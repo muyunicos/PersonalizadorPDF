@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang='es'>
+<head>
+<meta charset='UTF-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0'>
+<title>Extractor Corel - Placeholders</title>
+<style>
+body { font-family: Arial, sans-serif; max-width: 960px; margin: 0 auto; padding: 20px; background: #f5f6f7; }
+h1 { color: #333; text-align: center; }
+.card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+.form-group { margin-bottom: 15px; }
+label { display: block; margin-bottom: 5px; font-weight: bold; }
+input[type=file] { padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 100%; }
+button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; }
+button:hover { background: #0056b3; }
+button:disabled { background: #ccc; cursor: not-allowed; }
+.loading { display: none; text-align: center; color: #666; padding: 15px; }
+.error { color: #dc3545; background: #f8d7da; padding: 10px; border-radius: 4px; margin-top: 10px; display: none; }
+.summary { background: #cce5ff; padding: 12px; border-radius: 6px; margin-bottom: 12px; font-size: 1.05em; }
+.grupo { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 12px; margin-bottom: 10px; display: flex; align-items: center; gap: 14px; }
+.swatch { width: 46px; height: 46px; border-radius: 6px; border: 2px solid #495057; flex: none; }
+.grupo-info { flex: 1; }
+.grupo-info h4 { margin: 0 0 6px 0; color: #495057; }
+.detalle { font-size: 0.9em; color: #6c757d; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.8em; font-weight: bold; color: white; background: #28a745; margin-left: 5px; }
+.mono { font-family: Consolas, monospace; font-size: 0.85em; background: #eef1f4; padding: 6px 10px; border-radius: 4px; margin-top: 6px; word-break: break-all; }
+.marcos-grid { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; }
+.marco-item { text-align: center; }
+.marco-item img { background: repeating-conic-gradient(#ddd 0 0.25turn, #fff 0 0.5turn) 0 0/14px 14px; border: 1px solid #ccc; }
+</style>
+</head>
+<body>
+<h1>Extractor Corel - Reemplazo de placeholders</h1>
+
+<div class='card'>
+<h2>1. Subir PDF</h2>
+<div class='form-group'>
+<label for='pdf'>Selecciona un archivo PDF exportado desde Corel:</label>
+<input type='file' id='pdf' accept='application/pdf'>
+</div>
+<button id='analyze-btn'>Analizar PDF</button>
+<div class='loading' id='loading'>Analizando PDF...<br><small>Buscando rectangulos 100% transparentes y agrupando por color</small></div>
+<div class='error' id='error'></div>
+</div>
+
+<div class='card' id='result-section' style='display: none;'>
+<h2>2. Grupos detectados</h2>
+<div class='summary' id='summary'></div>
+<div id='grupos-container'></div>
+<button id='marcos-btn'>Generar marcos</button>
+<div class='loading' id='marcos-loading'>Generando marcos PNG...</div>
+</div>
+
+<div class='card' id='marcos-section' style='display: none;'>
+<h2>3. Marcos generados</h2>
+<p class='detalle'>PNG transparentes con las dimensiones exactas de cada grupo (base 200 ppp).</p>
+<div class='marcos-grid' id='marcos-grid'></div>
+<div class='error' id='marcos-error'></div>
+</div>
+
+<div class='card' id='actions-section' style='display: none;'>
+<h2>4. Reemplazar y descargar</h2>
+<p>Se superpondra cada marco sobre sus placeholders y se optimizara el PDF.</p>
+<button id='replace-btn'>Reemplazar y descargar PDF</button>
+<div class='loading' id='replace-loading'>Procesando PDF...</div>
+</div>
+
+<script>
+let sessionId = null;
+
+function mostrarError(id, texto) {
+  const el = document.getElementById(id);
+  el.textContent = texto;
+  el.style.display = 'block';
+}
+
+document.getElementById('analyze-btn').addEventListener('click', async () => {
+  const file = document.getElementById('pdf').files[0];
+  if (!file) { alert('Selecciona un archivo PDF primero'); return; }
+  const loading = document.getElementById('loading');
+  const error = document.getElementById('error');
+  loading.style.display = 'block';
+  error.style.display = 'none';
+  document.getElementById('analyze-btn').disabled = true;
+  document.getElementById('result-section').style.display = 'none';
+  document.getElementById('marcos-section').style.display = 'none';
+  document.getElementById('actions-section').style.display = 'none';
+  try {
+    const formData = new FormData();
+    formData.append('pdf', file);
+    const response = await fetch('/analyze', { method: 'POST', body: formData });
+    const data = await response.json();
+    if (!response.ok) {
+      mostrarError('error', data.error || 'Error al analizar el PDF');
+      return;
+    }
+    sessionId = data.session_id;
+    mostrarGrupos(data);
+  } catch (err) {
+    mostrarError('error', 'Error de conexion: ' + err.message);
+  } finally {
+    loading.style.display = 'none';
+    document.getElementById('analyze-btn').disabled = false;
+  }
+});
+
+function mostrarGrupos(data) {
+  document.getElementById('result-section').style.display = 'block';
+  const summary = document.getElementById('summary');
+  summary.innerHTML = `<strong>${data.total_pages} paginas</strong> - <strong>${data.total_grupos} grupos de color</strong> - <strong>${data.total_instancias} instancias</strong>`;
+  let html = '';
+  data.grupos.forEach(g => {
+    const paginas = g.paginas.map(p => p + 1).join(', ');
+    html += `<div class='grupo'>
+      <div class='swatch' style='background:${g.color}'></div>
+      <div class='grupo-info'>
+        <h4>Grupo ${g.letra.toUpperCase()} <span class='badge'>${g.color}</span></h4>
+        <div class='detalle'>Marco: <strong>${g.ancho_px}x${g.alto_px} px</strong>
+        (${g.ancho_pt}x${g.alto_pt} pt en el PDF) -
+        ${g.num_instancias} instancias - paginas: ${paginas}</div>
+      </div>
+    </div>`;
+  });
+  document.getElementById('grupos-container').innerHTML = html;
+}
+
+document.getElementById('marcos-btn').addEventListener('click', async () => {
+  if (!sessionId) { alert('Primero analiza un PDF'); return; }
+  const loading = document.getElementById('marcos-loading');
+  loading.style.display = 'block';
+  document.getElementById('marcos-btn').disabled = true;
+  try {
+    const formData = new FormData();
+    formData.append('session_id', sessionId);
+    const response = await fetch('/marcos', { method: 'POST', body: formData });
+    const data = await response.json();
+    if (!response.ok) {
+      mostrarError('marcos-error', data.error || 'Error al generar los marcos');
+      return;
+    }
+    document.getElementById('marcos-section').style.display = 'block';
+    document.getElementById('actions-section').style.display = 'block';
+    const grid = document.getElementById('marcos-grid');
+    grid.innerHTML = '';
+    data.marcos.forEach(m => {
+      const div = document.createElement('div');
+      div.className = 'marco-item';
+      div.innerHTML = `<img src='${m.url}' width='140' alt='${m.archivo}'>
+        <div class='mono'>${m.archivo}</div>`;
+      grid.appendChild(div);
+    });
+  } catch (err) {
+    mostrarError('marcos-error', 'Error de conexion: ' + err.message);
+  } finally {
+    loading.style.display = 'none';
+    document.getElementById('marcos-btn').disabled = false;
+  }
+});
+
+document.getElementById('replace-btn').addEventListener('click', async () => {
+  if (!sessionId) { alert('Primero analiza un PDF'); return; }
+  const loading = document.getElementById('replace-loading');
+  loading.style.display = 'block';
+  document.getElementById('replace-btn').disabled = true;
+  try {
+    const formData = new FormData();
+    formData.append('session_id', sessionId);
+    const response = await fetch('/replace', { method: 'POST', body: formData });
+    if (response.ok) {
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'resultado.pdf';
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } else {
+      const errorData = await response.json();
+      alert('Error al procesar el PDF: ' + (errorData.error || 'Error desconocido'));
+    }
+  } catch (err) {
+    alert('Error de conexion: ' + err.message);
+  } finally {
+    loading.style.display = 'none';
+    document.getElementById('replace-btn').disabled = false;
+  }
+});
+</script>
+</body>
+</html>
