@@ -31,6 +31,7 @@ class Overlay
     private $imgObj = [];     // letra => objnum imagen
     private $newObjs = [];    // objnum => texto del objeto nuevo
     private $firstNew;
+    private $activas = [];    // letra => true (grupos con imagen a insertar)
 
     public function __construct($pdfData)
     {
@@ -38,10 +39,20 @@ class Overlay
         $this->pdf->load();
     }
 
-    /** Devuelve los bytes del PDF procesado. */
-    public function build($grupos)
+    /**
+     * Devuelve los bytes del PDF procesado.
+     *
+     * $imagenes (opcional): mapa letra => especificacion de Imagen::normalizar():
+     *   - ['tipo'=>'raster', 'w','h','rgb','alpha']  imagen real RGBA
+     *   - ['tipo'=>'dct', 'w','h','jpeg']            JPEG incrustado directo
+     * Si $imagenes es null se usa el comportamiento original: marcos
+     * transparentes para TODOS los grupos. Si se pasa, los grupos sin imagen
+     * se omiten por completo (el PDF conserva sus rectangulos originales).
+     */
+    public function build($grupos, $imagenes = null)
     {
         $this->grupos = $grupos;
+        $this->activas = [];
         $pages = $this->pdf->getPages();
         $this->pageNums = $this->pdf->getPageObjectNumbers();
         foreach ($pages as $i => $page) {
@@ -58,15 +69,41 @@ class Overlay
         $this->firstNew = $maxNum + 1;
         $nextNum = $this->firstNew;
 
-        // 1) XObjects de imagen (RGB zeros) + SMask (alpha zeros) por grupo.
+        // 1) XObjects de imagen por grupo (reales si hay especificacion).
         foreach ($grupos as $g) {
+            $letra = $g['letra'];
+            $spec = null;
+            if ($imagenes !== null) {
+                $spec = isset($imagenes[$letra]) ? $imagenes[$letra] : null;
+                if (!$spec) {
+                    continue; // grupo sin imagen: no se toca
+                }
+            }
             $im = $nextNum++;
-            $sm = $nextNum++;
-            $this->imgObj[$g['letra']] = $im;
             $wPx = max(1, (int)$g['ancho_px']);
             $hPx = max(1, (int)$g['alto_px']);
-            $rgb = gzcompress(str_repeat("\x00", $wPx * $hPx * 3), 6);
-            $alpha = gzcompress(str_repeat("\x00", $wPx * $hPx), 6);
+            if ($spec && $spec['tipo'] === 'dct') {
+                // JPEG directo (DCTDecode), opaco, sin SMask.
+                $this->newObjs[$im] = $im . " 0 obj\r\n"
+                    . "<< /Type /XObject /Subtype /Image /Width " . (int)$spec['w']
+                    . " /Height " . (int)$spec['h']
+                    . " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode "
+                    . '/Length ' . strlen($spec['jpeg']) . " >>\r\n"
+                    . "stream\r\n" . $spec['jpeg'] . "\r\nendstream\r\nendobj";
+                $this->imgObj[$letra] = $im;
+                $this->activas[$letra] = true;
+                continue;
+            }
+            $sm = $nextNum++;
+            $this->imgObj[$letra] = $im;
+            if ($spec && $spec['tipo'] === 'raster') {
+                $rgb = gzcompress($spec['rgb'], 6);
+                $alpha = gzcompress($spec['alpha'], 6);
+            } else {
+                // Comportamiento original: imagen totalmente transparente.
+                $rgb = gzcompress(str_repeat("\x00", $wPx * $hPx * 3), 6);
+                $alpha = gzcompress(str_repeat("\x00", $wPx * $hPx), 6);
+            }
             $this->newObjs[$im] = $im . " 0 obj\r\n"
                 . "<< /Type /XObject /Subtype /Image /Width $wPx /Height $hPx "
                 . "/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode "
@@ -77,19 +114,23 @@ class Overlay
                 . "/ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode "
                 . '/Length ' . strlen($alpha) . " >>\r\n"
                 . "stream\r\n" . $alpha . "\r\nendstream\r\nendobj";
+            $this->activas[$letra] = true;
         }
 
         // 2) Content stream por pagina.
+        // IMPORTANTE: cada draw va en su propio par q...Q porque el operador
+        // cm CONCATENA la matriz de transformacion: sin el q/Q intermedio, el
+        // segundo y siguientes draws heredan el CTM acumulado del anterior y
+        // se dibujan con la escala al cuadrado.
         $this->agruparInstancias();
         $contentObj = [];
         foreach ($pages as $i => $page) {
-            $ops = 'q';
+            $ops = '';
             foreach ($this->perPage[$i] ?? [] as $d) {
                 $name = 'ECIm' . $this->imgObj[$d['img']];
-                $ops .= "\r\n" . $this->fmt($d['w']) . ' 0 0 ' . $this->fmt($d['h']) . ' '
-                    . $this->fmt($d['x']) . ' ' . $this->fmt($d['y']) . " cm /$name Do";
+                $ops .= "\r\nq\r\n" . $this->fmt($d['w']) . ' 0 0 ' . $this->fmt($d['h']) . ' '
+                    . $this->fmt($d['x']) . ' ' . $this->fmt($d['y']) . " cm /$name Do\r\nQ";
             }
-            $ops .= "\r\nQ";
             $n = $nextNum++;
             $contentObj[$i] = $n;
             $this->newObjs[$n] = $n . " 0 obj\r\n"
@@ -133,6 +174,9 @@ class Overlay
     private function agruparInstancias()
     {
         foreach ($this->grupos as $g) {
+            if (empty($this->activas[$g['letra']])) {
+                continue; // grupo sin imagen: sin dibujos
+            }
             foreach ($g['instancias'] as $inst) {
                 $p = $inst['page'];
                 $bbox = $inst['bbox'];

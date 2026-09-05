@@ -15,7 +15,7 @@ require __DIR__ . '/../engine/Detector.php';
 use ExtractCorel\Engine\Pdf;
 use ExtractCorel\Engine\Detector;
 
-$base = dirname(__DIR__, 2);
+$base = dirname(__DIR__);
 $pdfPath = isset($argv[1]) ? $argv[1] : $base . '/muestra.pdf';
 $expectedPath = __DIR__ . '/expected_muestra.json';
 

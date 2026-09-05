@@ -3,3 +3,5 @@ __pycache__/
 uploads/
 marcos/
 output_*.pdf
+tests/salida_*.pdf
+tests/*.tmp

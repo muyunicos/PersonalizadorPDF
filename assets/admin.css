@@ -1,0 +1,147 @@
+.extractor-corel h1 {
+    font-size: 22px;
+}
+.extractor-corel h2 {
+    margin-top: 0;
+}
+.extractor-corel .description {
+    color: #646970;
+}
+.extractor-corel code {
+    background: #f0f0f1;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* ============ Tabs y tarjetas ============ */
+.extractor-corel .card {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 18px 22px;
+    margin-top: 18px;
+    max-width: 960px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+.extractor-corel .ec-tabla .ec-fila-activa td {
+    background: #f0f6fc;
+}
+.extractor-corel .ec-form-inline {
+    display: inline-block;
+    margin: 0;
+}
+
+/* ============ Badges ============ */
+.ec-badge {
+    display: inline-block;
+    padding: 1px 9px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+    vertical-align: middle;
+}
+.ec-badge-verde { background: #00a32a; }
+.ec-badge-rojo { background: #d63638; }
+.ec-badge-amarillo { background: #dba617; }
+
+/* ============ Grilla de grupos ============ */
+.ec-grupos {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+    margin-top: 14px;
+}
+.ec-grupo {
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    padding: 12px 14px;
+    background: #fafafa;
+}
+.ec-grupo-cab {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.ec-grupo-cab h3 {
+    margin: 0;
+    font-size: 14px;
+}
+.ec-grupo .swatch {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    border: 2px solid #50575e;
+    flex: none;
+    display: inline-block;
+}
+.ec-datos-grupo {
+    color: #50575e;
+    font-size: 12.5px;
+    margin: 8px 0;
+}
+.ec-media {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.ec-preview {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    font-size: 11px;
+}
+.ec-preview img {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid #dcdcde;
+    background: repeating-conic-gradient(#e6e6e6 0 0.25turn, #ffffff 0 0.5turn) 0 0/14px 14px;
+    margin-bottom: 4px;
+}
+.ec-vacio {
+    height: 70px;
+    line-height: 70px;
+    border: 2px dashed #c3c4c7;
+    border-radius: 6px;
+    color: #787c82;
+    margin-bottom: 4px;
+}
+.ec-form-imagen input[type=file] {
+    max-width: 200px;
+    font-size: 12px;
+}
+
+/* ============ Procesar ============ */
+.ec-procesar {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid #dcdcde;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.ec-procesar form { margin: 0; }
+.ec-procesar .description { max-width: 520px; }
+.ec-aviso { color: #8a6116; }
+.ec-acciones { display: flex; align-items: center; gap: 10px; }
+.ec-acciones form { margin: 0; }
+
+/* ============ Modal conflicto de nombre ============ */
+.ec-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ec-modal[hidden] { display: none; }
+.ec-modal-caja {
+    background: #fff;
+    border-radius: 6px;
+    padding: 22px 26px;
+    max-width: 440px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+}
