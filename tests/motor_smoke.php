@@ -134,6 +134,19 @@ check('blue del medio recortado al circulo (Do entre W* y el relleno)',
     && $posGS29 !== false && $posDoMid !== false && $posDoMid > $posWcirc
     && $posFMid !== false && $posDoMid < $posFMid);
 
+// Opacidad: cada draw de imagen debe ir precedido de /ECOp1 gs (ca=1) para no
+// heredar la opacidad 0 del ExtGState del placeholder (si no, el SMask se
+// multiplica por ca=0 y la imagen se ve 100% transparente).
+check('todos los draws usan /ECOp1 gs antes del cm',
+    $draws0 + $draws1 === substr_count($cs0, 'q /ECOp1 gs') + substr_count($cs1, 'q /ECOp1 gs'),
+    'draws=' . ($draws0 + $draws1));
+$resOut0 = ($outPdf->pageKey($outPages[0], 'Resources'));
+$egOut0 = (is_array($resOut0) && isset($resOut0['ExtGState'])) ? $outPdf->deref($resOut0['ExtGState']) : [];
+$ecop = (is_array($egOut0) && isset($egOut0['ECOp1'])) ? $egOut0['ECOp1'] : null;
+check('Resources define ECOp1 con ca=1 y CA=1',
+    is_array($ecop) && (float)($ecop['ca'] ?? 0) === 1.0 && (float)($ecop['CA'] ?? 0) === 1.0,
+    json_encode($ecop));
+
 // ===== G: dataset desactualizado detectado =====
 $datosMalos = $datos;
 $datosMalos['grupos'][0]['ancho_px'] = 999;

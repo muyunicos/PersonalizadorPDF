@@ -119,9 +119,12 @@ y el resumen avisa cuáles quedaron como estaban.
    enmarcados dentro de círculos) y cualquier ornamento que se dibuje DESPUÉS (anillos,
    bordes) queda **por encima** de la foto. `Detector` guarda por instancia `stream`,
    `offset`, `op`, `ctm` y `dev_bbox`; `Overlay::splicearStreams()` re-emite el stream
-   original (FlateDecode) en su MISMO número de objeto y cada draw va en su propio `q...Q`
-   con `cm = inv(CTM) * rect_dev`. Instancias sin offset (dentro de Form XObjects) usan el
-   content stream nuevo al final (fallback, z-order anterior).
+   original (FlateDecode) en su MISMO número de objeto. Cada draw va en su propio `q...Q`
+   con `cm = inv(CTM) * rect_dev` Y con `q /ECOp1 gs ... Q`: el `/ECOp1` es un ExtGState
+   (`ca 1 /CA 1`) que se agrega al `/ExtGState` de la página, necesario porque el splice
+   hereda el ExtGState del placeholder (`ca 0`) que de otra forma multiplica el SMask por
+   cero y **la imagen se dibuja 100% transparente**. Instancias sin offset (dentro de Form
+   XObjects) usan el content stream nuevo al final (fallback, con el mismo `q /ECOp1 gs`).
 ## 5. Formatos y convenciones de nombres (NO CAMBIAR)
 
 - Carpeta por PDF: `uploads/extractor-corel/{pdfs,datos,imagenes,placeholders,salidas}/...`
@@ -169,6 +172,12 @@ y el resumen avisa cuáles quedaron como estaban.
   placeholder en el stream original: conserva el recorte circular y los elementos pintados
   después (enmarcado). El detector expone `stream/offset/ctm/dev_bbox` por instancia; la
   entrada del offset se degrada a fallback (final de página) si falta.
+- **Imágenes transparentes tras el splice (fix)**: al splicear justo antes del `f*` la imagen
+  heredaba el ExtGState del placeholder (`ca 0`) y, como la opacidad ca del estado gráfico se
+  multiplica por el SMask, la imagen salía 100% transparente. Se resolvió agregando un
+  **ExtGState `/ECOp1` (`ca 1 /CA 1`)** al `/ExtGState` de la página y anteponiendo
+  `q /ECOp1 gs ... Q` a cada draw (splice y fallback). Todo draw de imagen nuevo DEBE llevar
+  `q /ECOp1 gs`.
 ## 8. Dificultades del entorno (IMPORTANTE AL TRABAJAR AQUÍ)
 
 1. **Paths con espacios**: evitá `dir`/`ls`/`findstr` con paths largos. Usá `read_files` y
@@ -190,7 +199,7 @@ y el resumen avisa cuáles quedaron como estaban.
 
 ```bash
 php -l extractor-corel.php && php -l admin/*.php && php -l engine/*.php
-php tests/motor_smoke.php    # smoke del motor: debe decir "SMOKE OK" (24 checks)
+php tests/motor_smoke.php    # smoke del motor: debe decir "SMOKE OK" (26 checks)
 php tests/parity.php         # paridad del detector vs expected_muestra.json → "PARIDAD OK"
 ```
 

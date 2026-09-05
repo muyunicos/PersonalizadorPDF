@@ -142,7 +142,7 @@ class Overlay
                     continue; // ya insertada en el stream original
                 }
                 $name = 'ECIm' . $this->imgObj[$d['img']];
-                $ops .= "\r\nq\r\n" . $this->fmt($d['w']) . ' 0 0 ' . $this->fmt($d['h']) . ' '
+                $ops .= "\r\nq /ECOp1 gs\r\n" . $this->fmt($d['w']) . ' 0 0 ' . $this->fmt($d['h']) . ' '
                     . $this->fmt($d['x']) . ' ' . $this->fmt($d['y']) . " cm /$name Do\r\nQ";
             }
             $n = $nextNum++;
@@ -356,7 +356,7 @@ class Overlay
         $m4 = $ai * $db[0] + $bi * $db[1] + $ei;
         $m5 = $ci * $db[0] + $di * $db[1] + $fi;
         $name = 'ECIm' . $this->imgObj[$letra];
-        return "\r\nq " . $this->fmt($m0) . ' ' . $this->fmt($m1) . ' ' . $this->fmt($m2) . ' '
+        return "\r\nq /ECOp1 gs " . $this->fmt($m0) . ' ' . $this->fmt($m1) . ' ' . $this->fmt($m2) . ' '
             . $this->fmt($m3) . ' ' . $this->fmt($m4) . ' ' . $this->fmt($m5) . " cm /$name Do Q\r\n";
     }
 
@@ -417,46 +417,56 @@ class Overlay
         return "$num 0 obj\r\n<< " . $pairs . ">>\r\nendobj";
     }
 
-    /** Serializa el dict de Resources con /XObject incrementado. */
+    /** Serializa el dict de Resources con /XObject incrementado y /ExtGState con
+     *  opacidad 1 (ECOp1) para que las imagenes no hereden ca=0 de los
+     *  placeholders transparentes cuando se dibujan en el z-order original. */
     private function serResourceDict($res, array $usedImgs)
     {
-        $pairs = '';
-        if (is_array($res) && isset($res['XObject'])) {
-            foreach ($res as $k => $v) {
-                if ($k === 'XObject') {
-                    $xo = $this->pdf->deref($v);
-                    $inner = '';
-                    if (is_array($xo)) {
-                        foreach ($xo as $xk => $xv) {
-                            $inner .= '/' . $xk . ' ' . $this->serValue($xv);
-                        }
-                    }
-                    foreach ($usedImgs as $letra => $objnum) {
-                        $inner .= ' /ECIm' . $objnum . ' ' . $objnum . ' 0 R';
-                    }
-                    $pairs .= '/XObject << ' . $inner . ' >> ';
-                } else {
-                    $pairs .= '/' . $k . ' ' . $this->serValue($v) . ' ';
-                }
-            }
-        } elseif (is_array($res)) {
-            foreach ($res as $k => $v) {
-                $pairs .= '/' . $k . ' ' . $this->serValue($v) . ' ';
-            }
-            if ($usedImgs) {
-                $inner = '';
-                foreach ($usedImgs as $letra => $objnum) {
-                    $inner .= '/ECIm' . $objnum . ' ' . $objnum . ' 0 R';
-                }
-                $pairs .= '/XObject << ' . $inner . ' >> ';
-            }
-        } elseif ($usedImgs) {
-            $inner = '';
-            foreach ($usedImgs as $letra => $objnum) {
-                $inner .= '/ECIm' . $objnum . ' ' . $objnum . ' 0 R';
-            }
-            $pairs .= '/XObject << ' . $inner . ' >> ';
+        $res = is_array($res) ? $res : [];
+
+        $extg = null;
+        if (isset($res['ExtGState'])) {
+            $extg = $this->pdf->deref($res['ExtGState']);
+            unset($res['ExtGState']);
         }
+        $xo = null;
+        if (isset($res['XObject'])) {
+            $xo = $this->pdf->deref($res['XObject']);
+            unset($res['XObject']);
+        }
+
+        $pairs = '';
+        foreach ($res as $k => $v) {
+            $pairs .= '/' . $k . ' ' . $this->serValue($v) . ' ';
+        }
+
+        // ExtGState: conservar los de Corel y anadir ECOp1 (opacidad 1).
+        $xgPairs = '';
+        $alfaName = 'ECOp1';
+        if (is_array($extg)) {
+            $usados = array_keys($extg);
+            while (in_array($alfaName, $usados, true)) {
+                $alfaName .= 'x';
+            }
+            foreach ($extg as $k => $v) {
+                $xgPairs .= '/' . $k . ' ' . $this->serValue($v) . ' ';
+            }
+        }
+        $xgPairs .= '/' . $alfaName . ' << /ca 1 /CA 1 >> ';
+        $pairs .= '/ExtGState << ' . $xgPairs . '>> ';
+
+        // XObject: conservar los originales y anadir las imagenes usadas.
+        $xoPairs = '';
+        if (is_array($xo)) {
+            foreach ($xo as $k => $v) {
+                $xoPairs .= '/' . $k . ' ' . $this->serValue($v) . ' ';
+            }
+        }
+        foreach ($usedImgs as $objnum) {
+            $xoPairs .= '/ECIm' . $objnum . ' ' . $objnum . ' 0 R ';
+        }
+        $pairs .= '/XObject << ' . $xoPairs . '>> ';
+
         return '<< ' . $pairs . '>>';
     }
 
