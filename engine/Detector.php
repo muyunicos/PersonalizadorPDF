@@ -86,8 +86,10 @@ class ContentParser
     private $cur = null;
     private $inText = false;
     private $instancias = [];
+    private $streamIdx = 0;
+    private $depth = 0;
 
-    public function __construct(Pdf $pdf, $pageIdx, $height, $resources, $extgs = [], $ctm = null)
+    public function __construct(Pdf $pdf, $pageIdx, $height, $resources, $extgs = [], $ctm = null, $streamIdx = 0, $depth = 0)
     {
         $this->pdf = $pdf;
         $this->pageIdx = (int)$pageIdx;
@@ -97,6 +99,8 @@ class ContentParser
         if ($ctm !== null) {
             $this->ctm = $ctm;
         }
+        $this->streamIdx = (int)$streamIdx;
+        $this->depth = (int)$depth;
     }
 
     public function getInstancias()
@@ -130,7 +134,8 @@ class ContentParser
                 $args = [];
                 continue;
             }
-            $this->dispatch($op, $args, $lex);
+            $opOffset = $t[2] - strlen((string)$op);
+            $this->dispatch($op, $args, $lex, $opOffset);
             $args = [];
         }
     }
@@ -162,7 +167,7 @@ class ContentParser
         }
     }
 
-    private function dispatch($op, $args, $lex)
+    private function dispatch($op, $args, $lex, $opOffset)
     {
         switch ($op) {
             case 'q':
@@ -249,7 +254,7 @@ class ContentParser
             case 'B*':
             case 'b':
             case 'b*':
-                $this->fill();
+                $this->fill($opOffset, $op);
                 break;
             case 'S':
             case 's':
@@ -360,24 +365,24 @@ class ContentParser
         $this->cur = null;
     }
 
-    private function fill()
+    private function fill($opOffset = 0, $op = '')
     {
         $alpha = $this->fillAlpha;
         foreach ($this->subs as $sub) {
-            $this->emitSub($sub, $alpha);
+            $this->emitSub($sub, $alpha, $opOffset, $op);
         }
         if ($this->cur) {
-            $this->emitSub($this->cur, $alpha);
+            $this->emitSub($this->cur, $alpha, $opOffset, $op);
         }
         $this->subs = [];
         $this->cur = null;
     }
 
-    private function emitSub($sub, $alpha)
+    private function emitSub($sub, $alpha, $opOffset = 0, $op = '')
     {
         if (isset($sub['type']) && $sub['type'] === 'rect') {
             $r = $sub['rect'];
-            $this->maybeInstance([$r[0], $r[1], $r[0] + $r[2], $r[1] + $r[3]], $alpha);
+            $this->maybeInstance([$r[0], $r[1], $r[0] + $r[2], $r[1] + $r[3]], $alpha, $opOffset, $op);
             return;
         }
         $pts = $sub['pts'];
@@ -412,7 +417,7 @@ class ContentParser
         if (!$this->esRectanguloDeLineas($pts, $sub['close'], $minX, $minY, $maxX, $maxY)) {
             return;
         }
-        $this->maybeInstance([$minX, $minY, $maxX, $maxY], $alpha);
+        $this->maybeInstance([$minX, $minY, $maxX, $maxY], $alpha, $opOffset, $op);
     }
 
     private function esRectanguloDeLineas($pts, $close, $minX, $minY, $maxX, $maxY)
@@ -464,7 +469,7 @@ class ContentParser
         return $usedY0 && $usedY1 && $usedX0 && $usedX1;
     }
 
-    private function maybeInstance($bbox, $alpha)
+    private function maybeInstance($bbox, $alpha, $opOffset = null, $op = '')
     {
         $w = $bbox[2] - $bbox[0];
         $h = $bbox[3] - $bbox[1];
@@ -479,7 +484,7 @@ class ContentParser
             Round::halfEven($this->fillColor[1], 3),
             Round::halfEven($this->fillColor[2], 3),
         ];
-        $this->instancias[] = [
+        $inst = [
             'page' => $this->pageIdx,
             'bbox' => [
                 (float)$bbox[0],
@@ -492,6 +497,16 @@ class ContentParser
             'color' => $color,
             'color_hex' => Round::rgbHex($this->fillColor),
         ];
+        // Solo en streams de pagina (depth 0) tenemos offset donde "splicear" la
+        // imagen respetando clips/ornamentos. Dentro de Form XObjects no aplica.
+        if ($this->depth === 0 && $opOffset !== null) {
+            $inst['stream'] = $this->streamIdx;
+            $inst['offset'] = (int)$opOffset;
+            $inst['op'] = (string)$op;
+            $inst['ctm'] = array_map('floatval', $this->ctm);
+            $inst['dev_bbox'] = array_map('floatval', $bbox);
+        }
+        $this->instancias[] = $inst;
     }
 
     private function cmykToRgb(array $cmyk)
@@ -623,7 +638,7 @@ class ContentParser
         } else {
             $ctm = $this->ctm;
         }
-        $sub = new ContentParser($this->pdf, $this->pageIdx, $this->height, $resForm, $this->extgs, $ctm);
+        $sub = new ContentParser($this->pdf, $this->pageIdx, $this->height, $resForm, $this->extgs, $ctm, $this->streamIdx, $this->depth + 1);
         $sub->fillColor = $this->fillColor;
         $sub->fillAlpha = $this->fillAlpha;
         $sub->cs = $this->cs;
@@ -660,8 +675,8 @@ class Detector
             $height = $box[3] - $box[1];
             $resources = $this->pdf->pageKey($page, 'Resources');
             $extgs = $this->extGStateMap($resources);
-            foreach ($this->pdf->pageContents($page) as $data) {
-                $cp = new ContentParser($this->pdf, $i, $height, $resources, $extgs);
+            foreach ($this->pdf->pageContents($page) as $streamIdx => $data) {
+                $cp = new ContentParser($this->pdf, $i, $height, $resources, $extgs, null, $streamIdx, 0);
                 $cp->run($data);
                 foreach ($cp->getInstancias() as $inst) {
                     $instancias[] = $inst;
@@ -747,12 +762,20 @@ class Detector
             sort($paginas);
             $insts = [];
             foreach ($it['ls'] as $in) {
-                $insts[] = [
+                $inst = [
                     'page' => $in['page'],
                     'bbox' => array_map('floatval', $in['bbox']),
                     'w' => Round::halfEven($in['w'], 2),
                     'h' => Round::halfEven($in['h'], 2),
                 ];
+                if (isset($in['stream'], $in['offset'])) {
+                    $inst['stream'] = $in['stream'];
+                    $inst['offset'] = $in['offset'];
+                    $inst['op'] = isset($in['op']) ? $in['op'] : '';
+                    $inst['ctm'] = isset($in['ctm']) ? array_map('floatval', $in['ctm']) : null;
+                    $inst['dev_bbox'] = isset($in['dev_bbox']) ? array_map('floatval', $in['dev_bbox']) : null;
+                }
+                $insts[] = $inst;
             }
             $grupos[] = [
                 'letra' => self::letraGrupo($idx),

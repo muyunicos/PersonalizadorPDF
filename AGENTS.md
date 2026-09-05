@@ -113,6 +113,15 @@ y el resumen avisa cuáles quedaron como estaban.
    dimensiones coinciden exactamente con las del grupo. Con GD se remuestrea cualquier formato.
 8. **Optimización del PDF**: el PDF resultante se reconstruye completo con deduplicación de
    objetos; los streams de imagen van comprimidos (FlateDecode / DCTDecode).
+9. **⚠️ Z-order fiel al diseño (splice)**: cada imagen se inserta EN EL CONTENT STREAM
+   ORIGINAL justo ANTES del operador de relleno (`f`/`f*`) de su placeholder, NO al final
+   de la página. Con esto la imagen respeta los **clips activos** (`W*`, p. ej. placeholders
+   enmarcados dentro de círculos) y cualquier ornamento que se dibuje DESPUÉS (anillos,
+   bordes) queda **por encima** de la foto. `Detector` guarda por instancia `stream`,
+   `offset`, `op`, `ctm` y `dev_bbox`; `Overlay::splicearStreams()` re-emite el stream
+   original (FlateDecode) en su MISMO número de objeto y cada draw va en su propio `q...Q`
+   con `cm = inv(CTM) * rect_dev`. Instancias sin offset (dentro de Form XObjects) usan el
+   content stream nuevo al final (fallback, z-order anterior).
 ## 5. Formatos y convenciones de nombres (NO CAMBIAR)
 
 - Carpeta por PDF: `uploads/extractor-corel/{pdfs,datos,imagenes,placeholders,salidas}/...`
@@ -154,6 +163,12 @@ y el resumen avisa cuáles quedaron como estaban.
   (`Motor` pasa `imagenes`), pero el producto inserta **imágenes reales**.
 - Los PDFs subidos, datasets, imágenes y salidas se guardan en `uploads/` (runtime, no se
   versionan). `tests/fixtures/` SÍ se versiona (necesario para `motor_smoke.php`).
+- **Preservación del enmarcado (z-order)**: el `Overlay` dibujaba las imágenes en un content
+  stream nuevo AL FINAL (encima de todo), tapando ornamentos (anillos/círculos) y rompiendo
+  clips (`W*`). Ahora cada imagen se inserta con **splice justo antes del relleno** de su
+  placeholder en el stream original: conserva el recorte circular y los elementos pintados
+  después (enmarcado). El detector expone `stream/offset/ctm/dev_bbox` por instancia; la
+  entrada del offset se degrada a fallback (final de página) si falta.
 ## 8. Dificultades del entorno (IMPORTANTE AL TRABAJAR AQUÍ)
 
 1. **Paths con espacios**: evitá `dir`/`ls`/`findstr` con paths largos. Usá `read_files` y
@@ -175,7 +190,7 @@ y el resumen avisa cuáles quedaron como estaban.
 
 ```bash
 php -l extractor-corel.php && php -l admin/*.php && php -l engine/*.php
-php tests/motor_smoke.php    # smoke del motor: debe decir "SMOKE OK" (21 checks)
+php tests/motor_smoke.php    # smoke del motor: debe decir "SMOKE OK" (24 checks)
 php tests/parity.php         # paridad del detector vs expected_muestra.json → "PARIDAD OK"
 ```
 

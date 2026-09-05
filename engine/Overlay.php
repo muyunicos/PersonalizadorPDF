@@ -5,13 +5,16 @@
  *
  * Estrategia (PHP puro, sin librerias externas):
  *  1. Parsea el PDF original con Pdf.
- *  2. Crea nuevos objetos: imagen XObject + SMask por grupo, y un content
- *     stream por pagina que dibuja las imagenes sobre cada bbox.
- *  3. Reescribe cada objeto de pagina re-serializando su dict con
+ *  2. Crea nuevos objetos: imagen XObject + SMask por grupo.
+ *  3. Inserta (splice) cada imagen en el content stream ORIGINAL justo antes
+ *     del relleno de su placeholder (z-order fiel al diseno: respeta clips W*
+ *     y ornamentos que se pintan encima). Instancias sin offset usan un
+ *     content stream nuevo al final (fallback).
+ *  4. Reescribe cada objeto de pagina re-serializando su dict con
  *     /Contents ampliado y /Resources con el /XObject nuevo.
- *  4. (Opcional) optimiza: el PDF se re-construye completo, con deduplicacion
+ *  5. (Opcional) optimiza: el PDF se re-construye completo, con deduplicacion
  *     de objetos libres.
- *  5. Emite header + objetos + xref + trailer.
+ *  6. Emite header + objetos + xref + trailer.
  *
  * Devuelve los bytes del PDF final.
  *
@@ -32,6 +35,8 @@ class Overlay
     private $newObjs = [];    // objnum => texto del objeto nuevo
     private $firstNew;
     private $activas = [];    // letra => true (grupos con imagen a insertar)
+    private $splices = [];    // pageIdx => [ streamIdx => [ ['offset'=>int,'ops'=>str] ] ]
+    private $rwObjs = [];     // objnum => texto del objeto reescrito (streams con splice)
 
     public function __construct($pdfData)
     {
@@ -53,6 +58,9 @@ class Overlay
     {
         $this->grupos = $grupos;
         $this->activas = [];
+        $this->perPage = [];
+        $this->splices = [];
+        $this->rwObjs = [];
         $pages = $this->pdf->getPages();
         $this->pageNums = $this->pdf->getPageObjectNumbers();
         foreach ($pages as $i => $page) {
@@ -117,16 +125,22 @@ class Overlay
             $this->activas[$letra] = true;
         }
 
-        // 2) Content stream por pagina.
-        // IMPORTANTE: cada draw va en su propio par q...Q porque el operador
-        // cm CONCATENA la matriz de transformacion: sin el q/Q intermedio, el
-        // segundo y siguientes draws heredan el CTM acumulado del anterior y
-        // se dibujan con la escala al cuadrado.
+        // 2) Content streams.
+        // z-order fiel al diseno: cada imagen se inserta (splice) en el content
+        // stream ORIGINAL justo antes del operador de relleno de su placeholder.
+        // Asi respeta los clips activos (W*, p.ej. placeholders enmarcados dentro
+        // de circulos) y los ornamentos que se dibujan DESPUES (anillos) quedan
+        // por encima de la foto. Cada draw va en su propio par q...Q (si no, el
+        // cm CONCATENA el CTM y el 2do draw hereda la escala acumulada del 1ro).
         $this->agruparInstancias();
+        $this->splicearStreams();
         $contentObj = [];
         foreach ($pages as $i => $page) {
             $ops = '';
             foreach ($this->perPage[$i] ?? [] as $d) {
+                if (!empty($d['spliced'])) {
+                    continue; // ya insertada en el stream original
+                }
                 $name = 'ECIm' . $this->imgObj[$d['img']];
                 $ops .= "\r\nq\r\n" . $this->fmt($d['w']) . ' 0 0 ' . $this->fmt($d['h']) . ' '
                     . $this->fmt($d['x']) . ' ' . $this->fmt($d['y']) . " cm /$name Do\r\nQ";
@@ -154,6 +168,8 @@ class Overlay
             $offsets[$num] = strlen($out);
             if (isset($pageNumByIdx[$num])) {
                 $out .= $this->paginaProcesada($pageNumByIdx[$num], $contentObj[$pageNumByIdx[$num]]) . "\r\n";
+            } elseif (isset($this->rwObjs[$num])) {
+                $out .= $this->rwObjs[$num] . "\r\n";
             } else {
                 $raw = $this->pdf->rawObjectBytes($num);
                 if ($raw === null) {
@@ -178,20 +194,180 @@ class Overlay
                 continue; // grupo sin imagen: sin dibujos
             }
             foreach ($g['instancias'] as $inst) {
-                $p = $inst['page'];
+                $p = (int)$inst['page'];
                 $bbox = $inst['bbox'];
                 $H = $this->heights[$p];
                 $w = $bbox[2] - $bbox[0];
                 $h = $bbox[3] - $bbox[1];
-                $this->perPage[$p][] = [
+                $entry = [
                     'x' => $bbox[0],
                     'y' => $H - $bbox[3],
                     'w' => $w,
                     'h' => $h,
                     'img' => $g['letra'],
+                    'spliced' => false,
                 ];
+                $ops = $this->spliceOps($inst, $g['letra']);
+                if ($ops !== null && isset($inst['stream'], $inst['offset'])) {
+                    $stm = (int)$inst['stream'];
+                    $this->splices[$p][$stm][] = [
+                        'offset' => (int)$inst['offset'],
+                        'ops' => $ops,
+                    ];
+                    $entry['spliced'] = true;
+                }
+                $this->perPage[$p][] = $entry;
             }
         }
+    }
+
+    /**
+     * Numeros de objeto de los content streams de una pagina (en orden, solo los
+     * que se pueden decodificar y no estan vacios, igual que Pdf::pageContents).
+     */
+    private function pageContentRefs($page)
+    {
+        $refs = [];
+        if (!is_array($page) || !array_key_exists('Contents', $page)) {
+            return $refs;
+        }
+        $cands = [];
+        $raw = $page['Contents'];
+        if (is_array($raw) && isset($raw['R'])) {
+            $cands[] = $raw; // referencia unica
+        } elseif (is_array($raw)) {
+            foreach ($raw as $item) {
+                if (is_array($item) && isset($item['R'])) {
+                    $cands[] = $item;
+                }
+            }
+        }
+        foreach ($cands as $ref) {
+            $num = (int)$ref['n'];
+            $cont = $this->pdf->object($num);
+            if (!$cont || !isset($cont['stream'])) {
+                continue;
+            }
+            $dec = $this->pdf->decodeStreamData($cont['dict'], $cont['stream']);
+            if (!is_string($dec) || $dec === '') {
+                continue;
+            }
+            $refs[] = $num;
+        }
+        return $refs;
+    }
+
+    /**
+     * Re-escribe los content streams originales insertando cada imagen en el
+     * z-order de su placeholder (splice justo antes del operador de relleno).
+     * Re-emite el objeto con el MISMO numero para no tocar /Contents.
+     */
+    private function splicearStreams()
+    {
+        if (!$this->splices) {
+            return;
+        }
+        $spliceByNum = [];
+        $pages = $this->pdf->getPages();
+        foreach ($this->splices as $pageIdx => $byStream) {
+            $page = isset($pages[$pageIdx]) ? $pages[$pageIdx] : null;
+            $refs = $this->pageContentRefs($page);
+            foreach ($byStream as $stmIdx => $items) {
+                $num = isset($refs[$stmIdx]) ? $refs[$stmIdx] : null;
+                if ($num === null) {
+                    continue; // sin numero de objeto: queda el fallback
+                }
+                $cont = $this->pdf->object($num);
+                if (!$cont || !isset($cont['stream'])) {
+                    continue;
+                }
+                $dec = $this->pdf->decodeStreamData($cont['dict'], $cont['stream']);
+                if (!is_string($dec)) {
+                    continue;
+                }
+                if (!isset($spliceByNum[$num])) {
+                    $spliceByNum[$num] = ['dec' => $dec, 'items' => []];
+                }
+                foreach ($items as $it) {
+                    $spliceByNum[$num]['items'][] = $it;
+                }
+            }
+        }
+        foreach ($spliceByNum as $num => $sp) {
+            $data = $sp['dec'];
+            // Insertar de mayor a menor offset para no invalidar posiciones.
+            usort($sp['items'], function ($a, $b) {
+                return (int)$b['offset'] <=> (int)$a['offset'];
+            });
+            foreach ($sp['items'] as $it) {
+                $off = (int)$it['offset'];
+                if ($off < 0 || $off > strlen($data)) {
+                    continue;
+                }
+                $data = substr($data, 0, $off) . $it['ops'] . substr($data, $off);
+            }
+            $comp = gzcompress($data, 6);
+            $cont = $this->pdf->object($num);
+            $dict = is_array($cont['dict']) ? $cont['dict'] : [];
+            unset($dict['Length'], $dict['DecodeParms'], $dict['DP']);
+            $dict['Filter'] = 'FlateDecode';
+            $dict['Length'] = strlen($comp);
+            $this->rwObjs[$num] = $num . " 0 obj\r\n" . $this->serDict($dict) . "\r\n"
+                . "stream\r\n" . $comp . "\r\nendstream\r\nendobj";
+        }
+    }
+
+    /**
+     * Matriz cm para dibujar la imagen sobre DEV_bbox en el punto del stream
+     * donde el CTM era CTM: M = inv(CTM) * D, con D el rect en device space.
+     */
+    private function spliceOps(array $inst, $letra)
+    {
+        if (!isset($inst['ctm'], $inst['dev_bbox'])) {
+            return null;
+        }
+        $c = array_values($inst['ctm']);
+        if (count($c) < 6) {
+            return null;
+        }
+        $db = array_values($inst['dev_bbox']);
+        if (count($db) < 4) {
+            return null;
+        }
+        $w = (float)$db[2] - (float)$db[0];
+        $h = (float)$db[3] - (float)$db[1];
+        if ($w <= 0.001 || $h <= 0.001) {
+            return null;
+        }
+        $det = $c[0] * $c[3] - $c[1] * $c[2];
+        if (abs($det) < 1e-9) {
+            return null;
+        }
+        $ai =  $c[3] / $det;
+        $bi = -$c[1] / $det;
+        $ci = -$c[2] / $det;
+        $di =  $c[0] / $det;
+        $ei = ($c[2] * $c[5] - $c[3] * $c[4]) / $det;
+        $fi = ($c[1] * $c[4] - $c[0] * $c[5]) / $det;
+        $m0 = $ai * $w;
+        $m1 = $bi * $h;
+        $m2 = $ci * $w;
+        $m3 = $di * $h;
+        $m4 = $ai * $db[0] + $bi * $db[1] + $ei;
+        $m5 = $ci * $db[0] + $di * $db[1] + $fi;
+        $name = 'ECIm' . $this->imgObj[$letra];
+        return "\r\nq " . $this->fmt($m0) . ' ' . $this->fmt($m1) . ' ' . $this->fmt($m2) . ' '
+            . $this->fmt($m3) . ' ' . $this->fmt($m4) . ' ' . $this->fmt($m5) . " cm /$name Do Q\r\n";
+    }
+
+    /** Serializa un dict PDF (para re-emitir objetos reescritos). */
+    private function serDict(array $dict)
+    {
+        $s = '<<';
+        foreach ($dict as $k => $v) {
+            $s .= ' /' . $k . ' ' . $this->serValue($v);
+        }
+        return $s . ' >>';
     }
 
     /** Re-serializa el objeto de pagina con Contents ampliado y XObject nuevo. */

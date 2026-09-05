@@ -104,6 +104,36 @@ $r2 = Motor::procesar($pdfRuta, $datos, ['a' => $fixtures . '/foto_a.png']);
 check('sin imagen: grupos_sin_imagen = b', $r2['resumen']['grupos_sin_imagen'] === ['b']);
 check('sin imagen: insertadas = 3', $r2['resumen']['imagenes_insertadas'] === 3);
 
+// ===== H: z-order / enmarcado preservado (splice en el stream original) =====
+$outPdf = new Pdf($r['bytes']);
+$outPdf->load();
+$outPages = $outPdf->getPages();
+$cs0 = implode("\n", $outPdf->pageContents($outPages[0]));
+$cs1 = implode("\n", $outPdf->pageContents($outPages[1]));
+$draws0 = substr_count($cs0, ' cm /ECIm');
+$draws1 = substr_count($cs1, ' cm /ECIm');
+check('pagina 1: 3 draws ECIm y 0 fallback superpuesto', $draws0 === 3, 'draws=' . $draws0);
+check('pagina 2: 1 draw ECIm (splice)', $draws1 === 1, 'draws=' . $draws1);
+
+// Blue superior: la imagen se inserta antes de su relleno y el anillo se dibuja DESPUES.
+$posGS28 = strpos($cs0, '/GS28 gs');
+$posDoTop = $posGS28 === false ? false : strpos($cs0, ' cm /ECIm', $posGS28);
+$posRingTop = strpos($cs0, '346.8101 629.7945 m');
+check('anillo del blue superior queda por encima de su imagen',
+    $posGS28 !== false && $posRingTop !== false && $posDoTop !== false
+    && $posDoTop > $posGS28 && $posDoTop < $posRingTop);
+
+// Blue del medio: la imagen se dibuja DENTRO del clip del circulo (W* ... Do ... f*).
+$posC2 = strpos($cs0, '456.1112 230.4519 m');
+$posWcirc = $posC2 === false ? false : strpos($cs0, 'W*', $posC2);
+$posGS29 = strpos($cs0, '/GS29 gs');
+$posDoMid = $posGS29 === false ? false : strpos($cs0, ' cm /ECIm', $posGS29);
+$posFMid = $posDoMid === false ? false : strpos($cs0, 'f*', $posDoMid);
+check('blue del medio recortado al circulo (Do entre W* y el relleno)',
+    $posC2 !== false && $posWcirc !== false && $posWcirc > $posC2
+    && $posGS29 !== false && $posDoMid !== false && $posDoMid > $posWcirc
+    && $posFMid !== false && $posDoMid < $posFMid);
+
 // ===== G: dataset desactualizado detectado =====
 $datosMalos = $datos;
 $datosMalos['grupos'][0]['ancho_px'] = 999;
