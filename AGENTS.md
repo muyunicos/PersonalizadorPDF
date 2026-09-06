@@ -94,7 +94,12 @@ y el resumen avisa cuáles quedaron como estaban.
 1. **Detección de placeholders** (criterio idéntico entre Python y PHP):
    - El path debe tener relleno definido (`fill`; tipos `f`/`fs` de PyMuPDF).
    - `fill_opacity` ≤ `TOL_OPACIDAD` (0.001) → transparencia total.
-   - Forma rectangular: ítems tipo `re`, o 4 líneas rectas cerradas que forman el bbox.
+   - Forma rectangular: ítems tipo `re` (con las **4 esquinas** transformadas por
+     el CTM) o 4 líneas rectas cerradas que forman un cuadrilátero. Además del
+     rectángulo alineado a ejes se aceptan **rectángulos rotados** (aristas
+     opuestas paralelas e iguales, adyacentes perpendiculares, con tolerancia
+     relativa); en ese caso las medidas representativas son los **lados** (no el
+     bbox) y la instancia lleva `dev_quad`.
    - Tamaño mínimo anti-artefactos: **10 pt** de ancho y **5 pt** de alto.
 2. **Agrupación por color**: la clave de grupo es el color RGB redondeado a 3 decimales.
    Los grupos se ordenan por tupla RGB (determinista) y reciben letras `a, b, c... z, aa, ab...`.
@@ -178,6 +183,25 @@ y el resumen avisa cuáles quedaron como estaban.
   **ExtGState `/ECOp1` (`ca 1 /CA 1`)** al `/ExtGState` de la página y anteponiendo
   `q /ECOp1 gs ... Q` a cada draw (splice y fallback). Todo draw de imagen nuevo DEBE llevar
   `q /ECOp1 gs`.
+- **Rectángulos rotados (fix: muestra2.pdf)**: Corel exporta algunos placeholders como
+  rectángulos INCLINADOS (4 líneas + `h f*`). El detector PHP ahora los acepta (antes exigía
+  aristas exactamente horizontales/verticales → "No se detectaron placeholders"). El Overlay
+  dibuja la imagen sobre el cuadrilátero rotado (`instancias[].dev_quad`) con un `cm` general
+  `M = inv(CTM) * D` (origen + 2 vectores de arista) — el cálculo anterior de `cm` mezclaba
+  términos cruzados y solo era correcto con CTM identidad/diagonal. El `re` también se
+  transforma por sus 4 esquinas. Todo preserva el splice `q /ECOp1 gs ... Q` y la tolerancia
+  angular es relativa (TOL_GEO), porque los números del stream vienen redondeados.
+- **Orientación de la imagen en rectángulos rotados (fix: no espejar)**: Corel recorre los
+  paths en sentido HORARIO empezando en la esquina superior; anclar la imagen en la 1ra
+  esquina con `v = q3-q0` (2da arista) producía un REFLEJO vertical (la foto salía de cabeza).
+  `Overlay::baseDesdeQuad()` prueba las **4 esquinas del quad como origen** (sin deformar:
+  `u` siempre paralelo a la 1ra arista 0-1 = "ancho" del detector y `v` a la 2da 1-2 = "alto",
+  de modo que el paralelogramo cubre SIEMPRE el placeholder) y elige la que cumpla
+  **`det(u,v) > 0`** (rotación pura, nunca espejo) y **`v_y > 0`** (el "arriba" de la imagen
+  apunta hacia arriba en la página), con desempates `u_x > 0` y luego `u_y > 0`
+  (inclinaciones ≈ ±90°). El caso clásico axis-aligned sale idéntico al viejo
+  (origen = esquina inferior-izquierda del bbox, v = (0,h)). Splice y fallback usan la
+  MISMA base (fuente única: `rectBase()`).
 ## 8. Dificultades del entorno (IMPORTANTE AL TRABAJAR AQUÍ)
 
 1. **Paths con espacios**: evitá `dir`/`ls`/`findstr` con paths largos. Usá `read_files` y

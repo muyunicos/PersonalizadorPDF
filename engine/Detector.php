@@ -353,9 +353,13 @@ class ContentParser
         $y = (float)$args[1];
         $w = (float)$args[2];
         $h = (float)$args[3];
+        // Se transforman las 4 esquinas: si el CTM esta rotado el 're' queda
+        // como cuadrilatero inclinado en device space (vease emitQuad).
         $p1 = $this->txf($x, $y);
-        $p2 = $this->txf($x + $w, $y + $h);
-        $this->subs[] = ['type' => 'rect', 'rect' => [$p1[0], $p1[1], $p2[0] - $p1[0], $p2[1] - $p1[1]]];
+        $p2 = $this->txf($x + $w, $y);
+        $p3 = $this->txf($x + $w, $y + $h);
+        $p4 = $this->txf($x, $y + $h);
+        $this->subs[] = ['type' => 'rect', 'rect' => [$p1, $p2, $p3, $p4]];
         $this->cur = null;
     }
 
@@ -381,8 +385,9 @@ class ContentParser
     private function emitSub($sub, $alpha, $opOffset = 0, $op = '')
     {
         if (isset($sub['type']) && $sub['type'] === 'rect') {
-            $r = $sub['rect'];
-            $this->maybeInstance([$r[0], $r[1], $r[0] + $r[2], $r[1] + $r[3]], $alpha, $opOffset, $op);
+            // 're' es un rectangulo en user space; tras el CTM sus 4 esquinas
+            // (ya transformadas) pueden quedar rotadas.
+            $this->emitQuad($sub['rect'], $alpha, $opOffset, $op);
             return;
         }
         $pts = $sub['pts'];
@@ -414,10 +419,61 @@ class ContentParser
             $maxX = max($maxX, $p[0]);
             $maxY = max($maxY, $p[1]);
         }
-        if (!$this->esRectanguloDeLineas($pts, $sub['close'], $minX, $minY, $maxX, $maxY)) {
+        if ($this->esRectanguloDeLineas($pts, $sub['close'], $minX, $minY, $maxX, $maxY)) {
+            $this->maybeInstance([$minX, $minY, $maxX, $maxY], $alpha, $opOffset, $op);
             return;
         }
-        $this->maybeInstance([$minX, $minY, $maxX, $maxY], $alpha, $opOffset, $op);
+        // Rectangulo ROTADO: 4 segmentos cerrados cuyo recorrido forma un
+        // cuadrilatero (Corel exporta asi los huecos inclinados).
+        $quad = null;
+        if ($sub['close'] && count($pts) >= 4) {
+            $quad = array_slice($pts, 0, 4);
+        } elseif (!$sub['close'] && count($pts) === 5
+            && abs($pts[4][0] - $pts[0][0]) <= self::TOL_GEO
+            && abs($pts[4][1] - $pts[0][1]) <= self::TOL_GEO) {
+            // 4 lineas sin 'h' cerrando: el ultimo punto repite el primero.
+            $quad = array_slice($pts, 0, 4);
+        }
+        if ($quad) {
+            $this->emitQuad($quad, $alpha, $opOffset, $op);
+        }
+    }
+
+    /** Analiza un cuadrilatero (4 esquinas ya en device space) que proviene de
+     *  un 're' o de un path de 4 lineas cerradas. Si quedo rotado respecto a los
+     *  ejes, genera una instancia con medidas por LADOS y con 'dev_quad'. */
+    private function emitQuad(array $quad, $alpha, $opOffset = 0, $op = '')
+    {
+        if (count($quad) < 4 || !$this->esRectanguloQuad($quad)) {
+            return;
+        }
+        $minX = $quad[0][0];
+        $minY = $quad[0][1];
+        $maxX = $quad[0][0];
+        $maxY = $quad[0][1];
+        foreach ($quad as $p) {
+            $minX = min($minX, $p[0]);
+            $minY = min($minY, $p[1]);
+            $maxX = max($maxX, $p[0]);
+            $maxY = max($maxY, $p[1]);
+        }
+        $axis = true;
+        foreach ($quad as $p) {
+            if (abs($p[0] - $minX) > self::TOL_GEO && abs($p[0] - $maxX) > self::TOL_GEO) {
+                $axis = false;
+                break;
+            }
+            if (abs($p[1] - $minY) > self::TOL_GEO && abs($p[1] - $maxY) > self::TOL_GEO) {
+                $axis = false;
+                break;
+            }
+        }
+        if ($axis) {
+            // Alineado a ejes: camino identico al clasico.
+            $this->maybeInstance([$minX, $minY, $maxX, $maxY], $alpha, $opOffset, $op);
+        } else {
+            $this->maybeInstance([$minX, $minY, $maxX, $maxY], $alpha, $opOffset, $op, $quad);
+        }
     }
 
     private function esRectanguloDeLineas($pts, $close, $minX, $minY, $maxX, $maxY)
@@ -469,10 +525,60 @@ class ContentParser
         return $usedY0 && $usedY1 && $usedX0 && $usedX1;
     }
 
-    private function maybeInstance($bbox, $alpha, $opOffset = null, $op = '')
+    /** Distancia euclidiana entre dos puntos. */
+    private function distRect(array $a, array $b)
+    {
+        $dx = (float)$a[0] - (float)$b[0];
+        $dy = (float)$a[1] - (float)$b[1];
+        return sqrt($dx * $dx + $dy * $dy);
+    }
+
+    /** True si $quad (4 esquinas en device space, en orden de recorrido) es un
+     *  rectangulo: aristas opuestas paralelas e iguales, adyacentes
+     *  perpendiculares. Las comparaciones son RELATIVAS porque los numeros del
+     *  stream vienen redondeados (Corel exporta rectangulos rotados). */
+    private function esRectanguloQuad(array $quad)
+    {
+        if (count($quad) < 4) {
+            return false;
+        }
+        $tol = self::TOL_GEO;
+        $v = [];
+        $len = [];
+        for ($i = 0; $i < 4; $i++) {
+            $a = $quad[$i];
+            $b = $quad[($i + 1) % 4];
+            $v[] = [(float)$b[0] - (float)$a[0], (float)$b[1] - (float)$a[1]];
+            $len[] = $this->distRect($a, $b);
+            if ($len[count($len) - 1] <= $tol) {
+                return false; // lado degenerado
+            }
+        }
+        // Opuestos paralelos: producto vectorial ~ 0 (tolerancia angular relativa).
+        if (abs($v[0][0] * $v[2][1] - $v[0][1] * $v[2][0]) > $tol * $len[0] * $len[2]
+            || abs($v[1][0] * $v[3][1] - $v[1][1] * $v[3][0]) > $tol * $len[1] * $len[3]) {
+            return false;
+        }
+        // Opuestos iguales (tolerancia relativa).
+        if (abs($len[0] - $len[2]) > $tol * $len[0] || abs($len[1] - $len[3]) > $tol * $len[1]) {
+            return false;
+        }
+        // Adyacentes perpendiculares: producto escalar ~ 0 (relativo).
+        if (abs($v[0][0] * $v[1][0] + $v[0][1] * $v[1][1]) > $tol * $len[0] * $len[1]) {
+            return false;
+        }
+        return true;
+    }
+
+    private function maybeInstance($bbox, $alpha, $opOffset = null, $op = '', $quad = null)
     {
         $w = $bbox[2] - $bbox[0];
         $h = $bbox[3] - $bbox[1];
+        if ($quad !== null && count($quad) === 4) {
+            // Rectangulo rotado: las medidas representativas son los LADOS.
+            $w = $this->distRect($quad[0], $quad[1]);
+            $h = $this->distRect($quad[1], $quad[2]);
+        }
         if ($w < self::MIN_W || $h < self::MIN_H) {
             return;
         }
@@ -505,6 +611,11 @@ class ContentParser
             $inst['op'] = (string)$op;
             $inst['ctm'] = array_map('floatval', $this->ctm);
             $inst['dev_bbox'] = array_map('floatval', $bbox);
+            if ($quad !== null && count($quad) === 4) {
+                $inst['dev_quad'] = array_map(function ($p) {
+                    return [(float)$p[0], (float)$p[1]];
+                }, $quad);
+            }
         }
         $this->instancias[] = $inst;
     }
@@ -774,6 +885,11 @@ class Detector
                     $inst['op'] = isset($in['op']) ? $in['op'] : '';
                     $inst['ctm'] = isset($in['ctm']) ? array_map('floatval', $in['ctm']) : null;
                     $inst['dev_bbox'] = isset($in['dev_bbox']) ? array_map('floatval', $in['dev_bbox']) : null;
+                    if (isset($in['dev_quad'])) {
+                        $inst['dev_quad'] = array_map(function ($p) {
+                            return [(float)$p[0], (float)$p[1]];
+                        }, $in['dev_quad']);
+                    }
                 }
                 $insts[] = $inst;
             }

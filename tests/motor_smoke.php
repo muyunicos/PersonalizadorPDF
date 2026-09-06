@@ -20,7 +20,9 @@ use ExtractCorel\Engine\Detector;
 use ExtractCorel\Engine\Imagen;
 use ExtractCorel\Engine\Metadata;
 use ExtractCorel\Engine\Motor;
+use ExtractCorel\Engine\Overlay;
 use ExtractCorel\Engine\Pdf;
+use ExtractCorel\Engine\PngWriter;
 
 $fallos = 0;
 function check($nombre, $cond, $detalle = '')
@@ -146,6 +148,157 @@ $ecop = (is_array($egOut0) && isset($egOut0['ECOp1'])) ? $egOut0['ECOp1'] : null
 check('Resources define ECOp1 con ca=1 y CA=1',
     is_array($ecop) && (float)($ecop['ca'] ?? 0) === 1.0 && (float)($ecop['CA'] ?? 0) === 1.0,
     json_encode($ecop));
+
+// ===== I: Placeholder ROTADO (caso muestra2.pdf) =====
+// PDF sintetico de 1 pagina con 2 rectangulos 100% transparentes rotados
+// (100x50 pt, dibujados como 4 lineas cerradas + h f*, como los exporta Corel):
+//  - grupo a (azul): inclinado -30 grados, path en sentido HORARIO empezando en
+//    la esquina superior: es la orientacion real de muestra2.pdf, que antes
+//    producia la imagen ESPEJADA verticalmente (la base salia con un reflejo,
+//    no una rotacion).
+//  - grupo b (rojo): inclinado +30 grados, path ANTIHORARIO (regresion).
+function ecCp2($p)
+{
+    return sprintf('%.4f %.4f', $p[0], $p[1]);
+}
+$qAa = [250.0, 400.0];
+$qAb = [$qAa[0] + 86.6025, $qAa[1] - 50.0];
+$qAc = [$qAb[0] - 25.0, $qAb[1] - 43.3013];
+$qAd = [$qAa[0] - 25.0, $qAa[1] - 43.3013];
+$qBa = [400.0, 200.0];
+$qBb = [$qBa[0] + 86.6025, $qBa[1] + 50.0];
+$qBc = [$qBb[0] - 25.0, $qBb[1] + 43.3013];
+$qBd = [$qBa[0] - 25.0, $qBa[1] + 43.3013];
+$rotStream = '/GS1 gs' . "\n"
+    . '0 0 1 rg' . "\n"
+    . ecCp2($qAa) . ' m' . "\n"
+    . ecCp2($qAb) . ' l' . "\n"
+    . ecCp2($qAc) . ' l' . "\n"
+    . ecCp2($qAd) . ' l' . "\n"
+    . 'h f*' . "\n"
+    . '1 0 0 rg' . "\n"
+    . ecCp2($qBa) . ' m' . "\n"
+    . ecCp2($qBb) . ' l' . "\n"
+    . ecCp2($qBc) . ' l' . "\n"
+    . ecCp2($qBd) . ' l' . "\n"
+    . 'h f*' . "\n";
+$rotObjs = [];
+$rotObjs[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+$rotObjs[2] = '<< /Type /Pages /Kids [3 0 R] /Count 1 >>';
+$rotObjs[3] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] '
+    . '/Resources << /ExtGState << /GS1 << /Type /ExtGState /ca 0 /CA 0 >> >> >> '
+    . '/Contents 4 0 R >>';
+$rotObjs[4] = '<< /Length ' . strlen($rotStream) . " >>\nstream\n" . $rotStream . "\nendstream";
+$rotPdf = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
+$rotOff = [];
+foreach ($rotObjs as $num => $txt) {
+    $rotOff[$num] = strlen($rotPdf);
+    $rotPdf .= $num . ' 0 obj' . "\n" . $txt . "\n" . 'endobj' . "\n";
+}
+$rotXref = strlen($rotPdf);
+$rotPdf .= "xref\n0 5\n0000000000 65535 f \n";
+for ($i = 1; $i <= 4; $i++) {
+    $rotPdf .= sprintf('%010d 00000 n ', $rotOff[$i]) . "\n";
+}
+$rotPdf .= "trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n$rotXref\n%%EOF\n";
+
+$pdfRot = new Pdf($rotPdf);
+$pdfRot->load();
+$gRot = (new Detector($pdfRot))->analizarPdf()['grupos'];
+check('rotado: se detectan 2 grupos', count($gRot) === 2, 'grupos=' . count($gRot));
+$gA = null;
+$gB = null;
+foreach ($gRot as $g) {
+    if ($g['color'] === '#0000FF') {
+        $gA = $g;
+    }
+    if ($g['color'] === '#FF0000') {
+        $gB = $g;
+    }
+}
+check('rotado: grupo a azul', $gA !== null && $gA['letra'] === 'a'
+    && $gA['color'] === '#0000FF');
+check('rotado: grupo b rojo', $gB !== null && $gB['letra'] === 'b'
+    && $gB['color'] === '#FF0000');
+check('rotado: lados a ~100x50 pt', $gA !== null
+    && abs((float)$gA['ancho_pt'] - 100) < 0.5 && abs((float)$gA['alto_pt'] - 50) < 0.5,
+    $gA !== null ? ('w=' . $gA['ancho_pt'] . ' h=' . $gA['alto_pt']) : '-');
+check('rotado: lados b ~100x50 pt', $gB !== null
+    && abs((float)$gB['ancho_pt'] - 100) < 0.5 && abs((float)$gB['alto_pt'] - 50) < 0.5,
+    $gB !== null ? ('w=' . $gB['ancho_pt'] . ' h=' . $gB['alto_pt']) : '-');
+check('rotado: px 278x139', $gA !== null && $gA['ancho_px'] === 278 && $gA['alto_px'] === 139);
+$iA = ($gA !== null && isset($gA['instancias'][0])) ? $gA['instancias'][0] : null;
+$iB = ($gB !== null && isset($gB['instancias'][0])) ? $gB['instancias'][0] : null;
+check('rotado: instancias con dev_quad', $iA !== null && count($iA['dev_quad']) === 4
+    && $iB !== null && count($iB['dev_quad']) === 4);
+
+    if ($gA !== null && $gB !== null) {
+    // Overlay: inserta las imagenes rotadas en el stream original (splice).
+    $ovR = new Overlay($rotPdf);
+    $specR = [
+        'a' => [
+            'tipo' => 'raster',
+            'w' => $gA['ancho_px'],
+            'h' => $gA['alto_px'],
+            'rgb' => str_repeat("\x80", $gA['ancho_px'] * $gA['alto_px'] * 3),
+            'alpha' => str_repeat("\xFF", $gA['ancho_px'] * $gA['alto_px']),
+        ],
+        'b' => [
+            'tipo' => 'raster',
+            'w' => $gB['ancho_px'],
+            'h' => $gB['alto_px'],
+            'rgb' => str_repeat("\x90", $gB['ancho_px'] * $gB['alto_px'] * 3),
+            'alpha' => str_repeat("\xFF", $gB['ancho_px'] * $gB['alto_px']),
+        ],
+    ];
+    $outR = $ovR->build($gRot, $specR);
+    $pdfOutR = new Pdf($outR);
+    $pdfOutR->load();
+    $csR = implode("\n", $pdfOutR->pageContents($pdfOutR->getPages()[0]));
+    check('rotado: 2 draws splice con q /ECOp1 gs',
+        substr_count($csR, ' cm /ECIm') === 2 && substr_count($csR, 'q /ECOp1 gs') === 2,
+        'draws=' . substr_count($csR, ' cm /ECIm'));
+    // Grupo a (path horario como Corel): antes la base salia ESPEJADA
+    // (cm = 86.6025 -50 -25 -43.3013 ...). Ahora debe ser rotacion pura con
+    // v hacia arriba y origen en la esquina q3 del quad: u=(86.6,-50),
+    // v=(25,43.3), o=(225, 356.6987). Siempre cubre el quad.
+    check('rotado: cm del grupo a sin espejo (v_y>0)',
+        strpos($csR, '86.6025 -50 25 43.3013 225 356.6987 cm /ECIm') !== false,
+        'no se hallo el cm corregido');
+    check('rotado: cm espejado del grupo a AUSENTE',
+        strpos($csR, '86.6025 -50 -25 -43.3013') === false,
+        'todavia hay reflejo vertical');
+    check('rotado: cm del grupo b conservado',
+        strpos($csR, '86.6025 50 -25 43.3013 400 200 cm /ECIm') !== false);
+    $mDet = preg_match('/86.6025 -50 25 (43.3013) /', $csR, $mmDet);
+    check('rotado: det(cm a) > 0 => rotacion pura',
+        $mDet && (86.6025 * (float)$mmDet[1] - (-50.0) * 25.0) > 0
+            && (float)$mmDet[1] > 0,
+        $mDet ? ('det=' . (86.6025 * (float)$mmDet[1] + 1250.0)) : 'sin cm');
+
+    // Motor end-to-end con un PNG por grupo (RGBA 8 bits sin entrelazar: sin GD).
+    $rutaRotPdf = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'ec_rotado.pdf';
+    $rutaRotPngA = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'ec_rotado_a.png';
+    $rutaRotPngB = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'ec_rotado_b.png';
+    file_put_contents($rutaRotPdf, $rotPdf);
+    PngWriter::write($rutaRotPngA, $gA['ancho_px'], $gA['alto_px'],
+        str_repeat("\x80\x80\x80\xFF", $gA['ancho_px'] * $gA['alto_px']));
+    PngWriter::write($rutaRotPngB, $gB['ancho_px'], $gB['alto_px'],
+        str_repeat("\x40\x80\xC0\xFF", $gB['ancho_px'] * $gB['alto_px']));
+    try {
+        $rR = Motor::procesar($rutaRotPdf, Metadata::generar('sintetico_rotado', $gRot),
+            ['a' => $rutaRotPngA, 'b' => $rutaRotPngB]);
+        check('rotado: motor end-to-end', isset($rR['bytes'])
+            && $rR['resumen']['grupos_aplicados'] === ['a', 'b']
+            && (int)$rR['resumen']['imagenes_insertadas'] === 2,
+            json_encode($rR['resumen']));
+    } catch (\Throwable $e) {
+        check('rotado: motor end-to-end', false, $e->getMessage());
+    }
+    @unlink($rutaRotPdf);
+    @unlink($rutaRotPngA);
+    @unlink($rutaRotPngB);
+}
 
 // ===== G: dataset desactualizado detectado =====
 $datosMalos = $datos;

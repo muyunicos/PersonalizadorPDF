@@ -142,8 +142,20 @@ class Overlay
                     continue; // ya insertada en el stream original
                 }
                 $name = 'ECIm' . $this->imgObj[$d['img']];
-                $ops .= "\r\nq /ECOp1 gs\r\n" . $this->fmt($d['w']) . ' 0 0 ' . $this->fmt($d['h']) . ' '
-                    . $this->fmt($d['x']) . ' ' . $this->fmt($d['y']) . " cm /$name Do\r\nQ";
+                if (isset($d['quad'])) {
+                    // Rectangulo rotado: base ya orientada (sin espejo) guardada
+                    // en agruparInstancias(). En este stream nuevo el CTM es
+                    // identidad, asi que cm = D directamente.
+                    $b = $d['base'];
+                    $ops .= "\r\nq /ECOp1 gs\r\n"
+                        . $this->fmt($b[2]) . ' ' . $this->fmt($b[3]) . ' '
+                        . $this->fmt($b[4]) . ' ' . $this->fmt($b[5]) . ' '
+                        . $this->fmt($b[0]) . ' ' . $this->fmt($b[1])
+                        . " cm /$name Do\r\nQ";
+                } else {
+                    $ops .= "\r\nq /ECOp1 gs\r\n" . $this->fmt($d['w']) . ' 0 0 ' . $this->fmt($d['h']) . ' '
+                        . $this->fmt($d['x']) . ' ' . $this->fmt($d['y']) . " cm /$name Do\r\nQ";
+                }
             }
             $n = $nextNum++;
             $contentObj[$i] = $n;
@@ -195,18 +207,26 @@ class Overlay
             }
             foreach ($g['instancias'] as $inst) {
                 $p = (int)$inst['page'];
-                $bbox = $inst['bbox'];
                 $H = $this->heights[$p];
-                $w = $bbox[2] - $bbox[0];
-                $h = $bbox[3] - $bbox[1];
                 $entry = [
-                    'x' => $bbox[0],
-                    'y' => $H - $bbox[3],
-                    'w' => $w,
-                    'h' => $h,
                     'img' => $g['letra'],
                     'spliced' => false,
                 ];
+                if (isset($inst['dev_quad']) && count($inst['dev_quad']) === 4) {
+                    // Rectangulo rotado: medidas por LADOS, base = cuadrilatero
+                    // con orientacion corregida (misma fuente que spliceOps).
+                    $q = $inst['dev_quad'];
+                    $entry['quad'] = $q;
+                    $entry['w'] = $this->distRect($q[0], $q[1]);
+                    $entry['h'] = $this->distRect($q[1], $q[2]);
+                    $entry['base'] = $this->rectBase($inst);
+                } else {
+                    $bbox = $inst['bbox'];
+                    $entry['x'] = $bbox[0];
+                    $entry['y'] = $H - $bbox[3];
+                    $entry['w'] = $bbox[2] - $bbox[0];
+                    $entry['h'] = $bbox[3] - $bbox[1];
+                }
                 $ops = $this->spliceOps($inst, $g['letra']);
                 if ($ops !== null && isset($inst['stream'], $inst['offset'])) {
                     $stm = (int)$inst['stream'];
@@ -318,25 +338,19 @@ class Overlay
     }
 
     /**
-     * Matriz cm para dibujar la imagen sobre DEV_bbox en el punto del stream
-     * donde el CTM era CTM: M = inv(CTM) * D, con D el rect en device space.
+     * Matriz cm para dibujar la imagen sobre el rectangulo (device space) de la
+     * instancia en el punto del stream donde el CTM era CTM: M = inv(CTM) * D,
+     * con D definido por rectBase() (origen + vectores de arista). Cada draw va
+     * en su propio q...Q y con /ECOp1 gs (ca=1) para no heredar la opacidad 0
+     * del ExtGState del placeholder (regla de AGENTS.md seccion 4).
      */
     private function spliceOps(array $inst, $letra)
     {
-        if (!isset($inst['ctm'], $inst['dev_bbox'])) {
+        if (!isset($inst['ctm'])) {
             return null;
         }
         $c = array_values($inst['ctm']);
         if (count($c) < 6) {
-            return null;
-        }
-        $db = array_values($inst['dev_bbox']);
-        if (count($db) < 4) {
-            return null;
-        }
-        $w = (float)$db[2] - (float)$db[0];
-        $h = (float)$db[3] - (float)$db[1];
-        if ($w <= 0.001 || $h <= 0.001) {
             return null;
         }
         $det = $c[0] * $c[3] - $c[1] * $c[2];
@@ -349,15 +363,121 @@ class Overlay
         $di =  $c[0] / $det;
         $ei = ($c[2] * $c[5] - $c[3] * $c[4]) / $det;
         $fi = ($c[1] * $c[4] - $c[0] * $c[5]) / $det;
-        $m0 = $ai * $w;
-        $m1 = $bi * $h;
-        $m2 = $ci * $w;
-        $m3 = $di * $h;
-        $m4 = $ai * $db[0] + $bi * $db[1] + $ei;
-        $m5 = $ci * $db[0] + $di * $db[1] + $fi;
+        list($dx, $dy, $ux, $uy, $vx, $vy) = $this->rectBase($inst);
+        if ($dx === null) {
+            return null;
+        }
+        $m0 = $ai * $ux + $ci * $uy;
+        $m1 = $bi * $ux + $di * $uy;
+        $m2 = $ai * $vx + $ci * $vy;
+        $m3 = $bi * $vx + $di * $vy;
+        $m4 = $ai * $dx + $ci * $dy + $ei;
+        $m5 = $bi * $dx + $di * $dy + $fi;
         $name = 'ECIm' . $this->imgObj[$letra];
         return "\r\nq /ECOp1 gs " . $this->fmt($m0) . ' ' . $this->fmt($m1) . ' ' . $this->fmt($m2) . ' '
             . $this->fmt($m3) . ' ' . $this->fmt($m4) . ' ' . $this->fmt($m5) . " cm /$name Do Q\r\n";
+    }
+
+    /** Base geometrica del rectangulo en device space: [dx, dy, ux, uy, vx, vy]
+     *  (origen + 1ra arista + 2da arista). Con 'dev_quad' (rectangulo rotado) se
+     *  usa baseDesdeQuad (orientacion CORREGIDA, sin espejo); si no, el
+     *  rectangulo axis-aligned de 'dev_bbox'. */
+    private function rectBase(array $inst)
+    {
+        if (isset($inst['dev_quad']) && count($inst['dev_quad']) === 4) {
+            return $this->baseDesdeQuad($inst['dev_quad']);
+        }
+        if (!isset($inst['dev_bbox'])) {
+            return [null, null, null, null, null, null];
+        }
+        $db = array_values($inst['dev_bbox']);
+        if (count($db) < 4) {
+            return [null, null, null, null, null, null];
+        }
+        $w = (float)$db[2] - (float)$db[0];
+        $h = (float)$db[3] - (float)$db[1];
+        if ($w <= 0.001 || $h <= 0.001) {
+            return [null, null, null, null, null, null];
+        }
+        return [(float)$db[0], (float)$db[1], $w, 0.0, 0.0, $h];
+    }
+
+    /**
+     * Orienta la base de un cuadrilatero (4 esquinas en device space, en orden
+     * de recorrido del path) para que la imagen NO salga espejada ni girada y
+     * SIEMPRE cubra el quad (el origen es una esquina del quad y sus vectores
+     * salientes recorren las aristas, sin deformar: u es paralelo a la 1ra
+     * arista (0-1) y v a la 2da (1-2), los lados "ancho" y "alto" del detector).
+     * Elige la esquina cuyo mapeo cumpla:
+     *   1. det(u,v) > 0        -> rotacion pura, nunca reflejo (evita espejo);
+     *   2. v_y > 0             -> el "arriba" de la imagen apunta hacia arriba
+     *                             en la pagina (Corel recorre paths horarios);
+     *   3. desempates: u_x > 0, luego u_y > 0 (inclinaciones ~ +/-90 grados).
+     * El caso clasico axis-aligned sale identico al viejo (origen = esquina
+     * inferior-izquierda del bbox, v = (0, h)).
+     */
+    private function baseDesdeQuad(array $q)
+    {
+        $mejor = null;
+        $mejorScore = null;
+        for ($i = 0; $i < 4; $i++) {
+            $a = $q[$i];
+            // Lado del ANCHO (1ra arista, par 0-1 / 2-3) y del ALTO (2da, 1-2 / 3-0).
+            $uIdx = ($i % 2 === 0) ? ($i + 1) % 4 : ($i + 3) % 4;
+            $vIdx = ($i % 2 === 0) ? ($i + 3) % 4 : ($i + 1) % 4;
+            $u = [(float)$q[$uIdx][0] - (float)$a[0], (float)$q[$uIdx][1] - (float)$a[1]];
+            $v = [(float)$q[$vIdx][0] - (float)$a[0], (float)$q[$vIdx][1] - (float)$a[1]];
+            $det = $u[0] * $v[1] - $u[1] * $v[0];
+            if ($det <= 1e-6) {
+                continue; // reflejo -> descartado (no espejar la foto)
+            }
+            if ($v[1] <= 0.0) {
+                continue; // "arriba" hacia abajo -> descartado
+            }
+            $score = [
+                $u[0] > 0.0 ? 0 : 1,
+                $u[1] > 0.0 ? 0 : 1,
+            ];
+            if ($mejor === null || $this->cmpScore($score, $mejorScore) < 0) {
+                $mejor = [(float)$a[0], (float)$a[1], $u[0], $u[1], $v[0], $v[1]];
+                $mejorScore = $score;
+            }
+        }
+        if ($mejor === null) {
+            // Sin candidato valido (deberia ser imposible con un quad recto):
+            // fallback identico al comportamiento anterior.
+            return [
+                (float)$q[0][0], (float)$q[0][1],
+                (float)$q[1][0] - (float)$q[0][0], (float)$q[1][1] - (float)$q[0][1],
+                (float)$q[3][0] - (float)$q[0][0], (float)$q[3][1] - (float)$q[0][1],
+            ];
+        }
+        return $mejor;
+    }
+
+    /** Compara tuplas de desempate: menor primero. null se trata como infinito. */
+    private function cmpScore(array $a, array $b)
+    {
+        if ($b === null) {
+            return -1;
+        }
+        for ($i = 0; $i < 2; $i++) {
+            if ($a[$i] < $b[$i]) {
+                return -1;
+            }
+            if ($a[$i] > $b[$i]) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    /** Distancia euclidiana entre dos puntos. */
+    private function distRect(array $a, array $b)
+    {
+        $dx = (float)$a[0] - (float)$b[0];
+        $dy = (float)$a[1] - (float)$b[1];
+        return sqrt($dx * $dx + $dy * $dy);
     }
 
     /** Serializa un dict PDF (para re-emitir objetos reescritos). */
