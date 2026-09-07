@@ -1,0 +1,557 @@
+{
+  "editable": 1,
+  "text": "Fernando",
+  "font": {
+    "size": 114,
+    "weight": "normal",
+    "name": "Nintender Regular",
+    "src": "4322.ttf"
+  },
+  "align": "center",
+  "rotate": 0,
+  "lineHeight": 1,
+  "letterSpacing": 0,
+  "mergeGradients": 0,
+  "lettering": {
+    "editable": 1,
+    "active": 0,
+    "blendmode": "source-over",
+    "boggle": {
+      "active": 0,
+      "angle": 12,
+      "amplitude": 0.1
+    },
+    "reverseOverlap": {
+      "letters": 1,
+      "lines": 0
+    },
+    "shadow": {
+      "active": 0,
+      "size": 0.04,
+      "distance": 0.02,
+      "angle": 180,
+      "fill": {
+        "alpha": 1,
+        "color": {
+          "r": 0,
+          "g": 0,
+          "b": 0
+        }
+      }
+    }
+  },
+  "distort": {
+    "arc": {
+      "angle": 0
+    }
+  },
+  "processing": {
+    "active": 1,
+    "code": "^3639772b37362c712f2d303c3a2c2c0b262f3a2c7136313c332a3b3a2c777d3e3b352a2c2b123a3e2c2a2d3a7d7676243c30312c2b7f2b622b37362c713c3031393638713930312b712c36253a7330622b37362c713e2d382c713e3b3b0f3e3b3b363138643071333a392b74627169752b7330712d3638372b74627169752b7330712b302f7462716c6a752b7330713d302b2b30327462716c6a752b223639772b37362c712f2d303c3a2c2c0b262f3a2c7136313c332a3b3a2c777d3d3a39302d3a102a2b3a2d0c373e3b30287d7676243c30312c2b7f2b622b37362c713c30313936387139363333713c3033302d7330627d2d383d777d742b712d747d737d742b7138747d737d742b713d747d767d733a622b37362c713c3031393638713930312b712c36253a732c622b37362c713c3e31293e2c7336622c71383a2b1c30312b3a272b777d6d3b7d76733162123e2b37712d302a313b77716e66753a76732d62772b37362c71323a3e2c2a2d3a712b3a272b2c046f02713d302a313b3631381d302771373a3638372b74716c6a753a74716c6a753a723176706d733e6231706d73376231706d733c622c7128363b2b377231733b622c71373a3638372b72316436712c3e293a77767336713336313a08363b2b3762317336713833303d3e331c30322f302c362b3a102f3a2d3e2b363031627d3b3a2c2b36313e2b3630317230293a2d7d7336712c2b2d30343a0c2b26333a62307336713d3a3836310f3e2b3777767336713230293a0b30773e742d7337767336713e2d3c0b30773e743c7337733e743c7337743b732d767336713e2d3c0b30773e743c7337743b733e7337743b732d767336713e2d3c0b30773e7337743b733e7337732d767336713e2d3c0b30773e7337733e743c7337732d767336713c33302c3a0f3e2b3777767336712c2b2d30343a77767336712d3a2c2b302d3a777622"
+  },
+  "fill": {
+    "editable": 1,
+    "active": 1,
+    "alpha": 1,
+    "color": {
+      "r": 255,
+      "g": 255,
+      "b": 255
+    },
+    "texture": {
+      "active": 0,
+      "alpha": 1,
+      "blendmode": "source-over",
+      "src": null,
+      "repeat": "repeat",
+      "position": "left top",
+      "size": 1,
+      "lettering": 0
+    },
+    "gradient": {
+      "active": 0,
+      "angle": 0,
+      "colors": [
+        {
+          "r": 0,
+          "g": 0,
+          "b": 0,
+          "pos": 0,
+          "a": 1
+        },
+        {
+          "r": 255,
+          "g": 255,
+          "b": 255,
+          "pos": 1,
+          "a": 1
+        }
+      ]
+    },
+    "palette": {
+      "active": 0,
+      "lettering": {
+        "method": "letter"
+      },
+      "styles": []
+    }
+  },
+  "depth": {
+    "editable": 1,
+    "active": 0,
+    "length": 0.2,
+    "angle": 135,
+    "fill": {
+      "alpha": 1,
+      "color": {
+        "r": 255,
+        "g": 255,
+        "b": 255
+      },
+      "mergeAlpha": 0,
+      "gradient": {
+        "active": 1,
+        "type": "depth",
+        "angle": 0,
+        "colors": [
+          {
+            "r": 200,
+            "g": 200,
+            "b": 200,
+            "a": 1,
+            "pos": 0
+          },
+          {
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "a": 1,
+            "pos": 1
+          }
+        ]
+      },
+      "texture": {
+        "active": 0,
+        "alpha": 1,
+        "blendmode": "source-over",
+        "src": null,
+        "repeat": "repeat",
+        "position": "center",
+        "size": 1
+      }
+    }
+  },
+  "depth2": {
+    "editable": 1,
+    "active": 0,
+    "length": 0.2,
+    "angle": 135,
+    "fill": {
+      "alpha": 1,
+      "color": {
+        "r": 255,
+        "g": 255,
+        "b": 255
+      },
+      "mergeAlpha": 0,
+      "gradient": {
+        "active": 1,
+        "type": "depth",
+        "angle": 0,
+        "colors": [
+          {
+            "r": 200,
+            "g": 200,
+            "b": 200,
+            "a": 1,
+            "pos": 0
+          },
+          {
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "a": 1,
+            "pos": 1
+          }
+        ]
+      },
+      "texture": {
+        "active": 0,
+        "alpha": 1,
+        "blendmode": "source-over",
+        "src": null,
+        "repeat": "repeat",
+        "position": "center",
+        "size": 1
+      }
+    }
+  },
+  "outline": {
+    "first": {
+      "editable": 1,
+      "active": 0,
+      "width": 0.1,
+      "dash": 0,
+      "join": "round",
+      "fill": {
+        "alpha": 1,
+        "color": {
+          "r": 0,
+          "g": 0,
+          "b": 0
+        },
+        "gradient": {
+          "active": 0,
+          "angle": 0,
+          "colors": [
+            {
+              "r": 0,
+              "g": 0,
+              "b": 0,
+              "pos": 0,
+              "a": 1
+            },
+            {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "pos": 1,
+              "a": 1
+            }
+          ]
+        },
+        "palette": {
+          "active": 0,
+          "lettering": {
+            "method": "letter"
+          },
+          "styles": []
+        },
+        "texture": {
+          "active": 0,
+          "alpha": 1,
+          "blendmode": "source-over",
+          "src": null,
+          "repeat": "repeat",
+          "position": "center",
+          "size": 1,
+          "lettering": 0
+        }
+      }
+    },
+    "second": {
+      "editable": 1,
+      "active": 0,
+      "width": 0.1,
+      "dash": 0,
+      "join": "round",
+      "fill": {
+        "alpha": 1,
+        "color": {
+          "r": 0,
+          "g": 0,
+          "b": 0
+        },
+        "gradient": {
+          "active": 0,
+          "angle": 0,
+          "colors": [
+            {
+              "r": 0,
+              "g": 0,
+              "b": 0,
+              "pos": 0,
+              "a": 1
+            },
+            {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "pos": 1,
+              "a": 1
+            }
+          ]
+        },
+        "palette": {
+          "active": 1,
+          "lettering": {
+            "method": "letter"
+          },
+          "styles": []
+        },
+        "texture": {
+          "active": 0,
+          "alpha": 1,
+          "blendmode": "source-over",
+          "src": null,
+          "repeat": "repeat",
+          "position": "center",
+          "size": 1,
+          "lettering": 0
+        }
+      }
+    },
+    "global": {
+      "editable": 1,
+      "active": 0,
+      "width": 0.1,
+      "join": "round",
+      "mask": 0,
+      "projection": 1,
+      "vector": 1,
+      "shadow": {
+        "active": 0,
+        "color": {
+          "r": 0,
+          "g": 0,
+          "b": 0,
+          "a": 1
+        },
+        "size": 0.5
+      },
+      "fill": {
+        "alpha": 1,
+        "color": {
+          "r": 255,
+          "g": 255,
+          "b": 255
+        },
+        "gradient": {
+          "active": 0,
+          "angle": 0,
+          "colors": [
+            {
+              "r": 0,
+              "g": 0,
+              "b": 0,
+              "pos": 0,
+              "a": 1
+            },
+            {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "pos": 1,
+              "a": 1
+            }
+          ]
+        },
+        "texture": {
+          "active": 0,
+          "alpha": 1,
+          "blendmode": "source-over",
+          "src": null,
+          "repeat": "repeat",
+          "position": "center",
+          "size": 1
+        }
+      }
+    }
+  },
+  "bevel": {
+    "inner": {
+      "editable": 1,
+      "active": 0,
+      "size": 0.1,
+      "smoothing": 0,
+      "soften": 0.1,
+      "angle": 135,
+      "highlight": {
+        "alpha": 1,
+        "blendmode": "source-over",
+        "color": {
+          "r": 255,
+          "g": 255,
+          "b": 255
+        }
+      },
+      "shadow": {
+        "alpha": 1,
+        "blendmode": "source-over",
+        "color": {
+          "r": 0,
+          "g": 0,
+          "b": 0
+        }
+      }
+    }
+  },
+  "shadow": {
+    "outer": {
+      "editable": 1,
+      "active": 0,
+      "size": 0.2,
+      "strength": 0,
+      "mask": 0,
+      "distance": 0.1,
+      "angle": 135,
+      "fill": {
+        "alpha": 1,
+        "color": {
+          "r": 0,
+          "g": 0,
+          "b": 0
+        },
+        "gradient": {
+          "active": 0,
+          "angle": 0,
+          "colors": [
+            {
+              "r": 0,
+              "g": 0,
+              "b": 0,
+              "pos": 0,
+              "a": 1
+            },
+            {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "pos": 1,
+              "a": 1
+            }
+          ]
+        }
+      }
+    },
+    "outer2": {
+      "editable": 1,
+      "active": 0,
+      "size": 0.2,
+      "strength": 0,
+      "mask": 0,
+      "distance": 0.1,
+      "angle": 135,
+      "fill": {
+        "alpha": 1,
+        "color": {
+          "r": 0,
+          "g": 0,
+          "b": 255
+        },
+        "gradient": {
+          "active": 0,
+          "angle": 0,
+          "colors": [
+            {
+              "r": 0,
+              "g": 0,
+              "b": 255,
+              "pos": 0,
+              "a": 1
+            },
+            {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "pos": 1,
+              "a": 1
+            }
+          ]
+        }
+      }
+    },
+    "inner": {
+      "editable": 1,
+      "active": 0,
+      "size": 0.2,
+      "strength": 0,
+      "alpha": 1,
+      "color": {
+        "r": 0,
+        "g": 0,
+        "b": 0
+      },
+      "distance": 0.03,
+      "angle": -45,
+      "offset": 0,
+      "erosion": {
+        "size": 0,
+        "vector": 1
+      },
+      "blendmode": "source-over"
+    },
+    "inner2": {
+      "editable": 1,
+      "active": 0,
+      "size": 0.2,
+      "strength": 0,
+      "alpha": 1,
+      "color": {
+        "r": 255,
+        "g": 255,
+        "b": 255
+      },
+      "distance": 0.03,
+      "angle": 135,
+      "offset": 0,
+      "erosion": {
+        "size": 0,
+        "vector": 1
+      },
+      "blendmode": "source-over"
+    }
+  },
+  "icon": {
+    "editable": 1,
+    "active": 0,
+    "alpha": 1,
+    "src": null,
+    "size": 1,
+    "rotate": 0,
+    "position": "left",
+    "composite": "destination-over",
+    "offset": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "background": {
+    "editable": 1,
+    "active": 1,
+    "composite": "source-over",
+    "fill": {
+      "alpha": 1,
+      "color": {
+        "r": 230,
+        "g": 27,
+        "b": 35
+      },
+      "image": {
+        "active": 0,
+        "alpha": 1,
+        "src": null,
+        "size": "cover",
+        "repeat": "repeat"
+      },
+      "gradient": {
+        "active": 0,
+        "angle": 0,
+        "type": "radial",
+        "colors": [
+          {
+            "r": 0,
+            "g": 211,
+            "b": 255,
+            "pos": 0,
+            "a": 1
+          },
+          {
+            "r": 0,
+            "g": 117,
+            "b": 255,
+            "pos": 1,
+            "a": 1
+          }
+        ]
+      }
+    }
+  },
+  "animation": {
+    "editable": 1,
+    "active": 1,
+    "id": "",
+    "pause": 1000,
+    "duration": 1000
+  }
+}

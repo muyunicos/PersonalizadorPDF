@@ -9,10 +9,12 @@
 
 ## 0. Resumen en una frase
 
-El plugin **Extractor Corel** detecta "huecos" (rectángulos 100% transparentes) en un PDF
-exportado desde **CorelDRAW**, los agrupa por **color**, permite cargar **una imagen real
-por grupo** y **reemplaza cada hueco por su imagen** (encajada, sin deformar ni recortar),
-devolviendo un **PDF editado** optimizado, listo para descargar. Motor 100% PHP, sin Python.
+El plugin **Personalizador PDF** (antes "Extractor Corel") detecta "huecos" (rectángulos 100%
+transparentes) en un PDF exportado desde **CorelDRAW**, los agrupa por **color**, permite
+cargar **una imagen real por grupo** y **reemplaza cada hueco por su imagen** (encajada, sin
+deformar ni recortar), devolviendo un **PDF editado** optimizado. Motor 100% PHP, sin Python.
+Desde la **v3.0.0** integra el sistema **TextMuy** (editor de estilos de texto client-side)
+en la pestaña **"Estilos de Texto"** del admin.
 
 ## 1. Objetivo y visión del sistema
 
@@ -27,21 +29,31 @@ devolviendo un **PDF editado** optimizado, listo para descargar. Motor 100% PHP,
 - **Encajado (contain)**: la imagen **nunca** se deforma ni se recorta; se escala para
   caber entera dentro del placeholder y se centra; los márgenes sobrantes quedan
   transparentes.
-- **100% PHP**: funciona en hosting compartido (Hostinger, etc.) sin Python, Node ni SSH.
+- **TextMuy (v3.0.0+)**: módulo autocontenido en `modules/textmuy/`, servido en un iframe
+  same-origin dentro de la pestaña "Estilos de Texto". Es un editor de estilos de texto
+  (TextStudio-like) 100% client-side (Canvas 2D + WebGL). Diseño aprobado: en v3.1 los grupos
+  del PDF podrán llevar "texto + estilo" y TextMuy renderizará la imagen del grupo al pulsar
+  Procesar (el render ocurre en el navegador del admin; ver sección 7).
+- **100% PHP**: el servidor funciona en hosting compartido (Hostinger, etc.) sin Python ni
+  Node. El código que corre en el servidor es PHP; el JS de TextMuy corre solo en el navegador.
 
 ## 2. Arquitectura y mapa de archivos (raíz del repo = carpeta del plugin)
 
 ```
-PersonalizadorPDF/
+personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/personalizador-pdf/)
 ├── AGENTS.md                ← ESTE archivo (contesto obligatorio)
-├── extractor-corel.php      ← Plugin principal WP: menú, assets, handlers (admin_post_*)
+├── personalizador-pdf.php   ← Plugin principal WP (antes extractor-corel.php): clase
+│                               Personalizador_PDF_Plugin, menú, assets, handlers
+│                               admin_post_personalizador_pdf_*, migración de datos y
+│                               compat legacy extractor_corel_* (un ciclo, se elimina en 3.1)
 ├── admin/
-│   ├── page.php             ← Página admin: pestañas "PDFs" | "Ayuda"
+│   ├── page.php             ← Página admin: pestañas "PDFs" | "Estilos de Texto" | "Ayuda"
 │   ├── pdfs.php             ← Consola: subir PDF, listado, grupos, imágenes, Procesar
+│   ├── estilos-texto.php    ← NUEVO v3.0: iframe del módulo TextMuy (modules/textmuy)
 │   └── ayuda.php            ← Documentación interna del plugin
 ├── assets/
-│   ├── admin.css            ← Estilos de la consola
-│   └── admin.js             ← Modal renombrar/sobrescribir + galería wp.media
+│   ├── admin.css            ← Estilos de la consola + iframe de TextMuy
+│   └── admin.js             ← Modal renombrar/sobrescribir + galería wp.media (obj PersonalizadorPDF)
 ├── engine/                  ← MOTOR PHP puro (sin dependencias externas)
 │   ├── Pdf.php              ← Parser de PDF (lexer, objetos, xref, streams, árbol de páginas)
 │   ├── Detector.php         ← Detección de placeholders y agrupación por color (== análisis Python)
@@ -50,8 +62,15 @@ PersonalizadorPDF/
 │   ├── Imagen.php           ← Normaliza imágenes reales a RGBA (GD o PHP puro) + encajado
 │   ├── Overlay.php          ← Inyecta XObjects/imagenes en el PDF (reescribe objetos)
 │   └── Motor.php            ← ORQUESTADOR: PDF + dataset + imágenes → PDF editado
+├── modules/                 ← NUEVO v3.0: módulos autocontenidos del plugin
+│   └── textmuy/             ← Proyecto TextMuy íntegro (documento servido por el iframe):
+│                               index.html, render-core.html (motor headless, v3.1), css/,
+│                               js/ (effects/, utils/), presets/, fonts/ (vacía; fallback
+│                               Google Fonts), tests/, ROADMAP.md.
+│                               Upgrade = reemplazar esta carpeta sin tocar el plugin,
+│                               respetando el contrato RenderCore (ver §2.1).
 ├── tests/
-│   ├── motor_smoke.php      ← Smoke test del motor (21 checks) — CORRERLO SIEMPRE
+│   ├── motor_smoke.php      ← Smoke test del motor (26 checks) — CORRERLO SIEMPRE
 │   ├── parity.php           ← Paridad del detector PHP vs expected_muestra.json (oráculo)
 │   ├── expected_muestra.json ← Oráculo de detección PARA muestra.pdf
 │   └── fixtures/            ← Imágenes de prueba (foto_a.png, paleta_b.png, exacto_b.jpg)
@@ -63,12 +82,39 @@ PersonalizadorPDF/
 
 **Regla de oro: no crear duplicados.** Antes de agregar algo nuevo (página, motor, clase,
 script), consultá `AGENTS.md` y el árbol; reutilizá lo existente.
+
+> **Módulos**: `modules/` aloja sistemas completos que el plugin embebe sin mezclar código.
+> TextMuy se sirve tal cual (rutas relativas) desde su URL estática
+> (`PERSONALIZADOR_PDF_URL . 'modules/textmuy/index.html'`). No copiar sus JS/CSS a `assets/`
+> ni reescribir el módulo desde el plugin.
+
+### 2.1 Contrato RenderCore (comunicación plugin ↔ módulo TextMuy, v3.1)
+
+El plugin NO conoce los internos de TextMuy: solo consume este contrato público
+(cualquier cambio del módulo debe mantenerlo para no romper el puente):
+
+1. **Editor completo** (pestaña "Estilos de Texto"): `modules/textmuy/index.html` en iframe
+   same-origin (localStorage, fetch de presets, WebGL).
+2. **Motor de render headless**: `modules/textmuy/render-core.html` (~220 KB sin UI: fonts +
+   effects + editor + export + api). Se carga en un iframe off-screen SOLO cuando se usa
+   texto (carga perezosa). Expone `window.RenderCore = {version, ready}` y
+   `window.TextMuyAPI.renderBatch(items, {onProgress}) -> [{id, blob}]` (progreso por item;
+   rechaza ante el primer fallo — nunca lote parcial) y garantiza la fuente cargada antes de
+   renderizar (`ensureFontReady`). Los presets se resuelven con caché (1 fetch por preset):
+   localStorage primero, luego `presets/*.json`.
+3. **Catálogo de estilos base**: `modules/textmuy/presets/*.json` (listado por PHP con glob).
+4. **Versionado de estáticos del módulo** (cache-busting): los JS se sirven sin versión
+   automática. `render-core.html` e `index.html` referencian sus scripts con `?v=RCn`
+   (RC1 hoy): **al cambiar cualquier JS del módulo, subir el número** en ambos HTML. Además,
+   el plugin cache-bustea la URL del iframe con su propia versión y valida el contrato
+   (si la cache sirve un módulo viejo sin `renderBatch`, avisa recarga Ctrl+F5).
+
 ## 3. Flujo de trabajo (cómo lo usa el admin de WordPress)
 
-La página admin del plugin es una **consola de trabajo** con 2 pestañas:
+La página admin del plugin es una **consola de trabajo** con 3 pestañas:
 
-1. **PDFs y procesamiento** (`admin/pdfs.php`):
-   1. **Subir PDF** → se guarda en `uploads/extractor-corel/pdfs/{archivo}.pdf`, se detectan
+1. **PDFs y procesamiento** (`admin/pdfs.php`, `?tab=pdfs`):
+   1. **Subir PDF** → se guarda en `uploads/personalizador-pdf/pdfs/{archivo}.pdf`, se detectan
       los placeholders, se genera el **dataset** (`datos/{pdf}/metadata.json`) y los
       **placeholders** PNG transparentes descargables (`placeholders/{pdf}/{letra}-{WxH}.png`).
    2. **Listado de PDFs** (tabla) con grupos/instancias y acciones:
@@ -76,9 +122,22 @@ La página admin del plugin es una **consola de trabajo** con 2 pestañas:
    3. **Grupos e imágenes por PDF**: se ve cada grupo (color, medidas px/pt, instancias y
       páginas), preview de la imagen cargada y del placeholder, y se puede **cargar imagen**
       por grupo (desde la PC o desde la **galería de medios** wp.media).
-   4. **Procesar PDF** → `Motor::procesar(pdf, dataset, imágenes)` → PDF editado optimizado →
-      **Descargar PDF procesado**.
-2. **Ayuda** (`admin/ayuda.php`): documento interno del plugin.
+      Además, cada grupo puede llevar **texto estilizado** (v3.1): activar "Usar texto",
+      escribir el contenido (máx. 300 chars) y elegir el estilo; autoguardado AJAX en
+      `datos/{pdf}/textos.json`, vista previa al tamaño del hueco (vía RenderCore).
+   4. **Procesar PDF** → si hay grupos con texto activo, `admin.js` intercepta el submit,
+      renderiza cada grupo con `TextMuyAPI.renderBatch` (tamaño exacto `ancho_px × alto_px`,
+      PNG transparente RGBA no entrelazado) y envía UN POST con todo: `texto_{letra}`,
+      `estilo_{letra}` (persistidos en textos.json) y `imagen_{letra}` (PNG) →
+      `handle_procesar` guarda los PNG con `guardar_imagen()` y llama
+      `Motor::procesar(pdf, dataset, imágenes)` SIN cambios → PDF editado optimizado →
+      **Descargar PDF procesado**. Sin textos activos el submit es el clásico. El botón
+      **Procesar** se habilita con imagen manual o texto activo en al menos un grupo.
+2. **Estilos de Texto** (`admin/estilos-texto.php`, `?tab=textos`, NUEVO v3.0):
+   monta un iframe same-origin con `modules/textmuy/index.html`. Módulo client-side: usa
+   `localStorage` (presets por navegador), `fetch('presets/*.json')` y WebGL. NO existe una
+   API PHP para renderizar texto: el render de TextMuy corre en el navegador (ver §7).
+3. **Ayuda** (`admin/ayuda.php`, `?tab=ayuda`): documento interno del plugin.
 
 **Conflicto de nombre al subir**: si ya existe un PDF con el mismo nombre, se muestra un
 modal con **Renombrar automáticamente** (nombre-2.pdf) o **Sobrescribir** (borra datos,
@@ -132,7 +191,9 @@ y el resumen avisa cuáles quedaron como estaban.
    XObjects) usan el content stream nuevo al final (fallback, con el mismo `q /ECOp1 gs`).
 ## 5. Formatos y convenciones de nombres (NO CAMBIAR)
 
-- Carpeta por PDF: `uploads/extractor-corel/{pdfs,datos,imagenes,placeholders,salidas}/...`
+- Carpeta por PDF: `uploads/personalizador-pdf/{pdfs,datos,imagenes,placeholders,salidas}/...`
+  (en v3.0.0; la v2.0.0 usaba `uploads/extractor-corel/`, que se migra al activar y/o en el
+  primer uso del plugin sin perder datos)
 - Imagen de grupo: `imagenes/{pdf}/{letra}.{ext}` (una sola letra a, b, c...)
 - Dataset: `datos/{pdf}/metadata.json`
 - Placeholder PNG: `placeholders/{pdf}/{letra}-{ancho_px}x{alto_px}.png`
@@ -202,6 +263,34 @@ y el resumen avisa cuáles quedaron como estaban.
   (inclinaciones ≈ ±90°). El caso clásico axis-aligned sale idéntico al viejo
   (origen = esquina inferior-izquierda del bbox, v = (0,h)). Splice y fallback usan la
   MISMA base (fuente única: `rectBase()`).
+- **Fusión modular con TextMuy (v3.0.0, aprobada)**: el plugin pasa a llamarse
+  **"Personalizador PDF"** (archivo `personalizador-pdf.php`, clase
+  `Personalizador_PDF_Plugin`, slug `personalizador-pdf`, handlers
+  `admin_post_personalizador_pdf_*`). El sistema TextMuy se integra como **módulo
+  autocontenido** en `modules/textmuy/` servido por un **iframe same-origin** en la pestaña
+  "Estilos de Texto" (`admin/estilos-texto.php`). Motivos: aislamiento total del CSS/JS de
+  TextMuy (tiene estilos globales de app que romperían wp-admin si se mezclan en el DOM),
+  rutas relativas sin cambios, y upgrades triviales (reemplazar la carpeta). NO usar
+  `sandbox` en el iframe (el módulo necesita `localStorage`, `fetch` de presets y WebGL).
+  Los presets guardados en el editor viven en `localStorage` del navegador del admin; los
+  presets base (`presets/*.json`) son globales. Se mantiene compat temporal (ciclo 3.0.x)
+  con las acciones y nonces legacy `extractor_corel_*` (alias en `__construct()` y en
+  `seguridad()`); se elimina en 3.1.
+- **Render de texto estilizado hacia el PDF (IMPLEMENTADO v3.1)**: cada grupo puede llevar
+  "texto + estilo" (estado en `datos/{pdf}/textos.json`, se borra con el PDF). El render NO
+  ocurre en el servidor (TextMuy es 100% JS y el plugin es 100% PHP): al pulsar **Procesar
+  PDF**, `admin.js` intercepta el submit, carga perezosamente el **RenderCore**
+  (`modules/textmuy/render-core.html`, iframe off-screen) y llama `TextMuyAPI.renderBatch()`
+  por los grupos activos (PNG transparente RGBA no entrelazado, tamaño exacto del grupo →
+  encaje 1:1). Un solo POST con `texto_{letra}`/`estilo_{letra}` (persistidos en textos.json)
+  + `imagen_{letra}` (PNG, firma verificada) → `handle_procesar` los guarda con
+  `guardar_imagen()` → `Motor::procesar()` SIN cambios. Si un preset no existe en el
+  navegador → abort con mensaje claro (nunca parcial). UI: la pestaña "Estilos de Texto" es
+  el laboratorio; el texto+estilo por grupo se elige en "PDFs y procesamiento" (autoguardado
+  AJAX con debounce, vista previa, badge "Texto activo"; el texto reemplaza la imagen manual
+  del grupo al procesar). El módulo cambió SOLO en su API pública: `render-core.html`,
+  caché de presets y `renderBatch` en `js/api.js` (retro-compatible), documentado en el
+  ROADMAP.md del módulo (§10) y espejado en el proyecto fuente `sistema/textmuy`.
 ## 8. Dificultades del entorno (IMPORTANTE AL TRABAJAR AQUÍ)
 
 1. **Paths con espacios**: evitá `dir`/`ls`/`findstr` con paths largos. Usá `read_files` y
@@ -222,14 +311,23 @@ y el resumen avisa cuáles quedaron como estaban.
 ## 9. Cómo probar (siempre después de tocar engine/ o admin/)
 
 ```bash
-php -l extractor-corel.php && php -l admin/*.php && php -l engine/*.php
+php -l personalizador-pdf.php && php -l admin/*.php && php -l engine/*.php
 php tests/motor_smoke.php    # smoke del motor: debe decir "SMOKE OK" (26 checks)
 php tests/parity.php         # paridad del detector vs expected_muestra.json → "PARIDAD OK"
+php tests/texto_puente.php    # puente TextMuy: guardar_texto + handle_procesar con PNGs (stubs WP)
+# Tests del módulo TextMuy (requieren Node):
+cd modules/textmuy && node tests/preset-cache.test.js && node tests/preset-delta.test.js
+cd modules/textmuy && node tests/preset-load.test.js && node tests/distort-engine.test.js
+cd modules/textmuy && node tests/flag-wave.test.js && node tests/pattern-block-box.test.js
+node --check assets/admin.js  # sintaxis del puente JS
 ```
 
 - Para probar el flujo completo en WordPress: subir `muestra.pdf`, cargar imagen en cada
   grupo y pulsar **Procesar PDF**.
-- Requisitos: PHP 7.4+, zlib. GD opcional (sin GD: PNG puro + JPEG exacto).
+- Para probar la pestaña "Estilos de Texto": abrirla en el admin y verificar que el iframe
+  carga el editor de TextMuy (presets, canvas, exportación PNG).
+- Requisitos del servidor: PHP 7.4+, zlib. GD opcional (sin GD: PNG puro + JPEG exacto).
+  Node solo para los tests del módulo TextMuy (no corre en el servidor).
 
 ## 10. Reglas para la IA al editar
 
@@ -242,6 +340,11 @@ php tests/parity.php         # paridad del detector vs expected_muestra.json →
   única fuente de verdad junto con el código).
 - Mensajes de la interfaz y del código en español (pragmático, sin tildes para evitar
   problemas de encoding si hace falta).
+- El módulo `modules/textmuy/` NO se toca "desde el plugin": los cambios de TextMuy se hacen
+  en el proyecto fuente (`sistema/textmuy`) y se re-copian intactos. Si modificás el módulo,
+  corré sus tests Node.
+- Cualquier cambio en `personalizador-pdf.php`, `admin/*` o `assets/*` debe mantener la
+  compatibilidad legacy documentada (hooks/nonces `extractor_corel_*`, carpeta de uploads).
 
 ## 11. Tabla de errores comunes (resolver antes de preguntar)
 
@@ -253,6 +356,13 @@ php tests/parity.php         # paridad del detector vs expected_muestra.json →
 | "PNG entrelazado no soportado sin GD" | PNG interlaced | Guardar la imagen sin entrelazar |
 | Draws fuera de lugar / escala al cuadrado | Falta `q...Q` por draw en Overlay | Cada draw DEBE ir en su propio `q...Q` (sección 4.5) |
 | `fopen(...): Failed to open stream` en Documents | Acceso controlado a carpetas de Windows | Escribir en `%TEMP%` (dev); en WP usar `wp_upload_dir()` |
+| La pestaña "Estilos de Texto" no carga el editor | El iframe no sirvió `modules/textmuy/index.html` | Verificar que `modules/textmuy/` exista y que el hosting sirva estáticos; mirar la consola del navegador |
+| Un preset guardado en el editor no aparece en otro navegador | Los presets custom viven en `localStorage` (por navegador) | Previsto: los presets base de `presets/*.json` son globales; los custom son por equipo |
+| "El motor de render TextMuy no termino de cargar" al procesar | El iframe del render-core no cargó (estáticos bloqueados o red caída) | Reintentar; verificar `modules/textmuy/render-core.html` accesible; consola del navegador |
+| "No se pudo recibir el texto renderizado del grupo X" | El PNG supera `upload_max_filesize`/`post_max_size` del servidor | Aumentar los limites de subida del hosting o usar estilos mas livianos |
+| El texto renderizado sale con otra fuente | La familia Google Fonts no cargó (sin internet) o TTF local ausente | `ensureFontReady` fuerza la carga; verificar conexion; las TTF de `fonts/` caen a fallback |
+| "El modulo TextMuy en cache esta desactualizado" (Vista previa/Procesar) | Cache del navegador con `js/api.js` de una version anterior | Recargar con Ctrl+F5; los estaticos del modulo ya se versionan con `?v=RCn` |
+| Al procesar con texto, navega a `wp-admin/[object HTMLInputElement]` | Colision de named properties del `<form>`: el `<input name="action">` pisa `form.action` del DOM | Corregido v3.1.2: el puente usa `form.getAttribute('action')`. Regla: con el patron admin-post NUNCA leer `form.action` en JS; usar el atributo |
 
 ---
 

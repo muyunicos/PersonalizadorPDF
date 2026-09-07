@@ -1,37 +1,37 @@
 <?php
 /**
- * Plugin Name: Extractor Corel
- * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python.
- * Version: 2.0.0
- * Author: Extractor Corel
+ * Plugin Name: Personalizador PDF
+ * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
+ * Version: 3.1.2
+ * Author: Personalizador PDF
  * License: GPL-2.0+
- * Text Domain: extractor-corel
+ * Text Domain: personalizador-pdf
  *
- * @package ExtractCorel
+ * @package PersonalizadorPDF
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-define('EXTRACTOR_COREL_VERSION', '2.0.0');
-define('EXTRACTOR_COREL_PATH', plugin_dir_path(__FILE__));
-define('EXTRACTOR_COREL_URL', plugin_dir_url(__FILE__));
+define('PERSONALIZADOR_PDF_VERSION', '3.1.2');
+define('PERSONALIZADOR_PDF_PATH', plugin_dir_path(__FILE__));
+define('PERSONALIZADOR_PDF_URL', plugin_dir_url(__FILE__));
 
-require_once EXTRACTOR_COREL_PATH . 'engine/Pdf.php';
-require_once EXTRACTOR_COREL_PATH . 'engine/Detector.php';
-require_once EXTRACTOR_COREL_PATH . 'engine/PngWriter.php';
-require_once EXTRACTOR_COREL_PATH . 'engine/Metadata.php';
-require_once EXTRACTOR_COREL_PATH . 'engine/Imagen.php';
-require_once EXTRACTOR_COREL_PATH . 'engine/Overlay.php';
-require_once EXTRACTOR_COREL_PATH . 'engine/Motor.php';
+require_once PERSONALIZADOR_PDF_PATH . 'engine/Pdf.php';
+require_once PERSONALIZADOR_PDF_PATH . 'engine/Detector.php';
+require_once PERSONALIZADOR_PDF_PATH . 'engine/PngWriter.php';
+require_once PERSONALIZADOR_PDF_PATH . 'engine/Metadata.php';
+require_once PERSONALIZADOR_PDF_PATH . 'engine/Imagen.php';
+require_once PERSONALIZADOR_PDF_PATH . 'engine/Overlay.php';
+require_once PERSONALIZADOR_PDF_PATH . 'engine/Motor.php';
 
 use ExtractCorel\Engine\Detector;
 use ExtractCorel\Engine\Metadata;
 use ExtractCorel\Engine\Motor;
 use ExtractCorel\Engine\PngWriter;
 
-class Extractor_Corel_Plugin
+class Personalizador_PDF_Plugin
 {
     private static $instance = null;
 
@@ -47,6 +47,20 @@ class Extractor_Corel_Plugin
     {
         add_action('admin_menu', [$this, 'add_menu']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_assets']);
+        add_action('admin_post_personalizador_pdf_subir_pdf', [$this, 'handle_subir_pdf']);
+        add_action('admin_post_personalizador_pdf_reanalizar', [$this, 'handle_reanalizar']);
+        add_action('admin_post_personalizador_pdf_subir_imagen', [$this, 'handle_subir_imagen']);
+        add_action('admin_post_personalizador_pdf_imagen_galeria', [$this, 'handle_imagen_galeria']);
+        add_action('admin_post_personalizador_pdf_quitar_imagen', [$this, 'handle_quitar_imagen']);
+        add_action('admin_post_personalizador_pdf_guardar_texto', [$this, 'handle_guardar_texto']);
+        add_action('admin_post_personalizador_pdf_procesar', [$this, 'handle_procesar']);
+        add_action('admin_post_personalizador_pdf_descargar', [$this, 'handle_descargar']);
+        add_action('admin_post_personalizador_pdf_ver', [$this, 'handle_ver']);
+        add_action('admin_post_personalizador_pdf_borrar', [$this, 'handle_borrar']);
+
+        // Compatibilidad temporal (ciclo 3.0.x): los hooks legacy "extractor_corel_*"
+        // siguen respondiendo para no romper bookmarks o pestanas abiertas de <= 2.0.0.
+        // Se eliminan en la version 3.1.
         add_action('admin_post_extractor_corel_subir_pdf', [$this, 'handle_subir_pdf']);
         add_action('admin_post_extractor_corel_reanalizar', [$this, 'handle_reanalizar']);
         add_action('admin_post_extractor_corel_subir_imagen', [$this, 'handle_subir_imagen']);
@@ -63,7 +77,19 @@ class Extractor_Corel_Plugin
     private function base()
     {
         $upload_dir = wp_upload_dir();
-        $base = trailingslashit($upload_dir['basedir']) . 'extractor-corel';
+        $base = trailingslashit($upload_dir['basedir']) . 'personalizador-pdf';
+        if (!is_dir($base)) {
+            // Migracion desde la carpeta historica "extractor-corel" (<= 2.0.0).
+            // Preserva PDFs, datasets, imagenes, placeholders y salidas.
+            $viejo = trailingslashit($upload_dir['basedir']) . 'extractor-corel';
+            if (is_dir($viejo)) {
+                if (@rename($viejo, $base)) {
+                    // Migrado en el primer uso del plugin.
+                } else {
+                    return $viejo; // Sin permiso de rename: seguir usando la carpeta historica.
+                }
+            }
+        }
         if (!is_dir($base)) {
             wp_mkdir_p($base);
         }
@@ -154,10 +180,10 @@ class Extractor_Corel_Plugin
     public function add_menu()
     {
         add_menu_page(
-            'Extractor Corel',
-            'Extractor Corel',
+            'Personalizador PDF',
+            'Personalizador PDF',
             'manage_options',
-            'extractor-corel',
+            'personalizador-pdf',
             [$this, 'render_page'],
             'dashicons-media-document',
             30
@@ -166,26 +192,37 @@ class Extractor_Corel_Plugin
 
     public function enqueue_assets($hook)
     {
-        if ($hook !== 'toplevel_page_extractor-corel') {
+        if ($hook !== 'toplevel_page_personalizador-pdf') {
             return;
         }
+        // Pestana activa: pdfs (default) | textos | ayuda (misma whitelist que page.php).
+        $tab = isset($_GET['tab']) ? sanitize_key((string)$_GET['tab']) : 'pdfs';
+        if (!in_array($tab, ['pdfs', 'textos', 'ayuda'], true)) {
+            $tab = 'pdfs';
+        }
         wp_enqueue_style(
-            'extractor-corel',
-            EXTRACTOR_COREL_URL . 'assets/admin.css',
+            'personalizador-pdf',
+            PERSONALIZADOR_PDF_URL . 'assets/admin.css',
             [],
-            EXTRACTOR_COREL_VERSION
+            PERSONALIZADOR_PDF_VERSION
         );
+        // El JS de la consola (modal, galeria wp.media) y wp.media solo se usan en "PDFs".
+        if ($tab !== 'pdfs') {
+            return;
+        }
         wp_enqueue_media();
         wp_enqueue_script(
-            'extractor-corel',
-            EXTRACTOR_COREL_URL . 'assets/admin.js',
+            'personalizador-pdf',
+            PERSONALIZADOR_PDF_URL . 'assets/admin.js',
             ['jquery'],
-            EXTRACTOR_COREL_VERSION,
+            PERSONALIZADOR_PDF_VERSION,
             true
         );
-        wp_localize_script('extractor-corel', 'ExtractorCorel', [
+        wp_localize_script('personalizador-pdf', 'PersonalizadorPDF', [
             'existentes' => $this->pdfs_subidos(),
-            'nonce' => wp_create_nonce('extractor_corel_nonce'),
+            'nonce' => wp_create_nonce('personalizador_pdf_nonce'),
+            'version' => PERSONALIZADOR_PDF_VERSION,
+            'renderCoreUrl' => PERSONALIZADOR_PDF_URL . 'modules/textmuy/render-core.html',
         ]);
     }
 
@@ -194,7 +231,7 @@ class Extractor_Corel_Plugin
         if (!current_user_can('manage_options')) {
             return;
         }
-        include EXTRACTOR_COREL_PATH . 'admin/page.php';
+        include PERSONALIZADOR_PDF_PATH . 'admin/page.php';
     }
 
     /* ==================== Utilidades comunes ==================== */
@@ -202,16 +239,26 @@ class Extractor_Corel_Plugin
     /** Verifica permisos y nonce de una accion; wp_die si falla. */
     private function seguridad($accion)
     {
-        if (!current_user_can('manage_options')
-            || !wp_verify_nonce($_REQUEST['_wpnonce'] ?? '', $accion)) {
+        if (!current_user_can('manage_options')) {
             wp_die('Permiso denegado');
         }
+        $nonce = (string)($_REQUEST['_wpnonce'] ?? '');
+        if (wp_verify_nonce($nonce, $accion)) {
+            return;
+        }
+        // Compatibilidad temporal: acepta el nonce del prefijo historico
+        // "extractor_corel_*" generado por formularios o bookmarks de <= 2.0.0.
+        $legacy = str_replace('personalizador_pdf_', 'extractor_corel_', $accion);
+        if ($legacy !== $accion && wp_verify_nonce($nonce, $legacy)) {
+            return;
+        }
+        wp_die('Permiso denegado');
     }
 
     /** Redirige a la pagina del plugin con parametros extra. */
     private function redirigir(array $args = [])
     {
-        $args['page'] = 'extractor-corel';
+        $args['page'] = 'personalizador-pdf';
         wp_redirect(admin_url('admin.php?' . http_build_query($args)));
         exit;
     }
@@ -269,7 +316,7 @@ class Extractor_Corel_Plugin
     /** Sube una imagen real para un grupo (a, b, c...) de un PDF. */
     public function handle_subir_imagen()
     {
-        $this->seguridad('extractor_corel_subir_imagen');
+        $this->seguridad('personalizador_pdf_subir_imagen');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
         $letra = isset($_POST['letra']) ? strtolower((string)$_POST['letra']) : '';
         if (!$archivo || !is_file($this->ruta_pdf($archivo)) || !$this->letra_valida($letra)) {
@@ -289,7 +336,7 @@ class Extractor_Corel_Plugin
     /** Toma una imagen de la galeria de medios para un grupo. */
     public function handle_imagen_galeria()
     {
-        $this->seguridad('extractor_corel_imagen_galeria');
+        $this->seguridad('personalizador_pdf_imagen_galeria');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
         $letra = isset($_POST['letra']) ? strtolower((string)$_POST['letra']) : '';
         $attachment_id = isset($_POST['attachment_id']) ? (int)$_POST['attachment_id'] : 0;
@@ -311,7 +358,7 @@ class Extractor_Corel_Plugin
     /** Quita la imagen asignada a un grupo. */
     public function handle_quitar_imagen()
     {
-        $this->seguridad('extractor_corel_quitar_imagen');
+        $this->seguridad('personalizador_pdf_quitar_imagen');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
         $letra = isset($_POST['letra']) ? strtolower((string)$_POST['letra']) : '';
         if (!$archivo || !$this->letra_valida($letra)) {
@@ -344,12 +391,115 @@ class Extractor_Corel_Plugin
         }
     }
 
+    /* ==================== Textos estilizados por grupo (puente TextMuy) ==================== */
+
+    /** Ruta del estado de textos por grupo de un PDF (datos/{pdf}/textos.json). */
+    private function ruta_textos($nombre)
+    {
+        return $this->subdir('datos') . DIRECTORY_SEPARATOR . $nombre . DIRECTORY_SEPARATOR . 'textos.json';
+    }
+
+    /** Textos guardados: letra => ['activo' => bool, 'texto' => string, 'estilo' => string]. */
+    private function textos_de($nombre)
+    {
+        $ruta = $this->ruta_textos($nombre);
+        if (!is_file($ruta)) {
+            return [];
+        }
+        $datos = json_decode((string)file_get_contents($ruta), true);
+        return is_array($datos) ? $datos : [];
+    }
+
+    /** Persiste el estado de textos (sin textos -> sin archivo). */
+    private function guardar_textos($nombre, array $textos)
+    {
+        $ruta = $this->ruta_textos($nombre);
+        if (!$textos) {
+            @unlink($ruta);
+            return;
+        }
+        @file_put_contents($ruta, json_encode($textos, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    }
+
+    /** Nombres de los presets base del modulo TextMuy (modules/textmuy/presets/*.json). */
+    private function presets_base()
+    {
+        $dir = PERSONALIZADOR_PDF_PATH . 'modules' . DIRECTORY_SEPARATOR . 'textmuy' . DIRECTORY_SEPARATOR . 'presets';
+        $out = [];
+        foreach ((array)glob($dir . DIRECTORY_SEPARATOR . '*.json') as $ruta) {
+            $out[] = basename($ruta, '.json');
+        }
+        sort($out, SORT_NATURAL | SORT_FLAG_CASE);
+        return $out;
+    }
+
+    /** Limita el texto a N caracteres sin depender de la extension mbstring. */
+    private function limitar_texto($texto, $max = 300)
+    {
+        if (function_exists('mb_substr')) {
+            return mb_substr($texto, 0, $max);
+        }
+        if (strlen($texto) <= $max) {
+            return $texto;
+        }
+        // Fallback sin mbstring: recorte por bytes evitando partir una
+        // secuencia UTF-8 por la mitad.
+        $cortado = substr($texto, 0, $max);
+        $cortado = preg_replace('/[\x80-\xBF]{1,3}$/', '', $cortado);
+        if ($cortado !== '' && (ord(substr($cortado, -1)) & 0xC0) === 0xC0) {
+            $cortado = substr($cortado, 0, -1);
+        }
+        return $cortado;
+    }
+
+    /**
+     * Guarda/quita el texto estilizado de un grupo (puente TextMuy).
+     * Con $_POST['ajax']=1 responde JSON (autoguardado sin recarga); si no,
+     * redirige como el resto de los handlers (compatible sin JS).
+     */
+    public function handle_guardar_texto()
+    {
+        $this->seguridad('personalizador_pdf_guardar_texto');
+        $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
+        $letra = isset($_POST['letra']) ? strtolower((string)$_POST['letra']) : '';
+        $ajax = !empty($_POST['ajax']);
+        if (!$archivo || !is_file($this->ruta_pdf($archivo)) || !$this->letra_valida($letra)) {
+            if ($ajax) {
+                wp_send_json_error('datos_invalidos');
+            }
+            $this->redirigir(['ec_error' => 'datos_invalidos', 'ec_pdf' => $archivo]);
+        }
+        $activo = !empty($_POST['activo']);
+        $texto = isset($_POST['texto']) ? $this->limitar_texto(sanitize_text_field(wp_unslash($_POST['texto']))) : '';
+        $estilo = isset($_POST['estilo']) ? sanitize_key((string)wp_unslash($_POST['estilo'])) : '';
+        if ($activo && ($texto === '' || $estilo === '')) {
+            if ($ajax) {
+                wp_send_json_error('Escribe un texto y elige un estilo para activar el grupo.');
+            }
+            $this->redirigir(['ec_error' => 'texto_incompleto', 'ec_pdf' => $archivo]);
+        }
+        $nombre = $this->nombre_de($archivo);
+        $textos = $this->textos_de($nombre);
+        if ($activo) {
+            $textos[$letra] = ['activo' => true, 'texto' => $texto, 'estilo' => $estilo];
+        } else {
+            unset($textos[$letra]);
+        }
+        $this->guardar_textos($nombre, $textos);
+        if ($ajax) {
+            wp_send_json_success(['letra' => $letra, 'activo' => $activo]);
+        }
+        $this->redirigir($activo
+            ? ['ec_texto' => 1, 'ec_pdf' => $archivo]
+            : ['ec_texto_quitado' => 1, 'ec_pdf' => $archivo]);
+    }
+
     /* ==================== Handlers: PDFs ==================== */
 
     /** Sube un PDF, resuelve conflictos de nombre y genera el dataset. */
     public function handle_subir_pdf()
     {
-        $this->seguridad('extractor_corel_subir_pdf');
+        $this->seguridad('personalizador_pdf_subir_pdf');
         if (empty($_FILES['pdf']) || !is_array($_FILES['pdf'])) {
             $this->redirigir(['ec_error' => 'no_file']);
         }
@@ -394,7 +544,7 @@ class Extractor_Corel_Plugin
     /** Re-analiza un PDF ya subido y regenera su dataset + placeholders. */
     public function handle_reanalizar()
     {
-        $this->seguridad('extractor_corel_reanalizar');
+        $this->seguridad('personalizador_pdf_reanalizar');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
         if (!$archivo || !is_file($this->ruta_pdf($archivo))) {
             $this->redirigir(['ec_error' => 'pdf_inexistente']);
@@ -410,7 +560,7 @@ class Extractor_Corel_Plugin
     /** Borra un PDF subido con todo su dataset, imagenes y salida. */
     public function handle_borrar()
     {
-        $this->seguridad('extractor_corel_borrar');
+        $this->seguridad('personalizador_pdf_borrar');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
         if (!$archivo || !is_file($this->ruta_pdf($archivo))) {
             $this->redirigir(['ec_error' => 'pdf_inexistente']);
@@ -455,7 +605,7 @@ class Extractor_Corel_Plugin
     /** Ejecuta el motor: PDF + dataset + imagenes -> PDF editado. */
     public function handle_procesar()
     {
-        $this->seguridad('extractor_corel_procesar');
+        $this->seguridad('personalizador_pdf_procesar');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
         if (!$archivo || !is_file($this->ruta_pdf($archivo))) {
             $this->redirigir(['ec_error' => 'pdf_inexistente']);
@@ -465,6 +615,63 @@ class Extractor_Corel_Plugin
         if (!$datos) {
             $this->redirigir(['ec_error' => 'Este PDF no tiene datos analizados. Usa "Re-analizar".', 'ec_pdf' => $archivo]);
         }
+
+        /* === Puente TextMuy (v3.1): texto + estilo por grupo, 1 click === */
+
+        $letras_dataset = [];
+        foreach (($datos['grupos'] ?? []) as $g) {
+            $letras_dataset[$g['letra']] = true;
+        }
+
+        // 1) Persistir texto/estilo por grupo (mismo POST => estado coherente con lo procesado).
+        $textos = $this->textos_de($nombre);
+        foreach ($_POST as $campo => $valor) {
+            if (!is_string($campo) || !preg_match('/^texto_([a-z]{1,3})$/', $campo, $m)) {
+                continue;
+            }
+            $letra = $m[1];
+            if (!isset($letras_dataset[$letra])) {
+                continue; // Letra que ya no existe en el dataset actual.
+            }
+            $estilo = isset($_POST['estilo_' . $letra]) ? sanitize_key((string)wp_unslash($_POST['estilo_' . $letra])) : '';
+            $texto = $this->limitar_texto(sanitize_text_field(wp_unslash($valor)));
+            if ($texto !== '' && $estilo !== '') {
+                $textos[$letra] = ['activo' => true, 'texto' => $texto, 'estilo' => $estilo];
+            } else {
+                unset($textos[$letra]);
+            }
+        }
+        $this->guardar_textos($nombre, $textos);
+
+        // 2) PNGs renderizados por el navegador (imagen_{letra}) -> imagen del grupo.
+        foreach ($_FILES as $campo => $file) {
+            if (!is_string($campo) || !preg_match('/^imagen_([a-z]{1,3})$/', $campo, $m)) {
+                continue;
+            }
+            $letra = $m[1];
+            if (!isset($letras_dataset[$letra])) {
+                continue; // Nunca guardar archivos de letras inexistentes.
+            }
+            if (!is_array($file) || ($file['error'] ?? 1) !== UPLOAD_ERR_OK || empty($file['tmp_name'])) {
+                $this->redirigir([
+                    'ec_error' => 'No se pudo recibir el texto renderizado del grupo ' . strtoupper($letra)
+                        . ' (revisa el tamano maximo de subida del servidor).',
+                    'ec_pdf' => $archivo,
+                ]);
+            }
+            // Firma PNG: evitar guardar como imagen algo que no sea un PNG del render.
+            $firma = (string)@file_get_contents($file['tmp_name'], false, null, 0, 8);
+            if ($firma !== "\x89PNG\r\n\x1a\n") {
+                $this->redirigir([
+                    'ec_error' => 'El archivo del grupo ' . strtoupper($letra) . ' no es un PNG valido.',
+                    'ec_pdf' => $archivo,
+                ]);
+            }
+            $this->guardar_imagen($archivo, $letra, $file['tmp_name'], 'png');
+        }
+
+        /* === Fin puente: el motor sigue recibiendo imagenes por letra, sin cambios === */
+
         $rutas = $this->imagenes_de($nombre);
         try {
             $resultado = Motor::procesar($this->ruta_pdf($archivo), $datos, $rutas);
@@ -474,7 +681,7 @@ class Extractor_Corel_Plugin
             $this->redirigir(['ec_error' => $e->getMessage(), 'ec_pdf' => $archivo]);
         }
         set_transient(
-            'extractor_corel_proceso',
+            'personalizador_pdf_proceso',
             $resultado['resumen'] + ['archivo' => $archivo],
             HOUR_IN_SECONDS
         );
@@ -484,7 +691,7 @@ class Extractor_Corel_Plugin
     /** Descarga archivos: pdf | datos | placeholder | salida. */
     public function handle_descargar()
     {
-        $this->seguridad('extractor_corel_descargar');
+        $this->seguridad('personalizador_pdf_descargar');
         $tipo = isset($_GET['tipo']) ? (string)$_GET['tipo'] : '';
         $archivo = isset($_GET['archivo']) ? sanitize_file_name($_GET['archivo']) : '';
         $nombre = $archivo ? $this->nombre_de($archivo) : '';
@@ -524,7 +731,7 @@ class Extractor_Corel_Plugin
     /** Sirve imagenes y placeholders en linea (previews <img>). */
     public function handle_ver()
     {
-        $this->seguridad('extractor_corel_ver');
+        $this->seguridad('personalizador_pdf_ver');
         $tipo = isset($_GET['tipo']) ? (string)$_GET['tipo'] : '';
         $archivo = isset($_GET['archivo']) ? sanitize_file_name($_GET['archivo']) : '';
         $nombre = $archivo ? $this->nombre_de($archivo) : '';
@@ -556,4 +763,18 @@ class Extractor_Corel_Plugin
     }
 }
 
-Extractor_Corel_Plugin::instance();
+Personalizador_PDF_Plugin::instance();
+
+/**
+ * Migra los datos de uploads al activar el plugin: si existe la carpeta
+ * historica "extractor-corel" (<= 2.0.0) y no la nueva, la renombra para
+ * no perder PDFs, datasets, imagenes, placeholders ni salidas.
+ */
+register_activation_hook(__FILE__, function () {
+    $upload_dir = wp_upload_dir();
+    $viejo = trailingslashit($upload_dir['basedir']) . 'extractor-corel';
+    $nuevo = trailingslashit($upload_dir['basedir']) . 'personalizador-pdf';
+    if (is_dir($viejo) && !is_dir($nuevo)) {
+        @rename($viejo, $nuevo);
+    }
+});

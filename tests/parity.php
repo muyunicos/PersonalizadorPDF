@@ -3,7 +3,7 @@
  * Test de paridad: compara la deteccion PHP contra expected_muestra.json
  * (generado por el analizador Python) para muestra.pdf.
  *
- * Uso: php extractor-corel-php/tests/parity.php [ruta_muestra.pdf]
+ * Uso: php PersonalizadorPDF/tests/parity.php [ruta_muestra.pdf]
  */
 
 error_reporting(E_ALL);

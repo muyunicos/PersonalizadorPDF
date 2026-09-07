@@ -2,11 +2,11 @@
 if (!defined('ABSPATH')) {
     exit;
 }
-/** @var Extractor_Corel_Plugin $this */
+/** @var Personalizador_PDF_Plugin $this */
 
 $get = wp_unslash($_GET);
 $post_url = admin_url('admin-post.php');
-$url_tab = admin_url('admin.php?page=extractor-corel&tab=pdfs');
+$url_tab = admin_url('admin.php?page=personalizador-pdf&tab=pdfs');
 
 $pdfs = $this->pdfs_subidos();
 $seleccionado = isset($get['ec_pdf']) ? sanitize_file_name($get['ec_pdf']) : '';
@@ -19,19 +19,21 @@ if ($seleccionado !== '' && !in_array($seleccionado, $pdfs, true)) {
 
 $datos = $seleccionado ? $this->dataset_de($this->nombre_de($seleccionado)) : null;
 $imagenes = $seleccionado ? $this->imagenes_de($this->nombre_de($seleccionado)) : [];
+$textos = $seleccionado ? $this->textos_de($this->nombre_de($seleccionado)) : [];
+$presets = $seleccionado ? $this->presets_base() : [];
 $salida_ok = $seleccionado ? is_file($this->ruta_salida($this->nombre_de($seleccionado))) : false;
 
 $link_desc = function ($tipo, array $extra = []) use ($post_url) {
-    $params = array_merge(['action' => 'extractor_corel_descargar', 'tipo' => $tipo], $extra);
-    return wp_nonce_url($post_url . '?' . http_build_query($params), 'extractor_corel_descargar');
+    $params = array_merge(['action' => 'personalizador_pdf_descargar', 'tipo' => $tipo], $extra);
+    return wp_nonce_url($post_url . '?' . http_build_query($params), 'personalizador_pdf_descargar');
 };
 $link_ver = function ($tipo, array $extra = []) use ($post_url) {
-    $params = array_merge(['action' => 'extractor_corel_ver', 'tipo' => $tipo], $extra);
-    return wp_nonce_url($post_url . '?' . http_build_query($params), 'extractor_corel_ver');
+    $params = array_merge(['action' => 'personalizador_pdf_ver', 'tipo' => $tipo], $extra);
+    return wp_nonce_url($post_url . '?' . http_build_query($params), 'personalizador_pdf_ver');
 };
 
 $error = isset($get['ec_error']) ? rawurldecode((string)$get['ec_error']) : '';
-$proceso = $get['ec_procesado'] ?? null ? get_transient('extractor_corel_proceso') : null;
+$proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proceso') : null;
 ?>
 <?php if ($error) : ?>
     <div class="notice notice-error"><p><strong>Error:</strong> <?php echo esc_html($error); ?></p></div>
@@ -51,6 +53,10 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('extractor_corel_proceso
     <div class="notice notice-success"><p><strong>Imagen guardada</strong> para el grupo.</p></div>
 <?php elseif (isset($get['ec_imagen_quitada'])) : ?>
     <div class="notice notice-success"><p><strong>Imagen quitada</strong> del grupo.</p></div>
+<?php elseif (isset($get['ec_texto'])) : ?>
+    <div class="notice notice-success"><p><strong>Texto estilizado guardado</strong> para el grupo. Al procesar, se renderizara como imagen del grupo.</p></div>
+<?php elseif (isset($get['ec_texto_quitado'])) : ?>
+    <div class="notice notice-success"><p><strong>Texto estilizado quitado</strong> del grupo.</p></div>
 <?php endif; ?>
 
 <?php if ($proceso) : ?>
@@ -86,9 +92,9 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('extractor_corel_proceso
 <div class="card">
     <h2>1. Subir PDF</h2>
     <form class="ec-form-subir" method="post" action="<?php echo esc_url($post_url); ?>" enctype="multipart/form-data">
-        <input type="hidden" name="action" value="extractor_corel_subir_pdf">
+        <input type="hidden" name="action" value="personalizador_pdf_subir_pdf">
         <input type="hidden" name="modo" value="">
-        <?php wp_nonce_field('extractor_corel_subir_pdf'); ?>
+        <?php wp_nonce_field('personalizador_pdf_subir_pdf'); ?>
         <p>
             <input type="file" name="pdf" accept="application/pdf" required>
             <?php submit_button('Subir y analizar', 'primary', 'submit', false); ?>
@@ -141,9 +147,9 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('extractor_corel_proceso
                 <?php endif; ?>
                 <a class="button button-small" href="<?php echo esc_url($link_desc('pdf', ['archivo' => $archivo])); ?>">Descargar</a>
                 <form class="ec-form-inline ec-borrar" method="post" action="<?php echo esc_url($post_url); ?>">
-                    <input type="hidden" name="action" value="extractor_corel_borrar">
+                    <input type="hidden" name="action" value="personalizador_pdf_borrar">
                     <input type="hidden" name="archivo" value="<?php echo esc_attr($archivo); ?>">
-                    <?php wp_nonce_field('extractor_corel_borrar'); ?>
+                    <?php wp_nonce_field('personalizador_pdf_borrar'); ?>
                     <button type="submit" class="button button-small button-link-delete">Borrar</button>
                 </form>
             </td>
@@ -160,9 +166,9 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('extractor_corel_proceso
     <?php if (!$datos) : ?>
         <p class="ec-aviso">Este PDF no tiene datos analizados.</p>
         <form class="ec-form-inline" method="post" action="<?php echo esc_url($post_url); ?>">
-            <input type="hidden" name="action" value="extractor_corel_reanalizar">
+            <input type="hidden" name="action" value="personalizador_pdf_reanalizar">
             <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
-            <?php wp_nonce_field('extractor_corel_reanalizar'); ?>
+            <?php wp_nonce_field('personalizador_pdf_reanalizar'); ?>
             <button type="submit" class="button">Re-analizar</button>
         </form>
     <?php else : ?>
@@ -170,7 +176,8 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('extractor_corel_proceso
         $grupos = $datos['grupos'] ?? [];
         $conImagen = 0;
         foreach ($grupos as $g) {
-            if (isset($imagenes[$g['letra']])) {
+            // Habilita procesar un grupo con imagen manual O texto estilizado activo.
+            if (isset($imagenes[$g['letra']]) || !empty($textos[$g['letra']]['activo'])) {
                 $conImagen++;
             }
         }
@@ -181,16 +188,16 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('extractor_corel_proceso
                 return (int)($g['num_instancias'] ?? 0);
             }, $grupos)); ?></strong> instancias —
             <span class="ec-badge <?php echo $conImagen === count($grupos) ? 'ec-badge-verde' : 'ec-badge-amarillo'; ?>">
-                <?php echo $conImagen; ?>/<?php echo count($grupos); ?> con imagen
+                <?php echo $conImagen; ?>/<?php echo count($grupos); ?> con imagen/texto
             </span>
         </p>
 
         <p class="ec-acciones">
             <a class="button" href="<?php echo esc_url($link_desc('datos', ['archivo' => $seleccionado])); ?>">Descargar datos (JSON)</a>
             <form class="ec-form-inline" method="post" action="<?php echo esc_url($post_url); ?>">
-                <input type="hidden" name="action" value="extractor_corel_reanalizar">
+                <input type="hidden" name="action" value="personalizador_pdf_reanalizar">
                 <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
-                <?php wp_nonce_field('extractor_corel_reanalizar'); ?>
+                <?php wp_nonce_field('personalizador_pdf_reanalizar'); ?>
                 <button type="submit" class="button">Re-analizar</button>
             </form>
         </p>
@@ -238,11 +245,11 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('extractor_corel_proceso
                 </div>
 
                 <form class="ec-form-imagen" method="post" action="<?php echo esc_url($post_url); ?>" enctype="multipart/form-data">
-                    <input type="hidden" name="action" value="extractor_corel_subir_imagen">
+                    <input type="hidden" name="action" value="personalizador_pdf_subir_imagen">
                     <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
                     <input type="hidden" name="letra" value="<?php echo esc_attr($letra); ?>">
                     <input type="hidden" name="attachment_id" value="">
-                    <?php wp_nonce_field('extractor_corel_subir_imagen'); ?>
+                    <?php wp_nonce_field('personalizador_pdf_subir_imagen'); ?>
                     <input type="file" name="imagen" accept="image/png,image/jpeg,image/gif,image/webp" class="ec-input-imagen">
                     <button type="submit" class="button button-small">Cargar imagen</button>
                     <button type="button" class="button button-small ec-galeria"
@@ -251,21 +258,65 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('extractor_corel_proceso
 
                 <?php if ($tiene) : ?>
                 <form class="ec-form-inline" method="post" action="<?php echo esc_url($post_url); ?>">
-                    <input type="hidden" name="action" value="extractor_corel_quitar_imagen">
+                    <input type="hidden" name="action" value="personalizador_pdf_quitar_imagen">
                     <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
                     <input type="hidden" name="letra" value="<?php echo esc_attr($letra); ?>">
-                    <?php wp_nonce_field('extractor_corel_quitar_imagen'); ?>
+                    <?php wp_nonce_field('personalizador_pdf_quitar_imagen'); ?>
                     <button type="submit" class="button button-small button-link-delete">Quitar imagen</button>
                 </form>
                 <?php endif; ?>
+
+                <?php
+                $estado_texto = $textos[$letra] ?? null;
+                $texto_activo = $estado_texto && !empty($estado_texto['activo']);
+                ?>
+                <div class="ec-texto" data-letra="<?php echo esc_attr($letra); ?>"
+                     data-w="<?php echo (int)$g['ancho_px']; ?>" data-h="<?php echo (int)$g['alto_px']; ?>">
+                    <div class="ec-texto-cab">
+                        <strong>Texto estilizado</strong>
+                        <?php if ($texto_activo) : ?>
+                            <span class="ec-badge ec-badge-verde">Texto activo</span>
+                        <?php endif; ?>
+                    </div>
+                    <form class="ec-form-texto" method="post" action="<?php echo esc_url($post_url); ?>">
+                        <input type="hidden" name="action" value="personalizador_pdf_guardar_texto">
+                        <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
+                        <input type="hidden" name="letra" value="<?php echo esc_attr($letra); ?>">
+                        <?php wp_nonce_field('personalizador_pdf_guardar_texto'); ?>
+                        <label class="ec-texto-usar">
+                            <input type="checkbox" name="activo" value="1" <?php checked($texto_activo); ?>> Usar texto
+                        </label>
+                        <input type="text" name="texto" maxlength="300" class="ec-input-texto"
+                               placeholder="Texto del grupo <?php echo esc_attr(strtoupper($letra)); ?>"
+                               value="<?php echo esc_attr($estado_texto['texto'] ?? ''); ?>">
+                        <select name="estilo" class="ec-select-estilo">
+                            <option value="">Estilo...</option>
+                            <?php foreach ($presets as $preset) : ?>
+                                <option value="<?php echo esc_attr($preset); ?>" <?php selected($estado_texto['estilo'] ?? '', $preset); ?>>
+                                    <?php echo esc_html($preset); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button type="submit" class="button button-small">Guardar</button>
+                        <button type="button" class="button button-small ec-texto-preview">Vista previa</button>
+                        <span class="ec-texto-status" aria-live="polite"></span>
+                    </form>
+                    <div class="ec-texto-preview-caja" hidden>
+                        <img alt="Vista previa del texto estilizado">
+                        <span class="ec-texto-preview-dims"></span>
+                    </div>
+                    <?php if ($texto_activo && $tiene) : ?>
+                        <p class="ec-aviso">Al procesar, el texto estilizado reemplazara la imagen cargada de este grupo.</p>
+                    <?php endif; ?>
+                </div>
             </div>
         <?php endforeach; ?>
 
         <div class="ec-procesar">
-            <form method="post" action="<?php echo esc_url($post_url); ?>">
-                <input type="hidden" name="action" value="extractor_corel_procesar">
+            <form class="ec-form-procesar" method="post" action="<?php echo esc_url($post_url); ?>">
+                <input type="hidden" name="action" value="personalizador_pdf_procesar">
                 <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
-                <?php wp_nonce_field('extractor_corel_procesar'); ?>
+                <?php wp_nonce_field('personalizador_pdf_procesar'); ?>
                 <button type="submit" class="button button-primary button-hero"
                         <?php if ($conImagen === 0) : ?>disabled<?php endif; ?>>
                     Procesar PDF
@@ -273,11 +324,11 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('extractor_corel_proceso
             </form>
             <p class="description">
                 <?php if ($conImagen === 0) : ?>
-                    Carga al menos una imagen de grupo para poder procesar.
+                    Carga una imagen o activa un texto estilizado en al menos un grupo para poder procesar.
                 <?php else : ?>
-                    Inserta la imagen de cada grupo en todos sus placeholders (encajado, sin deformar ni recortar).
+                    Inserta la imagen o el texto estilizado de cada grupo en todos sus placeholders (encajado, sin deformar ni recortar).
                     <?php if ($conImagen < count($grupos)) : ?>
-                        Ojo: <?php echo count($grupos) - $conImagen; ?> grupo(s) sin imagen quedaran como estan.
+                        Ojo: <?php echo count($grupos) - $conImagen; ?> grupo(s) sin imagen ni texto quedaran como estan.
                     <?php endif; ?>
                     <?php if ($salida_ok) : ?>
                         — <a href="<?php echo esc_url($link_desc('salida', ['archivo' => $seleccionado])); ?>">Descargar el ultimo resultado</a>

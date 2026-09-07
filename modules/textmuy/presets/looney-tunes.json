@@ -1,0 +1,544 @@
+{
+  "editable": 1,
+  "text": "LOONEY\nTUNES",
+  "font": {
+    "size": 76,
+    "weight": "normal",
+    "name": "LEMON MILK Pro UltraBold",
+    "src": "11768.ttf"
+  },
+  "align": "center",
+  "rotate": 0,
+  "lineHeight": 1,
+  "letterSpacing": -0.13,
+  "mergeGradients": 0,
+  "lettering": {
+    "editable": 1,
+    "active": 1,
+    "blendmode": "over",
+    "boggle": {
+      "active": 1,
+      "angle": 5,
+      "amplitude": 0.1
+    },
+    "reverseOverlap": {
+      "letters": 1,
+      "lines": 0
+    },
+    "shadow": {
+      "active": 0,
+      "size": 0.04,
+      "distance": 0.02,
+      "angle": 180,
+      "fill": {
+        "alpha": 1,
+        "color": {
+          "r": 0,
+          "g": 0,
+          "b": 0
+        }
+      }
+    }
+  },
+  "distort": {
+    "arc": {
+      "angle": 0
+    }
+  },
+  "processing": {},
+  "fill": {
+    "editable": 1,
+    "active": 1,
+    "alpha": 1,
+    "color": {
+      "r": 247,
+      "g": 209,
+      "b": 0
+    },
+    "texture": {
+      "active": 0,
+      "alpha": 1,
+      "blendmode": "over",
+      "src": null,
+      "repeat": "repeat",
+      "position": "left top",
+      "size": 1,
+      "lettering": 0
+    },
+    "gradient": {
+      "active": 0,
+      "angle": 0,
+      "colors": [
+        {
+          "r": 0,
+          "g": 0,
+          "b": 0,
+          "pos": 0
+        },
+        {
+          "r": 255,
+          "g": 255,
+          "b": 255,
+          "pos": 1
+        }
+      ]
+    },
+    "palette": {
+      "active": 0,
+      "lettering": {
+        "method": "letter"
+      },
+      "styles": []
+    }
+  },
+  "depth": {
+    "editable": 1,
+    "active": 0,
+    "length": 0.2,
+    "angle": 135,
+    "fill": {
+      "alpha": 1,
+      "color": {
+        "r": 255,
+        "g": 255,
+        "b": 255
+      },
+      "mergeAlpha": 0,
+      "gradient": {
+        "active": 1,
+        "type": "depth",
+        "angle": 0,
+        "colors": [
+          {
+            "r": 200,
+            "g": 200,
+            "b": 200,
+            "a": 1,
+            "pos": 0
+          },
+          {
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "a": 1,
+            "pos": 1
+          }
+        ]
+      },
+      "texture": {
+        "active": 0,
+        "alpha": 1,
+        "blendmode": "over",
+        "src": null,
+        "repeat": "repeat",
+        "position": "center",
+        "size": 1
+      }
+    }
+  },
+  "depth2": {
+    "editable": 1,
+    "active": 0,
+    "length": 0.2,
+    "angle": 135,
+    "fill": {
+      "alpha": 1,
+      "color": {
+        "r": 255,
+        "g": 255,
+        "b": 255
+      },
+      "mergeAlpha": 0,
+      "gradient": {
+        "active": 1,
+        "type": "depth",
+        "angle": 0,
+        "colors": [
+          {
+            "r": 200,
+            "g": 200,
+            "b": 200,
+            "a": 1,
+            "pos": 0
+          },
+          {
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "a": 1,
+            "pos": 1
+          }
+        ]
+      },
+      "texture": {
+        "active": 0,
+        "alpha": 1,
+        "blendmode": "over",
+        "src": null,
+        "repeat": "repeat",
+        "position": "center",
+        "size": 1
+      }
+    }
+  },
+  "outline": {
+    "first": {
+      "editable": 1,
+      "active": 1,
+      "width": 0.06,
+      "dash": 0,
+      "join": "miter",
+      "fill": {
+        "alpha": 1,
+        "color": {
+          "r": 0,
+          "g": 0,
+          "b": 0
+        },
+        "gradient": {
+          "active": 0,
+          "angle": 0,
+          "colors": [
+            {
+              "r": 0,
+              "g": 0,
+              "b": 0,
+              "pos": 0
+            },
+            {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "pos": 1
+            }
+          ]
+        },
+        "palette": {
+          "active": 0,
+          "lettering": {
+            "method": "letter"
+          },
+          "styles": []
+        },
+        "texture": {
+          "active": 0,
+          "alpha": 1,
+          "blendmode": "over",
+          "src": null,
+          "repeat": "repeat",
+          "position": "center",
+          "size": 1,
+          "lettering": 0
+        }
+      }
+    },
+    "second": {
+      "editable": 1,
+      "active": 0,
+      "width": 0.1,
+      "dash": 0,
+      "join": "round",
+      "fill": {
+        "alpha": 1,
+        "color": {
+          "r": 0,
+          "g": 0,
+          "b": 0
+        },
+        "gradient": {
+          "active": 0,
+          "angle": 0,
+          "colors": [
+            {
+              "r": 0,
+              "g": 0,
+              "b": 0,
+              "pos": 0
+            },
+            {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "pos": 1
+            }
+          ]
+        },
+        "palette": {
+          "active": 0,
+          "lettering": {
+            "method": "letter"
+          },
+          "styles": []
+        },
+        "texture": {
+          "active": 0,
+          "alpha": 1,
+          "blendmode": "over",
+          "src": null,
+          "repeat": "repeat",
+          "position": "center",
+          "size": 1,
+          "lettering": 0
+        }
+      }
+    },
+    "global": {
+      "editable": 1,
+      "active": 0,
+      "width": 0.1,
+      "join": "round",
+      "mask": 0,
+      "projection": 1,
+      "vector": 1,
+      "shadow": {
+        "active": 0,
+        "color": {
+          "r": 0,
+          "g": 0,
+          "b": 0,
+          "a": 1
+        },
+        "size": 0.5
+      },
+      "fill": {
+        "alpha": 1,
+        "color": {
+          "r": 255,
+          "g": 255,
+          "b": 255
+        },
+        "gradient": {
+          "active": 0,
+          "angle": 0,
+          "colors": [
+            {
+              "r": 0,
+              "g": 0,
+              "b": 0,
+              "pos": 0
+            },
+            {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "pos": 1
+            }
+          ]
+        },
+        "texture": {
+          "active": 0,
+          "alpha": 1,
+          "blendmode": "over",
+          "src": null,
+          "repeat": "repeat",
+          "position": "center",
+          "size": 1
+        }
+      }
+    }
+  },
+  "bevel": {
+    "inner": {
+      "editable": 1,
+      "active": 0,
+      "size": 0.1,
+      "smoothing": 0,
+      "soften": 0.1,
+      "angle": 135,
+      "highlight": {
+        "alpha": 1,
+        "blendmode": "over",
+        "color": {
+          "r": 255,
+          "g": 255,
+          "b": 255
+        }
+      },
+      "shadow": {
+        "alpha": 1,
+        "blendmode": "over",
+        "color": {
+          "r": 0,
+          "g": 0,
+          "b": 0
+        }
+      }
+    }
+  },
+  "shadow": {
+    "outer": {
+      "editable": 1,
+      "active": 1,
+      "size": 0,
+      "strength": 0,
+      "mask": 0,
+      "distance": 0.1,
+      "angle": 135,
+      "fill": {
+        "alpha": 1,
+        "color": {
+          "r": 0,
+          "g": 0,
+          "b": 0
+        },
+        "gradient": {
+          "editable": 1,
+          "active": 0,
+          "angle": 0,
+          "colors": [
+            {
+              "r": 0,
+              "g": 0,
+              "b": 0,
+              "pos": 0
+            },
+            {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "pos": 1
+            }
+          ]
+        }
+      }
+    },
+    "outer2": {
+      "editable": 1,
+      "active": 0,
+      "size": 0.2,
+      "strength": 0,
+      "mask": 0,
+      "distance": 0.1,
+      "angle": 135,
+      "fill": {
+        "alpha": 1,
+        "color": {
+          "r": 0,
+          "g": 0,
+          "b": 255
+        },
+        "gradient": {
+          "editable": 1,
+          "active": 0,
+          "angle": 0,
+          "colors": [
+            {
+              "r": 0,
+              "g": 0,
+              "b": 255,
+              "pos": 0
+            },
+            {
+              "r": 255,
+              "g": 255,
+              "b": 255,
+              "pos": 1
+            }
+          ]
+        }
+      }
+    },
+    "inner": {
+      "editable": 1,
+      "active": 1,
+      "size": 0,
+      "strength": 0,
+      "alpha": 1,
+      "color": {
+        "r": 247,
+        "g": 0,
+        "b": 0
+      },
+      "distance": 0.015,
+      "angle": -45,
+      "offset": 0.05,
+      "erosion": {
+        "size": 0,
+        "vector": 1
+      },
+      "blendmode": "over"
+    },
+    "inner2": {
+      "editable": 1,
+      "active": 0,
+      "size": 0.2,
+      "strength": 0,
+      "alpha": 1,
+      "color": {
+        "r": 255,
+        "g": 255,
+        "b": 255
+      },
+      "distance": 0.03,
+      "angle": 135,
+      "offset": 0,
+      "erosion": {
+        "size": 0,
+        "vector": 1
+      },
+      "blendmode": "over"
+    }
+  },
+  "icon": {
+    "editable": 1,
+    "active": 0,
+    "alpha": 1,
+    "src": null,
+    "size": 1,
+    "rotate": 0,
+    "position": "left",
+    "composite": "source-over",
+    "offset": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "background": {
+    "editable": 1,
+    "active": 1,
+    "composite": "source-over",
+    "fill": {
+      "alpha": 1,
+      "color": {
+        "r": 0,
+        "g": 0,
+        "b": 0
+      },
+      "image": {
+        "active": 1,
+        "alpha": 1,
+        "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiBpZD0iQ2FscXVlXzIiIHZpZXdCb3g9IjAgMCAxMjk5LjAxIDk3OS4wMiI+PGRlZnM+PGNsaXBQYXRoIGlkPSJjbGlwcGF0aCI+PHJlY3Qgd2lkdGg9IjEyOTkuMDEiIGhlaWdodD0iOTc5LjAyIiBzdHlsZT0iZmlsbDpub25lIi8+PC9jbGlwUGF0aD48cmFkaWFsR3JhZGllbnQgaWQ9IkTDg8KpZ3JhZMODwqlfc2Fuc19ub20iIGN4PSI0NzYuMTgiIGN5PSIyMjkuODgiIHI9IjE5My45NSIgZng9IjQ3Ni4xOCIgZnk9IjIyOS44OCIgZ3JhZGllbnRUcmFuc2Zvcm09Im1hdHJpeCg0LjM2IDAgMCAtNC4zMyAtMTQyNC40NiAxNDk5Ljc2KSIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iIzllMDUxMSIvPjxzdG9wIG9mZnNldD0iLjY2IiBzdG9wLWNvbG9yPSIjYjQyYTNlIi8+PHN0b3Agb2Zmc2V0PSIuODEiIHN0b3AtY29sb3I9IiM4ZTAxMDciLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMxOTAwMDQiLz48L3JhZGlhbEdyYWRpZW50PjxyYWRpYWxHcmFkaWVudCBpZD0iRMODwqlncmFkw4PCqV9zYW5zX25vbV8yIiBjeD0iNDU0LjE5IiBjeT0iMjQyLjYyIiByPSIxOTMuOTUiIGZ4PSI0NTQuMTkiIGZ5PSIyNDIuNjIiIGdyYWRpZW50VHJhbnNmb3JtPSJtYXRyaXgoMy40MiAwIDAgLTMuNDMgLTkwMy43MSAxMzI5LjA3KSIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iIzllMDUxMSIvPjxzdG9wIG9mZnNldD0iLjY4IiBzdG9wLWNvbG9yPSIjYjQyYTNlIi8+PHN0b3Agb2Zmc2V0PSIuODMiIHN0b3AtY29sb3I9IiM4ZTAxMDciLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMxOTAwMDQiLz48L3JhZGlhbEdyYWRpZW50PjxyYWRpYWxHcmFkaWVudCBpZD0iRMODwqlncmFkw4PCqV9zYW5zX25vbV80IiBjeD0iNDI4LjQ5IiBjeT0iMjU4Ljc2IiByPSIxOTMuOTUiIGZ4PSI0MjguNDkiIGZ5PSIyNTguNzYiIGdyYWRpZW50VHJhbnNmb3JtPSJtYXRyaXgoMi43MyAwIDAgLTIuNzMgLTUyMS43MSAxMTk2LjgpIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjOWUwNTExIi8+PHN0b3Agb2Zmc2V0PSIuNzMiIHN0b3AtY29sb3I9IiNiNDJhM2UiLz48c3RvcCBvZmZzZXQ9Ii44NiIgc3RvcC1jb2xvcj0iIzhlMDEwNyIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzE5MDAwNCIvPjwvcmFkaWFsR3JhZGllbnQ+PHJhZGlhbEdyYWRpZW50IHhsaW5rOmhyZWY9IiNEw4PCqWdyYWTDg8KpX3NhbnNfbm9tXzQiIGlkPSJEw4PCqWdyYWTDg8KpX3NhbnNfbm9tXzQtMiIgY3g9IjM5OS44OSIgY3k9IjI2OS44MiIgcj0iMTkzLjk1IiBmeD0iMzk5Ljg5IiBmeT0iMjY5LjgyIiBncmFkaWVudFRyYW5zZm9ybT0ibWF0cml4KDIuMjMgMCAwIC0yLjIyIC0yNDMuOTYgMTA5OS4xKSIvPjxyYWRpYWxHcmFkaWVudCBpZD0iRMODwqlncmFkw4PCqV9zYW5zX25vbV81IiBjeD0iMzM1LjM1IiBjeT0iMjk5LjA2IiByPSIxOTMuOTUiIGZ4PSIzMzUuMzUiIGZ5PSIyOTkuMDYiIGdyYWRpZW50VHJhbnNmb3JtPSJtYXRyaXgoMS41OCAwIDAgLTEuNTggMTE4Ljg1IDk3OC45OCkiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNjYjRkODEiLz48c3RvcCBvZmZzZXQ9Ii42NSIgc3RvcC1jb2xvcj0iI2M3NGQ3ZCIvPjxzdG9wIG9mZnNldD0iLjkxIiBzdG9wLWNvbG9yPSIjOTYwMjBhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjN2UwMDAyIi8+PC9yYWRpYWxHcmFkaWVudD48cmFkaWFsR3JhZGllbnQgaWQ9IkTDg8KpZ3JhZMODwqlfc2Fuc19ub21fNiIgY3g9IjI2MS4yMSIgY3k9IjM0NC42OSIgcj0iMTkzLjk1IiBmeD0iMjYxLjIxIiBmeT0iMzQ0LjY5IiBncmFkaWVudFRyYW5zZm9ybT0ibWF0cml4KDEuMTkgMCAwIC0xLjE3IDMzOS45NCA5MDAuOTUpIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjY2I0ZDgxIi8+PHN0b3Agb2Zmc2V0PSIuNzUiIHN0b3AtY29sb3I9IiNjMjUyODEiLz48c3RvcCBvZmZzZXQ9Ii44OCIgc3RvcC1jb2xvcj0iI2MwMWI0NiIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iI2EwMDgxOCIvPjwvcmFkaWFsR3JhZGllbnQ+PHJhZGlhbEdyYWRpZW50IGlkPSJEw4PCqWdyYWTDg8KpX3NhbnNfbm9tXzciIGN4PSIxNTQuOTIiIGN5PSI0MDcuMjciIHI9IjE5My45NSIgZng9IjE1NC45MiIgZnk9IjQwNy4yNyIgZ3JhZGllbnRUcmFuc2Zvcm09Im1hdHJpeCguODcgMCAwIC0uODcgNTE0LjUgODQ0LjQ0KSIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iIzA0M2U3ZCIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzAyMWIzNiIvPjwvcmFkaWFsR3JhZGllbnQ+PC9kZWZzPjxnIGlkPSJzdmcyIj48ZyBpZD0ibGF5ZXIxIiBzdHlsZT0iY2xpcC1wYXRoOnVybCgjY2xpcHBhdGgpIj48ZyBpZD0iZzQwMjciPjxwYXRoIGlkPSJwYXRoMzg3NSIgZD0ibTE1MjQuMzQsNDg5LjUxYzAsNDgzLjE2LTM5MS42OCw4NzQuODMtODc0LjgzLDg3NC44M1MtMjI1LjMyLDk3Mi42Ni0yMjUuMzIsNDg5LjUxLDE2Ni4zNS0zODUuMzIsNjQ5LjUxLTM4NS4zMiwxNTI0LjM0LDYuMzUsMTUyNC4zNCw0ODkuNTFaIiBzdHlsZT0iZmlsbDp1cmwoI0TDg8KpZ3JhZMODwqlfc2Fuc19ub20pIi8+PHBhdGggaWQ9InBhdGgzODczIiBkPSJtMTMyOS4wMSw0ODkuNTFjMCwzNzUuMjgtMzA0LjIyLDY3OS41LTY3OS41LDY3OS41Uy0zMCw4NjQuNzktMzAsNDg5LjUxLDI3NC4yMy0xOTAsNjQ5LjUxLTE5MCwxMzI5LjAxLDExNC4yMywxMzI5LjAxLDQ4OS41MVoiIHN0eWxlPSJmaWxsOnVybCgjRMODwqlncmFkw4PCqV9zYW5zX25vbV8yKSIvPjxwYXRoIGlkPSJwYXRoMzg3MSIgZD0ibTExNzkuNjQsNDg5LjUxYzAsMjkyLjc4LTIzNy4zNSw1MzAuMTMtNTMwLjEzLDUzMC4xM1MxMTkuMzcsNzgyLjI5LDExOS4zNyw0ODkuNTEsMzU2LjcyLTQwLjYzLDY0OS41MS00MC42M3M1MzAuMTMsMjM3LjM1LDUzMC4xMyw1MzAuMTNaIiBzdHlsZT0iZmlsbDp1cmwoI0TDg8KpZ3JhZMODwqlfc2Fuc19ub21fNCkiLz48cGF0aCBpZD0icGF0aDM4NjkiIGQ9Im0xMDUzLjI1LDQ4OS41MWMwLDIyMi45OC0xODAuNzYsNDAzLjc0LTQwMy43NCw0MDMuNzRzLTQwMy43NC0xODAuNzYtNDAzLjc0LTQwMy43NFM0MjYuNTMsODUuNzYsNjQ5LjUxLDg1Ljc2czQwMy43NCwxODAuNzYsNDAzLjc0LDQwMy43NFoiIHN0eWxlPSJmaWxsOnVybCgjRMODwqlncmFkw4PCqV9zYW5zX25vbV80LTIpIi8+PHBhdGggaWQ9InBhdGgzODY3IiBkPSJtOTU2LjQxLDQ4OS41MWMwLDE2OS41LTEzNy40LDMwNi45LTMwNi45LDMwNi45cy0zMDYuOS0xMzcuNC0zMDYuOS0zMDYuOSwxMzcuNC0zMDYuOSwzMDYuOS0zMDYuOSwzMDYuOSwxMzcuNCwzMDYuOSwzMDYuOVoiIHN0eWxlPSJmaWxsOnVybCgjRMODwqlncmFkw4PCqV9zYW5zX25vbV81KSIvPjxwYXRoIGlkPSJwYXRoMzg2NSIgZD0ibTg4MC45LDQ4OS41MWMwLDEyNy44LTEwMy42LDIzMS40LTIzMS40LDIzMS40cy0yMzEuNC0xMDMuNi0yMzEuNC0yMzEuNCwxMDMuNi0yMzEuNCwyMzEuNC0yMzEuNCwyMzEuNCwxMDMuNiwyMzEuNCwyMzEuNFoiIHN0eWxlPSJmaWxsOnVybCgjRMODwqlncmFkw4PCqV9zYW5zX25vbV82KSIvPjxwYXRoIGlkPSJwYXRoMzA5NSIgZD0ibTgxOC41Myw0ODkuNTFjMCw5My4zNS03NS42NywxNjkuMDItMTY5LjAyLDE2OS4wMnMtMTY5LjAyLTc1LjY3LTE2OS4wMi0xNjkuMDIsNzUuNjctMTY5LjAyLDE2OS4wMi0xNjkuMDIsMTY5LjAyLDc1LjY3LDE2OS4wMiwxNjkuMDJaIiBzdHlsZT0iZmlsbDp1cmwoI0TDg8KpZ3JhZMODwqlfc2Fuc19ub21fNykiLz48L2c+PC9nPjwvZz48L3N2Zz4=",
+        "size": "cover",
+        "repeat": "repeat"
+      },
+      "gradient": {
+        "active": 0,
+        "angle": 0,
+        "type": "radial",
+        "colors": [
+          {
+            "r": 255,
+            "g": 231,
+            "b": 0,
+            "pos": 0,
+            "a": 1
+          },
+          {
+            "r": 255,
+            "g": 99,
+            "b": 0,
+            "pos": 1,
+            "a": 1
+          }
+        ]
+      }
+    }
+  },
+  "animation": {
+    "editable": 1,
+    "active": 1,
+    "id": "",
+    "pause": 1000,
+    "duration": 1000
+  }
+}
