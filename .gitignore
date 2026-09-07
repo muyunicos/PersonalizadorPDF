@@ -5,3 +5,6 @@ marcos/
 output_*.pdf
 tests/salida_*.pdf
 tests/*.tmp
+# Imagenes subidas desde el editor TextMuy (runtime, no se versionan).
+modules/textmuy/imagenes/*
+!modules/textmuy/imagenes/.gitkeep

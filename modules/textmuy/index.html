@@ -41,6 +41,11 @@
                     <div id="tt-gallery-body" class="tt-gallery-body">
                         <div class="tt-gallery-toolbar">
                             <input type="text" id="tt-gallery-search" placeholder="Filter presets...">
+                            <div class="tt-gallery-actions">
+                                <button type="button" id="tt-gallery-save-btn" class="tt-gallery-btn" title="Guardar el estilo actual como preset (.txm + .webp en el servidor)">Save as preset</button>
+                                <button type="button" id="tt-gallery-migrate-btn" class="tt-gallery-btn tt-gallery-btn-migrate" hidden></button>
+                            </div>
+                            <span id="tt-gallery-status" class="tt-gallery-status" aria-live="polite"></span>
                         </div>
                         <div id="tt-gallery-grid" class="tt-gallery-grid"></div>
                     </div>
@@ -1448,42 +1453,8 @@
                                             <button id="tt-download-btn" class="tt-download-button">Download</button>
                                         </div>
                                         <div class="tt-option">
-                                            <button id="tt-save-preset-btn" class="tt-download-button" >Save as New Preset</button>
-                                        </div>
-                                        <div class="tt-option">
                                             <button id="tt-copy-image-btn" class="tt-download-button" style="background: var(--tt-success);">Copy Image</button>
                                         </div>
-                                    </fieldset>
-                                    <fieldset class="tt-download-fieldset">
-                                        <legend>Presets</legend>
-                                        <div class="tt-option" style="margin-bottom: 8px;">
-                                            <input type="text" id="tt-preset-search-input" placeholder="Search presets..." >
-                                        </div>
-                                        <div class="tt-option" style="margin-bottom: 8px;">
-                                            <select id="tt-preset-category-filter" >
-                                                <option value="all">All Categories</option>
-                                                <option value="basic">Basic</option>
-                                                <option value="gaming">Gaming</option>
-                                                <option value="brands">Brands</option>
-                                                <option value="artistic">Artistic</option>
-                                                <option value="retro">Retro</option>
-                                                <option value="modern">Modern</option>
-                                                <option value="neon">Neon</option>
-                                                <option value="metallic">Metallic</option>
-                                                <option value="custom">Custom</option>
-                                            </select>
-                                        </div>
-                                        <ul class="tt-preset-list" id="tt-preset-list">
-                                            <li data-preset="fire-free" data-category="gaming" title="Free Fire Logo"><span>Free Fire</span></li>
-                                            <li data-preset="nintendo" data-category="brands" title="Nintendo Logo"><span>Nintendo</span></li>
-                                            <li data-preset="looney-tunes" data-category="brands" title="Looney Tunes Logo"><span>Looney Tunes</span></li>
-                                            <li data-preset="simple-gradient" data-category="basic" title="Simple Gradient"><span>Simple Gradient</span></li>
-                                            <li data-preset="neon-glow" data-category="neon" title="Neon Glow"><span>Neon Glow</span></li>
-                                            <li data-preset="gold-metallic" data-category="metallic" title="Gold Metallic"><span>Gold Metallic</span></li>
-                                            <li data-preset="cyberpunk" data-category="retro" title="Cyberpunk"><span>Cyberpunk</span></li>
-                                            <li data-preset="retro-wave" data-category="retro" title="Retro Wave"><span>Retro Wave</span></li>
-                                            <li data-preset="clean-modern" data-category="modern" title="Clean Modern"><span>Clean Modern</span></li>
-                                        </ul>
                                     </fieldset>
                                     <fieldset class="tt-download-fieldset">
                                         <legend>Import from TextStudio</legend>
@@ -1491,15 +1462,6 @@
                                             <input type="text" id="tt-import-url-input" placeholder="https://www.textstudio.com/logo/..." style="flex: 1;">
                                             <button id="tt-import-btn" class="tt-download-button" style="padding: 8px 16px;">Import</button>
                                         </div>
-                                    </fieldset>
-<fieldset class="tt-download-fieldset">
-                                        <legend>Local projects (.txm)</legend>
-                                        <div class="tt-projects-toolbar">
-                                            <button id="tt-project-pick-btn" class="tt-download-button" type="button">Open folder</button>
-                                            <button id="tt-project-save-btn" class="tt-download-button" type="button">Save project</button>
-                                        </div>
-                                        <div id="tt-project-status" class="tt-project-status"></div>
-                                        <ul id="tt-projects-list" class="tt-preset-list tt-projects-list"></ul>
                                     </fieldset>
                                 </div>
                             </div>
@@ -1510,17 +1472,17 @@
         </div>
     </div>
 
-    <script src="js/fonts.js?v=RC1"></script>
-    <script src="js/effects/bevel-webgl.js?v=RC1"></script>
-    <script src="js/effects/specular-webgl.js?v=RC1"></script>
-    <script src="js/effects/distort-engine.js?v=RC1"></script>
-    <script src="js/preset-manager.js?v=RC1"></script>
-    <script src="js/gradient-picker.js?v=RC1"></script>
-    <script src="js/editor.js?v=RC1"></script>
-    <script src="js/controls.js?v=RC1"></script>
-    <script src="js/export.js?v=RC1"></script>
-    <script src="js/api.js?v=RC1"></script>
-    <script src="js/main.js?v=RC1"></script>
+    <script src="js/fonts.js?v=RC2"></script>
+    <script src="js/effects/bevel-webgl.js?v=RC2"></script>
+    <script src="js/effects/specular-webgl.js?v=RC2"></script>
+    <script src="js/effects/distort-engine.js?v=RC2"></script>
+    <script src="js/preset-manager.js?v=RC2"></script>
+    <script src="js/gradient-picker.js?v=RC2"></script>
+    <script src="js/editor.js?v=RC2"></script>
+    <script src="js/controls.js?v=RC2"></script>
+    <script src="js/export.js?v=RC2"></script>
+    <script src="js/api.js?v=RC2"></script>
+    <script src="js/main.js?v=RC2"></script>
 </body>
 </html>
 

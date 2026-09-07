@@ -124,36 +124,11 @@ jQuery(function ($) {
         return renderCorePromesa;
     }
 
-    /** Presets custom guardados en este navegador (localStorage del editor). */
-    function presetsCustom() {
-        var nombres = [];
-        try {
-            var loc = JSON.parse(localStorage.getItem('textmuy_presets') || '{}');
-            Object.keys(loc).forEach(function (k) { if (nombres.indexOf(k) === -1) nombres.push(k); });
-            var imp = JSON.parse(localStorage.getItem('textstudio_presets') || '{}');
-            Object.keys(imp).forEach(function (k) { if (nombres.indexOf(k) === -1) nombres.push(k); });
-        } catch (_) { /* opcional */ }
-        return nombres;
-    }
-
-    /** Anhade los presets custom (de este navegador) a cada select de estilo. */
-    function mergePresetsCustom() {
-        var customs = presetsCustom();
-        if (!customs.length) { return; }
-        $('select.ec-select-estilo').each(function () {
-            var sel = this;
-            customs.forEach(function (nombre) {
-                var existe = Array.prototype.some.call(sel.options, function (o) { return o.value === nombre; });
-                if (!existe) {
-                    var o = document.createElement('option');
-                    o.value = nombre;
-                    o.textContent = nombre + ' (custom)';
-                    sel.appendChild(o);
-                }
-            });
-        });
-    }
-    mergePresetsCustom();
+    /**
+     * Los presets custom ya no viven en localStorage: desde 3.2.0 se guardan como
+     * .txm en modules/textmuy/presets/ y el listado completo llega desde el
+     * servidor en los <option> del selector (presets_base()). Nada que mergear.
+     */
 
     /** Estado texto/estilo de un bloque de grupo, leido del DOM actual. */
     function estadoTexto($bloque) {

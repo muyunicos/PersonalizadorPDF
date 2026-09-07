@@ -1,0 +1,227 @@
+{
+  "format": "textmuy-project",
+  "version": 1,
+  "name": "cyberpunk",
+  "settings": {
+    "text": "CYBER",
+    "font": {
+      "src": "Orbitron",
+      "size": 120,
+      "weight": "900"
+    },
+    "letterSpacing": 0.15,
+    "distort": {
+      "active": false
+    },
+    "fill": {
+      "color": "#00ffff",
+      "texture": {
+        "size": "1"
+      },
+      "gradient": {
+        "active": true,
+        "angle": 45,
+        "startColor": "#",
+        "endColor": "0"
+      }
+    },
+    "lettering": {
+      "blendmode": "source-over",
+      "flag": {
+        "tilt": 12,
+        "rise": 10
+      },
+      "reverseOverlap": {
+        "active": true
+      },
+      "shadow": {
+        "fill": {
+          "color": "#000000"
+        }
+      }
+    },
+    "depth": {
+      "length": 0.1,
+      "angle": 0,
+      "fill": {
+        "color": "#000000",
+        "gradient": {
+          "active": false
+        }
+      }
+    },
+    "depth2": {
+      "length": 0.1,
+      "angle": 0,
+      "fill": {
+        "color": "#ffffff",
+        "gradient": {
+          "active": false
+        }
+      }
+    },
+    "outline": {
+      "first": {
+        "active": true,
+        "width": 0.02,
+        "fill": {
+          "color": "#ff0080"
+        },
+        "specular": {
+          "active": 0,
+          "blur": 0.3,
+          "scale": 0.2,
+          "constant": 1,
+          "exponent": 20,
+          "azimuth": 135,
+          "elevation": 45,
+          "color": {
+            "r": 255,
+            "g": 255,
+            "b": 255
+          },
+          "blendmode": "screen",
+          "type": 0,
+          "point": {
+            "x": 0.5,
+            "y": 0.5,
+            "z": 0.5
+          }
+        }
+      },
+      "second": {
+        "width": 0.05,
+        "fill": {
+          "color": "#ffffff"
+        },
+        "specular": {
+          "active": 0,
+          "blur": 0.3,
+          "scale": 0.2,
+          "constant": 1,
+          "exponent": 20,
+          "azimuth": 135,
+          "elevation": 45,
+          "color": {
+            "r": 255,
+            "g": 255,
+            "b": 255
+          }
+        }
+      },
+      "global": {
+        "width": 0.05,
+        "projection": false,
+        "fill": {
+          "color": "#ffffff"
+        }
+      },
+      "global2": {
+        "width": 0.05,
+        "projection": false,
+        "fill": {
+          "color": "#ffffff"
+        }
+      }
+    },
+    "bevel": {
+      "inner": {
+        "size": 0.025,
+        "smoothing": 0.5,
+        "soften": 0.5,
+        "angle": 45,
+        "altitude": 30,
+        "highlight": {
+          "blendmode": "screen",
+          "color": "#ffffff"
+        },
+        "shadow": {
+          "blendmode": "multiply",
+          "color": "#000000"
+        }
+      },
+      "inner2": {
+        "size": 0.025,
+        "smoothing": 0.5,
+        "soften": 0.5,
+        "angle": 45,
+        "altitude": 30,
+        "highlight": {
+          "blendmode": "screen",
+          "color": "#ffffff"
+        },
+        "shadow": {
+          "blendmode": "multiply",
+          "color": "#000000"
+        }
+      }
+    },
+    "specular": {
+      "inner": {
+        "active": 0,
+        "type": 0,
+        "blur": 0.3,
+        "constant": 1,
+        "exponent": 20,
+        "azimuth": 135,
+        "elevation": 45,
+        "point": {
+          "x": 0.5,
+          "y": 0.5,
+          "z": 0.5
+        },
+        "scale": 0.2
+      }
+    },
+    "shadow": {
+      "outer": {
+        "active": true,
+        "size": 0.12,
+        "strength": 0.7,
+        "distance": 0.04,
+        "fill": {
+          "color": "#00ffff"
+        }
+      },
+      "outer2": {
+        "size": 0.1,
+        "strength": 0.5,
+        "distance": 0.05,
+        "fill": {
+          "color": "#000000"
+        }
+      },
+      "inner": {
+        "size": 0.05,
+        "strength": 0.5,
+        "color": "#000000",
+        "distance": 0.02,
+        "angle": 135,
+        "blendmode": "multiply"
+      },
+      "inner2": {
+        "size": 0.05,
+        "strength": 0.5,
+        "color": "#000000",
+        "distance": 0.02,
+        "blendmode": "multiply"
+      }
+    },
+    "icon": {
+      "size": 0.3,
+      "position": "top center"
+    },
+    "background": {
+      "active": false,
+      "fill": {
+        "color": "#0a0a1e",
+        "image": {
+          "size": "1"
+        },
+        "gradient": {
+          "type": "linear"
+        }
+      }
+    }
+  }
+}

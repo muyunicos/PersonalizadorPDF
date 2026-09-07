@@ -29,15 +29,22 @@
     function loadPresetByName(name) {
         if (presetCache[name]) return presetCache[name];
         const promise = (async function() {
-            try {
-                const saved = JSON.parse(localStorage.getItem('textmuy_presets') || '{}');
-                if (saved[name]) return saved[name];
-                // Imports made by the editor before the API existed use this key
-                // and wrap the actual preset with metadata.
-                const imported = JSON.parse(localStorage.getItem('textstudio_presets') || '{}');
-                if (imported[name]) return imported[name].preset || imported[name];
-            } catch (_) { /* storage is optional */ }
-            const response = await fetch('presets/' + encodeURIComponent(name) + '.json');
+            // Presets en formato .txm (delta textmuy-project, el formato unico
+            // desde 3.2.0). Si no existe, fallback al .json legacy (formato
+            // TextStudio crudo de versiones anteriores).
+            let response = await fetch('presets/' + encodeURIComponent(name) + '.txm');
+            if (response.ok) {
+                const payload = await response.json();
+                if (!payload || payload.format !== 'textmuy-project'
+                    || typeof payload.settings !== 'object' || payload.settings === null) {
+                    throw new Error('Unsupported preset format: ' + name);
+                }
+                if (window.PresetManager && window.PresetManager.settingsFromDelta) {
+                    return window.PresetManager.settingsFromDelta(payload.settings);
+                }
+                throw new Error('PresetManager is required to load .txm presets');
+            }
+            response = await fetch('presets/' + encodeURIComponent(name) + '.json');
             if (!response.ok) throw new Error('Preset not found: ' + name);
             return response.json();
         })();

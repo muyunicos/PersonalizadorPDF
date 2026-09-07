@@ -2,26 +2,36 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-// editor.js is a browser IIFE that only touches window/document inside
-// functions; a bare window stub is enough to require it in Node.
+// editor.js and preset-manager.js are browser IIFEs that only touch
+// window/document/localStorage inside functions; bare stubs are enough.
 global.window = {};
 
 require('../js/editor.js');
+global.localStorage = {
+    getItem: function() { return null; },
+    setItem: function() {},
+    removeItem: function() {}
+};
+require('../js/preset-manager.js');
 
 const TextEditor = global.window.TextEditor;
+const PM = global.window.PresetManager;
 assert.ok(TextEditor, 'TextEditor should be exposed');
 assert.ok(typeof TextEditor.loadPreset === 'function', 'TextEditor.loadPreset should exist');
+assert.ok(PM && PM.settingsFromDelta, 'PresetManager.settingsFromDelta should exist');
 
-// 1. Every bundled preset must load without throwing. This exercises every
-//    branch of loadPreset() with real TextStudio-shaped data.
+// 1. Every bundled preset (.txm delta, the only format since 3.2.0) must load:
+//    delta -> full settings -> loadPreset() without throwing.
 const presetsDir = path.join(__dirname, '..', 'presets');
-const files = fs.readdirSync(presetsDir).filter(f => f.endsWith('.json')).sort();
+const files = fs.readdirSync(presetsDir).filter(f => f.endsWith('.txm')).sort();
 assert.ok(files.length >= 9, 'expected the bundled presets to be present');
 
 files.forEach(function(file) {
-    const json = JSON.parse(fs.readFileSync(path.join(presetsDir, file), 'utf8'));
+    const payload = JSON.parse(fs.readFileSync(path.join(presetsDir, file), 'utf8'));
+    assert.equal(payload.format, 'textmuy-project', file + ' must use the .txm format');
+    const settings = PM.settingsFromDelta(payload.settings);
     const target = TextEditor.createDefaultSettings();
-    const result = TextEditor.loadPreset(json, target);
+    const result = TextEditor.loadPreset(JSON.parse(JSON.stringify(settings)), target);
     assert.ok(result, file + ' should load into a target settings object');
 });
 

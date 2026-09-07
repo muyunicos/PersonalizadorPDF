@@ -669,36 +669,9 @@ fieldset legend label {
     border-bottom-color: var(--tt-accent);
 }
 
-/* ===== PRESET LIST ===== */
-.tt-preset-list {
-    list-style: none;
-    padding: 0;
-}
-
-.tt-preset-list li {
-    padding: 8px 12px;
-    cursor: pointer;
-    border: 1px solid var(--tt-border-soft);
-    border-radius: var(--tt-radius-sm);
-    margin-bottom: 4px;
-    color: var(--tt-text);
-    transition: all var(--tt-transition);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.tt-preset-list li:hover {
-    background: var(--tt-bg-hover);
-    color: var(--tt-text-bright);
-    border-color: var(--tt-accent);
-}
-
-.tt-preset-list li.selected {
-    background: var(--tt-accent);
-    color: var(--tt-text-bright);
-    border-color: var(--tt-accent);
-}
+/* (El bloque PRESET LIST (.tt-preset-list) se elimino en 3.2.0 con el panel
+   "Presets" de la pestana DOWNLOAD: el unico panel de presets es la galeria
+   inferior, con sus propios estilos tt-gallery-*.) */
 
 /* ===== DOWNLOAD BUTTON ===== */
 .tt-download-button {
@@ -1528,6 +1501,9 @@ fieldset legend label {
 }
 .tt-gallery-toolbar {
     padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 .tt-gallery-toolbar input {
     width: 100%;
@@ -1582,56 +1558,153 @@ fieldset legend label {
     max-width: 100%;
 }
 
-/* ===== LOCAL PROJECTS ===== */
-.tt-projects-toolbar {
+/* ===== GALERIA DE PRESETS: acciones de toolbar y borrado por tile ===== */
+.tt-gallery-actions {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
-    margin-bottom: 8px;
 }
-.tt-projects-toolbar .tt-download-button {
-    width: auto;
-    flex: 1;
-    min-width: 120px;
-}
-.tt-project-status {
-    font-size: 12px;
-    color: var(--tt-text-muted, #999);
-    margin-bottom: 8px;
-    min-height: 16px;
-}
-.tt-projects-list li {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.tt-projects-list li img {
-    width: 28px;
-    height: 56px;
-    object-fit: contain;
-    background: var(--tt-bg, #0e0e0e);
-    border-radius: 2px;
-    flex: 0 0 auto;
-}
-.tt-projects-list li span {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.tt-projects-list li button {
-    padding: 4px 8px;
-    font-size: 12px;
-    border: 1px solid var(--tt-border-btn, #555);
+.tt-gallery-btn {
+    padding: 6px 12px;
     background: var(--tt-bg-panel-2, #222);
-    color: var(--tt-text, #ccc);
+    color: var(--tt-text-bright, #fff);
+    border: 1px solid var(--tt-border-btn, #555);
     border-radius: var(--tt-radius-sm, 4px);
     cursor: pointer;
+    font-size: 12px;
 }
-.tt-projects-list li button:hover {
+.tt-gallery-btn:hover {
     background: var(--tt-bg-hover, #2a2a2a);
     border-color: var(--tt-accent, #0089ff);
 }
-.tt-projects-list li .tt-project-delete {
+.tt-gallery-btn-migrate {
+    border-color: var(--tt-success, #2e7d32);
+}
+.tt-gallery-status {
+    font-size: 12px;
+    color: var(--tt-text-muted, #999);
+    min-height: 14px;
+}
+.tt-gallery-status-error {
+    color: var(--tt-danger, #ff4444);
+}
+.tt-gallery-tile {
+    position: relative;
+}
+.tt-gallery-tile-delete {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    line-height: 18px;
+    text-align: center;
+    border-radius: 50%;
+    border: 1px solid var(--tt-border-btn, #555);
+    background: rgba(0, 0, 0, 0.65);
+    color: var(--tt-text, #ccc);
+    font-size: 14px;
+    cursor: pointer;
+    user-select: none;
+}
+.tt-gallery-tile-delete:hover {
+    background: var(--tt-danger, #ff4444);
+    color: #fff;
     border-color: var(--tt-danger, #ff4444);
+}
+
+/* ===== BOTON "MIS IMAGENES" (junto a cada "Import image") ===== */
+.tt-myimages-btn {
+    display: block;
+    width: 100%;
+    margin-top: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    background: var(--tt-bg-panel-2, #222);
+    color: var(--tt-text, #ccc);
+    border: 1px solid var(--tt-border-btn, #555);
+    border-radius: var(--tt-radius-sm, 4px);
+    cursor: pointer;
+}
+.tt-myimages-btn:hover {
+    background: var(--tt-bg-hover, #2a2a2a);
+    border-color: var(--tt-accent, #0089ff);
+}
+
+/* ===== MODAL "MIS IMAGENES" (imagenes subidas al servidor) ===== */
+.tt-myimages-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.tt-myimages-overlay[hidden] {
+    display: none;
+}
+.tt-myimages-caja {
+    width: min(680px, 92vw);
+    max-height: 80vh;
+    overflow: auto;
+    background: var(--tt-bg-panel, #1a1a1a);
+    border: 1px solid var(--tt-border, #2a2a2a);
+    border-radius: var(--tt-radius, 6px);
+    padding: 14px;
+    color: var(--tt-text, #ccc);
+}
+.tt-myimages-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+.tt-myimages-upload {
+    padding: 6px 12px;
+    background: var(--tt-accent, #0089ff);
+    color: #fff;
+    border-radius: var(--tt-radius-sm, 4px);
+    cursor: pointer;
+    font-size: 12px;
+}
+.tt-myimages-cerrar {
+    margin-left: auto;
+    padding: 6px 12px;
+    background: var(--tt-bg-panel-2, #222);
+    color: var(--tt-text, #ccc);
+    border: 1px solid var(--tt-border-btn, #555);
+    border-radius: var(--tt-radius-sm, 4px);
+    cursor: pointer;
+    font-size: 12px;
+}
+.tt-myimages-cerrar:hover {
+    border-color: var(--tt-danger, #ff4444);
+}
+.tt-myimages-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+}
+.tt-myimages-tile {
+    border: 2px solid transparent;
+    background: var(--tt-bg, #0e0e0e);
+    border-radius: var(--tt-radius-sm, 4px);
+    cursor: pointer;
+    padding: 4px;
+}
+.tt-myimages-tile:hover {
+    border-color: var(--tt-accent, #0089ff);
+}
+.tt-myimages-tile img {
+    width: 100%;
+    height: 90px;
+    object-fit: contain;
+    display: block;
+}
+.tt-myimages-status {
+    font-size: 12px;
+    color: var(--tt-text-muted, #999);
+    margin: 10px 0 0;
 }

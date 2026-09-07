@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 3.1.2
+ * Version: 3.2.0
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('PERSONALIZADOR_PDF_VERSION', '3.1.2');
+define('PERSONALIZADOR_PDF_VERSION', '3.2.0');
 define('PERSONALIZADOR_PDF_PATH', plugin_dir_path(__FILE__));
 define('PERSONALIZADOR_PDF_URL', plugin_dir_url(__FILE__));
 
@@ -57,6 +57,13 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_descargar', [$this, 'handle_descargar']);
         add_action('admin_post_personalizador_pdf_ver', [$this, 'handle_ver']);
         add_action('admin_post_personalizador_pdf_borrar', [$this, 'handle_borrar']);
+
+        // Puente con el modulo TextMuy (pestana "Estilos de Texto"): el iframe
+        // guarda/borra presets (.txm + .webp) y sube imagenes al modulo via fetch.
+        // Solo en WP (con nonce); el modulo standalone sigue 100% client-side.
+        add_action('admin_post_personalizador_pdf_textmuy_guardar_preset', [$this, 'handle_textmuy_guardar_preset']);
+        add_action('admin_post_personalizador_pdf_textmuy_borrar_preset', [$this, 'handle_textmuy_borrar_preset']);
+        add_action('admin_post_personalizador_pdf_textmuy_subir_imagen', [$this, 'handle_textmuy_subir_imagen']);
 
         // Compatibilidad temporal (ciclo 3.0.x): los hooks legacy "extractor_corel_*"
         // siguen respondiendo para no romper bookmarks o pestanas abiertas de <= 2.0.0.
@@ -421,13 +428,21 @@ class Personalizador_PDF_Plugin
         @file_put_contents($ruta, json_encode($textos, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
 
-    /** Nombres de los presets base del modulo TextMuy (modules/textmuy/presets/*.json). */
+    /**
+     * Nombres de los presets del modulo TextMuy (modules/textmuy/presets/*.txm).
+     * Desde 3.2.0 el formato unico es .txm (delta textmuy-project); incluye los
+     * presets base que trae el modulo y los guardados por el admin desde el editor.
+     */
     private function presets_base()
     {
         $dir = PERSONALIZADOR_PDF_PATH . 'modules' . DIRECTORY_SEPARATOR . 'textmuy' . DIRECTORY_SEPARATOR . 'presets';
         $out = [];
-        foreach ((array)glob($dir . DIRECTORY_SEPARATOR . '*.json') as $ruta) {
-            $out[] = basename($ruta, '.json');
+        foreach ((array)glob($dir . DIRECTORY_SEPARATOR . '*.txm') as $ruta) {
+            $nombre = basename($ruta, '.txm');
+            // Solo nombres que el propio sanitizador dejaría iguales (sin sorpresas al usarlos).
+            if ($this->nombre_textmuy_seguro($nombre) === $nombre) {
+                $out[] = $nombre;
+            }
         }
         sort($out, SORT_NATURAL | SORT_FLAG_CASE);
         return $out;
@@ -492,6 +507,199 @@ class Personalizador_PDF_Plugin
         $this->redirigir($activo
             ? ['ec_texto' => 1, 'ec_pdf' => $archivo]
             : ['ec_texto_quitado' => 1, 'ec_pdf' => $archivo]);
+    }
+
+    /* ==================== Recursos del modulo TextMuy (presets .txm + imagenes) ==================== */
+
+    /** Directorio de presets del modulo (modules/textmuy/presets, pares .txm + .webp). */
+    private function dir_textmuy_presets()
+    {
+        return PERSONALIZADOR_PDF_PATH . 'modules' . DIRECTORY_SEPARATOR . 'textmuy' . DIRECTORY_SEPARATOR . 'presets';
+    }
+
+    /** Directorio de imagenes subidas del modulo (modules/textmuy/imagenes). */
+    private function dir_textmuy_imagenes($crear = true)
+    {
+        $dir = PERSONALIZADOR_PDF_PATH . 'modules' . DIRECTORY_SEPARATOR . 'textmuy' . DIRECTORY_SEPARATOR . 'imagenes';
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        return $dir;
+    }
+
+    /** Nombre de preset/imagen seguro: minusculas, [a-z0-9_-], sin puntos ni barras. */
+    private function nombre_textmuy_seguro($nombre)
+    {
+        $limpio = strtolower((string)$nombre);
+        $limpio = preg_replace('/[^a-z0-9_-]+/', '-', $limpio);
+        $limpio = preg_replace('/^-+|-+$/', '', (string)$limpio);
+        return substr($limpio, 0, 64);
+    }
+
+    /** Verifica la firma (magic bytes) de una imagen segun su extension. */
+    private function firma_imagen_valida($ruta, $ext)
+    {
+        $firma = (string)@file_get_contents($ruta, false, null, 0, 12);
+        if ($ext === 'png') {
+            return $firma === "\x89PNG\r\n\x1a\n";
+        }
+        if ($ext === 'jpg' || $ext === 'jpeg') {
+            return substr($firma, 0, 3) === "\xFF\xD8\xFF";
+        }
+        if ($ext === 'webp') {
+            return strlen($firma) >= 12 && substr($firma, 0, 4) === 'RIFF' && substr($firma, 8, 4) === 'WEBP';
+        }
+        return false;
+    }
+
+    /**
+     * Listado de recursos TextMuy para el iframe de "Estilos de Texto":
+     * presets (*.txm) e imagenes subidas (para el picker "Mis imagenes").
+     */
+    private function recursos_textmuy()
+    {
+        $presets = [];
+        foreach ((array)glob($this->dir_textmuy_presets() . DIRECTORY_SEPARATOR . '*.txm') as $ruta) {
+            $nombre = basename($ruta, '.txm');
+            if ($this->nombre_textmuy_seguro($nombre) === $nombre) {
+                $presets[] = $nombre;
+            }
+        }
+        sort($presets, SORT_NATURAL | SORT_FLAG_CASE);
+
+        $imagenes = [];
+        foreach ((array)glob($this->dir_textmuy_imagenes(false) . DIRECTORY_SEPARATOR . '*.*') as $ruta) {
+            $archivo = basename($ruta);
+            $ext = strtolower(pathinfo($archivo, PATHINFO_EXTENSION));
+            if (in_array($ext, ['png', 'jpg', 'jpeg', 'webp'], true)) {
+                $imagenes[] = [
+                    'nombre' => $archivo,
+                    'url' => PERSONALIZADOR_PDF_URL . 'modules/textmuy/imagenes/' . rawurlencode($archivo),
+                ];
+            }
+        }
+        sort($imagenes);
+        return ['presets' => $presets, 'imagenes' => $imagenes];
+    }
+
+    /**
+     * Guarda un preset del editor TextMuy como par {nombre}.txm + {nombre}.webp en
+     * modules/textmuy/presets. Siempre responde JSON (lo consume fetch desde el
+     * iframe, nunca un redirect de consola).
+     */
+    public function handle_textmuy_guardar_preset()
+    {
+        $this->seguridad('personalizador_pdf_textmuy_guardar_preset');
+        $nombre = $this->nombre_textmuy_seguro(isset($_POST['nombre']) ? wp_unslash($_POST['nombre']) : '');
+        if ($nombre === '') {
+            wp_send_json_error('Nombre de preset no valido.');
+        }
+        if (empty($_FILES['txm']) || !is_array($_FILES['txm']) || ($_FILES['txm']['error'] ?? 1) !== UPLOAD_ERR_OK) {
+            wp_send_json_error('No se recibio el archivo .txm del preset.');
+        }
+        if (empty($_FILES['webp']) || !is_array($_FILES['webp']) || ($_FILES['webp']['error'] ?? 1) !== UPLOAD_ERR_OK) {
+            wp_send_json_error('No se recibio la miniatura .webp del preset.');
+        }
+        $txm = $_FILES['txm'];
+        $webp = $_FILES['webp'];
+        if ($txm['size'] > 2 * 1024 * 1024) {
+            wp_send_json_error('El preset supera el tamano maximo (2 MB el .txm).');
+        }
+        if ($webp['size'] > 1024 * 1024) {
+            wp_send_json_error('La miniatura supera el tamano maximo (1 MB el .webp).');
+        }
+        // El .txm debe ser JSON valido del formato textmuy-project (delta de settings).
+        $payload = json_decode((string)file_get_contents($txm['tmp_name']), true);
+        if (!is_array($payload)
+            || (isset($payload['format']) ? $payload['format'] : '') !== 'textmuy-project'
+            || !is_array($payload['settings'] ?? null)
+        ) {
+            wp_send_json_error('El archivo .txm no tiene el formato textmuy-project esperado.');
+        }
+        // La miniatura debe ser WebP real (RIFF....WEBP).
+        $firma = (string)@file_get_contents($webp['tmp_name'], false, null, 0, 12);
+        if (strlen($firma) < 12 || substr($firma, 0, 4) !== 'RIFF' || substr($firma, 8, 4) !== 'WEBP') {
+            wp_send_json_error('La miniatura no es un WebP valido.');
+        }
+        $dir = $this->dir_textmuy_presets();
+        if (!is_dir($dir) || !wp_is_writable($dir)) {
+            wp_send_json_error(
+                'El directorio de presets del modulo no es escribible en este hosting. '
+                . 'Verifica los permisos de wp-content/plugins/personalizador-pdf/modules/textmuy/presets.'
+            );
+        }
+        $rutaTxm = $dir . DIRECTORY_SEPARATOR . $nombre . '.txm';
+        $rutaWebp = $dir . DIRECTORY_SEPARATOR . $nombre . '.webp';
+        if (!@move_uploaded_file($txm['tmp_name'], $rutaTxm)) {
+            wp_send_json_error('No se pudo escribir el preset en el directorio del modulo.');
+        }
+        if (!@move_uploaded_file($webp['tmp_name'], $rutaWebp)) {
+            @unlink($rutaTxm); // No dejar un .txm huerfano sin miniatura.
+            wp_send_json_error('No se pudo escribir la miniatura del preset.');
+        }
+        wp_send_json_success(['nombre' => $nombre]);
+    }
+
+    /** Borra el par {nombre}.txm + {nombre}.webp de modules/textmuy/presets. */
+    public function handle_textmuy_borrar_preset()
+    {
+        $this->seguridad('personalizador_pdf_textmuy_borrar_preset');
+        $nombre = $this->nombre_textmuy_seguro(isset($_POST['nombre']) ? wp_unslash($_POST['nombre']) : '');
+        if ($nombre === '') {
+            wp_send_json_error('Nombre de preset no valido.');
+        }
+        $dir = $this->dir_textmuy_presets();
+        @unlink($dir . DIRECTORY_SEPARATOR . $nombre . '.txm');
+        @unlink($dir . DIRECTORY_SEPARATOR . $nombre . '.webp');
+        wp_send_json_success(['nombre' => $nombre]);
+    }
+
+    /**
+     * Sube una imagen para rellenos/fondos/texturas del editor TextMuy a
+     * modules/textmuy/imagenes y devuelve su URL publica (misma origen que el
+     * iframe: el canvas puede usarla sin CORS).
+     */
+    public function handle_textmuy_subir_imagen()
+    {
+        $this->seguridad('personalizador_pdf_textmuy_subir_imagen');
+        if (empty($_FILES['imagen']) || !is_array($_FILES['imagen']) || ($_FILES['imagen']['error'] ?? 1) !== UPLOAD_ERR_OK) {
+            wp_send_json_error('No se recibio la imagen.');
+        }
+        $file = $_FILES['imagen'];
+        if ($file['size'] > 4 * 1024 * 1024) {
+            wp_send_json_error('La imagen supera el tamano maximo (4 MB).');
+        }
+        $ext = strtolower(pathinfo((string)$file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, ['png', 'jpg', 'jpeg', 'webp'], true)) {
+            wp_send_json_error('Formato no permitido (usa PNG, JPG o WebP).');
+        }
+        if (!$this->firma_imagen_valida($file['tmp_name'], $ext)) {
+            wp_send_json_error('El archivo no es una imagen valida.');
+        }
+        $dir = $this->dir_textmuy_imagenes(true);
+        if (!is_dir($dir) || !wp_is_writable($dir)) {
+            wp_send_json_error(
+                'El directorio de imagenes del modulo no es escribible en este hosting. '
+                . 'Verifica los permisos de wp-content/plugins/personalizador-pdf/modules/textmuy/imagenes.'
+            );
+        }
+        $base = $this->nombre_textmuy_seguro(pathinfo((string)$file['name'], PATHINFO_FILENAME));
+        if ($base === '') {
+            $base = 'imagen';
+        }
+        $destino = $base . '.' . $ext;
+        $i = 2;
+        while (is_file($dir . DIRECTORY_SEPARATOR . $destino)) {
+            $destino = $base . '-' . $i . '.' . $ext;
+            $i++;
+        }
+        if (!@move_uploaded_file($file['tmp_name'], $dir . DIRECTORY_SEPARATOR . $destino)) {
+            wp_send_json_error('No se pudo guardar la imagen.');
+        }
+        wp_send_json_success([
+            'nombre' => $destino,
+            'url' => PERSONALIZADOR_PDF_URL . 'modules/textmuy/imagenes/' . rawurlencode($destino),
+        ]);
     }
 
     /* ==================== Handlers: PDFs ==================== */

@@ -1,300 +1,56 @@
-/* ===== PRESET MANAGER - CRUD Operations ===== */
+/* ===== PRESET MANAGER - presets .txm (+ .webp) en modules/textmuy/presets =====
+ *
+ * Desde 3.2.0 el almacenamiento unico de presets son ARCHIVOS en presets/:
+ *   {nombre}.txm  -> delta de settings (formato textmuy-project v1)
+ *   {nombre}.webp -> miniatura 100x200 para la galeria
+ *
+ * Dentro del plugin (iframe de "Estilos de Texto") el guardado/borrado y la
+ * subida de imagenes van por el puente PHP (admin-post, ver AGENTS.md del
+ * plugin). Sin puente (uso standalone) "guardar" descarga el .txm y las
+ * imagenes se siguen embebiendo como data-URL.
+ * Las claves localStorage de versiones anteriores son SOLO LECTURA: la galeria
+ * ofrece migrarlas al servidor una unica vez (migrateLegacyPresets).
+ */
 (function() {
     'use strict';
 
-    const STORAGE_KEY = 'textmuy_presets';
-    const IMPORTED_KEY = 'textstudio_presets';
-    
-    // Preset categories
-    const CATEGORIES = {
-        basic: 'Basic',
-        gaming: 'Gaming',
-        brands: 'Brands',
-        artistic: 'Artistic',
-        retro: 'Retro',
-        modern: 'Modern',
-        neon: 'Neon',
-        metallic: 'Metallic',
-        custom: 'Custom'
-    };
-
-    /**
-     * Get all presets (local + imported)
-     */
-    function getAllPresets() {
-        const presets = {};
-        
-        // Load local presets
-        try {
-            const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-            Object.keys(local).forEach(name => {
-                presets[name] = {
-                    name: name,
-                    data: local[name],
-                    source: 'local',
-                    category: local[name].category || 'custom',
-                    timestamp: local[name].timestamp || Date.now()
-                };
-            });
-        } catch (e) {
-            console.error('Failed to load local presets:', e);
-        }
-
-        // Load imported presets
-        try {
-            const imported = JSON.parse(localStorage.getItem(IMPORTED_KEY) || '{}');
-            Object.keys(imported).forEach(name => {
-                if (!presets[name]) {
-                    presets[name] = {
-                        name: name,
-                        data: imported[name].preset || imported[name],
-                        source: 'imported',
-                        category: (imported[name].preset || imported[name]).category || 'custom',
-                        timestamp: imported[name].timestamp || Date.now()
-                    };
-                }
-            });
-        } catch (e) {
-            console.error('Failed to load imported presets:', e);
-        }
-
-        return presets;
-    }
-
-    /**
-     * Get presets by category
-     */
-    function getPresetsByCategory(category) {
-        const presets = getAllPresets();
-        const filtered = {};
-        
-        Object.keys(presets).forEach(name => {
-            if (presets[name].category === category) {
-                filtered[name] = presets[name];
+    // ===== PUENTE CON PERSONALIZADOR PDF (postMessage same-origin) =====
+    // La pagina del admin envia {type:'textmuy-bridge', bridge:{urls,nonces,presets,imagenes}}
+    // cuando el iframe carga. Sin puente: bridge queda null (modo standalone).
+    let bridge = null;
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+        window.addEventListener('message', function (ev) {
+            if (!ev || !ev.data || ev.data.type !== 'textmuy-bridge') return;
+            if (ev.source !== window.parent && ev.source !== window) return;
+            if (ev.data.bridge && typeof ev.data.bridge === 'object') {
+                bridge = ev.data.bridge;
             }
         });
-        
-        return filtered;
-    }
-
-    /**
-     * Search presets by name
-     */
-    function searchPresets(query) {
-        const presets = getAllPresets();
-        const filtered = {};
-        const lowerQuery = query.toLowerCase();
-        
-        Object.keys(presets).forEach(name => {
-            if (name.toLowerCase().includes(lowerQuery)) {
-                filtered[name] = presets[name];
-            }
-        });
-        
-        return filtered;
-    }
-
-    /**
-     * Get all categories
-     */
-    function getCategories() {
-        return CATEGORIES;
-    }
-
-    /**
-     * Get preset by name
-     */
-    function getPreset(name) {
-        const presets = getAllPresets();
-        return presets[name] ? presets[name].data : null;
-    }
-
-    /**
-     * Create new preset
-     */
-    function createPreset(name, settings, category = 'custom') {
-        if (!name || typeof name !== 'string') {
-            throw new Error('Preset name is required');
-        }
-
-        const safeName = name.replace(/[^a-z0-9-]/gi, '-').toLowerCase();
-        
+        // Avisar al parent que el modulo ya escucha (el parent reenvia el puente).
         try {
-            const presets = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-            
-            if (presets[safeName]) {
-                throw new Error('Preset already exists: ' + safeName);
+            if (window.parent && window.parent !== window && typeof window.parent.postMessage === 'function') {
+                window.parent.postMessage({ type: 'textmuy-ready' }, window.location.origin);
             }
-
-            presets[safeName] = {
-                ...settings,
-                category: category,
-                timestamp: Date.now()
-            };
-
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
-            return safeName;
-        } catch (e) {
-            console.error('Failed to create preset:', e);
-            throw e;
-        }
+        } catch (_) { /* parent cruzado o inaccesible */ }
     }
 
-    /**
-     * Update existing preset
-     */
-    function updatePreset(name, settings) {
-        if (!name || typeof name !== 'string') {
-            throw new Error('Preset name is required');
-        }
+    // Presets base que trae el modulo (fallback del listado cuando no hay puente).
+    const BASE_PRESETS = [
+        'clean-modern', 'cyberpunk', 'fire-free', 'gold-metallic', 'looney-tunes',
+        'neon-glow', 'nintendo', 'retro-wave', 'simple-gradient'
+    ];
 
-        const safeName = name.replace(/[^a-z0-9-]/gi, '-').toLowerCase();
-        
-        try {
-            const presets = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-            
-            if (!presets[safeName]) {
-                throw new Error('Preset not found: ' + safeName);
-            }
+    // Claves legacy de versiones anteriores (solo lectura, para migrar).
+    const LEGACY_STORAGE_KEY = 'textmuy_presets';
+    const LEGACY_IMPORTED_KEY = 'textstudio_presets';
 
-            presets[safeName] = {
-                ...settings,
-                timestamp: Date.now()
-            };
-
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
-            return safeName;
-        } catch (e) {
-            console.error('Failed to update preset:', e);
-            throw e;
-        }
-    }
-
-    /**
-     * Delete preset
-     */
-    function deletePreset(name) {
-        if (!name || typeof name !== 'string') {
-            throw new Error('Preset name is required');
-        }
-
-        const safeName = name.replace(/[^a-z0-9-]/gi, '-').toLowerCase();
-        
-        try {
-            const presets = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-            
-            if (!presets[safeName]) {
-                throw new Error('Preset not found: ' + safeName);
-            }
-
-            delete presets[safeName];
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
-            return true;
-        } catch (e) {
-            console.error('Failed to delete preset:', e);
-            throw e;
-        }
-    }
-
-    /**
-     * Duplicate preset
-     */
-    function duplicatePreset(name, newName) {
-        const preset = getPreset(name);
-        
-        if (!preset) {
-            throw new Error('Preset not found: ' + name);
-        }
-
-        const finalName = newName || name + '-copy';
-        return createPreset(finalName, preset);
-    }
-
-    /**
-     * Export preset as JSON file
-     */
-    function exportPreset(name) {
-        const preset = getPreset(name);
-        
-        if (!preset) {
-            throw new Error('Preset not found: ' + name);
-        }
-
-        const blob = new Blob([JSON.stringify(preset, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = name + '.json';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }
-
-    /**
-     * Import preset from JSON file
-     */
-    function importPreset(jsonString) {
-        try {
-            const preset = JSON.parse(jsonString);
-            const name = preset.name || 'imported-preset-' + Date.now();
-            return createPreset(name, preset);
-        } catch (e) {
-            console.error('Failed to import preset:', e);
-            throw new Error('Invalid preset JSON');
-        }
-    }
-
-    /**
-     * Load preset from file system
-     */
-    async function loadPresetFromFile(name) {
-        const response = await fetch('presets/' + encodeURIComponent(name) + '.json');
-        if (!response.ok) {
-            throw new Error('Preset not found: ' + name);
-        }
-        return await response.json();
-    }
-
-    /**
-     * Get preset list sorted by timestamp
-     */
-    function getPresetList() {
-        const presets = getAllPresets();
-        const list = Object.values(presets).sort((a, b) => b.timestamp - a.timestamp);
-        return list;
-    }
-
-    /**
-     * Clear all local presets
-     */
-    function clearLocalPresets() {
-        localStorage.removeItem(STORAGE_KEY);
-    }
-
-    /**
-     * Clear imported presets cache
-     */
-    function clearImportedPresets() {
-        localStorage.removeItem(IMPORTED_KEY);
-    }
-
-    /**
-     * Get preset count
-     */
-    function getPresetCount() {
-        const presets = getAllPresets();
-        return Object.keys(presets).length;
-    }
-
-// ===== PROJECT (.txm delta) + GALLERY THUMBNAILS =====
+    // ===== FORMATO .txm =====
     const PROJECT_FORMAT = 'textmuy-project';
     const PROJECT_VERSION = 1;
     const THUMB_WIDTH = 100;
     const THUMB_HEIGHT = 200;
 
-    let projectDirHandle = null;      // FileSystemDirectoryHandle from the picker
-    let thumbnailCache = new Map();   // name -> dataURL (runtime only)
+    let thumbnailCache = new Map();   // name -> URL (runtime only)
 
     function getDefaults() {
         return (window.TextEditor && window.TextEditor.createDefaultSettings)
@@ -345,7 +101,7 @@
             .replace(/[^a-z0-9_-]+/gi, '-')
             .replace(/^-+|-+$/g, '')
             .toLowerCase();
-        return clean || 'project';
+        return clean || 'preset';
     }
 
     function canvasToBlob(canvas, type, quality) {
@@ -394,46 +150,203 @@
         return blobToDataURL(await thumbnailBlob(settings));
     }
 
-    function storedThumbnail(name) {
-        try {
-            return (JSON.parse(localStorage.getItem('textmuy_thumbnails') || '{}'))[name] || null;
-        } catch (_) { return null; }
+    // ===== GUARDADO / BORRADO =====
+    async function leerJson(resp) {
+        try { return await resp.json(); } catch (_) { return null; }
     }
 
-    function storeThumbnail(name, url) {
-        try {
-            const m = JSON.parse(localStorage.getItem('textmuy_thumbnails') || '{}');
-            m[name] = url;
-            localStorage.setItem('textmuy_thumbnails', JSON.stringify(m));
-        } catch (_) {}
+    /** Mensaje de error humano: JSON del handler, o aviso de sesion expirada. */
+    function mensajePuente(datos, resp, porDefecto) {
+        if (datos && datos.data) return String(datos.data);
+        if (resp && (resp.status === 403 || resp.status === 400)) {
+            return porDefecto + ' Recarga la pagina (la sesion pudo expirar) y reintenta.';
+        }
+        return porDefecto;
     }
 
+    function descargarTxm(safe, blob) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = safe + '.txm';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+    }
+
+    /**
+     * Guarda el settings actual como par {nombre}.txm + {nombre}.webp.
+     * Con puente: al servidor (disponible en todos los navegadores).
+     * Sin puente: descarga el .txm (el usuario lo coloca en presets/).
+     * Devuelve {name, mode:'server'|'download'}.
+     */
+    async function savePreset(name, settings) {
+        const safe = sanitizeName(name || (settings && settings.text) || 'preset');
+        const payload = {
+            format: PROJECT_FORMAT,
+            version: PROJECT_VERSION,
+            name: safe,
+            settings: diffSettings(getDefaults(), settings) || {}
+        };
+        const txmBlob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        if (!bridgeAvailable()) {
+            descargarTxm(safe, txmBlob);
+            return { name: safe, mode: 'download' };
+        }
+        const webpBlob = await thumbnailBlob(settings);
+        const fd = new FormData();
+        fd.append('nombre', safe);
+        fd.append('txm', txmBlob, safe + '.txm');
+        fd.append('webp', webpBlob, safe + '.webp');
+        fd.append('_wpnonce', bridge.nonces.guardarPreset);
+        const resp = await fetch(bridge.urls.guardarPreset, {
+            method: 'POST', body: fd, credentials: 'same-origin'
+        });
+        const datos = await leerJson(resp);
+        if (!resp.ok || !datos || !datos.success) {
+            throw new Error(mensajePuente(datos, resp, 'No se pudo guardar el preset en el servidor.'));
+        }
+        // Mantener el listado local al dia (sin recargar la pagina).
+        if (Array.isArray(bridge.presets) && bridge.presets.indexOf(safe) === -1) {
+            bridge.presets.push(safe);
+            bridge.presets.sort();
+        }
+        thumbnailCache.set(safe, 'presets/' + encodeURIComponent(safe) + '.webp');
+        return { name: safe, mode: 'server' };
+    }
+
+    async function deletePreset(name) {
+        if (!bridgeAvailable()) {
+            throw new Error('Borrar presets del servidor solo esta disponible dentro del plugin.');
+        }
+        const safe = sanitizeName(name);
+        const fd = new FormData();
+        fd.append('nombre', safe);
+        fd.append('_wpnonce', bridge.nonces.borrarPreset);
+        const resp = await fetch(bridge.urls.borrarPreset, {
+            method: 'POST', body: fd, credentials: 'same-origin'
+        });
+        const datos = await leerJson(resp);
+        if (!resp.ok || !datos || !datos.success) {
+            throw new Error(mensajePuente(datos, resp, 'No se pudo borrar el preset del servidor.'));
+        }
+        if (Array.isArray(bridge.presets)) {
+            bridge.presets = bridge.presets.filter(function (n) { return n !== safe; });
+        }
+        thumbnailCache.delete(safe);
+        return true;
+    }
+
+    // ===== IMAGENES SUBIDAS (modules/textmuy/imagenes, para rellenos/fondos) =====
+    async function uploadImage(file) {
+        if (!bridgeAvailable()) {
+            throw new Error('El directorio de imagenes solo esta disponible dentro del plugin.');
+        }
+        const fd = new FormData();
+        fd.append('imagen', file, file.name);
+        fd.append('_wpnonce', bridge.nonces.subirImagen);
+        const resp = await fetch(bridge.urls.subirImagen, {
+            method: 'POST', body: fd, credentials: 'same-origin'
+        });
+        const datos = await leerJson(resp);
+        if (!resp.ok || !datos || !datos.success) {
+            throw new Error(mensajePuente(datos, resp, 'No se pudo subir la imagen.'));
+        }
+        if (Array.isArray(bridge.imagenes)) {
+            bridge.imagenes.push({ nombre: datos.data.nombre, url: datos.data.url });
+        }
+        return datos.data; // {nombre, url}
+    }
+
+    // ===== LISTADO =====
+    function bridgeAvailable() {
+        return !!(bridge && bridge.urls && bridge.urls.guardarPreset && bridge.nonces);
+    }
+
+    function listPresets() {
+        if (bridge && Array.isArray(bridge.presets) && bridge.presets.length) {
+            return bridge.presets.slice();
+        }
+        return BASE_PRESETS.slice();
+    }
+
+    function listImages() {
+        return (bridge && Array.isArray(bridge.imagenes)) ? bridge.imagenes.slice() : [];
+    }
+
+    // ===== CARGA =====
+    // Devuelve {kind:'txm'|'raw', data}. 'raw' es el formato TextStudio crudo de
+    // los presets .json legacy (compat de carga, ya no se generan).
+    async function fetchPreset(name) {
+        const safe = sanitizeName(name);
+        const response = await fetch('presets/' + encodeURIComponent(safe) + '.txm');
+        if (response.ok) {
+            const payload = await response.json();
+            if (!payload || payload.format !== PROJECT_FORMAT || typeof payload.settings !== 'object' || payload.settings === null) {
+                throw new Error('Unsupported preset format: ' + safe);
+            }
+            return { kind: 'txm', data: payload };
+        }
+        const legacy = await fetch('presets/' + encodeURIComponent(safe) + '.json');
+        if (legacy.ok) {
+            return { kind: 'raw', data: await legacy.json() };
+        }
+        throw new Error('Preset not found: ' + safe);
+    }
+
+    async function loadPreset(name) {
+        try {
+            const entry = await fetchPreset(name);
+            const settings = entry.kind === 'txm' ? settingsFromDelta(entry.data.settings) : entry.data;
+            if (window.TextEditor && window.TextEditor.loadPreset) window.TextEditor.loadPreset(settings);
+            return settings;
+        } catch (e) {
+            console.error('Failed to load preset:', name, e);
+            return null;
+        }
+    }
+
+    // ===== MINIATURAS =====
     function isFileProtocol() {
         try { return typeof location !== 'undefined' && location.protocol === 'file:'; }
         catch (_) { return false; }
     }
 
+    async function imagenExiste(url) {
+        try {
+            const resp = await fetch(url, { method: 'HEAD' });
+            return resp.ok;
+        } catch (_) { return false; }
+    }
+
+    /**
+     * URL de miniatura de un preset: presets/{name}.webp si existe en el
+     * servidor; si no, render lazy 100x200 en memoria (uso standalone o preset
+     * sin .webp). Nunca escribe en localStorage: las miniaturas viven junto al
+     * .txm (presets/{name}.webp).
+     */
     async function ensureThumbnail(name) {
         if (thumbnailCache.has(name)) return thumbnailCache.get(name);
-        const stored = storedThumbnail(name);
-        if (stored) { thumbnailCache.set(name, stored); return stored; }
-        try {
-            let data = getPreset(name);
-            if (!data && !(typeof fetch !== 'function' || isFileProtocol())) {
-                data = await loadPresetFromFile(name);
+        if (typeof fetch === 'function' && !isFileProtocol()) {
+            const url = 'presets/' + encodeURIComponent(sanitizeName(name)) + '.webp';
+            if (await imagenExiste(url)) {
+                thumbnailCache.set(name, url);
+                return url;
             }
-            if (!data) return null;
-            // Convert the raw preset (TextStudio structure) into internal
-            // settings so the thumbnail matches what loadPreset would show.
-            const editor = window.TextEditor;
-            let settings = data;
-            if (editor && editor.createDefaultSettings && editor.loadPreset) {
-                settings = editor.createDefaultSettings();
-                editor.loadPreset(data, settings);
+        }
+        try {
+            const entry = await fetchPreset(name);
+            let settings = entry.data;
+            if (entry.kind === 'txm') {
+                settings = settingsFromDelta(entry.data.settings);
+            } else if (window.TextEditor && window.TextEditor.createDefaultSettings && window.TextEditor.loadPreset) {
+                const converted = window.TextEditor.createDefaultSettings();
+                window.TextEditor.loadPreset(entry.data, converted);
+                settings = converted;
             }
             const url = await thumbnailDataUrl(settings);
             thumbnailCache.set(name, url);
-            storeThumbnail(name, url);
             return url;
         } catch (e) {
             console.warn('Could not render thumbnail for', name, e);
@@ -441,139 +354,77 @@
         }
     }
 
-    // Load a preset (local/imported or bundled file) into the editor.
-    async function loadPreset(name) {
+    // ===== MIGRACION LEGACY (localStorage -> servidor, una unica vez) =====
+    /** Presets de versiones anteriores guardados en localStorage (solo lectura). */
+    function legacyLocalPresets() {
+        const out = [];
         try {
-            let data = getPreset(name);
-            if (!data) data = await loadPresetFromFile(name);
-            if (window.TextEditor && window.TextEditor.loadPreset) window.TextEditor.loadPreset(data);
-            return data;
-        } catch (e) {
-            console.error('Failed to load preset:', name, e);
-            return null;
-        }
-    }
-    // ---- File System Access projects ----
-    function hasProjectDirectory() { return !!projectDirHandle; }
-
-    function getProjectDirectoryName() {
-        return projectDirHandle ? projectDirHandle.name : null;
+            const loc = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || '{}');
+            Object.keys(loc).forEach(function (n) {
+                out.push({ name: n, kind: 'settings', data: loc[n] });
+            });
+            const imp = JSON.parse(localStorage.getItem(LEGACY_IMPORTED_KEY) || '{}');
+            Object.keys(imp).forEach(function (n) {
+                if (!out.some(function (p) { return p.name === n; })) {
+                    out.push({ name: n, kind: 'raw', data: imp[n].preset || imp[n] });
+                }
+            });
+        } catch (_) { /* storage is optional */ }
+        return out;
     }
 
-    async function pickProjectDirectory() {
-        if (!window.showDirectoryPicker) {
-            throw new Error('Folder access is not supported by this browser. Use Chrome or Edge.');
-        }
-        projectDirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-        return projectDirHandle;
-    }
-
-    function requireProjectDir() {
-        return projectDirHandle
-            ? Promise.resolve(projectDirHandle)
-            : Promise.reject(new Error('No project folder selected.'));
-    }
-
-    async function saveProject(name, settings) {
-        const handle = await requireProjectDir();
-        const safe = sanitizeName(name || (settings && settings.text) || 'project');
-        const payload = {
-            format: PROJECT_FORMAT,
-            version: PROJECT_VERSION,
-            name: safe,
-            settings: diffSettings(getDefaults(), settings) || {}
-        };
-        const webpBlob = await thumbnailBlob(settings);
-
-        const txmHandle = await handle.getFileHandle(safe + '.txm', { create: true });
-        const webpHandle = await handle.getFileHandle(safe + '.webp', { create: true });
-
-        const txmText = JSON.stringify(payload, null, 2);
-
-        const txmWrt = await txmHandle.createWritable();
-        await txmWrt.write(txmText);
-        await txmWrt.close();
-
-        const webpWrt = await webpHandle.createWritable();
-        await webpWrt.write(webpBlob);
-        await webpWrt.close();
-
-        return { name: safe, txm: safe + '.txm', webp: safe + '.webp' };
-    }
-
-    async function listProjects() {
-        const handle = await requireProjectDir();
-        const names = new Set();
-        for await (const entry of handle.values()) {
-            if (entry.kind === 'file' && /\.txm$/i.test(entry.name)) {
-                names.add(entry.name.replace(/\.txm$/i, ''));
+    /** Sube los presets legacy de este navegador al servidor y limpia las claves. */
+    async function migrateLegacyPresets() {
+        const viejos = legacyLocalPresets();
+        if (!viejos.length || !bridgeAvailable()) return [];
+        const subidos = [];
+        for (let i = 0; i < viejos.length; i++) {
+            const p = viejos[i];
+            try {
+                let settings = p.data;
+                if (p.kind === 'raw' && window.TextEditor && window.TextEditor.createDefaultSettings && window.TextEditor.loadPreset) {
+                    settings = window.TextEditor.createDefaultSettings();
+                    window.TextEditor.loadPreset(p.data, settings);
+                }
+                if (settings && typeof settings === 'object') {
+                    delete settings.category;
+                    delete settings.timestamp;
+                }
+                await savePreset(p.name, settings);
+                subidos.push(sanitizeName(p.name));
+            } catch (e) {
+                console.warn('No se pudo migrar el preset local', p.name, e);
             }
         }
-        return Array.from(names).sort();
-    }
-
-    async function readProjectThumbnailUrl(name) {
-        const handle = await requireProjectDir();
-        const safe = sanitizeName(name);
-        try {
-            const fh = await handle.getFileHandle(safe + '.webp');
-            const f = await fh.getFile();
-            return URL.createObjectURL(f);
-        } catch (_) { return null; }
-    }
-
-    async function openProject(name) {
-        const handle = await requireProjectDir();
-        const safe = sanitizeName(name);
-        const fh = await handle.getFileHandle(safe + '.txm');
-        const text = await (await fh.getFile()).text();
-        let payload;
-        try { payload = JSON.parse(text); } catch (_) { throw new Error('Invalid project file.'); }
-        if (!payload || typeof payload.settings !== 'object') throw new Error('Unsupported project format.');
-        const settings = settingsFromDelta(payload.settings);
-        if (window.TextEditor && window.TextEditor.loadPreset) window.TextEditor.loadPreset(settings);
-        return settings;
-    }
-
-    async function deleteProject(name) {
-        const handle = await requireProjectDir();
-        const safe = sanitizeName(name);
-        await handle.removeEntry(safe + '.txm').catch(function() {});
-        await handle.removeEntry(safe + '.webp').catch(function() {});
-        return true;
+        if (subidos.length) {
+            try {
+                localStorage.removeItem(LEGACY_STORAGE_KEY);
+                localStorage.removeItem(LEGACY_IMPORTED_KEY);
+            } catch (_) { /* storage is optional */ }
+        }
+        return subidos;
     }
 
     // Expose API
     window.PresetManager = {
-        getAllPresets,
-        getPreset,
-        createPreset,
-        updatePreset,
-        deletePreset,
-        duplicatePreset,
-        exportPreset,
-        importPreset,
-        loadPresetFromFile,
-        getPresetsByCategory,
-        searchPresets,
-        getCategories,
-        getPresetList,
-        clearLocalPresets,
-        clearImportedPresets,
-        getPresetCount,
-
+        // Listado y carga (archivos .txm de presets/)
+        listPresets,
+        listImages,
         loadPreset,
-        ensureThumbnail,
-        thumbnailDataUrl,
+        fetchPreset,
         settingsFromDelta,
         diffSettings,
-        pickProjectDirectory,
-        saveProject,
-        listProjects,
-        openProject,
-        deleteProject,
-        readProjectThumbnailUrl,
-        hasProjectDirectory,
-        getProjectDirectoryName
+        // Puente (guardar/borrar en el servidor, o descargar .txm standalone)
+        savePreset,
+        deletePreset,
+        bridgeAvailable,
+        // Imagenes subidas (modules/textmuy/imagenes)
+        uploadImage,
+        // Miniaturas de galeria (presets/{name}.webp o render lazy)
+        ensureThumbnail,
+        thumbnailDataUrl,
+        // Migracion unica de presets legacy (localStorage de versiones previas)
+        legacyLocalPresets,
+        migrateLegacyPresets
     };
 })();

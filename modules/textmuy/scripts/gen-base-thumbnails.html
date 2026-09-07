@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TextMuy - Generar miniaturas .webp de los presets base</title>
+    <!--
+      Herramienta de DEV (una sola vez tras migrar presets/*.json -> *.txm):
+      renderiza cada presets/*.txm a 100x200 WebP (la miniatura que acompana al
+      .txm, igual que thumbnailBlob del editor) y deja descargar los archivos.
+      Los .webp generados se guardan en presets/ y se versionan con el modulo.
+
+      Uso: abrir esta pagina por HTTP desde la RAIZ del modulo (mismo origen que
+      presets/), p. ej.:  cd modules/textmuy && npx serve .
+      No funciona por file:// (fetch de presets/ lo bloquea).
+      (El <link> de Google Fonts es el mismo de render-core.html: el canvas
+      resuelve las familias desde document.fonts.)
+    -->
+    <link href="https://fonts.googleapis.com/css2?family=Freckle+Dragon&family=Permanent+Marker&family=Rock+Salt&family=Bangers&family=Anton&family=Oswald:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700;800;900&family=Pacifico&family=Press+Start+2P&family=Creepster&family=Share+Tech+Mono&family=Rubik+Wet+Paint&family=Carter+One&family=Fascinate&family=Kanit:wght@400;500;600;700;800;900&family=Bebas+Neue&family=Carter+One&family=Lobster&family=Raleway:wght@400;500;600;700;800;900&family=Open+Sans:wght@400;500;600;700;800&family=Lato:wght@400;500;600;700;800;900&family=Playfair+Display:wght@400;500;600;700;800;900&family=Merriweather:wght@400;500;600;700;800;900&family=Source+Sans+Pro:wght@400;500;600;700;800;900&family=Nunito:wght@400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800;900&family=Ubuntu:wght@400;500;600;700;800;900&family=Righteous&family=Abril+Fatface&family=Satisfy&family=Dancing+Script:wght@400;500;600;700&family=Indie+Flower&family=Shadows+Into+Light&family=Architects+Daughter&family=Patrick+Hand&family=Kalam:wght@400;500;700&family=Amatic+SC:wght@400;500;600;700&family=Caveat:wght@400;500;600;700&family=Zeyada&family=Great+Vibes&family=Alex+Brush&family=Allura&family=Sacramento&family=Tangerine:wght@400;500;600;700&family=Quicksand:wght@400;500;600;700;800;900&family=Nunito:wght@400;500;600;700;800;900&family=Work+Sans:wght@400;500;600;700;800;900&family=Josefin+Sans:wght@400;500;600;700&family=Quattrocento+Sans:wght@400;500;600;700&family=Crimson+Text:wght@400;500;600;700&family=Libre+Baskerville:wght@400;500;600;700&family=PT+Sans:wght@400;500;600;700&family=Source+Serif+Pro:wght@400;500;600;700&family=Slabo+27px&family=Arimo:wght@400;500;600;700&family=Arvo:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Vollkorn:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: sans-serif; background: #141414; color: #ccc; padding: 20px; }
+        button { padding: 8px 14px; cursor: pointer; }
+        #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; margin-top: 16px; }
+        .tile { background: #1e1e1e; border: 1px solid #333; border-radius: 6px; padding: 8px; text-align: center; }
+        .tile img { width: 100px; height: 200px; object-fit: contain; background: #0e0e0e; }
+        .tile a { display: block; color: #7fb7ff; font-size: 12px; margin-top: 6px; }
+        #estado { margin-top: 12px; font-size: 13px; color: #9c9; }
+    </style>
+</head>
+<body>
+    <h2>Miniaturas .webp de presets/*.txm</h2>
+    <p>Cada tile descarga <code>presets/&lt;nombre&gt;.webp</code> (100x200, image/webp).
+       Guardalos en <code>presets/</code> junto a los <code>.txm</code>.</p>
+    <button id="todos">Descargar todos</button>
+    <span id="estado"></span>
+    <div id="grid"></div>
+
+    <!-- Scripts relativos a la raiz del modulo (esta pagina vive en scripts/). -->
+    <script src="../js/fonts.js"></script>
+    <script src="../js/effects/distort-engine.js"></script>
+    <script src="../js/effects/bevel-webgl.js"></script>
+    <script src="../js/effects/specular-webgl.js"></script>
+    <script src="../js/editor.js"></script>
+    <script src="../js/preset-manager.js"></script>
+    <script src="../js/export.js"></script>
+    <script>
+    (function () {
+        'use strict';
+        window.ExportManager.init(window.TextEditor);
+
+        async function listarPresets() {
+            // Nombres de los presets base que trae el modulo (mismo orden que
+            // BASE_PRESETS de preset-manager.js); se omite el que no exista.
+            // Esta pagina vive en scripts/: los presets estan en ../presets/.
+            const base = ['clean-modern', 'cyberpunk', 'fire-free', 'gold-metallic',
+                'looney-tunes', 'neon-glow', 'nintendo', 'retro-wave', 'simple-gradient'];
+            const existentes = [];
+            for (const n of base) {
+                const r = await fetch('../presets/' + encodeURIComponent(n) + '.txm', { method: 'HEAD' });
+                if (r.ok) existentes.push(n);
+            }
+            return existentes;
+        }
+
+        async function generar() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            const nombres = await listarPresets();
+            document.getElementById('estado').textContent = nombres.length + ' preset(s) .txm';
+            for (const name of nombres) {
+                // Esta pagina vive en scripts/: los presets estan en ../presets/.
+                // (PresetManager.fetchPreset asume la raiz del modulo, no sirve aca.)
+                const resp = await fetch('../presets/' + encodeURIComponent(name) + '.txm');
+                const payload = await resp.json();
+                const settings = PresetManager.settingsFromDelta(payload.settings);
+                // Mismo pipeline que la galeria: miniatura data-URL 100x200 WebP.
+                const blob = await PresetManager.thumbnailDataUrl(settings);
+                const tile = document.createElement('div');
+                tile.className = 'tile';
+                const img = document.createElement('img');
+                img.src = blob;
+                tile.appendChild(img);
+                const link = document.createElement('a');
+                link.href = blob;
+                link.download = name + '.webp';
+                link.textContent = name + '.webp';
+                tile.appendChild(link);
+                grid.appendChild(tile);
+            }
+        }
+
+        document.getElementById('todos').addEventListener('click', function () {
+            document.querySelectorAll('#grid a[download]').forEach(function (a, i) {
+                setTimeout(function () { a.click(); }, i * 300);
+            });
+        });
+
+        generar().catch(function (e) {
+            document.getElementById('estado').textContent = 'Error: ' + e.message;
+        });
+    })();
+    </script>
+</body>
+</html>

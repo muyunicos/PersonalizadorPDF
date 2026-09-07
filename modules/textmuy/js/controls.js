@@ -12,21 +12,18 @@
         bindMenuTabs();
         bindCustomMenu();
         bindDownloadControls();
-        bindPresets();
         bindImportControls();
         initShowBrotherTabs();
         initTextureUploads();
         initIconGallery();
         initBackgroundGallery();
         initRangeSliders();
-        initPresetFilters();
         initFontFilters();
         initActiveFieldsets();
         initUndoRedo();
         initFillLayersUI();
         bindGradientColorInputs();
         initPresetGallery();
-        initProjectManager();
     }
 
     // Helper: set nested setting and trigger render
@@ -523,32 +520,53 @@
         });
     }
 
-    // ===== TEXTURE UPLOADS =====
+    // ===== TEXTURE UPLOADS (imagenes al servidor via puente) =====
     function initTextureUploads() {
         document.querySelectorAll('input[type="file"][accept="image/*"]').forEach(function(input) {
+            const settingPath = input.dataset.ttOption;
+
+            function aplicarImagen(src) {
+                if (settingPath) setNestedSetting(settingPath, src);
+                const preview = input.parentElement.nextElementSibling;
+                if (preview && preview.classList.contains('tt-texture-preview')) {
+                    preview.style.display = 'block';
+                    const img = preview.querySelector('.tt-texture-preview-image');
+                    if (img) img.src = src;
+                }
+                const previewContainer = input.closest('.tt-option')?.querySelector('[id$="preview-container"]');
+                if (previewContainer) {
+                    previewContainer.style.display = 'block';
+                    const img = previewContainer.querySelector('img');
+                    if (img) img.src = src;
+                }
+            }
+
+            function usarLocalEmbebida(file) {
+                const reader = new FileReader();
+                reader.onload = function(ev) { aplicarImagen(ev.target.result); };
+                reader.readAsDataURL(file);
+            }
+
             input.addEventListener('change', function(e) {
                 const file = e.target.files[0];
                 if (!file) return;
-                const reader = new FileReader();
-                reader.onload = function(ev) {
-                    const dataUrl = ev.target.result;
-                    const settingPath = input.dataset.ttOption;
-                    if (settingPath) setNestedSetting(settingPath, dataUrl);
-                    const preview = input.parentElement.nextElementSibling;
-                    if (preview && preview.classList.contains('tt-texture-preview')) {
-                        preview.style.display = 'block';
-                        const img = preview.querySelector('.tt-texture-preview-image');
-                        if (img) img.src = dataUrl;
-                    }
-                    const previewContainer = input.closest('.tt-option')?.querySelector('[id$="preview-container"]');
-                    if (previewContainer) {
-                        previewContainer.style.display = 'block';
-                        const img = previewContainer.querySelector('img');
-                        if (img) img.src = dataUrl;
-                    }
-                };
-                reader.readAsDataURL(file);
+                // Con puente: la imagen va a modules/textmuy/imagenes/ y el
+                // settings guarda su URL (reutilizable entre presets y visible
+                // en "Mis imagenes"). Sin puente (standalone): data-URL embebida.
+                if (window.PresetManager && PresetManager.bridgeAvailable && PresetManager.bridgeAvailable()) {
+                    PresetManager.uploadImage(file).then(function(res) {
+                        aplicarImagen(res.url);
+                    }).catch(function(err) {
+                        alert(((err && err.message) || 'No se pudo subir la imagen.')
+                            + ' La imagen se usara embebida en el preset.');
+                        usarLocalEmbebida(file);
+                    });
+                } else {
+                    usarLocalEmbebida(file);
+                }
             });
+
+            insertarBotonMisImagenes(input, aplicarImagen);
         });
 
         // Delete texture buttons
@@ -567,6 +585,114 @@
                 }
             });
         });
+    }
+
+    /** Boton "Mis imagenes" junto a cada importador de imagen (solo con puente). */
+    function insertarBotonMisImagenes(input, aplicar) {
+        if (!window.PresetManager || !PresetManager.bridgeAvailable || !PresetManager.bridgeAvailable()) return;
+        const label = input.closest('label');
+        if (!label) return;
+        const contenedor = label.parentElement;
+        if (!contenedor || contenedor.querySelector('.tt-myimages-btn')) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tt-myimages-btn';
+        btn.textContent = 'Mis imagenes';
+        btn.title = 'Elegir una imagen ya subida (modules/textmuy/imagenes)';
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            abrirModalMisImagenes(aplicar);
+        });
+        contenedor.appendChild(btn);
+    }
+
+    // ===== MODAL "MIS IMAGENES" (imagenes subidas al servidor) =====
+    let modalMisImagenes = null;
+
+    function abrirModalMisImagenes(aplicar) {
+        if (!modalMisImagenes) modalMisImagenes = crearModalMisImagenes();
+        modalMisImagenes.abrir(aplicar);
+    }
+
+    function crearModalMisImagenes() {
+        const overlay = document.createElement('div');
+        overlay.className = 'tt-myimages-overlay';
+        overlay.hidden = true;
+        overlay.innerHTML =
+            '<div class="tt-myimages-caja" role="dialog" aria-modal="true" aria-label="Mis imagenes">' +
+            '<div class="tt-myimages-toolbar">' +
+            '<strong>Mis imagenes</strong>' +
+            '<label class="tt-myimages-upload">Subir imagen<input type="file" accept="image/*" hidden></label>' +
+            '<button type="button" class="tt-myimages-cerrar">Cerrar</button>' +
+            '</div>' +
+            '<div class="tt-myimages-grid"></div>' +
+            '<p class="tt-myimages-status"></p>' +
+            '</div>';
+        document.body.appendChild(overlay);
+
+        const grid = overlay.querySelector('.tt-myimages-grid');
+        const status = overlay.querySelector('.tt-myimages-status');
+        const fileInput = overlay.querySelector('.tt-myimages-upload input');
+        let aplicarActual = null;
+
+        function pintar() {
+            const imagenes = (window.PresetManager && PresetManager.listImages)
+                ? PresetManager.listImages()
+                : [];
+            grid.innerHTML = '';
+            if (!imagenes.length) {
+                status.textContent = 'Todavia no subiste imagenes. Usa "Subir imagen" o cualquier boton "Import image".';
+                return;
+            }
+            status.textContent = imagenes.length + ' imagen(es) en modules/textmuy/imagenes';
+            imagenes.forEach(function(img) {
+                const tile = document.createElement('button');
+                tile.type = 'button';
+                tile.className = 'tt-myimages-tile';
+                tile.title = img.nombre;
+                const thumb = document.createElement('img');
+                thumb.src = img.url;
+                thumb.alt = img.nombre;
+                thumb.loading = 'lazy';
+                tile.appendChild(thumb);
+                tile.addEventListener('click', function() {
+                    if (aplicarActual) aplicarActual(img.url);
+                    cerrar();
+                });
+                grid.appendChild(tile);
+            });
+        }
+
+        function abrir(aplicar) {
+            aplicarActual = aplicar;
+            pintar();
+            overlay.hidden = false;
+        }
+
+        function cerrar() {
+            overlay.hidden = true;
+            aplicarActual = null;
+        }
+
+        overlay.querySelector('.tt-myimages-cerrar').addEventListener('click', cerrar);
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) cerrar();
+        });
+
+        fileInput.addEventListener('change', function() {
+            const file = this.files && this.files[0];
+            this.value = '';
+            if (!file || !window.PresetManager || !PresetManager.uploadImage) return;
+            status.textContent = 'Subiendo imagen...';
+            PresetManager.uploadImage(file).then(function() {
+                pintar();
+            }).catch(function(e) {
+                status.textContent = (e && e.message) || 'No se pudo subir la imagen.';
+            });
+        });
+
+        return { abrir: abrir };
     }
 
     // ===== ICON GALLERY =====
@@ -1490,23 +1616,8 @@
             });
         }
 
-        const savePresetBtn = document.getElementById('tt-save-preset-btn');
-        if (savePresetBtn) {
-            savePresetBtn.addEventListener('click', function() {
-                if (window.PresetManager && editor) {
-                    const name = prompt('Preset name:');
-                    if (name) {
-                        try {
-                            PresetManager.createPreset(name, editor.getSettings());
-                            alert('Preset "' + name + '" saved successfully.');
-                            bindPresets();
-                        } catch (e) {
-                            alert('Error saving preset: ' + e.message);
-                        }
-                    }
-                }
-            });
-        }
+        // "Save as New Preset" vive ahora en la galeria inferior (unico panel de
+        // presets): tt-gallery-save-btn -> initPresetGallery().
 
         const ratioInput = document.getElementById('tt-download-ratio-input');
         if (ratioInput) {
@@ -1537,44 +1648,26 @@
         }
     }
 
-    // ===== PRESETS =====
-    function bindPresets() {
-        const presetList = document.getElementById('tt-preset-list');
-        if (!presetList) return;
-
-        function loadPresets() {
-            // Do NOT clear the HTML list — it already contains the built-in
-            // presets (fire-free, nintendo, looney-tunes, simple-gradient, etc).
-            // Only append presets from localStorage that are not already present.
-
-            // Attach click handlers to any static <li> that lack them
-            presetList.querySelectorAll('li[data-preset]').forEach(function(li) {
-                if (!li.dataset.bound) {
-                    li.dataset.bound = '1';
-                    li.addEventListener('click', function() {
-                        if (window.PresetManager) PresetManager.loadPreset(li.dataset.preset);
-                    });
-                }
-            });
-
-            try {
-                const saved = JSON.parse(localStorage.getItem('textmuy_presets') || '{}');
-                Object.keys(saved).forEach(function(name) {
-                    if (!presetList.querySelector('[data-preset="' + name + '"]')) {
-                        const li = document.createElement('li');
-                        li.dataset.preset = name;
-                        li.title = name;
-                        li.innerHTML = '<span>' + name + '</span>';
-                        li.addEventListener('click', function() {
-                            if (window.PresetManager) PresetManager.loadPreset(name);
-                        });
-                        presetList.appendChild(li);
-                    }
-                });
-            } catch(e) {}
+    // ===== IMPORT DE PRESETS (TextStudio -> .txm en el servidor) =====
+    /**
+     * Guarda un preset importado (formato TextStudio crudo) como .txm via el
+     * puente; sin puente descarga el .txm. Al final refresca la galeria
+     * inferior (unico panel de presets).
+     */
+    function guardarPresetImportado(nombre, presetRaw) {
+        if (!window.PresetManager) { alert('PresetManager no esta disponible.'); return; }
+        let settings = presetRaw;
+        if (window.TextEditor && TextEditor.createDefaultSettings && TextEditor.loadPreset) {
+            settings = TextEditor.createDefaultSettings();
+            TextEditor.loadPreset(presetRaw, settings);
         }
-
-        loadPresets();
+        PresetManager.savePreset(nombre, settings).then(function (res) {
+            alert('Preset importado y guardado como "' + res.name + '"'
+                + (res.mode === 'server' ? ' (en el servidor).' : ' (.txm descargado: colocalo en presets/).'));
+            if (typeof refrescarGaleriaPresets === 'function') refrescarGaleriaPresets();
+        }).catch(function (e) {
+            alert('Error al guardar el preset importado: ' + e.message);
+        });
     }
 
     // ===== IMPORT CONTROLS =====
@@ -1612,9 +1705,7 @@
                                 const preset = JSON.parse(match[1]);
                                 if (window.PresetManager) {
                                     const name = 'imported-' + Date.now();
-                                    PresetManager.createPreset(name, preset);
-                                    alert('Preset imported successfully as "' + name + '"');
-                                    bindPresets();
+                                    guardarPresetImportado(name, preset);
                                 }
                                 importBtn.textContent = 'Import';
                                 importBtn.disabled = false;
@@ -1629,9 +1720,7 @@
                                 if (data && data.text) {
                                     if (window.PresetManager) {
                                         const name = 'imported-' + Date.now();
-                                        PresetManager.createPreset(name, data);
-                                        alert('Preset imported successfully as "' + name + '"');
-                                        bindPresets();
+                                        guardarPresetImportado(name, data);
                                     }
                                     importBtn.textContent = 'Import';
                                     importBtn.disabled = false;
@@ -1774,36 +1863,6 @@
         });
     }
 
-    // ===== PRESET SEARCH AND FILTER =====
-    function initPresetFilters() {
-        const searchInput = document.getElementById('tt-preset-search-input');
-        const categoryFilter = document.getElementById('tt-preset-category-filter');
-        const presetList = document.getElementById('tt-preset-list');
-
-        if (!searchInput || !categoryFilter || !presetList) return;
-
-        function filterPresets() {
-            const searchTerm = searchInput.value.toLowerCase();
-            const selectedCategory = categoryFilter.value;
-            const presetItems = presetList.querySelectorAll('li');
-
-            presetItems.forEach(function(item) {
-                const presetName = item.getAttribute('data-preset') || '';
-                const presetCategory = item.getAttribute('data-category') || 'custom';
-                const title = item.getAttribute('title') || '';
-
-                const matchesSearch = presetName.toLowerCase().includes(searchTerm) ||
-                                     title.toLowerCase().includes(searchTerm);
-                const matchesCategory = selectedCategory === 'all' || presetCategory === selectedCategory;
-
-                item.style.display = (matchesSearch && matchesCategory) ? '' : 'none';
-            });
-        }
-
-        searchInput.addEventListener('input', filterPresets);
-        categoryFilter.addEventListener('change', filterPresets);
-    }
-
     // ===== FONT SEARCH AND FILTER =====
     function initFontFilters() {
         const searchInput = document.getElementById('tt-font-search-input');
@@ -1874,75 +1933,66 @@
         }
     }
 
-    // ===== PRESET GALLERY (expandable bottom panel with thumbnails) =====
+    // ===== PRESET GALLERY (unico panel de presets: grilla inferior con miniaturas) =====
+    // Fuente de datos: listado del puente (presets/*.txm del servidor). Refresca
+    // al abrir y tras cada guardar/borrar/importar. El boton de migracion sube
+    // los presets legacy de localStorage (versiones anteriores) al servidor.
+    let refrescarGaleriaPresets = null;
+
     function initPresetGallery() {
         const gallery = document.getElementById('tt-preset-gallery');
         const toggle = document.getElementById('tt-preset-gallery-toggle');
         const grid = document.getElementById('tt-gallery-grid');
         const search = document.getElementById('tt-gallery-search');
+        const saveBtn = document.getElementById('tt-gallery-save-btn');
+        const migrateBtn = document.getElementById('tt-gallery-migrate-btn');
+        const statusEl = document.getElementById('tt-gallery-status');
         if (!gallery || !toggle || !grid) return;
 
-        let loaded = false;
-
-        toggle.addEventListener('click', function() {
-            const open = gallery.classList.toggle('open');
-            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-            if (open && !loaded) { loaded = true; populate(); }
-        });
-
-        if (search) search.addEventListener('input', filterTiles);
-
-        function presetNames() {
-            const names = [];
-            const seen = new Set();
-            const list = document.getElementById('tt-preset-list');
-            if (list) {
-                list.querySelectorAll('li[data-preset]').forEach(function(li) {
-                    const n = li.getAttribute('data-preset');
-                    if (n && !seen.has(n)) {
-                        seen.add(n);
-                        names.push({ name: n, category: li.getAttribute('data-category') || 'custom' });
-                    }
-                });
-            }
-            if (window.PresetManager) {
-                try {
-                    const all = PresetManager.getAllPresets();
-                    Object.keys(all).forEach(function(n) {
-                        if (!seen.has(n)) {
-                            seen.add(n);
-                            names.push({ name: n, category: all[n].category || 'custom' });
-                        }
-                    });
-                } catch (e) {}
-            }
-            return names;
+        function setStatus(msg, esError) {
+            if (!statusEl) return;
+            statusEl.textContent = msg || '';
+            statusEl.classList.toggle('tt-gallery-status-error', !!esError);
         }
 
         function populate() {
             grid.innerHTML = '';
-            presetNames().forEach(function(entry) {
+            const nombres = (window.PresetManager && PresetManager.listPresets)
+                ? PresetManager.listPresets()
+                : [];
+            nombres.forEach(function(name) {
                 const tile = document.createElement('button');
                 tile.type = 'button';
                 tile.className = 'tt-gallery-tile';
-                tile.dataset.preset = entry.name;
-                tile.dataset.category = entry.category;
-                tile.setAttribute('aria-label', entry.name);
+                tile.dataset.preset = name;
+                tile.setAttribute('aria-label', name);
 
                 const img = document.createElement('img');
-                img.alt = entry.name;
+                img.alt = name;
                 img.loading = 'lazy';
                 tile.appendChild(img);
 
                 const label = document.createElement('span');
                 label.className = 'tt-gallery-tile-label';
-                label.textContent = entry.name;
+                label.textContent = name;
                 tile.appendChild(label);
+
+                const del = document.createElement('span');
+                del.className = 'tt-gallery-tile-delete';
+                del.title = 'Borrar preset';
+                del.setAttribute('role', 'button');
+                del.setAttribute('aria-label', 'Borrar preset ' + name);
+                del.textContent = '\u00d7';
+                del.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    borrarPreset(name);
+                });
+                tile.appendChild(del);
 
                 tile.addEventListener('click', function() {
                     if (window.PresetManager && PresetManager.loadPreset) {
-                        PresetManager.loadPreset(entry.name);
-                        currentPresetName = entry.name;
+                        PresetManager.loadPreset(name);
+                        currentPresetName = name;
                         markSelected();
                     }
                 });
@@ -1950,13 +2000,75 @@
                 grid.appendChild(tile);
 
                 if (window.PresetManager && PresetManager.ensureThumbnail) {
-                    PresetManager.ensureThumbnail(entry.name).then(function(url) {
+                    PresetManager.ensureThumbnail(name).then(function(url) {
                         if (url) img.src = url;
                     });
                 }
             });
             markSelected();
+            actualizarMigracion();
         }
+
+        function borrarPreset(name) {
+            if (!confirm('Borrar el preset "' + name + '" (su .txm y .webp del directorio presets/)?')) return;
+            if (!window.PresetManager) return;
+            PresetManager.deletePreset(name).then(function() {
+                setStatus('Preset "' + name + '" borrado.');
+                if (currentPresetName === name) currentPresetName = null;
+                populate();
+            }).catch(function(e) { setStatus(e.message, true); });
+        }
+
+        function actualizarMigracion() {
+            if (!migrateBtn) return;
+            let n = 0;
+            try {
+                if (window.PresetManager && PresetManager.legacyLocalPresets) {
+                    n = PresetManager.legacyLocalPresets().length;
+                }
+            } catch (_) { n = 0; }
+            migrateBtn.hidden = !n;
+            if (n) migrateBtn.textContent = 'Subir ' + n + ' presets locales al servidor';
+        }
+
+        function guardarPreset() {
+            if (!editor || !window.PresetManager || !PresetManager.savePreset) return;
+            const nombre = prompt('Nombre del preset:');
+            if (!nombre) return;
+            setStatus('Guardando "' + nombre + '"...');
+            PresetManager.savePreset(nombre, editor.getSettings()).then(function(res) {
+                if (res.mode === 'server') {
+                    setStatus('Preset "' + res.name + '" guardado en el servidor.');
+                } else {
+                    setStatus('Sin servidor: se descargo "' + res.name + '.txm" (colocalo en presets/).');
+                }
+                populate();
+            }).catch(function(e) { setStatus(e.message, true); });
+        }
+
+        function migrarLocales() {
+            if (!window.PresetManager || !PresetManager.migrateLegacyPresets) return;
+            setStatus('Subiendo presets locales...');
+            PresetManager.migrateLegacyPresets().then(function(subidos) {
+                setStatus(subidos.length
+                    ? 'Migrados ' + subidos.length + ' preset(s) al servidor.'
+                    : 'No habia presets locales para migrar.');
+                populate();
+            }).catch(function(e) { setStatus(e.message, true); });
+        }
+
+        toggle.addEventListener('click', function() {
+            const open = gallery.classList.toggle('open');
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open) populate(); // Siempre fresco: refleja guardados/borrados.
+        });
+
+        if (search) search.addEventListener('input', filterTiles);
+        if (saveBtn) saveBtn.addEventListener('click', guardarPreset);
+        if (migrateBtn) migrateBtn.addEventListener('click', migrarLocales);
+
+        // Permite refrescar la galeria desde fuera (import de TextStudio, etc.).
+        refrescarGaleriaPresets = function() { populate(); };
 
         function markSelected() {
             grid.querySelectorAll('.tt-gallery-tile').forEach(function(t) {
@@ -1968,107 +2080,15 @@
             const q = (search.value || '').toLowerCase();
             grid.querySelectorAll('.tt-gallery-tile').forEach(function(t) {
                 const name = (t.dataset.preset || '').toLowerCase();
-                const cat = (t.dataset.category || '').toLowerCase();
-                t.style.display = (name.indexOf(q) !== -1 || cat.indexOf(q) !== -1) ? '' : 'none';
+                t.style.display = name.indexOf(q) !== -1 ? '' : 'none';
             });
         }
     }
 
-    // ===== LOCAL PROJECT MANAGEMENT (.txm + .webp) =====
-    function initProjectManager() {
-        const pickBtn = document.getElementById('tt-project-pick-btn');
-        const saveBtn = document.getElementById('tt-project-save-btn');
-        const status = document.getElementById('tt-project-status');
-        const list = document.getElementById('tt-projects-list');
-        if (!pickBtn || !saveBtn || !list) return;
-
-        function setStatus(msg) {
-            if (status) status.textContent = msg || '';
-        }
-
-        function refreshProjects() {
-            if (!window.PresetManager || !PresetManager.hasProjectDirectory()) return;
-            list.innerHTML = '';
-            PresetManager.listProjects().then(function(names) {
-                if (!names.length) { setStatus('No projects in folder.'); return; }
-                setStatus(names.length + ' project(s) in "' + PresetManager.getProjectDirectoryName() + '"');
-                names.forEach(function(name) {
-                    const li = document.createElement('li');
-                    li.className = 'tt-project-item';
-                    li.dataset.project = name;
-
-                    const thumb = document.createElement('img');
-                    thumb.alt = name;
-                    PresetManager.readProjectThumbnailUrl(name).then(function(u) { if (u) thumb.src = u; });
-
-                    const span = document.createElement('span');
-                    span.textContent = name;
-
-                    const openBtn = document.createElement('button');
-                    openBtn.textContent = 'Open';
-                    openBtn.addEventListener('click', function() { openProject(name); });
-
-                    const delBtn = document.createElement('button');
-                    delBtn.textContent = 'Delete';
-                    delBtn.className = 'tt-project-delete';
-                    delBtn.addEventListener('click', function() { deleteProject(name); });
-
-                    li.appendChild(thumb);
-                    li.appendChild(span);
-                    li.appendChild(openBtn);
-                    li.appendChild(delBtn);
-                    list.appendChild(li);
-                });
-            }).catch(function(e) {
-                setStatus('Error listing projects: ' + e.message);
-            });
-        }
-
-        function pickDirectory() {
-            return window.PresetManager.pickProjectDirectory().then(function() {
-                setStatus('Folder: "' + PresetManager.getProjectDirectoryName() + '"');
-                refreshProjects();
-            }).catch(function(e) {
-                if (e && e.name !== 'AbortError') setStatus(e.message || 'Could not open folder');
-            });
-        }
-
-        function ensureDir() {
-            if (window.PresetManager && PresetManager.hasProjectDirectory()) return Promise.resolve();
-            return pickDirectory();
-        }
-
-        function openProject(name) {
-            window.PresetManager.openProject(name).then(function() {
-                currentPresetName = null;
-                setStatus('Opened "' + name + '"');
-            }).catch(function(e) { setStatus('Error opening project: ' + e.message); });
-        }
-
-        function deleteProject(name) {
-            if (!confirm('Delete project "' + name + '" (.txm and .webp)?')) return;
-            window.PresetManager.deleteProject(name).then(function() {
-                setStatus('Deleted "' + name + '"');
-                refreshProjects();
-            }).catch(function(e) { setStatus('Error deleting project: ' + e.message); });
-        }
-
-        pickBtn.addEventListener('click', pickDirectory);
-
-        saveBtn.addEventListener('click', function() {
-            if (!editor) return;
-            ensureDir().then(function() {
-                return window.PresetManager.saveProject(editor.getSettings().text, editor.getSettings());
-            }).then(function(res) {
-                setStatus('Saved "' + res.name + '" (.txm + .webp)');
-                refreshProjects();
-            }).catch(function(e) {
-                if (e && e.name !== 'AbortError') setStatus('Error saving project: ' + e.message);
-            });
-        });
-
-        if (window.PresetManager && PresetManager.hasProjectDirectory()) refreshProjects();
-    }
+    // (Los "Local projects (.txm)" via File System Access se eliminaron en 3.2.0:
+    // guardar un preset ahora escribe {nombre}.txm + {nombre}.webp directamente
+    // en presets/ del servidor via el puente; sin puente, savePreset descarga el
+    // .txm. La carga/miniatura la resuelve loadPreset/ensureThumbnail.)
 
     // Expose init
     window.Controls = {
