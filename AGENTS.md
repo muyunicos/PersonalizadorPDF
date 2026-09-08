@@ -62,13 +62,15 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   ├── Imagen.php           ← Normaliza imágenes reales a RGBA (GD o PHP puro) + encajado
 │   ├── Overlay.php          ← Inyecta XObjects/imagenes en el PDF (reescribe objetos)
 │   └── Motor.php            ← ORQUESTADOR: PDF + dataset + imágenes → PDF editado
-├── modules/                 ← NUEVO v3.0: módulos autocontenidos del plugin
-│   └── textmuy/             ← Proyecto TextMuy íntegro (documento servido por el iframe):
-│                               index.html, render-core.html (motor headless, v3.1), css/,
-│                               js/ (effects/, utils/), presets/, fonts/ (vacía; fallback
-│                               Google Fonts), tests/, ROADMAP.md.
-│                               Upgrade = reemplazar esta carpeta sin tocar el plugin,
-│                               respetando el contrato RenderCore (ver §2.1).
+├── modules/                 ← Módulos autocontenidos del plugin (NO versionados desde v4.0.0)
+│   ├── LEEME.md             ← Instrucciones para importar los módulos a mano
+│   └── textmuy/             ← (se importa a mano) Proyecto TextMuy: index.html,
+│                               render-core.html (motor headless), css/, js/ (effects/,
+│                               utils/), fonts/, tests/, ROADMAP.md. Vive en su propia
+│                               carpeta/repositorio "textmuy" (git propio) y se copia aqui
+│                               tras cada actualizacion del modulo. Desde 4.0.0 NO trae
+│                               datos del admin: presets e imagenes viven en
+│                               uploads/personalizador-pdf/textmuy/ (ver §5 y §7).
 ├── tests/
 │   ├── motor_smoke.php      ← Smoke test del motor (26 checks) — CORRERLO SIEMPRE
 │   ├── parity.php           ← Paridad del detector PHP vs expected_muestra.json (oráculo)
@@ -84,30 +86,70 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 script), consultá `AGENTS.md` y el árbol; reutilizá lo existente.
 
 > **Módulos**: `modules/` aloja sistemas completos que el plugin embebe sin mezclar código.
-> TextMuy se sirve tal cual (rutas relativas) desde su URL estática
+> NO se versionan (gitignored desde 4.0.0): el usuario los importa a mano tras cada
+> actualización del módulo (ver `modules/LEEME.md`); sin módulo importado el plugin funciona
+> (la pestaña "Estilos de Texto" muestra un aviso y "PDFs" oculta la sección de texto
+> estilizado). TextMuy se sirve tal cual (rutas relativas) desde su URL estática
 > (`PERSONALIZADOR_PDF_URL . 'modules/textmuy/index.html'`). No copiar sus JS/CSS a `assets/`
 > ni reescribir el módulo desde el plugin.
 
-### 2.1 Contrato RenderCore (comunicación plugin ↔ módulo TextMuy, v3.1)
+### 2.1 Contrato RenderCore (comunicación plugin ↔ módulo TextMuy, v3.1/v3.2/v3.3)
 
 El plugin NO conoce los internos de TextMuy: solo consume este contrato público
 (cualquier cambio del módulo debe mantenerlo para no romper el puente):
 
 1. **Editor completo** (pestaña "Estilos de Texto"): `modules/textmuy/index.html` en iframe
-   same-origin (localStorage, fetch de presets, WebGL).
+   same-origin (localStorage, fetch de presets, WebGL). El módulo NO viene con el plugin:
+   se importa a mano (`modules/LEEME.md`); si falta, la pestaña muestra un aviso claro.
 2. **Motor de render headless**: `modules/textmuy/render-core.html` (~220 KB sin UI: fonts +
    effects + editor + export + api). Se carga en un iframe off-screen SOLO cuando se usa
    texto (carga perezosa). Expone `window.RenderCore = {version, ready}` y
    `window.TextMuyAPI.renderBatch(items, {onProgress}) -> [{id, blob}]` (progreso por item;
    rechaza ante el primer fallo — nunca lote parcial) y garantiza la fuente cargada antes de
-   renderizar (`ensureFontReady`). Los presets se resuelven con caché (1 fetch por preset):
-   localStorage primero, luego `presets/*.json`.
-3. **Catálogo de estilos base**: `modules/textmuy/presets/*.json` (listado por PHP con glob).
-4. **Versionado de estáticos del módulo** (cache-busting): los JS se sirven sin versión
+   renderizar (`ensureFontReady`). Los presets se resuelven con caché (1 fetch por preset)
+   vía `PresetManager.presetUrlBase()`: con puente es `bridge.urls.presetsBase` (uploads,
+   desde 4.0.0); standalone, `presets/` relativo al módulo. El archivo es `{nombre}.txm`
+   (delta textmuy-project, formato ÚNICO desde 3.2.0; fallback legacy `.json` TextStudio
+   crudo). El render-core carga también `js/preset-manager.js`
+   (expone `settingsFromDelta` y `presetUrlBase` para resolver los .txm).
+3. **Catálogo de estilos e imágenes (datos de usuario, v4.0.0)**: presets del admin en
+   `uploads/personalizador-pdf/textmuy/presets/{nombre}.txm` + `{nombre}.webp` (miniatura
+   200x100, auto-generada al primer uso), listados por PHP con glob. NO hay presets de
+   fábrica: el admin crea los suyos desde el editor (los que traiga la carpeta del módulo
+   solo valen en standalone). Imágenes subidas en
+   `uploads/personalizador-pdf/textmuy/imagenes/` (plano) + `catalogo.json` único
+   (`{nombre, categoria, titulo}`), generado en runtime. Al actualizar el plugin (ZIP o git)
+   NO hay nada que preservar.
+4. **Puente de recursos (v3.2.0/v3.3.0/v4.0.0)**: el módulo es client-side y NO puede escribir en el
+   servidor solo. `admin/estilos-texto.php` le pasa al iframe por postMessage same-origin
+   `{urls, nonces, presets, imagenes}` (en 3 momentos: load del iframe, aviso
+   `textmuy-ready` del módulo, e inmediato); `urls.presetsBase` (v4.0.0) es la URL de
+   uploads para LEER los .txm/.webp. El módulo expone
+   `PresetManager.{listPresets, listImages, savePreset, deletePreset, uploadImage,
+   presetUrlBase, bridgeAvailable, migrateLegacyPresets}` que POSTean a los handlers
+   `admin_post_personalizador_pdf_textmuy_{guardar_preset,borrar_preset,subir_imagen,
+   borrar_imagen,cambiar_imagen}`
+   (nonce + capability + nombre sanitizado `[a-z0-9_-]` + validación de firma .webp/imagen +
+   límites: 2 MB .txm, 1 MB .webp, 4 MB imagen). Las imágenes se organizan por categoría en
+   `catalogo.json` (campo `categoria`); el CRUD actualiza el JSON. URLs con cache-bust
+   `?v=mtime`; el listado marca `enUso` escaneando los `.txm`. Sin puente (uso standalone
+   del módulo) esas funciones se degradan: guardar descarga el `.txm` y las imágenes se
+   embeben como data-URL.
+5. **Versionado de estáticos del módulo** (cache-busting): los JS se sirven sin versión
    automática. `render-core.html` e `index.html` referencian sus scripts con `?v=RCn`
-   (RC1 hoy): **al cambiar cualquier JS del módulo, subir el número** en ambos HTML. Además,
+   (RC9 hoy): **al cambiar cualquier JS del módulo, subir el número** en ambos HTML. Además,
    el plugin cache-bustea la URL del iframe con su propia versión y valida el contrato
    (si la cache sirve un módulo viejo sin `renderBatch`, avisa recarga Ctrl+F5).
+6. **Galería de imágenes y catálogo base (v3.3.0)**: componente único en `js/galeria.js`
+   (`window.TextMuyGaleria.abrir(fuente, aplicar, seccion?, opciones?)`), panel acoplado
+   con search, tabs (fondos/iconos/varios + catálogo), lista 50x50 y footer (name + Save +
+   Delete + Select/Aplicar). Modo **preview en vivo**: si se pasan `opciones.preview` +
+   `opciones.controls` (Pattern/BACKGROUND), la galería oculta `tt-main-container`,
+   aplica la imagen al instante y replica los controles (Fit/Scale/Origin/Repeat o
+   Opacity/Repeat); "Aplicar" persiste, "✕" restaura el backup. Miniaturas de presets
+   200x100 auto-guardadas al primer uso. Desde 4.0.0 no hay catalogo base versionado: las
+   imagenes del admin viven en `uploads/personalizador-pdf/textmuy/imagenes/` +
+   `catalogo.json` (generado en runtime).
 
 ## 3. Flujo de trabajo (cómo lo usa el admin de WordPress)
 
@@ -133,10 +175,16 @@ La página admin del plugin es una **consola de trabajo** con 3 pestañas:
       `Motor::procesar(pdf, dataset, imágenes)` SIN cambios → PDF editado optimizado →
       **Descargar PDF procesado**. Sin textos activos el submit es el clásico. El botón
       **Procesar** se habilita con imagen manual o texto activo en al menos un grupo.
-2. **Estilos de Texto** (`admin/estilos-texto.php`, `?tab=textos`, NUEVO v3.0):
-   monta un iframe same-origin con `modules/textmuy/index.html`. Módulo client-side: usa
-   `localStorage` (presets por navegador), `fetch('presets/*.json')` y WebGL. NO existe una
-   API PHP para renderizar texto: el render de TextMuy corre en el navegador (ver §7).
+2. **Estilos de Texto** (`admin/estilos-texto.php`, `?tab=textos`, v3.0; presets en el
+   servidor desde v3.2.0): monta un iframe same-origin con `modules/textmuy/index.html` y le
+   pasa por postMessage el puente de recursos (endpoints + nonces + listado de
+   presets/imágenes). El ÚNICO panel de presets es la galería inferior expandible (buscar,
+   guardar como preset, borrar y migrar los legacy de localStorage); guardar escribe
+   `{nombre}.txm` + `{nombre}.webp` en `uploads/personalizador-pdf/textmuy/presets/` (visible en todos los
+   navegadores y en el selector de estilo por grupo de `admin/pdfs.php`). Las imágenes de
+   rellenos/fondos se suben a `uploads/personalizador-pdf/textmuy/imagenes/` (picker "Mis imágenes" junto a
+   cada "Import image"). NO existe una API PHP para renderizar texto: el render de TextMuy
+   corre en el navegador (ver §7).
 3. **Ayuda** (`admin/ayuda.php`, `?tab=ayuda`): documento interno del plugin.
 
 **Conflicto de nombre al subir**: si ya existe un PDF con el mismo nombre, se muestra un
@@ -198,6 +246,14 @@ y el resumen avisa cuáles quedaron como estaban.
 - Dataset: `datos/{pdf}/metadata.json`
 - Placeholder PNG: `placeholders/{pdf}/{letra}-{ancho_px}x{alto_px}.png`
 - Salida: `salidas/{pdf}_procesado.pdf`
+- Módulo TextMuy (v4.0.0): TODOS los datos del administrador viven en
+  `uploads/personalizador-pdf/textmuy/`: presets en `presets/{nombre}.txm` + miniatura
+  `{nombre}.webp` (100x200); imágenes subidas en `imagenes/{nombre}.{ext}` con
+  `imagenes/catalogo.json` (único, `{nombre, categoria, titulo}`, generado en runtime).
+  Sin contenido de fábrica. Migración automática (activación/primer uso) desde las rutas
+  de <= 3.3.0 (`modules/textmuy/{presets,imagenes}`), reescribiendo las URLs de imagen
+  dentro de los .txm.
+- Módulo TextMuy (v3.3.0, historico): componente de galería en `js/galeria.js` del módulo.
 - `metadata.json` (por grupo):
   `id: {pdf}-{letra}-{ancho_px}x{alto_px}` · `letra` · `color (#RRGGBB)` ·
   `color_rgb` · `ancho_px/alto_px` · `ancho_pt/alto_pt` · `num_instancias` ·
@@ -291,6 +347,47 @@ y el resumen avisa cuáles quedaron como estaban.
   del grupo al procesar). El módulo cambió SOLO en su API pública: `render-core.html`,
   caché de presets y `renderBatch` en `js/api.js` (retro-compatible), documentado en el
   ROADMAP.md del módulo (§10) y espejado en el proyecto fuente `sistema/textmuy`.
+- **Normalización de presets e imágenes de TextMuy (v3.2.0, aprobada)**: el guardado de
+  presets estaba "fuera de control" con 5 mecanismos (`.json` base embebidos, CRUD por
+  `localStorage` invisible, imports TextStudio por `localStorage`, miniaturas en
+  `localStorage`, proyectos `.txm`/`.webp` en una carpeta LOCAL del PC vía File System
+  Access) y 3 paneles de UI. Normalización decidida con el usuario: (1) **un solo panel** —
+  la galería inferior expandible es la única UI de presets (se eliminan el fieldset
+  "Presets" y el fieldset "Local projects (.txm)" de la pestaña DOWNLOAD; el botón de
+  guardar se muda a la galería); (2) **formato único `.txm`** — todo preset es
+  `presets/{nombre}.txm` (delta textmuy-project, el mismo payload que ya usaban los
+  proyectos) + `{nombre}.webp`; los 9 base migraron de `.json` con
+  `scripts/migrate-presets-to-txm.js` (Node, con round-trip de sanidad) y los `.json` se
+  borraron; las miniaturas se sirven de `presets/{nombre}.webp` con render lazy de fallback;
+  el CRUD por `localStorage` se ELIMINÓ (las claves viejas `textmuy_presets` /
+  `textstudio_presets` son solo lectura y la galería ofrece migrarlas al servidor una única
+  vez); (3) **directorio de imágenes subidas** — `modules/textmuy/imagenes/` vía el puente
+  PHP (§2.1.4): los settings guardan la URL del servidor en vez de data-URLs embebidas, y un
+  picker "Mis imágenes" (modal) permite reutilizarlas entre presets. El usuario eligió
+  guardar TODO dentro del módulo (`modules/textmuy/presets/` e `imagenes/`) conociendo los
+  riesgos: al actualizar el módulo HAY que preservar los `.txm`/`.webp` del admin y
+  `imagenes/` (regla en §10), y el hosting debe permitir escritura en la carpeta del plugin
+  (el handler responde con error claro si no). El render-core incorpora
+  `js/preset-manager.js` para resolver `.txm`; `?v=RC1`→`RC2` en ambos HTML. Etapa futura
+  anotada: si algún día se deploya por git pull, separar los presets del usuario en
+  `presets/usuario/` para poder gitignorarlos. [RESUELTA en v4.0.0: los datos del
+   usuario viven en uploads y el modulo tiene repositorio propio (ver decision siguiente).]
+- **Separacion plugin / modulo / datos de usuario (v4.0.0, aprobada)**: reorganizacion en
+  3 capas decidida con el usuario. (1) **Datos de usuario en uploads**: presets
+  (`.txm`+`.webp`) e imagenes del editor TextMuy pasan de `modules/textmuy/{presets,imagenes}`
+  a `uploads/personalizador-pdf/textmuy/{presets,imagenes}` con migracion automatica
+  (activacion/primer uso) que reescribe las URLs de imagen dentro de los `.txm`; el plugin
+  queda 100% de solo lectura y se actualiza (ZIP o git pull) sin preservar archivos. SIN
+  contenido de fabrica (no hay presets base ni catalogo SVG versionados): el admin crea sus
+  presets y sube sus imagenes, y los JSON (`catalogo.json`) se generan en runtime. (2)
+  **Modulo fuera del repo del plugin**: `modules/textmuy/` se quita del versionado
+  (gitignored) y el proyecto TextMuy vive en su propia carpeta/repositorio `textmuy`
+  (git propio, lo crea el usuario); se importa a mano a `modules/textmuy/` tras cada
+  actualizacion (`modules/LEEME.md`). Sin modulo importado el plugin funciona: la pestana
+  "Estilos de Texto" muestra un aviso y "PDFs" oculta la seccion de texto estilizado; el
+  Procesar clasico (imagen por grupo) no cambia. (3) **Contrato**: nueva entrada
+  `urls.presetsBase` en el puente + `PresetManager.presetUrlBase()` y su uso en
+  `js/api.js` (retro-compatible, standalone sigue con ruta relativa); bump `RC9`.
 ## 8. Dificultades del entorno (IMPORTANTE AL TRABAJAR AQUÍ)
 
 1. **Paths con espacios**: evitá `dir`/`ls`/`findstr` con paths largos. Usá `read_files` y
@@ -315,10 +412,11 @@ php -l personalizador-pdf.php && php -l admin/*.php && php -l engine/*.php
 php tests/motor_smoke.php    # smoke del motor: debe decir "SMOKE OK" (26 checks)
 php tests/parity.php         # paridad del detector vs expected_muestra.json → "PARIDAD OK"
 php tests/texto_puente.php    # puente TextMuy: guardar_texto + handle_procesar con PNGs (stubs WP)
-# Tests del módulo TextMuy (requieren Node):
-cd modules/textmuy && node tests/preset-cache.test.js && node tests/preset-delta.test.js
-cd modules/textmuy && node tests/preset-load.test.js && node tests/distort-engine.test.js
-cd modules/textmuy && node tests/flag-wave.test.js && node tests/pattern-block-box.test.js
+# Tests del módulo TextMuy (requieren Node; el módulo vive en su carpeta/repositorio
+# propio "textmuy", hermana del repo del plugin, o donde este importado):
+cd ../textmuy && node tests/preset-cache.test.js && node tests/preset-delta.test.js
+cd ../textmuy && node tests/preset-load.test.js && node tests/distort-engine.test.js
+cd ../textmuy && node tests/flag-wave.test.js && node tests/pattern-block-box.test.js
 node --check assets/admin.js  # sintaxis del puente JS
 ```
 
@@ -340,9 +438,15 @@ node --check assets/admin.js  # sintaxis del puente JS
   única fuente de verdad junto con el código).
 - Mensajes de la interfaz y del código en español (pragmático, sin tildes para evitar
   problemas de encoding si hace falta).
-- El módulo `modules/textmuy/` NO se toca "desde el plugin": los cambios de TextMuy se hacen
-  en el proyecto fuente (`sistema/textmuy`) y se re-copian intactos. Si modificás el módulo,
-  corré sus tests Node.
+- El módulo TextMuy NO vive en este repo (gitignored desde 4.0.0): los cambios de TextMuy se
+  hacen en su carpeta/repositorio propio (`../textmuy` o el proyecto fuente `sistema/textmuy`)
+  y se importan a mano a `modules/textmuy/` tras cada actualización (`modules/LEEME.md`).
+  Si modificás el módulo, corré sus tests Node y subí `?v=RCn` en ambos HTML.
+- ⚠️ Al ACTUALIZAR el módulo `modules/textmuy/` (reemplazo de carpeta): NO hay nada que
+  preservar desde 4.0.0 — los presets e imagenes del administrador viven en
+  `uploads/personalizador-pdf/textmuy/` y el plugin los migra/lee desde ahi. Si la
+  instalacion es anterior a 4.0.0 y aun no se abrio el admin, dejar que la migracion
+  automatica haga el traslado ANTES de borrar la carpeta vieja.
 - Cualquier cambio en `personalizador-pdf.php`, `admin/*` o `assets/*` debe mantener la
   compatibilidad legacy documentada (hooks/nonces `extractor_corel_*`, carpeta de uploads).
 
@@ -356,12 +460,15 @@ node --check assets/admin.js  # sintaxis del puente JS
 | "PNG entrelazado no soportado sin GD" | PNG interlaced | Guardar la imagen sin entrelazar |
 | Draws fuera de lugar / escala al cuadrado | Falta `q...Q` por draw en Overlay | Cada draw DEBE ir en su propio `q...Q` (sección 4.5) |
 | `fopen(...): Failed to open stream` en Documents | Acceso controlado a carpetas de Windows | Escribir en `%TEMP%` (dev); en WP usar `wp_upload_dir()` |
-| La pestaña "Estilos de Texto" no carga el editor | El iframe no sirvió `modules/textmuy/index.html` | Verificar que `modules/textmuy/` exista y que el hosting sirva estáticos; mirar la consola del navegador |
-| Un preset guardado en el editor no aparece en otro navegador | Los presets custom viven en `localStorage` (por navegador) | Previsto: los presets base de `presets/*.json` son globales; los custom son por equipo |
+| La pestaña "Estilos de Texto" no carga el editor | El iframe no sirvió `modules/textmuy/index.html` | Verificar que el módulo esté importado en `modules/textmuy/` (no viene con el plugin desde v4.0.0: ver `modules/LEEME.md`) y que el hosting sirva estáticos; mirar la consola del navegador |
+| Un preset guardado en el editor no aparece en otro navegador | — | Resuelto v3.2.0/v4.0.0: los presets viven como `.txm` en el servidor (`uploads/personalizador-pdf/textmuy/presets/`), visibles en todos los navegadores |
 | "El motor de render TextMuy no termino de cargar" al procesar | El iframe del render-core no cargó (estáticos bloqueados o red caída) | Reintentar; verificar `modules/textmuy/render-core.html` accesible; consola del navegador |
 | "No se pudo recibir el texto renderizado del grupo X" | El PNG supera `upload_max_filesize`/`post_max_size` del servidor | Aumentar los limites de subida del hosting o usar estilos mas livianos |
 | El texto renderizado sale con otra fuente | La familia Google Fonts no cargó (sin internet) o TTF local ausente | `ensureFontReady` fuerza la carga; verificar conexion; las TTF de `fonts/` caen a fallback |
 | "El modulo TextMuy en cache esta desactualizado" (Vista previa/Procesar) | Cache del navegador con `js/api.js` de una version anterior | Recargar con Ctrl+F5; los estaticos del modulo ya se versionan con `?v=RCn` |
+| "El directorio de presets/imagenes no es escribible" al guardar un preset o subir una imagen | El hosting bloquea escrituras en `uploads/` | Dar permisos de escritura a `wp-content/uploads/personalizador-pdf/textmuy/{presets,imagenes}` (desde v4.0.0 los datos del admin viven en uploads, no en la carpeta del plugin) |
+| Un preset recién guardado no aparece en el selector de estilo de un grupo | La página "PDFs" estaba abierta antes de guardar el preset | Recargar la página: el listado se genera con glob en cada carga |
+| Error del puente al guardar/borrar un preset tras tener el admin mucho tiempo abierto | Nonce de WP expirado (~12-24 h) | Recargar la página y reintentar |
 | Al procesar con texto, navega a `wp-admin/[object HTMLInputElement]` | Colision de named properties del `<form>`: el `<input name="action">` pisa `form.action` del DOM | Corregido v3.1.2: el puente usa `form.getAttribute('action')`. Regla: con el patron admin-post NUNCA leer `form.action` en JS; usar el atributo |
 
 ---

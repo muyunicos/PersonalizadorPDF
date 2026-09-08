@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 3.2.0
+ * Version: 4.0.0
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('PERSONALIZADOR_PDF_VERSION', '3.2.0');
+define('PERSONALIZADOR_PDF_VERSION', '4.0.0');
 define('PERSONALIZADOR_PDF_PATH', plugin_dir_path(__FILE__));
 define('PERSONALIZADOR_PDF_URL', plugin_dir_url(__FILE__));
 
@@ -64,6 +64,8 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_textmuy_guardar_preset', [$this, 'handle_textmuy_guardar_preset']);
         add_action('admin_post_personalizador_pdf_textmuy_borrar_preset', [$this, 'handle_textmuy_borrar_preset']);
         add_action('admin_post_personalizador_pdf_textmuy_subir_imagen', [$this, 'handle_textmuy_subir_imagen']);
+        add_action('admin_post_personalizador_pdf_textmuy_borrar_imagen', [$this, 'handle_textmuy_borrar_imagen']);
+        add_action('admin_post_personalizador_pdf_textmuy_cambiar_imagen', [$this, 'handle_textmuy_cambiar_imagen']);
 
         // Compatibilidad temporal (ciclo 3.0.x): los hooks legacy "extractor_corel_*"
         // siguen respondiendo para no romper bookmarks o pestanas abiertas de <= 2.0.0.
@@ -429,13 +431,13 @@ class Personalizador_PDF_Plugin
     }
 
     /**
-     * Nombres de los presets del modulo TextMuy (modules/textmuy/presets/*.txm).
-     * Desde 3.2.0 el formato unico es .txm (delta textmuy-project); incluye los
-     * presets base que trae el modulo y los guardados por el admin desde el editor.
+     * Nombres de los presets del administrador (uploads/.../textmuy/presets/*.txm).
+     * Desde 4.0.0 NO hay presets base versionados: todo preset vive en uploads
+     * (creado desde el editor "Estilos de Texto" o migrado desde <= 3.3.0).
      */
     private function presets_base()
     {
-        $dir = PERSONALIZADOR_PDF_PATH . 'modules' . DIRECTORY_SEPARATOR . 'textmuy' . DIRECTORY_SEPARATOR . 'presets';
+        $dir = $this->dir_textmuy_presets();
         $out = [];
         foreach ((array)glob($dir . DIRECTORY_SEPARATOR . '*.txm') as $ruta) {
             $nombre = basename($ruta, '.txm');
@@ -509,22 +511,215 @@ class Personalizador_PDF_Plugin
             : ['ec_texto_quitado' => 1, 'ec_pdf' => $archivo]);
     }
 
-    /* ==================== Recursos del modulo TextMuy (presets .txm + imagenes) ==================== */
+    /* ==================== Recursos TextMuy (presets .txm + imagenes) ==================== */
 
-    /** Directorio de presets del modulo (modules/textmuy/presets, pares .txm + .webp). */
-    private function dir_textmuy_presets()
+    /* Desde 4.0.0 TODO el contenido del administrador vive en
+     * uploads/personalizador-pdf/textmuy/{presets,imagenes}: el plugin queda de
+     * solo lectura y se actualiza (ZIP o git pull) sin preservar archivos. El
+     * modulo importado en modules/textmuy (opcional, se copia a mano) solo
+     * aporta el codigo del editor; presets e imagenes son datos de usuario. */
+
+    /** Indica si el modulo TextMuy esta importado en modules/textmuy (con index.html). */
+    public function modulo_textmuy_disponible()
     {
-        return PERSONALIZADOR_PDF_PATH . 'modules' . DIRECTORY_SEPARATOR . 'textmuy' . DIRECTORY_SEPARATOR . 'presets';
+        return is_file(PERSONALIZADOR_PDF_PATH . 'modules' . DIRECTORY_SEPARATOR . 'textmuy' . DIRECTORY_SEPARATOR . 'index.html');
     }
 
-    /** Directorio de imagenes subidas del modulo (modules/textmuy/imagenes). */
-    private function dir_textmuy_imagenes($crear = true)
+    /** Directorio de presets del administrador (uploads/personalizador-pdf/textmuy/presets). */
+    private function dir_textmuy_presets()
     {
-        $dir = PERSONALIZADOR_PDF_PATH . 'modules' . DIRECTORY_SEPARATOR . 'textmuy' . DIRECTORY_SEPARATOR . 'imagenes';
-        if ($crear && !is_dir($dir)) {
-            wp_mkdir_p($dir);
+        $this->migrar_textmuy();
+        return $this->subdir('textmuy' . DIRECTORY_SEPARATOR . 'presets');
+    }
+
+    /** Categorias de imagenes del administrador. */
+    private function categorias_textmuy()
+    {
+        return ['fondos', 'iconos', 'varios'];
+    }
+
+    /** Directorio de imagenes del administrador (uploads/personalizador-pdf/textmuy/imagenes). */
+    private function dir_textmuy_imagenes($crear = false)
+    {
+        $this->migrar_textmuy();
+        return $this->subdir('textmuy' . DIRECTORY_SEPARATOR . 'imagenes');
+    }
+
+    /** URL publica de los presets (uploads/.../textmuy/presets/, con barra final). */
+    private function url_base_textmuy_presets()
+    {
+        $upload_dir = wp_upload_dir();
+        return trailingslashit($upload_dir['baseurl']) . 'personalizador-pdf/textmuy/presets/';
+    }
+
+    /** URL publica de las imagenes (uploads/.../textmuy/imagenes/, con barra final). */
+    private function url_base_textmuy_imagenes()
+    {
+        $upload_dir = wp_upload_dir();
+        return trailingslashit($upload_dir['baseurl']) . 'personalizador-pdf/textmuy/imagenes/';
+    }
+
+    private static $textmuy_migrado = false;
+
+    /**
+     * Migra (una vez por request, con guard) el contenido del administrador que
+     * vivia DENTRO del modulo hasta 3.3.0 (modules/textmuy/{presets,imagenes})
+     * hacia uploads/. Mueve los pares .txm/.webp y las imagenes subidas, mergea
+     * las categorias del catalogo.json viejo y reescribe en cada .txm las URLs
+     * de imagen viejas (modules/textmuy/imagenes/...) por las nuevas de uploads.
+     */
+    public function migrar_textmuy()
+    {
+        if (self::$textmuy_migrado) {
+            return;
         }
-        return $dir;
+        self::$textmuy_migrado = true;
+
+        $dirModulo = PERSONALIZADOR_PDF_PATH . 'modules' . DIRECTORY_SEPARATOR . 'textmuy';
+        $dirPresetsViejo = $dirModulo . DIRECTORY_SEPARATOR . 'presets';
+        $dirImagenesViejo = $dirModulo . DIRECTORY_SEPARATOR . 'imagenes';
+        if (!is_dir($dirPresetsViejo) && !is_dir($dirImagenesViejo)) {
+            return; // Modulo no importado (o ya migrado a mano): nada que hacer.
+        }
+
+        // --- Presets: pares .txm + .webp ---
+        $dirPresets = $this->subdir('textmuy' . DIRECTORY_SEPARATOR . 'presets');
+        foreach ((array)glob($dirPresetsViejo . DIRECTORY_SEPARATOR . '*.txm') as $ruta) {
+            $destino = $dirPresets . DIRECTORY_SEPARATOR . basename($ruta);
+            if (!is_file($destino) && @rename($ruta, $destino)) {
+                $webp = substr($ruta, 0, -4) . '.webp';
+                if (is_file($webp)) {
+                    @rename($webp, $dirPresets . DIRECTORY_SEPARATOR . basename($webp));
+                }
+            }
+        }
+        foreach ((array)glob($dirPresetsViejo . DIRECTORY_SEPARATOR . '*.webp') as $ruta) {
+            $destino = $dirPresets . DIRECTORY_SEPARATOR . basename($ruta);
+            if (!is_file($destino)) {
+                @rename($ruta, $destino); // Miniatura huerfana: mejor conservarla.
+            }
+        }
+
+        // --- Imagenes subidas (el catalogo.json viejo solo aporta categorias) ---
+        $catalogoViejo = [];
+        $rutaCatalogoViejo = $dirImagenesViejo . DIRECTORY_SEPARATOR . 'catalogo.json';
+        if (is_file($rutaCatalogoViejo)) {
+            $datos = json_decode((string)file_get_contents($rutaCatalogoViejo), true);
+            if (is_array($datos)) {
+                foreach ($datos as $e) {
+                    if (is_array($e) && !empty($e['nombre'])) {
+                        $catalogoViejo[$e['nombre']] = $e;
+                    }
+                }
+            }
+        }
+        $dirImagenes = $this->subdir('textmuy' . DIRECTORY_SEPARATOR . 'imagenes');
+        foreach ((array)glob($dirImagenesViejo . DIRECTORY_SEPARATOR . '*.*') as $ruta) {
+            $archivo = basename($ruta);
+            if ($archivo === 'catalogo.json' || is_dir($ruta)) {
+                continue;
+            }
+            $destino = $dirImagenes . DIRECTORY_SEPARATOR . $archivo;
+            if (!is_file($destino) && @rename($ruta, $destino) && isset($catalogoViejo[$archivo])) {
+                $this->catalogo_textmuy_actualizar(
+                    $archivo,
+                    isset($catalogoViejo[$archivo]['categoria']) ? $catalogoViejo[$archivo]['categoria'] : 'varios',
+                    isset($catalogoViejo[$archivo]['titulo']) ? $catalogoViejo[$archivo]['titulo'] : ''
+                );
+            }
+        }
+
+        // --- Reescribir URLs de imagen dentro de los .txm movidos ---
+        $nuevaBase = $this->url_base_textmuy_imagenes();
+        foreach ((array)glob($dirPresets . DIRECTORY_SEPARATOR . '*.txm') as $ruta) {
+            $contenido = (string)@file_get_contents($ruta);
+            if ($contenido === '' || strpos($contenido, 'modules/textmuy/imagenes/') === false) {
+                continue;
+            }
+            $nuevo = preg_replace(
+                '#https?://[^\s"\'\]\}<>]+/modules/textmuy/imagenes/#',
+                $nuevaBase,
+                $contenido
+            );
+            if (is_string($nuevo) && $nuevo !== $contenido) {
+                @file_put_contents($ruta, $nuevo);
+            }
+        }
+    }
+
+    /** Ruta del catalogo.json unico de las imagenes del administrador. */
+    private function ruta_catalogo_textmuy()
+    {
+        return $this->dir_textmuy_imagenes() . DIRECTORY_SEPARATOR . 'catalogo.json';
+    }
+
+    /** Lee catalogo.json. Fallback: escanea el dir y genera el catalogo. */
+    private function leer_catalogo_textmuy()
+    {
+        $ruta = $this->ruta_catalogo_textmuy();
+        if (is_file($ruta)) {
+            $data = json_decode((string)file_get_contents($ruta), true);
+            if (is_array($data)) {
+                return $data;
+            }
+        }
+        // Fallback: escanear el dir y generar el catalogo
+        $dir = $this->dir_textmuy_imagenes();
+        $cat = [];
+        foreach ((array)glob($dir . DIRECTORY_SEPARATOR . '*.*') as $ruta) {
+            $archivo = basename($ruta);
+            if ($archivo === 'catalogo.json' || is_dir($ruta)) continue;
+            $ext = strtolower(pathinfo($archivo, PATHINFO_EXTENSION));
+            if (!in_array($ext, ['png', 'jpg', 'jpeg', 'webp', 'svg'], true)) continue;
+            $cat[] = ['nombre' => $archivo, 'categoria' => 'varios', 'titulo' => $archivo];
+        }
+        if (!empty($cat)) {
+            $this->escribir_catalogo_textmuy($cat);
+        }
+        return $cat;
+    }
+
+    /** Escribe catalogo.json con las imagenes actuales. */
+    private function escribir_catalogo_textmuy($lista)
+    {
+        $ruta = $this->ruta_catalogo_textmuy();
+        @file_put_contents($ruta, wp_json_encode($lista, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    /** Agrega o actualiza una entrada en catalogo.json. */
+    private function catalogo_textmuy_actualizar($nombre, $categoria, $titulo = '')
+    {
+        $cat = $this->leer_catalogo_textmuy();
+        $encontrado = false;
+        foreach ($cat as $k => $e) {
+            if ($e['nombre'] === $nombre) {
+                $cat[$k]['categoria'] = $categoria;
+                if ($titulo !== '') $cat[$k]['titulo'] = $titulo;
+                $encontrado = true;
+                break;
+            }
+        }
+        if (!$encontrado) {
+            $cat[] = ['nombre' => $nombre, 'categoria' => $categoria, 'titulo' => ($titulo ?: $nombre)];
+        }
+        $this->escribir_catalogo_textmuy($cat);
+    }
+
+    /** Quita una entrada de catalogo.json. */
+    private function catalogo_textmuy_quitar($nombre)
+    {
+        $cat = $this->leer_catalogo_textmuy();
+        $cat = array_values(array_filter($cat, function ($e) use ($nombre) {
+            return $e['nombre'] !== $nombre;
+        }));
+        $this->escribir_catalogo_textmuy($cat);
+    }
+
+    /** Resuelve la ruta de una imagen en imagenes/ flat. */
+    private function ruta_textmuy_imagen($nombre, $categoria = '')
+    {
+        $ruta = $this->dir_textmuy_imagenes() . DIRECTORY_SEPARATOR . $nombre;
+        return is_file($ruta) ? $ruta : '';
     }
 
     /** Nombre de preset/imagen seguro: minusculas, [a-z0-9_-], sin puntos ni barras. */
@@ -549,42 +744,56 @@ class Personalizador_PDF_Plugin
         if ($ext === 'webp') {
             return strlen($firma) >= 12 && substr($firma, 0, 4) === 'RIFF' && substr($firma, 8, 4) === 'WEBP';
         }
+        if ($ext === 'svg') {
+            return strpos($firma, '<') !== false || substr($firma, 0, 5) === '<?xml';
+        }
         return false;
     }
 
     /**
      * Listado de recursos TextMuy para el iframe de "Estilos de Texto":
-     * presets (*.txm) e imagenes subidas (para el picker "Mis imagenes").
+     * presets (*.txm) e imagenes subidas con categoria, indicador "en uso"
+     * (cuantos presets .txm referencian su URL) y cache-bust por mtime.
+     * Todo desde uploads/personalizador-pdf/textmuy/ (v4.0.0).
      */
     private function recursos_textmuy()
     {
         $presets = [];
+        $contenidosPresets = '';
         foreach ((array)glob($this->dir_textmuy_presets() . DIRECTORY_SEPARATOR . '*.txm') as $ruta) {
             $nombre = basename($ruta, '.txm');
             if ($this->nombre_textmuy_seguro($nombre) === $nombre) {
                 $presets[] = $nombre;
+                $contenidosPresets .= (string)@file_get_contents($ruta);
             }
         }
         sort($presets, SORT_NATURAL | SORT_FLAG_CASE);
 
+        $urlBase = $this->url_base_textmuy_imagenes();
         $imagenes = [];
-        foreach ((array)glob($this->dir_textmuy_imagenes(false) . DIRECTORY_SEPARATOR . '*.*') as $ruta) {
-            $archivo = basename($ruta);
-            $ext = strtolower(pathinfo($archivo, PATHINFO_EXTENSION));
-            if (in_array($ext, ['png', 'jpg', 'jpeg', 'webp'], true)) {
-                $imagenes[] = [
-                    'nombre' => $archivo,
-                    'url' => PERSONALIZADOR_PDF_URL . 'modules/textmuy/imagenes/' . rawurlencode($archivo),
-                ];
-            }
+        foreach ($this->leer_catalogo_textmuy() as $e) {
+            $archivo = $e['nombre'];
+            $ruta = $this->ruta_textmuy_imagen($archivo);
+            if ($ruta === '') continue;
+            $urlLimpia = $urlBase . rawurlencode($archivo);
+            $enUso = ($contenidosPresets !== '' && strpos($contenidosPresets, $urlLimpia) !== false) ? 1 : 0;
+            $imagenes[] = [
+                'nombre' => $archivo,
+                'categoria' => $e['categoria'] ?? 'varios',
+                'titulo' => $e['titulo'] ?? $archivo,
+                'url' => $urlLimpia . '?v=' . (int)@filemtime($ruta),
+                'enUso' => $enUso,
+            ];
         }
-        sort($imagenes);
+        usort($imagenes, function ($a, $b) {
+            return strcmp($a['categoria'], $b['categoria']) ?: strcasecmp($a['nombre'], $b['nombre']);
+        });
         return ['presets' => $presets, 'imagenes' => $imagenes];
     }
 
     /**
      * Guarda un preset del editor TextMuy como par {nombre}.txm + {nombre}.webp en
-     * modules/textmuy/presets. Siempre responde JSON (lo consume fetch desde el
+     * uploads/personalizador-pdf/textmuy/presets. Siempre responde JSON (lo consume fetch desde el
      * iframe, nunca un redirect de consola).
      */
     public function handle_textmuy_guardar_preset()
@@ -624,14 +833,14 @@ class Personalizador_PDF_Plugin
         $dir = $this->dir_textmuy_presets();
         if (!is_dir($dir) || !wp_is_writable($dir)) {
             wp_send_json_error(
-                'El directorio de presets del modulo no es escribible en este hosting. '
-                . 'Verifica los permisos de wp-content/plugins/personalizador-pdf/modules/textmuy/presets.'
+                'El directorio de presets no es escribible en este hosting. '
+                . 'Verifica los permisos de wp-content/uploads/personalizador-pdf/textmuy/presets.'
             );
         }
         $rutaTxm = $dir . DIRECTORY_SEPARATOR . $nombre . '.txm';
         $rutaWebp = $dir . DIRECTORY_SEPARATOR . $nombre . '.webp';
         if (!@move_uploaded_file($txm['tmp_name'], $rutaTxm)) {
-            wp_send_json_error('No se pudo escribir el preset en el directorio del modulo.');
+            wp_send_json_error('No se pudo escribir el preset en el directorio de datos.');
         }
         if (!@move_uploaded_file($webp['tmp_name'], $rutaWebp)) {
             @unlink($rutaTxm); // No dejar un .txm huerfano sin miniatura.
@@ -640,7 +849,7 @@ class Personalizador_PDF_Plugin
         wp_send_json_success(['nombre' => $nombre]);
     }
 
-    /** Borra el par {nombre}.txm + {nombre}.webp de modules/textmuy/presets. */
+    /** Borra el par {nombre}.txm + {nombre}.webp de uploads/.../textmuy/presets. */
     public function handle_textmuy_borrar_preset()
     {
         $this->seguridad('personalizador_pdf_textmuy_borrar_preset');
@@ -655,9 +864,12 @@ class Personalizador_PDF_Plugin
     }
 
     /**
-     * Sube una imagen para rellenos/fondos/texturas del editor TextMuy a
-     * modules/textmuy/imagenes y devuelve su URL publica (misma origen que el
-     * iframe: el canvas puede usarla sin CORS).
+     * Sube una imagen para rellenos/fondos/texturas/iconos del editor TextMuy a
+     * uploads/personalizador-pdf/textmuy/imagenes y devuelve su URL publica (misma
+     * origen que el iframe: el canvas puede usarla sin CORS).
+     * POST: imagen (archivo), categoria (fondos|iconos|varios), nombre
+     * (opcional, para guardar una edicion), sobrescribir (1 => pisar el archivo
+     * destino en vez de generar -2, -3...).
      */
     public function handle_textmuy_subir_imagen()
     {
@@ -670,35 +882,112 @@ class Personalizador_PDF_Plugin
             wp_send_json_error('La imagen supera el tamano maximo (4 MB).');
         }
         $ext = strtolower(pathinfo((string)$file['name'], PATHINFO_EXTENSION));
-        if (!in_array($ext, ['png', 'jpg', 'jpeg', 'webp'], true)) {
-            wp_send_json_error('Formato no permitido (usa PNG, JPG o WebP).');
+        if (!in_array($ext, ['png', 'jpg', 'jpeg', 'webp', 'svg'], true)) {
+            wp_send_json_error('Formato no permitido (usa PNG, JPG, WebP o SVG).');
         }
         if (!$this->firma_imagen_valida($file['tmp_name'], $ext)) {
             wp_send_json_error('El archivo no es una imagen valida.');
         }
+        $categoria = $this->nombre_textmuy_seguro(isset($_POST['categoria']) ? wp_unslash($_POST['categoria']) : 'varios');
+        if (!in_array($categoria, $this->categorias_textmuy(), true)) {
+            $categoria = 'varios';
+        }
+        $sobrescribir = !empty($_POST['sobrescribir']);
         $dir = $this->dir_textmuy_imagenes(true);
         if (!is_dir($dir) || !wp_is_writable($dir)) {
             wp_send_json_error(
-                'El directorio de imagenes del modulo no es escribible en este hosting. '
-                . 'Verifica los permisos de wp-content/plugins/personalizador-pdf/modules/textmuy/imagenes.'
+                'El directorio de imagenes no es escribible en este hosting. '
+                . 'Verifica los permisos de wp-content/uploads/personalizador-pdf/textmuy/imagenes.'
             );
         }
-        $base = $this->nombre_textmuy_seguro(pathinfo((string)$file['name'], PATHINFO_FILENAME));
+        $nombreSugerido = isset($_POST['nombre']) ? $this->nombre_textmuy_seguro(wp_unslash($_POST['nombre'])) : '';
+        $base = $nombreSugerido !== '' ? $nombreSugerido : $this->nombre_textmuy_seguro(pathinfo((string)$file['name'], PATHINFO_FILENAME));
         if ($base === '') {
             $base = 'imagen';
         }
         $destino = $base . '.' . $ext;
-        $i = 2;
-        while (is_file($dir . DIRECTORY_SEPARATOR . $destino)) {
-            $destino = $base . '-' . $i . '.' . $ext;
-            $i++;
+        if (!$sobrescribir) {
+            $i = 2;
+            while (is_file($dir . DIRECTORY_SEPARATOR . $destino)) {
+                $destino = $base . '-' . $i . '.' . $ext;
+                $i++;
+            }
         }
         if (!@move_uploaded_file($file['tmp_name'], $dir . DIRECTORY_SEPARATOR . $destino)) {
             wp_send_json_error('No se pudo guardar la imagen.');
         }
+        // Actualizar catalogo.json
+        $this->catalogo_textmuy_actualizar($destino, $categoria);
+        $rutaDestino = $dir . DIRECTORY_SEPARATOR . $destino;
         wp_send_json_success([
             'nombre' => $destino,
-            'url' => PERSONALIZADOR_PDF_URL . 'modules/textmuy/imagenes/' . rawurlencode($destino),
+            'categoria' => $categoria,
+            'url' => $this->url_base_textmuy_imagenes() . rawurlencode($destino)
+                . '?v=' . (int)@filemtime($rutaDestino),
+        ]);
+    }
+
+    /** Borra una imagen del modulo. POST: nombre + categoria. */
+    public function handle_textmuy_borrar_imagen()
+    {
+        $this->seguridad('personalizador_pdf_textmuy_borrar_imagen');
+        $nombre = $this->nombre_textmuy_seguro(isset($_POST['nombre']) ? wp_unslash($_POST['nombre']) : '');
+        $categoria = $this->nombre_textmuy_seguro(isset($_POST['categoria']) ? wp_unslash($_POST['categoria']) : '');
+        if ($nombre === '' || !preg_match('/[.](png|jpe?g|webp|svg)$/i', $nombre)) {
+            wp_send_json_error('Nombre de imagen no valido.');
+        }
+        $ruta = $this->ruta_textmuy_imagen($nombre, $categoria);
+        if ($ruta === '') {
+            wp_send_json_error('La imagen no existe.');
+        }
+        if (!@unlink($ruta)) {
+            wp_send_json_error('No se pudo borrar la imagen (permisos del directorio).');
+        }
+        $this->catalogo_textmuy_quitar($nombre);
+        wp_send_json_success(['nombre' => $nombre]);
+    }
+
+    /**
+     * Renombra y/o mueve de categoria una imagen del modulo.
+     * POST: nombre, categoria, nombreNuevo, categoriaNueva.
+     */
+    public function handle_textmuy_cambiar_imagen()
+    {
+        $this->seguridad('personalizador_pdf_textmuy_cambiar_imagen');
+        $nombre = $this->nombre_textmuy_seguro(isset($_POST['nombre']) ? wp_unslash($_POST['nombre']) : '');
+        $categoria = $this->nombre_textmuy_seguro(isset($_POST['categoria']) ? wp_unslash($_POST['categoria']) : '');
+        $nombreNuevo = $this->nombre_textmuy_seguro(isset($_POST['nombreNuevo']) ? wp_unslash($_POST['nombreNuevo']) : '');
+        $categoriaNueva = $this->nombre_textmuy_seguro(isset($_POST['categoriaNueva']) ? wp_unslash($_POST['categoriaNueva']) : 'varios');
+        if ($nombre === '' || $nombreNuevo === '' || !in_array($categoriaNueva, $this->categorias_textmuy(), true)) {
+            wp_send_json_error('Datos no validos para renombrar la imagen.');
+        }
+        $origen = $this->ruta_textmuy_imagen($nombre, $categoria);
+        if ($origen === '') {
+            wp_send_json_error('La imagen no existe.');
+        }
+        $ext = strtolower(pathinfo($nombre, PATHINFO_EXTENSION));
+        $dirDestino = $this->dir_textmuy_imagenes(true);
+        if (!is_dir($dirDestino) || !wp_is_writable($dirDestino)) {
+            wp_send_json_error('El directorio de imagenes del modulo no es escribible.');
+        }
+        $destino = $dirDestino . DIRECTORY_SEPARATOR . $nombreNuevo . '.' . $ext;
+        if ($destino !== $origen) {
+            $i = 2;
+            while (is_file($destino)) {
+                $destino = $dirDestino . DIRECTORY_SEPARATOR . $nombreNuevo . '-' . $i . '.' . $ext;
+                $i++;
+            }
+            if (!@rename($origen, $destino)) {
+                wp_send_json_error('No se pudo renombrar/mover la imagen.');
+            }
+        }
+        $nombreFinal = basename($destino);
+        $this->catalogo_textmuy_actualizar($nombreFinal, $categoriaNueva);
+        wp_send_json_success([
+            'nombre' => $nombreFinal,
+            'categoria' => $categoriaNueva,
+            'url' => $this->url_base_textmuy_imagenes() . rawurlencode($nombreFinal)
+                . '?v=' . (int)@filemtime($destino),
         ]);
     }
 
@@ -974,9 +1263,12 @@ class Personalizador_PDF_Plugin
 Personalizador_PDF_Plugin::instance();
 
 /**
- * Migra los datos de uploads al activar el plugin: si existe la carpeta
- * historica "extractor-corel" (<= 2.0.0) y no la nueva, la renombra para
- * no perder PDFs, datasets, imagenes, placeholders ni salidas.
+ * Migra los datos al activar el plugin:
+ *  - si existe la carpeta historica "extractor-corel" (<= 2.0.0) y no la nueva,
+ *    la renombra para no perder PDFs, datasets, imagenes, placeholders ni salidas;
+ *  - mueve los presets e imagenes del administrador que vivian DENTRO del modulo
+ *    TextMuy (modules/textmuy/{presets,imagenes}, <= 3.3.0) a
+ *    uploads/personalizador-pdf/textmuy/ (v4.0.0), reescribiendo URLs internas.
  */
 register_activation_hook(__FILE__, function () {
     $upload_dir = wp_upload_dir();
@@ -985,4 +1277,5 @@ register_activation_hook(__FILE__, function () {
     if (is_dir($viejo) && !is_dir($nuevo)) {
         @rename($viejo, $nuevo);
     }
+    Personalizador_PDF_Plugin::instance()->migrar_textmuy();
 });

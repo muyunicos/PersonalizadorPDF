@@ -267,6 +267,10 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                 <?php endif; ?>
 
                 <?php
+                // La seccion de texto estilizado requiere el modulo TextMuy
+                // (render en el navegador). Sin el modulo importado, los grupos
+                // siguen funcionando con imagen manual y el Procesar clasico.
+                if ($this->modulo_textmuy_disponible()) :
                 $estado_texto = $textos[$letra] ?? null;
                 $texto_activo = $estado_texto && !empty($estado_texto['activo']);
                 ?>
@@ -309,6 +313,7 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                         <p class="ec-aviso">Al procesar, el texto estilizado reemplazara la imagen cargada de este grupo.</p>
                     <?php endif; ?>
                 </div>
+                <?php endif; // modulo_textmuy_disponible ?>
             </div>
         <?php endforeach; ?>
 

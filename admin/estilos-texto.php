@@ -3,22 +3,51 @@ if (!defined('ABSPATH')) {
     exit;
 }
 /** @var Personalizador_PDF_Plugin $this */
+
+// El modulo TextMuy NO se distribuye con el plugin (v4.0.0): se importa a mano
+// en modules/textmuy/ (ver modules/LEEME.md). Sin el modulo, la pestana muestra
+// el aviso y el resto del plugin funciona con normalidad.
+if (!$this->modulo_textmuy_disponible()) {
+    ?>
+    <div class="card">
+        <h2>Estilos de Texto (TextMuy)</h2>
+        <p><strong>El modulo TextMuy no esta importado en esta instalacion.</strong></p>
+        <p class="description">
+            Para habilitar el editor, copia el proyecto <code>textmuy</code> dentro de la carpeta del
+            plugin de modo que exista <code>wp-content/plugins/personalizador-pdf/modules/textmuy/index.html</code>
+            (instrucciones completas en <code>modules/LEEME.md</code>). El resto del plugin
+            (PDFs, grupos, imagenes y Procesar) funciona con normalidad sin el modulo.
+        </p>
+    </div>
+    <?php
+    return;
+}
+
 $modulo_url = PERSONALIZADOR_PDF_URL . 'modules/textmuy/index.html';
 // Config del puente plugin <-> modulo: endpoints + nonces + listado actual de
-// presets (.txm) e imagenes subidas. El iframe la recibe via postMessage
-// same-origin al cargar (el modulo standalone, sin esta config, oculta las
-// funciones de servidor y sigue 100% client-side).
+// presets (.txm) e imagenes subidas + URLs base de lectura. El iframe la recibe
+// via postMessage same-origin al cargar (el modulo standalone, sin esta config,
+// oculta las funciones de servidor y sigue 100% client-side).
+// Desde 4.0.0 los presets e imagenes del administrador viven en
+// uploads/personalizador-pdf/textmuy/{presets,imagenes} (fuera del plugin).
 $recursos = $this->recursos_textmuy();
 $puente = [
     'urls' => [
         'guardarPreset' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_guardar_preset'),
         'borrarPreset' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_borrar_preset'),
         'subirImagen' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_subir_imagen'),
+        'borrarImagen' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_borrar_imagen'),
+        'cambiarImagen' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_cambiar_imagen'),
+        // Lectura de presets (.txm) e imagenes: base de uploads pasada al modulo
+        // para que el editor y el render-core resuelvan {nombre}.txm / .webp.
+        'presetsBase' => $this->url_base_textmuy_presets(),
     ],
     'nonces' => [
         'guardarPreset' => wp_create_nonce('personalizador_pdf_textmuy_guardar_preset'),
         'borrarPreset' => wp_create_nonce('personalizador_pdf_textmuy_borrar_preset'),
         'subirImagen' => wp_create_nonce('personalizador_pdf_textmuy_subir_imagen'),
+        'borrarImagen' => wp_create_nonce('personalizador_pdf_textmuy_borrar_imagen'),
+        'cambiarImagen' => wp_create_nonce('personalizador_pdf_textmuy_cambiar_imagen'),
     ],
     'presets' => $recursos['presets'],
     'imagenes' => $recursos['imagenes'],
@@ -33,10 +62,11 @@ $puente = [
     </p>
     <p class="description">
         Los presets se guardan como <code>.txm</code> (mas su miniatura <code>.webp</code>) en
-        <code>modules/textmuy/presets/</code> del servidor: estan disponibles en
+        <code>wp-content/uploads/personalizador-pdf/textmuy/presets/</code>: estan disponibles en
         <strong>todos los navegadores</strong> y en el selector de estilo de cada grupo de un PDF.
         Las imagenes que subas para rellenos y fondos quedan en
-        <code>modules/textmuy/imagenes/</code> y se reutilizan entre presets.
+        <code>wp-content/uploads/personalizador-pdf/textmuy/imagenes/</code> y se reutilizan entre presets.
+        No hay presets de fabrica: crea los tuyos desde este editor.
     </p>
 </div>
 

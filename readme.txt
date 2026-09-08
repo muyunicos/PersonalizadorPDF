@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 3.1.2
+Stable tag: 4.0.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -17,7 +17,7 @@ Personalizador PDF (antes "Extractor Corel") automatiza el reemplazo de placehol
 La administracion funciona como consola de trabajo con 3 pestanas:
 
 1. **PDFs y procesamiento**: se detectan los placeholders, se agrupan por color y se generan los datos (dataset) del PDF; se carga una imagen por grupo (computadora o galeria de medios) y se procesa el PDF final.
-2. **Estilos de Texto**: editor integrado del sistema TextMuy (100% en el navegador, estilo TextStudio) para disenar estilos de texto y guardarlos como presets. En la proxima version, esos estilos se podran asignar a los grupos del PDF para renderizar el texto estilizado al procesar.
+2. **Estilos de Texto**: editor integrado del sistema TextMuy (100% en el navegador, estilo TextStudio) para disenar estilos de texto y guardarlos como presets `.txm` en el servidor (disponibles en todos los navegadores y en el selector de estilo de cada grupo del PDF). Las imagenes para rellenos y fondos se suben a un directorio propio del modulo y se reutilizan entre presets.
 3. **Ayuda**: documentacion interna.
 
 A diferencia de la version original (Flask + Python), esta es **100% PHP puro** en el servidor y se ejecuta directamente en WordPress, por lo que funciona en alojamientos compartidos (Hostinger, etc.) sin Python, Node ni procesos persistentes. El modulo TextMuy corre en el navegador del administrador (Canvas + WebGL); no agrega carga al servidor.
@@ -28,7 +28,9 @@ A diferencia de la version original (Flask + Python), esta es **100% PHP puro** 
 * Extension zlib (casi siempre disponible)
 * La extension GD es opcional: sin GD el motor procesa imagenes PNG (8 bits, sin entrelazar) con su decodificador propio; para JPEG/GIF/WebP se necesita GD (o un JPEG cuyo tamano coincida exactamente con el del grupo)
 
-**Datos guardados** en `wp-content/uploads/personalizador-pdf/`: `pdfs/` (PDFs subidos), `datos/` (dataset por PDF), `imagenes/` (imagen de cada grupo), `placeholders/` (marcos PNG transparentes descargables) y `salidas/` (PDFs procesados). Al activar, los datos de la version 2.0.0 (`uploads/extractor-corel/`) se migran automaticamente.
+**Datos guardados** en `wp-content/uploads/personalizador-pdf/`: `pdfs/` (PDFs subidos), `datos/` (dataset por PDF), `imagenes/` (imagen de cada grupo), `placeholders/` (marcos PNG transparentes descargables), `salidas/` (PDFs procesados) y, desde 4.0.0, `textmuy/presets/` + `textmuy/imagenes/` (presets `.txm`/`.webp` e imagenes del editor de estilos). Al activar, los datos de versiones anteriores (incluidos los que vivian dentro de `modules/textmuy/` hasta 3.3.0) se migran automaticamente; la carpeta del plugin queda 100% de solo lectura.
+
+**Modulo TextMuy (opcional)**: desde 4.0.0 el editor de estilos de texto NO viene empaquetado con el plugin. Se importa a mano copiando el proyecto `textmuy` a `wp-content/plugins/personalizador-pdf/modules/textmuy/` (instrucciones en `modules/LEEME.md`). Sin el modulo, el resto del plugin funciona con normalidad.
 
 == Installation ==
 
@@ -59,6 +61,26 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/personalizador-pdf/`. Puedes borrar cada PDF (con sus datos) desde la propia pantalla del plugin.
 
 == Changelog ==
+
+= 4.0.0 =
+* **Datos de usuario fuera del plugin**: los presets del editor TextMuy (`.txm` + miniatura `.webp`) y las imagenes subidas se guardan ahora en `wp-content/uploads/personalizador-pdf/textmuy/{presets,imagenes}` (con `catalogo.json` generado en runtime). El plugin queda de solo lectura: se actualiza (ZIP o git) sin preservar archivos. Migracion automatica desde `modules/textmuy/{presets,imagenes}` (<= 3.3.0), reescribiendo las URLs de imagen dentro de los `.txm`.
+* **Sin contenido de fabrica**: no hay presets base ni catalogo de imagenes versionados; el administrador crea sus presets y sube sus imagenes desde el editor.
+* **Modulo TextMuy separado del repositorio del plugin**: `modules/textmuy/` no se versiona; se importa a mano tras cada actualizacion del modulo (ver `modules/LEEME.md`). Sin el modulo importado, la pestana "Estilos de Texto" muestra un aviso, la seccion "Texto estilizado" por grupo se oculta y el Procesar clasico funciona con normalidad.
+* **Contrato**: nueva entrada `urls.presetsBase` en el puente y `PresetManager.presetUrlBase()` en el modulo para leer presets/imagenes desde uploads (retro-compatible; standalone sigue con ruta relativa). Cache-busting `?v=RC9`.
+* Corregido: al renombrar/mover una imagen en la galeria, `catalogo.json` registraba un nombre vacio.
+
+= 3.3.0 =
+* **Galeria de imagenes unificada** (componente `js/galeria.js`): un solo boton "Select" en los importadores de imagen (rellenos, fondos, texturas, iconos) abre un panel con tabs (fondos/iconos/varios), buscador, subida (boton + arrastrar y soltar + pegar) y footer (nombre, categoria, Save, Delete, Select).
+* **Preview en vivo**: en Fill layers (Pattern) y en BACKGROUND, la galeria oculta temporalmente la interfaz, aplica la imagen al instante al hacer click y replica los controles (Fit/Scale/Origin/Repeat o Opacity/Repeat). "Aplicar" persiste; cerrar sin Aplicar revierte al estilo anterior.
+* **Imagenes planas + catalogo unico**: `modules/textmuy/imagenes/` sin subcarpetas; la categoria de cada archivo se guarda en `imagenes/catalogo.json`. El CRUD (subir/borrar/renombrar) actualiza el JSON. Los 128 SVGs base del catalogo (45 iconos + 83 fondos) viven en el mismo directorio, versionados.
+* Cache-busting `?v=RC7` en render-core e index; render-core incorpora `js/preset-manager.js` para presets `.txm`.
+
+= 3.2.0 =
+* **Normalizacion de presets del modulo TextMuy**: el formato unico es `.txm` (delta de settings) junto a su miniatura `.webp`, guardados en `modules/textmuy/presets/` del servidor; disponibles en todos los navegadores y en el selector de estilo de cada grupo de un PDF. Los 9 presets base migraron de `.json` (formato TextStudio crudo) a `.txm`.
+* **Un solo panel de presets**: la galeria inferior expandible es la unica UI de presets (guardar, borrar, buscar y migrar). Se eliminan el panel "Presets" y el panel "Local projects (.txm)" de la pestana DOWNLOAD. Boton de migracion unica que sube los presets viejos de localStorage al servidor.
+* **Directorio de imagenes subidas**: las imagenes de rellenos/fondos/texturas se guardan en `modules/textmuy/imagenes/` via un puente PHP (nonce, capability, validacion de firma y limites de tamano) y quedan reutilizables entre presets con el picker "Mis imagenes".
+* Puente plugin-modulo por postMessage same-origin (handlers `admin_post_personalizador_pdf_textmuy_guardar_preset|borrar_preset|subir_imagen`). El modulo standalone sigue 100% client-side: sin puente, guardar descarga el `.txm` y las imagenes se embeben.
+* Cache-busting de los estaticos del modulo: `?v=RC2` (render-core e index). El render-core incorpora `js/preset-manager.js` para resolver presets `.txm`.
 
 = 3.1.2 =
 * **Corregido**: al procesar con texto estilizado, el envio apuntaba a una URL rota (`[object HTMLInputElement]`) por la colision del `<input name="action">` con la propiedad `form.action` del DOM; ahora se usa siempre el atributo `action` del formulario. Los PDF con texto estilizado procesan y descargan correctamente.

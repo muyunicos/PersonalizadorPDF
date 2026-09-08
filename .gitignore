@@ -1,10 +1,11 @@
-__pycache__/
-*.pyc
+# Datos runtime del plugin (nunca se versionan).
 uploads/
 marcos/
 output_*.pdf
 tests/salida_*.pdf
 tests/*.tmp
-# Imagenes subidas desde el editor TextMuy (runtime, no se versionan).
-modules/textmuy/imagenes/*
-!modules/textmuy/imagenes/.gitkeep
+
+# Modulos autocontenidos: NO se versionan, se importan a mano tras cada
+# actualizacion del modulo (ver modules/LEEME.md).
+modules/textmuy/
+
