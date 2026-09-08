@@ -190,6 +190,12 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   - Imágenes/fondos: `textmuy/imagenes/{nombre}.{ext}` (flat) +
     `textmuy/imagenes/catalogo.json` (`{nombre, categoria, titulo}`; categorías:
     fondos, iconos, varios).
+- 🔜 **FUTURO — Fuentes como datos de usuario** (no implementado): `textmuy/fonts/
+  {nombre}.{ttf,otf,woff,woff2}` + `{nombre}.webp` (preview) + `textmuy/fonts/fonts.json`
+  (`{nombre, titulo, url}`); handlers `textmuy_subir_fuente|borrar_fuente` (firma + límite);
+  el módulo registra las fuentes desde el puente y reemplaza `localStorage`
+  (`textmuy_custom_fonts`) dentro del plugin (standalone mantiene localStorage); preview
+  webp generada en el navegador al subir.
 - **Migración automática** (`migrar_textmuy()`): al activar o en primer uso, mueve los
   presets e imágenes que vivían DENTRO del módulo hasta 3.3.0
   (`modules/textmuy/{presets,imagenes}`) a uploads, reescribiendo las URLs de imagen
