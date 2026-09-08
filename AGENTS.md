@@ -37,8 +37,23 @@ en la pestaña **"Estilos de Texto"** del admin.
 - **100% PHP**: el servidor funciona en hosting compartido (Hostinger, etc.) sin Python ni
   Node. El código que corre en el servidor es PHP; el JS de TextMuy corre solo en el navegador.
 
-## 2. Arquitectura y mapa de archivos (raíz del repo = carpeta del plugin)
+## 2. Arquitectura y mapa de archivos (v4.1: proyecto de 3 carpetas)
 
+La RAIZ DEL PROYECTO (sin git) agrupa tres carpetas hermanas:
+
+```
+personalizador-pdf/              <- RAIZ DEL PROYECTO (sin git)
+├── personalizador-pdf/          <- PLUGIN (repo git, el arbol de abajo; en WP vive en
+│                                   wp-content/plugins/personalizador-pdf/)
+├── textmuy/                     <- MODULO TextMuy (git propio): se importa a mano a
+│                                   modules/textmuy/ tras cada actualizacion (LEEME.md)
+└── uploads/personalizador-pdf/  <- DATOS DE USUARIO (sin git): espejo de
+                                    wp-content/uploads/personalizador-pdf/ (pdfs, datos,
+                                    imagenes, placeholders, salidas y textmuy/{presets,
+                                    imagenes} desde 4.1). Se despliega COMPLETO al servidor.
+```
+
+Arbol del repo del plugin (la carpeta `personalizador-pdf/` de arriba):
 ```
 personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/personalizador-pdf/)
 ├── AGENTS.md                ← ESTE archivo (contesto obligatorio)
@@ -77,8 +92,8 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   ├── expected_muestra.json ← Oráculo de detección PARA muestra.pdf
 │   └── fixtures/            ← Imágenes de prueba (foto_a.png, paleta_b.png, exacto_b.jpg)
 ├── readme.txt               ← Metadatos WP (README del plugin)
-├── muestra.pdf              ← PDF de prueba real (2.7 MB) con placeholders
-├── .gitignore
+├── .gitignore               ← (muestra.pdf/muestra2.pdf NO se versionan: viven en
+│                               ../uploads/personalizador-pdf/pdfs/, datos del usuario)
 └── .gitattributes
 ```
 
@@ -410,6 +425,8 @@ y el resumen avisa cuáles quedaron como estaban.
 ```bash
 php -l personalizador-pdf.php && php -l admin/*.php && php -l engine/*.php
 php tests/motor_smoke.php    # smoke del motor: debe decir "SMOKE OK" (26 checks)
+# Los tests leen muestra.pdf desde ../uploads/personalizador-pdf/pdfs/ (datos del usuario,
+# NO versionados). Si falta, copiarlo desde el servidor o la carpeta de datos.
 php tests/parity.php         # paridad del detector vs expected_muestra.json → "PARIDAD OK"
 php tests/texto_puente.php    # puente TextMuy: guardar_texto + handle_procesar con PNGs (stubs WP)
 # Tests del módulo TextMuy (requieren Node; el módulo vive en su carpeta/repositorio
@@ -449,6 +466,12 @@ node --check assets/admin.js  # sintaxis del puente JS
   automatica haga el traslado ANTES de borrar la carpeta vieja.
 - Cualquier cambio en `personalizador-pdf.php`, `admin/*` o `assets/*` debe mantener la
   compatibilidad legacy documentada (hooks/nonces `extractor_corel_*`, carpeta de uploads).
+- Despliegue (v4.1): (1) subir la carpeta del plugin a `wp-content/plugins/personalizador-pdf/`;
+  (2) importar el modulo: copiar `../textmuy` a `modules/textmuy/`; (3) subir la carpeta
+  `uploads/personalizador-pdf/` COMPLETA a `wp-content/uploads/` (incluye
+  `textmuy/{presets,imagenes}` con catalogo.json: son los datos del administrador). La
+  migracion automatica del plugin (`migrar_textmuy()`) solo mueve a uploads lo que falte
+  (nunca pisa datos existentes), asi que se puede desplegar antes o despues de activar.
 
 ## 11. Tabla de errores comunes (resolver antes de preguntar)
 

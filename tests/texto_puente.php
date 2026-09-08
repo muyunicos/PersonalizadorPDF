@@ -128,9 +128,15 @@ $base = dirname($plugin);
 
 function preparar_entorno($testBase, $base)
 {
+    // muestra.pdf ya no se versiona: vive en la carpeta de datos del proyecto (uploads/).
+    $muestra = dirname($base) . '/uploads/personalizador-pdf/pdfs/muestra.pdf';
+    if (!is_file($muestra)) {
+        fwrite(STDERR, "No se encontro muestra.pdf en {$muestra}\n");
+        exit(1);
+    }
     wp_mkdir_p($testBase . '/uploads/personalizador-pdf/pdfs');
-    copy($base . '/muestra.pdf', $testBase . '/uploads/personalizador-pdf/pdfs/muestra.pdf');
-    $pdf = new \ExtractCorel\Engine\Pdf((string)file_get_contents($base . '/muestra.pdf'));
+    copy($muestra, $testBase . '/uploads/personalizador-pdf/pdfs/muestra.pdf');
+    $pdf = new \ExtractCorel\Engine\Pdf((string)file_get_contents($muestra));
     $pdf->load();
     $grupos = (new \ExtractCorel\Engine\Detector($pdf))->analizarPdf()['grupos'];
     $datos = \ExtractCorel\Engine\Metadata::generar('muestra', $grupos);

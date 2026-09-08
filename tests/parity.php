@@ -16,7 +16,8 @@ use ExtractCorel\Engine\Pdf;
 use ExtractCorel\Engine\Detector;
 
 $base = dirname(__DIR__);
-$pdfPath = isset($argv[1]) ? $argv[1] : $base . '/muestra.pdf';
+// muestra.pdf ya no se versiona: vive en la carpeta de datos del proyecto (uploads/).
+$pdfPath = isset($argv[1]) ? $argv[1] : dirname($base) . '/uploads/personalizador-pdf/pdfs/muestra.pdf';
 $expectedPath = __DIR__ . '/expected_muestra.json';
 
 $exit = 0;
