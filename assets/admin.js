@@ -321,4 +321,41 @@ jQuery(function ($) {
             $btn.prop('disabled', false);
         });
     });
+
+
+    /* ============ 5. Miniaturas lazy (grupos de PDF) ============ */
+
+    (function () {
+        var cfg = window.PersonalizadorPDF || {};
+        if (window.ThumbEngine && cfg.guardarMiniaturaUrl) {
+            ThumbEngine.configure({
+                endpoint: cfg.guardarMiniaturaUrl,
+                nonce: cfg.guardarMiniaturaNonce || ''
+            });
+        }
+
+        var baseThumbs = (cfg.imagenesBase || '').replace(/\/$/, '');
+
+        /**
+         * Asegura la miniatura de una imagen asignada a un grupo de PDF.
+         * Usa ThumbEngine.ensure con el slug '{pdf}-{letra}'.
+         * Si la miniatura no existe en servidor, renderiza a 100x100 contain y la guarda.
+         */
+        function ensureMiniatura(pdf, letra, fullUrl) {
+            var nombre = (pdf + '-' + letra).toLowerCase();
+            if (!window.ThumbEngine || !baseThumbs || !fullUrl) {
+                return Promise.resolve(fullUrl);
+            }
+            return ThumbEngine.ensure({
+                fuente: fullUrl,
+                nombre: nombre,
+                base: baseThumbs,
+                ancho: 100,
+                alto: 100
+            });
+        }
+
+        window.PersonalizadorPDF = window.PersonalizadorPDF || {};
+        window.PersonalizadorPDF.ensureMiniatura = ensureMiniatura;
+    })();
 });

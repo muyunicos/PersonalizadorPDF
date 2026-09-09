@@ -38,9 +38,17 @@ $puente = [
         'subirImagen' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_subir_imagen'),
         'borrarImagen' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_borrar_imagen'),
         'cambiarImagen' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_cambiar_imagen'),
-        // Lectura de presets (.txm) e imagenes: base de uploads pasada al modulo
-        // para que el editor y el render-core resuelvan {nombre}.txm / .webp.
+        'subirFuente' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_subir_fuente'),
+        'borrarFuente' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_borrar_fuente'),
+        'guardarMiniatura' => admin_url('admin-post.php?action=personalizador_pdf_guardar_miniatura'),
+        'guardarSprite' => admin_url('admin-post.php?action=personalizador_pdf_guardar_sprite'),
+        // Script del motor de miniaturas y sprites para inyectar en el iframe
+        'miniaturas' => PERSONALIZADOR_PDF_URL . 'assets/miniaturas.js',
+        // Lectura de presets (.txm), imagenes y fuentes: bases de uploads.
+        // imagenesBase sirve para reutilizar el spritesheet thumbs/imagenes.* sin regenerar.
         'presetsBase' => $this->url_base_textmuy_presets(),
+        'fuentesBase' => $this->url_base_textmuy_fonts(),
+        'imagenesBase' => $this->url_base_textmuy_imagenes(),
     ],
     'nonces' => [
         'guardarPreset' => wp_create_nonce('personalizador_pdf_textmuy_guardar_preset'),
@@ -48,28 +56,16 @@ $puente = [
         'subirImagen' => wp_create_nonce('personalizador_pdf_textmuy_subir_imagen'),
         'borrarImagen' => wp_create_nonce('personalizador_pdf_textmuy_borrar_imagen'),
         'cambiarImagen' => wp_create_nonce('personalizador_pdf_textmuy_cambiar_imagen'),
+        'subirFuente' => wp_create_nonce('personalizador_pdf_textmuy_subir_fuente'),
+        'borrarFuente' => wp_create_nonce('personalizador_pdf_textmuy_borrar_fuente'),
+        'guardarMiniatura' => wp_create_nonce('personalizador_pdf_guardar_miniatura'),
+        'guardarSprite' => wp_create_nonce('personalizador_pdf_guardar_sprite'),
     ],
     'presets' => $recursos['presets'],
     'imagenes' => $recursos['imagenes'],
+    'fuentes' => $recursos['fuentes'],
 ];
 ?>
-<div class="card">
-    <h2>Sistema TextMuy integrado</h2>
-    <p>
-        Este editor permite disenar <strong>estilos de texto</strong> (fuente, relleno, contorno,
-        sombras, efectos y presets) al estilo TextStudio y guardarlos como <em>presets</em>.
-        Es el modulo integrado de estilos de texto del plugin.
-    </p>
-    <p class="description">
-        Los presets se guardan como <code>.txm</code> (mas su miniatura <code>.webp</code>) en
-        <code>wp-content/uploads/personalizador-pdf/textmuy/presets/</code>: estan disponibles en
-        <strong>todos los navegadores</strong> y en el selector de estilo de cada grupo de un PDF.
-        Las imagenes que subas para rellenos y fondos quedan en
-        <code>wp-content/uploads/personalizador-pdf/textmuy/imagenes/</code> y se reutilizan entre presets.
-        No hay presets de fabrica: crea los tuyos desde este editor.
-    </p>
-</div>
-
 <div class="ec-textmuy-frame-wrap">
     <iframe
         id="ec-textmuy-frame"

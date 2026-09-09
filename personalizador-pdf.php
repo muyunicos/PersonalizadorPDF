@@ -66,6 +66,10 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_textmuy_subir_imagen', [$this, 'handle_textmuy_subir_imagen']);
         add_action('admin_post_personalizador_pdf_textmuy_borrar_imagen', [$this, 'handle_textmuy_borrar_imagen']);
         add_action('admin_post_personalizador_pdf_textmuy_cambiar_imagen', [$this, 'handle_textmuy_cambiar_imagen']);
+        add_action('admin_post_personalizador_pdf_textmuy_subir_fuente', [$this, 'handle_textmuy_subir_fuente']);
+        add_action('admin_post_personalizador_pdf_textmuy_borrar_fuente', [$this, 'handle_textmuy_borrar_fuente']);
+        add_action('admin_post_personalizador_pdf_guardar_miniatura', [$this, 'handle_guardar_miniatura']);
+        add_action('admin_post_personalizador_pdf_guardar_sprite', [$this, 'handle_guardar_sprite']);
 
         // Compatibilidad temporal (ciclo 3.0.x): los hooks legacy "extractor_corel_*"
         // siguen respondiendo para no romper bookmarks o pestanas abiertas de <= 2.0.0.
@@ -221,9 +225,16 @@ class Personalizador_PDF_Plugin
         }
         wp_enqueue_media();
         wp_enqueue_script(
+            'miniaturas',
+            PERSONALIZADOR_PDF_URL . 'assets/miniaturas.js',
+            [],
+            PERSONALIZADOR_PDF_VERSION,
+            true
+        );
+        wp_enqueue_script(
             'personalizador-pdf',
             PERSONALIZADOR_PDF_URL . 'assets/admin.js',
-            ['jquery'],
+            ['jquery', 'miniaturas'],
             PERSONALIZADOR_PDF_VERSION,
             true
         );
@@ -232,6 +243,9 @@ class Personalizador_PDF_Plugin
             'nonce' => wp_create_nonce('personalizador_pdf_nonce'),
             'version' => PERSONALIZADOR_PDF_VERSION,
             'renderCoreUrl' => PERSONALIZADOR_PDF_URL . 'modules/textmuy/render-core.html',
+            'guardarMiniaturaUrl' => admin_url('admin-post.php?action=personalizador_pdf_guardar_miniatura'),
+            'guardarMiniaturaNonce' => wp_create_nonce('personalizador_pdf_guardar_miniatura'),
+            'imagenesBase' => $this->url_base_textmuy_imagenes(),
         ]);
     }
 
@@ -386,6 +400,7 @@ class Personalizador_PDF_Plugin
         foreach ((array)glob($dir . DIRECTORY_SEPARATOR . $letra . '.*') as $vieja) {
             @unlink($vieja);
         }
+        @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . $letra . '.webp');
         if (!@copy($origen, $dir . DIRECTORY_SEPARATOR . $letra . '.' . $ext)) {
             $this->redirigir(['ec_error' => 'No se pudo guardar la imagen.', 'ec_pdf' => $archivo]);
         }
@@ -398,6 +413,7 @@ class Personalizador_PDF_Plugin
         foreach ((array)glob($dir . DIRECTORY_SEPARATOR . $letra . '.*') as $vieja) {
             @unlink($vieja);
         }
+        @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . $letra . '.webp');
     }
 
     /* ==================== Textos estilizados por grupo (puente TextMuy) ==================== */
@@ -557,6 +573,69 @@ class Personalizador_PDF_Plugin
     {
         $upload_dir = wp_upload_dir();
         return trailingslashit($upload_dir['baseurl']) . 'personalizador-pdf/textmuy/imagenes/';
+    }
+
+    /** Directorio de fuentes del administrador (uploads/personalizador-pdf/textmuy/fonts). */
+    private function dir_textmuy_fonts($crear = false)
+    {
+        $this->migrar_textmuy();
+        return $this->subdir('textmuy' . DIRECTORY_SEPARATOR . 'fonts');
+    }
+
+    /** URL publica de las fuentes (uploads/.../textmuy/fonts/, con barra final). */
+    private function url_base_textmuy_fonts()
+    {
+        $upload_dir = wp_upload_dir();
+        return trailingslashit($upload_dir['baseurl']) . 'personalizador-pdf/textmuy/fonts/';
+    }
+
+    /** Ruta del catalogo de fuentes (fonts.json). */
+    private function ruta_catalogo_textmuy_fonts()
+    {
+        return $this->dir_textmuy_fonts() . DIRECTORY_SEPARATOR . 'fonts.json';
+    }
+
+    /** Lee el catalogo de fuentes [{nombre, titulo, url, ext}]. */
+    private function leer_catalogo_textmuy_fonts()
+    {
+        $ruta = $this->ruta_catalogo_textmuy_fonts();
+        if (!is_file($ruta)) {
+            return [];
+        }
+        $datos = json_decode((string)file_get_contents($ruta), true);
+        return is_array($datos) ? $datos : [];
+    }
+
+    /** Guarda el catalogo de fuentes. */
+    private function escribir_catalogo_textmuy_fonts($lista)
+    {
+        $ruta = $this->ruta_catalogo_textmuy_fonts();
+        @file_put_contents($ruta, json_encode(array_values($lista), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    }
+
+    /** Valida firma binaria (magic bytes) de fuentes TTF/OTF/WOFF/WOFF2. */
+    private function firma_fuente_valida($ruta, $ext)
+    {
+        $f = @fopen($ruta, 'rb');
+        if (!$f) {
+            return false;
+        }
+        $bytes = (string)@fread($f, 4);
+        @fclose($f);
+        if (strlen($bytes) < 4) {
+            return false;
+        }
+        switch ($ext) {
+            case 'ttf':
+                return $bytes === "   " || $bytes === 'true';
+            case 'otf':
+                return $bytes === 'OTTO';
+            case 'woff':
+                return $bytes === 'wOFF';
+            case 'woff2':
+                return $bytes === 'wOF2';
+        }
+        return false;
     }
 
     private static $textmuy_migrado = false;
@@ -777,18 +856,35 @@ class Personalizador_PDF_Plugin
             if ($ruta === '') continue;
             $urlLimpia = $urlBase . rawurlencode($archivo);
             $enUso = ($contenidosPresets !== '' && strpos($contenidosPresets, $urlLimpia) !== false) ? 1 : 0;
+            $thumbUrl = $urlBase . 'thumbs/' . rawurlencode($archivo) . '.webp';
+            $thumbPath = $dirTextMuy . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . $archivo . '.webp';
             $imagenes[] = [
                 'nombre' => $archivo,
                 'categoria' => $e['categoria'] ?? 'varios',
                 'titulo' => $e['titulo'] ?? $archivo,
                 'url' => $urlLimpia . '?v=' . (int)@filemtime($ruta),
+                'thumb' => is_file($thumbPath) ? $thumbUrl . '?v=' . (int)@filemtime($thumbPath) : '',
                 'enUso' => $enUso,
             ];
         }
         usort($imagenes, function ($a, $b) {
             return strcmp($a['categoria'], $b['categoria']) ?: strcasecmp($a['nombre'], $b['nombre']);
         });
-        return ['presets' => $presets, 'imagenes' => $imagenes];
+
+        $urlFonts = $this->url_base_textmuy_fonts();
+        $fuentes = [];
+        foreach ($this->leer_catalogo_textmuy_fonts() as $fn) {
+            $archivo = $fn['nombre'] ?? '';
+            if (!$archivo) continue;
+            $fuentes[] = [
+                'nombre' => $fn['nombre'],
+                'titulo' => $fn['titulo'] ?? pathinfo($archivo, PATHINFO_FILENAME),
+                'ext' => $fn['ext'] ?? pathinfo($archivo, PATHINFO_EXTENSION),
+                'url' => $urlFonts . rawurlencode($archivo) . '?v=' . (int)@filemtime($this->dir_textmuy_fonts() . DIRECTORY_SEPARATOR . $archivo),
+            ];
+        }
+
+        return ['presets' => $presets, 'imagenes' => $imagenes, 'fuentes' => $fuentes];
     }
 
     /**
@@ -806,16 +902,9 @@ class Personalizador_PDF_Plugin
         if (empty($_FILES['txm']) || !is_array($_FILES['txm']) || ($_FILES['txm']['error'] ?? 1) !== UPLOAD_ERR_OK) {
             wp_send_json_error('No se recibio el archivo .txm del preset.');
         }
-        if (empty($_FILES['webp']) || !is_array($_FILES['webp']) || ($_FILES['webp']['error'] ?? 1) !== UPLOAD_ERR_OK) {
-            wp_send_json_error('No se recibio la miniatura .webp del preset.');
-        }
         $txm = $_FILES['txm'];
-        $webp = $_FILES['webp'];
         if ($txm['size'] > 2 * 1024 * 1024) {
             wp_send_json_error('El preset supera el tamano maximo (2 MB el .txm).');
-        }
-        if ($webp['size'] > 1024 * 1024) {
-            wp_send_json_error('La miniatura supera el tamano maximo (1 MB el .webp).');
         }
         // El .txm debe ser JSON valido del formato textmuy-project (delta de settings).
         $payload = json_decode((string)file_get_contents($txm['tmp_name']), true);
@@ -825,11 +914,6 @@ class Personalizador_PDF_Plugin
         ) {
             wp_send_json_error('El archivo .txm no tiene el formato textmuy-project esperado.');
         }
-        // La miniatura debe ser WebP real (RIFF....WEBP).
-        $firma = (string)@file_get_contents($webp['tmp_name'], false, null, 0, 12);
-        if (strlen($firma) < 12 || substr($firma, 0, 4) !== 'RIFF' || substr($firma, 8, 4) !== 'WEBP') {
-            wp_send_json_error('La miniatura no es un WebP valido.');
-        }
         $dir = $this->dir_textmuy_presets();
         if (!is_dir($dir) || !wp_is_writable($dir)) {
             wp_send_json_error(
@@ -837,14 +921,15 @@ class Personalizador_PDF_Plugin
                 . 'Verifica los permisos de wp-content/uploads/personalizador-pdf/textmuy/presets.'
             );
         }
+        // Las miniaturas de presets viven en thumbs/presets.webp (spritesheet global).
+        // Ya no se guarda .webp suelto junto al .txm: se elimina cualquier resto.
+        @unlink($dir . DIRECTORY_SEPARATOR . $nombre . '.webp');
+        $thumbDir = $dir . DIRECTORY_SEPARATOR . 'thumbs';
+        @unlink($thumbDir . DIRECTORY_SEPARATOR . 'presets.webp');
+        @unlink($thumbDir . DIRECTORY_SEPARATOR . 'presets.json');
         $rutaTxm = $dir . DIRECTORY_SEPARATOR . $nombre . '.txm';
-        $rutaWebp = $dir . DIRECTORY_SEPARATOR . $nombre . '.webp';
         if (!@move_uploaded_file($txm['tmp_name'], $rutaTxm)) {
             wp_send_json_error('No se pudo escribir el preset en el directorio de datos.');
-        }
-        if (!@move_uploaded_file($webp['tmp_name'], $rutaWebp)) {
-            @unlink($rutaTxm); // No dejar un .txm huerfano sin miniatura.
-            wp_send_json_error('No se pudo escribir la miniatura del preset.');
         }
         wp_send_json_success(['nombre' => $nombre]);
     }
@@ -860,6 +945,9 @@ class Personalizador_PDF_Plugin
         $dir = $this->dir_textmuy_presets();
         @unlink($dir . DIRECTORY_SEPARATOR . $nombre . '.txm');
         @unlink($dir . DIRECTORY_SEPARATOR . $nombre . '.webp');
+        $thumbDir = $dir . DIRECTORY_SEPARATOR . 'thumbs';
+        @unlink($thumbDir . DIRECTORY_SEPARATOR . 'presets.webp');
+        @unlink($thumbDir . DIRECTORY_SEPARATOR . 'presets.json');
         wp_send_json_success(['nombre' => $nombre]);
     }
 
@@ -944,6 +1032,7 @@ class Personalizador_PDF_Plugin
             wp_send_json_error('No se pudo borrar la imagen (permisos del directorio).');
         }
         $this->catalogo_textmuy_quitar($nombre);
+        @unlink($this->dir_textmuy_imagenes() . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . $nombre . '.webp');
         wp_send_json_success(['nombre' => $nombre]);
     }
 
@@ -982,12 +1071,213 @@ class Personalizador_PDF_Plugin
             }
         }
         $nombreFinal = basename($destino);
+        $thumbsDir = $this->dir_textmuy_imagenes() . DIRECTORY_SEPARATOR . 'thumbs';
+        if (is_dir($thumbsDir)) {
+            $thumbOrigen = $thumbsDir . DIRECTORY_SEPARATOR . $nombre . '.webp';
+            $thumbDestino = $thumbsDir . DIRECTORY_SEPARATOR . $nombreFinal . '.webp';
+            if (is_file($thumbOrigen) && !is_file($thumbDestino)) {
+                @rename($thumbOrigen, $thumbDestino);
+            }
+        }
         $this->catalogo_textmuy_actualizar($nombreFinal, $categoriaNueva);
         wp_send_json_success([
             'nombre' => $nombreFinal,
             'categoria' => $categoriaNueva,
             'url' => $this->url_base_textmuy_imagenes() . rawurlencode($nombreFinal)
                 . '?v=' . (int)@filemtime($destino),
+        ]);
+    }
+
+    /** Sube una fuente (TTF/OTF/WOFF/WOFF2) al servidor. POST: fuente, titulo opcional. */
+    public function handle_textmuy_subir_fuente()
+    {
+        $this->seguridad('personalizador_pdf_textmuy_subir_fuente');
+        if (empty($_FILES['fuente']) || !is_array($_FILES['fuente']) || ($_FILES['fuente']['error'] ?? 1) !== UPLOAD_ERR_OK) {
+            wp_send_json_error('No se recibio el archivo de fuente.');
+        }
+        $file = $_FILES['fuente'];
+        if ($file['size'] > 10 * 1024 * 1024) { // max 10 MB
+            wp_send_json_error('La fuente supera el tamano maximo (10 MB).');
+        }
+        $ext = strtolower(pathinfo((string)$file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, ['ttf', 'otf', 'woff', 'woff2'], true)) {
+            wp_send_json_error('Formato no permitido (usa TTF, OTF, WOFF o WOFF2).');
+        }
+        if (!$this->firma_fuente_valida($file['tmp_name'], $ext)) {
+            wp_send_json_error('El archivo no parece ser una fuente valida.');
+        }
+        $dir = $this->dir_textmuy_fonts(true);
+        if (!is_dir($dir) && !wp_mkdir_p($dir)) {
+            wp_send_json_error('No se pudo crear el directorio de fuentes.');
+        }
+        $base = $this->nombre_textmuy_seguro(pathinfo((string)$file['name'], PATHINFO_FILENAME));
+        if ($base === '') {
+            $base = 'fuente';
+        }
+        $destino = $base . '.' . $ext;
+        $i = 2;
+        while (is_file($dir . DIRECTORY_SEPARATOR . $destino)) {
+            $destino = $base . '-' . $i . '.' . $ext;
+            $i++;
+        }
+        if (!@move_uploaded_file($file['tmp_name'], $dir . DIRECTORY_SEPARATOR . $destino)) {
+            wp_send_json_error('No se pudo guardar la fuente en el servidor.');
+        }
+
+        $titulo = isset($_POST['titulo']) ? sanitize_text_field(wp_unslash($_POST['titulo'])) : '';
+        if ($titulo === '') {
+            $titulo = $base;
+        }
+
+        $catalogo = $this->leer_catalogo_textmuy_fonts();
+        $catalogo[] = [
+            'nombre' => $destino,
+            'titulo' => $titulo,
+            'ext' => $ext,
+        ];
+        $this->escribir_catalogo_textmuy_fonts($catalogo);
+
+        // Invalida el sprite de fuentes si existia
+        @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . 'fuentes.webp');
+        @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . 'fuentes.json');
+
+        $url = $this->url_base_textmuy_fonts() . rawurlencode($destino) . '?v=' . (int)@filemtime($dir . DIRECTORY_SEPARATOR . $destino);
+        wp_send_json_success([
+            'nombre' => $destino,
+            'titulo' => $titulo,
+            'ext' => $ext,
+            'url' => $url,
+        ]);
+    }
+
+    /** Borra una fuente del servidor. POST: nombre */
+    public function handle_textmuy_borrar_fuente()
+    {
+        $this->seguridad('personalizador_pdf_textmuy_borrar_fuente');
+        $nombre = $this->nombre_textmuy_seguro(isset($_POST['nombre']) ? wp_unslash($_POST['nombre']) : '');
+        if ($nombre === '' || !preg_match('/[.](ttf|otf|woff|woff2)$/i', $nombre)) {
+            wp_send_json_error('Nombre de fuente no valido.');
+        }
+        $dir = $this->dir_textmuy_fonts();
+        $ruta = $dir . DIRECTORY_SEPARATOR . $nombre;
+        if (is_file($ruta) && !@unlink($ruta)) {
+            wp_send_json_error('No se pudo borrar el archivo de fuente.');
+        }
+        $catalogo = $this->leer_catalogo_textmuy_fonts();
+        $nuevo = array_filter($catalogo, function ($f) use ($nombre) {
+            return ($f['nombre'] ?? '') !== $nombre;
+        });
+        $this->escribir_catalogo_textmuy_fonts($nuevo);
+
+        // Invalida el sprite de fuentes
+        @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . 'fuentes.webp');
+        @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . 'fuentes.json');
+
+        wp_send_json_success(['nombre' => $nombre]);
+    }
+
+    /**
+     * Guarda miniatura individual .webp (grupos de PDF y fallback).
+     * POST: webp (archivo), nombre (string ej. 'diploma-a' o nombre-imagen)
+     */
+    public function handle_guardar_miniatura()
+    {
+        $this->seguridad('personalizador_pdf_guardar_miniatura');
+        if (empty($_FILES['webp']) || !is_array($_FILES['webp']) || ($_FILES['webp']['error'] ?? 1) !== UPLOAD_ERR_OK) {
+            wp_send_json_error('No se recibio la miniatura.');
+        }
+        $file = $_FILES['webp'];
+        if ($file['size'] > 500 * 1024) { // max 500 KB
+            wp_send_json_error('La miniatura supera el tamano maximo (500 KB).');
+        }
+        if (!$this->firma_imagen_valida($file['tmp_name'], 'webp')) {
+            wp_send_json_error('El archivo no es una imagen WebP valida.');
+        }
+
+        $nombreRaw = isset($_POST['nombre']) ? wp_unslash($_POST['nombre']) : '';
+        $nombre = $this->nombre_textmuy_seguro($nombreRaw);
+        if ($nombre === '') {
+            $nombre = uniqid('thumb_', true);
+        }
+
+        $thumbDir = $this->dir_textmuy_imagenes() . DIRECTORY_SEPARATOR . 'thumbs';
+        if (!is_dir($thumbDir) && !wp_mkdir_p($thumbDir)) {
+            wp_send_json_error('No se pudo crear el directorio de miniaturas.');
+        }
+
+        $destino = $thumbDir . DIRECTORY_SEPARATOR . $nombre . '.webp';
+        if (!@move_uploaded_file($file['tmp_name'], $destino)) {
+            wp_send_json_error('No se pudo guardar la miniatura.');
+        }
+
+        $url = $this->url_base_textmuy_imagenes() . 'thumbs/' . rawurlencode($nombre) . '.webp?v=' . (int)@filemtime($destino);
+        wp_send_json_success(['url' => $url, 'nombre' => $nombre]);
+    }
+
+    /**
+     * Guarda sprite global .webp + manifiesto .json.
+     * POST: sprite (archivo), manifest (JSON string), scope ('imagenes'|'fuentes'|'presets')
+     */
+    public function handle_guardar_sprite()
+    {
+        $this->seguridad('personalizador_pdf_guardar_sprite');
+        if (empty($_FILES['sprite']) || !is_array($_FILES['sprite']) || ($_FILES['sprite']['error'] ?? 1) !== UPLOAD_ERR_OK) {
+            wp_send_json_error('No se recibio el archivo sprite.');
+        }
+        $file = $_FILES['sprite'];
+        if ($file['size'] > 4 * 1024 * 1024) { // max 4 MB
+            wp_send_json_error('El sprite supera el tamano maximo (4 MB).');
+        }
+        if (empty($_POST['manifest']) || empty($_POST['scope'])) {
+            wp_send_json_error('Faltan datos de scope o manifiesto.');
+        }
+        $scope = $this->nombre_textmuy_seguro(wp_unslash($_POST['scope']));
+        $manifestRaw = wp_unslash($_POST['manifest']);
+        $manifest = json_decode($manifestRaw, true);
+        if (!is_array($manifest)) {
+            wp_send_json_error('El manifiesto no es un JSON valido.');
+        }
+
+        // Directorio y base URL segun scope
+        $thumbDir = '';
+        $baseUrl = '';
+        if ($scope === 'imagenes') {
+            $thumbDir = $this->dir_textmuy_imagenes(true) . DIRECTORY_SEPARATOR . 'thumbs';
+            $baseUrl = $this->url_base_textmuy_imagenes() . 'thumbs/';
+        } elseif ($scope === 'fuentes') {
+            $thumbDir = $this->dir_textmuy_fonts(true) . DIRECTORY_SEPARATOR . 'thumbs';
+            $baseUrl = $this->url_base_textmuy_fonts() . 'thumbs/';
+        } elseif ($scope === 'presets') {
+            $thumbDir = $this->dir_textmuy_presets(true) . DIRECTORY_SEPARATOR . 'thumbs';
+            $baseUrl = $this->url_base_textmuy_presets() . 'thumbs/';
+        } else {
+            wp_send_json_error('Scope no valido (usa imagenes, fuentes o presets).');
+        }
+
+        if (!is_dir($thumbDir) && !wp_mkdir_p($thumbDir)) {
+            wp_send_json_error('No se pudo crear el directorio de miniaturas.');
+        }
+
+        $destinoSprite = $thumbDir . DIRECTORY_SEPARATOR . $scope . '.webp';
+        $destinoManifest = $thumbDir . DIRECTORY_SEPARATOR . $scope . '.json';
+
+        if (!@move_uploaded_file($file['tmp_name'], $destinoSprite)) {
+            wp_send_json_error('No se pudo guardar el sprite en el servidor.');
+        }
+
+        if (@file_put_contents($destinoManifest, json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) === false) {
+            @unlink($destinoSprite);
+            wp_send_json_error('No se pudo guardar el manifiesto.');
+        }
+
+        $mtime = (int)@filemtime($destinoSprite);
+        $urlSprite = $baseUrl . rawurlencode($scope) . '.webp?v=' . $mtime;
+        $urlManifest = $baseUrl . rawurlencode($scope) . '.json?v=' . $mtime;
+
+        wp_send_json_success([
+            'spriteUrl' => $urlSprite,
+            'manifestUrl' => $urlManifest,
+            'scope' => $scope,
         ]);
     }
 
