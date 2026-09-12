@@ -56,12 +56,12 @@
 
     function manifestUrlDe(scope, baseUrl) {
         if (typeof baseUrl !== 'string' || !baseUrl) return '';
-        return baseUrl.replace(/\/$/, '') + '/thumbs/' + encodeURIComponent(scope) + '.json';
+        return baseUrl.replace(/\/$/, '') + '/sprite.json';
     }
 
     function spriteUrlDe(scope, baseUrl) {
         if (typeof baseUrl !== 'string' || !baseUrl) return '';
-        return baseUrl.replace(/\/$/, '') + '/thumbs/' + encodeURIComponent(scope) + '.webp';
+        return baseUrl.replace(/\/$/, '') + '/sprite.webp';
     }
 
     function cargarImagen(src) {
@@ -98,7 +98,7 @@
         var alto = opts.alto || 100;
         var render = opts.render;
 
-        var thumbUrl = base ? base + '/thumbs/' + encodeURIComponent(nombre) + '.webp' : '';
+        var thumbUrl = base ? base + '/' + encodeURIComponent(nombre) + '.webp' : '';
         var cacheKey = base + '|' + nombre;
 
         if (cacheSingle.has(cacheKey)) {
@@ -183,7 +183,7 @@
      * Spritesheet global persistente + actualizacion incremental (nivel 2).
      * opts: { scope, items, ancho, alto, columnas, render, pad, baseUrl }
      *   - baseUrl: URL publica del ambito (ej. presetsBase) para leer
-     *     thumbs/{scope}.json y thumbs/{scope}.webp sin regenerar.
+     *     sprite.json y sprite.webp sin regenerar.
      * Flujo:
      *   1) si la cache en memoria coincide con los items -> devolverla;
      *   2) si hay manifest persistido y sus nombres coinciden -> reutilizarlo;

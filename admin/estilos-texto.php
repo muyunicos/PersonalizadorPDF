@@ -28,8 +28,8 @@ $modulo_url = PERSONALIZADOR_PDF_URL . 'modules/textmuy/index.html';
 // presets (.txm) e imagenes subidas + URLs base de lectura. El iframe la recibe
 // via postMessage same-origin al cargar (el modulo standalone, sin esta config,
 // oculta las funciones de servidor y sigue 100% client-side).
-// Desde 4.0.0 los presets e imagenes del administrador viven en
-// uploads/personalizador-pdf/textmuy/{presets,imagenes} (fuera del plugin).
+// Los datos TextMuy del administrador viven en la ubicacion unica
+// wp-content/uploads/tm/{fonts,img,presets} (fuera del plugin).
 $recursos = $this->recursos_textmuy();
 $puente = [
     'urls' => [
@@ -46,7 +46,7 @@ $puente = [
         // Script del motor de miniaturas y sprites para inyectar en el iframe
         'miniaturas' => PERSONALIZADOR_PDF_URL . 'assets/miniaturas.js',
         // Lectura de presets (.txm), imagenes y fuentes: bases de uploads.
-        // imagenesBase sirve para reutilizar el spritesheet thumbs/imagenes.* sin regenerar.
+        // imagenesBase apunta a tm/img/ (catalogo img.json + fisicos + sprite).
         'presetsBase' => $this->url_base_textmuy_presets(),
         'fuentesBase' => $this->url_base_textmuy_fonts(),
         'imagenesBase' => $this->url_base_textmuy_imagenes(),

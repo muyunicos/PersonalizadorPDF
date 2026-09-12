@@ -126,8 +126,10 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
    renderiza lote por lote y rechaza ante el primer fallo (nunca un lote parcial), con
    `ensureFontReady` garantizando la fuente antes de renderizar.
 3. **Catálogo y recursos**: presets, miniaturas e imágenes de usuario se leen desde
-   `uploads/personalizador-pdf/textmuy/` (ver §5) vía `urls.presetsBase` +
-   `PresetManager.presetUrlBase()`. NO hay presets de fábrica.
+   `uploads/tm/{fonts,img,presets}` (ver §5) vía `urls.*Base` +
+   `PresetManager.presetUrlBase()`. NO hay presets de fábrica. En los `.txm`
+   las imágenes se guardan SOLO por id numérico del catálogo `img.json`
+   (la URL se resuelve al renderizar vía `prepareImgRefs`).
 4. **Puente de recursos**: el plugin pasa al iframe por postMessage
    `{urls, nonces, presets, imagenes}`. El módulo interactúa con los handlers
    `admin_post_personalizador_pdf_textmuy_*` (nonce + capability + saneo; CRUD de
@@ -185,18 +187,21 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 - Imágenes aplicadas: `imagenes/{pdf}/{letra}.{ext}`
 - Placeholders vacíos: `placeholders/{pdf}/{letra}-{ancho_px}x{alto_px}.png`
 - PDF procesado: `salidas/{pdf}_procesado.pdf`
-- **Archivos TextMuy (datos de usuario, formato unico v5.0)**:
+- **Archivos TextMuy (datos de usuario, formato unico v5.0)** — ubicacion unica
+  y definitiva `wp-content/uploads/tm/{fonts,img,presets}/`:
   - Catalogo por ambito `{thumbs:{w,h,c}, items:[[id,title,cats,file],...]}`:
-    `textmuy/fonts/fonts.json` (180x30, c=4), `textmuy/img/img.json` (100x100,
-    c=8; los archivos fisicos siguen en `textmuy/imagenes/` para no romper las
-    URLs de los `.txm` existentes) y `textmuy/presets/presets.json` (200x100, c=4).
+    `tm/fonts/fonts.json` (180x30, c=4), `tm/img/img.json` (100x100, c=8;
+    catalogo + fisicos unificados, sin subcarpeta `imagenes/`) y
+    `tm/presets/presets.json` (200x100, c=4).
   - `id` numerico = tile `id-1` del sprite del ambito; `cats` una = string,
     varias = array (default `custom`); `file` con extension = fisico, sin
     extension = Google (solo fonts); baja = tombstone `[id,"","",""]`, alta
     reutiliza el hueco mas bajo (`tupla_textmuy_alta`/`tupla_textmuy_baja`).
-  - Presets: `textmuy/presets/{nombre}.txm` (delta `textmuy-project` v1 con
-    referencias numericas). Miniaturas: sprite por scope via ThumbEngine
-    (`handle_guardar_sprite` persiste `thumbs/{scope}.webp` + manifest;
+  - Presets: `tm/presets/{nombre}.txm` (delta `textmuy-project` v1 con
+    referencias numericas: `font.src` = id de fuente, imagenes = SOLO id
+    numerico de `img.json`, resuelto a URL al renderizar). Miniaturas:
+    `tm/{img,fonts,presets}/sprite.webp` + `sprite.json` fijos por ambito
+    (via ThumbEngine + `handle_guardar_sprite`; sin subcarpeta `thumbs/`,
     sin miniaturas por item).
   - Handlers (nonce + capability): `textmuy_subir_imagen|borrar_imagen|
     cambiar_imagen`, `textmuy_subir_fuente|borrar_fuente|cambiar_fuente` y
@@ -224,7 +229,7 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 - ✅ **Formato único para presets**: todo preset es `.txm` (delta de settings) + `.webp`.
   Ya no se usa `localStorage` ni `.json` para guardar.
 - ✅ **Separación estricta de datos (v4.0.0)**: todo dato o recurso aportado por el
-  administrador reside en `uploads/personalizador-pdf/textmuy/`. La carpeta del plugin y la
+  administrador reside en `uploads/tm/` (ubicacion unica definitiva). La carpeta del plugin y la
   del módulo son reemplazables/actualizables sin perder información. Sin contenido de
   fábrica: el admin crea sus presets y sube sus imágenes.
 - ✅ **Módulo con repositorio propio (v4.1)**: `modules/textmuy/` no se versiona; el módulo
@@ -299,7 +304,7 @@ node tests/flag-wave.test.js && node tests/pattern-block-box.test.js
 | Error guardando preset o subiendo imagen | Permisos de escritura | Asegurar permisos en la carpeta respectiva de `uploads/` |
 | "No se pudo recibir el texto renderizado del grupo X" | PNG supera límites del servidor | Subir `upload_max_filesize`/`post_max_size` o usar estilos más livianos |
 | El texto renderizado sale con otra fuente | Google Fonts sin internet o TTF local ausente | `ensureFontReady` fuerza la carga; verificar conexión |
-| Un preset guardado no aparece en otro navegador | — | Resuelto v3.2.0/v4.0.0: presets `.txm` en `uploads/.../textmuy/presets/` |
+| Un preset guardado no aparece en otro navegador | — | Resuelto: presets `.txm` en `uploads/tm/presets/` |
 | Un preset recién guardado no aparece en el selector de un grupo | Página "PDFs" abierta antes de guardar | Recargar: el listado se genera con glob en cada carga |
 | Navegación a `wp-admin/[object HTMLInputElement]` al Procesar | Colisión de atributos del `<form>` | Usar `form.getAttribute('action')`, NUNCA `form.action`, al interceptar |
 | Error del puente tras tener el admin mucho tiempo abierto | Nonce expirado (~12-24 h) | Recargar la página y reintentar |

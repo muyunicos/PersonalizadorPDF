@@ -119,6 +119,27 @@ class Personalizador_PDF_Plugin
         return $dir;
     }
 
+    /** Raiz TextMuy: wp-content/uploads/tm/ (ubicacion unica y definitiva). */
+    private function dir_tm($crear = false)
+    {
+        $upload_dir = wp_upload_dir();
+        $dir = trailingslashit($upload_dir['basedir']) . 'tm';
+        if (($crear || !is_dir($dir)) && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        return $dir;
+    }
+
+    /** Subcarpeta de la raiz tm/ (fonts|img|presets), creada bajo demanda. */
+    private function subdir_tm($rel, $crear = false)
+    {
+        $dir = $this->dir_tm($crear) . DIRECTORY_SEPARATOR . $rel;
+        if (($crear || !is_dir($dir)) && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        return $dir;
+    }
+
     private function ruta_pdf($archivo)
     {
         return $this->subdir('pdfs') . DIRECTORY_SEPARATOR . $archivo;
@@ -401,7 +422,8 @@ class Personalizador_PDF_Plugin
         foreach ((array)glob($dir . DIRECTORY_SEPARATOR . $letra . '.*') as $vieja) {
             @unlink($vieja);
         }
-        @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . $letra . '.webp');
+        @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . $letra . '.webp'); // miniatura legada
+        $this->miniatura_grupo_textmuy_unlink($nombre, $letra); // nueva miniatura ThumbEngine (tm/img/)
         if (!@copy($origen, $dir . DIRECTORY_SEPARATOR . $letra . '.' . $ext)) {
             $this->redirigir(['ec_error' => 'No se pudo guardar la imagen.', 'ec_pdf' => $archivo]);
         }
@@ -414,7 +436,14 @@ class Personalizador_PDF_Plugin
         foreach ((array)glob($dir . DIRECTORY_SEPARATOR . $letra . '.*') as $vieja) {
             @unlink($vieja);
         }
-        @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . $letra . '.webp');
+        @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . $letra . '.webp'); // miniatura legada
+        $this->miniatura_grupo_textmuy_unlink($this->nombre_de($archivo), $letra);
+    }
+
+    /** Borra la miniatura ThumbEngine de un grupo de PDF (tm/img/{pdf}-{letra}.webp, slug en minusculas). */
+    private function miniatura_grupo_textmuy_unlink($pdf, $letra)
+    {
+        @unlink($this->dir_textmuy_imagenes() . DIRECTORY_SEPARATOR . strtolower($pdf) . '-' . $letra . '.webp');
     }
 
     /* ==================== Textos estilizados por grupo (puente TextMuy) ==================== */
@@ -530,11 +559,12 @@ class Personalizador_PDF_Plugin
 
     /* ==================== Recursos TextMuy (presets .txm + imagenes) ==================== */
 
-    /* Desde 4.0.0 TODO el contenido del administrador vive en
-     * uploads/personalizador-pdf/textmuy/{presets,imagenes}: el plugin queda de
-     * solo lectura y se actualiza (ZIP o git pull) sin preservar archivos. El
-     * modulo importado en modules/textmuy (opcional, se copia a mano) solo
-     * aporta el codigo del editor; presets e imagenes son datos de usuario. */
+    /* Ubicacion unica y definitiva: wp-content/uploads/tm/{fonts,img,presets}/
+     * (disenando: puede cambiar; hoy NO hay migracion desde la ruta historica
+     * uploads/personalizador-pdf/textmuy/). El plugin queda de solo lectura y
+     * se actualiza (ZIP o git pull) sin preservar archivos. El modulo importado
+     * en modules/textmuy (opcional, se copia a mano) solo aporta el codigo del
+     * editor; presets, imagenes y fuentes son datos de usuario. */
 
     /** Indica si el modulo TextMuy esta importado en modules/textmuy (con index.html). */
     public function modulo_textmuy_disponible()
@@ -542,10 +572,10 @@ class Personalizador_PDF_Plugin
         return is_file(PERSONALIZADOR_PDF_PATH . 'modules' . DIRECTORY_SEPARATOR . 'textmuy' . DIRECTORY_SEPARATOR . 'index.html');
     }
 
-    /** Directorio de presets del administrador (uploads/personalizador-pdf/textmuy/presets). */
+    /** Directorio de presets del administrador (uploads/tm/presets). */
     private function dir_textmuy_presets()
     {
-        return $this->subdir('textmuy' . DIRECTORY_SEPARATOR . 'presets');
+        return $this->subdir_tm('presets');
     }
 
     /** Categorias de imagenes del administrador. */
@@ -554,37 +584,38 @@ class Personalizador_PDF_Plugin
         return ['fondos', 'iconos', 'varios'];
     }
 
-    /** Directorio de imagenes del administrador (uploads/personalizador-pdf/textmuy/imagenes). */
+    /** Directorio de imagenes del administrador: fisicos en uploads/tm/img
+     * (unificado con el catalogo img/img.json; sin subcarpeta imagenes/). */
     private function dir_textmuy_imagenes($crear = false)
     {
-        return $this->subdir('textmuy' . DIRECTORY_SEPARATOR . 'imagenes');
+        return $this->subdir_tm('img', $crear);
     }
 
-    /** URL publica de los presets (uploads/.../textmuy/presets/, con barra final). */
+    /** URL publica de los presets (uploads/tm/presets/, con barra final). */
     private function url_base_textmuy_presets()
     {
         $upload_dir = wp_upload_dir();
-        return trailingslashit($upload_dir['baseurl']) . 'personalizador-pdf/textmuy/presets/';
+        return trailingslashit($upload_dir['baseurl']) . 'tm/presets/';
     }
 
-    /** URL publica de las imagenes (uploads/.../textmuy/imagenes/, con barra final). */
+    /** URL publica de las imagenes (uploads/tm/img/, con barra final). */
     private function url_base_textmuy_imagenes()
     {
         $upload_dir = wp_upload_dir();
-        return trailingslashit($upload_dir['baseurl']) . 'personalizador-pdf/textmuy/imagenes/';
+        return trailingslashit($upload_dir['baseurl']) . 'tm/img/';
     }
 
-    /** Directorio de fuentes del administrador (uploads/personalizador-pdf/textmuy/fonts). */
+    /** Directorio de fuentes del administrador (uploads/tm/fonts). */
     private function dir_textmuy_fonts($crear = false)
     {
-        return $this->subdir('textmuy' . DIRECTORY_SEPARATOR . 'fonts');
+        return $this->subdir_tm('fonts', $crear);
     }
 
-    /** URL publica de las fuentes (uploads/.../textmuy/fonts/, con barra final). */
+    /** URL publica de las fuentes (uploads/tm/fonts/, con barra final). */
     private function url_base_textmuy_fonts()
     {
         $upload_dir = wp_upload_dir();
-        return trailingslashit($upload_dir['baseurl']) . 'personalizador-pdf/textmuy/fonts/';
+        return trailingslashit($upload_dir['baseurl']) . 'tm/fonts/';
     }
 
     /* ==================== Catalogos v5.0 (tuplas [id,title,cats,file]) ==================== */
@@ -596,10 +627,8 @@ class Personalizador_PDF_Plugin
             return $this->dir_textmuy_fonts() . DIRECTORY_SEPARATOR . 'fonts.json';
         }
         if ($ambito === 'img') {
-            // El JSON del ambito vive en textmuy/img/ (canonico del modulo:
-            // presetsBase + '../img/img.json'); los archivos fisicos siguen en
-            // textmuy/imagenes/ (imagenesBase y las URLs guardadas en los .txm).
-            return $this->subdir('textmuy' . DIRECTORY_SEPARATOR . 'img') . DIRECTORY_SEPARATOR . 'img.json';
+            // Unificado: catalogo + fisicos en tm/img/ (sin subcarpeta imagenes/).
+            return $this->dir_textmuy_imagenes() . DIRECTORY_SEPARATOR . 'img.json';
         }
         if ($ambito === 'presets') {
             return $this->dir_textmuy_presets() . DIRECTORY_SEPARATOR . 'presets.json';
@@ -620,13 +649,18 @@ class Personalizador_PDF_Plugin
     }
 
     /** Lee el catalogo v5.0 de un ambito. Sin migradores: si falta o esta en
-     * otro formato, devuelve el catalogo canonico vacio (los datos del admin
-     * se crean desde cero). */
+     * otro formato, crea y devuelve el catalogo canonico vacio (seed lazy:
+     * la primera visita a "Estilos de Texto" deja tm/{fonts,img,presets}/
+     * operativos; los datos del admin se crean desde cero). */
     private function catalogo_textmuy($ambito)
     {
         $cat = ['thumbs' => $this->thumbs_textmuy_ambito($ambito), 'items' => []];
         $ruta = $this->ruta_catalogo_textmuy_ambito($ambito);
-        if ($ruta === '' || !is_file($ruta)) {
+        if ($ruta === '') {
+            return $cat;
+        }
+        if (!is_file($ruta)) {
+            @file_put_contents($ruta, wp_json_encode($cat, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
             return $cat;
         }
         $datos = json_decode((string)file_get_contents($ruta), true);
@@ -759,7 +793,7 @@ class Personalizador_PDF_Plugin
      * Listado de recursos TextMuy para el iframe de "Estilos de Texto":
      * presets (*.txm) e imagenes subidas con categoria, indicador "en uso"
      * (cuantos presets .txm referencian su URL) y cache-bust por mtime.
-     * Todo desde uploads/personalizador-pdf/textmuy/ (v4.0.0).
+     * Todo desde uploads/tm/ (ubicacion unica definitiva).
      */
     private function recursos_textmuy()
     {
@@ -796,6 +830,8 @@ class Personalizador_PDF_Plugin
                 'categoria' => $categoria,
                 'titulo' => ((string)$t[1] !== '' ? (string)$t[1] : $archivo),
                 'url' => $urlLimpia . '?v=' . (int)@filemtime($ruta),
+                // R2: id numerico del catalogo img.json — el .txm guarda SOLO el id.
+                'id' => (int)$t[0],
                 // Miniatura via sprite ThumbEngine (guardarSprite): sin thumbs/ por item.
                 'thumb' => '',
                 'enUso' => $enUso,
@@ -830,7 +866,7 @@ class Personalizador_PDF_Plugin
 
     /**
      * Guarda un preset del editor TextMuy como par {nombre}.txm + {nombre}.webp en
-     * uploads/personalizador-pdf/textmuy/presets. Siempre responde JSON (lo consume fetch desde el
+     * uploads/tm/presets. Siempre responde JSON (lo consume fetch desde el
      * iframe, nunca un redirect de consola).
      */
     public function handle_textmuy_guardar_preset()
@@ -859,7 +895,7 @@ class Personalizador_PDF_Plugin
         if (!is_dir($dir) || !wp_is_writable($dir)) {
             wp_send_json_error(
                 'El directorio de presets no es escribible en este hosting. '
-                . 'Verifica los permisos de wp-content/uploads/personalizador-pdf/textmuy/presets.'
+                . 'Verifica los permisos de wp-content/uploads/tm/presets.'
             );
         }
         @unlink($dir . DIRECTORY_SEPARATOR . $nombre . '.webp'); // resto deprecado de miniaturas por item
@@ -907,7 +943,7 @@ class Personalizador_PDF_Plugin
 
     /**
      * Sube una imagen para rellenos/fondos/texturas/iconos del editor TextMuy a
-     * uploads/personalizador-pdf/textmuy/imagenes y devuelve su URL publica (misma
+     * uploads/tm/img y devuelve su URL publica (misma
      * origen que el iframe: el canvas puede usarla sin CORS).
      * POST: imagen (archivo), categoria (fondos|iconos|varios), nombre
      * (opcional, para guardar una edicion), sobrescribir (1 => pisar el archivo
@@ -939,7 +975,7 @@ class Personalizador_PDF_Plugin
         if (!is_dir($dir) || !wp_is_writable($dir)) {
             wp_send_json_error(
                 'El directorio de imagenes no es escribible en este hosting. '
-                . 'Verifica los permisos de wp-content/uploads/personalizador-pdf/textmuy/imagenes.'
+                . 'Verifica los permisos de wp-content/uploads/tm/img.'
             );
         }
         $nombreSugerido = isset($_POST['nombre']) ? $this->nombre_textmuy_seguro(wp_unslash($_POST['nombre'])) : '';
@@ -1057,6 +1093,7 @@ class Personalizador_PDF_Plugin
         wp_send_json_success([
             'nombre' => $nombreFinal,
             'categoria' => $categoriaNueva,
+            'id' => $id,
             'url' => $this->url_base_textmuy_imagenes() . rawurlencode($nombreFinal)
                 . '?v=' . (int)@filemtime($destino),
         ]);
@@ -1196,7 +1233,8 @@ class Personalizador_PDF_Plugin
     }
     /**
      * Guarda miniatura individual .webp (grupos de PDF y fallback).
-     * POST: webp (archivo), nombre (string ej. 'diploma-a' o nombre-imagen)
+     * POST: webp (archivo), nombre (string ej. 'diploma-a' o nombre-imagen).
+     * Vive junto a los fisicos en uploads/tm/img/ (sin subcarpeta thumbs/).
      */
     public function handle_guardar_miniatura()
     {
@@ -1218,23 +1256,22 @@ class Personalizador_PDF_Plugin
             $nombre = uniqid('thumb_', true);
         }
 
-        $thumbDir = $this->dir_textmuy_imagenes() . DIRECTORY_SEPARATOR . 'thumbs';
-        if (!is_dir($thumbDir) && !wp_mkdir_p($thumbDir)) {
-            wp_send_json_error('No se pudo crear el directorio de miniaturas.');
-        }
+        $ambitoDir = $this->dir_textmuy_imagenes(true);
 
-        $destino = $thumbDir . DIRECTORY_SEPARATOR . $nombre . '.webp';
+        $destino = $ambitoDir . DIRECTORY_SEPARATOR . $nombre . '.webp';
         if (!@move_uploaded_file($file['tmp_name'], $destino)) {
             wp_send_json_error('No se pudo guardar la miniatura.');
         }
 
-        $url = $this->url_base_textmuy_imagenes() . 'thumbs/' . rawurlencode($nombre) . '.webp?v=' . (int)@filemtime($destino);
+        $url = $this->url_base_textmuy_imagenes() . rawurlencode($nombre) . '.webp?v=' . (int)@filemtime($destino);
         wp_send_json_success(['url' => $url, 'nombre' => $nombre]);
     }
 
     /**
-     * Guarda sprite global .webp + manifiesto .json.
-     * POST: sprite (archivo), manifest (JSON string), scope ('imagenes'|'fuentes'|'presets')
+     * Guarda sprite global sprite.webp + manifiesto sprite.json.
+     * POST: sprite (archivo), manifest (JSON string), scope ('img'|'fonts'|'presets';
+     * se acepta 'imagenes' como alias legacy de 'img'). Sin subcarpeta thumbs/:
+     * el sheet vive junto al catalogo del ambito en uploads/tm/{img,fonts,presets}/.
      */
     public function handle_guardar_sprite()
     {
@@ -1250,34 +1287,33 @@ class Personalizador_PDF_Plugin
             wp_send_json_error('Faltan datos de scope o manifiesto.');
         }
         $scope = $this->nombre_textmuy_seguro(wp_unslash($_POST['scope']));
+        if ($scope === 'imagenes') $scope = 'img'; // alias legacy
+        if ($scope === 'fuentes') $scope = 'fonts';  // alias legacy
         $manifestRaw = wp_unslash($_POST['manifest']);
         $manifest = json_decode($manifestRaw, true);
         if (!is_array($manifest)) {
             wp_send_json_error('El manifiesto no es un JSON valido.');
         }
 
-        // Directorio y base URL segun scope
-        $thumbDir = '';
+        // Directorio y base URL segun scope (sin thumbs/: sprite.webp + sprite.json
+        // fijos por ambito, junto a su catalogo).
+        $ambitoDir = '';
         $baseUrl = '';
-        if ($scope === 'imagenes') {
-            $thumbDir = $this->dir_textmuy_imagenes(true) . DIRECTORY_SEPARATOR . 'thumbs';
-            $baseUrl = $this->url_base_textmuy_imagenes() . 'thumbs/';
-        } elseif ($scope === 'fuentes') {
-            $thumbDir = $this->dir_textmuy_fonts(true) . DIRECTORY_SEPARATOR . 'thumbs';
-            $baseUrl = $this->url_base_textmuy_fonts() . 'thumbs/';
+        if ($scope === 'img') {
+            $ambitoDir = $this->dir_textmuy_imagenes(true);
+            $baseUrl = $this->url_base_textmuy_imagenes();
+        } elseif ($scope === 'fonts') {
+            $ambitoDir = $this->dir_textmuy_fonts(true);
+            $baseUrl = $this->url_base_textmuy_fonts();
         } elseif ($scope === 'presets') {
-            $thumbDir = $this->dir_textmuy_presets(true) . DIRECTORY_SEPARATOR . 'thumbs';
-            $baseUrl = $this->url_base_textmuy_presets() . 'thumbs/';
+            $ambitoDir = $this->dir_textmuy_presets(true);
+            $baseUrl = $this->url_base_textmuy_presets();
         } else {
-            wp_send_json_error('Scope no valido (usa imagenes, fuentes o presets).');
+            wp_send_json_error('Scope no valido (usa img, fonts o presets).');
         }
 
-        if (!is_dir($thumbDir) && !wp_mkdir_p($thumbDir)) {
-            wp_send_json_error('No se pudo crear el directorio de miniaturas.');
-        }
-
-        $destinoSprite = $thumbDir . DIRECTORY_SEPARATOR . $scope . '.webp';
-        $destinoManifest = $thumbDir . DIRECTORY_SEPARATOR . $scope . '.json';
+        $destinoSprite = $ambitoDir . DIRECTORY_SEPARATOR . 'sprite.webp';
+        $destinoManifest = $ambitoDir . DIRECTORY_SEPARATOR . 'sprite.json';
 
         if (!@move_uploaded_file($file['tmp_name'], $destinoSprite)) {
             wp_send_json_error('No se pudo guardar el sprite en el servidor.');
@@ -1289,8 +1325,8 @@ class Personalizador_PDF_Plugin
         }
 
         $mtime = (int)@filemtime($destinoSprite);
-        $urlSprite = $baseUrl . rawurlencode($scope) . '.webp?v=' . $mtime;
-        $urlManifest = $baseUrl . rawurlencode($scope) . '.json?v=' . $mtime;
+        $urlSprite = $baseUrl . 'sprite.webp?v=' . $mtime;
+        $urlManifest = $baseUrl . 'sprite.json?v=' . $mtime;
 
         wp_send_json_success([
             'spriteUrl' => $urlSprite,

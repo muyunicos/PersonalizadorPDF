@@ -18,11 +18,17 @@ Aqui se importan manualmente los modulos autocontenidos del plugin (hoy: **TextM
    del admin lo detecta y monta el iframe; si falta, muestra un aviso con estas
    instrucciones en su lugar.
 
-## Notas importantes (v4.1)
+## Notas importantes
 
 - **Esta carpeta NO se versiona**: `modules/textmuy/` esta en `.gitignore`.
    El modulo tiene su propio repositorio/proyecto fuente.
-- **El modulo es solo codigo (v4.1)**: NO trae datos. Los presets (`.txm`/`.webp`),
-   imagenes y fuentes del administrador viven en
-   `wp-content/uploads/personalizador-pdf/textmuy/{presets,imagenes,fonts}`.
+- **El modulo es solo codigo**: NO trae datos. Los presets (`.txm`), imagenes
+   y fuentes del administrador viven en la ubicacion unica
+   `wp-content/uploads/tm/{fonts,img,presets}/`.
    Al actualizar el modulo (reemplazar `modules/textmuy/`) NO hay nada que preservar.
+- **Ruta historica abandonada**: los datos que hubieran quedado en la ruta vieja
+   `wp-content/uploads/personalizador-pdf/textmuy/` NO se migran (decision R007,
+   2026-09): se crean desde cero en `uploads/tm/` (el plugin seedea los catalogos
+   vacios en la primera visita a "Estilos de Texto"). Si existieran datos viejos
+   que quieras conservar, moverlos a mano: `presets/*` -> `tm/presets/`,
+   `imagenes/*` -> `tm/img/` (+ regenerar `img.json`) y `fonts/*` -> `tm/fonts/`.
