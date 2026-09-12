@@ -1268,9 +1268,9 @@ class Personalizador_PDF_Plugin
     }
 
     /**
-     * Guarda sprite global sprite.webp + manifiesto sprite.json.
-     * POST: sprite (archivo), manifest (JSON string), scope ('img'|'fonts'|'presets';
-     * se acepta 'imagenes' como alias legacy de 'img'). Sin subcarpeta thumbs/:
+     * Guarda el sprite unico thumbs.webp del ambito (sin manifiesto JSON en disco).
+     * POST: sprite (archivo), scope ('img'|'fonts'|'presets';
+     * se acepta 'imagenes'/'fuentes' como aliases legacy). Sin subcarpeta thumbs/:
      * el sheet vive junto al catalogo del ambito en uploads/tm/{img,fonts,presets}/.
      */
     public function handle_guardar_sprite()
@@ -1283,20 +1283,16 @@ class Personalizador_PDF_Plugin
         if ($file['size'] > 4 * 1024 * 1024) { // max 4 MB
             wp_send_json_error('El sprite supera el tamano maximo (4 MB).');
         }
-        if (empty($_POST['manifest']) || empty($_POST['scope'])) {
-            wp_send_json_error('Faltan datos de scope o manifiesto.');
+        if (empty($_POST['scope'])) {
+            wp_send_json_error('Falta el scope.');
         }
         $scope = $this->nombre_textmuy_seguro(wp_unslash($_POST['scope']));
         if ($scope === 'imagenes') $scope = 'img'; // alias legacy
         if ($scope === 'fuentes') $scope = 'fonts';  // alias legacy
-        $manifestRaw = wp_unslash($_POST['manifest']);
-        $manifest = json_decode($manifestRaw, true);
-        if (!is_array($manifest)) {
-            wp_send_json_error('El manifiesto no es un JSON valido.');
-        }
 
-        // Directorio y base URL segun scope (sin thumbs/: sprite.webp + sprite.json
-        // fijos por ambito, junto a su catalogo).
+        // Directorio y base URL segun scope. Sprite unico thumbs.webp plano junto
+        // al catalogo del ambito (sin manifiesto JSON en disco: las coordenadas
+        // de cada tile se derivan del catalogo en el cliente).
         $ambitoDir = '';
         $baseUrl = '';
         if ($scope === 'img') {
@@ -1312,25 +1308,19 @@ class Personalizador_PDF_Plugin
             wp_send_json_error('Scope no valido (usa img, fonts o presets).');
         }
 
-        $destinoSprite = $ambitoDir . DIRECTORY_SEPARATOR . 'sprite.webp';
-        $destinoManifest = $ambitoDir . DIRECTORY_SEPARATOR . 'sprite.json';
+        $destinoSprite = $ambitoDir . DIRECTORY_SEPARATOR . 'thumbs.webp';
 
         if (!@move_uploaded_file($file['tmp_name'], $destinoSprite)) {
             wp_send_json_error('No se pudo guardar el sprite en el servidor.');
         }
 
-        if (@file_put_contents($destinoManifest, json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) === false) {
-            @unlink($destinoSprite);
-            wp_send_json_error('No se pudo guardar el manifiesto.');
-        }
-
         $mtime = (int)@filemtime($destinoSprite);
-        $urlSprite = $baseUrl . 'sprite.webp?v=' . $mtime;
-        $urlManifest = $baseUrl . 'sprite.json?v=' . $mtime;
+        $urlSprite = $baseUrl . 'thumbs.webp?v=' . $mtime;
+        @unlink($ambitoDir . DIRECTORY_SEPARATOR . 'sprite.json'); // resto del formato anterior (R010)
+        @unlink($ambitoDir . DIRECTORY_SEPARATOR . 'sprite.webp'); // resto del formato anterior (R010)
 
         wp_send_json_success([
             'spriteUrl' => $urlSprite,
-            'manifestUrl' => $urlManifest,
             'scope' => $scope,
         ]);
     }

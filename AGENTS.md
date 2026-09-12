@@ -200,9 +200,10 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   - Presets: `tm/presets/{nombre}.txm` (delta `textmuy-project` v1 con
     referencias numericas: `font.src` = id de fuente, imagenes = SOLO id
     numerico de `img.json`, resuelto a URL al renderizar). Miniaturas:
-    `tm/{img,fonts,presets}/sprite.webp` + `sprite.json` fijos por ambito
-    (via ThumbEngine + `handle_guardar_sprite`; sin subcarpeta `thumbs/`,
-    sin miniaturas por item).
+    un `thumbs.webp` unico por ambito (`tm/{img,fonts,presets}/thumbs.webp`)
+    via ThumbEngine + `handle_guardar_sprite`; SIN manifiesto JSON en disco
+    (las coordenadas derivan del catalogo `{thumbs,items}`), sin subcarpeta
+    `thumbs/`, sin miniaturas por item.
   - Handlers (nonce + capability): `textmuy_subir_imagen|borrar_imagen|
     cambiar_imagen`, `textmuy_subir_fuente|borrar_fuente|cambiar_fuente` y
     `textmuy_guardar_preset|borrar_preset` — todos escriben tupla v5.0.
