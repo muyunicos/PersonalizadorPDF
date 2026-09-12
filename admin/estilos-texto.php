@@ -40,6 +40,7 @@ $puente = [
         'cambiarImagen' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_cambiar_imagen'),
         'subirFuente' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_subir_fuente'),
         'borrarFuente' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_borrar_fuente'),
+        'cambiarFuente' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_cambiar_fuente'),
         'guardarMiniatura' => admin_url('admin-post.php?action=personalizador_pdf_guardar_miniatura'),
         'guardarSprite' => admin_url('admin-post.php?action=personalizador_pdf_guardar_sprite'),
         // Script del motor de miniaturas y sprites para inyectar en el iframe
@@ -58,6 +59,7 @@ $puente = [
         'cambiarImagen' => wp_create_nonce('personalizador_pdf_textmuy_cambiar_imagen'),
         'subirFuente' => wp_create_nonce('personalizador_pdf_textmuy_subir_fuente'),
         'borrarFuente' => wp_create_nonce('personalizador_pdf_textmuy_borrar_fuente'),
+        'cambiarFuente' => wp_create_nonce('personalizador_pdf_textmuy_cambiar_fuente'),
         'guardarMiniatura' => wp_create_nonce('personalizador_pdf_guardar_miniatura'),
         'guardarSprite' => wp_create_nonce('personalizador_pdf_guardar_sprite'),
     ],

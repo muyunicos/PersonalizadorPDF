@@ -68,6 +68,7 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_textmuy_cambiar_imagen', [$this, 'handle_textmuy_cambiar_imagen']);
         add_action('admin_post_personalizador_pdf_textmuy_subir_fuente', [$this, 'handle_textmuy_subir_fuente']);
         add_action('admin_post_personalizador_pdf_textmuy_borrar_fuente', [$this, 'handle_textmuy_borrar_fuente']);
+        add_action('admin_post_personalizador_pdf_textmuy_cambiar_fuente', [$this, 'handle_textmuy_cambiar_fuente']);
         add_action('admin_post_personalizador_pdf_guardar_miniatura', [$this, 'handle_guardar_miniatura']);
         add_action('admin_post_personalizador_pdf_guardar_sprite', [$this, 'handle_guardar_sprite']);
 
@@ -544,7 +545,6 @@ class Personalizador_PDF_Plugin
     /** Directorio de presets del administrador (uploads/personalizador-pdf/textmuy/presets). */
     private function dir_textmuy_presets()
     {
-        $this->migrar_textmuy();
         return $this->subdir('textmuy' . DIRECTORY_SEPARATOR . 'presets');
     }
 
@@ -557,7 +557,6 @@ class Personalizador_PDF_Plugin
     /** Directorio de imagenes del administrador (uploads/personalizador-pdf/textmuy/imagenes). */
     private function dir_textmuy_imagenes($crear = false)
     {
-        $this->migrar_textmuy();
         return $this->subdir('textmuy' . DIRECTORY_SEPARATOR . 'imagenes');
     }
 
@@ -578,7 +577,6 @@ class Personalizador_PDF_Plugin
     /** Directorio de fuentes del administrador (uploads/personalizador-pdf/textmuy/fonts). */
     private function dir_textmuy_fonts($crear = false)
     {
-        $this->migrar_textmuy();
         return $this->subdir('textmuy' . DIRECTORY_SEPARATOR . 'fonts');
     }
 
@@ -589,30 +587,114 @@ class Personalizador_PDF_Plugin
         return trailingslashit($upload_dir['baseurl']) . 'personalizador-pdf/textmuy/fonts/';
     }
 
-    /** Ruta del catalogo de fuentes (fonts.json). */
-    private function ruta_catalogo_textmuy_fonts()
+    /* ==================== Catalogos v5.0 (tuplas [id,title,cats,file]) ==================== */
+
+    /** Ruta del catalogo unico v5.0 de un ambito (fonts.json / img.json / presets.json). */
+    private function ruta_catalogo_textmuy_ambito($ambito)
     {
-        return $this->dir_textmuy_fonts() . DIRECTORY_SEPARATOR . 'fonts.json';
+        if ($ambito === 'fonts') {
+            return $this->dir_textmuy_fonts() . DIRECTORY_SEPARATOR . 'fonts.json';
+        }
+        if ($ambito === 'img') {
+            // El JSON del ambito vive en textmuy/img/ (canonico del modulo:
+            // presetsBase + '../img/img.json'); los archivos fisicos siguen en
+            // textmuy/imagenes/ (imagenesBase y las URLs guardadas en los .txm).
+            return $this->subdir('textmuy' . DIRECTORY_SEPARATOR . 'img') . DIRECTORY_SEPARATOR . 'img.json';
+        }
+        if ($ambito === 'presets') {
+            return $this->dir_textmuy_presets() . DIRECTORY_SEPARATOR . 'presets.json';
+        }
+        return '';
     }
 
-    /** Lee el catalogo de fuentes [{nombre, titulo, url, ext}]. */
-    private function leer_catalogo_textmuy_fonts()
+    /** Grilla del sprite por ambito (thumbs del catalogo; filas derivables). */
+    private function thumbs_textmuy_ambito($ambito)
     {
-        $ruta = $this->ruta_catalogo_textmuy_fonts();
-        if (!is_file($ruta)) {
-            return [];
+        if ($ambito === 'fonts') {
+            return ['w' => 180, 'h' => 30, 'c' => 4];
+        }
+        if ($ambito === 'img') {
+            return ['w' => 100, 'h' => 100, 'c' => 8];
+        }
+        return ['w' => 200, 'h' => 100, 'c' => 4]; // presets
+    }
+
+    /** Lee el catalogo v5.0 de un ambito. Sin migradores: si falta o esta en
+     * otro formato, devuelve el catalogo canonico vacio (los datos del admin
+     * se crean desde cero). */
+    private function catalogo_textmuy($ambito)
+    {
+        $cat = ['thumbs' => $this->thumbs_textmuy_ambito($ambito), 'items' => []];
+        $ruta = $this->ruta_catalogo_textmuy_ambito($ambito);
+        if ($ruta === '' || !is_file($ruta)) {
+            return $cat;
         }
         $datos = json_decode((string)file_get_contents($ruta), true);
-        return is_array($datos) ? $datos : [];
+        if (is_array($datos) && isset($datos['thumbs'], $datos['items']) && is_array($datos['items'])) {
+            $cat['thumbs'] = $datos['thumbs'];
+            $cat['items'] = array_values(array_filter($datos['items'], 'is_array'));
+        }
+        return $cat;
     }
 
-    /** Guarda el catalogo de fuentes. */
-    private function escribir_catalogo_textmuy_fonts($lista)
+    /** Escribe el catalogo v5.0 de un ambito. */
+    private function guardar_catalogo_textmuy($ambito, $cat)
     {
-        $ruta = $this->ruta_catalogo_textmuy_fonts();
-        @file_put_contents($ruta, json_encode(array_values($lista), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        $ruta = $this->ruta_catalogo_textmuy_ambito($ambito);
+        if ($ruta === '') {
+            return false;
+        }
+        return @file_put_contents($ruta, wp_json_encode($cat, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) !== false;
     }
 
+    /** Id de la tupla cuyo file coincide. 0 si no esta. */
+    private function tupla_textmuy_id_de_file($items, $file)
+    {
+        foreach ((array)$items as $t) {
+            if (is_array($t) && count($t) >= 4 && (string)$t[3] === (string)$file) {
+                return (int)$t[0];
+            }
+        }
+        return 0;
+    }
+
+    /** Alta v5.0: reutiliza el tombstone mas bajo o anexa max(id)+1. Devuelve el id. */
+    private function tupla_textmuy_alta(&$items, $title, $cats, $file)
+    {
+        $maxId = 0;
+        $hueco = 0;
+        foreach ((array)$items as $t) {
+            if (!is_array($t) || count($t) < 4) continue;
+            $id = (int)$t[0];
+            if ($id > $maxId) $maxId = $id;
+            if ((string)$t[1] === '' && (string)$t[2] === '' && (string)$t[3] === ''
+                && ($hueco === 0 || $id < $hueco)) {
+                $hueco = $id;
+            }
+        }
+        if ($hueco > 0) {
+            foreach ($items as $i => $t) {
+                if (is_array($t) && (int)$t[0] === $hueco) {
+                    $items[$i] = [$hueco, $title, $cats, $file];
+                    return $hueco;
+                }
+            }
+        }
+        $items[] = [$maxId + 1, $title, $cats, $file];
+        return $maxId + 1;
+    }
+
+    /** Baja v5.0: escribe tombstone [id,"","",""] sin reindexar. */
+    private function tupla_textmuy_baja(&$items, $id)
+    {
+        foreach ($items as $i => $t) {
+            if (is_array($t) && (int)$t[0] === (int)$id) {
+                $items[$i] = [(int)$id, '', '', ''];
+                return true;
+            }
+        }
+        return false;
+    }
     /** Valida firma binaria (magic bytes) de fuentes TTF/OTF/WOFF/WOFF2. */
     private function firma_fuente_valida($ruta, $ext)
     {
@@ -636,162 +718,6 @@ class Personalizador_PDF_Plugin
                 return $bytes === 'wOF2';
         }
         return false;
-    }
-
-    private static $textmuy_migrado = false;
-
-    /**
-     * Migra (una vez por request, con guard) el contenido del administrador que
-     * vivia DENTRO del modulo hasta 3.3.0 (modules/textmuy/{presets,imagenes})
-     * hacia uploads/. Mueve los pares .txm/.webp y las imagenes subidas, mergea
-     * las categorias del catalogo.json viejo y reescribe en cada .txm las URLs
-     * de imagen viejas (modules/textmuy/imagenes/...) por las nuevas de uploads.
-     */
-    public function migrar_textmuy()
-    {
-        if (self::$textmuy_migrado) {
-            return;
-        }
-        self::$textmuy_migrado = true;
-
-        $dirModulo = PERSONALIZADOR_PDF_PATH . 'modules' . DIRECTORY_SEPARATOR . 'textmuy';
-        $dirPresetsViejo = $dirModulo . DIRECTORY_SEPARATOR . 'presets';
-        $dirImagenesViejo = $dirModulo . DIRECTORY_SEPARATOR . 'imagenes';
-        if (!is_dir($dirPresetsViejo) && !is_dir($dirImagenesViejo)) {
-            return; // Modulo no importado (o ya migrado a mano): nada que hacer.
-        }
-
-        // --- Presets: pares .txm + .webp ---
-        $dirPresets = $this->subdir('textmuy' . DIRECTORY_SEPARATOR . 'presets');
-        foreach ((array)glob($dirPresetsViejo . DIRECTORY_SEPARATOR . '*.txm') as $ruta) {
-            $destino = $dirPresets . DIRECTORY_SEPARATOR . basename($ruta);
-            if (!is_file($destino) && @rename($ruta, $destino)) {
-                $webp = substr($ruta, 0, -4) . '.webp';
-                if (is_file($webp)) {
-                    @rename($webp, $dirPresets . DIRECTORY_SEPARATOR . basename($webp));
-                }
-            }
-        }
-        foreach ((array)glob($dirPresetsViejo . DIRECTORY_SEPARATOR . '*.webp') as $ruta) {
-            $destino = $dirPresets . DIRECTORY_SEPARATOR . basename($ruta);
-            if (!is_file($destino)) {
-                @rename($ruta, $destino); // Miniatura huerfana: mejor conservarla.
-            }
-        }
-
-        // --- Imagenes subidas (el catalogo.json viejo solo aporta categorias) ---
-        $catalogoViejo = [];
-        $rutaCatalogoViejo = $dirImagenesViejo . DIRECTORY_SEPARATOR . 'catalogo.json';
-        if (is_file($rutaCatalogoViejo)) {
-            $datos = json_decode((string)file_get_contents($rutaCatalogoViejo), true);
-            if (is_array($datos)) {
-                foreach ($datos as $e) {
-                    if (is_array($e) && !empty($e['nombre'])) {
-                        $catalogoViejo[$e['nombre']] = $e;
-                    }
-                }
-            }
-        }
-        $dirImagenes = $this->subdir('textmuy' . DIRECTORY_SEPARATOR . 'imagenes');
-        foreach ((array)glob($dirImagenesViejo . DIRECTORY_SEPARATOR . '*.*') as $ruta) {
-            $archivo = basename($ruta);
-            if ($archivo === 'catalogo.json' || is_dir($ruta)) {
-                continue;
-            }
-            $destino = $dirImagenes . DIRECTORY_SEPARATOR . $archivo;
-            if (!is_file($destino) && @rename($ruta, $destino) && isset($catalogoViejo[$archivo])) {
-                $this->catalogo_textmuy_actualizar(
-                    $archivo,
-                    isset($catalogoViejo[$archivo]['categoria']) ? $catalogoViejo[$archivo]['categoria'] : 'varios',
-                    isset($catalogoViejo[$archivo]['titulo']) ? $catalogoViejo[$archivo]['titulo'] : ''
-                );
-            }
-        }
-
-        // --- Reescribir URLs de imagen dentro de los .txm movidos ---
-        $nuevaBase = $this->url_base_textmuy_imagenes();
-        foreach ((array)glob($dirPresets . DIRECTORY_SEPARATOR . '*.txm') as $ruta) {
-            $contenido = (string)@file_get_contents($ruta);
-            if ($contenido === '' || strpos($contenido, 'modules/textmuy/imagenes/') === false) {
-                continue;
-            }
-            $nuevo = preg_replace(
-                '#https?://[^\s"\'\]\}<>]+/modules/textmuy/imagenes/#',
-                $nuevaBase,
-                $contenido
-            );
-            if (is_string($nuevo) && $nuevo !== $contenido) {
-                @file_put_contents($ruta, $nuevo);
-            }
-        }
-    }
-
-    /** Ruta del catalogo.json unico de las imagenes del administrador. */
-    private function ruta_catalogo_textmuy()
-    {
-        return $this->dir_textmuy_imagenes() . DIRECTORY_SEPARATOR . 'catalogo.json';
-    }
-
-    /** Lee catalogo.json. Fallback: escanea el dir y genera el catalogo. */
-    private function leer_catalogo_textmuy()
-    {
-        $ruta = $this->ruta_catalogo_textmuy();
-        if (is_file($ruta)) {
-            $data = json_decode((string)file_get_contents($ruta), true);
-            if (is_array($data)) {
-                return $data;
-            }
-        }
-        // Fallback: escanear el dir y generar el catalogo
-        $dir = $this->dir_textmuy_imagenes();
-        $cat = [];
-        foreach ((array)glob($dir . DIRECTORY_SEPARATOR . '*.*') as $ruta) {
-            $archivo = basename($ruta);
-            if ($archivo === 'catalogo.json' || is_dir($ruta)) continue;
-            $ext = strtolower(pathinfo($archivo, PATHINFO_EXTENSION));
-            if (!in_array($ext, ['png', 'jpg', 'jpeg', 'webp', 'svg'], true)) continue;
-            $cat[] = ['nombre' => $archivo, 'categoria' => 'varios', 'titulo' => $archivo];
-        }
-        if (!empty($cat)) {
-            $this->escribir_catalogo_textmuy($cat);
-        }
-        return $cat;
-    }
-
-    /** Escribe catalogo.json con las imagenes actuales. */
-    private function escribir_catalogo_textmuy($lista)
-    {
-        $ruta = $this->ruta_catalogo_textmuy();
-        @file_put_contents($ruta, wp_json_encode($lista, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-    }
-
-    /** Agrega o actualiza una entrada en catalogo.json. */
-    private function catalogo_textmuy_actualizar($nombre, $categoria, $titulo = '')
-    {
-        $cat = $this->leer_catalogo_textmuy();
-        $encontrado = false;
-        foreach ($cat as $k => $e) {
-            if ($e['nombre'] === $nombre) {
-                $cat[$k]['categoria'] = $categoria;
-                if ($titulo !== '') $cat[$k]['titulo'] = $titulo;
-                $encontrado = true;
-                break;
-            }
-        }
-        if (!$encontrado) {
-            $cat[] = ['nombre' => $nombre, 'categoria' => $categoria, 'titulo' => ($titulo ?: $nombre)];
-        }
-        $this->escribir_catalogo_textmuy($cat);
-    }
-
-    /** Quita una entrada de catalogo.json. */
-    private function catalogo_textmuy_quitar($nombre)
-    {
-        $cat = $this->leer_catalogo_textmuy();
-        $cat = array_values(array_filter($cat, function ($e) use ($nombre) {
-            return $e['nombre'] !== $nombre;
-        }));
-        $this->escribir_catalogo_textmuy($cat);
     }
 
     /** Resuelve la ruta de una imagen en imagenes/ flat. */
@@ -850,20 +776,28 @@ class Personalizador_PDF_Plugin
 
         $urlBase = $this->url_base_textmuy_imagenes();
         $imagenes = [];
-        foreach ($this->leer_catalogo_textmuy() as $e) {
-            $archivo = $e['nombre'];
+        // Catalogo unico v5.0 (img/img.json): tuplas [id,title,cats,file].
+        foreach ($this->catalogo_textmuy('img')['items'] as $t) {
+            if (!is_array($t) || count($t) < 4 || (string)$t[3] === '') continue; // tombstone/rota: fuera
+            $archivo = (string)$t[3];
             $ruta = $this->ruta_textmuy_imagen($archivo);
-            if ($ruta === '') continue;
+            if ($ruta === '') continue; // fisico ausente: cero 404
             $urlLimpia = $urlBase . rawurlencode($archivo);
             $enUso = ($contenidosPresets !== '' && strpos($contenidosPresets, $urlLimpia) !== false) ? 1 : 0;
-            $thumbUrl = $urlBase . 'thumbs/' . rawurlencode($archivo) . '.webp';
-            $thumbPath = $dirTextMuy . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . $archivo . '.webp';
+            $cats = $t[2];
+            if (is_array($cats)) {
+                $categoria = (string)($cats[0] ?? 'varios');
+            } else {
+                $categoria = trim((string)$cats);
+                if ($categoria === '') $categoria = 'varios';
+            }
             $imagenes[] = [
                 'nombre' => $archivo,
-                'categoria' => $e['categoria'] ?? 'varios',
-                'titulo' => $e['titulo'] ?? $archivo,
+                'categoria' => $categoria,
+                'titulo' => ((string)$t[1] !== '' ? (string)$t[1] : $archivo),
                 'url' => $urlLimpia . '?v=' . (int)@filemtime($ruta),
-                'thumb' => is_file($thumbPath) ? $thumbUrl . '?v=' . (int)@filemtime($thumbPath) : '',
+                // Miniatura via sprite ThumbEngine (guardarSprite): sin thumbs/ por item.
+                'thumb' => '',
                 'enUso' => $enUso,
             ];
         }
@@ -873,17 +807,24 @@ class Personalizador_PDF_Plugin
 
         $urlFonts = $this->url_base_textmuy_fonts();
         $fuentes = [];
-        foreach ($this->leer_catalogo_textmuy_fonts() as $fn) {
-            $archivo = $fn['nombre'] ?? '';
-            if (!$archivo) continue;
+        $dirFonts = $this->dir_textmuy_fonts();
+        // Catalogo unico v5.0 (fonts/fonts.json): tuplas [id,title,cats,file].
+        foreach ($this->catalogo_textmuy('fonts')['items'] as $t) {
+            if (!is_array($t) || count($t) < 4) continue;
+            $archivo = (string)$t[3];
+            // SOLO fuentes fisicas reales (archivo existente + extension de
+            // fuente): las Google (file sin extension) NO van a bridge.fuentes
+            // porque el iframe intentaria FontFace contra una URL inexistente.
+            // El modulo lee las Google por su cuenta (loadCatalogo('fonts')).
+            if ($archivo === '' || !preg_match('/\.(ttf|otf|woff|woff2)$/i', $archivo)) continue;
+            if (!is_file($dirFonts . DIRECTORY_SEPARATOR . $archivo)) continue;
             $fuentes[] = [
-                'nombre' => $fn['nombre'],
-                'titulo' => $fn['titulo'] ?? pathinfo($archivo, PATHINFO_FILENAME),
-                'ext' => $fn['ext'] ?? pathinfo($archivo, PATHINFO_EXTENSION),
-                'url' => $urlFonts . rawurlencode($archivo) . '?v=' . (int)@filemtime($this->dir_textmuy_fonts() . DIRECTORY_SEPARATOR . $archivo),
+                'nombre' => $archivo,
+                'titulo' => ((string)$t[1] !== '' ? (string)$t[1] : pathinfo($archivo, PATHINFO_FILENAME)),
+                'ext' => pathinfo($archivo, PATHINFO_EXTENSION),
+                'url' => $urlFonts . rawurlencode($archivo) . '?v=' . (int)@filemtime($dirFonts . DIRECTORY_SEPARATOR . $archivo),
             ];
         }
-
         return ['presets' => $presets, 'imagenes' => $imagenes, 'fuentes' => $fuentes];
     }
 
@@ -921,17 +862,26 @@ class Personalizador_PDF_Plugin
                 . 'Verifica los permisos de wp-content/uploads/personalizador-pdf/textmuy/presets.'
             );
         }
-        // Las miniaturas de presets viven en thumbs/presets.webp (spritesheet global).
-        // Ya no se guarda .webp suelto junto al .txm: se elimina cualquier resto.
-        @unlink($dir . DIRECTORY_SEPARATOR . $nombre . '.webp');
-        $thumbDir = $dir . DIRECTORY_SEPARATOR . 'thumbs';
-        @unlink($thumbDir . DIRECTORY_SEPARATOR . 'presets.webp');
-        @unlink($thumbDir . DIRECTORY_SEPARATOR . 'presets.json');
+        @unlink($dir . DIRECTORY_SEPARATOR . $nombre . '.webp'); // resto deprecado de miniaturas por item
         $rutaTxm = $dir . DIRECTORY_SEPARATOR . $nombre . '.txm';
         if (!@move_uploaded_file($txm['tmp_name'], $rutaTxm)) {
             wp_send_json_error('No se pudo escribir el preset en el directorio de datos.');
         }
-        wp_send_json_success(['nombre' => $nombre]);
+        // Catalogo v5.0: upsert de la tupla [id,nombre,'custom',nombre.txm].
+        $cat = $this->catalogo_textmuy('presets');
+        $id = $this->tupla_textmuy_id_de_file($cat['items'], $nombre . '.txm');
+        if ($id > 0) {
+            foreach ($cat['items'] as $i => $t) {
+                if ((int)$t[0] === $id) {
+                    $cat['items'][$i] = [$id, $nombre, 'custom', $nombre . '.txm'];
+                    break;
+                }
+            }
+        } else {
+            $id = $this->tupla_textmuy_alta($cat['items'], $nombre, 'custom', $nombre . '.txm');
+        }
+        $this->guardar_catalogo_textmuy('presets', $cat);
+        wp_send_json_success(['nombre' => $nombre, 'id' => $id]);
     }
 
     /** Borra el par {nombre}.txm + {nombre}.webp de uploads/.../textmuy/presets. */
@@ -945,10 +895,14 @@ class Personalizador_PDF_Plugin
         $dir = $this->dir_textmuy_presets();
         @unlink($dir . DIRECTORY_SEPARATOR . $nombre . '.txm');
         @unlink($dir . DIRECTORY_SEPARATOR . $nombre . '.webp');
-        $thumbDir = $dir . DIRECTORY_SEPARATOR . 'thumbs';
-        @unlink($thumbDir . DIRECTORY_SEPARATOR . 'presets.webp');
-        @unlink($thumbDir . DIRECTORY_SEPARATOR . 'presets.json');
-        wp_send_json_success(['nombre' => $nombre]);
+        // Catalogo v5.0: baja = tombstone [id,"","",""] (sin reindexar).
+        $cat = $this->catalogo_textmuy('presets');
+        $id = $this->tupla_textmuy_id_de_file($cat['items'], $nombre . '.txm');
+        if ($id > 0) {
+            $this->tupla_textmuy_baja($cat['items'], $id);
+            $this->guardar_catalogo_textmuy('presets', $cat);
+        }
+        wp_send_json_success(['nombre' => $nombre, 'id' => $id]);
     }
 
     /**
@@ -1004,12 +958,21 @@ class Personalizador_PDF_Plugin
         if (!@move_uploaded_file($file['tmp_name'], $dir . DIRECTORY_SEPARATOR . $destino)) {
             wp_send_json_error('No se pudo guardar la imagen.');
         }
-        // Actualizar catalogo.json
-        $this->catalogo_textmuy_actualizar($destino, $categoria);
+        // Catalogo v5.0: alta de tupla [id,titulo,cats,file] (id = hueco mas
+        // bajo o max+1; el tile del sprite deriva de id-1).
+        $cat = $this->catalogo_textmuy('img');
+        $id = $this->tupla_textmuy_alta(
+            $cat['items'],
+            pathinfo($destino, PATHINFO_FILENAME),
+            ($categoria !== '' ? $categoria : 'varios'),
+            $destino
+        );
+        $this->guardar_catalogo_textmuy('img', $cat);
         $rutaDestino = $dir . DIRECTORY_SEPARATOR . $destino;
         wp_send_json_success([
             'nombre' => $destino,
             'categoria' => $categoria,
+            'id' => $id,
             'url' => $this->url_base_textmuy_imagenes() . rawurlencode($destino)
                 . '?v=' . (int)@filemtime($rutaDestino),
         ]);
@@ -1031,9 +994,14 @@ class Personalizador_PDF_Plugin
         if (!@unlink($ruta)) {
             wp_send_json_error('No se pudo borrar la imagen (permisos del directorio).');
         }
-        $this->catalogo_textmuy_quitar($nombre);
-        @unlink($this->dir_textmuy_imagenes() . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . $nombre . '.webp');
-        wp_send_json_success(['nombre' => $nombre]);
+        // Catalogo v5.0: baja = tombstone (sin reindexar). Sin thumbs/ por item.
+        $cat = $this->catalogo_textmuy('img');
+        $id = $this->tupla_textmuy_id_de_file($cat['items'], $nombre);
+        if ($id > 0) {
+            $this->tupla_textmuy_baja($cat['items'], $id);
+            $this->guardar_catalogo_textmuy('img', $cat);
+        }
+        wp_send_json_success(['nombre' => $nombre, 'id' => $id]);
     }
 
     /**
@@ -1071,15 +1039,21 @@ class Personalizador_PDF_Plugin
             }
         }
         $nombreFinal = basename($destino);
-        $thumbsDir = $this->dir_textmuy_imagenes() . DIRECTORY_SEPARATOR . 'thumbs';
-        if (is_dir($thumbsDir)) {
-            $thumbOrigen = $thumbsDir . DIRECTORY_SEPARATOR . $nombre . '.webp';
-            $thumbDestino = $thumbsDir . DIRECTORY_SEPARATOR . $nombreFinal . '.webp';
-            if (is_file($thumbOrigen) && !is_file($thumbDestino)) {
-                @rename($thumbOrigen, $thumbDestino);
+        // Catalogo v5.0: actualizar la tupla (file nuevo + categoria); si el
+        // archivo no estaba en el catalogo, dar de alta.
+        $cat = $this->catalogo_textmuy('img');
+        $id = $this->tupla_textmuy_id_de_file($cat['items'], $nombre);
+        if ($id > 0) {
+            foreach ($cat['items'] as $i => $t) {
+                if ((int)$t[0] === $id) {
+                    $cat['items'][$i] = [$id, ((string)$t[1] !== '' ? $t[1] : pathinfo($nombreFinal, PATHINFO_FILENAME)), ($categoriaNueva !== '' ? $categoriaNueva : $t[2]), $nombreFinal];
+                    break;
+                }
             }
+        } else {
+            $id = $this->tupla_textmuy_alta($cat['items'], pathinfo($nombreFinal, PATHINFO_FILENAME), ($categoriaNueva !== '' ? $categoriaNueva : 'varios'), $nombreFinal);
         }
-        $this->catalogo_textmuy_actualizar($nombreFinal, $categoriaNueva);
+        $this->guardar_catalogo_textmuy('img', $cat);
         wp_send_json_success([
             'nombre' => $nombreFinal,
             'categoria' => $categoriaNueva,
@@ -1129,17 +1103,11 @@ class Personalizador_PDF_Plugin
             $titulo = $base;
         }
 
-        $catalogo = $this->leer_catalogo_textmuy_fonts();
-        $catalogo[] = [
-            'nombre' => $destino,
-            'titulo' => $titulo,
-            'ext' => $ext,
-        ];
-        $this->escribir_catalogo_textmuy_fonts($catalogo);
-
-        // Invalida el sprite de fuentes si existia
-        @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . 'fuentes.webp');
-        @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . 'fuentes.json');
+        // Catalogo v5.0: alta de tupla [id,titulo,cats,file] (id = hueco mas
+        // bajo o max+1). Google = file sin extension; aqui siempre fisica.
+        $cat = $this->catalogo_textmuy('fonts');
+        $id = $this->tupla_textmuy_alta($cat['items'], $titulo, 'custom', $destino);
+        $this->guardar_catalogo_textmuy('fonts', $cat);
 
         $url = $this->url_base_textmuy_fonts() . rawurlencode($destino) . '?v=' . (int)@filemtime($dir . DIRECTORY_SEPARATOR . $destino);
         wp_send_json_success([
@@ -1163,19 +1131,69 @@ class Personalizador_PDF_Plugin
         if (is_file($ruta) && !@unlink($ruta)) {
             wp_send_json_error('No se pudo borrar el archivo de fuente.');
         }
-        $catalogo = $this->leer_catalogo_textmuy_fonts();
-        $nuevo = array_filter($catalogo, function ($f) use ($nombre) {
-            return ($f['nombre'] ?? '') !== $nombre;
-        });
-        $this->escribir_catalogo_textmuy_fonts($nuevo);
+        // Catalogo v5.0: baja = tombstone por file (sin reindexar).
+        $cat = $this->catalogo_textmuy('fonts');
+        $id = $this->tupla_textmuy_id_de_file($cat['items'], $nombre);
+        if ($id > 0) {
+            $this->tupla_textmuy_baja($cat['items'], $id);
+            $this->guardar_catalogo_textmuy('fonts', $cat);
+        }
 
-        // Invalida el sprite de fuentes
-        @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . 'fuentes.webp');
-        @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . 'fuentes.json');
-
-        wp_send_json_success(['nombre' => $nombre]);
+        wp_send_json_success(['nombre' => $nombre, 'id' => $id]);
     }
 
+    /** Renombra y/o cambia la categoria de una fuente fisica (tupla v5.0).
+     * POST: nombre, nombreNuevo, categoriaNueva. */
+    public function handle_textmuy_cambiar_fuente()
+    {
+        $this->seguridad('personalizador_pdf_textmuy_cambiar_fuente');
+        $nombre = $this->nombre_textmuy_seguro(isset($_POST['nombre']) ? wp_unslash($_POST['nombre']) : '');
+        $nombreNuevo = $this->nombre_textmuy_seguro(isset($_POST['nombreNuevo']) ? wp_unslash($_POST['nombreNuevo']) : '');
+        $categoriaNueva = $this->nombre_textmuy_seguro(isset($_POST['categoriaNueva']) ? wp_unslash($_POST['categoriaNueva']) : '');
+        if ($nombre === '' || $nombreNuevo === '' || !preg_match('/[.](ttf|otf|woff|woff2)$/i', $nombre)) {
+            wp_send_json_error('Datos de fuente no validos.');
+        }
+        $dir = $this->dir_textmuy_fonts();
+        $origen = $dir . DIRECTORY_SEPARATOR . $nombre;
+        if (!is_file($origen)) {
+            wp_send_json_error('La fuente no existe.');
+        }
+        $ext = strtolower(pathinfo($nombre, PATHINFO_EXTENSION));
+        $destino = $dir . DIRECTORY_SEPARATOR . $nombreNuevo . '.' . $ext;
+        if ($destino !== $origen) {
+            $i = 2;
+            while (is_file($destino)) {
+                $destino = $dir . DIRECTORY_SEPARATOR . $nombreNuevo . '-' . $i . '.' . $ext;
+                $i++;
+            }
+            if (!@rename($origen, $destino)) {
+                wp_send_json_error('No se pudo renombrar la fuente.');
+            }
+        }
+        $archivoFinal = basename($destino);
+        // Catalogo v5.0: actualizar la tupla (file nuevo + categoria; title se conserva).
+        $cat = $this->catalogo_textmuy('fonts');
+        $id = $this->tupla_textmuy_id_de_file($cat['items'], $nombre);
+        $titulo = $nombreNuevo;
+        if ($id > 0) {
+            foreach ($cat['items'] as $i => $t) {
+                if ((int)$t[0] === $id) {
+                    if ((string)$t[1] !== '') $titulo = (string)$t[1];
+                    $cat['items'][$i] = [$id, $titulo, ($categoriaNueva !== '' ? $categoriaNueva : $t[2]), $archivoFinal];
+                    break;
+                }
+            }
+        } else {
+            $id = $this->tupla_textmuy_alta($cat['items'], $titulo, ($categoriaNueva !== '' ? $categoriaNueva : 'custom'), $archivoFinal);
+        }
+        $this->guardar_catalogo_textmuy('fonts', $cat);
+        wp_send_json_success([
+            'nombre' => $archivoFinal,
+            'titulo' => $titulo,
+            'ext' => $ext,
+            'url' => $this->url_base_textmuy_fonts() . rawurlencode($archivoFinal) . '?v=' . (int)@filemtime($destino),
+        ]);
+    }
     /**
      * Guarda miniatura individual .webp (grupos de PDF y fallback).
      * POST: webp (archivo), nombre (string ej. 'diploma-a' o nombre-imagen)
@@ -1556,9 +1574,6 @@ Personalizador_PDF_Plugin::instance();
  * Migra los datos al activar el plugin:
  *  - si existe la carpeta historica "extractor-corel" (<= 2.0.0) y no la nueva,
  *    la renombra para no perder PDFs, datasets, imagenes, placeholders ni salidas;
- *  - mueve los presets e imagenes del administrador que vivian DENTRO del modulo
- *    TextMuy (modules/textmuy/{presets,imagenes}, <= 3.3.0) a
- *    uploads/personalizador-pdf/textmuy/ (v4.0.0), reescribiendo URLs internas.
  */
 register_activation_hook(__FILE__, function () {
     $upload_dir = wp_upload_dir();
@@ -1567,5 +1582,4 @@ register_activation_hook(__FILE__, function () {
     if (is_dir($viejo) && !is_dir($nuevo)) {
         @rename($viejo, $nuevo);
     }
-    Personalizador_PDF_Plugin::instance()->migrar_textmuy();
 });

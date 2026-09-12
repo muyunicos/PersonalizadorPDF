@@ -185,21 +185,24 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 - Imágenes aplicadas: `imagenes/{pdf}/{letra}.{ext}`
 - Placeholders vacíos: `placeholders/{pdf}/{letra}-{ancho_px}x{alto_px}.png`
 - PDF procesado: `salidas/{pdf}_procesado.pdf`
-- **Archivos TextMuy (datos de usuario, desde 4.0.0)**:
-  - Presets: `textmuy/presets/{nombre}.txm` + miniatura `{nombre}.webp` (200x100).
-  - Imágenes/fondos: `textmuy/imagenes/{nombre}.{ext}` (flat) +
-    `textmuy/imagenes/catalogo.json` (`{nombre, categoria, titulo}`; categorías:
-    fondos, iconos, varios).
-- 🔜 **FUTURO — Fuentes como datos de usuario** (no implementado): `textmuy/fonts/
-  {nombre}.{ttf,otf,woff,woff2}` + `{nombre}.webp` (preview) + `textmuy/fonts/fonts.json`
-  (`{nombre, titulo, url}`); handlers `textmuy_subir_fuente|borrar_fuente` (firma + límite);
-  el módulo registra las fuentes desde el puente y reemplaza `localStorage`
-  (`textmuy_custom_fonts`) dentro del plugin (standalone mantiene localStorage); preview
-  webp generada en el navegador al subir.
-- **Migración automática** (`migrar_textmuy()`): al activar o en primer uso, mueve los
-  presets e imágenes que vivían DENTRO del módulo hasta 3.3.0
-  (`modules/textmuy/{presets,imagenes}`) a uploads, reescribiendo las URLs de imagen
-  dentro de los `.txm`. Nunca pisa archivos que ya existan en uploads.
+- **Archivos TextMuy (datos de usuario, formato unico v5.0)**:
+  - Catalogo por ambito `{thumbs:{w,h,c}, items:[[id,title,cats,file],...]}`:
+    `textmuy/fonts/fonts.json` (180x30, c=4), `textmuy/img/img.json` (100x100,
+    c=8; los archivos fisicos siguen en `textmuy/imagenes/` para no romper las
+    URLs de los `.txm` existentes) y `textmuy/presets/presets.json` (200x100, c=4).
+  - `id` numerico = tile `id-1` del sprite del ambito; `cats` una = string,
+    varias = array (default `custom`); `file` con extension = fisico, sin
+    extension = Google (solo fonts); baja = tombstone `[id,"","",""]`, alta
+    reutiliza el hueco mas bajo (`tupla_textmuy_alta`/`tupla_textmuy_baja`).
+  - Presets: `textmuy/presets/{nombre}.txm` (delta `textmuy-project` v1 con
+    referencias numericas). Miniaturas: sprite por scope via ThumbEngine
+    (`handle_guardar_sprite` persiste `thumbs/{scope}.webp` + manifest;
+    sin miniaturas por item).
+  - Handlers (nonce + capability): `textmuy_subir_imagen|borrar_imagen|
+    cambiar_imagen`, `textmuy_subir_fuente|borrar_fuente|cambiar_fuente` y
+    `textmuy_guardar_preset|borrar_preset` — todos escriben tupla v5.0.
+  - Sin migradores (decision 2026-09-11): los datos se crean desde cero; un
+    JSON en otro formato se trata como catalogo vacio.
 - `muestra.pdf`/`muestra2.pdf` NO se versionan: viven en
   `uploads/personalizador-pdf/pdfs/` (los tests los leen desde ahí).
 
