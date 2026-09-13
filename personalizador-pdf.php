@@ -58,19 +58,10 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_ver', [$this, 'handle_ver']);
         add_action('admin_post_personalizador_pdf_borrar', [$this, 'handle_borrar']);
 
-        // Puente con el modulo TextMuy (pestana "Estilos de Texto"): el iframe
-        // guarda/borra presets (.txm + .webp) y sube imagenes al modulo via fetch.
-        // Solo en WP (con nonce); el modulo standalone sigue 100% client-side.
-        add_action('admin_post_personalizador_pdf_textmuy_guardar_preset', [$this, 'handle_textmuy_guardar_preset']);
-        add_action('admin_post_personalizador_pdf_textmuy_borrar_preset', [$this, 'handle_textmuy_borrar_preset']);
-        add_action('admin_post_personalizador_pdf_textmuy_subir_imagen', [$this, 'handle_textmuy_subir_imagen']);
-        add_action('admin_post_personalizador_pdf_textmuy_borrar_imagen', [$this, 'handle_textmuy_borrar_imagen']);
-        add_action('admin_post_personalizador_pdf_textmuy_cambiar_imagen', [$this, 'handle_textmuy_cambiar_imagen']);
-        add_action('admin_post_personalizador_pdf_textmuy_subir_fuente', [$this, 'handle_textmuy_subir_fuente']);
-        add_action('admin_post_personalizador_pdf_textmuy_borrar_fuente', [$this, 'handle_textmuy_borrar_fuente']);
-        add_action('admin_post_personalizador_pdf_textmuy_cambiar_fuente', [$this, 'handle_textmuy_cambiar_fuente']);
-        add_action('admin_post_personalizador_pdf_guardar_miniatura', [$this, 'handle_guardar_miniatura']);
-        add_action('admin_post_personalizador_pdf_guardar_sprite', [$this, 'handle_guardar_sprite']);
+        // Motor de galerias TextMuy (Const. VII): UNICO endpoint
+        // action=tm_galeria con op=listar|alta|baja|editar|sprite|miniatura.
+        // Handlers sueltos purgados (Const. VIII).
+        add_action('admin_post_tm_galeria', [$this, 'handle_tm_galeria']);
 
         // Compatibilidad temporal (ciclo 3.0.x): los hooks legacy "extractor_corel_*"
         // siguen respondiendo para no romper bookmarks o pestanas abiertas de <= 2.0.0.
@@ -119,25 +110,19 @@ class Personalizador_PDF_Plugin
         return $dir;
     }
 
-    /** Raiz TextMuy: wp-content/uploads/tm/ (ubicacion unica y definitiva). */
-    private function dir_tm($crear = false)
-    {
-        $upload_dir = wp_upload_dir();
-        $dir = trailingslashit($upload_dir['basedir']) . 'tm';
-        if (($crear || !is_dir($dir)) && !is_dir($dir)) {
-            wp_mkdir_p($dir);
-        }
-        return $dir;
-    }
+    /* ==================== Motor de galerias (Const. VII) ==================== */
 
-    /** Subcarpeta de la raiz tm/ (fonts|img|presets), creada bajo demanda. */
-    private function subdir_tm($rel, $crear = false)
+    /** Instancia unica del motor (clase TM_Galeria, inc/class-tm-galeria.php). */
+    private function tm_galeria()
     {
-        $dir = $this->dir_tm($crear) . DIRECTORY_SEPARATOR . $rel;
-        if (($crear || !is_dir($dir)) && !is_dir($dir)) {
-            wp_mkdir_p($dir);
+        static $motor = null;
+        if ($motor === null) {
+            if (!class_exists('TM_Galeria')) {
+                require_once PERSONALIZADOR_PDF_PATH . 'inc' . DIRECTORY_SEPARATOR . 'class-tm-galeria.php';
+            }
+            $motor = new TM_Galeria();
         }
-        return $dir;
+        return $motor;
     }
 
     private function ruta_pdf($archivo)
@@ -265,8 +250,8 @@ class Personalizador_PDF_Plugin
             'nonce' => wp_create_nonce('personalizador_pdf_nonce'),
             'version' => PERSONALIZADOR_PDF_VERSION,
             'renderCoreUrl' => PERSONALIZADOR_PDF_URL . 'modules/textmuy/render-core.html',
-            'guardarMiniaturaUrl' => admin_url('admin-post.php?action=personalizador_pdf_guardar_miniatura'),
-            'guardarMiniaturaNonce' => wp_create_nonce('personalizador_pdf_guardar_miniatura'),
+            'motorUrl' => admin_url('admin-post.php?action=tm_galeria'),
+            'motorNonce' => wp_create_nonce('tm_galeria'),
             'imagenesBase' => $this->url_base_textmuy_imagenes(),
         ]);
     }
@@ -1323,6 +1308,15 @@ class Personalizador_PDF_Plugin
             'spriteUrl' => $urlSprite,
             'scope' => $scope,
         ]);
+    }
+
+    /* ==================== Handler unificado TM_Galeria ==================== */
+
+    /** Endpoint unificado para todas las operaciones de TM_Galeria. */
+    public function handle_tm_galeria()
+    {
+        $tm_galeria = $this->tm_galeria();
+        $tm_galeria->handle_request();
     }
 
     /* ==================== Handlers: PDFs ==================== */

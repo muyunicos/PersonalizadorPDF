@@ -13,7 +13,7 @@
 }(typeof self !== 'undefined' ? self : this, function () {
     'use strict';
 
-    var config = { endpoint: '', nonce: '' };
+    var config = { endpoint: '', nonce: '', opMini: 'miniatura', opSprite: 'sprite' };
     var cacheSingle = new Map();
     var cacheSprite = new Map();
 
@@ -21,6 +21,8 @@
         if (!cfg) return;
         if (cfg.endpoint) config.endpoint = cfg.endpoint;
         if (cfg.nonce) config.nonce = cfg.nonce;
+        if (cfg.opMini) config.opMini = cfg.opMini;
+        if (cfg.opSprite) config.opSprite = cfg.opSprite;
     }
 
     /**
@@ -133,8 +135,9 @@
                 return Promise.resolve(thumbUrl || (typeof fuente === 'string' ? fuente : null));
             }
             var fd = new FormData();
+            fd.append('op', config.opMini || 'miniatura');
             fd.append('nombre', nombre);
-            fd.append('webp', blob, nombre + '.webp');
+            fd.append('archivo', blob, nombre + '.webp');
             if (config.nonce) {
                 fd.append('_wpnonce', config.nonce);
             }
@@ -321,8 +324,9 @@ function persistirSheet(cv, scope, manifest) {
                     return null;
                 }
                 var fd = new FormData();
+                fd.append('op', config.opSprite || 'sprite');
                 fd.append('scope', scope);
-                fd.append('sprite', blob, 'thumbs.webp');
+                fd.append('archivo', blob, 'thumbs.webp');
                 if (config.nonce) {
                     fd.append('_wpnonce', config.nonce);
                 }

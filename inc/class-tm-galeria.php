@@ -672,4 +672,71 @@ class TM_Galeria
             'nombre' => $nombre,
         ];
     }
+
+    /** Dispatch unificado: procesa la operacion basada en op. */
+    public function handle_request()
+    {
+        if (!isset($_POST['op'])) {
+            wp_send_json_error('motor:op:falta');
+        }
+        $op = (string)$_POST['op'];
+
+        try {
+            switch ($op) {
+                case 'listar':
+                    wp_send_json_success($this->listar());
+                    break;
+                case 'alta':
+                    $ambito = (string)$_POST['ambito'];
+                    if (!in_array($ambito, $this->ambitos, true)) {
+                        wp_send_json_error('motor:alta:ambito:invalido');
+                    }
+                    $titulo = isset($_POST['titulo']) ? (string)$_POST['titulo'] : '';
+                    $file = $_POST['archivo'] ?? '';
+                    if ($file === '' || $titulo === '') {
+                        wp_send_json_error('motor:alta:falta:archivo|titulo');
+                    }
+                    wp_send_json_success($this->alta($ambito, $titulo, $file));
+                    break;
+                case 'baja':
+                    $ambito = (string)$_POST['ambito'];
+                    $file = (string)$_POST['archivo'];
+                    if ($ambito === '' || $file === '') {
+                        wp_send_json_error('motor:baja:falta:ambito|archivo');
+                    }
+                    wp_send_json_success($this->baja($ambito, $file));
+                    break;
+                case 'editar':
+                    $ambito = (string)$_POST['ambito'];
+                    $titulo = (string)$_POST['titulo'];
+                    $file = (string)$_POST['archivo'];
+                    if ($ambito === '' || $file === '') {
+                        wp_send_json_error('motor:editar:falta:ambito|archivo');
+                    }
+                    wp_send_json_success($this->editar($ambito, $titulo, $file));
+                    break;
+                case 'sprite':
+                    $scope = (string)$_POST['scope'];
+                    if (!in_array($scope, $this->ambitos, true)) {
+                        wp_send_json_error('motor:sprite:scope:invalido');
+                    }
+                    if (!isset($_FILES['archivo']) || $_FILES['archivo']['error'] !== UPLOAD_ERR_OK) {
+                        wp_send_json_error('motor:sprite:falta:archivo');
+                    }
+                    wp_send_json_success($this->sprite($scope, $_FILES['archivo']));
+                    break;
+                case 'miniatura':
+                    if (!isset($_FILES['archivo']) || $_FILES['archivo']['error'] !== UPLOAD_ERR_OK) {
+                        wp_send_json_error('motor:miniatura:falta:archivo');
+                    }
+                    $nombre = (string)$_POST['nombre'] ?? '';
+                    wp_send_json_success($this->miniatura($nombre, $_FILES['archivo']));
+                    break;
+                default:
+                    wp_send_json_error('motor:op:invalido:' . $op);
+            }
+        } catch (Exception $e) {
+            wp_send_json_error($e->getMessage());
+        }
+    }
 }

@@ -24,44 +24,25 @@ if (!$this->modulo_textmuy_disponible()) {
 }
 
 $modulo_url = PERSONALIZADOR_PDF_URL . 'modules/textmuy/index.html';
-// Config del puente plugin <-> modulo: endpoints + nonces + listado actual de
-// presets (.txm) e imagenes subidas + URLs base de lectura. El iframe la recibe
-// via postMessage same-origin al cargar (el modulo standalone, sin esta config,
-// oculta las funciones de servidor y sigue 100% client-side).
-// Los datos TextMuy del administrador viven en la ubicacion unica
-// wp-content/uploads/tm/{fonts,img,presets} (fuera del plugin).
-$recursos = $this->recursos_textmuy();
+// Config del puente plugin <-> modulo: motor unico de galerias (Const. VII)
+// oculto en el iframe via postMessage same-origin al cargar. El modulo NO
+// conoce handlers sueltos: solo motorUrl + op=... (contracts/motor-contract.md)
+// + bases de lectura + listados iniciales generados por el motor.
+// Los datos TextMuy viven en la ubicacion unica wp-content/uploads/tm/{fonts,img,presets}.
+$tm_galeria = $this->tm_galeria();
+$recursos = $tm_galeria->listar();
 $puente = [
     'urls' => [
-        'guardarPreset' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_guardar_preset'),
-        'borrarPreset' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_borrar_preset'),
-        'subirImagen' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_subir_imagen'),
-        'borrarImagen' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_borrar_imagen'),
-        'cambiarImagen' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_cambiar_imagen'),
-        'subirFuente' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_subir_fuente'),
-        'borrarFuente' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_borrar_fuente'),
-        'cambiarFuente' => admin_url('admin-post.php?action=personalizador_pdf_textmuy_cambiar_fuente'),
-        'guardarMiniatura' => admin_url('admin-post.php?action=personalizador_pdf_guardar_miniatura'),
-        'guardarSprite' => admin_url('admin-post.php?action=personalizador_pdf_guardar_sprite'),
+        'motor' => admin_url('admin-post.php?action=tm_galeria'),
         // Script del motor de miniaturas y sprites para inyectar en el iframe
         'miniaturas' => PERSONALIZADOR_PDF_URL . 'assets/miniaturas.js',
         // Lectura de presets (.txm), imagenes y fuentes: bases de uploads.
-        // imagenesBase apunta a tm/img/ (catalogo img.json + fisicos + sprite).
-        'presetsBase' => $this->url_base_textmuy_presets(),
-        'fuentesBase' => $this->url_base_textmuy_fonts(),
-        'imagenesBase' => $this->url_base_textmuy_imagenes(),
+        'presetsBase' => $tm_galeria->url_ambito('presets'),
+        'fuentesBase' => $tm_galeria->url_ambito('fonts'),
+        'imagenesBase' => $tm_galeria->url_ambito('img'),
     ],
     'nonces' => [
-        'guardarPreset' => wp_create_nonce('personalizador_pdf_textmuy_guardar_preset'),
-        'borrarPreset' => wp_create_nonce('personalizador_pdf_textmuy_borrar_preset'),
-        'subirImagen' => wp_create_nonce('personalizador_pdf_textmuy_subir_imagen'),
-        'borrarImagen' => wp_create_nonce('personalizador_pdf_textmuy_borrar_imagen'),
-        'cambiarImagen' => wp_create_nonce('personalizador_pdf_textmuy_cambiar_imagen'),
-        'subirFuente' => wp_create_nonce('personalizador_pdf_textmuy_subir_fuente'),
-        'borrarFuente' => wp_create_nonce('personalizador_pdf_textmuy_borrar_fuente'),
-        'cambiarFuente' => wp_create_nonce('personalizador_pdf_textmuy_cambiar_fuente'),
-        'guardarMiniatura' => wp_create_nonce('personalizador_pdf_guardar_miniatura'),
-        'guardarSprite' => wp_create_nonce('personalizador_pdf_guardar_sprite'),
+        'motor' => wp_create_nonce('tm_galeria'),
     ],
     'presets' => $recursos['presets'],
     'imagenes' => $recursos['imagenes'],

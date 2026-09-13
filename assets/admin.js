@@ -327,10 +327,10 @@ jQuery(function ($) {
 
     (function () {
         var cfg = window.PersonalizadorPDF || {};
-        if (window.ThumbEngine && cfg.guardarMiniaturaUrl) {
+        if (window.ThumbEngine && cfg.motorUrl) {
             ThumbEngine.configure({
-                endpoint: cfg.guardarMiniaturaUrl,
-                nonce: cfg.guardarMiniaturaNonce || ''
+                endpoint: cfg.motorUrl,
+                nonce: cfg.motorNonce || ''
             });
         }
 
