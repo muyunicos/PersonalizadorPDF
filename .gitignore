@@ -9,3 +9,7 @@ tests/*.tmp
 # actualizacion del modulo (ver modules/LEEME.md).
 modules/textmuy/
 
+# Configuraciones de AI Assistant (Speckit recomendaciones).
+.clinerules/
+.specify/
+
