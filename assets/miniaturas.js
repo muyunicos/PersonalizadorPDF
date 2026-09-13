@@ -315,14 +315,10 @@ function persistirSheet(cv, scope, manifest) {
                 cv.toBlob(function (blob) { resBlob(blob); }, 'image/webp', 0.85);
             }).then(function (blob) {
                 if (!blob || !config.endpoint) {
-                    // Fallback sin endpoint: data-URL local (standalone).
-                    var resLocal = {
-                        spriteUrl: cv.toDataURL('image/webp'),
-                        manifest: manifest,
-                        spriteImage: cv
-                    };
-                    cacheSprite.set(scope, resLocal);
-                    return resLocal;
+                    // Sin endpoint/puente el modulo NO opera (Const. III/VIII
+                    // v3.0.0): cero data-URL de fallback. Fail visible con causa.
+                    console.warn('thumbs:' + scope + ':endpoint:ausente');
+                    return null;
                 }
                 var fd = new FormData();
                 fd.append('scope', scope);
