@@ -28,7 +28,7 @@ A diferencia de la version original (Flask + Python), esta es **100% PHP puro** 
 * Extension zlib (casi siempre disponible)
 * La extension GD es opcional: sin GD el motor procesa imagenes PNG (8 bits, sin entrelazar) con su decodificador propio; para JPEG/GIF/WebP se necesita GD (o un JPEG cuyo tamano coincida exactamente con el del grupo)
 
-**Datos guardados**: PDFs y proceso en `wp-content/uploads/personalizador-pdf/` (`pdfs/`, `datos/`, `imagenes/` por grupo, `placeholders/`, `salidas/`); datos TextMuy en la ubicacion unica `wp-content/uploads/tm/{fonts,img,presets}/` (catalogos `.json` + fisicos + `.txm` + `sprite.webp/json` por ambito). La carpeta del plugin queda 100% de solo lectura.
+**Datos guardados**: PDFs y proceso en `wp-content/uploads/pmu/` (`pdfs/`, `datos/`, `imagenes/` por grupo, `placeholders/`, `salidas/`); datos TextMuy en la ubicacion unica `wp-content/uploads/pmu/tm/` (catalogos `.json` + fisicos + `.txm` + `sprite.webp/json` por ambito). La carpeta del plugin queda 100% de solo lectura.
 
 **Modulo TextMuy (opcional)**: desde 4.0.0 el editor de estilos de texto NO viene empaquetado con el plugin. Se importa a mano copiando el proyecto `textmuy` a `wp-content/plugins/personalizador-pdf/modules/textmuy/` (instrucciones en `modules/LEEME.md`). Sin el modulo, el resto del plugin funciona con normalidad.
 
@@ -41,7 +41,7 @@ Instalacion desde cero (recomendada):
 
 Despues de activar:
 
-3. Si venias de la version 2.0.0 (Extractor Corel): desactiva el plugin viejo `extractor-corel` (si estaba instalado); los datos de `wp-content/uploads/extractor-corel/` se migran automaticamente a `wp-content/uploads/personalizador-pdf/`.
+3. Si venias de la version 2.0.0 (Extractor Corel): desactiva el plugin viejo `extractor-corel` (si estaba instalado); los datos de `wp-content/uploads/extractor-corel/` se migran automaticamente a `wp-content/uploads/pmu/`.
 4. Accede al menu "Personalizador PDF" en el panel de administracion (pestanas "PDFs y procesamiento", "Estilos de Texto" y "Ayuda").
 
 Nota: los PDFs de muestra (`muestra.pdf`, `muestra2.pdf`), la carpeta `tests/` y `AGENTS.md` son archivos de desarrollo del repositorio; no se incluyen en el ZIP de instalacion.
@@ -58,12 +58,12 @@ Si, siempre que tenga PHP 7.4+ y zlib. No requiere SSH, Composer ni procesos en 
 El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir borra los datos, imagenes y resultado anteriores de ese PDF y regenera el analisis.
 
 = ¿Que pasa con los archivos subidos? =
-Todo queda en `wp-content/uploads/personalizador-pdf/`. Puedes borrar cada PDF (con sus datos) desde la propia pantalla del plugin.
+Todo queda en `wp-content/uploads/pmu/`. Puedes borrar cada PDF (con sus datos) desde la propia pantalla del plugin.
 
 == Changelog ==
 
 = 4.0.0 =
-* **Datos de usuario fuera del plugin (v5.0)**: los presets TextMuy (`.txm`), catalogos, fisicos y sprites se guardan en la ubicacion unica `wp-content/uploads/tm/{fonts,img,presets}/` (catalogo `img.json` unificado con los fisicos, sin `imagenes/`); los `.txm` guardan las imagenes SOLO por id numerico (resuelto a URL al renderizar). El plugin queda de solo lectura: se actualiza sin preservar archivos. Sin migradores: los datos se crean desde cero.
+* **Datos de usuario fuera del plugin (v5.0)**: los presets TextMuy (`.txm`), catalogos, fisicos y sprites se guardan en la ubicacion unica `wp-content/uploads/pmu/tm/` (catalogo `img.json` unificado con los fisicos, sin `imagenes/`); los `.txm` guardan las imagenes SOLO por id numerico (resuelto a URL al renderizar). El plugin queda de solo lectura: se actualiza sin preservar archivos. Sin migradores: los datos se crean desde cero.
 * **Sin contenido de fabrica**: no hay presets base ni catalogo de imagenes versionados; el administrador crea sus presets y sube sus imagenes desde el editor.
 * **Modulo TextMuy separado del repositorio del plugin**: `modules/textmuy/` no se versiona; se importa a mano tras cada actualizacion del modulo (ver `modules/LEEME.md`). Sin el modulo importado, la pestana "Estilos de Texto" muestra un aviso, la seccion "Texto estilizado" por grupo se oculta y el Procesar clasico funciona con normalidad.
 * **Contrato**: nueva entrada `urls.presetsBase` en el puente y `PresetManager.presetUrlBase()` en el modulo para leer presets/imagenes desde uploads (retro-compatible; standalone sigue con ruta relativa). Cache-busting `?v=RC9`.
@@ -72,13 +72,13 @@ Todo queda en `wp-content/uploads/personalizador-pdf/`. Puedes borrar cada PDF (
 = 3.3.0 =
 * **Galeria de imagenes unificada** (componente `js/galeria.js`): un solo boton "Select" en los importadores de imagen (rellenos, fondos, texturas, iconos) abre un panel con tabs (fondos/iconos/varios), buscador, subida (boton + arrastrar y soltar + pegar) y footer (nombre, categoria, Save, Delete, Select).
 * **Preview en vivo**: en Fill layers (Pattern) y en BACKGROUND, la galeria oculta temporalmente la interfaz, aplica la imagen al instante al hacer click y replica los controles (Fit/Scale/Origin/Repeat o Opacity/Repeat). "Aplicar" persiste; cerrar sin Aplicar revierte al estilo anterior.
-* **Locacion unica uploads/tm**: imagenes planas + catalogo `img.json` en `wp-content/uploads/tm/img/` (sin `imagenes/`); la categoria de cada archivo se guarda en la tupla `[id,title,cats,file]`. El CRUD (subir/borrar/renombrar) actualiza el JSON y la tupla.
+* **Locacion unica uploads/pmu/tm**: imagenes planas + catalogo `img.json` en `wp-content/uploads/pmu/tm/img/` (sin `imagenes/`); la categoria de cada archivo se guarda en la tupla `[id,title,cats,file]`. El CRUD (subir/borrar/renombrar) actualiza el JSON y la tupla.
 * Cache-busting `?v=RC7` en render-core e index; render-core incorpora `js/preset-manager.js` para presets `.txm`.
 
 = 3.2.0 =
 * **Normalizacion de presets del modulo TextMuy**: el formato unico es `.txm` (delta de settings) junto a su miniatura `.webp`, guardados en `modules/textmuy/presets/` del servidor; disponibles en todos los navegadores y en el selector de estilo de cada grupo de un PDF. Los 9 presets base migraron de `.json` (formato TextStudio crudo) a `.txm`.
 * **Un solo panel de presets**: la galeria inferior expandible es la unica UI de presets (guardar, borrar, buscar y migrar). Se eliminan el panel "Presets" y el panel "Local projects (.txm)" de la pestana DOWNLOAD. Boton de migracion unica que sube los presets viejos de localStorage al servidor.
-* **Directorio de imagenes subidas**: las imagenes de rellenos/fondos/texturas se guardan en `wp-content/uploads/tm/img/` (unificado con el catalogo) via un puente PHP (nonce, capability, validacion de firma y limites de tamano) y quedan reutilizables entre presets con el picker "Mis imagenes".
+* **Directorio de imagenes subidas**: las imagenes de rellenos/fondos/texturas se guardan en `wp-content/uploads/pmu/tm/img/` (unificado con el catalogo) via un puente PHP (nonce, capability, validacion de firma y limites de tamano) y quedan reutilizables entre presets con el picker "Mis imagenes".
 * Puente plugin-modulo por postMessage same-origin (handlers `admin_post_personalizador_pdf_textmuy_guardar_preset|borrar_preset|subir_imagen`). El modulo standalone sigue 100% client-side: sin puente, guardar descarga el `.txm` y las imagenes se embeben.
 * Cache-busting de los estaticos del modulo: `?v=RC2` (render-core e index). El render-core incorpora `js/preset-manager.js` para resolver presets `.txm`.
 
@@ -100,7 +100,7 @@ Todo queda en `wp-content/uploads/personalizador-pdf/`. Puedes borrar cada PDF (
 = 3.0.0 =
 * El plugin pasa a llamarse **Personalizador PDF** (antes "Extractor Corel"): archivo principal `personalizador-pdf.php`, clase `Personalizador_PDF_Plugin`, slug `personalizador-pdf` y handlers `admin_post_personalizador_pdf_*`.
 * Nueva pestana **Estilos de Texto**: integra el sistema TextMuy como modulo autocontenido en `modules/textmuy/` (editor de estilos de texto client-side en iframe same-origin).
-* Migracion automatica al activar: `uploads/extractor-corel/` -> `uploads/personalizador-pdf/` sin perder PDFs, datos, imagenes ni salidas.
+* Migracion automatica al activar: `uploads/extractor-corel/` -> `uploads/pmu/` sin perder PDFs, datos, imagenes ni salidas.
 * Compatibilidad temporal con hooks y nonces legacy de la 2.0.0 (se eliminan en 3.1).
 * El motor PHP (engine/) no se modifica.
 
