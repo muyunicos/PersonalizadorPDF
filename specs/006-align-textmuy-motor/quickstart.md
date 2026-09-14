@@ -36,16 +36,23 @@ node tests/controls-init.test.js
 
 ```bash
 # 2.1 Código y documentación del plugin: no debe haber referencias a la carpeta anterior
-grep -rn "uploads/tm/" --include=*.php --include=*.js --include=*.md --include=*.txt . | grep -v "uploads/pmu/tm-presets"
+#     (excluye artefactos de especificacion en specs/ y el historial del modulo en
+#     modules/textmuy/here/, que mencionan rutas viejas a titulo documental)
+grep -rn "uploads/tm/" --include=*.php --include=*.js --include=*.md --include=*.txt . | grep -v "uploads/pmu/tm-presets" | grep -v "specs/" | grep -v "textmuy/here/"
 
 # 2.2 Raíz propia alternativa del ayudante de miniaturas (objetivo de SC-003)
-grep -rn "pmu/tm/" --include=*.php .
+#     (mismas exclusiones; el == Changelog == de readme.txt es historial y no
+#     cuenta como documentacion normativa -> se excluye readme.txt entero aqui;
+#     la coherencia del readme normativo se verifica en la seccion 7)
+grep -rn "pmu/tm/" --include=*.php --include=*.js --include=*.md --include=*.txt . | grep -v "pmu/tm-presets" | grep -v "specs/" | grep -v "textmuy/here/" | grep -v "^./readme.txt"
 
-# 2.3 Claves del puente por operación (no deben existir en el editor)
-grep -rn "guardarPreset\|borrarPreset\|subirImagen\|borrarImagen\|guardarSprite\|cambiarImagen\|subirFuente\|borrarFuente\|cambiarFuente" modules/textmuy/js
+# 2.3 Claves del puente por operacion (no deben existir en el editor; las
+#     funciones internas de UI con nombres parecidos no cuentan)
+grep -rnE "nonces[.](guardar|borrar|subir|cambiar)|urls[.](guardar|borrar|subir|cambiar)" modules/textmuy/js
 ```
 
 **Resultado esperado**: los tres comandos sin coincidencias.
+(La ruta vigente `uploads/pmu/tm-presets/` no cuenta como coincidencia: el filtro `grep -v` la excluye.)
 
 ## 3. Verificación de la raíz única de datos (objetivo de SC-002)
 
@@ -54,7 +61,7 @@ grep -rn "guardarPreset\|borrarPreset\|subirImagen\|borrarImagen\|guardarSprite\
 
 **Resultado esperado**:
 - Un único catálogo y un único sprite por ámbito, junto a los archivos físicos.
-- Ninguna carpeta `uploads/tm/` ni `uploads/pmu/tm/`.
+- Ninguna carpeta `uploads/tm/` ni `uploads/pmu/tm/` (la ruta vigente `uploads/pmu/tm-presets/` sí existe y es la de estilos guardados).
 - Ningún archivo residual de los recursos dados de baja y ninguna entrada que apunte a un archivo ausente.
 - Tras recargar el panel, la galería muestra exactamente los recursos vigentes con su miniatura.
 

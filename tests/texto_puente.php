@@ -10,6 +10,7 @@
  * Los handlers terminan en exit (wp_redirect/wp_send_json), por lo que cada
  * fase se corre como proceso independiente y verifica en shutdown:
  *   php tests/texto_puente.php setup | guardar_ajax | guardar_vacio | procesar | rechazo
+ *   php tests/texto_puente.php nonce [cap]   (seguridad del motor: nonce y capacidad)
  */
 
 $fase = isset($argv[1]) ? $argv[1] : 'setup';
@@ -40,8 +41,11 @@ function wp_enqueue_script(...$a) { return true; }
 function wp_enqueue_media() { return true; }
 function wp_localize_script(...$a) { return true; }
 function wp_create_nonce($a) { return 'nonce'; }
-function wp_verify_nonce($n = '', $a = '') { return true; }
-function current_user_can($a) { return true; }
+// Stubs conmutables por variable de entorno para la fase de seguridad (nonce|cap).
+function wp_verify_nonce($n = '', $a = '') { return getenv('PD_PUENTE_SIN_NONCE') ? false : true; }
+function current_user_can($a) { return getenv('PD_PUENTE_SIN_CAP') ? false : true; }
+function wp_json_encode($d = null, $f = 0) { return json_encode($d, $f); }
+function wp_is_writable($d) { return is_writable($d); }
 function wp_mkdir_p($d) { return @mkdir($d, 0777, true); }
 function trailingslashit($s) { return rtrim($s, '/\\') . '/'; }
 function sanitize_key($k) { return strtolower(preg_replace('/[^a-z0-9_\-]/', '', (string)$k)); }
@@ -112,6 +116,16 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin) {
             check('archivo no-PNG no se guarda', !is_file($uploads . '/imagenes/muestra/b.png'));
             check('redirect con error de PNG invalido', strpos($redirect, 'ec_error=') !== false);
             break;
+        case 'nonce':
+            $sub = isset($GLOBALS['test_nonce_sub']) ? $GLOBALS['test_nonce_sub'] : 'nonce';
+            check('respuesta JSON error (seguridad)', is_array($json) && $json['success'] === false);
+            $causa = is_array($json) ? (string)$json['data'] : '';
+            if ($sub === 'cap') {
+                check('causa motor:capacidad:invalida', strpos($causa, 'motor:capacidad:invalida') !== false);
+            } else {
+                check('causa motor:nonce:invalido', strpos($causa, 'motor:nonce:invalido') !== false);
+            }
+            break;
         default:
             check('fase desconocida', false);
     }
@@ -129,7 +143,7 @@ $base = dirname($plugin);
 function preparar_entorno($testBase, $base)
 {
     // muestra.pdf ya no se versiona: vive en la carpeta de datos del proyecto (uploads/).
-    $muestra = dirname($base) . '/uploads/personalizador-pdf/pdfs/muestra.pdf';
+    $muestra = dirname($base) . '/uploads/pmu/pdfs/muestra.pdf';
     if (!is_file($muestra)) {
         fwrite(STDERR, "No se encontro muestra.pdf en {$muestra}\n");
         exit(1);
@@ -229,5 +243,24 @@ switch ($fase) {
         ];
         $_REQUEST = $_POST;
         $p->handle_procesar(); // exit en redirigir(ec_error)
+        break;
+
+    case 'nonce':
+        // La verificacion de seguridad ocurre antes de tocar datos: no requiere muestra.pdf.
+        $sub = isset($argv[2]) ? (string)$argv[2] : 'nonce';
+        $GLOBALS['test_nonce_sub'] = $sub;
+        if ($sub === 'cap') {
+            putenv('PD_PUENTE_SIN_CAP=1'); // capacidad denegada: debe frenar antes que nada
+        } else {
+            putenv('PD_PUENTE_SIN_NONCE=1'); // nonce invalido: debe frenar antes de la op
+        }
+        $_POST = [
+            'action' => 'pmu_uploads',
+            'op' => 'listar',
+            'scope' => 'img',
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_pmu_uploads(); // exit en wp_send_json_error
         break;
 }

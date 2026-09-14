@@ -35,7 +35,7 @@ postMessage({
 
 - Las cinco claves de `urls` son obligatorias y apuntan a la **raíz única**.
 - Los inventarios iniciales salen del motor de recursos (mismo contrato que `op=listar`).
-- La credencial corresponde a la acción del motor; el endpoint verifica además la capacidad.
+- Una sola credencial `nonces.motor` para la acción `pmu_uploads`; el endpoint verifica además la capacidad. Prohibidas las credenciales por operación.
 - Prohibido: emitir claves por operación (guardar/borrar/subir/cambiar por recurso), emitir bases de una raíz alternativa o emitir rutas locales del módulo.
 
 ## Reglas del lado del editor

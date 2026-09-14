@@ -17,7 +17,7 @@ Personalizador PDF (antes "Extractor Corel") automatiza el reemplazo de placehol
 La administracion funciona como consola de trabajo con 3 pestanas:
 
 1. **PDFs y procesamiento**: se detectan los placeholders, se agrupan por color y se generan los datos (dataset) del PDF; se carga una imagen por grupo (computadora o galeria de medios) y se procesa el PDF final.
-2. **Estilos de Texto**: editor integrado del sistema TextMuy (100% en el navegador, estilo TextStudio) para disenar estilos de texto y guardarlos como presets `.txm` en el servidor (disponibles en todos los navegadores y en el selector de estilo de cada grupo del PDF). Las imagenes para rellenos y fondos se suben a un directorio propio del modulo y se reutilizan entre presets.
+2. **Estilos de Texto**: editor integrado del sistema TextMuy (100% en el navegador, estilo TextStudio) para disenar estilos de texto y guardarlos como presets `.txm` en el servidor (disponibles en todos los navegadores y en el selector de estilo de cada grupo del PDF). Las imagenes para rellenos y fondos se suben a `uploads/pmu/img/` y se reutilizan entre presets.
 3. **Ayuda**: documentacion interna.
 
 A diferencia de la version original (Flask + Python), esta es **100% PHP puro** en el servidor y se ejecuta directamente en WordPress, por lo que funciona en alojamientos compartidos (Hostinger, etc.) sin Python, Node ni procesos persistentes. El modulo TextMuy corre en el navegador del administrador (Canvas + WebGL); no agrega carga al servidor.
@@ -28,7 +28,7 @@ A diferencia de la version original (Flask + Python), esta es **100% PHP puro** 
 * Extension zlib (casi siempre disponible)
 * La extension GD es opcional: sin GD el motor procesa imagenes PNG (8 bits, sin entrelazar) con su decodificador propio; para JPEG/GIF/WebP se necesita GD (o un JPEG cuyo tamano coincida exactamente con el del grupo)
 
-**Datos guardados**: PDFs y proceso en `wp-content/uploads/pmu/` (`pdfs/`, `datos/`, `imagenes/` por grupo, `placeholders/`, `salidas/`); datos TextMuy en la ubicacion unica `wp-content/uploads/pmu/tm/` (catalogos `.json` + fisicos + `.txm` + `sprite.webp/json` por ambito). La carpeta del plugin queda 100% de solo lectura.
+**Datos guardados**: PDFs y proceso en `wp-content/uploads/pmu/` (`pdfs/`, `datos/`, `imagenes/` por grupo, `placeholders/`, `salidas/`); datos TextMuy en la ubicacion unica `wp-content/uploads/pmu/{fonts,img,tm-presets}/` (catalogos `fonts.json`/`img.json`/`presets.json` + fisicos + `.txm` + `thumbs.webp` por ambito). La carpeta del plugin queda 100% de solo lectura.
 
 **Modulo TextMuy (opcional)**: desde 4.0.0 el editor de estilos de texto NO viene empaquetado con el plugin. Se importa a mano copiando el proyecto `textmuy` a `wp-content/plugins/personalizador-pdf/modules/textmuy/` (instrucciones en `modules/LEEME.md`). Sin el modulo, el resto del plugin funciona con normalidad.
 

@@ -10,7 +10,8 @@
 
 | Aspecto | Regla |
 |---|---|
-| Seguridad | Capacidad de administración verificada en servidor + `_wpnonce` con la acción del motor |
+| Seguridad | Capacidad `manage_options` verificada en servidor en `handle_pmu_uploads()` + `_wpnonce` de la acción `pmu_uploads` verificado en servidor al inicio de `handle_request()`, antes de cualquier `op` |
+| Orden de rechazo | capacidad → nonce → `op` → ámbito → payload |
 | Campos comunes | `op` (obligatorio), `scope`/ámbito según la operación |
 | Respuesta | JSON con `success` y, en error, causa con el formato fijo del contrato |
 | Causa de error | `motor:<op>:<motivo>` (por ejemplo `motor:alta:ambito:invalido`) |
@@ -23,6 +24,8 @@
 - Ámbitos del editor (subconjunto): `fonts`, `img`, `tm-presets` — sin alias
 
 ## Operaciones
+
+Params canónicos: `scope` (alias aceptado `ambito`), `title` (alias `titulo`), `file` (alias `archivo`); `sprite` usa `scope`; `miniatura` usa `nombre`. Los alias se normalizan en un punto de `handle_request()`.
 
 | `op` | Payload | Éxito | Efecto en disco |
 |---|---|---|---|
@@ -40,7 +43,7 @@
 3. Catálogo de un ámbito: nombre **explícito** por ámbito (`fonts.json`, `img.json`, `presets.json`); el nombre del archivo no se deriva del nombre del directorio.
 4. Sprite: `uploads/pmu/<scope>/thumbs.webp`.
 5. Miniaturas de grupos: `uploads/pmu/img/{pdf}-{letra}.webp`.
-6. Prohibido: cualquier ruta que resuelva a `uploads/tm/` o a `uploads/pmu/tm/`.
+6. Prohibido: cualquier ruta que resuelva a `uploads/tm/` o a `uploads/pmu/tm/` salvo la vigente `uploads/pmu/tm-presets/`.
 
 ## Errores tipificados de referencia
 
@@ -53,6 +56,7 @@
 | Directora no escribible | `motor:<op>:directorio:no_escribible` |
 | Archivo con formato no admitido | `motor:<op>:tipo:invalido` |
 | Capacidad insuficiente | `motor:capacidad:invalida` |
+| Nonce ausente o inválido | `motor:nonce:invalido` |
 
 ## Propagación al editor
 

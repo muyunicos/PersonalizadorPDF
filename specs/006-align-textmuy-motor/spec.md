@@ -1,6 +1,6 @@
 # Feature Specification: align-textmuy-motor
 
-**Feature Branch**: `main-align-textmuy-motor`
+**Feature Branch**: `main`
 
 **Created**: 2026-09-14
 
@@ -90,7 +90,7 @@ Quien instala o despliega el sistema sigue la documentación del plugin (incluid
 ### Functional Requirements
 
 - **FR-001**: El sistema DEBE tener una única ubicación de datos para los recursos del editor (tipografías, imágenes y estilos guardados), sin rutas alternativas ni copias del mismo dato.
-- **FR-002**: El sistema DEBE exponer al editor un único punto de operaciones para listar, dar de alta, dar de baja, editar, persistir la hoja de miniaturas y guardar miniaturas de grupos, con credenciales de seguridad por operación.
+- **FR-002**: El sistema DEBE exponer al editor un único punto de operaciones para listar, dar de alta, dar de baja, editar, persistir la hoja de miniaturas y guardar miniaturas de grupos, con una sola credencial `nonces.motor` (acción `pmu_uploads`) más capacidad de administración verificadas en servidor.
 - **FR-003**: El editor DEBE recibir del sistema las ubicaciones de lectura, las credenciales y el inventario inicial, y DEBE negarse a operar si esa información no está disponible (sin datos locales de respaldo ni modos alternativos).
 - **FR-004**: El editor NO DEBE leer ni escribir recursos por fuera del punto único de operaciones (sin escritura directa de inventarios ni de archivos).
 - **FR-005**: Cada ámbito DEBE tener exactamente un inventario y una hoja de miniaturas, ubicados junto a los archivos físicos del ámbito.
@@ -112,7 +112,7 @@ Quien instala o despliega el sistema sigue la documentación del plugin (incluid
 - **Ámbito**: colección de recursos de la misma naturaleza (tipografías, imágenes, estilos guardados). Cada ámbito tiene un inventario y una hoja de miniaturas.
 - **Inventario**: registro por ámbito de los recursos vigentes; incluye huecos de recursos dados de baja y debe coincidir con los archivos existentes.
 - **Hoja de miniaturas**: imagen que reúne las miniaturas del ámbito, posicionadas por el identificador del recurso.
-- **Estilo guardado**: definición reutilizable de estilo de texto que referencia recursos por identificador.
+- **Estilo guardado**: definición reutilizable de estilo de texto que referencia recursos por identificador (preset `.txm`, delta `textmuy-project` v1; el módulo lo llama "preset" y vive en `tm-presets/`).
 - **Grupo de PDF**: hueco del PDF que se personaliza con texto estilizado; su render consume el estilo y sus recursos.
 - **Puente**: canal por el que el sistema entrega al editor las ubicaciones de lectura, las credenciales y el inventario inicial, y por el que el editor solicita operaciones.
 
@@ -122,9 +122,9 @@ Quien instala o despliega el sistema sigue la documentación del plugin (incluid
 
 - **SC-001**: El 100% de los recursos subidos desde la pestaña del editor aparecen listados con miniatura después de recargar la página (hoy no hay garantía: las galerías pueden quedar vacías o con miniaturas rotas).
 - **SC-002**: Tras 20 operaciones consecutivas (altas, renombres y bajas) existe exactamente 1 copia por recurso y 1 inventario + 1 hoja de miniaturas por ámbito: 0 duplicados y 0 residuos.
-- **SC-003**: 0 ubicaciones de datos distintas de la vigente y 0 referencias a ellas en código o documentación (verificable por búsqueda).
+- **SC-003**: 0 ubicaciones de datos distintas de la vigente y 0 referencias a ellas en código y documentación vigente, verificable por búsqueda según §2 de `quickstart.md` (excluye artefactos de especificación en `specs/` y el historial del módulo en `modules/textmuy/here/`, y el `== Changelog ==` de `readme.txt` como historial).
 - **SC-004**: El 100% de las operaciones fallidas muestra un motivo accionable (operación, ámbito y causa); 0 fallos silenciosos.
-- **SC-005**: El 100% de las verificaciones automáticas del proyecto pasa sin fallos por rutas de datos.
+- **SC-005**: El 100% de las verificaciones automáticas del proyecto (§1 de `quickstart.md`: `php -l`, `motor_smoke`, `parity`, `node --check` + 10 suites Node) pasa en verde; `motor_smoke` y `parity` dependen de `uploads/pmu/pdfs/muestra.pdf` (dato del administrador) y quedan condicionadas a disponer de ese dato — verificado en el recorrido final T029.
 - **SC-006**: Restaurar todos los recursos del editor en una instalación limpia toma menos de 2 minutos y una sola copia de carpeta de datos.
 - **SC-007**: El 100% de los pasos de la guía de despliegue del plugin se completa sin encontrar archivos inexistentes.
 - **SC-008**: El circuito completo (subir imagen + guardar estilo + procesar un grupo) se completa sin errores en un único intento en el 100% de las pruebas manuales.
@@ -134,7 +134,7 @@ Quien instala o despliega el sistema sigue la documentación del plugin (incluid
 - Entorno de desarrollo controlado y sin datos en producción que migrar: no se requiere compatibilidad ni migración desde versiones anteriores; las carpetas de datos anteriores se pueden borrar.
 - La ubicación vigente de los recursos del editor es la raíz de datos del plugin, con ámbitos de tipografías, imágenes y estilos guardados; el nombre del inventario de estilos es el que ya existe en disco.
 - El motor del sistema es el único responsable de escribir inventarios, archivos y hojas de miniaturas; el editor es solo consumidor.
-- El detalle de ejecución de la mitad del editor ya está desglosado en su propio repositorio y se considera el plan de trabajo de esa parte; este documento fija el resultado esperado.
+- El detalle de ejecución del módulo integrado vive en `modules/textmuy/` de este repo y se considera el plan de trabajo de esa parte; este documento fija el resultado esperado.
 - Se mantiene el marco vigente del proyecto: procesamiento en el servidor del sitio, sin dependencias nativas, y herramientas de prueba separadas del servidor productivo.
 - Los recursos vigentes (tipografías, imágenes y estilos presentes hoy) son válidos y se conservan tal cual.
 - **Fuera de alcance**: funciones nuevas del editor (efectos, plantillas, animaciones), rediseño de la interfaz, y cualquier cambio en el procesamiento del PDF distinto de consumir correctamente los recursos vigentes.

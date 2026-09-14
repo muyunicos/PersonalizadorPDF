@@ -24,22 +24,31 @@ if (!$this->modulo_textmuy_disponible()) {
 }
 
 $modulo_url = PERSONALIZADOR_PDF_URL . 'modules/textmuy/index.html';
-// Config del puente plugin <-> modulo: motor unico de galerias (Const. VII)
+// Config del puente plugin <-> modulo: motor unico de recursos (Const. II)
 // oculto en el iframe via postMessage same-origin al cargar. El modulo NO
-// conoce handlers sueltos: solo motorUrl + op=... (contracts/motor-contract.md)
-// + bases de lectura + listados iniciales generados por el motor.
-// Los datos TextMuy viven en la ubicacion unica wp-content/uploads/pmu/tm-presets/.
-$pmu_galeria = $this->pmu_galeria();
-$recursos = $pmu_galeria->listar();
+// conoce handlers sueltos: solo urls.motor + op=... (contracts/motor-resources.md)
+// + bases de lectura + listados iniciales generados por el motor, con UNA
+// credencial nonces.motor. Los datos TextMuy viven en la ubicacion unica
+// wp-content/uploads/pmu/{fonts,img,tm-presets}/.
+$pmu_uploads = $this->pmu_uploads();
+try {
+    $recursos = $pmu_uploads->listar_todo();
+    $aviso_puente = '';
+} catch (Exception $e) {
+    // Fallo del inventario inicial (catalogo invalido, permisos, etc.):
+    // causa visible en la pestana; el editor se recibe vacio y se niega a operar.
+    $recursos = ['presets' => [], 'imagenes' => [], 'fuentes' => []];
+    $aviso_puente = $e->getMessage();
+}
 $puente = [
     'urls' => [
         'motor' => admin_url('admin-post.php?action=pmu_uploads'),
         // Script del motor de miniaturas y sprites para inyectar en el iframe
         'miniaturas' => PERSONALIZADOR_PDF_URL . 'assets/miniaturas.js',
         // Lectura de presets (.txm), imagenes y fuentes: bases de uploads.
-        'presetsBase' => $pmu_galeria->url_ambito('presets'),
-        'fuentesBase' => $pmu_galeria->url_ambito('fonts'),
-        'imagenesBase' => $pmu_galeria->url_ambito('img'),
+        'presetsBase' => $pmu_uploads->url_ambito('tm-presets'),
+        'fuentesBase' => $pmu_uploads->url_ambito('fonts'),
+        'imagenesBase' => $pmu_uploads->url_ambito('img'),
     ],
     'nonces' => [
         'motor' => wp_create_nonce('pmu_uploads'),
@@ -49,6 +58,13 @@ $puente = [
     'fuentes' => $recursos['fuentes'],
 ];
 ?>
+<?php if ($aviso_puente !== ''): ?>
+<div class="notice notice-error"><p>
+    <strong>Estilos de Texto:</strong> no se pudo preparar el inventario de recursos
+    (<code><?php echo esc_html($aviso_puente); ?></code>). El editor se abrira sin recursos;
+    corrija la causa y recargue la pagina.
+</p></div>
+<?php endif; ?>
 <div class="ec-textmuy-frame-wrap">
     <iframe
         id="ec-textmuy-frame"

@@ -27,13 +27,11 @@ if (!defined('ABSPATH')) {
         estilo TextStudio). Se disenan estilos (fuente, relleno, contorno, sombras, efectos) y se guardan como
         <em>presets</em>.</p>
     <ul>
-        <li><strong>Presets:</strong> viven en la ubicacion unica <code>uploads/tm/presets/</code>
+        <li><strong>Presets:</strong> viven en la ubicacion unica <code>uploads/pmu/tm-presets/</code>
             (catalogo <code>presets.json</code> + <code>.txm</code>), compartidos por todos los
             navegadores del equipo.</li>
-        <li><strong>Presets historicos (localStorage):</strong> las versiones anteriores guardaban
-            en el navegador; la galeria del editor ofrece migrarlos una unica vez.</li>
-        <li><strong>Integracion:</strong> el plan aprobado permite asignar "texto + estilo" a cada grupo del
-            PDF y generar la imagen del texto al pulsar <em>Procesar</em>, sin tocar el motor PHP.</li>
+        <li><strong>Integracion:</strong> cada grupo del PDF puede llevar "texto + estilo";
+            al pulsar <em>Procesar</em> se genera la imagen del texto, sin tocar el motor PHP.</li>
     </ul>
 </div>
 

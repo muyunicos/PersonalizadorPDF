@@ -10,12 +10,12 @@ Entidades del motor unico de recursos y del puente con el editor. Los formatos d
 
 | Campo | Tipo | Regla |
 |---|---|---|
-| `scope` | string | Editor: `fonts`, `img`, `tm-presets` (sin alias). El motor admite ademas `pdfs`, `orders`, `tmp` |
+| `scope` | string | Editor: `fonts`, `img`, `tm-presets` (sin alias; el editor envia `scope`, se acepta `ambito` como alias). `pdfs`, `orders`, `tmp` son ambitos de datos del motor sin catalogo ni sprite (fuera del contrato de galerias) |
 | `dir` | ruta | `uploads/pmu/<scope>/`, junto a su catalogo y su sprite |
 | `catalogo` | archivo | Nombre explicito por ambito (ver 2); nunca derivado del directorio |
 | `sprite` | archivo | `thumbs.webp`, uno por ambito (ver 5) |
 
-**Reglas de validacion**: un catalogo y un sprite por ambito; ambito fuera de la whitelist ⇒ rechazo con causa; prohibidas las raices `uploads/tm/` y `uploads/pmu/tm/`.
+**Reglas de validacion**: un catalogo y un sprite por ambito; ambito fuera de la whitelist ⇒ rechazo con causa; prohibidas las raices heredadas (`uploads/tm/` y una raiz `tm` propia dentro de `pmu` distinta de la vigente `tm-presets`).
 
 ---
 
@@ -134,9 +134,9 @@ Nombres por ambito: `fonts` → `fonts.json`, `img` → `img.json`, `tm-presets`
 
 | Estado | Evento | Estado final |
 |---|---|---|
-| Sin catálogo | Primera lectura | Catálogo vacío creado (semilla diferida) |
+| Sin catálogo | `op=listar` | Catálogo vacío creado (semilla diferida) + aviso no bloqueante `motor:listar:catalogo:ausente` |
 | Catálogo presente, sprite ausente | Apertura de galería | Sprite generado y persistido |
-| Catálogo inválido | Lectura | Rechazo con causa visible; sin sustituciones |
+| Catálogo inválido | Lectura | Rechazo `motor:<op>:catalogo:invalido` con causa visible; sin sustituciones |
 
 **Estilo guardado**
 

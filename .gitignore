@@ -5,11 +5,8 @@ output_*.pdf
 tests/salida_*.pdf
 tests/*.tmp
 
-# Modulos autocontenidos: NO se versionan, se importan a mano tras cada
-# actualizacion del modulo (ver modules/LEEME.md).
-modules/textmuy/
+# El modulo modules/textmuy/ SE versiona en este repositorio (v4.2).
 
 # Configuraciones de AI Assistant (Speckit recomendaciones).
 .clinerules/
 .specify/
-

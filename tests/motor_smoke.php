@@ -37,7 +37,7 @@ function check($nombre, $cond, $detalle = '')
 $base = dirname(__DIR__);
 // muestra.pdf ya no se versiona: vive en la carpeta de datos del proyecto (uploads/).
 $pdfRuta = dirname($base) . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR
-    . 'personalizador-pdf' . DIRECTORY_SEPARATOR . 'pdfs' . DIRECTORY_SEPARATOR . 'muestra.pdf';
+    . 'pmu' . DIRECTORY_SEPARATOR . 'pdfs' . DIRECTORY_SEPARATOR . 'muestra.pdf';
 $fixtures = __DIR__ . DIRECTORY_SEPARATOR . 'fixtures';
 $salida = __DIR__ . DIRECTORY_SEPARATOR . 'salida_motor.pdf';
 

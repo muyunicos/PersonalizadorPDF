@@ -1,6 +1,6 @@
 # Implementation Plan: align-textmuy-motor
 
-**Branch**: `main` (sin rama de feature: no hay hook `before_plan` registrado) | **Date**: 2026-09-14 | **Spec**: [spec.md](./spec.md)
+**Branch**: `main` | **Date**: 2026-09-14 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `specs/006-align-textmuy-motor/spec.md`
 
@@ -8,7 +8,7 @@
 
 ## Summary
 
-Alinear el cliente del editor (repositorio `textmuy`) y el plugin con el contrato unico ya documentado: un solo responsable de la verdad de almacenamiento en `PMU_Uploads` (rutas, catalogos, altas/bajas/ediciones, unico `handle_request()`), con `PMU_Galeria` conservada como ayudante puro de miniaturas (celdas, composicion del `thumbs.webp`, validacion de `webp`, saneo; sin rutas propias ni catalogos ni dispatcher), raiz unica `uploads/pmu/` con ambitos `fonts` / `img` / `tm-presets` (catalogos `fonts.json` / `img.json` / `presets.json`), puente `textmuy-bridge` (`urls` + `nonces` + inventarios) como unico acceso del editor, operaciones de escritura por `POST` al endpoint unico con `op` (`listar`, `alta`, `baja`, `editar`, `sprite`, `miniatura`), purga total del codigo y las rutas heredadas, y documentacion con un solo valor por dato. Decisiones y alternativas en [research.md](./research.md); entidades en [data-model.md](./data-model.md); contratos en [contracts/](./contracts/); recorrido de validacion en [quickstart.md](./quickstart.md).
+Alinear el cliente del editor (módulo integrado `modules/textmuy/`, bajo control total) y el plugin con el contrato unico ya documentado: un solo responsable de la verdad de almacenamiento en `PMU_Uploads` (rutas, catalogos, altas/bajas/ediciones, unico `handle_request()`), con `PMU_Galeria` conservada como ayudante puro de miniaturas (celdas, composicion del `thumbs.webp`, validacion de `webp`, saneo; sin rutas propias ni catalogos ni dispatcher), raiz unica `uploads/pmu/` con ambitos `fonts` / `img` / `tm-presets` (catalogos `fonts.json` / `img.json` / `presets.json`), puente `textmuy-bridge` (`urls` + `nonces` + inventarios) como unico acceso del editor, operaciones de escritura por `POST` al endpoint unico con `op` (`listar`, `alta`, `baja`, `editar`, `sprite`, `miniatura`), purga total del codigo y las rutas heredadas, y documentacion con un solo valor por dato. Decisiones y alternativas en [research.md](./research.md); entidades en [data-model.md](./data-model.md); contratos en [contracts/](./contracts/); recorrido de validacion en [quickstart.md](./quickstart.md).
 
 ## Technical Context
 
@@ -28,11 +28,11 @@ Alinear el cliente del editor (repositorio `textmuy`) y el plugin con el contrat
 
 **Target Platform**: Hosting compartido del servidor del sitio (procesamiento server-side en PHP) + navegador del administrador (editor client-side).
 
-**Project Type**: Plugin WordPress (PHP) + modulo frontend autocontenido (repo hermano `textmuy`, con `AGENTS.md` y constitucion propios v3.1.0).
+**Project Type**: Plugin WordPress (PHP) + modulo frontend integrado en `modules/textmuy/` de este repo.
 
 **Performance Goals**: Restauracion completa de los recursos del editor en instalacion limpia en menos de 2 minutos con una sola copia de carpeta (SC-006); recorrido principal (subir imagen + guardar estilo + procesar un grupo) sin errores al primer intento (SC-008).
 
-**Constraints**: Sin dependencias nativas; las escrituras solo ocurren por el endpoint unico con credencial por operacion; el editor se niega a operar sin puente (sin modos alternativos ni datos locales de respaldo); cero legado: sin migraciones ni compatibilidad con datos o codigo anteriores.
+**Constraints**: Sin dependencias nativas; las escrituras solo ocurren por el endpoint unico con una sola credencial `nonces.motor` (acción `pmu_uploads`) más capacidad de administración; el editor se niega a operar sin puente (sin modos alternativos ni datos locales de respaldo); cero legado: sin migraciones ni compatibilidad con datos o codigo anteriores.
 
 **Scale/Scope**: 3 ambitos del editor (`fonts`, `img`, `tm-presets`) con inventarios de 11+ estilos y recursos vigentes; 20 operaciones consecutivas sin duplicados ni residuos (SC-002); 16 requisitos funcionales, 8 criterios de exito, 7 entidades.
 
@@ -53,7 +53,7 @@ Constitucion del plugin v1.0.0 (`.specify/memory/constitution.md`) + constitucio
 | Workflow: tests tras cambios, contratos claros | Pasa | Puertas obligatorias al cierre (R10): `php -l`, smoke, parity, `node --check` + 10 suites, busqueda de control y recorrido integrado del quickstart. |
 | Governance (documentar primero) | Pasa | Este plan + research + contratos documentan el cambio antes de implementarlo; `/speckit-tasks` generara las tareas despues. |
 
-**Re-check post-diseno (Fase 1)**: los contratos (`motor-resources.md`, `bridge-editor.md`, `catalog-schema.md`) y el modelo de datos respetan todos los principios: responsabilidad unica (II), raiz unica (IV), cero legado (V) y seguridad por capacidad + credencial por operacion. Sin violaciones que justificar: **Complexity Tracking no aplica**.
+**Re-check post-diseno (Fase 1)**: los contratos (`motor-resources.md`, `bridge-editor.md`, `catalog-schema.md`) y el modelo de datos respetan todos los principios: responsabilidad unica (II), raiz unica (IV), cero legado (V) y seguridad por capacidad + credencial unica del motor. Sin violaciones que justificar: **Complexity Tracking no aplica**.
 
 ## Project Structure
 
@@ -83,7 +83,6 @@ specs/006-align-textmuy-motor/
 -->
 
 ```text
-```text
 personalizador-pdf/              # Plugin (repo actual)
 ├── personalizador-pdf.php       # Registro: endpoint unico, purga de handlers/ayudantes heredados
 ├── inc/
@@ -98,17 +97,17 @@ personalizador-pdf/              # Plugin (repo actual)
 │   └── admin.css                # (sin cambios previstos)
 ├── engine/                      # Motor PDF: SIN CAMBIOS en esta feature
 ├── modules/
-│   └── textmuy/                 # Modulo (repo hermano): cliente al contrato unico, purga de respaldo
-├── tests/                       # Puertas: motor_smoke.php, parity.php
-├── AGENTS.md                    # Correccion de los 2 puntos contradictorios
+│   └── textmuy/                 # Modulo integrado: cliente al contrato unico, purga de respaldo
+├── tests/                       # Puertas: motor_smoke.php, parity.php, texto_puente.php (fase nonce)
+├── AGENTS.md                    # Correccion de los puntos contradictorios
 ├── readme.txt                   # Coherencia con el contrato vigente
 └── uploads/pmu/                 # Datos (no versionados): fonts/ img/ tm-presets/ pdfs/ orders/ tmp/
 
-modules/textmuy/                 # Repo hermano textmuy (constitucion v3.1.0, plan propio T006-T019)
+modules/textmuy/                 # Modulo integrado bajo control total (se edita directo + bump ?v=RCn)
 └── js/                          # preset-manager.js, catalog.js, api.js, fonts.js, galeria.js...
 ```
 
-**Structure Decision**: estructura existente en ambos repos, sin piezas nuevas y sin eliminar piezas. El plan modifica el plugin (verdad unica en `PMU_Uploads` + `PMU_Galeria` como ayudante de miniaturas + puente + purga + docs) y dirige el cliente del editor hacia su propio plan de trabajo ya desglosado (T006-T019 en `here/specs/002-galeria-engine/tasks.md`), fijando aca el resultado esperado via contratos.
+**Structure Decision**: estructura existente en este repo, sin piezas nuevas de arquitectura y con purga del legado listado (T007, T008, T012, T024). El plan modifica el plugin (verdad unica en `PMU_Uploads` + `PMU_Galeria` como ayudante de miniaturas + puente + purga + docs) y el modulo integrado `modules/textmuy/` (edicion directa, tests Node y bump `?v=RCn` en ambos HTML), fijando aca el resultado esperado via contratos.
 
 ## Complexity Tracking
 
