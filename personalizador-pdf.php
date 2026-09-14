@@ -59,24 +59,10 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_borrar', [$this, 'handle_borrar']);
 
         // Motor de galerias TextMuy (Const. VII): UNICO endpoint
-        // action=tm_galeria con op=listar|alta|baja|editar|sprite|miniatura.
+        // action=pmu_uploads con op=listar|alta|baja|editar|sprite|miniatura.
         // Handlers sueltos purgados (Const. VIII).
-        add_action('admin_post_tm_galeria', [$this, 'handle_tm_galeria']);
         // Endpoint PMU Uploads (motor unificado de recursos): Const. VII
         add_action("admin_post_pmu_uploads", [$this, "handle_pmu_uploads"]);
-
-        // Compatibilidad temporal (ciclo 3.0.x): los hooks legacy "extractor_corel_*"
-        // siguen respondiendo para no romper bookmarks o pestanas abiertas de <= 2.0.0.
-        // Se eliminan en la version 3.1.
-        add_action('admin_post_extractor_corel_subir_pdf', [$this, 'handle_subir_pdf']);
-        add_action('admin_post_extractor_corel_reanalizar', [$this, 'handle_reanalizar']);
-        add_action('admin_post_extractor_corel_subir_imagen', [$this, 'handle_subir_imagen']);
-        add_action('admin_post_extractor_corel_imagen_galeria', [$this, 'handle_imagen_galeria']);
-        add_action('admin_post_extractor_corel_quitar_imagen', [$this, 'handle_quitar_imagen']);
-        add_action('admin_post_extractor_corel_procesar', [$this, 'handle_procesar']);
-        add_action('admin_post_extractor_corel_descargar', [$this, 'handle_descargar']);
-        add_action('admin_post_extractor_corel_ver', [$this, 'handle_ver']);
-        add_action('admin_post_extractor_corel_borrar', [$this, 'handle_borrar']);
     }
 
     /* ==================== Rutas y carpetas de datos ==================== */
@@ -115,14 +101,15 @@ class Personalizador_PDF_Plugin
     /* ==================== Motor de galerias (Const. VII) ==================== */
 
     /** Instancia unica del motor (clase TM_Galeria, inc/class-tm-galeria.php). */
-    private function tm_galeria()
+    /** Instancia unica del motor de galerías (clase PMU_Galeria, inc/class-pmu-galeria.php). */
+    private function pmu_galeria()
     {
         static $motor = null;
         if ($motor === null) {
-            if (!class_exists('TM_Galeria')) {
-                require_once PERSONALIZADOR_PDF_PATH . 'inc' . DIRECTORY_SEPARATOR . 'class-tm-galeria.php';
+            if (!class_exists("PMU_Galeria")) {
+                require_once PERSONALIZADOR_PDF_PATH . "inc" . DIRECTORY_SEPARATOR . "class-pmu-galeria.php";
             }
-            $motor = new TM_Galeria();
+            $motor = new PMU_Galeria();
         }
         return $motor;
     }
@@ -275,8 +262,8 @@ class Personalizador_PDF_Plugin
             'nonce' => wp_create_nonce('personalizador_pdf_nonce'),
             'version' => PERSONALIZADOR_PDF_VERSION,
             'renderCoreUrl' => PERSONALIZADOR_PDF_URL . 'modules/textmuy/render-core.html',
-            'motorUrl' => admin_url('admin-post.php?action=tm_galeria'),
-            'motorNonce' => wp_create_nonce('tm_galeria'),
+            'motorUrl' => admin_url('admin-post.php?action=pmu_uploads'),
+            'motorNonce' => wp_create_nonce('pmu_uploads'),
             'imagenesBase' => $this->url_base_textmuy_imagenes(),
         ]);
     }
@@ -1338,12 +1325,6 @@ class Personalizador_PDF_Plugin
     /* ==================== Handler unificado TM_Galeria ==================== */
 
     /** Endpoint unificado para todas las operaciones de TM_Galeria. */
-    public function handle_tm_galeria()
-    {
-        $tm_galeria = $this->tm_galeria();
-        $tm_galeria->handle_request();
-    }
-
     /* ==================== Handlers: PDFs ==================== */
 
     /** Sube un PDF, resuelve conflictos de nombre y genera el dataset. */

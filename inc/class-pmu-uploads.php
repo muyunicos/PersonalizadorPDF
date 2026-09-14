@@ -5,9 +5,22 @@ if (!defined('ABSPATH')) {
 
 /**
  * PMU_Uploads - Motor unico de cargas y gestion de recursos.
+ * Delega operaciones de miniatura/sprite a PMU_Galeria.
  */
 class PMU_Uploads
 {
+    private $galeria;
+
+    private function get_galeria()
+    {
+        if ($this->galeria === null) {
+            if (!class_exists('PMU_Galeria')) {
+                require_once PERSONALIZADOR_PDF_PATH . 'inc' . DIRECTORY_SEPARATOR . 'class-pmu-galeria.php';
+            }
+            $this->galeria = new PMU_Galeria();
+        }
+        return $this->galeria;
+    }
     private static $AMBITOS = ['fonts', 'img', 'pdfs', 'orders', 'tmp', 'tm-presets'];
 
     private $thumbs = [
@@ -227,10 +240,20 @@ class PMU_Uploads
                     wp_send_json_success($this->editar($_POST['ambito'], (int)$_POST['id'], $nuevo));
                     break;
                 case 'sprite':
-                    wp_send_json_error('motor:sprite:pendiente');
+                    if (!isset($_POST['scope'])) {
+                        wp_send_json_error('motor:sprite:falta:scope');
+                    }
+                    if (!isset($_FILES['archivo']) || $_FILES['archivo']['error'] !== UPLOAD_ERR_OK) {
+                        wp_send_json_error('motor:sprite:falta:archivo');
+                    }
+                    wp_send_json_success($this->get_galeria()->sprite($_POST['scope'], $_FILES['archivo']));
                     break;
                 case 'miniatura':
-                    wp_send_json_error('motor:miniatura:pendiente');
+                    if (!isset($_FILES['archivo']) || $_FILES['archivo']['error'] !== UPLOAD_ERR_OK) {
+                        wp_send_json_error('motor:miniatura:falta:archivo');
+                    }
+                    $nombre = (string)$_POST['nombre'] ?? '';
+                    wp_send_json_success($this->get_galeria()->miniatura($nombre, $_FILES['archivo']));
                     break;
             }
         } catch (Exception $e) {

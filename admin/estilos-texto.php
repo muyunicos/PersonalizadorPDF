@@ -28,21 +28,21 @@ $modulo_url = PERSONALIZADOR_PDF_URL . 'modules/textmuy/index.html';
 // oculto en el iframe via postMessage same-origin al cargar. El modulo NO
 // conoce handlers sueltos: solo motorUrl + op=... (contracts/motor-contract.md)
 // + bases de lectura + listados iniciales generados por el motor.
-// Los datos TextMuy viven en la ubicacion unica wp-content/uploads/tm/{fonts,img,presets}.
-$tm_galeria = $this->tm_galeria();
-$recursos = $tm_galeria->listar();
+// Los datos TextMuy viven en la ubicacion unica wp-content/uploads/pmu/tm-presets/.
+$pmu_galeria = $this->pmu_galeria();
+$recursos = $pmu_galeria->listar();
 $puente = [
     'urls' => [
-        'motor' => admin_url('admin-post.php?action=tm_galeria'),
+        'motor' => admin_url('admin-post.php?action=pmu_uploads'),
         // Script del motor de miniaturas y sprites para inyectar en el iframe
         'miniaturas' => PERSONALIZADOR_PDF_URL . 'assets/miniaturas.js',
         // Lectura de presets (.txm), imagenes y fuentes: bases de uploads.
-        'presetsBase' => $tm_galeria->url_ambito('presets'),
-        'fuentesBase' => $tm_galeria->url_ambito('fonts'),
-        'imagenesBase' => $tm_galeria->url_ambito('img'),
+        'presetsBase' => $pmu_galeria->url_ambito('presets'),
+        'fuentesBase' => $pmu_galeria->url_ambito('fonts'),
+        'imagenesBase' => $pmu_galeria->url_ambito('img'),
     ],
     'nonces' => [
-        'motor' => wp_create_nonce('tm_galeria'),
+        'motor' => wp_create_nonce('pmu_uploads'),
     ],
     'presets' => $recursos['presets'],
     'imagenes' => $recursos['imagenes'],

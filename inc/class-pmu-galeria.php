@@ -4,18 +4,18 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * TM_Galeria — Motor unico de galerias de TextMuy (Const. VII).
+ * PMU_Galeria — Motor unico de galerias de TextMuy (Const. VII).
  *
  * UNICO responsable de leer, escribir, listar y persistir
  * uploads/tm/{fonts,img,presets} (catalogos v5.0 tuplas
  * [id,title,cats,file], fisicos y sprite thumbs.webp por ambito).
  * Los handlers sueltos admin_post_personalizador_pdf_textmuy_* NO
- * existen: todo pasa por action=tm_galeria con op= (Contrato
+ * existen: todo pasa por action=pmu_uploads con op= (Contrato
  * contracts/motor-contract.md de 002).
  *
  * Fuera del motor: pdfs/, datasets y salidas (Const. VII).
  */
-class TM_Galeria
+class PMU_Galeria
 {
     /** Ambitos soportados (orden canonico). */
     public $ambitos = ['fonts', 'img', 'presets'];
@@ -43,19 +43,19 @@ class TM_Galeria
 
     /* ============ Rutas ============ */
 
-    public function dir_tm($crear = false)
+    public function dir_pmu_t($crear = false)
     {
         $upload_dir = wp_upload_dir();
-        $dir = trailingslashit($upload_dir['basedir']) . 'tm';
+        $dir = trailingslashit($upload_dir['basedir']) . 'pmu/tm';
         if (($crear || !is_dir($dir)) && !is_dir($dir)) {
             wp_mkdir_p($dir);
         }
         return $dir;
     }
 
-    public function subdir_tm($rel, $crear = false)
+    public function subdir_pmu_t($rel, $crear = false)
     {
-        $dir = $this->dir_tm($crear) . DIRECTORY_SEPARATOR . $rel;
+        $dir = $this->dir_pmu_t($crear) . DIRECTORY_SEPARATOR . $rel;
         if (($crear || !is_dir($dir)) && !is_dir($dir)) {
             wp_mkdir_p($dir);
         }
@@ -64,7 +64,7 @@ class TM_Galeria
 
     public function dir_ambito($ambito, $crear = false)
     {
-        return $this->subdir_tm($this->dirs[$ambito], $crear);
+        return $this->subdir_pmu_t($this->dirs[$ambito], $crear);
     }
 
     public function url_ambito($ambito)
