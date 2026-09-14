@@ -62,6 +62,8 @@ class Personalizador_PDF_Plugin
         // action=tm_galeria con op=listar|alta|baja|editar|sprite|miniatura.
         // Handlers sueltos purgados (Const. VIII).
         add_action('admin_post_tm_galeria', [$this, 'handle_tm_galeria']);
+        // Endpoint PMU Uploads (motor unificado de recursos): Const. VII
+        add_action("admin_post_pmu_uploads", [$this, "handle_pmu_uploads"]);
 
         // Compatibilidad temporal (ciclo 3.0.x): los hooks legacy "extractor_corel_*"
         // siguen respondiendo para no romper bookmarks o pestanas abiertas de <= 2.0.0.
@@ -123,6 +125,29 @@ class Personalizador_PDF_Plugin
             $motor = new TM_Galeria();
         }
         return $motor;
+    }
+    /** Instancia unica del motor PMU Uploads (inc/class-pmu-uploads.php). */
+    private function pmu_uploads()
+    {
+        static $motor = null;
+        if ($motor === null) {
+            if (!class_exists("PMU_Uploads")) {
+                require_once PERSONALIZADOR_PDF_PATH . "inc" . DIRECTORY_SEPARATOR . "class-pmu-uploads.php";
+            }
+            $motor = new PMU_Uploads();
+        }
+        return $motor;
+    }
+
+    public function handle_pmu_uploads()
+    {
+        if (!current_user_can("manage_options")) {
+            wp_send_json_error("motor:capacidad:invalida");
+        }
+        if (!isset($_POST["op"])) {
+            wp_send_json_error("motor:op:falta");
+        }
+        $this->pmu_uploads()->handle_request();
     }
 
     private function ruta_pdf($archivo)

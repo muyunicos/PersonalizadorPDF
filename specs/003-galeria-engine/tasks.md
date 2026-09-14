@@ -2,93 +2,91 @@
 description: "Task list for Galería Engine implementation"
 ---
 
-# Tasks: Galería Engine
+# Tasks: Galería Engine (PMU Uploads)
 
 **Input**: Design documents from `/specs/003-galeria-engine/`
 
-**Prerequisites**: research.md (decisions), constitution.md (governance)
+**Prerequisites**: research.md (decisions), spec.md (requirements), data-model.md (entities), contracts/motor-contract.md
 
-**Organization**: Tasks grouped by user story for independent implementation
+**Tests**: Not explicitly requested - test tasks omitted
 
+**Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: Can run in parallel (different files, no dependencies)
+- **[Story]**: Which user story this task belongs to (e.g., US1, US2, US3)
+- Include exact file paths in descriptions
+
+## Path Conventions
+
+- WordPress plugin: `engine/`, `personalizador-pdf.php` at repository root
+- Paths shown below assume WordPress plugin structure
 
 ---
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-**Purpose**: Project structure for Galería Engine
+**Purpose**: Project initialization and basic structure
 
-- [ ] T001 Create `engine/Galeria.php` skeleton class with namespace
-- [ ] T002 [P] Create `tests/galeria_test.php` smoke test file
-
+- [ ] T001 Verify PHP environment and GD extension available
+- [ ] T002 [P] Create `engine/PMU_Uploads.php` class skeleton with namespace
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-**Purpose**: Core infrastructure that MUST be complete before ANY user story
+**Purpose**: Core infrastructure that MUST be complete before ANY user story can be implemented
 
-**Checkpoint**: CRITICAL - No user story work can begin until this phase is complete
+**⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T003 [P] Define private static `$AMBITOS` array: `fonts`, `img`, `pdfs`, `orders`, `tmp`, `tm-presets`
-- [ ] T004 [P] Create private static `get_ambito_path($ambito)` method returning full Windows/WP path
-- [ ] T005 [P] Create private static `guardar_json($ambito, array $datos)` method
-- [ ] T006 [P] Create private static `leer_json($ambito)` method returning array
-
+- [ ] T003 [P] Define `private static $AMBITOS = ['fonts', 'img', 'pdfs', 'orders', 'tmp', 'tm-presets']` in `engine/PMU_Uploads.php`
+- [ ] T004 [P] Implement `dir_pmu($crear = false)` method in `engine/PMU_Uploads.php` (returns `uploads/pmu/` base path)
+- [ ] T005 [P] Implement `dir_ambito($ambito, $crear = false)` method in `engine/PMU_Uploads.php` (returns specific ambito path)
+- [ ] T006 [P] Implement `ruta_catalogo($ambito)` method in `engine/PMU_Uploads.php` (returns `{ambito}.json` path)
+- [ ] T007 [P] Implement `catalogo($ambito)` method in `engine/PMU_Uploads.php` (seed lazy: reads/creates JSON with {thumbs, items} structure)
+- [ ] T008 [P] Implement `guardar_catalogo($ambito, $cat)` method in `engine/PMU_Uploads.php` (writes JSON canónico)
+- [ ] T009 [P] Implement `tupla_alta($ambito)` helper in `engine/PMU_Uploads.php` (returns next available ID: hueco más bajo or max+1)
+- [ ] T010 [P] Implement `tupla_baja($ambito, $id)` helper in `engine/PMU_Uploads.php` (creates tombstone `[id, "", ""]`)
+- [ ] T011 [P] Implement `obtener_url($ambito, $nombre)` method in `engine/PMU_Uploads.php` (resuelve URL web)
 
 **Checkpoint**: Foundation ready - user story implementation can now begin
 
-
 ---
 
-## Phase 3: User Story 1 - CRUD Operaciones (Priority: P1) ✅ MVP
+## Phase 3: User Story 1 - CRUD Operaciones (Priority: P1) 🎯 MVP
 
 **Goal**: Full CRUD (leer, alta, baja, editar) para todos los ámbitos
 
-**Independent Test**: Tests que validen CRUD en un ámbito sin depender de otros
-
-
-### Tests for User Story 1 (OPTIONAL)
-
-- [ ] T007 [P] [US1] Create `tests/galeria_crud_test.php` smoke test (crear/leer/borrar item)
-
+**Independent Test**: Tests que validen CRUD en un ámbito (ej. `img`) sin depender de otros ámbitos
 
 ### Implementation for User Story 1
 
-- [ ] T008 [P] [US1] Implement `leer_ambito($ambito)` method en `engine/Galeria.php`
-- [ ] T009 [P] [US1] Implement `alta_ambito($ambito, array $datos)` con auto-generación de ID
-- [ ] T010 [P] [US1] Implement `baja_ambito($ambito, $id)` usando tombstone `[id, "", ""]`
-- [ ] T011 [P] [US1] Implement `editar_ambito($ambito, $id, array $datos)`
-- [ ] T012 [P] [US1] Implement `buscar_por_id($ambito, $id)` para lookup rápido
-
+- [ ] T012 [P] [US1] Implement `listar($ambito)` method in `engine/PMU_Uploads.php` (merge catálogo + físicos, return items with {id, title, cats, file, url, thumb, enUso})
+- [ ] T013 [P] [US1] Implement `alta($ambito, $title, $cats, $file)` method in `engine/PMU_Uploads.php` (creates new item with auto-generated ID >= 1, max 1000 items per catalogo)
+- [ ] T014 [P] [US1] Implement `baja($ambito, $id)` method in `engine/PMU_Uploads.php` (creates tombstone without deleting physical file)
+- [ ] T015 [P] [US1] Implement `editar($ambito, $id, $nuevo...)` method in `engine/PMU_Uploads.php` (updates existing item, renames physical file if needed)
 
 **Checkpoint**: User Story 1 should be fully functional and testable
-
 
 ---
 
 ## Phase 4: User Story 2 - Gestión de Físicos (Priority: P2)
 
-**Goal**: Manejo de archivos físicos (subir, validar, borrar, thumb)
+**Goal**: Manejo de archivos físicos (subir, validar, borrar, generar miniatura)
 
-**Independent Test**: Tests de subidas, validación de firmas, borrar y thumb
-
-
-### Tests for User Story 2
-
-- [ ] T013 [P] [US2] Create `tests/galeria_fisicos_test.php` smoke test
-
+**Independent Test**: Tests de subidas, validación de firmas, borrar y generar miniatura
 
 ### Implementation for User Story 2
 
-- [ ] T014 [P] [US2] Implement `validar_firma_imagen($file)` para PNG/JPG/WebP/GIF
-- [ ] T015 [P] [US2] Implement `validar_firma_fuente($file)` para TTF/OTF
-- [ ] T016 [P] [US2] Implement `guardar_fisico($ambito, $nombre, $file)` con movimiento de archivos
-- [ ] T017 [P] [US2] Implement `borrar_fisico($ambito, $nombre)` con unlink
-- [ ] T018 [P] [US2] Implement `generar_miniatura($ambito, $nombre, $file)` usando GD
-
+- [ ] T016 [P] [US2] Implement `validar_firma_imagen($file)` method in `engine/PMU_Uploads.php` (validates PNG/JPG/WebP/GIF, max 10MB)
+- [ ] T017 [P] [US2] Implement `validar_firma_fuente($file)` method in `engine/PMU_Uploads.php` (validates TTF/OTF, max 5MB)
+- [ ] T018 [P] [US2] Implement `validar_firma_preset($file)` method in `engine/PMU_Uploads.php` (validates TXM, max 50KB)
+- [ ] T019 [P] [US2] Implement `guardar_fisico($ambito, $nombre, $file)` method in `engine/PMU_Uploads.php` (moves uploaded file to final location)
+- [ ] T020 [P] [US2] Implement `borrar_fisico($ambito, $nombre)` method in `engine/PMU_Uploads.php` (unlinks physical file)
+- [ ] T021 [P] [US2] Implement `generar_miniatura($ambito, $nombre, $file)` method in `engine/PMU_Uploads.php` (creates .webp using GD extension)
 
 **Checkpoint**: User Story 2 should be functional
-
 
 ---
 
@@ -98,45 +96,31 @@ description: "Task list for Galería Engine implementation"
 
 **Independent Test**: Test que genere sprite desde items en el catálogo
 
-
-### Tests for User Story 3
-
-- [ ] T019 [P] [US3] Create `tests/galeria_sprite_test.php` smoke test
-
-
 ### Implementation for User Story 3
 
-- [ ] T020 [P] [US3] Implement `regenerar_sprite($ambito)` que compile thumbs.webp de todos los items activos
-- [ ] T021 [P] [US3] Implement `obtener_url_sprite($ambito)` que devuelve ruta pública del sprite
-- [ ] T022 [P] [US3] Implement `obtener_url_miniatura($ambito, $nombre)` para thumbs individuales
-
+- [ ] T022 [P] [US3] Implement `regenerar_sprite($ambito)` method in `engine/PMU_Uploads.php` (compiles thumbs.webp from all active items)
+- [ ] T023 [P] [US3] Implement `obtener_url_sprite($ambito)` method in `engine/PMU_Uploads.php` (returns public URL of sprite)
+- [ ] T024 [P] [US3] Implement `obtener_url_miniatura($ambito, $nombre)` method in `engine/PMU_Uploads.php` (returns URL of individual thumbnail)
 
 **Checkpoint**: User Story 3 should be functional
 
-
 ---
 
-## Phase 6: User Story 4 - Helpers & Integración (Priority: P4)
+## Phase 6: User Story 4 - Integración WordPress (Priority: P4)
 
-**Goal**: Helpers para WP integration y manejo de URLs
+**Goal**: Handlers WP y manejo de URLs
 
-**Independent Test**: Tests de resolución de URLs y handlers
-
-
-### Tests for User Story 4
-
-- [ ] T023 [P] [US4] Create `tests/galeria_helpers_test.php` smoke test
-
+**Independent Test**: Tests de resolución de URLs y handlers con nonce
 
 ### Implementation for User Story 4
 
-- [ ] T024 [P] [US4] Implement `obtener_url($ambito, $nombre)` para resolución web
-- [ ] T025 [P] [US4] Crear WP handlers en `personalizador-pdf.php` (admin_post con nonce)
-- [ ] T026 [P] [US4] Crear `engine/GaleriaWP.php` wrapper con WP hooks
-
+- [ ] T025 [P] [US4] Remove old handlers from `personalizador-pdf.php`: `admin_post_personalizador_pdf_textmuy_subir_imagen`, `admin_post_personalizador_pdf_textmuy_guardar_preset`, `admin_post_personalizador_pdf_guardar_sprite`, `admin_post_personalizador_pdf_guardar_miniatura`
+- [ ] T026 [P] [US4] Add `add_action('admin_post_pmu_uploads', [$this, 'handle_pmu_uploads'])` to `personalizador-pdf.php`
+- [ ] T027 [P] [US4] Implement `handle_pmu_uploads()` method in `personalizador-pdf.php` (nonce verification, capability check, dispatch to PMU_Uploads)
+- [ ] T028 [US4] Implement switch statement in `handle_pmu_uploads()` for ops: listar, alta, baja, editar, sprite, miniatura
+- [ ] T029 [P] [US4] Add error responses with format `motor:<op>:<motivo>` for all failure scenarios
 
 **Checkpoint**: User Story 4 should be functional
-
 
 ---
 
@@ -144,11 +128,10 @@ description: "Task list for Galería Engine implementation"
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T027 [P] Add docblocks y comentarios en todos los métodos
-- [ ] T028 [P] Create `tests/galeria_full_test.php` end-to-end smoke test
-- [ ] T029 Run todos los tests y validar `SMOKE OK`
-- [ ] T030 [P] Actualizar `AGENTS.md` con nueva responsabilidad de Galería
-
+- [ ] T030 [P] Add PHPDoc blocks to all methods in `engine/PMU_Uploads.php`
+- [ ] T031 [P] Create smoke test in `tests/` to validate all endpoints
+- [ ] T032 Run quickstart.md validation scenarios
+- [ ] T033 [P] Update AGENTS.md with PMU_Uploads responsibility
 
 ---
 
@@ -157,28 +140,64 @@ description: "Task list for Galería Engine implementation"
 ### Phase Dependencies
 
 - **Setup (Phase 1)**: No dependencies - can start immediately
-- **Foundational (Phase 2)**: Depends on Setup completion - BLOCKS all user stories
-- **User Stories (Phase 3-6)**: All depend on Foundational phase completion
-- **Polish (Final Phase)**: Depends on all desired user stories being complete
-
+- **Foundational (Phase 2)**: Depends on Setup - BLOCKS all user stories
+- **User Story 1 (Phase 3)**: Depends on Foundational
+- **User Story 2 (Phase 4)**: Depends on Foundational
+- **User Story 3 (Phase 5)**: Depends on Foundational
+- **User Story 4 (Phase 6)**: Depends on Foundational
+- **Polish (Phase 7)**: Depends on all desired user stories
 
 ### Parallel Opportunities
 
-- All Setup tasks marked [P] can run in parallel
-- All Foundational tasks marked [P] can run in parallel (within Phase 2)
-- All tests can run in parallel after foundation
-- All models/services marked [P] can run in parallel
+- All Phase 1 tasks can run in parallel
+- All Phase 2 tasks marked [P] can run in parallel
+- Once Phase 2 completes, US1, US2, US3, US4 can be implemented in parallel by different team members
 
+### Parallel Example: Phase 2 (Foundational)
 
-### Implementation Strategy
+```bash
+# Launch all foundational tasks together:
+Task: "Define $AMBITOS array in engine/PMU_Uploads.php"
+Task: "Implement dir_pmu() method in engine/PMU_Uploads.php"
+Task: "Implement dir_ambito() method in engine/PMU_Uploads.php"
+Task: "Implement ruta_catalogo() method in engine/PMU_Uploads.php"
+Task: "Implement catalogo() method in engine/PMU_Uploads.php"
+Task: "Implement guardar_catalogo() method in engine/PMU_Uploads.php"
+Task: "Implement tupla_alta() helper in engine/PMU_Uploads.php"
+Task: "Implement tupla_baja() helper in engine/PMU_Uploads.php"
+Task: "Implement obtener_url() method in engine/PMU_Uploads.
 
-**MVP First (User Story 1 Only)**
+---
+
+## Implementation Strategy
+
+### MVP First (User Story 1 Only)
 
 1. Complete Phase 1: Setup
 2. Complete Phase 2: Foundational (CRITICAL)
 3. Complete Phase 3: User Story 1
-4. STOP and VALIDATE: Test User Story 1 independently
+4. **STOP and VALIDATE**: Test CRUD operations independently
+5. Deploy/demo if ready
 
+### Incremental Delivery
+
+1. Setup + Foundational → Foundation ready
+2. Add US1 → CRUD works → Deploy/Demo (MVP!)
+3. Add US2 → Physical files handled → Deploy/Demo
+4. Add US3 → Sprites generated → Deploy/Demo
+5. Add US4 → WP handlers integrated → Deploy/Demo
+6. Each story adds value without breaking previous stories
+
+### Parallel Team Strategy
+
+With multiple developers:
+
+1. Team completes Setup + Foundational together
+2. Once Foundational is done:
+   - Developer A: User Story 1 (CRUD)
+   - Developer B: User Story 2 (Físicos)
+   - Developer C: User Story 3 (Sprites)
+3. Stories complete and integrate independently
 
 ---
 
@@ -186,5 +205,7 @@ description: "Task list for Galería Engine implementation"
 
 - [P] tasks = different files, no dependencies
 - [Story] label maps task to specific user story for traceability
-- Tests deben escribirse ANTES de implementación
+- Each user story should be independently completable and testable
 - Commit after each task or logical group
+- Stop at any checkpoint to validate story independently
+- Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
