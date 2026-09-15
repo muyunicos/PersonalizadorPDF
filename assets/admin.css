@@ -181,6 +181,21 @@
 .ec-marco-btn { cursor: pointer; }
 .ec-marco-btn .ec-marco { margin: 0 auto 4px; }
 .ec-col-media .ec-btn-placeholder { display: block; margin: 6px auto 0; }
+.ec-col-media .ec-quitar { margin-top: 4px; }
+.ec-subida-status {
+    display: block;
+    font-size: 11.5px;
+    color: #646970;
+    margin-top: 4px;
+    min-height: 15px;
+}
+.ec-subida-status.ec-ok { color: #00a32a; }
+.ec-subida-status.ec-error { color: #d63638; }
+.ec-marco-btn.ec-arrastre {
+    outline: 2px dashed #2271b1;
+    outline-offset: 2px;
+    border-radius: 4px;
+}
 .ec-col-config { flex: 1; min-width: 0; }
 .ec-linea {
     display: flex;

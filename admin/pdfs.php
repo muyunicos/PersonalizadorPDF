@@ -226,11 +226,13 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
             <div class="notice notice-warning"><p><strong>Aviso de recursos:</strong> <?php echo esc_html($aviso_cfg_campos); ?></p></div>
         <?php endif; ?>
 
-        <p class="ec-cabecera">
-            <strong><?php echo count($grupos); ?></strong> grupo(s) de color —
-            <strong><?php echo (int)$totalInst; ?></strong> instancias —
-            <span class="ec-badge <?php echo $conImagen === count($grupos) ? 'ec-badge-verde' : 'ec-badge-amarillo'; ?>" id="ec-badge-cobertura">
-                <?php echo $conImagen; ?>/<?php echo count($grupos); ?> con imagen/texto
+        <div class="ec-cabecera">
+            <span class="ec-cabecera-datos">
+                <strong><?php echo count($grupos); ?></strong> grupo(s) de color —
+                <strong><?php echo (int)$totalInst; ?></strong> instancias —
+                <span class="ec-badge <?php echo $conImagen === count($grupos) ? 'ec-badge-verde' : 'ec-badge-amarillo'; ?>" id="ec-badge-cobertura">
+                    <?php echo $conImagen; ?>/<?php echo count($grupos); ?> con imagen/texto
+                </span>
             </span>
             <a class="button button-small" href="<?php echo esc_url($link_desc('datos', ['archivo' => $seleccionado])); ?>">Descargar JSON</a>
             <form class="ec-form-inline" method="post" action="<?php echo esc_url($post_url); ?>">
@@ -239,7 +241,7 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                 <?php wp_nonce_field('personalizador_pdf_reanalizar'); ?>
                 <button type="submit" class="button button-small">Re-analizar</button>
             </form>
-        </p>
+        </div>
 
         <form class="ec-form-config" method="post" action="<?php echo esc_url($post_url); ?>">
             <input type="hidden" name="action" value="personalizador_pdf_config">
@@ -329,7 +331,9 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                         <div class="ec-grupo-cols">
                             <div class="ec-col-media">
                                 <div class="ec-preview ec-checker ec-marco-btn" data-id="<?php echo esc_attr($gid); ?>"
-                                     title="Clic: elegir imagen de la galeria">
+                                     data-ver="<?php echo esc_url($link_ver('imagen', ['archivo' => $seleccionado, 'id' => $gid])); ?>"
+                                     data-vw="<?php echo (int)$vw; ?>" data-vh="<?php echo (int)$vh; ?>"
+                                     title="Clic: elegir imagen de la galeria (o arrastrala aca)">
                                     <?php if ($tiene) : ?>
                                         <img src="<?php echo esc_url($link_ver('imagen', ['archivo' => $seleccionado, 'id' => $gid])); ?>"
                                              alt="Imagen del grupo <?php echo esc_attr($gid); ?>">
@@ -342,6 +346,11 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                                    href="<?php echo esc_url($link_desc('placeholder', ['archivo' => $seleccionado, 'id' => $gid])); ?>">
                                     Descargar placeholder
                                 </a>
+                                <button type="button" class="button button-small button-link-delete ec-quitar"
+                                        data-id="<?php echo esc_attr($gid); ?>"<?php if (!$tiene) : ?> hidden<?php endif; ?>>
+                                    Quitar imagen
+                                </button>
+                                <span class="ec-subida-status" aria-live="polite"></span>
                             </div>
                             <div class="ec-col-config">
                                 <p class="ec-linea">

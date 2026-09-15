@@ -46,15 +46,70 @@ jQuery(function ($) {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
-    /* ============ 2. Imagenes desde la galeria de medios ============ */
+    /* ============ 2. Imagenes por grupo sin recargar (galeria, drag & drop, quitar) ============ */
+
+    var EXT_IMAGEN = /\.(png|jpe?g|gif|webp)$/i;
+    var MIME_EXT = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp' };
+
+    function panelDeId(id) { return $('.ec-panel-grupo[data-id="' + id + '"]'); }
+
+    /** Refresca el preview del grupo con la imagen del motor (ver) con cache-bust. */
+    function marcarImagen($panel) {
+        var $marco = $panel.find('.ec-marco-btn');
+        var url = String($marco.attr('data-ver') || '');
+        if (!url) { return; }
+        $marco.find('img, .ec-marco').remove();
+        $marco.append($('<img alt="">').attr('src', url + '&t=' + Date.now()));
+        $panel.attr('data-tiene', '1');
+        $panel.find('.ec-quitar').removeAttr('hidden');
+        refrescarProcesar();
+    }
+
+    /** Vuelve al marco vacio del grupo (tras quitar la imagen). */
+    function marcarSinImagen($panel) {
+        var $marco = $panel.find('.ec-marco-btn');
+        var vw = parseInt($marco.attr('data-vw'), 10) || 100;
+        var vh = parseInt($marco.attr('data-vh'), 10) || 100;
+        $marco.find('img, .ec-marco').remove();
+        $marco.append($('<div class="ec-marco"></div>').css({ width: vw + 'px', height: vh + 'px' }));
+        $panel.attr('data-tiene', '0');
+        $panel.find('.ec-quitar').attr('hidden', true);
+        refrescarProcesar();
+    }
+
+    /** Sube una imagen para el grupo via AJAX (handle_subir_imagen con ajax=1). */
+    function subirImagen($form, file, $status) {
+        var $panel = panelDeId(String($form.attr('data-id') || ''));
+        var fd = new FormData($form[0]);
+        fd.set('ajax', '1');
+        fd.set('imagen', file, file.name || ('imagen' + (MIME_EXT[file.type] || '.png')));
+        $status.removeClass('ec-error ec-ok').text('Subiendo...');
+        return fetch($form.attr('action'), { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                if (j && j.success) {
+                    $status.addClass('ec-ok').text('Imagen cargada ✓');
+                    marcarImagen($panel);
+                    return j;
+                }
+                throw new Error((j && j.data) || 'No se pudo subir la imagen.');
+            })
+            .catch(function (e) {
+                var msg = (e instanceof Error && e.message) ? e.message : 'No se pudo subir la imagen (red).';
+                $status.addClass('ec-error').text(msg);
+                throw e;
+            });
+    }
 
     if (typeof wp !== 'undefined' && wp.media) {
-        // El marco del placeholder y el boton del pool oculto abren la misma galeria.
+        // El marco del placeholder y el boton del pool oculto abren la misma galeria;
+        // la eleccion se descarga y se sube por AJAX (sin recargar la consola).
         $(document).on('click', '.ec-galeria, .ec-marco-btn', function (e) {
             e.preventDefault();
             var idGrupo = (String($(this).data('id') || '')).toUpperCase();
             var $form = $('form.ec-form-imagen[data-id="' + idGrupo + '"]').first();
             if (!$form.length) { return; }
+            var $status = panelDeId(idGrupo).find('.ec-subida-status');
             var frame = wp.media({
                 title: 'Elegir imagen para el grupo ' + idGrupo,
                 multiple: false,
@@ -62,14 +117,90 @@ jQuery(function ($) {
             });
             frame.on('select', function () {
                 var att = frame.state().get('selection').first().toJSON();
-                $form.find('input[name=attachment_id]').val(att.id);
-                $form.trigger('submit');
+                fetch(att.url, { credentials: 'same-origin' })
+                    .then(function (r) {
+                        if (!r.ok) { throw new Error('La imagen de la galeria no esta disponible.'); }
+                        return r.blob();
+                    })
+                    .then(function (blob) {
+                        var nombre = String(att.filename || 'imagen');
+                        if (!EXT_IMAGEN.test(nombre)) {
+                            nombre = nombre.replace(EXT_IMAGEN, '') + (MIME_EXT[blob.type] || '.png');
+                        }
+                        return subirImagen($form, new File([blob], nombre, { type: blob.type }), $status);
+                    })
+                    .catch(function (err) {
+                        if (window.console && console.warn) { console.warn('[PersonalizadorPDF] galeria', err); }
+                    });
             });
             frame.open();
         });
     } else {
         $('.ec-galeria, .ec-marco-btn').attr('title', 'Galeria no disponible');
     }
+
+    // Arrastrar y soltar una imagen sobre el marco (sin recargar).
+    $(document).on('dragover dragleave drop', '.ec-marco-btn', function (e) {
+        var $marco = $(this);
+        var id = String($marco.data('id') || '');
+        var $panel = panelDeId(id);
+        var $status = $panel.find('.ec-subida-status');
+        if (e.type === 'dragover') {
+            e.preventDefault();
+            e.originalEvent.dataTransfer.dropEffect = 'copy';
+            $marco.addClass('ec-arrastre');
+            return;
+        }
+        $marco.removeClass('ec-arrastre');
+        if (e.type === 'dragleave') { return; }
+        e.preventDefault();
+        var dt = e.originalEvent.dataTransfer;
+        var file = dt && dt.files && dt.files[0];
+        if (!file) { return; }
+        var $form = $('form.ec-form-imagen[data-id="' + id + '"]').first();
+        if (!$form.length) { return; }
+        if (file.type && file.type.indexOf('image/') !== 0) {
+            $status.addClass('ec-error').text('El archivo soltado no es una imagen.');
+            return;
+        }
+        subirImagen($form, file, $status).catch(function () { /* el status ya muestra el error */ });
+    });
+
+    // Seleccion manual con el input de archivo del pool (tambien por AJAX).
+    $(document).on('change', '.ec-input-imagen', function () {
+        var $form = $(this).closest('form.ec-form-imagen');
+        var file = this.files && this.files[0];
+        if (!$form.length || !file) { return; }
+        var $panel = panelDeId(String($form.attr('data-id') || ''));
+        subirImagen($form, file, $panel.find('.ec-subida-status')).catch(function () { /* status */ });
+        $(this).val('');
+    });
+
+    // Quitar la imagen del grupo por AJAX.
+    $(document).on('click', '.ec-quitar', function () {
+        var id = String($(this).data('id') || '');
+        var $form = $('form.ec-form-quitar[data-id="' + id + '"]').first();
+        var $panel = panelDeId(id);
+        if (!$form.length) { return; }
+        var $status = $panel.find('.ec-subida-status');
+        var fd = new FormData($form[0]);
+        fd.set('ajax', '1');
+        $status.removeClass('ec-error ec-ok').text('Quitando...');
+        fetch($form.attr('action'), { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                if (j && j.success) {
+                    $status.addClass('ec-ok').text('Imagen quitada.');
+                    marcarSinImagen($panel);
+                    return j;
+                }
+                throw new Error((j && j.data) || 'No se pudo quitar la imagen.');
+            })
+            .catch(function (e) {
+                var msg = (e instanceof Error && e.message) ? e.message : 'No se pudo quitar la imagen (red).';
+                $status.addClass('ec-error').text(msg);
+            });
+    });
 
     /* ============ 3. Confirmaciones ============ */
 

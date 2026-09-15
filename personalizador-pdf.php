@@ -803,17 +803,31 @@ class Personalizador_PDF_Plugin
         $this->seguridad('personalizador_pdf_subir_imagen');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
         $gid = $this->id_recibido($_POST);
+        $ajax = !empty($_POST['ajax']);
+        $fallo = function ($mensaje) use ($ajax, $archivo) {
+            if ($ajax) {
+                wp_send_json_error($mensaje);
+            }
+            $this->redirigir(['ec_error' => $mensaje, 'ec_pdf' => $archivo]);
+        };
         if (!$archivo || !is_file($this->ruta_pdf($archivo)) || $gid === '') {
-            $this->redirigir(['ec_error' => 'datos_invalidos', 'ec_pdf' => $archivo]);
+            $fallo('datos_invalidos');
         }
         if (empty($_FILES['imagen']) || ($_FILES['imagen']['error'] ?? 1) !== UPLOAD_ERR_OK) {
-            $this->redirigir(['ec_error' => 'upload', 'ec_pdf' => $archivo]);
+            $fallo('No se recibio ninguna imagen (o el servidor rechazo la subida).');
         }
         $ext = $this->extension_imagen($_FILES['imagen']['name']);
         if (!$ext) {
-            $this->redirigir(['ec_error' => 'Formato de imagen no permitido (usa PNG, JPG, GIF o WebP).', 'ec_pdf' => $archivo]);
+            $fallo('Formato de imagen no permitido (usa PNG, JPG, GIF o WebP).');
         }
-        $this->guardar_imagen($archivo, $gid, $_FILES['imagen']['tmp_name'], $ext);
+        try {
+            $this->guardar_imagen($archivo, $gid, $_FILES['imagen']['tmp_name'], $ext);
+        } catch (\Throwable $e) {
+            $fallo($e->getMessage());
+        }
+        if ($ajax) {
+            wp_send_json_success(['id' => $gid, 'ext' => $ext]);
+        }
         $this->redirigir(['ec_imagen' => 1, 'ec_pdf' => $archivo]);
     }
 
@@ -835,7 +849,11 @@ class Personalizador_PDF_Plugin
         if (!$ext) {
             $this->redirigir(['ec_error' => 'El adjunto de la galeria no es una imagen permitida.', 'ec_pdf' => $archivo]);
         }
-        $this->guardar_imagen($archivo, $gid, $ruta, $ext);
+        try {
+            $this->guardar_imagen($archivo, $gid, $ruta, $ext);
+        } catch (\Throwable $e) {
+            $this->redirigir(['ec_error' => $e->getMessage(), 'ec_pdf' => $archivo]);
+        }
         $this->redirigir(['ec_imagen' => 1, 'ec_pdf' => $archivo]);
     }
 
@@ -845,10 +863,17 @@ class Personalizador_PDF_Plugin
         $this->seguridad('personalizador_pdf_quitar_imagen');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
         $gid = $this->id_recibido($_POST);
+        $ajax = !empty($_POST['ajax']);
         if (!$archivo || $gid === '') {
+            if ($ajax) {
+                wp_send_json_error('datos_invalidos');
+            }
             $this->redirigir(['ec_error' => 'datos_invalidos', 'ec_pdf' => $archivo]);
         }
         $this->quitar_imagen($archivo, $gid);
+        if ($ajax) {
+            wp_send_json_success(['id' => $gid]);
+        }
         $this->redirigir(['ec_imagen_quitada' => 1, 'ec_pdf' => $archivo]);
     }
 
@@ -864,7 +889,7 @@ class Personalizador_PDF_Plugin
         @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . $gid . '.webp'); // miniatura legada
         $this->miniatura_grupo_textmuy_unlink($nombre, $gid); // nueva miniatura ThumbEngine (pmu/img/)
         if (!@copy($origen, $dir . DIRECTORY_SEPARATOR . $gid . '.' . $ext)) {
-            $this->redirigir(['ec_error' => 'No se pudo guardar la imagen.', 'ec_pdf' => $archivo]);
+            throw new \RuntimeException('No se pudo guardar la imagen (permisos de ' . $dir . ').');
         }
     }
 
@@ -1218,7 +1243,11 @@ class Personalizador_PDF_Plugin
                     'ec_pdf' => $archivo,
                 ]);
             }
-            $this->guardar_imagen($archivo, $gid, $file['tmp_name'], 'png');
+            try {
+                $this->guardar_imagen($archivo, $gid, $file['tmp_name'], 'png');
+            } catch (\Throwable $e) {
+                $this->redirigir(['ec_error' => $e->getMessage(), 'ec_pdf' => $archivo]);
+            }
         }
 
         /* === Fin puente: el motor recibe imagenes por id de grupo, sin cambios === */
