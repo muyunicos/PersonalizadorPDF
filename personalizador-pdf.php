@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.0.1
+ * Version: 4.1.0
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('PERSONALIZADOR_PDF_VERSION', '4.0.1');
+define('PERSONALIZADOR_PDF_VERSION', '4.1.0');
 define('PERSONALIZADOR_PDF_PATH', plugin_dir_path(__FILE__));
 define('PERSONALIZADOR_PDF_URL', plugin_dir_url(__FILE__));
 

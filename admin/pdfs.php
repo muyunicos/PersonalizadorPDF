@@ -177,7 +177,7 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
 
 <?php if ($seleccionado) : ?>
 <div class="card">
-    <h2>3. Grupos e imagenes — <?php echo esc_html($seleccionado); ?></h2>
+    <h2>3. Personalizacion — <?php echo esc_html($seleccionado); ?></h2>
 
     <?php if (!$datos) : ?>
         <p class="ec-aviso">Este PDF no tiene datos analizados.</p>
@@ -198,219 +198,264 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
         }
         $conImagen = 0;
         foreach ($grupos as $g) {
-            // Habilita procesar un grupo con imagen manual O texto estilizado activo.
+            // Habilita procesar un grupo con imagen manual O mapeo activo.
             // Vista fusionada (value no vacio). Sin espejos (T018).
             $activo = !empty($perso[$g['id']]['value']);
             if (isset($imagenes[$g['id']]) || $activo) {
                 $conImagen++;
             }
         }
-        ?>
-        <p>
-            <strong><?php echo count($grupos); ?></strong> grupo(s) de color —
-            <strong><?php echo array_sum(array_map(function ($g) {
-                return (int)($g['cont'] ?? 0);
-            }, $grupos)); ?></strong> instancias —
-            <span class="ec-badge <?php echo $conImagen === count($grupos) ? 'ec-badge-verde' : 'ec-badge-amarillo'; ?>">
-                <?php echo $conImagen; ?>/<?php echo count($grupos); ?> con imagen/texto
-            </span>
-        </p>
-
-        <p class="ec-acciones">
-            <a class="button" href="<?php echo esc_url($link_desc('datos', ['archivo' => $seleccionado])); ?>">Descargar datos (JSON)</a>
-            <form class="ec-form-inline" method="post" action="<?php echo esc_url($post_url); ?>">
-                <input type="hidden" name="action" value="personalizador_pdf_reanalizar">
-                <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
-                <?php wp_nonce_field('personalizador_pdf_reanalizar'); ?>
-                <button type="submit" class="button">Re-analizar</button>
-            </form>
-        </p>
-
-        <div class="ec-grupos">
-        <?php
-        // Seccion de configuracion tienda por PDF (spec 004, Fase B; plan 008:
-        // la vista ya trae analisis+config fusionados).
+        $totalInst = array_sum(array_map(function ($g) {
+            return (int)($g['cont'] ?? 0);
+        }, $grupos));
+        // Configuracion tienda por PDF (plan 008: vista analisis+config fusionada).
         $cfg_pdf = $vista_pdf ? $vista_pdf['config'] : ['activo' => false, 'productos' => [], 'campos_ids' => [], 'placeholders' => []];
         list($todos_campos, $aviso_cfg_campos2) = $this->campos_activos();
         if ($aviso_cfg_campos === '' && $aviso_cfg_campos2 !== null && $aviso_cfg_campos2 !== '') {
             $aviso_cfg_campos = $aviso_cfg_campos2;
         }
+        // Campos habilitados para este PDF (config) que siguen en el catalogo.
+        $campos_pdf = [];
+        foreach ((array)$cfg_pdf['campos_ids'] as $cid) {
+            if (isset($todos_campos[(int)$cid])) {
+                $campos_pdf[(int)$cid] = $todos_campos[(int)$cid];
+            }
+        }
         ?>
         <?php if ($aviso_cfg_campos !== null && $aviso_cfg_campos !== '') : ?>
             <div class="notice notice-warning"><p><strong>Aviso de recursos:</strong> <?php echo esc_html($aviso_cfg_campos); ?></p></div>
         <?php endif; ?>
+
+        <p class="ec-cabecera">
+            <strong><?php echo count($grupos); ?></strong> grupo(s) de color —
+            <strong><?php echo (int)$totalInst; ?></strong> instancias —
+            <span class="ec-badge <?php echo $conImagen === count($grupos) ? 'ec-badge-verde' : 'ec-badge-amarillo'; ?>" id="ec-badge-cobertura">
+                <?php echo $conImagen; ?>/<?php echo count($grupos); ?> con imagen/texto
+            </span>
+            <a class="button button-small" href="<?php echo esc_url($link_desc('datos', ['archivo' => $seleccionado])); ?>">Descargar JSON</a>
+            <form class="ec-form-inline" method="post" action="<?php echo esc_url($post_url); ?>">
+                <input type="hidden" name="action" value="personalizador_pdf_reanalizar">
+                <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
+                <?php wp_nonce_field('personalizador_pdf_reanalizar'); ?>
+                <button type="submit" class="button button-small">Re-analizar</button>
+            </form>
+        </p>
+
         <form class="ec-form-config" method="post" action="<?php echo esc_url($post_url); ?>">
-            <h2>Configuracion tienda (PDF <?php echo esc_html($nombre); ?>)</h2>
             <input type="hidden" name="action" value="personalizador_pdf_config">
             <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
             <?php wp_nonce_field('personalizador_pdf_config'); ?>
-            <p><label><input type="checkbox" name="activo" value="1" <?php checked(!empty($cfg_pdf['activo']), true); ?>>
-                Activo (se ofrece en los productos)</label></p>
-            <p><label>Productos (IDs Woo, uno por linea, max 100)<br>
-                <textarea name="productos_txt" rows="2" cols="40" class="large-text code"><?php echo esc_textarea(implode("\n", (array)$cfg_pdf['productos'])); ?></textarea></label>
-                <span class="description">Se validan contra el catalogo Woo al guardar.</span></p>
-            <p><label>Campos (en orden de UI)<br>
-                <select name="campos_ids[]" multiple size="6" style="min-width:280px">
-                    <?php foreach ($todos_campos as $cid => $t) : ?>
-                        <option value="<?php echo (int)$cid; ?>" <?php echo in_array($cid, (array)$cfg_pdf['campos_ids'], true) ? 'selected' : ''; ?>>
-                            <?php echo (int)$cid; ?> — <?php echo esc_html($t[1] !== '' ? $t[1] : '(oculto)'); ?> (<?php echo esc_html($t[2]); ?>)
-                        </option>
-                    <?php endforeach; ?>
-                </select></label></p>
-            <h3>Mapeo por grupo (placeholders)</h3>
-            <?php foreach ($grupos as $g) :
-                $gm = $cfg_pdf['placeholders'][$g['id']] ?? ['tipo' => 'texto', 'preset' => '', 'value' => '', 'settings' => ''];
-                $gid_cfg = $g['id'];
-            ?>
-            <fieldset class="ec-config-grupo">
-                <legend>Grupo <?php echo esc_html($gid_cfg); ?> (<?php echo (int)$g['w']; ?>x<?php echo (int)$g['h']; ?> px)</legend>
-                <p><label>Tipo
-                    <select name="placeholders[<?php echo esc_attr($gid_cfg); ?>][tipo]">
-                        <option value="texto" <?php selected($gm['tipo'] ?? 'texto', 'texto'); ?>>texto</option>
-                        <option value="imagen" <?php selected($gm['tipo'] ?? 'texto', 'imagen'); ?>>imagen</option>
-                    </select></label>
-                <label>Preset
-                    <select name="placeholders[<?php echo esc_attr($gid_cfg); ?>][preset]">
-                        <option value="">(ninguno)</option>
-                        <?php foreach ($presets as $preset) : ?>
-                            <option value="<?php echo esc_attr($preset); ?>" <?php selected($gm['preset'] ?? '', $preset); ?>><?php echo esc_html($preset); ?></option>
-                        <?php endforeach; ?>
-                    </select></label></p>
-                <p><label>Value (plantilla, admite [campoN])<br>
-                    <input name="placeholders[<?php echo esc_attr($gid_cfg); ?>][value]" class="large-text" maxlength="2000" value="<?php echo esc_attr($gm['value'] ?? ''); ?>"></label></p>
-                <p><label>Settings (overrides, admite [campoN])<br>
-                    <input name="placeholders[<?php echo esc_attr($gid_cfg); ?>][settings]" class="large-text" maxlength="4000" value="<?php echo esc_attr($gm['settings'] ?? ''); ?>"></label></p>
-            </fieldset>
-            <?php endforeach; ?>
-            <p><button type="submit" class="button button-primary">Guardar configuracion tienda</button>
-            <span class="description">Solo grupos del dataset; lo demas se descarta. Productos se validan con Woo si esta activo.</span></p>
-        </form>
-        <?php foreach ($grupos as $g) :
-            $gid = $g['id'];
-            $tiene = isset($imagenes[$gid]);
-            // Marco dibujado (sin archivo): escala el tamano real w x h a la caja de la consola.
-            $mnW = max(1, (int)$g['w']); $mnH = max(1, (int)$g['h']);
-            $escala = min(140 / $mnW, 100 / $mnH);
-            $vw = max(8, (int)round($mnW * $escala)); $vh = max(8, (int)round($mnH * $escala));
-        ?>
-            <div class="ec-grupo" data-id="<?php echo esc_attr($gid); ?>">
-                <div class="ec-grupo-cab">
-                    <span class="swatch" style="background: <?php echo esc_attr('#' . $g['id']); ?>"></span>
-                    <h3>Grupo <?php echo esc_html(strtoupper($gid)); ?>
-                        <span class="ec-badge" style="background:<?php echo esc_attr('#' . $g['id']); ?>"><?php echo esc_html('#' . $g['id']); ?></span>
-                    </h3>
-                </div>
-                <p class="ec-datos-grupo">
-                    Marco: <strong><?php echo (int)$g['w']; ?>x<?php echo (int)$g['h']; ?> px</strong>
 
-                    <?php echo (int)$g['cont']; ?> instancia(s), pag.
-                    <?php echo esc_html(implode(', ', array_map(function ($p) {
-                        return (int)$p + 1;
-                    }, $g['pgs'] ?? []))); ?>
-                </p>
-
-                <div class="ec-media">
-                    <div class="ec-preview">
-                        <?php if ($tiene) : ?>
-                            <img src="<?php echo esc_url($link_ver('imagen', ['archivo' => $seleccionado, 'id' => $gid])); ?>"
-                                 alt="Imagen del grupo <?php echo esc_attr($gid); ?>">
-                            <span class="ec-badge ec-badge-verde">Imagen cargada</span>
-                        <?php else : ?>
-                            <div class="ec-vacio">Sin imagen</div>
-                            <span class="ec-badge ec-badge-rojo">Sin imagen</span>
-                        <?php endif; ?>
-                    </div>
-                    <div class="ec-preview ec-checker">
-                        <div class="ec-marco" style="width:<?php echo (int)$vw; ?>px;height:<?php echo (int)$vh; ?>px"
-                             title="<?php echo (int)$mnW; ?>x<?php echo (int)$mnH; ?> px"></div>
-
-                        <a href="<?php echo esc_url($link_desc('placeholder', ['archivo' => $seleccionado, 'id' => $gid])); ?>">
-                            Descargar placeholder
-                        </a>
-                    </div>
-                </div>
-
-                <form class="ec-form-imagen" method="post" action="<?php echo esc_url($post_url); ?>" enctype="multipart/form-data">
-                    <input type="hidden" name="action" value="personalizador_pdf_subir_imagen">
-                    <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
-                    <input type="hidden" name="id" value="<?php echo esc_attr($gid); ?>">
-                    <input type="hidden" name="attachment_id" value="">
-                    <?php wp_nonce_field('personalizador_pdf_subir_imagen'); ?>
-                    <input type="file" name="imagen" accept="image/png,image/jpeg,image/gif,image/webp" class="ec-input-imagen">
-                    <button type="submit" class="button button-small">Cargar imagen</button>
-                    <button type="button" class="button button-small ec-galeria"
-                            data-id="<?php echo esc_attr($gid); ?>">Desde galeria</button>
-                </form>
-
-                <?php if ($tiene) : ?>
-                <form class="ec-form-inline" method="post" action="<?php echo esc_url($post_url); ?>">
-                    <input type="hidden" name="action" value="personalizador_pdf_quitar_imagen">
-                    <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
-                    <input type="hidden" name="id" value="<?php echo esc_attr($gid); ?>">
-                    <?php wp_nonce_field('personalizador_pdf_quitar_imagen'); ?>
-                    <button type="submit" class="button button-small button-link-delete">Quitar imagen</button>
-                </form>
-                <?php endif; ?>
-
-                <?php
-                // La seccion de texto estilizado requiere el modulo TextMuy
-                // (render en el navegador). Sin el modulo importado, los grupos
-                // siguen funcionando con imagen manual y el Procesar clasico.
-                if ($this->modulo_textmuy_disponible()) :
-                // Vista fusionada analisis+config (value no vacio). Sin espejos.
-                $estado_grupo = $perso[$gid] ?? [];
-                $estado_texto = null;
-                if (!empty($estado_grupo['value'])) {
-                    $estado_texto = [
-                        'activo' => true,
-                        'texto' => (string)$estado_grupo['value'],
-                        'estilo' => (string)($estado_grupo['preset'] ?? ''),
-                    ];
-                }
-                $texto_activo = $estado_texto && !empty($estado_texto['activo']);
-                ?>
-                <div class="ec-texto" data-id="<?php echo esc_attr($gid); ?>"
-                     data-w="<?php echo (int)$g['w']; ?>" data-h="<?php echo (int)$g['h']; ?>">
-                    <div class="ec-texto-cab">
-                        <strong>Texto estilizado</strong>
-                        <?php if ($texto_activo) : ?>
-                            <span class="ec-badge ec-badge-verde">Texto activo</span>
-                        <?php endif; ?>
-                    </div>
-                    <form class="ec-form-texto" method="post" action="<?php echo esc_url($post_url); ?>">
-                        <input type="hidden" name="action" value="personalizador_pdf_guardar_texto">
-                        <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
-                        <input type="hidden" name="id" value="<?php echo esc_attr($gid); ?>">
-                        <?php wp_nonce_field('personalizador_pdf_guardar_texto'); ?>
-                        <label class="ec-texto-usar">
-                            <input type="checkbox" name="activo" value="1" <?php checked($texto_activo); ?>> Usar texto
-                        </label>
-                        <input type="text" name="texto" maxlength="300" class="ec-input-texto"
-                               placeholder="Texto del grupo <?php echo esc_attr(strtoupper($gid)); ?>"
-                               value="<?php echo esc_attr($estado_texto['texto'] ?? ''); ?>">
-                        <select name="estilo" class="ec-select-estilo">
-                            <option value="">Estilo...</option>
-                            <?php foreach ($presets as $preset) : ?>
-                                <option value="<?php echo esc_attr($preset); ?>" <?php selected($estado_texto['estilo'] ?? '', $preset); ?>>
-                                    <?php echo esc_html($preset); ?>
+            <details class="ec-acordeon ec-acordeon-tienda">
+                <summary class="ec-acordeon-cab">Configuracion tienda
+                    <label class="ec-switch ec-no-toggle">
+                        <input type="checkbox" name="activo" value="1" <?php checked(!empty($cfg_pdf['activo']), true); ?>>
+                        <span class="ec-switch-pista"></span>
+                    </label>
+                    <span class="ec-switch-texto">Activo (se ofrece en los productos)</span>
+                </summary>
+                <div class="ec-acordeon-cuerpo">
+                    <p><label>Productos (IDs Woo, uno por linea, max 100)<br>
+                        <textarea name="productos_txt" rows="2" cols="40" class="large-text code"><?php echo esc_textarea(implode("\n", (array)$cfg_pdf['productos'])); ?></textarea></label>
+                        <span class="description">Se validan contra el catalogo Woo al guardar. (Buscador: proximamente.)</span></p>
+                    <p><label>Campos (en orden de UI)<br>
+                        <select name="campos_ids[]" multiple size="6" style="min-width:280px">
+                            <?php foreach ($todos_campos as $cid => $t) : ?>
+                                <option value="<?php echo (int)$cid; ?>" <?php echo in_array($cid, (array)$cfg_pdf['campos_ids'], true) ? 'selected' : ''; ?>>
+                                    <?php echo (int)$cid; ?> — <?php echo esc_html($t[1] !== '' ? $t[1] : '(oculto)'); ?> (<?php echo esc_html($t[2]); ?>)
                                 </option>
                             <?php endforeach; ?>
-                        </select>
-                        <button type="submit" class="button button-small">Guardar</button>
-                        <button type="button" class="button button-small ec-texto-preview">Vista previa</button>
-                        <span class="ec-texto-status" aria-live="polite"></span>
-                    </form>
-                    <div class="ec-texto-preview-caja" hidden>
-                        <img alt="Vista previa del texto estilizado">
-                        <span class="ec-texto-preview-dims"></span>
-                    </div>
-                    <?php if ($texto_activo && $tiene) : ?>
-                        <p class="ec-aviso">Al procesar, el texto estilizado reemplazara la imagen cargada de este grupo.</p>
-                    <?php endif; ?>
+                        </select></label>
+                        <span class="description">Los campos elegidos aca alimentan el selector de cada placeholder. (Alta rapida: proximamente.)</span></p>
                 </div>
-                <?php endif; // modulo_textmuy_disponible ?>
+            </details>
+
+            <details class="ec-acordeon ec-acordeon-placeholders" open>
+                <summary class="ec-acordeon-cab">Placeholders</summary>
+                <div class="ec-acordeon-cuerpo">
+                    <?php if (count($grupos) > 1) : ?>
+                    <div class="ec-tabs">
+                        <?php foreach ($grupos as $gi => $g) : ?>
+                        <button type="button" class="button ec-tab<?php echo $gi === 0 ? ' ec-tab-activa' : ''; ?>" data-id="<?php echo esc_attr($g['id']); ?>">
+                            <span class="swatch" style="background: #<?php echo esc_attr($g['id']); ?>"></span>
+                            <?php echo esc_html(strtoupper($g['id'])); ?>
+                        </button>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php foreach ($grupos as $gi => $g) :
+                        $gid = $g['id'];
+                        $tiene = isset($imagenes[$gid]);
+                        $gm = $perso[$gid] ?? [];
+                        $valor = (string)($gm['value'] ?? '');
+                        $preset_g = (string)($gm['preset'] ?? '');
+                        $settings_g = (string)($gm['config'] ?? '');
+                        $tipo_g = (string)($gm['default'] ?? '');
+                        if ($tipo_g === '') {
+                            $tipo_g = 'texto';
+                        }
+                        // Estado inicial del panel: campo, modo codigo o vacio.
+                        $campo_id = 0;
+                        if (preg_match('/^\[campo(\d+)\]$/i', trim($valor), $mm)) {
+                            $cid0 = (int)$mm[1];
+                            if (isset($campos_pdf[$cid0])) {
+                                $campo_id = $cid0;
+                            }
+                        }
+                        $modo_codigo = ($valor !== '' && $campo_id === 0);
+                        // Marco dibujado (sin archivo): escala el tamano real a la caja.
+                        $mnW = max(1, (int)$g['w']); $mnH = max(1, (int)$g['h']);
+                        $escala = min(140 / $mnW, 100 / $mnH);
+                        $vw = max(8, (int)round($mnW * $escala)); $vh = max(8, (int)round($mnH * $escala));
+                    ?>
+                    <div class="ec-panel-grupo<?php echo $gi === 0 ? ' ec-panel-activa' : ''; ?>"
+                         data-id="<?php echo esc_attr($gid); ?>"
+                         data-w="<?php echo (int)$mnW; ?>" data-h="<?php echo (int)$mnH; ?>"
+                         data-tiene="<?php echo $tiene ? '1' : '0'; ?>">
+                        <div class="ec-grupo-cab">
+                            <span class="swatch" style="background: #<?php echo esc_attr($gid); ?>"></span>
+                            <h3>Grupo <?php echo esc_html(strtoupper($gid)); ?>
+                                <span class="ec-badge" style="background:#<?php echo esc_attr($gid); ?>"><?php echo esc_html('#' . $gid); ?></span>
+                            </h3>
+                        </div>
+                        <p class="ec-datos-grupo">
+                            Marco: <strong><?php echo (int)$mnW; ?>x<?php echo (int)$mnH; ?> px</strong> —
+                            <?php echo (int)$g['cont']; ?> instancia(s), pag.
+                            <?php echo esc_html(implode(', ', array_map(function ($p) {
+                                return (int)$p + 1;
+                            }, $g['pgs'] ?? []))); ?>
+                        </p>
+                        <div class="ec-grupo-cols">
+                            <div class="ec-col-media">
+                                <div class="ec-preview ec-checker ec-marco-btn" data-id="<?php echo esc_attr($gid); ?>"
+                                     title="Clic: elegir imagen de la galeria">
+                                    <?php if ($tiene) : ?>
+                                        <img src="<?php echo esc_url($link_ver('imagen', ['archivo' => $seleccionado, 'id' => $gid])); ?>"
+                                             alt="Imagen del grupo <?php echo esc_attr($gid); ?>">
+                                    <?php else : ?>
+                                        <div class="ec-marco" style="width:<?php echo (int)$vw; ?>px;height:<?php echo (int)$vh; ?>px"
+                                             title="<?php echo (int)$mnW; ?>x<?php echo (int)$mnH; ?> px"></div>
+                                    <?php endif; ?>
+                                </div>
+                                <a class="button button-small ec-btn-placeholder"
+                                   href="<?php echo esc_url($link_desc('placeholder', ['archivo' => $seleccionado, 'id' => $gid])); ?>">
+                                    Descargar placeholder
+                                </a>
+                            </div>
+                            <div class="ec-col-config">
+                                <p class="ec-linea">
+                                    <label class="ec-label-chica">
+                                        <input type="checkbox" class="ec-modo-codigo" data-id="<?php echo esc_attr($gid); ?>" <?php checked($modo_codigo); ?>>
+                                        modo codigo
+                                    </label>
+                                    <label class="ec-label-chica">Tipo
+                                        <select class="ec-select-tipo" data-id="<?php echo esc_attr($gid); ?>">
+                                            <option value="texto" <?php selected($tipo_g, 'texto'); ?>>texto</option>
+                                            <option value="imagen" <?php selected($tipo_g, 'imagen'); ?>>imagen</option>
+                                        </select>
+                                    </label>
+                                </p>
+                                <p class="ec-bloque-codigo"<?php if (!$modo_codigo) : ?> hidden<?php endif; ?>>
+                                    <input type="text" class="ec-input-codigo" data-id="<?php echo esc_attr($gid); ?>" maxlength="2000"
+                                           placeholder="Ej: Hola [campo1]"
+                                           value="<?php echo esc_attr($modo_codigo ? $valor : ''); ?>">
+                                    <span class="description">Codigo libre; los [campoN] se reemplazan con el valor del cliente.</span>
+                                </p>
+                                <p class="ec-bloque-campo"<?php if ($modo_codigo) : ?> hidden<?php endif; ?>>
+                                    <select class="ec-select-campo" data-id="<?php echo esc_attr($gid); ?>">
+                                        <option value="">(sin campo)</option>
+                                        <?php foreach ($campos_pdf as $cid => $t) : ?>
+                                            <option value="<?php echo (int)$cid; ?>" data-titulo="<?php echo esc_attr($t[1]); ?>" <?php selected($campo_id, (int)$cid); ?>>
+                                                <?php echo (int)$cid; ?> — <?php echo esc_html($t[1] !== '' ? $t[1] : '(oculto)'); ?> (<?php echo esc_html($t[2]); ?>)
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </p>
+                                <p class="ec-bloque-estilo"<?php if ($tipo_g !== 'texto') : ?> hidden<?php endif; ?>>
+                                    <label class="ec-label-chica">Estilo
+                                        <?php $primer_preset = $presets ? (string)reset($presets) : ''; ?>
+                                        <select class="ec-select-estilo" data-id="<?php echo esc_attr($gid); ?>">
+                                            <?php $sel_estilo = $preset_g !== '' ? $preset_g : $primer_preset; ?>
+                                            <?php foreach ($presets as $preset) : ?>
+                                                <option value="<?php echo esc_attr($preset); ?>" <?php selected($sel_estilo, $preset); ?>>
+                                                    <?php echo esc_html($preset); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                </p>
+                                <details class="ec-avanzado">
+                                    <summary>Avanzado (settings)</summary>
+                                    <input type="text" class="ec-input-settings" data-id="<?php echo esc_attr($gid); ?>" maxlength="4000"
+                                           value="<?php echo esc_attr($settings_g); ?>">
+                                    <span class="description">Overrides del estilo; admite [campoN].</span>
+                                </details>
+                                <p class="ec-linea">
+                                    <button type="button" class="button button-small ec-probar" data-id="<?php echo esc_attr($gid); ?>">Probar</button>
+                                    <span class="ec-texto-status" aria-live="polite"></span>
+                                </p>
+                                <div class="ec-texto-preview-caja" hidden>
+                                    <img alt="Vista previa del grupo <?php echo esc_attr($gid); ?>">
+                                    <span class="ec-texto-preview-dims"></span>
+                                </div>
+                                <?php if ($valor !== '' && $preset_g !== '' && $tiene) : ?>
+                                    <p class="ec-aviso">Al procesar, el texto renderizado reemplazara la imagen cargada de este grupo.</p>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php // Estado canonico que recibe handle_config_guardar (sincronizado por admin.js). ?>
+                        <input type="hidden" name="placeholders[<?php echo esc_attr($gid); ?>][tipo]" class="ec-h-tipo" value="<?php echo esc_attr($tipo_g); ?>">
+                        <input type="hidden" name="placeholders[<?php echo esc_attr($gid); ?>][preset]" class="ec-h-preset" value="<?php echo esc_attr($preset_g); ?>">
+                        <input type="hidden" name="placeholders[<?php echo esc_attr($gid); ?>][value]" class="ec-h-value" value="<?php echo esc_attr($valor); ?>">
+                        <input type="hidden" name="placeholders[<?php echo esc_attr($gid); ?>][settings]" class="ec-h-settings" value="<?php echo esc_attr($settings_g); ?>">
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </details>
+
+            <details class="ec-acordeon ec-acordeon-mockups">
+                <summary class="ec-acordeon-cab">Mockups</summary>
+                <div class="ec-acordeon-cuerpo">
+                    <p class="description">Proximamente: previsualizacion de las paginas del PDF con los placeholders aplicados.</p>
+                </div>
+            </details>
+
+            <div class="ec-fila-final">
+                <button type="submit" class="button button-primary">Guardar</button>
+                <span class="ec-guardar-status" aria-live="polite"></span>
+                <?php if ($salida_ok) : ?>
+                    <a class="button" href="<?php echo esc_url($link_desc('salida', ['archivo' => $seleccionado])); ?>">Descargar PDF Procesado</a>
+                <?php else : ?>
+                    <button type="button" class="button" disabled>Descargar PDF Procesado</button>
+                <?php endif; ?>
+                <span class="description">Guarda activo, productos, campos y el mapeo de cada placeholder.</span>
             </div>
-        <?php endforeach; ?>
+        </form>
+
+        <?php // Formularios de imagen por grupo (pool oculto; el marco abre la galeria). ?>
+        <div class="ec-forms-imagen" hidden>
+            <?php foreach ($grupos as $g) : $gid = $g['id']; $tiene = isset($imagenes[$gid]); ?>
+            <form class="ec-form-imagen" method="post" action="<?php echo esc_url($post_url); ?>" enctype="multipart/form-data" data-id="<?php echo esc_attr($gid); ?>">
+                <input type="hidden" name="action" value="personalizador_pdf_subir_imagen">
+                <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
+                <input type="hidden" name="id" value="<?php echo esc_attr($gid); ?>">
+                <input type="hidden" name="attachment_id" value="">
+                <?php wp_nonce_field('personalizador_pdf_subir_imagen'); ?>
+                <input type="file" name="imagen" accept="image/png,image/jpeg,image/gif,image/webp" class="ec-input-imagen">
+                <button type="button" class="button button-small ec-galeria" data-id="<?php echo esc_attr($gid); ?>">Desde galeria</button>
+                <button type="submit" class="button button-small">Cargar imagen</button>
+            </form>
+            <?php if ($tiene) : ?>
+            <form class="ec-form-inline ec-form-quitar" method="post" action="<?php echo esc_url($post_url); ?>" data-id="<?php echo esc_attr($gid); ?>">
+                <input type="hidden" name="action" value="personalizador_pdf_quitar_imagen">
+                <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
+                <input type="hidden" name="id" value="<?php echo esc_attr($gid); ?>">
+                <?php wp_nonce_field('personalizador_pdf_quitar_imagen'); ?>
+            </form>
+            <?php endif; ?>
+            <?php endforeach; ?>
+        </div>
 
         <div class="ec-procesar">
             <form class="ec-form-procesar" method="post" action="<?php echo esc_url($post_url); ?>">
@@ -424,9 +469,9 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
             </form>
             <p class="description">
                 <?php if ($conImagen === 0) : ?>
-                    Carga una imagen o activa un texto estilizado en al menos un grupo para poder procesar.
+                    Carga una imagen o asigna un texto en al menos un grupo para poder procesar.
                 <?php else : ?>
-                    Inserta la imagen o el texto estilizado de cada grupo en todos sus placeholders (encajado, sin deformar ni recortar).
+                    Inserta la imagen o el texto de cada grupo en todos sus placeholders (encajado, sin deformar ni recortar).
                     <?php if ($conImagen < count($grupos)) : ?>
                         Ojo: <?php echo count($grupos) - $conImagen; ?> grupo(s) sin imagen ni texto quedaran como estan.
                     <?php endif; ?>
@@ -435,7 +480,6 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                     <?php endif; ?>
                 <?php endif; ?>
             </p>
-        </div>
         </div>
     <?php endif; ?>
 </div>

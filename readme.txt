@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.0.1
+Stable tag: 4.1.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -62,6 +62,11 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.1.0 =
+* **Consola redisenada (tarjeta "3. Personalizacion")**: cabecera en una linea (grupos, instancias, badge de cobertura, Descargar JSON y Re-analizar con botones chicos); "Configuracion tienda" y "Placeholders" en acordeones, con switch Activo en la cabecera del acordeon; "Mockups" como seccion reservada.
+* **Placeholders con pestanas por grupo**: un panel visible a la vez, en 2 columnas (marco con galeria al clic + Descargar placeholder, a la izquierda; asignacion a la derecha). La asignacion unifica el mapeo: modo codigo (codigo libre con `[campoN]` + tipo texto/imagen) o selector de campo; el estilo TextMuy se elige solo para tipo texto (primer preset por defecto). Boton "Probar" renderiza la vista previa con el texto de muestra (los `[campoN]` se resuelven con el titulo del campo). El estado canonico vive en hidden inputs `placeholders[id]` (mismo `config.json` de siempre) y se sincroniza con JS.
+* **Guardar unificado**: la tarjeta guarda activo, productos, campos y mapeos en un POST AJAX (`ajax=1` del handler existente) sin recargar, con estado en pantalla y actualizacion del badge de cobertura. "Procesar PDF" guarda la configuracion primero y luego envia un solo POST con los PNG `imagen_{id}` renderizados (ya no envia `texto_`/`estilo_`, asi la plantilla de `config.json` no se pisa con la muestra). El endpoint `personalizador_pdf_guardar_texto` se conserva (lo ejercita `tests/texto_puente.php`); su formulario literal sale de la UI.
 
 = 4.0.1 =
 * **Layout de PDFs (una carpeta por producto, plan 008)**: cada PDF vive en `uploads/pmu/pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` inmutable + `config.json` editable con `activo`/`productos`/`campos_ids`/`placeholders[id]`, clave `id` = color hex sin `#`); sin `textos.json` ni `metadata.json`. (Historial 4.0.1: `metadata.json` como fuente unica.)

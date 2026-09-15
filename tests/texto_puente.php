@@ -125,7 +125,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         case 'admin':
             check('render sin fatal ni excepcion', $admin_error === '');
             check('aviso con la causa del motor', strpos($admin_html, 'motor:listar:') !== false);
-            check('el selector de estilos queda vacio', strpos($admin_html, '<option value="">Estilo...</option>') !== false);
+            check('el selector de estilos sigue presente', strpos($admin_html, 'ec-select-estilo') !== false);
             break;
         case 'setup':
             check('PDF en pdfs/muestra/muestra.pdf', is_file($uploads . '/pdfs/muestra/muestra.pdf'));

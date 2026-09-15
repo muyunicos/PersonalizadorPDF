@@ -49,11 +49,12 @@ jQuery(function ($) {
     /* ============ 2. Imagenes desde la galeria de medios ============ */
 
     if (typeof wp !== 'undefined' && wp.media) {
-        $('.ec-galeria').on('click', function (e) {
+        // El marco del placeholder y el boton del pool oculto abren la misma galeria.
+        $(document).on('click', '.ec-galeria, .ec-marco-btn', function (e) {
             e.preventDefault();
-            var $btn = $(this);
-            var $form = $btn.closest('form.ec-form-imagen');
-            var idGrupo = (String($btn.data('id') || '')).toUpperCase();
+            var idGrupo = (String($(this).data('id') || '')).toUpperCase();
+            var $form = $('form.ec-form-imagen[data-id="' + idGrupo + '"]').first();
+            if (!$form.length) { return; }
             var frame = wp.media({
                 title: 'Elegir imagen para el grupo ' + idGrupo,
                 multiple: false,
@@ -67,7 +68,7 @@ jQuery(function ($) {
             frame.open();
         });
     } else {
-        $('.ec-galeria').prop('disabled', true).attr('title', 'Galeria no disponible');
+        $('.ec-galeria, .ec-marco-btn').attr('title', 'Galeria no disponible');
     }
 
     /* ============ 3. Confirmaciones ============ */
@@ -78,11 +79,10 @@ jQuery(function ($) {
         }
     });
 
-    /* ============ 4. Texto estilizado por grupo (puente TextMuy) ============ */
+    /* ============ 4. Personalizacion por grupo (estado, guardado y puente TextMuy) ============ */
 
     var RENDER_CORE_URL = (window.PersonalizadorPDF && window.PersonalizadorPDF.renderCoreUrl) || '';
     var renderCorePromesa = null;
-    var debounceTexto = {};
 
     /** Carga perezosa del render-core del modulo (iframe off-screen, SOLO al usarse). */
     function renderCore() {
@@ -130,89 +130,160 @@ jQuery(function ($) {
      * servidor en los <option> del selector (presets_base()). Nada que mergear.
      */
 
-    /** Estado texto/estilo de un bloque de grupo, leido del DOM actual. */
-    function estadoTexto($bloque) {
-        var $form = $bloque.find('form.ec-form-texto');
-        var chk = $form.find('input[name=activo]')[0];
+    /** Estado canonico de un panel, leido de los hidden inputs sincronizados. */
+    function estadoPanel($panel) {
         return {
-            id: String($bloque.data('id') || ''),
-            activo: !!(chk && chk.checked),
-            texto: ($form.find('input[name=texto]').val() || '').trim(),
-            estilo: $form.find('select[name=estilo]').val() || '',
-            w: parseInt($bloque.data('w'), 10) || 0,
-            h: parseInt($bloque.data('h'), 10) || 0,
-            $form: $form
+            id: String($panel.data('id') || ''),
+            tipo: $panel.find('.ec-h-tipo').val() || 'texto',
+            preset: $panel.find('.ec-h-preset').val() || '',
+            value: ($panel.find('.ec-h-value').val() || '').trim(),
+            w: parseInt($panel.data('w'), 10) || 0,
+            h: parseInt($panel.data('h'), 10) || 0,
+            tiene: $panel.attr('data-tiene') === '1',
+            $panel: $panel
         };
     }
 
-    /** Autoguardado via AJAX (el handler responde JSON cuando ajax=1). */
-    function guardarTextoAjax($form) {
-        var fd = new FormData($form[0]);
-        fd.set('ajax', '1');
-        var chk = $form.find('input[name=activo]')[0];
-        fd.set('activo', (chk && chk.checked) ? '1' : '0');
-        var $status = $form.find('.ec-texto-status');
-        $status.removeClass('ec-ok ec-error').text('Guardando...');
-        return fetch($form.attr('action'), { method: 'POST', body: fd, credentials: 'same-origin' })
-            .then(function (r) { return r.json(); })
-            .then(function (j) {
-                if (j && j.success) { $status.addClass('ec-ok').text('Guardado ✓'); }
-                else { $status.addClass('ec-error').text((j && j.data) || 'No se pudo guardar.'); }
-            })
-            .catch(function (e) {
-                if (window.console && console.warn) { console.warn('[PersonalizadorPDF] autoguardado', e); }
-                $status.addClass('ec-error').text('No se pudo guardar (red).');
-            });
+    /** Sincroniza los hidden inputs del panel con sus controles visibles. */
+    function syncPanel($panel) {
+        var codigo = $panel.find('.ec-modo-codigo').prop('checked');
+        var tipo = $panel.find('.ec-select-tipo').val() || 'texto';
+        var campo = String($panel.find('.ec-select-campo').val() || '');
+        var estilo = $panel.find('.ec-select-estilo').val() || '';
+        var code = ($panel.find('.ec-input-codigo').val() || '').trim();
+        var value = '';
+        if (codigo) {
+            value = code;
+        } else if (campo !== '') {
+            value = '[campo' + campo + ']';
+        }
+        if (tipo !== 'texto') {
+            estilo = '';
+        }
+        $panel.find('.ec-bloque-codigo').prop('hidden', !codigo);
+        $panel.find('.ec-bloque-campo').prop('hidden', codigo);
+        $panel.find('.ec-bloque-estilo').prop('hidden', tipo !== 'texto');
+        $panel.find('.ec-h-tipo').val(tipo);
+        $panel.find('.ec-h-preset').val(estilo);
+        $panel.find('.ec-h-value').val(value);
+        $panel.find('.ec-h-settings').val($panel.find('.ec-input-settings').val() || '');
     }
 
-    // Autoguardado con debounce al escribir o cambiar estilo/activo.
-    $(document).on('input change', 'form.ec-form-texto input[name=texto], form.ec-form-texto select[name=estilo], form.ec-form-texto input[name=activo]', function () {
-        var $form = $(this).closest('form.ec-form-texto');
-        var idGrupo = $form.find('input[name=id]').val() || '';
-        clearTimeout(debounceTexto[idGrupo]);
-        debounceTexto[idGrupo] = setTimeout(function () { guardarTextoAjax($form); }, 600);
-        refrescarBotonProcesar();
+    /** Texto de muestra: [campoN] -> titulo del campo (para el render de prueba). */
+    function textoMuestra(st) {
+        return String(st.value).replace(/\[campo\s*(\d+)\s*\]/gi, function (todo, n) {
+            var titulo = String(st.$panel.find('.ec-select-campo option[value="' + n + '"]').data('titulo') || '');
+            return titulo !== '' ? titulo : 'campo' + n;
+        });
+    }
+
+    /** Un grupo cubre su hueco si tiene imagen manual o mapeo con value. */
+    function panelCubierto(st) {
+        return st.tiene || st.value !== '';
+    }
+
+    // Pestanas: un grupo visible a la vez.
+    $(document).on('click', '.ec-tab', function () {
+        var id = String($(this).data('id') || '');
+        $('.ec-tab').removeClass('ec-tab-activa');
+        $(this).addClass('ec-tab-activa');
+        $('.ec-panel-grupo').removeClass('ec-panel-activa');
+        $('.ec-panel-grupo[data-id="' + id + '"]').addClass('ec-panel-activa');
     });
+
+    // El switch de "Configuracion tienda" no abre/cierra el acordeon.
+    $(document).on('click', '.ec-switch, .ec-switch-texto', function (e) {
+        e.stopPropagation();
+    });
+
+    // Cualquier cambio de control re-sincroniza el estado canonico del panel.
+    $(document).on('input change',
+        '.ec-panel-grupo .ec-modo-codigo, .ec-panel-grupo .ec-select-tipo, ' +
+        '.ec-panel-grupo .ec-select-campo, .ec-panel-grupo .ec-select-estilo, ' +
+        '.ec-panel-grupo .ec-input-codigo, .ec-panel-grupo .ec-input-settings',
+        function () {
+            syncPanel($(this).closest('.ec-panel-grupo'));
+            refrescarProcesar();
+        });
 
     var estadoInicialProcesar = null;
 
-    /** El boton Procesar se habilita con imagen manual o texto activo en algun grupo. */
-    function refrescarBotonProcesar() {
+    function actualizarBadge() {
+        var $badge = $('#ec-badge-cobertura');
+        var $paneles = $('.ec-panel-grupo');
+        if (!$badge.length || !$paneles.length) { return; }
+        var cubiertos = 0;
+        $paneles.each(function () {
+            if (panelCubierto(estadoPanel($(this)))) { cubiertos++; }
+        });
+        $badge.text(cubiertos + '/' + $paneles.length + ' con imagen/texto');
+        $badge.toggleClass('ec-badge-verde', cubiertos === $paneles.length);
+        $badge.toggleClass('ec-badge-amarillo', cubiertos !== $paneles.length);
+    }
+
+    /** El boton Procesar se habilita con imagen manual o mapeo con value en algun grupo. */
+    function refrescarProcesar() {
         var $btn = $('form.ec-form-procesar button[type=submit]');
         if (!$btn.length) { return; }
         if (estadoInicialProcesar === null) {
             estadoInicialProcesar = $btn.prop('disabled');
         }
-        var hayActivos = Array.prototype.some.call(document.querySelectorAll('.ec-texto'), function (el) {
-            var st = estadoTexto($(el));
-            return st.activo && st.texto && st.estilo;
+        var hay = Array.prototype.some.call(document.querySelectorAll('.ec-panel-grupo'), function (el) {
+            return panelCubierto(estadoPanel($(el)));
         });
-        $btn.prop('disabled', hayActivos ? false : estadoInicialProcesar);
+        $btn.prop('disabled', hay ? false : estadoInicialProcesar);
+        actualizarBadge();
     }
-    refrescarBotonProcesar();
+    refrescarProcesar();
 
-    // Con JS activo, el boton Guardar tambien usa AJAX (sin recarga).
-    $(document).on('submit', 'form.ec-form-texto', function (e) {
+    /** Guarda la configuracion via AJAX (handle_config_guardar responde JSON con ajax=1). */
+    function guardarConfigAjax() {
+        var $form = $('form.ec-form-config');
+        $('.ec-panel-grupo').each(function () { syncPanel($(this)); });
+        var fd = new FormData($form[0]);
+        fd.set('ajax', '1');
+        var $status = $form.find('.ec-guardar-status');
+        $status.removeClass('ec-ok ec-error').text('Guardando...');
+        return fetch($form.attr('action'), { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                if (j && j.success) {
+                    $status.addClass('ec-ok').text('Guardado ✓');
+                    actualizarBadge();
+                    return j;
+                }
+                throw new Error((j && j.data) || 'No se pudo guardar.');
+            })
+            .catch(function (e) {
+                var msg = (e instanceof Error && e.message) ? e.message : 'No se pudo guardar (red).';
+                $status.addClass('ec-error').text(msg);
+                throw new Error(msg);
+            });
+    }
+
+    // Guardar: toda la configuracion en un POST AJAX, sin recarga.
+    $(document).on('submit', 'form.ec-form-config', function (e) {
         e.preventDefault();
-        guardarTextoAjax($(this));
+        guardarConfigAjax().catch(function () { /* el status ya muestra el error */ });
     });
 
-    /** Vista previa del texto del grupo al tamano exacto del hueco. */
-    $(document).on('click', '.ec-texto-preview', function () {
+    /** Vista previa del grupo al tamano exacto del hueco (texto de muestra). */
+    $(document).on('click', '.ec-probar', function () {
         var $btn = $(this);
-        var $bloque = $btn.closest('.ec-texto');
-        var st = estadoTexto($bloque);
-        var $status = st.$form.find('.ec-texto-status');
-        if (!st.texto || !st.estilo) {
-            $status.addClass('ec-error').text('Escribe un texto y elige un estilo.');
+        var $panel = $btn.closest('.ec-panel-grupo');
+        syncPanel($panel);
+        var st = estadoPanel($panel);
+        var $status = $panel.find('.ec-texto-status');
+        if (st.tipo !== 'texto' || !st.preset || !st.value) {
+            $status.addClass('ec-error').text('Elegi tipo texto, un campo o codigo y un estilo.');
             return;
         }
         $btn.prop('disabled', true).text('Renderizando...');
         renderCore().then(function (core) {
-            return core.TextMuyAPI.renderBatch([{ id: st.id, text: st.texto, preset: st.estilo, width: st.w, height: st.h }]);
+            return core.TextMuyAPI.renderBatch([{ id: st.id, text: textoMuestra(st), preset: st.preset, width: st.w, height: st.h }]);
         }).then(function (out) {
             var url = URL.createObjectURL(out[0].blob);
-            var $caja = $bloque.find('.ec-texto-preview-caja');
+            var $caja = $panel.find('.ec-texto-preview-caja');
             var $img = $caja.find('img');
             if ($img.data('url')) { URL.revokeObjectURL($img.data('url')); }
             $img.attr('src', url).data('url', url);
@@ -220,10 +291,10 @@ jQuery(function ($) {
             $caja.removeAttr('hidden');
             $status.removeClass('ec-error').text('');
         }).catch(function (err) {
-            if (window.console && console.warn) { console.warn('[PersonalizadorPDF] preview', err); }
+            if (window.console && console.warn) { console.warn('[PersonalizadorPDF] probar', err); }
             $status.addClass('ec-error').text((err && err.message) || 'Fallo la vista previa.');
         }).finally(function () {
-            $btn.prop('disabled', false).text('Vista previa');
+            $btn.prop('disabled', false).text('Probar');
         });
     });
 
@@ -262,11 +333,14 @@ jQuery(function ($) {
 
     $('form.ec-form-procesar').on('submit', function (e) {
         var form = this;
-        var bloques = $('.ec-texto').map(function () { return estadoTexto($(this)); }).get()
-            .filter(function (st) { return st.activo && st.texto && st.estilo; });
-        if (!bloques.length) {
-            return; // Sin textos activos: submit clasico (solo imagenes manuales).
-        }
+        var bloques = [];
+        $('.ec-panel-grupo').each(function () {
+            syncPanel($(this));
+            var st = estadoPanel($(this));
+            if (st.tipo === 'texto' && st.preset && st.value) {
+                bloques.push(st);
+            }
+        });
         e.preventDefault();
         var $btn = $(form).find('button[type=submit]').prop('disabled', true);
         var ov = overlayRender();
@@ -274,40 +348,46 @@ jQuery(function ($) {
         // propiedad form.action del DOM (named property collision). La URL real del
         // envio esta en el ATRIBUTO, nunca en la propiedad.
         var actionUrl = form.getAttribute('action') || window.location.href;
-        renderCore().then(function (core) {
+        // 1) La configuracion se guarda SIEMPRE primero (el procesado refleja lo guardado).
+        guardarConfigAjax().then(function () {
+            if (!bloques.length) {
+                // Solo imagenes manuales: submit nativo (el backend usa las imagenes guardadas).
+                ov.aplicar();
+                form.submit();
+                return null;
+            }
+            // 2) Render de los grupos de texto y 3) un solo POST con los PNG (imagen_{id}).
+            // Sin texto_/estilo_: la plantilla de config.json no se pisa con la muestra.
             ov.setTotal(bloques.length);
             var items = bloques.map(function (st) {
-                return { id: st.id, text: st.texto, preset: st.estilo, width: st.w, height: st.h };
+                return { id: st.id, text: textoMuestra(st), preset: st.preset, width: st.w, height: st.h };
             });
-            return core.TextMuyAPI.renderBatch(items, {
-                onProgress: function (id, idx, total) {
-                    ov.paso('Grupo ' + String(id).toUpperCase() + ' (' + (idx + 1) + '/' + total + ')', idx);
-                }
-            }).then(function (out) {
-                var fd = new FormData(form);
-                var porId = {};
-                bloques.forEach(function (st) { porId[st.id] = st; });
-                out.forEach(function (r) {
-                    var st = porId[r.id];
-                    fd.append('texto_' + r.id, st.texto);
-                    fd.append('estilo_' + r.id, st.estilo);
-                    fd.append('imagen_' + r.id, r.blob, r.id + '.png');
-                });
-                ov.aplicar();
-                // Mismo POST: textos + PNGs + procesar. admin-post redirige al final.
-                // AbortController: si la red muere, el overlay muestra error en vez de esperar eterno.
-                var controlador = new AbortController();
-                var timeoutId = setTimeout(function () { controlador.abort(); }, 90000);
-                return fetch(actionUrl, {
-                    method: 'POST',
-                    body: fd,
-                    credentials: 'same-origin',
-                    signal: controlador.signal
-                }).finally(function () {
-                    clearTimeout(timeoutId);
+            return renderCore().then(function (core) {
+                return core.TextMuyAPI.renderBatch(items, {
+                    onProgress: function (id, idx, total) {
+                        ov.paso('Grupo ' + String(id).toUpperCase() + ' (' + (idx + 1) + '/' + total + ')', idx);
+                    }
+                }).then(function (out) {
+                    var fd = new FormData(form);
+                    out.forEach(function (r) {
+                        fd.append('imagen_' + r.id, r.blob, r.id + '.png');
+                    });
+                    ov.aplicar();
+                    // AbortController: si la red muere, el overlay muestra error en vez de esperar eterno.
+                    var controlador = new AbortController();
+                    var timeoutId = setTimeout(function () { controlador.abort(); }, 90000);
+                    return fetch(actionUrl, {
+                        method: 'POST',
+                        body: fd,
+                        credentials: 'same-origin',
+                        signal: controlador.signal
+                    }).finally(function () {
+                        clearTimeout(timeoutId);
+                    });
                 });
             });
         }).then(function (resp) {
+            if (!resp) { return; } // envio nativo en curso (solo imagenes manuales)
             // Cerrar el overlay antes de navegar al resultado (transicion limpia).
             ov.cerrar();
             window.location.href = resp.url || window.location.href;
