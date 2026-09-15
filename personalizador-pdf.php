@@ -61,6 +61,9 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_ver', [$this, 'handle_ver']);
         add_action('admin_post_personalizador_pdf_borrar', [$this, 'handle_borrar']);
 
+        // Buscador de productos Woo para Configuracion tienda (autocompletado AJAX).
+        add_action('wp_ajax_personalizador_pdf_buscar_productos', [$this, 'handle_buscar_productos']);
+
         // Motor de galerias TextMuy (Const. VII): UNICO endpoint
         // action=pmu_uploads con op=listar|alta|baja|editar|sprite|miniatura.
         // Handlers sueltos purgados (Const. VIII).
@@ -589,6 +592,33 @@ class Personalizador_PDF_Plugin
         $this->redirigir(['ec_config' => 1, 'ec_pdf' => $archivo]);
     }
 
+    /** Busca productos Woo para el autocompletado de Configuracion tienda (AJAX JSON). */
+    public function handle_buscar_productos()
+    {
+        $this->seguridad('personalizador_pdf_buscar_productos');
+        $term = isset($_REQUEST['q']) ? sanitize_text_field(wp_unslash($_REQUEST['q'])) : '';
+        if (!function_exists('wc_get_products')) {
+            wp_send_json_error('woocommerce_inactivo');
+        }
+        $args = [
+            'status' => 'publish',
+            'limit' => 20,
+            'orderby' => 'title',
+            'order' => 'ASC',
+        ];
+        if ($term !== '') {
+            $args['s'] = $term;
+        }
+        $items = [];
+        foreach ((array)wc_get_products($args) as $producto) {
+            $items[] = [
+                'id' => (int)$producto->get_id(),
+                'titulo' => (string)$producto->get_name(),
+            ];
+        }
+        wp_send_json_success($items);
+    }
+
     /* ==================== Menu y assets ==================== */
 
     public function add_menu()
@@ -647,6 +677,10 @@ class Personalizador_PDF_Plugin
             'motorUrl' => admin_url('admin-post.php?action=pmu_uploads'),
             'motorNonce' => wp_create_nonce('pmu_uploads'),
             'imagenesBase' => $this->base_imagenes_segura(),
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'postUrl' => admin_url('admin-post.php'),
+            'nonceBuscar' => wp_create_nonce('personalizador_pdf_buscar_productos'),
+            'nonceCampo' => wp_create_nonce('personalizador_pdf_campo'),
         ]);
     }
 

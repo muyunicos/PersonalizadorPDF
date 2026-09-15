@@ -234,6 +234,63 @@
     margin-bottom: 4px;
 }
 
+/* ============ Chips de productos y buscador ============ */
+.ec-block-label { display: block; font-weight: 600; margin-bottom: 4px; }
+.ec-block-label .button { margin-left: 8px; vertical-align: middle; }
+.ec-buscador-producto { display: block; max-width: 420px; }
+.ec-input-buscar-producto { width: 100%; }
+.ec-resultados-producto {
+    display: block;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    background: #fff;
+    max-width: 420px;
+    max-height: 200px;
+    overflow: auto;
+    position: relative;
+    z-index: 20;
+}
+.ec-resultados-producto[hidden] { display: none; }
+.ec-resultado-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid #f0f0f1;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 12.5px;
+}
+.ec-resultado-item:hover { background: #f0f6fc; }
+.ec-resultado-vacio { display: block; padding: 6px 10px; color: #787c82; font-size: 12.5px; }
+.ec-chips-productos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0 2px;
+}
+.ec-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f0f0f1;
+    border: 1px solid #c3c4c7;
+    border-radius: 12px;
+    padding: 2px 10px;
+    font-size: 12.5px;
+}
+.ec-chip .ec-chip-x {
+    background: none;
+    border: 0;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    color: #50575e;
+    padding: 0;
+}
+.ec-chip .ec-chip-x:hover { color: #d63638; }
+
 /* ============ Fila final (Guardar / Descargar) ============ */
 .ec-fila-final {
     display: flex;

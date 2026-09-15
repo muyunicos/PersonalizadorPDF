@@ -55,3 +55,5 @@ peticiones locales (sin bases de respaldo, sin data-URL, sin migraciones).
    (el modulo ya viene incluido).
 2. Subir `uploads/pmu/` COMPLETA a `wp-content/uploads/` (incluye `{fonts,img,tm-presets}`
    con sus catalogos: son los datos del administrador).
+3. Despliegue automatico (webhooks Hostinger, ver AGENTS.md §2): el modulo TextMuy tiene
+   su propio webhook de implementacion al hosting, separado del del plugin.

@@ -202,6 +202,164 @@ jQuery(function ($) {
             });
     });
 
+    /* ============ 2c. Buscador de productos Woo (chips + autocompletado) ============ */
+
+    var cfgBusqueda = window.PersonalizadorPDF || {};
+    var debounceBusqueda = null;
+
+    /** Escape HTML reutilizable para titulos dinamicos. */
+    function escHtml(texto) {
+        return $('<i>').text(String(texto === undefined || texto === null ? '' : texto)).html();
+    }
+
+    function chipExiste(id) {
+        return $('.ec-chips-productos .ec-chip[data-id="' + (parseInt(id, 10) || 0) + '"]').length > 0;
+    }
+
+    function agregarChip(id, titulo) {
+        id = parseInt(id, 10) || 0;
+        if (id <= 0 || chipExiste(id)) { return; }
+        $('.ec-chips-productos').append(
+            '<span class="ec-chip" data-id="' + id + '">' +
+            '<span class="ec-chip-texto">#' + id + (titulo ? ' — ' + escHtml(titulo) : '') + '</span>' +
+            '<button type="button" class="ec-chip-x" aria-label="Quitar producto ' + id + '">×</button>' +
+            '<input type="hidden" name="productos[]" value="' + id + '">' +
+            '</span>'
+        );
+    }
+
+    // Autocompletado de productos (endpoint wp_ajax con nonce dedicado).
+    $(document).on('input', '.ec-input-buscar-producto', function () {
+        var $input = $(this);
+        var $caja = $input.closest('.ec-acordeon-cuerpo').find('.ec-resultados-producto');
+        var q = ($input.val() || '').trim();
+        clearTimeout(debounceBusqueda);
+        if (q === '') {
+            $caja.attr('hidden', true).empty();
+            return;
+        }
+        debounceBusqueda = setTimeout(function () {
+            fetch(cfgBusqueda.ajaxUrl + '?action=personalizador_pdf_buscar_productos&_wpnonce=' +
+                encodeURIComponent(cfgBusqueda.nonceBuscar || '') + '&q=' + encodeURIComponent(q),
+                { credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (j) {
+                    if (!(j && j.success)) { throw new Error((j && j.data) || 'La busqueda fallo.'); }
+                    $caja.empty();
+                    if (!j.data.length) {
+                        $caja.append('<span class="ec-resultado-vacio">Sin resultados.</span>');
+                    } else {
+                        j.data.forEach(function (p) {
+                            $caja.append(
+                                '<button type="button" class="ec-resultado-item" data-id="' + p.id + '" data-titulo="' + escHtml(p.titulo) + '">' +
+                                '#' + p.id + ' — ' + escHtml(p.titulo) + '</button>'
+                            );
+                        });
+                    }
+                    $caja.removeAttr('hidden');
+                })
+                .catch(function (err) {
+                    if (String(err && err.message) === 'woocommerce_inactivo') {
+                        $caja.empty().append('<span class="ec-resultado-vacio">WooCommerce no esta activo: escribi un ID y pulsas Enter.</span>').removeAttr('hidden');
+                        return;
+                    }
+                    if (window.console && console.warn) { console.warn('[PersonalizadorPDF] buscar', err); }
+                });
+        }, 300);
+    });
+
+    // Enter con un ID numerico: alta manual (fallback sin Woo).
+    $(document).on('keydown', '.ec-input-buscar-producto', function (e) {
+        if (e.key !== 'Enter') { return; }
+        e.preventDefault();
+        var $input = $(this);
+        var valor = ($input.val() || '').trim();
+        if (/^\d+$/.test(valor)) {
+            agregarChip(valor, '');
+            $input.val('');
+            $input.closest('.ec-acordeon-cuerpo').find('.ec-resultados-producto').attr('hidden', true).empty();
+        }
+    });
+
+    $(document).on('click', '.ec-resultado-item', function () {
+        agregarChip($(this).data('id'), String($(this).data('titulo') || ''));
+        var $input = $('.ec-input-buscar-producto').first();
+        $input.val('');
+        $(this).closest('.ec-resultados-producto').attr('hidden', true).empty();
+    });
+
+    $(document).on('click', '.ec-chip-x', function () {
+        $(this).closest('.ec-chip').remove();
+    });
+
+    // Cerrar el dropdown al hacer clic fuera.
+    $(document).on('click', function (e) {
+        if (!$(e.target).closest('.ec-buscador-producto, .ec-resultados-producto').length) {
+            $('.ec-resultados-producto').attr('hidden', true).empty();
+        }
+    });
+
+    // --- Alta rapida de campos (modal; reusa handle_campo_guardar con ajax=1) ---
+    $(document).on('click', '.ec-nuevo-campo', function () {
+        $('.ec-modal-campo').removeAttr('hidden');
+        $('.ec-modal-campo .ec-campo-status').removeClass('ec-error ec-ok').text('');
+        $('.ec-modal-campo .ec-campo-titulo').trigger('focus');
+    });
+
+    $(document).on('click', '.ec-modal-campo .ec-campo-cancelar', function () {
+        $('.ec-modal-campo').attr('hidden', true);
+    });
+
+    $(document).on('click', '.ec-modal-campo .ec-campo-crear', function () {
+        var $status = $('.ec-modal-campo .ec-campo-status');
+        var titulo = ($('.ec-modal-campo .ec-campo-titulo').val() || '').trim();
+        var tipo = $('.ec-modal-campo .ec-campo-tipo').val() || 'text';
+        if (titulo === '') {
+            $status.addClass('ec-error').text('Escribi un titulo.');
+            return;
+        }
+        var fd = new FormData();
+        fd.set('action', 'personalizador_pdf_campo');
+        fd.set('_wpnonce', cfgBusqueda.nonceCampo || '');
+        fd.set('titulo_cliente', titulo);
+        fd.set('tipo', tipo);
+        fd.set('etiquetas', ($('.ec-modal-campo .ec-campo-etiquetas').val() || '').trim());
+        fd.set('visible', $('.ec-modal-campo .ec-campo-visible').prop('checked') ? '1' : '');
+        fd.set('ajax', '1');
+        $status.removeClass('ec-error ec-ok').text('Creando...');
+        fetch(cfgBusqueda.postUrl || window.location.href, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                if (!(j && j.success)) { throw new Error((j && j.data) || 'No se pudo crear el campo.'); }
+                var id = (j.data && j.data.id) || 0;
+                if (id > 0) {
+                    var etiqueta = id + ' — ' + titulo + ' (' + tipo + ')';
+                    var $sel = $('select[name="campos_ids[]"]').first();
+                    if ($sel.length && !$sel.find('option[value="' + id + '"]').length) {
+                        $sel.append($('<option>', { value: id, text: etiqueta }).prop('selected', true));
+                    }
+                    // Alta en los selectores de cada placeholder (data-titulo para Probar).
+                    $('.ec-select-campo').each(function () {
+                        var $sc = $(this);
+                        if (!$sc.find('option[value="' + id + '"]').length) {
+                            $sc.append($('<option>', { value: id, 'data-titulo': titulo, text: etiqueta }));
+                        }
+                    });
+                }
+                $status.addClass('ec-ok').text('Campo ' + id + ' creado ✓');
+                $('.ec-modal-campo .ec-campo-titulo').val('');
+                $('.ec-modal-campo .ec-campo-etiquetas').val('');
+                setTimeout(function () {
+                    $('.ec-modal-campo').attr('hidden', true);
+                    $status.text('');
+                }, 1200);
+            })
+            .catch(function (e) {
+                var msg = (e instanceof Error && e.message) ? e.message : 'No se pudo crear el campo (red).';
+                $status.addClass('ec-error').text(msg);
+            });
+    });
+
     /* ============ 3. Confirmaciones ============ */
 
     $('form.ec-borrar').on('submit', function (e) {

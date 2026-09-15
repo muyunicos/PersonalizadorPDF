@@ -257,18 +257,45 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                     <span class="ec-switch-texto">Activo (se ofrece en los productos)</span>
                 </summary>
                 <div class="ec-acordeon-cuerpo">
-                    <p><label>Productos (IDs Woo, uno por linea, max 100)<br>
-                        <textarea name="productos_txt" rows="2" cols="40" class="large-text code"><?php echo esc_textarea(implode("\n", (array)$cfg_pdf['productos'])); ?></textarea></label>
-                        <span class="description">Se validan contra el catalogo Woo al guardar. (Buscador: proximamente.)</span></p>
-                    <p><label>Campos (en orden de UI)<br>
+                    <p>
+                        <span class="ec-block-label">Productos (busca y agrega, max 100)</span>
+                        <span class="ec-buscador-producto">
+                            <input type="text" class="ec-input-buscar-producto"
+                                   placeholder="Buscar producto por nombre o ID..." autocomplete="off">
+                        </span>
+                        <span class="ec-resultados-producto" hidden></span>
+                        <span class="ec-chips-productos">
+                            <?php foreach ((array)$cfg_pdf['productos'] as $pid) :
+                                $titulo_chip = '';
+                                if (function_exists('wc_get_product')) {
+                                    $prod = wc_get_product((int)$pid);
+                                    if ($prod) {
+                                        $titulo_chip = $prod->get_name();
+                                    }
+                                }
+                            ?>
+                            <span class="ec-chip" data-id="<?php echo (int)$pid; ?>">
+                                <span class="ec-chip-texto">#<?php echo (int)$pid; ?><?php echo $titulo_chip !== '' ? ' — ' . esc_html($titulo_chip) : ''; ?></span>
+                                <button type="button" class="ec-chip-x" aria-label="Quitar producto <?php echo (int)$pid; ?>">×</button>
+                                <input type="hidden" name="productos[]" value="<?php echo (int)$pid; ?>">
+                            </span>
+                            <?php endforeach; ?>
+                        </span>
+                        <span class="description">Se validan contra el catalogo Woo al guardar. Sin Woo, escribi un ID y pulsas Enter para agregarlo manualmente.</span>
+                    </p>
+                    <p>
+                        <span class="ec-block-label">Campos (en orden de UI)
+                            <button type="button" class="button button-small ec-nuevo-campo">Nuevo campo</button>
+                        </span>
                         <select name="campos_ids[]" multiple size="6" style="min-width:280px">
                             <?php foreach ($todos_campos as $cid => $t) : ?>
                                 <option value="<?php echo (int)$cid; ?>" <?php echo in_array($cid, (array)$cfg_pdf['campos_ids'], true) ? 'selected' : ''; ?>>
                                     <?php echo (int)$cid; ?> — <?php echo esc_html($t[1] !== '' ? $t[1] : '(oculto)'); ?> (<?php echo esc_html($t[2]); ?>)
                                 </option>
                             <?php endforeach; ?>
-                        </select></label>
-                        <span class="description">Los campos elegidos aca alimentan el selector de cada placeholder. (Alta rapida: proximamente.)</span></p>
+                        </select>
+                        <span class="description">Los campos elegidos aca alimentan el selector de cada placeholder.</span>
+                    </p>
                 </div>
             </details>
 
@@ -441,6 +468,32 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                 <span class="description">Guarda activo, productos, campos y el mapeo de cada placeholder.</span>
             </div>
         </form>
+
+        <?php // Modal de alta rapida de campo (spec 004: reusa handle_campo_guardar con ajax=1). ?>
+        <div class="ec-modal ec-modal-campo" hidden>
+            <div class="ec-modal-caja">
+                <h3>Nuevo campo</h3>
+                <p><label>Titulo (visible para el cliente)<br>
+                    <input type="text" class="ec-campo-titulo" maxlength="200"></label></p>
+                <p><label>Tipo<br>
+                    <select class="ec-campo-tipo">
+                        <option value="text">text</option>
+                        <option value="textarea">textarea</option>
+                        <option value="select">select</option>
+                        <option value="img">img</option>
+                        <option value="override">override</option>
+                    </select></label></p>
+                <p><label>Etiquetas (separadas por coma, opcional)<br>
+                    <input type="text" class="ec-campo-etiquetas" maxlength="300"></label></p>
+                <p><label><input type="checkbox" class="ec-campo-visible" checked="checked"> Visible</label></p>
+                <p>
+                    <button type="button" class="button button-primary ec-campo-crear">Crear</button>
+                    <button type="button" class="button button-link ec-campo-cancelar">Cancelar</button>
+                    <span class="ec-campo-status" aria-live="polite"></span>
+                </p>
+                <p class="description">Despues lo completas en la pestana Campos.</p>
+            </div>
+        </div>
 
         <?php // Formularios de imagen por grupo (pool oculto; el marco abre la galeria). ?>
         <div class="ec-forms-imagen" hidden>

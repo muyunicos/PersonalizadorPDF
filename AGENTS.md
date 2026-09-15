@@ -113,6 +113,10 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 `uploads/pmu/` COMPLETA a `wp-content/uploads/` (incluye
 `{fonts,img,tm-presets}` con sus catálogos: son los datos del administrador).
 
+**Despliegue automático (webhooks Hostinger — implementaciones al hosting)**:
+- Plugin (este repo): `https://webhooks.hostinger.com/deploy/1f050c10cad12026236eb07cf9fc7c11`
+- Módulo TextMuy: `https://webhooks.hostinger.com/deploy/4df90409198182acd0a39f9fe786a033`
+
 **Regla de oro: no crear duplicados.** Antes de agregar algo, revisá el árbol y reutilizá
 lo existente. El módulo `modules/textmuy/` se versiona en este repositorio.
 
