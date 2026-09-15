@@ -16,8 +16,9 @@ use ExtractCorel\Engine\Pdf;
 use ExtractCorel\Engine\Detector;
 
 $base = dirname(__DIR__);
-// muestra.pdf ya no se versiona: vive en la carpeta de datos del proyecto (uploads/).
-$pdfPath = isset($argv[1]) ? $argv[1] : dirname($base) . '/uploads/pmu/pdfs/muestra.pdf';
+// muestra.pdf ya no se versiona: vive en la carpeta de datos del plugin (uploads/pmu/).
+// H-001 (003-plugin-compat-review): antes resolvia dirname($base)/uploads (layout anidado viejo).
+$pdfPath = isset($argv[1]) ? $argv[1] : $base . '/uploads/pmu/pdfs/muestra.pdf';
 $expectedPath = __DIR__ . '/expected_muestra.json';
 
 $exit = 0;
