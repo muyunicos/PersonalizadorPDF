@@ -14,11 +14,12 @@ Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde
 
 Personalizador PDF (antes "Extractor Corel") automatiza el reemplazo de placeholders en PDFs exportados desde CorelDRAW. Cuando Corel exporta un documento con marcos vacios donde iran las imagenes o nombres (credenciales, certificados, etc.), esos huecos llegan al PDF como rectangulos vectoriales con transparencia total. El plugin los detecta, los agrupa por color, deja cargar una imagen real por grupo y la inserta en cada placeholder del PDF, entregando un PDF editado optimizado listo para descargar.
 
-La administracion funciona como consola de trabajo con 3 pestanas:
+La administracion funciona como consola de trabajo con 4 pestanas:
 
-1. **PDFs y procesamiento**: se detectan los placeholders, se agrupan por color y se generan los datos (dataset) del PDF; se carga una imagen por grupo (computadora o galeria de medios) y se procesa el PDF final.
-2. **Estilos de Texto**: editor integrado del sistema TextMuy (100% en el navegador, estilo TextStudio) para disenar estilos de texto y guardarlos como presets `.txm` en el servidor (disponibles en todos los navegadores y en el selector de estilo de cada grupo del PDF). Las imagenes para rellenos y fondos se suben a `uploads/pmu/img/` y se reutilizan entre presets.
-3. **Ayuda**: documentacion interna.
+1. **PDFs y procesamiento**: se detectan los placeholders, se agrupan por color y se generan `analisis.json` + `config.json` del PDF; se carga una imagen por grupo (computadora o galeria de medios) y se procesa el PDF final.
+2. **Campos**: catalogo reutilizable de campos (`campos.json`) para la tienda (spec 004 / plan 008).
+3. **Estilos de Texto**: editor integrado del sistema TextMuy (100% en el navegador, estilo TextStudio) para disenar estilos de texto y guardarlos como presets `.txm` en el servidor (disponibles en todos los navegadores y en el selector de estilo de cada grupo del PDF). Las imagenes para rellenos y fondos se suben a `uploads/pmu/img/` y se reutilizan entre presets.
+4. **Ayuda**: documentacion interna (resumen; canonico en `AGENTS.md` §5).
 
 A diferencia de la version original (Flask + Python), esta es **100% PHP puro** en el servidor y se ejecuta directamente en WordPress, por lo que funciona en alojamientos compartidos (Hostinger, etc.) sin Python, Node ni procesos persistentes. El modulo TextMuy corre en el navegador del administrador (Canvas + WebGL); no agrega carga al servidor.
 
@@ -28,21 +29,21 @@ A diferencia de la version original (Flask + Python), esta es **100% PHP puro** 
 * Extension zlib (casi siempre disponible)
 * La extension GD es opcional: sin GD el motor procesa imagenes PNG (8 bits, sin entrelazar) con su decodificador propio; para JPEG/GIF/WebP se necesita GD (o un JPEG cuyo tamano coincida exactamente con el del grupo)
 
-**Datos guardados**: cada PDF vive en `wp-content/uploads/pmu/pdfs/{nombre}/` (`{nombre}.pdf` + `metadata.json` con el dataset y la personalizacion por grupo); las pruebas del panel (imagenes aplicadas, salida de muestra) van a `wp-content/uploads/pmu/tmp/muestras/{nombre}/` (se sobrescriben en cada Procesar); borradores del comprador en `tmp/cart/{linea}/`, staging en `tmp/orders/{order_id}/` y resultados confirmados en `orders/{order_id}/{pdf}/`; datos TextMuy en la ubicacion unica `wp-content/uploads/pmu/{fonts,img,tm-presets}/` (catalogos `fonts.json`/`img.json`/`presets.json` + fisicos + `.txm` + `thumbs.webp` por ambito). La carpeta del plugin queda 100% de solo lectura.
+**Datos guardados** (detalle canonico en `AGENTS.md` §5): cada PDF vive en `wp-content/uploads/pmu/pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` inmutable + `config.json` editable con `activo`/`productos`/`campos_ids`/`placeholders[id]`); las pruebas del panel (imagenes aplicadas, salida de muestra) van a `wp-content/uploads/pmu/tmp/muestras/{nombre}/` (se sobrescriben en cada Procesar); ciclo comprador en `tmp/cart/{linea}/` (legacy) + `tmp/sesion-{sid}/{item_key}/` (vigente plan 008, preview obligatoria), staging en `tmp/orders/{order_id}/` y resultados confirmados en `orders/{order_id}/{pdf}/`; datos TextMuy en `wp-content/uploads/pmu/{fonts,img,tm-presets}/` (catalogos `fonts.json`/`img.json`/`presets.json` + fisicos + `.txm` + `thumbs.webp` por ambito). La carpeta del plugin queda 100% de solo lectura.
 
-**Modulo TextMuy (opcional)**: desde 4.0.0 el editor de estilos de texto NO viene empaquetado con el plugin. Se importa a mano copiando el proyecto `textmuy` a `wp-content/plugins/personalizador-pdf/modules/textmuy/` (instrucciones en `modules/LEEME.md`). Sin el modulo, el resto del plugin funciona con normalidad.
+**Modulo TextMuy (integrado desde 4.2)**: el editor de estilos de texto ya viene incluido en `wp-content/plugins/personalizador-pdf/modules/textmuy/` (detalle en `modules/LEEME.md`; canonico tecnico en `AGENTS.md` §2.1). Sin el modulo, el resto del plugin funciona con normalidad.
 
 == Installation ==
 
 Instalacion desde cero (recomendada):
 
-1. En WordPress: "Plugins → Anadir nuevo → Subir plugin" y selecciona `personalizador-pdf.zip`. El ZIP ya contiene la carpeta `personalizador-pdf/` con `personalizador-pdf.php`, `admin/`, `assets/`, `engine/`, `modules/` y `readme.txt`. Pulsa "Instalar ahora" y luego "Activar plugin".
-2. Instalacion manual (FTP): copia la carpeta `personalizador-pdf/` completa del repositorio a `/wp-content/plugins/personalizador-pdf/` y activa "Personalizador PDF" en "Plugins".
+1. En WordPress: "Plugins → Anadir nuevo → Subir plugin" y selecciona `personalizador-pdf.zip`. El ZIP ya contiene la carpeta `personalizador-pdf/` con `personalizador-pdf.php`, `admin/`, `assets/`, `engine/`, `inc/`, `modules/` y `readme.txt`. Pulsa "Instalar ahora" y luego "Activar plugin".
+2. Instalacion manual (FTP): copia la carpeta `personalizador-pdf/` completa del repositorio a `/wp-content/plugins/personalizador-pdf/` y activa "Personalizador PDF" en "Plugins". El modulo TextMuy ya viene incluido en `modules/textmuy/` (nada que importar).
 
 Despues de activar:
 
-3. Si venias de la version 2.0.0 (Extractor Corel) o de la 4.0.0 (raiz `personalizador-pdf/`): desactiva el plugin viejo `extractor-corel` (si estaba instalado); al abrir la consola los datos se migran una sola vez a `wp-content/uploads/pmu/pdfs/{nombre}/` (con su personalizacion) y la carpeta anterior queda intacta como respaldo.
-4. Accede al menu "Personalizador PDF" en el panel de administracion (pestanas "PDFs y procesamiento", "Estilos de Texto" y "Ayuda").
+3. Subi `uploads/pmu/` COMPLETA a `wp-content/uploads/` (incluye `{fonts,img,tm-presets}` con sus catalogos: son los datos del administrador; ver `AGENTS.md` §5).
+4. Accede al menu "Personalizador PDF" en el panel de administracion (pestanas "PDFs y procesamiento", "Campos", "Estilos de Texto" y "Ayuda").
 
 Nota: los PDFs de muestra (`muestra.pdf`, `muestra2.pdf`), la carpeta `tests/` y `AGENTS.md` son archivos de desarrollo del repositorio; no se incluyen en el ZIP de instalacion.
 
@@ -58,16 +59,16 @@ Si, siempre que tenga PHP 7.4+ y zlib. No requiere SSH, Composer ni procesos en 
 El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir borra los datos, imagenes y resultado anteriores de ese PDF y regenera el analisis.
 
 = ¿Que pasa con los archivos subidos? =
-Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `metadata.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola.
+Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
 
 = 4.0.1 =
-* **Layout unico de PDFs (una carpeta por producto)**: cada PDF vive en `uploads/pmu/pdfs/{nombre}/` (`{nombre}.pdf` + `metadata.json`); la personalizacion por grupo son campos planos en el dataset (`default`/`value`/`preset`/`config`, clave `id` = color hex sin `#`); sin `textos.json` (unica fuente: el dataset).
+* **Layout de PDFs (una carpeta por producto, plan 008)**: cada PDF vive en `uploads/pmu/pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` inmutable + `config.json` editable con `activo`/`productos`/`campos_ids`/`placeholders[id]`, clave `id` = color hex sin `#`); sin `textos.json` ni `metadata.json`. (Historial 4.0.1: `metadata.json` como fuente unica.)
 * **Placeholders sin archivos**: la consola dibuja un marco al tamano real y la descarga se genera al vuelo (PNG transparente `w`x`h`); ya no se guardan PNGs de placeholder en disco.
 * **Muestras idempotentes**: imagenes aplicadas y salida del panel en `uploads/pmu/tmp/muestras/{pdf}/` (se sobrescriben en cada Procesar; un archivo por grupo).
-* **Ciclo comprador (rutas listas, sin cableado Woo aun)**: borradores por linea en `tmp/cart/{linea}/` (+ `manifest.json` con `pdf`, personalizacion canonica, `pmu_hash`, cantidad, `creado`, motor), staging en `tmp/orders/{order_id}/` y entregable por linea en `orders/{order_id}/{pdf}/` (promocion por `rename()` solo al confirmarse el pago).
-* **Migracion unica**: al abrir la consola, los datos de `uploads/personalizador-pdf/` (o `extractor-corel/`) se copian al layout nuevo (con su personalizacion) una sola vez (bandera `uploads/pmu/.migrado-007`); la carpeta anterior queda intacta como respaldo y los destinos existentes no se pisan.
+* **Ciclo comprador (rutas listas, sin cableado Woo aun)**: borradores legacy por linea en `tmp/cart/{linea}/` (+ `manifest.json`) junto a la unidad vigente plan 008 `tmp/sesion-{sid}/{item_key}/` (preview obligatoria `draft-{uuid}` → `cart_item_key`), staging en `tmp/orders/{order_id}/` y entregable por linea en `orders/{order_id}/{pdf}/` (promocion por `rename()` solo al confirmarse el pago).
+* **Migracion historica `.migrado-007` retirada**: (nota 4.0.1: copiaba `uploads/personalizador-pdf/`/`extractor-corel/` al layout nuevo una sola vez). La fase `migracion` del arnes verifica que ya no existe `migrar_datos_heredados`.
 * **Consola robusta**: ningun fallo de recursos del motor (catalogos, rutas, permisos) muestra la pagina de error critico: la pestana responde 200 con el aviso y su causa.
 * Escritura atomica de catalogos (`.tmp` + `rename`) y lectura tolerante (catalogo ilegible = aviso, no fatal).
 

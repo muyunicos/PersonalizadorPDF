@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-14
 
-**Status**: Draft
+**Status**: Implementado salvo 2 verificaciones manuales en panel WP real (T017, T029 en `tasks.md`; requieren `uploads/pmu/pdfs/muestra.pdf`).
 
 **Input**: User description: "corregir la Deuda pendiente: (a) módulo: el cliente del editor aún usa las claves viejas del puente (guardar/borrar preset e imagen, guardar sprite) y el ámbito `presets` con bases de respaldo; (b) plugin: el puente de la pestaña Estilos de Texto se arma con el motor viejo hacia una carpeta inexistente, el catálogo de estilos guardados se calcula con un nombre que no es el real, quedan rutas y handlers heredados de una carpeta de datos anterior, falta un archivo de instrucciones que se referencia, y la documentación del plugin se contradice; (c) coherencia: lo documentado como contrato vigente debe ser lo que el sistema realmente hace."
 

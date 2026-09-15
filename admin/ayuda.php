@@ -19,10 +19,12 @@ if (!defined('ABSPATH')) {
     </ol>
     <p>El tamano base de cada grupo es el del rectangulo <strong>mas grande</strong> del grupo. Cada PDF
         vive en su carpeta <code>wp-content/uploads/pmu/pdfs/{nombre}/</code>
-        (<code>{nombre}.pdf</code> + <code>analisis.json</code> + <code>config.json</code>); las pruebas del panel
+        (<code>{nombre}.pdf</code> + <code>analisis.json</code> inmutable del Detector +
+        <code>config.json</code> editable con <code>activo</code>/<code>productos</code>/
+        <code>campos_ids</code>/<code>placeholders[id]</code>); las pruebas del panel
         (imagenes aplicadas, salida de muestra) van a
         <code>wp-content/uploads/pmu/tmp/muestras/{nombre}/</code> y se sobrescriben
-        en cada Procesar.</p>
+        en cada Procesar. Detalle canonico en <code>AGENTS.md</code> §5.</p>
 </div>
 
 <div class="card">
@@ -43,8 +45,8 @@ if (!defined('ABSPATH')) {
     <h2>Texto estilizado por grupo (modulo TextMuy)</h2>
     <p>Ademas de una imagen, cada grupo puede llevar un <strong>texto estilizado</strong>. En la consola
         de cada PDF, en la tarjeta del grupo, activa <em>Usar texto</em>, escribe el contenido y elige el
-        <em>estilo</em> (preset de TextMuy; los que guardes en la pestana "Estilos de Texto" aparecen como
-        <em>custom</em> de este navegador).</p>
+        <em>estilo</em> (preset de TextMuy guardado en el servidor en
+        <code>uploads/pmu/tm-presets/</code>; aparece en el selector del grupo).</p>
     <ul>
         <li><strong>Autoguardado:</strong> al escribir o cambiar el estilo, el texto se guarda solo
             (indicador <em>Guardado</em>). El boton <em>Guardar</em> tambien funciona.</li>
@@ -54,7 +56,7 @@ if (!defined('ABSPATH')) {
             El texto reemplaza la imagen cargada manualmente de ese grupo.</li>
         <li><strong>Sin el motor en el servidor:</strong> el render ocurre en tu navegador (Canvas + WebGL
             del modulo TextMuy); el servidor PHP solo recibe PNGs y los inserta como siempre.</li>
-        <li>Si un estilo <em>custom</em> no existe en el navegador donde procesas, el proceso se cancela con un
+        <li>Si el estilo elegido ya no existe en el servidor al procesar, el proceso se cancela con un
             aviso (nunca se genera un PDF a medias).</li>
     </ul>
 </div>

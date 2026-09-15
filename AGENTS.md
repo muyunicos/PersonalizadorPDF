@@ -56,7 +56,7 @@ Integra el sistema **TextMuy** (editor de estilos de texto client-side) en la pe
   PDFs editados mediante una API con WordPress: el sistema recibe el nombre del PDF base y
   un conjunto de imágenes, y devuelve la URL al archivo procesado.
 
-## 2. Arquitectura y mapa de archivos (v4.1: proyecto de 3 carpetas)
+## 2. Arquitectura y mapa de archivos (v4.3: 3 carpetas + conciliacion 008)
 
 La RAÍZ DEL PROYECTO (sin git) agrupa tres carpetas hermanas:
 
@@ -75,11 +75,12 @@ personalizador-pdf/              <- RAÍZ DEL PROYECTO (sin git)
 ```
 personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/personalizador-pdf/)
 ├── AGENTS.md                ← ESTE archivo (contexto obligatorio)
-├── personalizador-pdf.php   ← Plugin WP (clase principal, menús, handlers, migración)
+├── personalizador-pdf.php   ← Plugin WP (clase principal, menús, handlers PDFs/campos/config,
+│                                   ciclo carrito→pedido, puente TextMuy; sin migraciones)
 ├── admin/
-│   ├── page.php             ← Página admin con pestañas ("PDFs" | "Estilos de Texto" | "Ayuda")
+│   ├── page.php             ← Página admin con pestañas ("PDFs" | "Campos" | "Estilos de Texto" | "Ayuda")
 │   ├── pdfs.php             ← Consola: subir PDF, grupos, imágenes, Procesar
-│   ├── estilos-texto.php    ← Iframe del módulo TextMuy (aviso si no está importado)
+│   ├── estilos-texto.php    ← Iframe del módulo TextMuy (aviso si no está integrado)
 │   └── ayuda.php            ← Documentación interna
 ├── assets/
 │   ├── admin.css            ← Estilos de consola + iframe
@@ -87,11 +88,14 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 ├── engine/                  ← MOTOR PHP PURO
 │   ├── Pdf.php              ← Parser (lectura de streams y objetos)
 │   ├── Detector.php         ← Detección y agrupación de placeholders
-│   ├── Metadata.php         ← Dataset JSON
+│   ├── Metadata.php         ← Dataset JSON (`analisis.json` inmutable + `config.json` via motor)
 │   ├── PngWriter.php        ← Generador PNG puro
 │   ├── Imagen.php           ← Normalización y encajado RGBA
 │   ├── Overlay.php          ← Inyector de objetos al PDF (splice)
 │   └── Motor.php            ← Orquestador principal
+├── inc/                     ← DUEÑO UNICO DE DATOS
+│   ├── class-pmu-uploads.php ← PMU_Uploads: rutas, catálogos, ops, handle_request
+│   └── class-pmu-galeria.php ← PMU_Galeria: ayudante puro de miniaturas
 ├── modules/
 │   ├── LEEME.md             ← Ficha del módulo integrado TextMuy + despliegue de datos
 │   └── textmuy/             ← Motor frontend TextMuy (integrado, versionado, control total)
@@ -133,7 +137,7 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
    `op=` de presets/imágenes/fuentes). Sin puente el editor NO opera: muestra un
    error accionable y hace cero peticiones locales (no hay modo standalone).
 5. **Versionado de estáticos (cache-bust)**: `render-core.html` e `index.html` referencian
-   sus scripts internos con `?v=RCn` (**RC28 hoy**): al cambiar cualquier JS del módulo,
+   sus scripts internos con `?v=RCn` (**RC29 hoy**): al cambiar cualquier JS del módulo,
    subir el número en ambos HTML.
 6. **Galería**: manejada internamente por el módulo (`js/galeria.js`), con preview en vivo.
 
@@ -146,8 +150,10 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
      incorporando al sistema.
    - **Procesar PDF** → si hay textos activos, `admin.js` renderiza PNGs vía RenderCore en
      el navegador (tamaño exacto del hueco) y envía UN POST único a `handle_procesar` con
-     imágenes y textos (persistidos en `metadata.json` por grupo). El Motor orquesta y entrega
-     el PDF editado (encajado, sin deformar ni recortar).
+     imágenes y textos (los mapeos persisten en `config.json` por grupo, `placeholders[id]`;
+     la geometría vive en `analisis.json` y nunca se edita desde la UI; la consola muestra
+     la fusión de ambos en `vista_grupos()`). El Motor orquesta
+     y entrega el PDF editado (encajado, sin deformar ni recortar).
 2. **Estilos de Texto** (`admin/estilos-texto.php`): laboratorio frontend TextMuy. Guardar
    un estilo crea un `.txm` + miniatura `.webp` en el servidor (uploads).
 3. **Manejo de estados**:
@@ -185,21 +191,27 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 - Ámbitos del editor: `fonts/` (catálogo `fonts.json`), `img/` (catálogo `img.json`) y
   `tm-presets/` (catálogo `presets.json`); un sprite `thumbs.webp` por ámbito, junto a su
   catálogo. `pdfs/`, `orders/` y `tmp/` son ámbitos de datos del motor, sin catálogo ni sprite.
-- Datasets PDF: `pdfs/{nombre}/metadata.json` (esquema plano por grupo: `id`/`w`/`h`/`cont`/`pgs`
-  + personalizacion `default`/`value`/`preset`/`config`; `activo` en la raiz).
-  Sin `textos.json` (eliminado en T018; SC-004).
+- Datasets PDF: `pdfs/{nombre}/analisis.json` (geometría inmutable del Detector: grupos
+  `id`/`w`/`h`/`cont`/`pgs`) + `pdfs/{nombre}/config.json` (editable: `activo`, `productos`,
+  `campos_ids`, `placeholders[id]` con `tipo`/`preset`/`value`/`settings`).
+  Sin `textos.json` y sin `metadata.json`
+  (plan 008 vigente; la migración `.migrado-007` ya no se ejecuta).
 - Imágenes aplicadas (muestras del panel): `tmp/muestras/{nombre}/{id}.{ext}` (un archivo
   por grupo, se sobrescribe en cada Procesar)
 - Placeholders: sin archivos en disco; marco dibujado en la consola + descarga generada
   al vuelo (`PngWriter::bytes(w, h)`)
 - Salida de muestra: `tmp/muestras/{nombre}/{nombre}_procesado.pdf` (se sobrescribe)
-- Comprador (sin cableado Woo aun): borradores en `tmp/cart/{linea}/` (+ `manifest.json`
-  con `pdf`, personalizacion canonica, `pmu_hash`, cantidad, `creado`, motor), staging en
+- Comprador (ciclo carrito → pedido; el cableado a hooks Woo vive en spec 004):
+  borradores legacy en `tmp/cart/{linea}/` (`manifest.json` con `pdf`, personalizacion
+  canonica, `pmu_hash`, cantidad, `creado`, motor) + unidad vigente plan 008 en
+  `tmp/sesion-{sid}/{item_key}/` (`manifest.json` + pool `img/`; `draft-{uuid}` →
+  `cart_item_key`; preview obligatoria antes del add-to-cart); staging en
   `tmp/orders/{order_id}/`, entregable por linea en `orders/{order_id}/{pdf}/`
   (promocion por `rename()` solo al confirmarse el pago)
-- Migracion unica: `uploads/personalizador-pdf/` (o `extractor-corel/`) se copia una vez a
-  `pdfs/{nombre}/` al abrir la consola (bandera `uploads/pmu/.migrado-007`); la raiz
-  heredada queda intacta como respaldo y los destinos existentes no se pisan
+- Migracion historica `.migrado-007` (`uploads/personalizador-pdf/` o `extractor-corel/`
+  → `pdfs/{nombre}/`): ya retirada del codigo (fase `migracion` del arnes lo verifica:
+  sin metodo `migrar_datos_heredados`). Migracion 007 → 008 pendiente segun
+  `specs/008-sesion-cart-preview/spec.md` §6.
 - **Archivos TextMuy (datos de usuario, formato unico v5.0)** — ubicacion unica
   y definitiva `uploads/pmu/tm-presets/`:
   - Presets: `tm-presets/{nombre}.txm` (delta `textmuy-project` v1 con referencias numericas)
@@ -211,7 +223,9 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 
 - **`Pdf.php`**: parser base (lectura pura de objetos/streams/xref).
 - **`Detector.php`**: análisis del PDF, detección y agrupación de cajas transparentes.
-- **`Metadata.php`**: controlador del dataset JSON.
+- **`Metadata.php`**: dataset del producto (`analisis.json` inmutable via
+  `Metadata::generarAnalisis/guardar/cargar` + `config.json` editable via
+  `PMU_Uploads::leer_config/guardar_config`; constantes `ARCHIVO_ANALISIS`/`ARCHIVO_CONFIG`).
 - **`PngWriter.php`**: generador de PNG transparente sin dependencias.
 - **`Imagen.php`**: normalizador de imágenes a RGBA / encajado (contain).
 - **`Overlay.php`**: empaquetado final (modificación e inyección de bytes en el PDF).
@@ -231,16 +245,26 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 - ✅ **Módulo integrado (v4.2)**: TextMuy vive en `modules/textmuy/` de este repositorio,
   bajo control total; se edita directamente, se corren sus tests Node y se hace bump
   `?v=RCn` en ambos HTML al tocar su JS.
-- ✅ **Layout unico de PDFs (v4.0.1, spec 007)**: cada producto vive en
-  `uploads/pmu/pdfs/{nombre}/` (`{nombre}.pdf` + `metadata.json` con dataset y
-  personalizacion plana `default`/`value`/`preset`/`config`, clave `id` = color hex;
-  unica fuente, sin `textos.json`);
-  muestras idempotentes en `tmp/muestras/{nombre}/`; ciclo comprador en `tmp/cart/`,
-  `tmp/orders/` y `orders/{order_id}/{pdf}/`; migracion unica con bandera
-  `.migrado-007`. La consola nunca muestra la pagina de error critico por fallos
+- ✅ **Layout de PDFs (plan 008 vigente, ex-007)**: cada producto vive en
+  `uploads/pmu/pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` inmutable del Detector +
+  `config.json` editable con `activo`/`productos`/`campos_ids`/`placeholders[id]`, clave
+  `id` = color hex; sin `textos.json` ni `metadata.json`);
+  muestras idempotentes en `tmp/muestras/{nombre}/`; ciclo comprador en `tmp/cart/`
+  (legacy) + `tmp/sesion-{sid}/{item_key}/` (vigente, preview obligatoria
+  `draft-{uuid}` → `cart_item_key`), staging en `tmp/orders/` y entregable en
+  `orders/{order_id}/{pdf}/`; migracion `.migrado-007` ya retirada. La consola nunca muestra la pagina de error critico por fallos
   de recursos del motor (aviso con causa, HTTP 200).
-- ✅ **Hooks legacy**: se mantiene soporte temporal a hooks `extractor_corel_*` por
-  retrocompatibilidad (se considera código legacy).
+- ✅ **Conciliacion 008 (normativa)**: `specs/008-sesion-cart-preview/spec.md` NO es
+  feature implementable: norma 004 vs 007 (`analisis.json`+`config.json`,
+  `tmp/sesion-{sid}/{item_key}/`, preview obligatoria `draft-{uuid}` → `cart_item_key`).
+- ✅ **Specs historicos**: 003 obsoleto (superado por 006); 004 tasks 100% pero diseño
+  historico (normativo = 008 §0+§6); 006/007 casi cerrados salvo verificaciones manuales
+  en panel WP real (ver sus `tasks.md`).
+- ✅ **Hooks legacy**: `seguridad()` acepta nonce historico `extractor_corel_*` (<= 2.0.0)
+  ademas del vigente `personalizador_pdf_*` (se considera codigo legacy).
+- ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
+  `admin/ayuda.php`, `modules/LEEME.md` solo resumen y apuntan aqui). El `== Changelog ==`
+  de `readme.txt` es historial, no normativa.
 
 ## 8. Dificultades del entorno (IMPORTANTE AL TRABAJAR AQUÍ)
 
@@ -260,15 +284,19 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 
 ### Entorno PHP (plugin) — desde la carpeta del plugin, tras tocar `engine/` o `admin/`
 ```bash
-php -l personalizador-pdf.php && php -l admin/*.php && php -l engine/*.php
+php -l personalizador-pdf.php && php -l admin/*.php && php -l engine/*.php && php -l inc/*.php
 php tests/motor_smoke.php     # Smoke del motor (debe decir "SMOKE OK")
 php tests/parity.php          # Oráculo del detector (debe decir "PARIDAD OK")
-php tests/texto_puente.php    # Puente TextMuy con stubs WP: setup | guardar_ajax |
-                              # guardar_vacio | procesar | rechazo | nonce [cap]
-                              # (cada fase = 1 proceso)
+php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
+                              # setup | guardar_ajax | guardar_vacio | procesar |
+                              # rechazo | contenido | placeholder | admin |
+                              # linea | campos | config | tienda | pedido |
+                              # migracion | nonce [cap]
 ```
-Los tests leen `muestra.pdf` desde `../uploads/pmu/pdfs/` (datos del
+Los tests leen `muestra.pdf` desde `uploads/pmu/pdfs/` (datos del
 usuario, NO versionados). `parity.php` acepta la ruta como argumento opcional.
+`texto_puente.php` crea su entorno aislado en `%TEMP%` (`preparar_entorno()`:
+`pdfs/muestra/` + `analisis.json` + `config.json` + preset `neon-glow`).
 
 ### Entorno Node (módulo TextMuy) — si se modifica `modules/textmuy/`
 ```bash

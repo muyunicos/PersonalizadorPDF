@@ -1,10 +1,10 @@
-# Feature Specification: Layout PMU de PDFs y contenido por grupo en metadata
+# Feature Specification: Layout PMU de PDFs y contenido por grupo (plan 008 vigente)
 
 **Feature Branch**: `007-pmu-pdf-layout`
 
 **Created**: 2026-09-15
 
-**Status**: Draft
+**Status**: Implementado en codigo como `analisis.json`+`config.json` (plan 008); quedan 4 tareas de cierre (T001/T002 base verde + inventario, T039/T040 quickstart en panel real). El titulo original decia "metadata como unica fuente": derogado por 008 §0.
 
 **Input**: User description: "Unificar los datos del PDF en uploads/pmu/pdfs/{pdf} con metadata.json como unica fuente del contenido por grupo, placeholders generados al vuelo sin almacenar, imagenes aplicadas y PDF procesado en tmp/ (pruebas del panel) u orders/ (pedidos completados), y robustez de la pestana PDFs del admin (sin errores 500)"
 

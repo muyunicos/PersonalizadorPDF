@@ -1,5 +1,8 @@
 # LEEME — Modulo integrado TextMuy (v4.2)
 
+> Canonico tecnico: `AGENTS.md` §2.1 (contrato RenderCore + puente) y §5 (rutas).
+> Este archivo es solo ficha operativa del modulo; si discrepa, vale `AGENTS.md`.
+
 ## Que es
 
 **TextMuy vive integrado en este repositorio** (`modules/textmuy/`), bajo control total
@@ -26,7 +29,7 @@ Todo dato o recurso del administrador vive en la raiz unica **`uploads/pmu/`**:
 | Ambito | Contenido | Catalogo | Sprite |
 |---|---|---|---|
 | `fonts/` | Tipografias (fisicas + familias Google) | `fonts.json` | `thumbs.webp` 180x30 c4 |
-| `img/` | Imagenes (fondos, iconos...) + miniaturas de grupo `{pdf}-{letra}.webp` | `img.json` | `thumbs.webp` 100x100 c8 |
+| `img/` | Imagenes (fondos, iconos...) + miniaturas de grupo `{pdf}-{id}.webp` (id = hex sin `#`) | `img.json` | `thumbs.webp` 100x100 c8 |
 | `tm-presets/` | Estilos guardados `{nombre}.txm` (delta `textmuy-project` v1, refs por id) | `presets.json` | `thumbs.webp` 200x100 c4 |
 
 Los ambitos `pdfs/`, `orders/` y `tmp/` son datos del motor de PDF, sin catalogo ni sprite.

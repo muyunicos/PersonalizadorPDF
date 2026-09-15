@@ -1,5 +1,10 @@
 # Personalización de Productos PDF para WooCommerce
 
+> **Estado (2026-09-15)**: tasks 100% pero diseño historico. Lo normativo es el plan
+> de conciliacion `008-sesion-cart-preview` (§0 decisiones + §6 migracion):
+> `analisis.json`+`config.json`, `tmp/sesion-{sid}/{item_key}/`, preview obligatoria
+> `draft-{uuid}` → `cart_item_key`. Ver tambien `data-model.md` (cabecera ESTADO 008).
+
 ## Contexto
 
 Plugin WordPress que permite asociar productos PDF (con placeholders personalizables) a productos WooCommerce. Los clientes personalizan sus productos antes de la compra mediante campos definidos por el administrador, pueden (en algunos casos) previsualizar un mockup del resultado final y reciben el PDF personalizado tras el pago.
