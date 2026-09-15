@@ -31,10 +31,10 @@ class Overlay
     private $pageNums = [];   // pageIdx => objnum pagina
     private $heights = [];    // pageIdx => alto en pt
     private $perPage = [];    // pageIdx => [{x,y,w,h,img}]
-    private $imgObj = [];     // letra => objnum imagen
+    private $imgObj = [];     // id => objnum imagen
     private $newObjs = [];    // objnum => texto del objeto nuevo
     private $firstNew;
-    private $activas = [];    // letra => true (grupos con imagen a insertar)
+    private $activas = [];    // id => true (grupos con imagen a insertar)
     private $splices = [];    // pageIdx => [ streamIdx => [ ['offset'=>int,'ops'=>str] ] ]
     private $rwObjs = [];     // objnum => texto del objeto reescrito (streams con splice)
 
@@ -47,7 +47,7 @@ class Overlay
     /**
      * Devuelve los bytes del PDF procesado.
      *
-     * $imagenes (opcional): mapa letra => especificacion de Imagen::normalizar():
+     * $imagenes (opcional): mapa id => especificacion de Imagen::normalizar():
      *   - ['tipo'=>'raster', 'w','h','rgb','alpha']  imagen real RGBA
      *   - ['tipo'=>'dct', 'w','h','jpeg']            JPEG incrustado directo
      * Si $imagenes es null se usa el comportamiento original: marcos
@@ -79,17 +79,17 @@ class Overlay
 
         // 1) XObjects de imagen por grupo (reales si hay especificacion).
         foreach ($grupos as $g) {
-            $letra = $g['letra'];
+            $gid = $g['id'];
             $spec = null;
             if ($imagenes !== null) {
-                $spec = isset($imagenes[$letra]) ? $imagenes[$letra] : null;
+                $spec = isset($imagenes[$gid]) ? $imagenes[$gid] : null;
                 if (!$spec) {
                     continue; // grupo sin imagen: no se toca
                 }
             }
             $im = $nextNum++;
-            $wPx = max(1, (int)$g['ancho_px']);
-            $hPx = max(1, (int)$g['alto_px']);
+            $wPx = max(1, (int)$g['w']);
+            $hPx = max(1, (int)$g['h']);
             if ($spec && $spec['tipo'] === 'dct') {
                 // JPEG directo (DCTDecode), opaco, sin SMask.
                 $this->newObjs[$im] = $im . " 0 obj\r\n"
@@ -98,12 +98,12 @@ class Overlay
                     . " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode "
                     . '/Length ' . strlen($spec['jpeg']) . " >>\r\n"
                     . "stream\r\n" . $spec['jpeg'] . "\r\nendstream\r\nendobj";
-                $this->imgObj[$letra] = $im;
-                $this->activas[$letra] = true;
+                $this->imgObj[$gid] = $im;
+                $this->activas[$gid] = true;
                 continue;
             }
             $sm = $nextNum++;
-            $this->imgObj[$letra] = $im;
+            $this->imgObj[$gid] = $im;
             if ($spec && $spec['tipo'] === 'raster') {
                 $rgb = gzcompress($spec['rgb'], 6);
                 $alpha = gzcompress($spec['alpha'], 6);
@@ -122,7 +122,7 @@ class Overlay
                 . "/ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode "
                 . '/Length ' . strlen($alpha) . " >>\r\n"
                 . "stream\r\n" . $alpha . "\r\nendstream\r\nendobj";
-            $this->activas[$letra] = true;
+            $this->activas[$gid] = true;
         }
 
         // 2) Content streams.
@@ -202,14 +202,14 @@ class Overlay
     private function agruparInstancias()
     {
         foreach ($this->grupos as $g) {
-            if (empty($this->activas[$g['letra']])) {
+            if (empty($this->activas[$g['id']])) {
                 continue; // grupo sin imagen: sin dibujos
             }
             foreach ($g['instancias'] as $inst) {
                 $p = (int)$inst['page'];
                 $H = $this->heights[$p];
                 $entry = [
-                    'img' => $g['letra'],
+                    'img' => $g['id'],
                     'spliced' => false,
                 ];
                 if (isset($inst['dev_quad']) && count($inst['dev_quad']) === 4) {
@@ -227,7 +227,7 @@ class Overlay
                     $entry['w'] = $bbox[2] - $bbox[0];
                     $entry['h'] = $bbox[3] - $bbox[1];
                 }
-                $ops = $this->spliceOps($inst, $g['letra']);
+                $ops = $this->spliceOps($inst, $g['id']);
                 if ($ops !== null && isset($inst['stream'], $inst['offset'])) {
                     $stm = (int)$inst['stream'];
                     $this->splices[$p][$stm][] = [
@@ -344,7 +344,7 @@ class Overlay
      * en su propio q...Q y con /ECOp1 gs (ca=1) para no heredar la opacidad 0
      * del ExtGState del placeholder (regla de AGENTS.md seccion 4).
      */
-    private function spliceOps(array $inst, $letra)
+    private function spliceOps(array $inst, $gid)
     {
         if (!isset($inst['ctm'])) {
             return null;
@@ -373,7 +373,7 @@ class Overlay
         $m3 = $bi * $vx + $di * $vy;
         $m4 = $ai * $dx + $ci * $dy + $ei;
         $m5 = $bi * $dx + $di * $dy + $fi;
-        $name = 'ECIm' . $this->imgObj[$letra];
+        $name = 'ECIm' . $this->imgObj[$gid];
         return "\r\nq /ECOp1 gs " . $this->fmt($m0) . ' ' . $this->fmt($m1) . ' ' . $this->fmt($m2) . ' '
             . $this->fmt($m3) . ' ' . $this->fmt($m4) . ' ' . $this->fmt($m5) . " cm /$name Do Q\r\n";
     }

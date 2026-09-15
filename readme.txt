@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.0.0
+Stable tag: 4.0.1
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -28,7 +28,7 @@ A diferencia de la version original (Flask + Python), esta es **100% PHP puro** 
 * Extension zlib (casi siempre disponible)
 * La extension GD es opcional: sin GD el motor procesa imagenes PNG (8 bits, sin entrelazar) con su decodificador propio; para JPEG/GIF/WebP se necesita GD (o un JPEG cuyo tamano coincida exactamente con el del grupo)
 
-**Datos guardados**: PDFs y proceso en `wp-content/uploads/pmu/` (`pdfs/`, `datos/`, `imagenes/` por grupo, `placeholders/`, `salidas/`); datos TextMuy en la ubicacion unica `wp-content/uploads/pmu/{fonts,img,tm-presets}/` (catalogos `fonts.json`/`img.json`/`presets.json` + fisicos + `.txm` + `thumbs.webp` por ambito). La carpeta del plugin queda 100% de solo lectura.
+**Datos guardados**: cada PDF vive en `wp-content/uploads/pmu/pdfs/{nombre}/` (`{nombre}.pdf` + `metadata.json` con el dataset y la personalizacion por grupo); las pruebas del panel (imagenes aplicadas, salida de muestra) van a `wp-content/uploads/pmu/tmp/muestras/{nombre}/` (se sobrescriben en cada Procesar); borradores del comprador en `tmp/cart/{linea}/`, staging en `tmp/orders/{order_id}/` y resultados confirmados en `orders/{order_id}/{pdf}/`; datos TextMuy en la ubicacion unica `wp-content/uploads/pmu/{fonts,img,tm-presets}/` (catalogos `fonts.json`/`img.json`/`presets.json` + fisicos + `.txm` + `thumbs.webp` por ambito). La carpeta del plugin queda 100% de solo lectura.
 
 **Modulo TextMuy (opcional)**: desde 4.0.0 el editor de estilos de texto NO viene empaquetado con el plugin. Se importa a mano copiando el proyecto `textmuy` a `wp-content/plugins/personalizador-pdf/modules/textmuy/` (instrucciones en `modules/LEEME.md`). Sin el modulo, el resto del plugin funciona con normalidad.
 
@@ -41,7 +41,7 @@ Instalacion desde cero (recomendada):
 
 Despues de activar:
 
-3. Si venias de la version 2.0.0 (Extractor Corel): desactiva el plugin viejo `extractor-corel` (si estaba instalado); los datos de `wp-content/uploads/extractor-corel/` se migran automaticamente a `wp-content/uploads/pmu/`.
+3. Si venias de la version 2.0.0 (Extractor Corel) o de la 4.0.0 (raiz `personalizador-pdf/`): desactiva el plugin viejo `extractor-corel` (si estaba instalado); al abrir la consola los datos se migran una sola vez a `wp-content/uploads/pmu/pdfs/{nombre}/` (con su personalizacion) y la carpeta anterior queda intacta como respaldo.
 4. Accede al menu "Personalizador PDF" en el panel de administracion (pestanas "PDFs y procesamiento", "Estilos de Texto" y "Ayuda").
 
 Nota: los PDFs de muestra (`muestra.pdf`, `muestra2.pdf`), la carpeta `tests/` y `AGENTS.md` son archivos de desarrollo del repositorio; no se incluyen en el ZIP de instalacion.
@@ -58,9 +58,18 @@ Si, siempre que tenga PHP 7.4+ y zlib. No requiere SSH, Composer ni procesos en 
 El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir borra los datos, imagenes y resultado anteriores de ese PDF y regenera el analisis.
 
 = ¿Que pasa con los archivos subidos? =
-Todo queda en `wp-content/uploads/pmu/`. Puedes borrar cada PDF (con sus datos) desde la propia pantalla del plugin.
+Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `metadata.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola.
 
 == Changelog ==
+
+= 4.0.1 =
+* **Layout unico de PDFs (una carpeta por producto)**: cada PDF vive en `uploads/pmu/pdfs/{nombre}/` (`{nombre}.pdf` + `metadata.json`); la personalizacion por grupo son campos planos en el dataset (`default`/`value`/`preset`/`config`, clave `id` = color hex sin `#`); sin `textos.json` (unica fuente: el dataset).
+* **Placeholders sin archivos**: la consola dibuja un marco al tamano real y la descarga se genera al vuelo (PNG transparente `w`x`h`); ya no se guardan PNGs de placeholder en disco.
+* **Muestras idempotentes**: imagenes aplicadas y salida del panel en `uploads/pmu/tmp/muestras/{pdf}/` (se sobrescriben en cada Procesar; un archivo por grupo).
+* **Ciclo comprador (rutas listas, sin cableado Woo aun)**: borradores por linea en `tmp/cart/{linea}/` (+ `manifest.json` con `pdf`, personalizacion canonica, `pmu_hash`, cantidad, `creado`, motor), staging en `tmp/orders/{order_id}/` y entregable por linea en `orders/{order_id}/{pdf}/` (promocion por `rename()` solo al confirmarse el pago).
+* **Migracion unica**: al abrir la consola, los datos de `uploads/personalizador-pdf/` (o `extractor-corel/`) se copian al layout nuevo (con su personalizacion) una sola vez (bandera `uploads/pmu/.migrado-007`); la carpeta anterior queda intacta como respaldo y los destinos existentes no se pisan.
+* **Consola robusta**: ningun fallo de recursos del motor (catalogos, rutas, permisos) muestra la pagina de error critico: la pestana responde 200 con el aviso y su causa.
+* Escritura atomica de catalogos (`.tmp` + `rename`) y lectura tolerante (catalogo ilegible = aviso, no fatal).
 
 = 4.0.0 =
 * **Datos de usuario fuera del plugin (v5.0)**: los presets TextMuy (`.txm`), catalogos, fisicos y sprites se guardan en la ubicacion unica `wp-content/uploads/pmu/tm/` (catalogo `img.json` unificado con los fisicos, sin `imagenes/`); los `.txm` guardan las imagenes SOLO por id numerico (resuelto a URL al renderizar). El plugin queda de solo lectura: se actualiza sin preservar archivos. Sin migradores: los datos se crean desde cero.
@@ -94,7 +103,7 @@ Todo queda en `wp-content/uploads/pmu/`. Puedes borrar cada PDF (con sus datos) 
 * **Texto estilizado por grupo (puente TextMuy)**: en "PDFs y procesamiento" cada grupo puede llevar un texto y un estilo (preset TextMuy); al pulsar **Procesar**, el navegador renderiza el texto al tamano exacto del grupo (PNG transparente) y se incorpora como imagen del grupo en el mismo envio. Un solo click.
 * Nueva seccion "Texto estilizado" en cada grupo: activar/desactivar, texto (max 300 caracteres), selector de estilo (presets base + los guardados en "Estilos de Texto"), vista previa al tamano del hueco y autoguardado.
 * **Render Core** (`modules/textmuy/render-core.html`): motor de render headless del modulo TextMuy (~220 KB sin UI) con API por lotes (`renderBatch`) y cache de presets; el plugin solo consume ese contrato publico.
-* Estado por PDF en `datos/{pdf}/textos.json` (texto + estilo por grupo); se borra con el PDF.
+* Estado por grupo en el dataset (`default`/`value`/`preset` en `metadata.json`); se borra con el PDF.
 * El motor PHP (engine/) sigue sin cambios: recibe imagenes por grupo como siempre.
 
 = 3.0.0 =

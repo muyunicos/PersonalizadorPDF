@@ -3,7 +3,7 @@
  * Motor - Motor principal del Extractor Corel.
  *
  * Recibe un PDF, un conjunto de datos (dataset de metadatos) y un conjunto de
- * imagenes reales (una por grupo: letra => ruta). Vuelve a detectar los
+ * imagenes reales (una por grupo: id => ruta). Vuelve a detectar los
  * placeholders para garantizar consistencia, valida que el dataset coincida
  * con el PDF, encaja cada imagen (contain) en el tamano del grupo y superpone
  * los resultados. Devuelve los bytes del PDF editado.
@@ -22,8 +22,8 @@ class Motor
      * Procesa el PDF y devuelve el PDF editado.
      *
      * @param string     $rutaPdf        ruta del PDF de entrada
-     * @param array|null $datos          dataset (contenido de metadata.json) o null
-     * @param array      $rutasImagenes  mapa letra => ruta de imagen real
+     * @param array|null $datos          dataset (contenido de analisis.json) o null
+     * @param array      $rutasImagenes  mapa id => ruta de imagen real
      * @return array ['bytes'=>string, 'grupos'=>array, 'resumen'=>array]
      */
     public static function procesar($rutaPdf, $datos, array $rutasImagenes)
@@ -47,18 +47,29 @@ class Motor
         }
         if ($datos !== null) {
             self::validarDataset($datos, $grupos);
+        } else {
+            // Sin dataset (pedidos tienda): el Motor confia en el mapa id => ruta
+            // que ya trae PNGs al tamano exacto de cada grupo (render cliente).
+            // Igual exige ids validos y tamanos positivos para fallar rapido.
+            foreach ($grupos as $g) {
+                if (!isset($g['id'], $g['w'], $g['h'], $g['cont'])
+                    || !preg_match('/^[0-9A-F]{6}$/', (string)$g['id'])
+                    || (int)$g['w'] < 1 || (int)$g['h'] < 1 || (int)$g['cont'] < 1) {
+                    throw new \RuntimeException('Grupo invalido en el analisis (id/w/h/cont).');
+                }
+            }
         }
 
         $especificaciones = [];
         $sinImagen = [];
         foreach ($grupos as $g) {
-            $letra = $g['letra'];
-            $ruta = isset($rutasImagenes[$letra]) ? $rutasImagenes[$letra] : null;
+            $id = $g['id'];
+            $ruta = isset($rutasImagenes[$id]) ? $rutasImagenes[$id] : null;
             if (!$ruta || !is_file($ruta)) {
-                $sinImagen[] = $letra;
+                $sinImagen[] = $id;
                 continue;
             }
-            $especificaciones[$letra] = Imagen::normalizar($ruta, (int)$g['ancho_px'], (int)$g['alto_px']);
+            $especificaciones[$id] = Imagen::normalizar($ruta, (int)$g['w'], (int)$g['h']);
         }
         if (!$especificaciones) {
             throw new \RuntimeException(
@@ -71,8 +82,8 @@ class Motor
 
         $insertadas = 0;
         foreach ($grupos as $g) {
-            if (isset($especificaciones[$g['letra']])) {
-                $insertadas += (int)$g['num_instancias'];
+            if (isset($especificaciones[$g['id']])) {
+                $insertadas += (int)$g['cont'];
             }
         }
         return [
@@ -90,7 +101,7 @@ class Motor
 
     /**
      * Verifica que el dataset guardado siga describiendo el mismo PDF
-     * (mismos grupos, letras, tamanos y cantidades de instancias).
+     * (mismos grupos, ids, tamanos y cantidades de instancias).
      */
     public static function validarDataset($datos, array $grupos)
     {
@@ -102,17 +113,41 @@ class Motor
         }
         foreach ($grupos as $i => $g) {
             $e = isset($esperados[$i]) && is_array($esperados[$i]) ? $esperados[$i] : [];
-            $mismo = isset($e['letra'], $e['ancho_px'], $e['alto_px'], $e['num_instancias'])
-                && $e['letra'] === $g['letra']
-                && (int)$e['ancho_px'] === (int)$g['ancho_px']
-                && (int)$e['alto_px'] === (int)$g['alto_px']
-                && (int)$e['num_instancias'] === (int)$g['num_instancias'];
+            $mismo = isset($e['id'], $e['w'], $e['h'], $e['cont'])
+                && $e['id'] === $g['id']
+                && (int)$e['w'] === (int)$g['w']
+                && (int)$e['h'] === (int)$g['h']
+                && (int)$e['cont'] === (int)$g['cont'];
             if (!$mismo) {
-                $letraE = isset($e['letra']) ? $e['letra'] : '?';
+                $idE = isset($e['id']) ? $e['id'] : '?';
                 throw new \RuntimeException(
-                    "Los datos guardados no coinciden con el PDF (grupo {$g['letra']}, esperado $letraE). Re-analiza el PDF."
+                    "Los datos guardados no coinciden con el PDF (grupo {$g['id']}, esperado $idE). Re-analiza el PDF."
                 );
             }
         }
+    }
+
+    /**
+     * Motor rapido tienda: PDF + mapa id => ruta PNG (tamano exacto por grupo)
+     * -> PDF editado. Sin dataset: no hay paridad que validar (los PNG ya
+     * vienen renderizados por el cliente). Devuelve el resumen del Motor.
+     */
+    public static function procesar_pedido($rutaPdf, array $mapaIdRuta)
+    {
+        if (!$mapaIdRuta) {
+            throw new \RuntimeException('Sin imagenes para procesar el pedido.');
+        }
+        $canon = [];
+        foreach ($mapaIdRuta as $id => $ruta) {
+            $id = strtoupper((string)$id);
+            if (!preg_match('/^[0-9A-F]{6}$/', $id)) {
+                throw new \RuntimeException('Id de grupo invalido en el pedido: ' . $id);
+            }
+            if (!is_string($ruta) || !is_file($ruta)) {
+                throw new \RuntimeException('Falta el PNG del grupo ' . $id . ' en el pedido.');
+            }
+            $canon[$id] = $ruta;
+        }
+        return self::procesar($rutaPdf, null, $canon);
     }
 }

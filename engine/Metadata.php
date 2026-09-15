@@ -1,10 +1,11 @@
 <?php
 /**
- * Metadata - Convenciones de nombres e ids identicas a core/metadatos.py.
+ * Metadata - Analisis del producto PDF (plan 008, spec 008 FR-001).
  *
- * Identificador de grupo:  {pdf}-{letra}-{ancho_px}x{alto_px}
- * Marco:                   {dir}/marcos/{pdf}/{letra}-{w}x{h}.png
- * Metadata:                {dir}/marcos/{pdf}/metadata.json
+ * El Detector escribe analisis.json inmutable: id (color hex sin '#'),
+ * w/h en px (base 200 ppp), cont (instancias), pgs (paginas 0-based).
+ * Raiz con pdf/dpi/total_grupos/creado. Sin personalizacion y sin activo:
+ * eso vive en config.json (PMU_Uploads::leer_config/guardar_config).
  *
  * @package  ExtractCorel\Engine
  */
@@ -13,7 +14,8 @@ namespace ExtractCorel\Engine;
 
 class Metadata
 {
-    const ARCHIVO = 'metadata.json';
+    const ARCHIVO_ANALISIS = 'analisis.json';
+    const ARCHIVO_CONFIG = 'config.json';
 
     /** nombre_desde_archivo de Python: base saneada [A-Za-z0-9_-]. */
     public static function nombreDesdeArchivo($ruta)
@@ -27,42 +29,39 @@ class Metadata
         return $saneado === '' ? 'pdf' : $saneado;
     }
 
-    public static function idGrupo($pdf, $letra, $wPx, $hPx)
+    /** id valido de grupo: hex de 6 sin '#'. */
+    public static function idValido($id)
     {
-        return "{$pdf}-{$letra}-{$wPx}x{$hPx}";
+        return is_string($id) && preg_match('/^[0-9A-F]{6}$/', $id) === 1;
     }
 
-    public static function rutaMarco($pdf, $letra, $wPx, $hPx)
-    {
-        return "marcos/{$pdf}/{$letra}-{$wPx}x{$hPx}.png";
-    }
 
-    public static function rutaMetadata($pdf, $dirMarcos = 'marcos')
-    {
-        return rtrim((string)$dirMarcos, '/\\') . DIRECTORY_SEPARATOR . $pdf . DIRECTORY_SEPARATOR . self::ARCHIVO;
-    }
 
-    /** Igual que metadatos.generar(). Devuelve array (json-serializable). */
-    public static function generar($pdf, $grupos, $dpi = 200)
+    /**
+     * Analisis inmutable del Detector (plan 008, spec 008 FR-001): solo
+     * geometria (id/w/h/cont/pgs) + raiz pdf/dpi/creado/total_grupos.
+     * Sin personalizacion (default/value/preset/config) y sin activo: eso
+     * vive en config.json (PMU_Uploads::leer_config/guardar_config).
+     * Se escribe en analisis.json y nunca se edita desde la UI.
+     */
+    public static function generarAnalisis($pdf, $grupos, $dpi = 200)
     {
         $registros = [];
-        foreach ($grupos as $g) {
+        foreach ((array)$grupos as $g) {
+            $gid = isset($g['id']) ? (string)$g['id'] : '';
+            if (!self::idValido($gid)) {
+                continue;
+            }
             $registros[] = [
-                'id' => self::idGrupo($pdf, $g['letra'], $g['ancho_px'], $g['alto_px']),
-                'letra' => $g['letra'],
-                'color' => $g['color'],
-                'color_rgb' => $g['color_rgb'],
-                'ancho_px' => $g['ancho_px'],
-                'alto_px' => $g['alto_px'],
-                'ancho_pt' => $g['ancho_pt'],
-                'alto_pt' => $g['alto_pt'],
-                'num_instancias' => $g['num_instancias'],
-                'paginas' => $g['paginas'],
-                'ruta_marco' => self::rutaMarco($pdf, $g['letra'], $g['ancho_px'], $g['alto_px']),
+                'id' => $gid,
+                'w' => max(1, (int)($g['w'] ?? 0)),
+                'h' => max(1, (int)($g['h'] ?? 0)),
+                'cont' => max(1, (int)($g['cont'] ?? 0)),
+                'pgs' => array_values(array_map('intval', (array)($g['pgs'] ?? []))),
             ];
         }
         return [
-            'pdf' => $pdf,
+            'pdf' => (string)$pdf,
             'dpi_conversion' => (int)$dpi,
             'creado' => gmdate('Y-m-d\TH:i:s\Z'),
             'total_grupos' => count($registros),
@@ -70,13 +69,17 @@ class Metadata
         ];
     }
 
+
+    /** Escritura atomica: tmp + rename en la misma carpeta. */
     public static function guardar(array $datos, $ruta)
     {
         $dir = dirname($ruta);
         if ($dir && !is_dir($dir)) {
             mkdir($dir, 0775, true);
         }
-        file_put_contents($ruta, json_encode($datos, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        $tmp = $ruta . '.tmp';
+        file_put_contents($tmp, json_encode($datos, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        rename($tmp, $ruta);
         return $ruta;
     }
 

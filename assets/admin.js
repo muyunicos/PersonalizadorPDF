@@ -53,9 +53,9 @@ jQuery(function ($) {
             e.preventDefault();
             var $btn = $(this);
             var $form = $btn.closest('form.ec-form-imagen');
-            var letra = ($btn.data('letra') || '').toUpperCase();
+            var idGrupo = (String($btn.data('id') || '')).toUpperCase();
             var frame = wp.media({
-                title: 'Elegir imagen para el grupo ' + letra,
+                title: 'Elegir imagen para el grupo ' + idGrupo,
                 multiple: false,
                 library: { type: 'image' }
             });
@@ -135,7 +135,7 @@ jQuery(function ($) {
         var $form = $bloque.find('form.ec-form-texto');
         var chk = $form.find('input[name=activo]')[0];
         return {
-            letra: String($bloque.data('letra') || ''),
+            id: String($bloque.data('id') || ''),
             activo: !!(chk && chk.checked),
             texto: ($form.find('input[name=texto]').val() || '').trim(),
             estilo: $form.find('select[name=estilo]').val() || '',
@@ -168,9 +168,9 @@ jQuery(function ($) {
     // Autoguardado con debounce al escribir o cambiar estilo/activo.
     $(document).on('input change', 'form.ec-form-texto input[name=texto], form.ec-form-texto select[name=estilo], form.ec-form-texto input[name=activo]', function () {
         var $form = $(this).closest('form.ec-form-texto');
-        var letra = $form.find('input[name=letra]').val() || '';
-        clearTimeout(debounceTexto[letra]);
-        debounceTexto[letra] = setTimeout(function () { guardarTextoAjax($form); }, 600);
+        var idGrupo = $form.find('input[name=id]').val() || '';
+        clearTimeout(debounceTexto[idGrupo]);
+        debounceTexto[idGrupo] = setTimeout(function () { guardarTextoAjax($form); }, 600);
         refrescarBotonProcesar();
     });
 
@@ -209,7 +209,7 @@ jQuery(function ($) {
         }
         $btn.prop('disabled', true).text('Renderizando...');
         renderCore().then(function (core) {
-            return core.TextMuyAPI.renderBatch([{ id: st.letra, text: st.texto, preset: st.estilo, width: st.w, height: st.h }]);
+            return core.TextMuyAPI.renderBatch([{ id: st.id, text: st.texto, preset: st.estilo, width: st.w, height: st.h }]);
         }).then(function (out) {
             var url = URL.createObjectURL(out[0].blob);
             var $caja = $bloque.find('.ec-texto-preview-caja');
@@ -277,7 +277,7 @@ jQuery(function ($) {
         renderCore().then(function (core) {
             ov.setTotal(bloques.length);
             var items = bloques.map(function (st) {
-                return { id: st.letra, text: st.texto, preset: st.estilo, width: st.w, height: st.h };
+                return { id: st.id, text: st.texto, preset: st.estilo, width: st.w, height: st.h };
             });
             return core.TextMuyAPI.renderBatch(items, {
                 onProgress: function (id, idx, total) {
@@ -285,10 +285,10 @@ jQuery(function ($) {
                 }
             }).then(function (out) {
                 var fd = new FormData(form);
-                var porLetra = {};
-                bloques.forEach(function (st) { porLetra[st.letra] = st; });
+                var porId = {};
+                bloques.forEach(function (st) { porId[st.id] = st; });
                 out.forEach(function (r) {
-                    var st = porLetra[r.id];
+                    var st = porId[r.id];
                     fd.append('texto_' + r.id, st.texto);
                     fd.append('estilo_' + r.id, st.estilo);
                     fd.append('imagen_' + r.id, r.blob, r.id + '.png');
@@ -338,11 +338,11 @@ jQuery(function ($) {
 
         /**
          * Asegura la miniatura de una imagen asignada a un grupo de PDF.
-         * Usa ThumbEngine.ensure con el slug '{pdf}-{letra}'.
+         * Usa ThumbEngine.ensure con el slug '{pdf}-{id}'.
          * Si la miniatura no existe en servidor, renderiza a 100x100 contain y la guarda.
          */
-        function ensureMiniatura(pdf, letra, fullUrl) {
-            var nombre = (pdf + '-' + letra).toLowerCase();
+        function ensureMiniatura(pdf, idGrupo, fullUrl) {
+            var nombre = (pdf + '-' + idGrupo).toLowerCase();
             if (!window.ThumbEngine || !baseThumbs || !fullUrl) {
                 return Promise.resolve(fullUrl);
             }

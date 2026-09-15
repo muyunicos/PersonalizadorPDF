@@ -30,6 +30,10 @@ class PMU_Uploads
         'tm-presets' => 'presets.json',
     ];
 
+    /** Subambitos de trabajo bajo tmp/ (contrato rutas-pmu.md v2, spec 007;
+     *  plan 008: se suma 'sesion' para tmp/sesion-{sid}/). */
+    private static $SUBAMBITOS_TMP = ['muestras', 'cart', 'orders', 'sesion'];
+
     /** Grilla del sprite por ambito (defaults; el catalogo vigente manda). */
     private static $THUMBS = [
         'fonts' => ['w' => 180, 'h' => 30, 'c' => 4],
@@ -52,11 +56,28 @@ class PMU_Uploads
 
     /* ==================== Rutas ==================== */
 
+    /**
+     * Sanea un nombre de dato (PDF, linea de carrito): minusculas [a-z0-9_-],
+     * sin extension, no vacio. Lanza motor:<op>:nombre:invalido si no valida.
+     */
+    public function nombre_seguro($nombre, $op = 'ruta')
+    {
+        $nombre = strtolower(trim((string)$nombre));
+        $nombre = preg_replace('/\.pdf$/i', '', $nombre);
+        $nombre = preg_replace('/[^a-z0-9_\-]+/', '-', $nombre);
+        $nombre = trim((string)$nombre, '-');
+        if ($nombre === '') {
+            throw new Exception('motor:' . $op . ':nombre:invalido');
+        }
+        return $nombre;
+    }
+
     public function dir_pmu($crear = false)
     {
         $upload_dir = wp_upload_dir();
         $dir = trailingslashit($upload_dir['basedir']) . 'pmu';
-        if (($crear || !is_dir($dir)) && !is_dir($dir)) {
+        if (!is_dir($dir)) {
+            // Crear el arbol completo, no solo el ultimo nivel.
             wp_mkdir_p($dir);
         }
         return $dir;
@@ -67,7 +88,11 @@ class PMU_Uploads
         if (!in_array($ambito, self::$AMBITOS, true)) {
             throw new Exception('motor:dir_ambito:ambito:invalido');
         }
-        return $this->dir_pmu($crear) . DIRECTORY_SEPARATOR . $ambito;
+        $dir = $this->dir_pmu($crear) . DIRECTORY_SEPARATOR . $ambito;
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        return $dir;
     }
 
     public function url_ambito($ambito)
@@ -77,6 +102,252 @@ class PMU_Uploads
         }
         $upload_dir = wp_upload_dir();
         return trailingslashit($upload_dir['baseurl']) . 'pmu/' . $ambito . '/';
+    }
+
+    /* ============ Rutas de producto PDF (contrato rutas-pmu.md v2, T003) ============ */
+
+    /** Carpeta del producto: uploads/pmu/pdfs/{nombre}/ */
+    public function dir_pdf($nombre, $crear = false)
+    {
+        $nombre = $this->nombre_seguro($nombre, 'dir_pdf');
+        $dir = $this->dir_ambito('pdfs', $crear) . DIRECTORY_SEPARATOR . $nombre;
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        if (!is_dir($dir) || !wp_is_writable($dir)) {
+            throw new Exception('motor:dir_pdf:directorio:no_escribible');
+        }
+        return $dir;
+    }
+
+    /** Archivo del producto: uploads/pmu/pdfs/{nombre}/{nombre}.pdf */
+    public function ruta_pdf($nombre)
+    {
+        $nombre = $this->nombre_seguro($nombre, 'ruta_pdf');
+        return $this->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . $nombre
+            . DIRECTORY_SEPARATOR . $nombre . '.pdf';
+    }
+
+
+    /** Analisis inmutable del Detector: uploads/pmu/pdfs/{nombre}/analisis.json (plan 008). */
+    public function ruta_analisis($nombre)
+    {
+        $nombre = $this->nombre_seguro($nombre, 'ruta_analisis');
+        return $this->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . $nombre
+            . DIRECTORY_SEPARATOR . 'analisis.json';
+    }
+
+    /** Config editable del admin: uploads/pmu/pdfs/{nombre}/config.json (plan 008). */
+    public function ruta_config($nombre)
+    {
+        $nombre = $this->nombre_seguro($nombre, 'ruta_config');
+        return $this->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . $nombre
+            . DIRECTORY_SEPARATOR . 'config.json';
+    }
+
+    /** Asegura un subdirectorio bajo tmp/ (muestras|cart|orders). */
+    private function dir_tmp_sub($sub, $crear = false)
+    {
+        if (!in_array($sub, self::$SUBAMBITOS_TMP, true)) {
+            throw new Exception('motor:dir_tmp:subambito:invalido:' . $sub);
+        }
+        $dir = $this->dir_ambito('tmp', $crear) . DIRECTORY_SEPARATOR . $sub;
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        return $dir;
+    }
+
+    /** Temporales de muestras del panel: uploads/pmu/tmp/muestras/{pdf}/ */
+    public function dir_tmp_muestras($pdf, $crear = false)
+    {
+        $pdf = $this->nombre_seguro($pdf, 'dir_tmp_muestras');
+        $dir = $this->dir_tmp_sub('muestras', $crear) . DIRECTORY_SEPARATOR . $pdf;
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        if ($crear && (!is_dir($dir) || !wp_is_writable($dir))) {
+            throw new Exception('motor:dir_tmp_muestras:directorio:no_escribible');
+        }
+        return $dir;
+    }
+
+    /** Imagen aplicada de un grupo (muestra): tmp/muestras/{pdf}/{id}.{ext} */
+    public function ruta_aplicado($pdf, $id, $ext)
+    {
+        $pdf = $this->nombre_seguro($pdf, 'ruta_aplicado');
+        $id = strtoupper(preg_replace('/[^0-9A-Fa-f]/', '', (string)$id));
+        if (!preg_match('/^[0-9A-F]{6}$/', $id)) {
+            throw new Exception('motor:ruta_aplicado:id:invalido');
+        }
+        $ext = strtolower(ltrim((string)$ext, '.'));
+        $validas = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+        if (!in_array($ext, $validas, true)) {
+            throw new Exception('motor:ruta_aplicado:extension:invalida');
+        }
+        return $this->dir_tmp_sub('muestras') . DIRECTORY_SEPARATOR . $pdf
+            . DIRECTORY_SEPARATOR . $id . '.' . $ext;
+    }
+
+    /** PDF procesado de muestra: tmp/muestras/{pdf}/{nombre}_procesado.pdf */
+    public function ruta_salida_tmp($pdf)
+    {
+        $pdf = $this->nombre_seguro($pdf, 'ruta_salida_tmp');
+        return $this->dir_tmp_sub('muestras') . DIRECTORY_SEPARATOR . $pdf
+            . DIRECTORY_SEPARATOR . $pdf . '_procesado.pdf';
+    }
+
+    /** Borrador/linea del carrito: uploads/pmu/tmp/cart/{linea}/ (spec 007).
+     *  El plan 008 mueve la unidad bajo sesion: dir_sesion_item() es el acceso
+     *  nuevo; dir_tmp_cart()/manifest_cart() quedan como legado (lectura). */
+    public function dir_tmp_cart($linea, $crear = false)
+    {
+        $linea = $this->nombre_seguro($linea, 'dir_tmp_cart');
+        $dir = $this->dir_tmp_sub('cart', $crear) . DIRECTORY_SEPARATOR . $linea;
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        if ($crear && (!is_dir($dir) || !wp_is_writable($dir))) {
+            throw new Exception('motor:dir_tmp_cart:directorio:no_escribible');
+        }
+        return $dir;
+    }
+
+    /** Manifiesto de la linea: uploads/pmu/tmp/cart/{linea}/manifest.json */
+    public function manifest_cart($linea)
+    {
+        $linea = $this->nombre_seguro($linea, 'manifest_cart');
+        return $this->dir_tmp_sub('cart') . DIRECTORY_SEPARATOR . $linea
+            . DIRECTORY_SEPARATOR . 'manifest.json';
+    }
+
+    /* ============ Unidad sesion (plan 008: tmp/sesion-{sid}/{item_key}/) ============ */
+
+    /**
+     * Sanea un sid de sesion (cookie pmu_sid o user_id): minusculas [a-z0-9_-],
+     * sin extension, no vacio. Lanza motor:<op>:sesion:invalida si no valida.
+     */
+    public function sesion_segura($sid, $op = 'sesion')
+    {
+        $sid = strtolower(trim((string)$sid));
+        $sid = preg_replace('/[^a-z0-9_\-]+/', '-', $sid);
+        $sid = trim((string)$sid, '-');
+        if ($sid === '' || strlen($sid) > 64) {
+            throw new Exception('motor:' . $op . ':sesion:invalida');
+        }
+        return $sid;
+    }
+
+    /**
+     * Sanea un item_key (draft-{uuid} pre-carrito o cart_item_key post-carrito):
+     * [A-Za-z0-9_-], no vacio, max 64. Lanza motor:<op>:item:invalido si no valida.
+     */
+    public function item_seguro($item, $op = 'sesion')
+    {
+        $item = trim((string)$item);
+        $item = preg_replace('/[^A-Za-z0-9_\-]+/', '-', $item);
+        $item = trim($item, '-');
+        if ($item === '' || strlen($item) > 64) {
+            throw new Exception('motor:' . $op . ':item:invalido');
+        }
+        return $item;
+    }
+
+    /** Carpeta de la sesion: uploads/pmu/tmp/sesion-{sid}/ (plan 008, crea si falta). */
+    public function dir_sesion($sid, $crear = false)
+    {
+        $sid = $this->sesion_segura($sid, 'dir_sesion');
+        $dir = $this->dir_tmp_sub('sesion', $crear) . DIRECTORY_SEPARATOR . 'sesion-' . $sid;
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        if ($crear && (!is_dir($dir) || !wp_is_writable($dir))) {
+            throw new Exception('motor:dir_sesion:directorio:no_escribible');
+        }
+        return $dir;
+    }
+
+    /** Carpeta del item: uploads/pmu/tmp/sesion-{sid}/{item_key}/ (plan 008, crea si falta). */
+    public function dir_sesion_item($sid, $item, $crear = false)
+    {
+        $sid = $this->sesion_segura($sid, 'dir_sesion_item');
+        $item = $this->item_seguro($item, 'dir_sesion_item');
+        $dir = $this->dir_sesion($sid, $crear) . DIRECTORY_SEPARATOR . $item;
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        if ($crear && (!is_dir($dir) || !wp_is_writable($dir))) {
+            throw new Exception('motor:dir_sesion_item:directorio:no_escribible');
+        }
+        return $dir;
+    }
+
+    /** Manifiesto del item: uploads/pmu/tmp/sesion-{sid}/{item_key}/manifest.json (plan 008). */
+    public function manifest_sesion_item($sid, $item)
+    {
+        $sid = $this->sesion_segura($sid, 'manifest_sesion_item');
+        $item = $this->item_seguro($item, 'manifest_sesion_item');
+        return $this->dir_tmp_sub('sesion') . DIRECTORY_SEPARATOR . 'sesion-' . $sid
+            . DIRECTORY_SEPARATOR . $item . DIRECTORY_SEPARATOR . 'manifest.json';
+    }
+
+    /** Pool de imagenes del item: uploads/pmu/tmp/sesion-{sid}/{item_key}/img/ (plan 008). */
+    public function dir_sesion_item_img($sid, $item, $crear = false)
+    {
+        $dir = $this->dir_sesion_item($sid, $item, $crear) . DIRECTORY_SEPARATOR . 'img';
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        if ($crear && (!is_dir($dir) || !wp_is_writable($dir))) {
+            throw new Exception('motor:dir_sesion_item_img:directorio:no_escribible');
+        }
+        return $dir;
+    }
+
+    /** Staging del pedido: uploads/pmu/tmp/orders/{order_id}/ */
+    public function dir_tmp_order($order_id, $crear = false)
+    {
+        $order_id = (int)$order_id;
+        if ($order_id < 1) {
+            throw new Exception('motor:dir_tmp_order:pedido:invalido');
+        }
+        $dir = $this->dir_tmp_sub('orders', $crear) . DIRECTORY_SEPARATOR . $order_id;
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        if ($crear && (!is_dir($dir) || !wp_is_writable($dir))) {
+            throw new Exception('motor:dir_tmp_order:directorio:no_escribible');
+        }
+        return $dir;
+    }
+
+    /** Carpeta del pedido confirmado: uploads/pmu/orders/{order_id}/ */
+    public function dir_order($order_id, $crear = false)
+    {
+        $order_id = (int)$order_id;
+        if ($order_id < 1) {
+            throw new Exception('motor:dir_order:pedido:invalido');
+        }
+        $dir = $this->dir_ambito('orders', $crear) . DIRECTORY_SEPARATOR . $order_id;
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        if ($crear && (!is_dir($dir) || !wp_is_writable($dir))) {
+            throw new Exception('motor:dir_order:directorio:no_escribible');
+        }
+        return $dir;
+    }
+
+    /** Salida final de una linea: orders/{order_id}/{pdf}/{pdf}_procesado.pdf */
+    public function ruta_order_pdf($order_id, $pdf)
+    {
+        $order_id = (int)$order_id;
+        if ($order_id < 1) {
+            throw new Exception('motor:ruta_order_pdf:pedido:invalido');
+        }
+        $pdf = $this->nombre_seguro($pdf, 'ruta_order_pdf');
+        return $this->dir_ambito('orders') . DIRECTORY_SEPARATOR . $order_id
+            . DIRECTORY_SEPARATOR . $pdf . DIRECTORY_SEPARATOR . $pdf . '_procesado.pdf';
     }
 
     public function tiene_catalogo($ambito)
@@ -101,7 +372,9 @@ class PMU_Uploads
 
     /** Lee el catalogo. Devuelve ['cat'=>..., 'aviso'=>string|null].
      *  Ausente: semilla vacia + aviso no bloqueante.
-     *  Invalido: rechazo con causa, sin sustituciones. */
+     *  Ilegible (0 bytes, JSON invalido, estructura ajena): catalogo vacio
+     *  + aviso no bloqueante (T005: la consola nunca da 500 por esto).
+     *  Solo lanza si el directorio no es escribible y no se puede sembrar. */
     public function catalogo($ambito, $op = 'catalogo')
     {
         $cat = ['thumbs' => $this->thumbs_defecto($ambito), 'items' => []];
@@ -113,26 +386,265 @@ class PMU_Uploads
             if (!is_dir(dirname($ruta))) {
                 wp_mkdir_p(dirname($ruta));
             }
-            if (!@file_put_contents($ruta, wp_json_encode($cat, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))) {
+            if (!$this->guardar_catalogo($ambito, $cat)) {
                 throw new Exception('motor:' . $op . ':directorio:no_escribible');
             }
             return ['cat' => $cat, 'aviso' => 'motor:listar:catalogo:ausente:' . $ambito];
         }
-        $datos = json_decode((string)file_get_contents($ruta), true);
+        $crudo = (string)@file_get_contents($ruta);
+        $datos = $crudo === '' ? null : json_decode($crudo, true);
         if (!is_array($datos) || !isset($datos['thumbs'], $datos['items']) || !is_array($datos['items'])) {
-            throw new Exception('motor:' . $op . ':catalogo:invalido:' . $ambito);
+            return ['cat' => $cat, 'aviso' => 'motor:listar:catalogo:invalido:' . $ambito];
         }
         $cat['thumbs'] = $datos['thumbs'];
         $cat['items'] = array_values(array_filter($datos['items'], 'is_array'));
         return ['cat' => $cat, 'aviso' => null];
     }
 
+    /**
+     * Escribe el catalogo de forma atomica (T004): vuelca a {catalogo}.tmp
+     * en la misma carpeta y renombra sobre el destino. Ningun lector ve
+     * un catalogo truncado. Devuelve true/false (no lanza).
+     */
     public function guardar_catalogo($ambito, $cat)
     {
-        return @file_put_contents(
-            $this->ruta_catalogo($ambito),
-            wp_json_encode($cat, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
-        ) !== false;
+        $ruta = $this->ruta_catalogo($ambito);
+        return $this->escribir_json($ruta, $cat);
+    }
+
+    /** Escribe un array como JSON de forma atomica (.tmp + rename). */
+    public function escribir_json($ruta, array $datos)
+    {
+        $dir = dirname($ruta);
+        if (!is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        $tmp = $ruta . '.tmp';
+        $json = wp_json_encode($datos, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        if ($json === false || @file_put_contents($tmp, $json) === false) {
+            @unlink($tmp);
+            return false;
+        }
+        if (!@rename($tmp, $ruta)) {
+            @unlink($tmp);
+            return false;
+        }
+        return true;
+    }
+
+    /** Lee un JSON de datos. Devuelve null si no existe o es invalido. */
+    public function leer_json($ruta)
+    {
+        if (!is_file($ruta)) {
+            return null;
+        }
+        $datos = json_decode((string)@file_get_contents($ruta), true);
+        return is_array($datos) ? $datos : null;
+    }
+
+    /** Lee el catalogo global de campos (uploads/pmu/campos.json). */
+    public function campos_catalogo($op = 'campos')
+    {
+        $ruta = $this->dir_pmu() . DIRECTORY_SEPARATOR . 'campos.json';
+        if (!is_file($ruta)) {
+            return ['cat' => ['items' => []], 'aviso' => null];
+        }
+        $crudo = (string)@file_get_contents($ruta);
+        $datos = $crudo === '' ? null : json_decode($crudo, true);
+        if (!is_array($datos) || !isset($datos['items']) || !is_array($datos['items'])) {
+            return ['cat' => ['items' => []], 'aviso' => 'motor:listar:catalogo:invalido:campos'];
+        }
+        $items = [];
+        foreach ($datos['items'] as $t) {
+            if (is_array($t) && isset($t[0]) && (int)$t[0] >= 1) {
+                $items[] = $t;
+            }
+        }
+        return ['cat' => ['items' => $items], 'aviso' => null];
+    }
+
+    /** Guarda el catalogo global de campos (atomico). Devuelve true/false. */
+    public function guardar_campos($items)
+    {
+        return $this->escribir_json(
+            $this->dir_pmu(true) . DIRECTORY_SEPARATOR . 'campos.json',
+            ['items' => array_values($items)]
+        );
+    }
+
+    /** Alta de campo: id = hueco mas bajo o max+1. Devuelve el id. */
+    public function campo_alta(array $tupla)
+    {
+        $res = $this->campos_catalogo('alta');
+        $items = $res['cat']['items'];
+        $usados = [];
+        foreach ($items as $t) {
+            $usados[(int)$t[0]] = true;
+        }
+        $id = 1;
+        while (isset($usados[$id])) {
+            $id++;
+        }
+        $tupla[0] = $id;
+        $items[] = array_values($tupla);
+        if (!$this->guardar_campos($items)) {
+            throw new Exception('motor:alta:directorio:no_escribible');
+        }
+        return $id;
+    }
+
+    /** Baja de campo: tombstone [id, "", ""]. */
+    public function campo_baja($id)
+    {
+        $id = (int)$id;
+        if ($id < 1) {
+            throw new Exception('motor:baja:campo:invalido');
+        }
+        $res = $this->campos_catalogo('baja');
+        $items = $res['cat']['items'];
+        $hubo = false;
+        foreach ($items as &$t) {
+            if ((int)$t[0] === $id) {
+                $t = [$id, '', ''];
+                $hubo = true;
+            }
+        }
+        unset($t);
+        if (!$hubo) {
+            $items[] = [$id, '', ''];
+        }
+        if (!$this->guardar_campos($items)) {
+            throw new Exception('motor:baja:directorio:no_escribible');
+        }
+        return true;
+    }
+
+    /** Edicion de campo por id. Lanza si el id no existe. */
+    public function campo_editar($id, array $tupla)
+    {
+        $id = (int)$id;
+        if ($id < 1) {
+            throw new Exception('motor:editar:campo:invalido');
+        }
+        $res = $this->campos_catalogo('editar');
+        $items = $res['cat']['items'];
+        $hubo = false;
+        foreach ($items as &$t) {
+            if ((int)$t[0] === $id) {
+                $tupla[0] = $id;
+                $t = array_values($tupla);
+                $hubo = true;
+            }
+        }
+        unset($t);
+        if (!$hubo) {
+            throw new Exception('motor:editar:campo:inexistente:' . $id);
+        }
+        if (!$this->guardar_campos($items)) {
+            throw new Exception('motor:editar:directorio:no_escribible');
+        }
+        return true;
+    }
+
+    /** Normaliza la seccion productos de un config (int[] unico, max 100). */
+    private function config_productos($valor)
+    {
+        $ids = [];
+        foreach ((array)$valor as $p) {
+            $p = (int)$p;
+            if ($p > 0) {
+                $ids[] = $p;
+            }
+        }
+        return array_values(array_slice(array_unique($ids), 0, 100));
+    }
+
+    /** Normaliza el mapeo placeholders (id hex => tipo/preset/value/settings). */
+    private function config_placeholders($valor)
+    {
+        $ph = [];
+        foreach ((array)$valor as $gid => $m) {
+            $gid = strtoupper((string)$gid);
+            if (!preg_match('/^[0-9A-F]{6}$/', $gid) || !is_array($m)) {
+                continue;
+            }
+            $tipo = isset($m['tipo']) ? (string)$m['tipo'] : 'texto';
+            if ($tipo !== 'texto' && $tipo !== 'imagen') {
+                continue;
+            }
+            $ph[$gid] = [
+                'tipo' => $tipo,
+                'preset' => isset($m['preset']) && $m['preset'] !== '' ? (string)$m['preset'] : null,
+                'value' => isset($m['value']) ? (string)$m['value'] : '',
+                'settings' => isset($m['settings']) ? (string)$m['settings'] : '',
+            ];
+        }
+        return $ph;
+    }
+
+    /** Lee el config.json editable de un PDF (o defaults si no existe). */
+    public function leer_config($pdf)
+    {
+        $pdf = $this->nombre_seguro($pdf, 'leer_config');
+        $ruta = $this->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . $pdf
+            . DIRECTORY_SEPARATOR . 'config.json';
+        $base = ['activo' => false, 'productos' => [], 'campos_ids' => [], 'placeholders' => []];
+        $datos = $this->leer_json($ruta);
+        if (!is_array($datos)) {
+            return $base;
+        }
+        if (array_key_exists('activo', $datos)) {
+            $base['activo'] = (bool)$datos['activo'];
+        }
+        if (isset($datos['productos'])) {
+            $base['productos'] = $this->config_productos($datos['productos']);
+        }
+        if (isset($datos['campos_ids']) && is_array($datos['campos_ids'])) {
+            $ids = [];
+            foreach ($datos['campos_ids'] as $c) {
+                $c = (int)$c;
+                if ($c > 0) {
+                    $ids[] = $c;
+                }
+            }
+            $base['campos_ids'] = array_values(array_unique($ids));
+        }
+        if (isset($datos['placeholders'])) {
+            $base['placeholders'] = $this->config_placeholders($datos['placeholders']);
+        }
+        return $base;
+    }
+
+    /**
+     * Guarda el config.json editable de un PDF de forma atomica.
+     * Nunca toca el dataset: solo activo, productos, campos y mapeos.
+     * Devuelve true/false (no lanza salvo nombre invalido).
+     */
+    public function guardar_config($pdf, array $config)
+    {
+        $pdf = $this->nombre_seguro($pdf, 'guardar_config');
+        $dir = $this->dir_pdf($pdf, true);
+        $canon = $this->leer_config($pdf);
+        if (array_key_exists('activo', $config)) {
+            $canon['activo'] = (bool)$config['activo'];
+        }
+        if (isset($config['productos'])) {
+            $canon['productos'] = $this->config_productos($config['productos']);
+        }
+        if (isset($config['campos_ids'])) {
+            $ids = [];
+            foreach ((array)$config['campos_ids'] as $c) {
+                $c = (int)$c;
+                if ($c > 0) {
+                    $ids[] = $c;
+                }
+            }
+            $canon['campos_ids'] = array_values(array_unique($ids));
+        }
+        if (isset($config['placeholders'])) {
+            $canon['placeholders'] = $this->config_placeholders($config['placeholders']);
+        }
+        return $this->escribir_json($dir . DIRECTORY_SEPARATOR . 'config.json', $canon);
     }
 
     /* ==================== Tuplas v5.0 ==================== */
@@ -193,7 +705,11 @@ class PMU_Uploads
 
     /* ==================== Utilidades ==================== */
 
-    public function nombre_seguro($nombre)
+    /**
+     * Sanea un nombre de archivo de recurso del editor (fuentes/imagenes).
+     * Minusculas [a-z0-9_-], max 64. Devuelve '' si no queda nada.
+     */
+    private function nombre_recurso_seguro($nombre)
     {
         $limpio = strtolower((string)$nombre);
         $limpio = preg_replace('/[^a-z0-9_-]+/', '-', $limpio);
@@ -347,6 +863,10 @@ class PMU_Uploads
     public function presets_nombres()
     {
         $res = $this->catalogo('tm-presets', 'listar');
+        // US1: un catalogo ilegible se avisa con causa, nunca se silencia.
+        if (!empty($res['aviso'])) {
+            throw new Exception($res['aviso']);
+        }
         $dir = $this->dir_ambito('tm-presets');
         $out = [];
         foreach ($res['cat']['items'] as $t) {

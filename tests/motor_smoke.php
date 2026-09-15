@@ -48,10 +48,10 @@ echo 'GD disponible: ' . (Imagen::gd() ? 'si' : 'no') . "\n";
 $pdf = new Pdf((string)file_get_contents($pdfRuta));
 $pdf->load();
 $grupos = (new Detector($pdf))->analizarPdf()['grupos'];
-$datos = Metadata::generar('muestra', $grupos);
+$datos = Metadata::generarAnalisis('muestra', $grupos);
 echo 'Dataset: ' . count($grupos) . " grupos\n";
 foreach ($grupos as $g) {
-    echo "  [{$g['letra']}] {$g['color']} {$g['ancho_px']}x{$g['alto_px']} px, {$g['num_instancias']} inst\n";
+    echo "  [{$g['id']}] {$g['w']}x{$g['h']} px, {$g['cont']} inst\n";
 }
 
 // ===== A: geometria del encajado =====
@@ -95,18 +95,18 @@ Imagen::$sinGD = false;
 // "Acceso controlado a carpetas" y bloquear la escritura de php.exe; se
 // escribe el resultado en %TEMP% para poder validarlo con PyMuPDF.
 $salida = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'salida_motor.pdf';
-$mapa = ['a' => $fixtures . '/foto_a.png', 'b' => $fixtures . '/exacto_b.jpg'];
+$mapa = ['0000FF' => $fixtures . '/foto_a.png', 'FF0000' => $fixtures . '/exacto_b.jpg'];
 $r = Motor::procesar($pdfRuta, $datos, $mapa);
 $escritos = file_put_contents($salida, $r['bytes']);
-check('grupos_aplicados = a,b', $r['resumen']['grupos_aplicados'] === ['a', 'b'],
+check('grupos_aplicados = 0000FF,FF0000', $r['resumen']['grupos_aplicados'] === ['0000FF', 'FF0000'],
     implode(',', $r['resumen']['grupos_aplicados']));
 check('imagenes_insertadas = 4', $r['resumen']['imagenes_insertadas'] === 4);
 check('grupos_sin_imagen vacio', $r['resumen']['grupos_sin_imagen'] === []);
 check('PDF escrito (' . strlen($r['bytes']) . " bytes)", $escritos === strlen($r['bytes']), $salida);
 
 // ===== F: Motor con un grupo sin imagen =====
-$r2 = Motor::procesar($pdfRuta, $datos, ['a' => $fixtures . '/foto_a.png']);
-check('sin imagen: grupos_sin_imagen = b', $r2['resumen']['grupos_sin_imagen'] === ['b']);
+$r2 = Motor::procesar($pdfRuta, $datos, ['0000FF' => $fixtures . '/foto_a.png']);
+check('sin imagen: grupos_sin_imagen = FF0000', $r2['resumen']['grupos_sin_imagen'] === ['FF0000']);
 check('sin imagen: insertadas = 3', $r2['resumen']['imagenes_insertadas'] === 3);
 
 // ===== H: z-order / enmarcado preservado (splice en el stream original) =====
@@ -212,24 +212,22 @@ check('rotado: se detectan 2 grupos', count($gRot) === 2, 'grupos=' . count($gRo
 $gA = null;
 $gB = null;
 foreach ($gRot as $g) {
-    if ($g['color'] === '#0000FF') {
+    if ($g['id'] === '0000FF') {
         $gA = $g;
     }
-    if ($g['color'] === '#FF0000') {
+    if ($g['id'] === 'FF0000') {
         $gB = $g;
     }
 }
-check('rotado: grupo a azul', $gA !== null && $gA['letra'] === 'a'
-    && $gA['color'] === '#0000FF');
-check('rotado: grupo b rojo', $gB !== null && $gB['letra'] === 'b'
-    && $gB['color'] === '#FF0000');
+check('rotado: grupo 0000FF azul', $gA !== null && $gA['id'] === '0000FF');
+check('rotado: grupo FF0000 rojo', $gB !== null && $gB['id'] === 'FF0000');
 check('rotado: lados a ~100x50 pt', $gA !== null
-    && abs((float)$gA['ancho_pt'] - 100) < 0.5 && abs((float)$gA['alto_pt'] - 50) < 0.5,
-    $gA !== null ? ('w=' . $gA['ancho_pt'] . ' h=' . $gA['alto_pt']) : '-');
+    && $gA['w'] === 278 && $gA['h'] === 139,
+    $gA !== null ? ('w=' . $gA['w'] . ' h=' . $gA['h']) : '-');
 check('rotado: lados b ~100x50 pt', $gB !== null
-    && abs((float)$gB['ancho_pt'] - 100) < 0.5 && abs((float)$gB['alto_pt'] - 50) < 0.5,
-    $gB !== null ? ('w=' . $gB['ancho_pt'] . ' h=' . $gB['alto_pt']) : '-');
-check('rotado: px 278x139', $gA !== null && $gA['ancho_px'] === 278 && $gA['alto_px'] === 139);
+    && $gB['w'] === 278 && $gB['h'] === 139,
+    $gB !== null ? ('w=' . $gB['w'] . ' h=' . $gB['h']) : '-');
+check('rotado: px 278x139', $gA !== null && $gA['w'] === 278 && $gA['h'] === 139);
 $iA = ($gA !== null && isset($gA['instancias'][0])) ? $gA['instancias'][0] : null;
 $iB = ($gB !== null && isset($gB['instancias'][0])) ? $gB['instancias'][0] : null;
 check('rotado: instancias con dev_quad', $iA !== null && count($iA['dev_quad']) === 4
@@ -239,19 +237,19 @@ check('rotado: instancias con dev_quad', $iA !== null && count($iA['dev_quad']) 
     // Overlay: inserta las imagenes rotadas en el stream original (splice).
     $ovR = new Overlay($rotPdf);
     $specR = [
-        'a' => [
+        '0000FF' => [
             'tipo' => 'raster',
-            'w' => $gA['ancho_px'],
-            'h' => $gA['alto_px'],
-            'rgb' => str_repeat("\x80", $gA['ancho_px'] * $gA['alto_px'] * 3),
-            'alpha' => str_repeat("\xFF", $gA['ancho_px'] * $gA['alto_px']),
+            'w' => $gA['w'],
+            'h' => $gA['h'],
+            'rgb' => str_repeat("\x80", $gA['w'] * $gA['h'] * 3),
+            'alpha' => str_repeat("\xFF", $gA['w'] * $gA['h']),
         ],
-        'b' => [
+        'FF0000' => [
             'tipo' => 'raster',
-            'w' => $gB['ancho_px'],
-            'h' => $gB['alto_px'],
-            'rgb' => str_repeat("\x90", $gB['ancho_px'] * $gB['alto_px'] * 3),
-            'alpha' => str_repeat("\xFF", $gB['ancho_px'] * $gB['alto_px']),
+            'w' => $gB['w'],
+            'h' => $gB['h'],
+            'rgb' => str_repeat("\x90", $gB['w'] * $gB['h'] * 3),
+            'alpha' => str_repeat("\xFF", $gB['w'] * $gB['h']),
         ],
     ];
     $outR = $ovR->build($gRot, $specR);
@@ -284,15 +282,15 @@ check('rotado: instancias con dev_quad', $iA !== null && count($iA['dev_quad']) 
     $rutaRotPngA = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'ec_rotado_a.png';
     $rutaRotPngB = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'ec_rotado_b.png';
     file_put_contents($rutaRotPdf, $rotPdf);
-    PngWriter::write($rutaRotPngA, $gA['ancho_px'], $gA['alto_px'],
-        str_repeat("\x80\x80\x80\xFF", $gA['ancho_px'] * $gA['alto_px']));
-    PngWriter::write($rutaRotPngB, $gB['ancho_px'], $gB['alto_px'],
-        str_repeat("\x40\x80\xC0\xFF", $gB['ancho_px'] * $gB['alto_px']));
+    PngWriter::write($rutaRotPngA, $gA['w'], $gA['h'],
+        str_repeat("\x80\x80\x80\xFF", $gA['w'] * $gA['h']));
+    PngWriter::write($rutaRotPngB, $gB['w'], $gB['h'],
+        str_repeat("\x40\x80\xC0\xFF", $gB['w'] * $gB['h']));
     try {
-        $rR = Motor::procesar($rutaRotPdf, Metadata::generar('sintetico_rotado', $gRot),
-            ['a' => $rutaRotPngA, 'b' => $rutaRotPngB]);
+        $rR = Motor::procesar($rutaRotPdf, Metadata::generarAnalisis('sintetico_rotado', $gRot),
+            ['0000FF' => $rutaRotPngA, 'FF0000' => $rutaRotPngB]);
         check('rotado: motor end-to-end', isset($rR['bytes'])
-            && $rR['resumen']['grupos_aplicados'] === ['a', 'b']
+            && $rR['resumen']['grupos_aplicados'] === ['0000FF', 'FF0000']
             && (int)$rR['resumen']['imagenes_insertadas'] === 2,
             json_encode($rR['resumen']));
     } catch (\Throwable $e) {
@@ -305,7 +303,7 @@ check('rotado: instancias con dev_quad', $iA !== null && count($iA['dev_quad']) 
 
 // ===== G: dataset desactualizado detectado =====
 $datosMalos = $datos;
-$datosMalos['grupos'][0]['ancho_px'] = 999;
+$datosMalos['grupos'][0]['w'] = 999;
 try {
     Motor::procesar($pdfRuta, $datosMalos, $mapa);
     check('dataset invalido rechazado', false);

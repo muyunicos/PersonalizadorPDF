@@ -9,16 +9,20 @@ if (!defined('ABSPATH')) {
         <li><strong>Subi un PDF</strong> exportado desde Corel con rectangulos 100% transparentes donde iran las
             imagenes. El plugin los detecta, los agrupa por color y genera los <em>datos</em> (dataset) del PDF:
             grupos, colores, tamanos e instancias.</li>
-        <li><strong>Carga una imagen real por grupo</strong> (grupo A, B, C...). Podes subirla desde tu computadora
-            o elegirla de la galeria de medios de WordPress. El placeholder de cada grupo es descargable en PNG
-            transparente con el tamano exacto, por si queres preparar la imagen aparte.</li>
+        <li><strong>Carga una imagen real por grupo</strong> (identificados por su color,
+            p. ej. <code>0000FF</code>). Podes subirla desde tu computadora
+            o elegirla de la galeria de medios de WordPress. El placeholder de cada grupo se
+            previsualiza como marco al tamano real y es descargable en PNG
+            transparente (generado al vuelo), por si queres preparar la imagen aparte.</li>
         <li><strong>Pulsa Procesar PDF.</strong> El motor inserta la imagen de cada grupo en todas sus instancias,
             encajada dentro del placeholder (sin deformar, sin recortar) y devuelve el PDF editado optimizado.</li>
     </ol>
-    <p>El tamano base de cada grupo es el del rectangulo <strong>mas grande</strong> del grupo. Los PDFs subidos,
-        sus datos, imagenes y resultados se guardan en <code>wp-content/uploads/personalizador-pdf/</code>
-        (carpetas <code>pdfs</code>, <code>datos</code>, <code>imagenes</code>, <code>placeholders</code> y
-        <code>salidas</code>).</p>
+    <p>El tamano base de cada grupo es el del rectangulo <strong>mas grande</strong> del grupo. Cada PDF
+        vive en su carpeta <code>wp-content/uploads/pmu/pdfs/{nombre}/</code>
+        (<code>{nombre}.pdf</code> + <code>analisis.json</code> + <code>config.json</code>); las pruebas del panel
+        (imagenes aplicadas, salida de muestra) van a
+        <code>wp-content/uploads/pmu/tmp/muestras/{nombre}/</code> y se sobrescriben
+        en cada Procesar.</p>
 </div>
 
 <div class="card">

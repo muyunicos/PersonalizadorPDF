@@ -4,7 +4,7 @@ if (!defined('ABSPATH')) {
 }
 /** @var Personalizador_PDF_Plugin $this */
 $get = wp_unslash($_GET);
-$tab = isset($get['tab']) && in_array($get['tab'], ['textos', 'ayuda'], true) ? $get['tab'] : 'pdfs';
+$tab = isset($get['tab']) && in_array($get['tab'], ['campos', 'textos', 'ayuda'], true) ? $get['tab'] : 'pdfs';
 $url_base = admin_url('admin.php?page=personalizador-pdf');
 ?>
 <div class="wrap personalizador-pdf">
@@ -13,6 +13,8 @@ $url_base = admin_url('admin.php?page=personalizador-pdf');
     <nav class="nav-tab-wrapper ec-tabs">
         <a href="<?php echo esc_url($url_base . '&tab=pdfs'); ?>"
            class="nav-tab <?php echo $tab === 'pdfs' ? 'nav-tab-active' : ''; ?>">PDFs y procesamiento</a>
+        <a href="<?php echo esc_url($url_base . '&tab=campos'); ?>"
+           class="nav-tab <?php echo $tab === 'campos' ? 'nav-tab-active' : ''; ?>">Campos</a>
         <a href="<?php echo esc_url($url_base . '&tab=textos'); ?>"
            class="nav-tab <?php echo $tab === 'textos' ? 'nav-tab-active' : ''; ?>">Estilos de Texto</a>
         <a href="<?php echo esc_url($url_base . '&tab=ayuda'); ?>"
@@ -20,7 +22,9 @@ $url_base = admin_url('admin.php?page=personalizador-pdf');
     </nav>
 
     <?php
-    if ($tab === 'textos') {
+    if ($tab === 'campos') {
+        include PERSONALIZADOR_PDF_PATH . 'admin/campos.php';
+    } elseif ($tab === 'textos') {
         include PERSONALIZADOR_PDF_PATH . 'admin/estilos-texto.php';
     } elseif ($tab === 'ayuda') {
         include PERSONALIZADOR_PDF_PATH . 'admin/ayuda.php';

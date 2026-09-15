@@ -7,7 +7,7 @@
  *  - forma rectangular (4 lineas cerradas o 're')
  *  - tamano minimo 10 x 5 pt
  *  - agrupacion por color RGB redondeado a 3 decimales
- *  - letras a, b, c... por orden de color; medidas en px (base 200 ppp)
+ *  - id = color hex sin '#' por orden de color; medidas en px (base 200 ppp)
  *  - bbox en coordenadas de pagina con origen ARRIBA-IZQUIERDA (como PyMuPDF)
  *
  * @package  ExtractCorel\Engine
@@ -894,27 +894,20 @@ class Detector
                 $insts[] = $inst;
             }
             $grupos[] = [
-                'letra' => self::letraGrupo($idx),
-                'color' => Round::rgbHex($it['color']),
-                'color_rgb' => $it['color'],
-                'ancho_px' => Round::ptToPx($it['mayor']['w']),
-                'alto_px' => Round::ptToPx($it['mayor']['h']),
-                'ancho_pt' => Round::halfEven($it['mayor']['w'], 2),
-                'alto_pt' => Round::halfEven($it['mayor']['h'], 2),
-                'num_instancias' => count($it['ls']),
-                'paginas' => $paginas,
+                'id' => self::idGrupo($it['color']),
+                'w' => Round::ptToPx($it['mayor']['w']),
+                'h' => Round::ptToPx($it['mayor']['h']),
+                'cont' => count($it['ls']),
+                'pgs' => $paginas,
                 'instancias' => $insts,
             ];
         }
         return $grupos;
     }
 
-    /** Equivalente a letra_grupo(): 0=>a, 25=>z, 26=>aa... */
-    public static function letraGrupo($indice)
+    /** id de grupo = color hex sin '#' (p.ej. 0000FF). Unica clave (T006). */
+    public static function idGrupo(array $rgb)
     {
-        if ($indice < 26) {
-            return chr(97 + $indice);
-        }
-        return chr(97 + intdiv($indice, 26) - 1) . chr(97 + $indice % 26);
+        return ltrim(Round::rgbHex($rgb), '#');
     }
 }

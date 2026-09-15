@@ -146,7 +146,7 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
      incorporando al sistema.
    - **Procesar PDF** → si hay textos activos, `admin.js` renderiza PNGs vía RenderCore en
      el navegador (tamaño exacto del hueco) y envía UN POST único a `handle_procesar` con
-     imágenes y textos persistidos (`datos/{pdf}/textos.json`). El Motor orquesta y entrega
+     imágenes y textos (persistidos en `metadata.json` por grupo). El Motor orquesta y entrega
      el PDF editado (encajado, sin deformar ni recortar).
 2. **Estilos de Texto** (`admin/estilos-texto.php`): laboratorio frontend TextMuy. Guardar
    un estilo crea un `.txm` + miniatura `.webp` en el servidor (uploads).
@@ -162,8 +162,9 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
      lados opuestos paralelos e iguales; la instancia lleva `dev_quad`).
    - `fill_opacity` ≤ 0.001 (transparencia total).
    - Tamaño mínimo: 10×5 pt (anti-artefactos).
-2. **Agrupación**: clave = color RGB (3 decimales), orden determinista, letras
-   `a, b, c... z, aa, ab...`. Se toma la figura de mayor área como base. Medidas SIEMPRE
+2. **Agrupación**: clave = color RGB (3 decimales), orden determinista; cada grupo se
+   identifica por `id` = color hex `RRGGBB` sin `#` (ej. `0000FF`) en datasets, archivos,
+   formularios, URLs y puente. Se toma la figura de mayor área como base. Medidas SIEMPRE
    en px (base 200 ppp: `px = pt * 200/72` redondeado arriba).
 3. **Encajado (contain)**: escala adaptativa `min(W/iw, H/ih)`, jamás estirar ni recortar.
 4. **Overlay y CTM (`q ... Q`)**: cada "draw" debe ir aislado en su propio bloque `q ... Q`
@@ -184,10 +185,21 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 - Ámbitos del editor: `fonts/` (catálogo `fonts.json`), `img/` (catálogo `img.json`) y
   `tm-presets/` (catálogo `presets.json`); un sprite `thumbs.webp` por ámbito, junto a su
   catálogo. `pdfs/`, `orders/` y `tmp/` son ámbitos de datos del motor, sin catálogo ni sprite.
-- Datasets PDF: `datos/{pdf}/metadata.json` (+ `textos.json` para el puente TextMuy)
-- Imágenes aplicadas: `imagenes/{pdf}/{letra}.{ext}`
-- Placeholders vacíos: `placeholders/{pdf}/{letra}-{ancho_px}x{alto_px}.png`
-- PDF procesado: `salidas/{pdf}_procesado.pdf`
+- Datasets PDF: `pdfs/{nombre}/metadata.json` (esquema plano por grupo: `id`/`w`/`h`/`cont`/`pgs`
+  + personalizacion `default`/`value`/`preset`/`config`; `activo` en la raiz).
+  Sin `textos.json` (eliminado en T018; SC-004).
+- Imágenes aplicadas (muestras del panel): `tmp/muestras/{nombre}/{id}.{ext}` (un archivo
+  por grupo, se sobrescribe en cada Procesar)
+- Placeholders: sin archivos en disco; marco dibujado en la consola + descarga generada
+  al vuelo (`PngWriter::bytes(w, h)`)
+- Salida de muestra: `tmp/muestras/{nombre}/{nombre}_procesado.pdf` (se sobrescribe)
+- Comprador (sin cableado Woo aun): borradores en `tmp/cart/{linea}/` (+ `manifest.json`
+  con `pdf`, personalizacion canonica, `pmu_hash`, cantidad, `creado`, motor), staging en
+  `tmp/orders/{order_id}/`, entregable por linea en `orders/{order_id}/{pdf}/`
+  (promocion por `rename()` solo al confirmarse el pago)
+- Migracion unica: `uploads/personalizador-pdf/` (o `extractor-corel/`) se copia una vez a
+  `pdfs/{nombre}/` al abrir la consola (bandera `uploads/pmu/.migrado-007`); la raiz
+  heredada queda intacta como respaldo y los destinos existentes no se pisan
 - **Archivos TextMuy (datos de usuario, formato unico v5.0)** — ubicacion unica
   y definitiva `uploads/pmu/tm-presets/`:
   - Presets: `tm-presets/{nombre}.txm` (delta `textmuy-project` v1 con referencias numericas)
@@ -219,6 +231,14 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 - ✅ **Módulo integrado (v4.2)**: TextMuy vive en `modules/textmuy/` de este repositorio,
   bajo control total; se edita directamente, se corren sus tests Node y se hace bump
   `?v=RCn` en ambos HTML al tocar su JS.
+- ✅ **Layout unico de PDFs (v4.0.1, spec 007)**: cada producto vive en
+  `uploads/pmu/pdfs/{nombre}/` (`{nombre}.pdf` + `metadata.json` con dataset y
+  personalizacion plana `default`/`value`/`preset`/`config`, clave `id` = color hex;
+  unica fuente, sin `textos.json`);
+  muestras idempotentes en `tmp/muestras/{nombre}/`; ciclo comprador en `tmp/cart/`,
+  `tmp/orders/` y `orders/{order_id}/{pdf}/`; migracion unica con bandera
+  `.migrado-007`. La consola nunca muestra la pagina de error critico por fallos
+  de recursos del motor (aviso con causa, HTTP 200).
 - ✅ **Hooks legacy**: se mantiene soporte temporal a hooks `extractor_corel_*` por
   retrocompatibilidad (se considera código legacy).
 

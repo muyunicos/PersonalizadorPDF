@@ -101,27 +101,31 @@ foreach ($eg as $i => $gEsp) {
         continue;
     }
     $gPhp = $rg[$i];
-    foreach (['letra', 'color'] as $k) {
-        if (($gPhp[$k] ?? null) !== ($gEsp[$k] ?? null)) {
-            $errores[] = "grupo[$i].$k: PHP=" . json_encode($gPhp[$k] ?? null) . ' esperado=' . json_encode($gEsp[$k] ?? null);
+    // Esquema plano del dataset (contrato metadata-pdf.md, spec 007):
+    // id = color hex sin '#'; w/h en px; cont = instancias; pgs = paginas.
+    if ((isset($gPhp['id']) ? $gPhp['id'] : null) !== (isset($gEsp['id']) ? $gEsp['id'] : null)) {
+        $errores[] = "grupo[$i].id: PHP=" . json_encode(isset($gPhp['id']) ? $gPhp['id'] : null)
+            . ' esperado=' . json_encode(isset($gEsp['id']) ? $gEsp['id'] : null);
+    }
+    foreach (['w', 'h', 'cont'] as $k) {
+        $vn = (int)(isset($gPhp[$k]) ? $gPhp[$k] : -1);
+        $ve = (int)(isset($gEsp[$k]) ? $gEsp[$k] : -2);
+        if ($vn !== $ve) {
+            $errores[] = "grupo[$i].$k: PHP=$vn esperado=$ve";
         }
     }
-    foreach (['ancho_px', 'alto_px', 'num_instancias'] as $k) {
-        if ((int)($gPhp[$k] ?? -1) !== (int)($gEsp[$k] ?? -2)) {
-            $errores[] = "grupo[$i].$k: PHP={$gPhp[$k]} esperado={$gEsp[$k]}";
+    $pgsPhp = array_map('intval', isset($gPhp['pgs']) ? (array)$gPhp['pgs'] : []);
+    $pgsEsp = array_map('intval', isset($gEsp['pgs']) ? (array)$gEsp['pgs'] : []);
+    if ($pgsPhp !== $pgsEsp) {
+        $errores[] = "grupo[$i].pgs: PHP=" . json_encode($pgsPhp) . ' esperado=' . json_encode($pgsEsp);
+    }
+    // Claves prohibidas: el dataset no puede traer el esquema previo.
+    foreach (['letra', 'color', 'color_rgb', 'ancho_px', 'alto_px', 'ancho_pt', 'alto_pt', 'num_instancias', 'paginas'] as $prohibida) {
+        if (array_key_exists($prohibida, $gPhp)) {
+            $errores[] = "grupo[$i]: clave prohibida '$prohibida' en el esquema nuevo";
         }
     }
-    foreach (['ancho_pt', 'alto_pt'] as $k) {
-        if (abs((float)($gPhp[$k] ?? -99) - (float)($gEsp[$k] ?? -98)) > $tolNum) {
-            $errores[] = "grupo[$i].$k: PHP={$gPhp[$k]} esperado={$gEsp[$k]}";
-        }
-    }
-    foreach (['color_rgb', 'paginas'] as $k) {
-        if (!cmpVal($k, $gPhp[$k] ?? null, $gEsp[$k] ?? null, $tolNum)) {
-            $errores[] = "grupo[$i].$k: PHP=" . json_encode($gPhp[$k]) . ' esperado=' . json_encode($gEsp[$k]);
-        }
-    }
-    $ip = $gPhp['instancias'] ?? [];
+    $ip = isset($gPhp['instancias']) ? $gPhp['instancias'] : [];
     $ie = $gEsp['instancias'] ?? [];
     if (count($ip) !== count($ie)) {
         $errores[] = "grupo[$i].instancias: PHP=" . count($ip) . ' esperado=' . count($ie);
