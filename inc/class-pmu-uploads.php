@@ -409,6 +409,9 @@ class PMU_Uploads
     public function guardar_catalogo($ambito, $cat)
     {
         $ruta = $this->ruta_catalogo($ambito);
+        if ($ambito === 'img') {
+            unset($cat['thumbs']['sprite_firma']);
+        }
         return $this->escribir_json($ruta, $cat);
     }
 
@@ -1088,12 +1091,42 @@ class PMU_Uploads
     }
 
     /** op=sprite: persiste thumbs.webp del ambito (delega fisica a PMU_Galeria). */
-    public function sprite($ambito, $file)
+    public function sprite($ambito, $file, $firma = '')
     {
         $op = 'sprite';
         $this->exigir_galeria($ambito, $op);
         $dir = $this->dir_ambito($ambito, true);
-        $this->get_galeria()->sprite($dir, $file);
+        if ($ambito === 'img') {
+            $res = $this->catalogo($ambito, $op);
+            $cat = $res['cat'];
+            $dims = $cat['thumbs'];
+            $esperado = [(int)$dims['w'], (int)$dims['h'], (int)$dims['c'], $cat['items']];
+            if ($res['aviso'] || json_decode((string)$firma, true) !== $esperado) {
+                throw new Exception('motor:sprite:catalogo:desactualizado');
+            }
+            $max = 0;
+            foreach ($cat['items'] as $t) { $max = max($max, (int)$t[0]); }
+            $tam = @getimagesize($file['tmp_name']);
+            if (!$tam || $dims['c'] < 1 || $tam[0] !== $dims['w'] * $dims['c']
+                || $tam[1] !== (int)ceil(max(1, $max) / $dims['c']) * $dims['h']) {
+                throw new Exception('motor:sprite:dimensiones:invalidas');
+            }
+            // Invalidar antes de reemplazar: un fallo nunca certifica una hoja vieja.
+            if (!$this->guardar_catalogo($ambito, $cat)) {
+                throw new Exception('motor:sprite:catalogo:no_escribible');
+            }
+            $this->get_galeria()->sprite($dir, $file);
+            $actual = $this->catalogo($ambito, $op)['cat'];
+            if ($actual['items'] !== $cat['items']) {
+                throw new Exception('motor:sprite:catalogo:desactualizado');
+            }
+            $cat['thumbs']['sprite_firma'] = (string)$firma;
+            if (!$this->escribir_json($this->ruta_catalogo($ambito), $cat)) {
+                throw new Exception('motor:sprite:catalogo:no_escribible');
+            }
+        } else {
+            $this->get_galeria()->sprite($dir, $file);
+        }
         return ['spriteUrl' => $this->url_de($ambito, 'thumbs.webp'), 'scope' => $ambito];
     }
 
@@ -1191,7 +1224,7 @@ class PMU_Uploads
                     if (empty($_FILES['archivo']) || ($_FILES['archivo']['error'] ?? 1) !== UPLOAD_ERR_OK) {
                         wp_send_json_error('motor:sprite:falta:archivo');
                     }
-                    wp_send_json_success($this->sprite($scope, $_FILES['archivo']));
+                    wp_send_json_success($this->sprite($scope, $_FILES['archivo'], wp_unslash((string)$this->param(['firma'], ''))));
                     break;
                 case 'miniatura':
                     $nombre = (string)$this->param(['nombre'], '');

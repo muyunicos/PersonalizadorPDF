@@ -191,6 +191,7 @@
         var render = opts.render;
         var pad = !!opts.pad;
         var baseUrl = opts.baseUrl || '';
+        var firma = opts.firma || ''; // certificacion del catalogo (op=sprite)
 
         if (!scope || items.length === 0) {
             return Promise.resolve(null);
@@ -208,7 +209,7 @@
         // 2) Generacion completa (cache fria o items cambiados). Sin manifiesto
         //    persistido: no hay validacion contra servidor ni actualizacion
         //    incremental; se regenera y se persiste solo el thumbs.webp.
-        return construirDesdeCero({ scope: scope, items: items, ancho: ancho, alto: alto, columnas: columnas, render: render, pad: pad, baseUrl: baseUrl });
+        return construirDesdeCero({ scope: scope, items: items, ancho: ancho, alto: alto, columnas: columnas, render: render, pad: pad, baseUrl: baseUrl, firma: firma });
 
         // --- Generacion completa (primera vez o sheet ilegible) ---
         function construirDesdeCero(p) {
@@ -219,6 +220,7 @@
             var columnas = p.columnas;
             var render = p.render;
             var pad = p.pad;
+            var firma = p.firma || '';
             var cols = columnas > 0 ? columnas : Math.ceil(Math.sqrt(items.length));
         var rows = Math.ceil(items.length / cols);
         var spriteW = cols * ancho;
@@ -309,11 +311,11 @@
             };
             // Persiste solo thumbs.webp (sin manifiesto en disco); el manifest
             // queda en memoria para tile()/drawTile(). Sin endpoint: data-URL.
-            return persistirSheet(cv, scope, manifest);
+            return persistirSheet(cv, scope, manifest, firma);
         });
         }
 
-function persistirSheet(cv, scope, manifest) {
+function persistirSheet(cv, scope, manifest, firma) {
             return new Promise(function (resBlob) {
                 cv.toBlob(function (blob) { resBlob(blob); }, 'image/webp', 0.85);
             }).then(function (blob) {
@@ -327,6 +329,9 @@ function persistirSheet(cv, scope, manifest) {
                 fd.append('op', config.opSprite || 'sprite');
                 fd.append('scope', scope);
                 fd.append('archivo', blob, 'thumbs.webp');
+                if (firma) {
+                    fd.append('firma', firma);
+                }
                 if (config.nonce) {
                     fd.append('_wpnonce', config.nonce);
                 }

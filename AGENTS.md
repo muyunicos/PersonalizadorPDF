@@ -194,7 +194,10 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 - Raíz de datos: `uploads/pmu/`
 - Ámbitos del editor: `fonts/` (catálogo `fonts.json`), `img/` (catálogo `img.json`) y
   `tm-presets/` (catálogo `presets.json`); un sprite `thumbs.webp` por ámbito, junto a su
-  catálogo. `pdfs/`, `orders/` y `tmp/` son ámbitos de datos del motor, sin catálogo ni sprite.
+  catálogo. El sprite está **certificado** por su catálogo (`thumbs.{w,h,c}` +
+  `thumbs.sprite_firma` = `[w,h,c,items]`; `op=sprite` rechaza con causa
+  `motor:sprite:catalogo:desactualizado` si la firma no coincide con el catálogo
+  vigente). `pdfs/`, `orders/` y `tmp/` son ámbitos de datos del motor, sin catálogo ni sprite.
 - Datasets PDF: `pdfs/{nombre}/analisis.json` (geometría inmutable del Detector: grupos
   `id`/`w`/`h`/`cont`/`pgs`) + `pdfs/{nombre}/config.json` (editable: `activo`, `productos`,
   `campos_ids`, `placeholders[id]` con `tipo`/`preset`/`value`/`settings`).
