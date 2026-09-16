@@ -378,6 +378,11 @@ jQuery(function ($) {
         if (renderCorePromesa) { return renderCorePromesa; }
         renderCorePromesa = new Promise(function (resolve, reject) {
             if (!RENDER_CORE_URL) { reject(new Error('Render core no disponible.')); return; }
+            // Puente TextMuy (contrato textmuy-bridge, AGENTS 2.1): el render-core
+            // resuelve presets .txm, catalogos y fuentes SOLO con las bases del
+            // puente (presetsBase/fuentesBase/imagenesBase). Sin puente, todo
+            // render con preset rechaza con "presets:sin_puente".
+            var puente = (window.PersonalizadorPDF && PersonalizadorPDF.puente) || null;
             var iframe = document.createElement('iframe');
             // Cache-busting por version del plugin: el HTML del render-core es un
             // estatico sin version propia.
@@ -389,12 +394,14 @@ jQuery(function ($) {
             iframe.tabIndex = -1;
             iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;border:0;';
             iframe.addEventListener('load', function () {
+                enviarPuente();
                 var intentos = 0;
                 (function sondeo() {
                     var w = iframe.contentWindow;
                     // Contrato RenderCore v1: la API debe exponer renderBatch (evita
                     // que una copia en cache del navegador use un modulo viejo).
                     if (w && w.RenderCore && w.TextMuyAPI && typeof w.TextMuyAPI.renderBatch === 'function' && w.TextEditor && w.ExportManager) {
+                        enviarPuente(); // garantia extra: puente antes de cualquier renderBatch
                         resolve(w);
                     } else if (++intentos < 100) {
                         setTimeout(sondeo, 100);
@@ -408,7 +415,23 @@ jQuery(function ($) {
             iframe.addEventListener('error', function () {
                 reject(new Error('No se pudo cargar el motor de render TextMuy.'));
             });
+            /** Envia el puente al iframe (idempotente: el modulo guarda el ultimo). */
+            function enviarPuente() {
+                if (!puente) { return; }
+                try {
+                    iframe.contentWindow.postMessage({ type: 'textmuy-bridge', bridge: puente }, window.location.origin);
+                } catch (e) { /* el iframe puede no estar listo aun */ }
+            }
+            // Tres momentos de envio (igual que la pestana "Estilos de Texto"):
+            // aviso textmuy-ready del modulo, carga del iframe y ya-mismo
+            // (por si el iframe termino de cargar antes que este emisor).
+            window.addEventListener('message', function (ev) {
+                if (ev.source === iframe.contentWindow && ev.data && ev.data.type === 'textmuy-ready') {
+                    enviarPuente();
+                }
+            });
             document.body.appendChild(iframe);
+            enviarPuente();
         });
         return renderCorePromesa;
     }

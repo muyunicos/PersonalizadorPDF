@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.1.0
+Stable tag: 4.1.1
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -62,6 +62,11 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.1.1 =
+* **Corregido: puente faltante en el render-core**: la consola "PDFs" (Probar y Procesar) nunca enviaba el puente textmuy-bridge al iframe render-core.html, asi que todo render con preset TextMuy fallaba con presets:sin_puente. Ahora assets/admin.js envia el puente (urls + nonces + inventarios, construidos por el nuevo metodo unico puente_textmuy()) en los 3 momentos del contrato (AGENTS 2.1).
+* **Corregido: guardado de presets (motor:alta:contenido:invalido)**: WordPress aplica magic quotes a $_POST y el JSON del .txm llegaba escapado a PMU_Uploads::alta(); ahora se aplica wp_unslash() antes de json_decode. Esto tambien habilita el remedio de los presets legacy (por ejemplo simple-gradient, con font.src string): re-guardarlos desde el editor.
+* Cache-bust de assets/admin.js (4.1.0 -> 4.1.1).
 
 = 4.1.0 =
 * **Consola redisenada (tarjeta "3. Personalizacion")**: cabecera en una linea (grupos, instancias, badge de cobertura, Descargar JSON y Re-analizar con botones chicos); "Configuracion tienda" y "Placeholders" en acordeones, con switch Activo en la cabecera del acordeon; "Mockups" como seccion reservada.

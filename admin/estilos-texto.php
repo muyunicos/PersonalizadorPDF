@@ -24,39 +24,13 @@ if (!$this->modulo_textmuy_disponible()) {
 }
 
 $modulo_url = PERSONALIZADOR_PDF_URL . 'modules/textmuy/index.html';
-// Config del puente plugin <-> modulo: motor unico de recursos (Const. II)
-// oculto en el iframe via postMessage same-origin al cargar. El modulo NO
-// conoce handlers sueltos: solo urls.motor + op=... (contracts/motor-resources.md)
-// + bases de lectura + listados iniciales generados por el motor, con UNA
-// credencial nonces.motor. Los datos TextMuy viven en la ubicacion unica
-// wp-content/uploads/pmu/{fonts,img,tm-presets}/.
-$pmu_uploads = $this->pmu_uploads();
-try {
-    $recursos = $pmu_uploads->listar_todo();
-    $aviso_puente = '';
-} catch (Exception $e) {
-    // Fallo del inventario inicial (catalogo invalido, permisos, etc.):
-    // causa visible en la pestana; el editor se recibe vacio y se niega a operar.
-    $recursos = ['presets' => [], 'imagenes' => [], 'fuentes' => []];
-    $aviso_puente = $e->getMessage();
-}
-$puente = [
-    'urls' => [
-        'motor' => admin_url('admin-post.php?action=pmu_uploads'),
-        // Script del motor de miniaturas y sprites para inyectar en el iframe
-        'miniaturas' => PERSONALIZADOR_PDF_URL . 'assets/miniaturas.js',
-        // Lectura de presets (.txm), imagenes y fuentes: bases de uploads.
-        'presetsBase' => $pmu_uploads->url_ambito('tm-presets'),
-        'fuentesBase' => $pmu_uploads->url_ambito('fonts'),
-        'imagenesBase' => $pmu_uploads->url_ambito('img'),
-    ],
-    'nonces' => [
-        'motor' => wp_create_nonce('pmu_uploads'),
-    ],
-    'presets' => $recursos['presets'],
-    'imagenes' => $recursos['imagenes'],
-    'fuentes' => $recursos['fuentes'],
-];
+// Config del puente plugin <-> modulo (contrato textmuy-bridge): UNICA fuente
+// de verdad en Personalizador_PDF_Plugin::puente_textmuy() (tambien la consume
+// el render-core off-screen desde assets/admin.js). Sin inventario disponible
+// el editor se recibe vacio y se niega a operar, con la causa visible arriba.
+$puente_data = $this->puente_textmuy();
+$puente = $puente_data['puente'];
+$aviso_puente = $puente_data['aviso'];
 ?>
 <?php if ($aviso_puente !== ''): ?>
 <div class="notice notice-error"><p>

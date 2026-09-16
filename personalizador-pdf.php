@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.1.0
+ * Version: 4.1.1
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('PERSONALIZADOR_PDF_VERSION', '4.1.0');
+define('PERSONALIZADOR_PDF_VERSION', '4.1.1');
 define('PERSONALIZADOR_PDF_PATH', plugin_dir_path(__FILE__));
 define('PERSONALIZADOR_PDF_URL', plugin_dir_url(__FILE__));
 
@@ -677,6 +677,9 @@ class Personalizador_PDF_Plugin
             'motorUrl' => admin_url('admin-post.php?action=pmu_uploads'),
             'motorNonce' => wp_create_nonce('pmu_uploads'),
             'imagenesBase' => $this->base_imagenes_segura(),
+            // Puente TextMuy completo (urls + nonces + inventarios): lo envia
+            // assets/admin.js al iframe render-core.html (contrato AGENTS 2.1).
+            'puente' => $this->puente_textmuy()['puente'],
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'postUrl' => admin_url('admin-post.php'),
             'nonceBuscar' => wp_create_nonce('personalizador_pdf_buscar_productos'),
@@ -694,6 +697,48 @@ class Personalizador_PDF_Plugin
         }
     }
 
+
+    /**
+     * Puente plugin <-> TextMuy (contrato textmuy-bridge, AGENTS 2.1): urls +
+     * nonces + inventarios construidos desde el motor unico PMU_Uploads. UNICA
+     * fuente de verdad: la consume la pestana "Estilos de Texto" (editor
+     * completo) y el render-core off-screen (assets/admin.js). Nunca lanza:
+     * si listar_todo() falla, el puente sale con inventarios vacios y el
+     * aviso con la causa.
+     */
+    public function puente_textmuy()
+    {
+        $recursos = ['presets' => [], 'imagenes' => [], 'fuentes' => []];
+        $aviso = '';
+        try {
+            $recursos = $this->pmu_uploads()->listar_todo();
+        } catch (\Throwable $e) {
+            // Fallo del inventario inicial (catalogo invalido, permisos, etc.):
+            // causa visible en la pestana; el editor se recibe vacio y se niega a operar.
+            $aviso = $e->getMessage();
+        }
+        $pmu_uploads = $this->pmu_uploads();
+        return [
+            'puente' => [
+                'urls' => [
+                    'motor' => admin_url('admin-post.php?action=pmu_uploads'),
+                    // Script del motor de miniaturas y sprites para inyectar en el iframe
+                    'miniaturas' => PERSONALIZADOR_PDF_URL . 'assets/miniaturas.js',
+                    // Lectura de presets (.txm), imagenes y fuentes: bases de uploads.
+                    'presetsBase' => $pmu_uploads->url_ambito('tm-presets'),
+                    'fuentesBase' => $pmu_uploads->url_ambito('fonts'),
+                    'imagenesBase' => $pmu_uploads->url_ambito('img'),
+                ],
+                'nonces' => [
+                    'motor' => wp_create_nonce('pmu_uploads'),
+                ],
+                'presets' => is_array($recursos['presets'] ?? null) ? $recursos['presets'] : [],
+                'imagenes' => is_array($recursos['imagenes'] ?? null) ? $recursos['imagenes'] : [],
+                'fuentes' => is_array($recursos['fuentes'] ?? null) ? $recursos['fuentes'] : [],
+            ],
+            'aviso' => $aviso,
+        ];
+    }
     public function render_page()
     {
         if (!current_user_can('manage_options')) {

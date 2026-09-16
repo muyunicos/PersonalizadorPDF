@@ -950,7 +950,10 @@ class PMU_Uploads
             if ($nombre === '') {
                 throw new Exception('motor:' . $op . ':nombre:invalido');
             }
-            $datos = json_decode((string)$contenido, true);
+            // wp_unslash: WordPress aplica magic quotes a $_POST y el JSON del
+            // .txm llega con comillas escapadas (rompia json_decode con
+            // "motor:alta:contenido:invalido" en todo guardado de presets).
+            $datos = json_decode(wp_unslash((string)$contenido), true);
             if (!is_array($datos)
                 || (isset($datos['format']) ? $datos['format'] : '') !== 'textmuy-project'
                 || (isset($datos['version']) ? (int)$datos['version'] : 0) !== 1) {
