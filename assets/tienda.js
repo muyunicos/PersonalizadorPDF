@@ -99,6 +99,7 @@
     var cfg = global.PMU_TIENDA || {};
     var renderCorePromesa = null;
     var ficha = null;
+    var galeriaActual = null;
 
     function raiz() {
         return document.querySelector('[data-pmu-panel]') || null;
@@ -380,8 +381,64 @@
             mostrar();
         });
         mostrar();
+        galeriaActual = estado;
         return estado;
     }
+
+    /* ==================== T015: carrito del comprador ==================== */
+
+    /** Boton "Agregar al carrito" de la ficha Woo (null fuera de Woo). */
+    function botonWoo() {
+        var form = document.querySelector('form.cart');
+        return form ? form.querySelector('.single_add_to_cart_button') : null;
+    }
+
+    /** T015: el carrito queda bloqueado hasta que las vistas esten listas. */
+    function bloquearCarrito(bloquear) {
+        var b = botonWoo();
+        if (b) { b.disabled = bloquear; }
+    }
+
+    /** Inyecta (o actualiza) un input oculto en el form del carrito. */
+    function inyectar(form, nombre, valor) {
+        var campo = form.querySelector('input[name="' + nombre + '"]');
+        if (!campo) {
+            campo = document.createElement('input');
+            campo.type = 'hidden';
+            campo.name = nombre;
+            form.appendChild(campo);
+        }
+        campo.value = valor;
+    }
+
+    /**
+     * T015: intercept del submit del carrito. Envia la meta canonica (pmu_sid/
+     * pmu_item_key) y congela las vistas aprobadas (pmu_mockups = {id: webp}).
+     * Submit NATIVO con inputs ocultos: nunca se lee form.action (norma §11).
+     */
+    function engancharCarrito() {
+        var form = document.querySelector('form.cart');
+        if (!form || form.getAttribute('data-pmu-carrito') === '1') { return; }
+        form.setAttribute('data-pmu-carrito', '1');
+        form.addEventListener('submit', function () {
+            if (!global.PMU_API || !global.PMU_API.sesion) { return; }
+            var webps = {};
+            (galeriaActual && galeriaActual.vistas || []).forEach(function (v) {
+                if (v.canvas && v.mockup && v.mockup.id) {
+                    try {
+                        var url = v.canvas.toDataURL('image/webp', 0.9);
+                        if (String(url).indexOf('data:image/webp') === 0) {
+                            webps[v.mockup.id] = url;
+                        }
+                    } catch (e) { /* sin webp: sin_vista, reintento al descargar */ }
+                }
+            });
+            inyectar(form, 'pmu_sid', global.PMU_API.sesion.sid);
+            inyectar(form, 'pmu_item_key', global.PMU_API.sesion.item_key);
+            inyectar(form, 'pmu_mockups', JSON.stringify(webps));
+        });
+    }
+
     /** Genera la vista de UN pdf: concilia, renderiza, sube y compone. */
     function generarPdf(pdfDatos, sid, itemKey, vista) {
         var valores = (global.PMU_API && global.PMU_API.valores()) || {};
@@ -433,6 +490,7 @@
                 return componerMockup(pdfDatos, vista.mockup, pngsPorGrupo).then(function (canvas) {
                     var espera = vista.marco.querySelector('.pmu-gal-espera');
                     if (espera) { espera.remove(); }
+                    vista.canvas = canvas;
                     vista.marco.appendChild(canvas);
                 });
             });
@@ -461,11 +519,14 @@
             var vistas = (pdfDatos.mockups || []).map(function (m) { return { mockup: m }; });
             var galeria = prepararGaleria(vistas);
             if (!galeria || !galeria.vistas.length) {
-                return null; // sin mockups definidos: sin vista previa (venta libre, T021)
+                bloquearCarrito(false); // sin mockups: sin vista previa, venta libre (T021)
+                return null;
             }
             return Promise.all(galeria.vistas.map(function (v) {
                 return generarPdf(pdfDatos, datos.sid, datos.item_key, v);
-            }));
+            })).then(function () {
+                bloquearCarrito(false); // vistas listas: carrito habilitado
+            });
         });
     }
 
@@ -478,6 +539,9 @@
         var estado = montarCampos(panel, ficha.campos);
         var api = { pdf: ficha.pdf, estado: estado, valores: function () { return estado; } };
         global.PMU_API = api;
+        // T015: sin vistas el carrito permanece bloqueado (excepto omisible, T018).
+        if (!ficha.preview_omisible) { bloquearCarrito(true); }
+        engancharCarrito();
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'pmu-btn-previa';
@@ -491,6 +555,7 @@
             generarVista().catch(function (e) {
                 if (window.console && console.warn) { console.warn('[PersonalizadorPDF]', e); }
                 mostrarAviso(null, (e && e.message) || 'No se pudo generar la vista previa.');
+                bloquearCarrito(false); // V-7: la venta nunca queda bloqueada (T021 pule esto)
             }).then(function () {
                 btn.disabled = false;
             });

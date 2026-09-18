@@ -702,7 +702,8 @@ class Personalizador_PDF_Plugin
 
     /**
      * T015: promocion del draft a linea del carrito (rename a {cart_item_key},
-     * mismo sid). Fail-safe: nunca tumba el flujo de compra.
+     * mismo sid) + congelado de las vistas aprobadas (mockup-{id}.webp 300x300,
+     * webp que envia el cliente al agregar). Fail-safe: nunca tumba la compra.
      */
     public function carrito_promover($item_key, $product_id, $cantidad, $variacion = 0, $variacion2 = null)
     {
@@ -714,16 +715,47 @@ class Personalizador_PDF_Plugin
         try {
             $sesion = $this->sesion();
             $sesion->promover($sid, $draft, $item_key);
-            $manifest = $sesion->leer_manifest($sid, $item_key);
-            // Los webp aprobados ya viven en el item (T014 los congela al pulsar
-            // "Vista previa"); aqui solo se asegura el estado del manifest.
-            if (is_array($manifest) && empty($manifest['mockup_vistas'])) {
-                $manifest['preview_estado'] = $manifest['preview_estado'] ?? PMU_Sesion::ESTADO_SIN_VISTA;
-                $sesion->guardar_manifest($sid, $item_key, $manifest);
+            // Congelar vistas aprobadas: el cliente envia {mockup_id: webp dataURL}
+            // (lo que vio y aprobo en la galeria). Sin vistas validas el estado
+            // queda sin_vista (venta habilitada, reintento al descargar).
+            $mockups = isset($_POST['pmu_mockups']) ? json_decode(wp_unslash((string)$_POST['pmu_mockups']), true) : [];
+            $congelados = 0;
+            foreach ((array)$mockups as $mid => $dataurl) {
+                $bytes = $this->dataurl_bytes((string)$dataurl);
+                if ($bytes === '' || substr($bytes, 0, 4) !== 'RIFF' || strpos($bytes, 'WEBP') !== 8) {
+                    continue; // solo webp real (contrato congelar_webp)
+                }
+                try {
+                    $sesion->congelar_webp($sid, $item_key, (string)$mid, $bytes);
+                    $congelados++;
+                } catch (\Throwable $e) {
+                    continue;
+                }
+            }
+            if ($congelados > 0) {
+                $manifest = $sesion->leer_manifest($sid, $item_key);
+                if (is_array($manifest)) {
+                    $manifest['preview_estado'] = PMU_Sesion::ESTADO_OK;
+                    $sesion->guardar_manifest($sid, $item_key, $manifest);
+                }
             }
         } catch (\Throwable $e) {
             // La linea queda con meta; estado_preview() del manifest manda al descargar.
         }
+    }
+
+    /** Decodifica un dataURL a bytes crudos ('' si no es data: valido). */
+    private function dataurl_bytes($dataurl)
+    {
+        if (strpos((string)$dataurl, 'data:image/') !== 0) {
+            return '';
+        }
+        $coma = strpos((string)$dataurl, ',');
+        if ($coma === false) {
+            return '';
+        }
+        $bin = base64_decode(substr((string)$dataurl, $coma + 1), true);
+        return is_string($bin) ? $bin : '';
     }
 
     /** T015: etiquetas `cliente` visibles en carrito/checkout (item Woo + espejo). */

@@ -364,6 +364,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('unique_key UUID v4', preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', (string)($meta['unique_key'] ?? '')) === 1);
             check('promover renombra a item_key real', ($c['dir_draft'] ?? '') !== '' && ($c['dir_item'] ?? '') !== '' && $c['dir_item'] !== $c['dir_draft'] && !is_dir($c['dir_draft']));
             check('manifest promovido', is_array($c['man_item'] ?? null) && $c['man_item']['item_key'] === 'abc123def456');
+            check('webp aprobado congelado al agregar', !empty($c['webp_ok']));
+            check('estado ok tras congelar', ($c['estado'] ?? '') === 'ok');
             $etiquetas = is_array($c['etiquetas'] ?? null) ? $c['etiquetas'] : [];
             check('etiqueta cliente con titulo del campo', count($etiquetas) === 1 && $etiquetas[0]['name'] === 'Nombre' && $etiquetas[0]['value'] === 'Ana');
             check('borrado quirurgico al quitar', isset($c['dir_item']) && !is_dir($c['dir_item']));
@@ -612,7 +614,12 @@ switch ($fase) {
         $man_c = $sesion_c->leer_manifest($sid_c, $draft_c);
         $man_c['valores'] = [$cid_c => ['valor' => 'Ana', 'cliente' => 'Ana']];
         $sesion_c->guardar_manifest($sid_c, $draft_c, $man_c);
-        $_POST = ['pmu_sid' => $sid_c, 'pmu_item_key' => $draft_c];
+        $_POST = [
+            'pmu_sid' => $sid_c,
+            'pmu_item_key' => $draft_c,
+            // T015: vistas aprobadas (webp 300x300 que el cliente congela al agregar).
+            'pmu_mockups' => json_encode(['m1' => 'data:image/webp;base64,' . base64_encode('RIFF0000WEBPVP8 ' . str_repeat('x', 24))]),
+        ];
         $GLOBALS['test_carrito'] = [
             'dir_draft' => $sesion_c->dir_item($sid_c, $draft_c),
         ];
@@ -620,6 +627,11 @@ switch ($fase) {
         $p->carrito_promover('abc123def456', 42, 1, 0, null);
         $GLOBALS['test_carrito']['dir_item'] = $motor_c->dir_sesion_item($sid_c, 'abc123def456');
         $GLOBALS['test_carrito']['man_item'] = $sesion_c->leer_manifest($sid_c, 'abc123def456');
+        $GLOBALS['test_carrito']['estado'] = $sesion_c->estado_preview($sid_c, 'abc123def456');
+        // Evidencia del congelado ANTES de borrar el item (el check corre en shutdown).
+        $rutaWebp = $GLOBALS['test_carrito']['dir_item'] . '/mockup-m1.webp';
+        $GLOBALS['test_carrito']['webp_ok'] = is_file($rutaWebp)
+            && strpos((string)@file_get_contents($rutaWebp, false, null, 0, 12), 'WEBP') !== false;
         $GLOBALS['test_carrito']['etiquetas'] = $p->carrito_mostrar([], ['pmu_sid' => $sid_c, 'pmu_item_key' => 'abc123def456']);
         $GLOBALS['test_wc'] = new TestWC();
         $GLOBALS['test_wc']->cart->cart_contents['abc123def456'] = ['pmu_sid' => $sid_c, 'pmu_item_key' => 'abc123def456'];
