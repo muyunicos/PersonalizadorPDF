@@ -31,10 +31,13 @@ if (is_dir($testBase)) {
 // ====== Stubs minimos de WordPress ======
 define('ABSPATH', __DIR__ . '/');
 define('HOUR_IN_SECONDS', 3600);
+define('DAY_IN_SECONDS', 86400);
 function wp_upload_dir() { global $testBase; return ['basedir' => $testBase . '/uploads', 'baseurl' => 'http://test/uploads']; }
 function plugin_dir_path($f) { return dirname($f) . DIRECTORY_SEPARATOR; }
 function plugin_dir_url($f) { return 'http://test/wp-content/plugins/personalizador-pdf/'; }
+function add_shortcode(...$a) { return true; }
 function add_action(...$a) { return true; }
+function add_filter(...$a) { return true; }
 function add_menu_page(...$a) { return true; }
 function wp_enqueue_style(...$a) { return true; }
 function wp_enqueue_script(...$a) { return true; }
@@ -72,6 +75,19 @@ function submit_button($t = '', $c = '', $n = '', $w = true) { echo '<button cla
 function esc_textarea($t) { return htmlspecialchars((string)$t, ENT_QUOTES, 'UTF-8'); }
 function checked($a, $b = true) { echo ((string)$a === (string)$b || ($b === true && !empty($a))) ? ' checked="checked"' : ''; }
 function register_activation_hook($f, $cb) { return true; }
+
+// Stub Woo minimo (T015): el carrito solo existe si el test lo instala.
+class TestWC_Cart
+{
+    public $cart_contents = [];
+    public function get_cart_item($k) { return isset($this->cart_contents[$k]) ? $this->cart_contents[$k] : []; }
+}
+class TestWC
+{
+    public $cart;
+    public function __construct() { $this->cart = new TestWC_Cart(); }
+}
+function WC() { return isset($GLOBALS['test_wc']) ? $GLOBALS['test_wc'] : null; }
 
 require $plugin;
 $p = Personalizador_PDF_Plugin::instance();
@@ -137,6 +153,33 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             $archivos_r = array_values(array_diff(scandir($uploads . '/pdfs/muestra'), ['.', '..']));
             sort($archivos_r);
             check('solo PDF, analisis y config', $archivos_r === ['analisis.json', 'config.json', 'muestra.pdf']);
+            break;
+        case 'mockups_guardar':
+            // T008: guardado parcial del editor de mockups.
+            check('respuesta JSON success', is_array($json) && $json['success'] === true);
+            $cfg_g = $p->motor_para_tests()->leer_config('muestra');
+            $previo = isset($GLOBALS['test_cfg_previo']) ? $GLOBALS['test_cfg_previo'] : [];
+            check('mockup guardado con 2 capas validas', count((array)$cfg_g['mockups']) === 1 && count($cfg_g['mockups'][0]['capas']) === 2);
+            check('filtros por capa persistidos', $cfg_g['mockups'][0]['capas'][0]['filtros'] === ['brillo' => 90]);
+            check('omisible=true con mockups', $cfg_g['preview_omisible'] === true);
+            check('activo intacto', $cfg_g['activo'] === $previo['activo']);
+            check('productos intactos', $cfg_g['productos'] === $previo['productos']);
+            check('campos intactos', $cfg_g['campos_ids'] === $previo['campos_ids']);
+            check('mapeos intactos', $cfg_g['placeholders'] === $previo['placeholders']);
+            break;
+        case 'mockup_foto':
+            // T007: la foto queda en pdfs/{nombre}/mockups/ con nombre saneado.
+            check('redirect de subida', strpos($redirect, 'ec_mockup_subida=1') !== false);
+            $dirF = $uploads . '/pdfs/muestra/mockups';
+            check('carpeta mockups creada', is_dir($dirF));
+            check('foto guardada con nombre saneado', is_file($dirF . '/fiesta.png'));
+            check('foto valida PNG', substr((string)@file_get_contents($dirF . '/fiesta.png', false, null, 0, 8), 0, 4) === "\x89PNG");
+            break;
+        case 'mockup_foto_baja':
+            // T007: borrado quirurgico dentro de mockups/, sin tocar vecinos.
+            check('redirect de baja', strpos($redirect, 'ec_mockup_baja=1') !== false);
+            check('foto eliminada', !is_file($uploads . '/pdfs/muestra/mockups/fiesta.png'));
+            check('vecina intacta', is_file($uploads . '/pdfs/muestra/mockups/otra.png'));
             break;
         case 'sesion':
             // T003/T017: ciclo de vida completo del item.
@@ -268,6 +311,54 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 return false;
             })());
             check('sin textos.json (SC-004)', !is_file($uploads . '/tmp/muestras/muestra/textos.json'));
+            break;
+        case 'ficha':
+            // T012: panel del comprador (oculto si el PDF no es ofrecible).
+            $ficha = isset($GLOBALS['test_ficha']) ? $GLOBALS['test_ficha'] : null;
+            $sc = isset($GLOBALS['test_ficha_shortcode']) ? $GLOBALS['test_ficha_shortcode'] : null;
+            check('panel con pdf/campos/mapeos', is_array($ficha) && $ficha['pdf'] === 'muestra'
+                && isset($ficha['campos'][1]) && isset($ficha['placeholders']['0000FF']));
+            check('omisible por defecto false', is_array($ficha) && $ficha['preview_omisible'] === false);
+            check('shortcode devuelve el mismo panel', is_array($sc) && $sc == $ficha);
+            check('PDF inactivo/sin analisis se oculta', $GLOBALS['test_ficha_oculta'] === false);
+            break;
+        case 'vista_previa':
+            // T013: draft de sesion con valores duales saneados.
+            check('respuesta JSON success', is_array($json) && $json['success'] === true);
+            $sid_v = is_array($json) ? (string)($json['data']['sid'] ?? '') : '';
+            $item_v = is_array($json) ? (string)($json['data']['item_key'] ?? '') : '';
+            check('sid devuelto', $sid_v !== '');
+            check('item_key draft', strpos($item_v, 'draft-') === 0);
+            check('pdfs = muestra', is_array($json) && $json['data']['pdfs'] === ['muestra']);
+            $rutaMan = glob($testBase . '/uploads/pmu/tmp/sesion/sesion-' . $sid_v . '/' . $item_v . '/manifest.json');
+            $man_v = $rutaMan ? json_decode((string)@file_get_contents($rutaMan[0]), true) : null;
+            $cid_v = isset($GLOBALS['test_previa_cid']) ? (int)$GLOBALS['test_previa_cid'] : 1;
+            check('manifest con valor dual', is_array($man_v) && isset($man_v['valores'][$cid_v]) && $man_v['valores'][$cid_v]['cliente'] === 'Ana');
+            check('valor crudo acotado (sin strip)', is_array($man_v) && $man_v['valores'][$cid_v]['valor'] === '<b>Ana</b>');
+            check('campo desconocido descartado', is_array($man_v) && !isset($man_v['valores'][999]));
+            check('mockups del PDF en la respuesta', is_array($json) && $json['data']['mockups'] === []);
+            break;
+        case 'vista_previa_mal':
+            check('respuesta JSON error (seguridad)', is_array($json) && $json['success'] === false);
+            check('causa motor:nonce:invalido', is_array($json) && $json['data'] === 'motor:nonce:invalido');
+            check('sin drafts creados', (function () use ($testBase) {
+                foreach ((array)glob($testBase . '/uploads/pmu/tmp/sesion-*/draft-*', GLOB_ONLYDIR) as $d) {
+                    return false;
+                }
+                return true;
+            })());
+            break;
+        case 'carrito':
+            // T015: meta canonica + promocion + etiquetas + borrado quirurgico.
+            $c = isset($GLOBALS['test_carrito']) ? $GLOBALS['test_carrito'] : [];
+            $meta = isset($c['meta']) && is_array($c['meta']) ? $c['meta'] : [];
+            check('meta pmu_sid/pmu_item_key', isset($meta['pmu_sid']) && $meta['pmu_sid'] === 'test-8f2a' && preg_match('/^draft-/', (string)($meta['pmu_item_key'] ?? '')) === 1);
+            check('unique_key UUID v4', preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', (string)($meta['unique_key'] ?? '')) === 1);
+            check('promover renombra a item_key real', ($c['dir_draft'] ?? '') !== '' && ($c['dir_item'] ?? '') !== '' && $c['dir_item'] !== $c['dir_draft'] && !is_dir($c['dir_draft']));
+            check('manifest promovido', is_array($c['man_item'] ?? null) && $c['man_item']['item_key'] === 'abc123def456');
+            $etiquetas = is_array($c['etiquetas'] ?? null) ? $c['etiquetas'] : [];
+            check('etiqueta cliente con titulo del campo', count($etiquetas) === 1 && $etiquetas[0]['name'] === 'Nombre' && $etiquetas[0]['value'] === 'Ana');
+            check('borrado quirurgico al quitar', isset($c['dir_item']) && !is_dir($c['dir_item']));
             break;
         case 'placeholder':
             // T026: placeholder al vuelo por id (sin archivos) + rechazo con id ausente.
@@ -417,6 +508,88 @@ function preparar_entorno($testBase, $base)
 }
 
 switch ($fase) {
+    case 'ficha':
+        // T012: panel del comprador (oculto si el PDF no es ofrecible).
+        // El entorno del arnes necesita config activa + campo catalogado.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        $motor_f = new PMU_Uploads();
+        $cid_f = $motor_f->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $motor_f->guardar_config('muestra', [
+            'activo' => true,
+            'campos_ids' => [$cid_f],
+            'placeholders' => ['0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => '[campo1]', 'settings' => '', 'repetir' => false]],
+        ]);
+        $GLOBALS['test_ficha'] = $p->panel_ficha('muestra');
+        $GLOBALS['test_ficha_shortcode'] = $p->shortcode_panel(['pdf' => 'muestra']);
+        $GLOBALS['test_ficha_oculta'] = $p->panel_ficha('inexistente');
+        break;
+
+    case 'vista_previa':
+    case 'vista_previa_mal':
+        // T013: draft de sesion desde el panel (camino feliz + nonce invalido).
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        $motor_f = new PMU_Uploads();
+        $cid_f = $motor_f->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $motor_f->guardar_config('muestra', [
+            'activo' => true,
+            'campos_ids' => [$cid_f],
+            'placeholders' => ['0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => '[campo1]', 'settings' => '', 'repetir' => false]],
+        ]);
+        $GLOBALS['test_previa_cid'] = $cid_f;
+        if ($fase === 'vista_previa_mal') {
+            putenv('PD_PUENTE_SIN_NONCE=1');
+        }
+        $_POST = [
+            'action' => 'personalizador_pdf_vista_previa',
+            'pdf' => 'muestra.pdf',
+            'valores' => json_encode([$cid_f => ['valor' => '<b>Ana</b>', 'cliente' => 'Ana'], 999 => ['valor' => 'intruso', 'cliente' => 'intruso']]),
+            'ajax' => '1',
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_vista_previa(); // exit en wp_send_json_*
+        break;
+
+    case 'carrito':
+        // T015: ciclo carrito (meta canonica, promover, etiquetas, borrado).
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $motor_c = $p->motor_para_tests();
+        $cid_c = $motor_c->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $motor_c->guardar_config('muestra', [
+            'activo' => true,
+            'campos_ids' => [$cid_c],
+            'placeholders' => ['0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => '[campo1]', 'settings' => '', 'repetir' => false]],
+        ]);
+        $sesion_c = new PMU_Sesion($motor_c);
+        $sid_c = 'test-8f2a';
+        $draft_c = $sesion_c->crear_draft($sid_c, ['muestra']);
+        $man_c = $sesion_c->leer_manifest($sid_c, $draft_c);
+        $man_c['valores'] = [$cid_c => ['valor' => 'Ana', 'cliente' => 'Ana']];
+        $sesion_c->guardar_manifest($sid_c, $draft_c, $man_c);
+        $_POST = ['pmu_sid' => $sid_c, 'pmu_item_key' => $draft_c];
+        $GLOBALS['test_carrito'] = [
+            'dir_draft' => $sesion_c->dir_item($sid_c, $draft_c),
+        ];
+        $GLOBALS['test_carrito']['meta'] = $p->carrito_agregar([], 42, 0, 1);
+        $p->carrito_promover('abc123def456', 42, 1, 0, null);
+        $GLOBALS['test_carrito']['dir_item'] = $motor_c->dir_sesion_item($sid_c, 'abc123def456');
+        $GLOBALS['test_carrito']['man_item'] = $sesion_c->leer_manifest($sid_c, 'abc123def456');
+        $GLOBALS['test_carrito']['etiquetas'] = $p->carrito_mostrar([], ['pmu_sid' => $sid_c, 'pmu_item_key' => 'abc123def456']);
+        $GLOBALS['test_wc'] = new TestWC();
+        $GLOBALS['test_wc']->cart->cart_contents['abc123def456'] = ['pmu_sid' => $sid_c, 'pmu_item_key' => 'abc123def456'];
+        $p->carrito_quitar('abc123def456');
+        break;
     case 'desactivar':
     case 'reanalizar':
         preparar_entorno($testBase, $base);
@@ -747,8 +920,77 @@ switch ($fase) {
         }
         break;
 
+    case 'mockup_foto':
+        // T007: subir foto de mockup del admin -> pdfs/{nombre}/mockups/.
+        preparar_entorno($testBase, $base);
+        $fotoTmp = sys_get_temp_dir() . '/pd_puente_foto_' . getmypid() . '.png';
+        \ExtractCorel\Engine\PngWriter::write($fotoTmp, 120, 90);
+        $_FILES = [
+            'foto' => [
+                'name' => 'fiesta.png', 'type' => 'image/png',
+                'tmp_name' => $fotoTmp, 'error' => UPLOAD_ERR_OK, 'size' => filesize($fotoTmp),
+            ],
+        ];
+        $_POST = [
+            'action' => 'personalizador_pdf_mockup_subir',
+            'archivo' => 'muestra.pdf',
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_mockup_subir(); // exit en redirigir(ec_mockup_subida)
+        break;
+
+    case 'mockup_foto_baja':
+        // T007: borrar una foto de mockup (ruta ya saneada por el motor).
+        preparar_entorno($testBase, $base);
+        $motor_mf = $p->motor_para_tests();
+        $dirFoto = $motor_mf->dir_mockups('muestra', true);
+        file_put_contents($dirFoto . DIRECTORY_SEPARATOR . 'fiesta.png', 'png falso');
+        // Testigo ajeno que debe sobrevivir.
+        file_put_contents($dirFoto . DIRECTORY_SEPARATOR . 'otra.png', 'otra');
+        $_POST = [
+            'action' => 'personalizador_pdf_mockup_borrar',
+            'archivo' => 'muestra.pdf',
+            'foto' => 'fiesta.png',
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_mockup_borrar(); // exit en redirigir(ec_mockup_baja)
+        break;
+
+    case 'mockups_guardar':
+        // T008: el editor guarda SOLO mockups + preview_omisible; el resto del
+        // config (activo/productos/campos/mapeos) queda intacto.
+        preparar_entorno($testBase, $base);
+        $motor_mg = $p->motor_para_tests();
+        $motor_mg->guardar_config('muestra', [
+            'activo' => true,
+            'productos' => [7],
+            'campos_ids' => [1],
+            'placeholders' => ['0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => 'Ana', 'settings' => '', 'repetir' => true]],
+        ]);
+        $GLOBALS['test_cfg_previo'] = $motor_mg->leer_config('muestra');
+        $_POST = [
+            'action' => 'personalizador_pdf_mockups',
+            'archivo' => 'muestra.pdf',
+            'ajax' => '1',
+            'preview_omisible' => '1',
+            'mockups' => json_encode([[
+                'id' => 'fiesta',
+                'titulo' => 'Fiesta',
+                'capas' => [
+                    ['tipo' => 'img', 'ref' => 'fondo.png', 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300, 'rot' => 0, 'sesgo' => 0, 'filtros' => ['brillo' => 90]],
+                    ['tipo' => 'placeholder', 'ref' => '0000FF#0', 'x' => 96, 'y' => 60, 'w' => 110, 'h' => 180, 'rot' => -3, 'sesgo' => 0.05, 'filtros' => []],
+                    ['tipo' => 'otro', 'ref' => 'x', 'x' => 0, 'y' => 0, 'w' => 1, 'h' => 1],
+                ],
+            ]]),
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_mockups_guardar(); // exit en wp_send_json_success
+        break;
+
     case 'nonce':
-        // La verificacion de seguridad ocurre antes de tocar datos: no requiere muestra.pdf.
         $sub = isset($argv[2]) ? (string)$argv[2] : 'nonce';
         $GLOBALS['test_nonce_sub'] = $sub;
         if ($sub === 'cap') {

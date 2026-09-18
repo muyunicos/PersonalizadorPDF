@@ -101,17 +101,24 @@ uniforme el espacio de la ficha; el placeholder se adapta con tamano/posicion/ro
 miniaturas PNG por mockup (estado derivado que hay que invalidar); preview limitada a 1
 mockup (impide mostrar frente/dorso o varios productos).
 
-### 7. Editor de mockups embebido, reutilizando el motor TextMuy
+### 7. Editor de mockups: geometria en el plugin, contenido en TextMuy
 
-**Decision**: el editor de capas vive embebido en la pagina de edicion del PDF (iframe/modo
-del modulo `modules/textmuy/`, bump `?v=RCn`), no como editor nuevo ni pestana aparte.
+**Decision (2026-09-18, implementado en T008)**: la UI de composicion vive en el plugin
+(`assets/mockups.js`, panel dentro del acordeon "Mockups", canvas 300x300 Canvas 2D),
+con endpoint propio `action=personalizador_pdf_mockups` que SOLO escribe
+`config.json:mockups[]` + `preview_omisible` (nunca pisa activo/productos/campos/mapeos).
+El render del TEXTO real sigue siendo TextMuy (RenderCore, usado en la ficha y, a futuro,
+tambien en el lienzo del admin): no se crea modo `?modo=mockup` dentro del modulo (sin
+superficie nueva ni bump `?v=RCn`).
 
-**Rationale**: el modulo ya tiene Canvas 2D + WebGL, galeria del catalogo `img/` y catalogo
-de presets. Const. II manda reutilizar; ademas el admin no cambia de contexto.
-
-**Alternatives considered**: editor nuevo en el plugin (duplicaria motor de render y
-galeria); reutilizar el editor completo sin modo reducido (interfaz mas pesada de lo
-necesario para componer capas).
+**Rationale**: lo que el admin realmente define es GEOMETRIA (posicion, tamano, rotacion,
+sesgo, filtros y orden de capas), que Canvas 2D resuelve sin tocar el modulo; el
+contenido estilizado permanece 100% en TextMuy (Const. III) y el editor de capas no
+duplica galerias (fotos por subida directa a `pdfs/{nombre}/mockups/`) ni el motor de
+texto. Un endpoint propio era obligatorio: guardar mockups por el formulario grande
+`personalizador_pdf_config` habria reseteado secciones no enviadas (activo/productos).
+Pendiente declarado: encuadre por arrastre del mouse (hoy inputs numericos) y render del
+texto real dentro del lienzo admin.
 
 ### 8. Sesion del comprador: un directorio que se mueve
 
@@ -160,13 +167,29 @@ generar el PDF en servidor como respaldo (Const. III: el texto se renderiza en e
 ### 11. Descargas por lista nativa de Woo y cantidad fija 1
 
 **Decision**: la entrega usa la lista de archivos de `mi-cuenta/descargas/` (una fila por
-PDF, sin ZIP propio); el boton "Descargar" hace render cliente + Motor (reintentable e
-idempotente); en productos con PDF la cantidad es fija 1 y todo `add-to-cart` lleva
-`unique_key=uuid` para que Woo nunca fusione lineas.
 
-**Rationale**: cada PDF personalizado es un diseño unico (no hay "dos iguales"); la lista
-nativa ya cubre reintentos, permisos y correos. Un ZIP propio duplicaria funcionalidad de
-Woo.
+**Decision**: la UI de composicion de mockups vive en el plugin (`assets/mockups.js`,
+Canvas 2D, panel dentro del acordeon "Mockups") y guarda con un endpoint propio
+(`action=personalizador_pdf_mockups` -> `handle_mockups_guardar`, que solo escribe
+`config.json:mockups[]` + `preview_omisible`). El render del TEXTO real de cada
+placeholder no se duplica: sigue siendo el motor TextMuy (RenderCore
+`TextMuyAPI.renderBatch`) quien lo produce en la vista del cliente (T014) y en el
+admin cuando haga falta.
 
-**Alternatives considered**: ZIP con los N PDFs (mas codigo y peor diagnostico de fallos);
-permitir cantidad >1 (multiplicaria un diseño unico sin sentido).
+**Rationale**: la norma pedia "editor embebido que reutilice el motor TextMuy via
+iframe/modo". Lo que el admin realmente define es GEOMETRIA (posicion, tamano,
+rotacion, sesgo, filtros y orden de capas), que Canvas 2D resuelve sin duplicar el
+motor de texto; el contenido estilizado permanece 100% en TextMuy (Const. III).
+Crear un modo nuevo dentro del modulo habria agregado superficie y un bump `?v=RCn`
+sin aportar capacidad de render. Ademas, el endpoint propio evita el riesgo de que
+guardar mockups pise activo/productos/campos/mapeos (el formulario grande siempre
+manda todas las secciones).
+
+**Alternatives considered**: modo `?modo=mockup` dentro de `modules/textmuy/`
+(rechazado: superficie nueva en el modulo y bump sin capacidad extra);
+guardar mockups por el formulario grande `personalizador_pdf_config` (rechazado:
+un POST parcial reseteaba activo/productos/mapeos).
+
+**Pendiente declarado**: encuadre por arrastre del mouse en el lienzo (hoy inputs
+numericos) y previsualizacion del texto real dentro del lienzo del admin (hoy el
+placeholder se dibuja como caja de encuadre con su id).
