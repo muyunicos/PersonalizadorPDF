@@ -218,6 +218,41 @@ class PMU_Sesion
         return ['indice' => $fila['indice'], 'file' => $file, 'hash' => $fila['hash']];
     }
 
+    /**
+     * Reemplazo idempotente (T014): quita los PNG previos del grupo en el pool
+     * del item y sus filas del manifest; la regeneracion renumera desde 1.
+     */
+    public function limpiar_grupo($sid, $item_key, $pdf, $grupo)
+    {
+        $pdf = $this->motor->nombre_seguro($pdf, 'sesion:limpiar_grupo');
+        $grupo = strtoupper((string)$grupo);
+        if (!preg_match('/^[0-9A-F]{6}$/', $grupo)) {
+            throw new Exception('motor:sesion:grupo:invalido');
+        }
+        $imgDir = $this->motor->dir_sesion_item_img($sid, $item_key, false);
+        if (is_dir($imgDir)) {
+            foreach ((array)glob($imgDir . DIRECTORY_SEPARATOR . $pdf . '-' . $grupo . '-*.png') as $ruta) {
+                @unlink($ruta);
+            }
+        }
+        $manifest = $this->leer_manifest($sid, $item_key);
+        if (!is_array($manifest)) {
+            throw new Exception('motor:sesion:item:ausente');
+        }
+        $resto = [];
+        foreach ((array)($manifest['archivos'] ?? []) as $fila) {
+            if (is_array($fila)
+                && isset($fila['pdf'], $fila['grupo_id'])
+                && (string)$fila['pdf'] === $pdf
+                && strtoupper((string)$fila['grupo_id']) === $grupo) {
+                continue;
+            }
+            $resto[] = $fila;
+        }
+        $manifest['archivos'] = $resto;
+        $this->guardar_manifest($sid, $item_key, $manifest);
+    }
+
     /** Congela la vista aprobada: mockup-{id}.webp (300x300) en el item. */
     public function congelar_webp($sid, $item_key, $mockup_id, $bytes)
     {

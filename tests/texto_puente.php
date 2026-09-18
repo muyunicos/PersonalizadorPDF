@@ -323,20 +323,28 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('PDF inactivo/sin analisis se oculta', $GLOBALS['test_ficha_oculta'] === false);
             break;
         case 'vista_previa':
-            // T013: draft de sesion con valores duales saneados.
+            // T013/T014: draft de sesion con valores duales saneados + datos de render.
             check('respuesta JSON success', is_array($json) && $json['success'] === true);
             $sid_v = is_array($json) ? (string)($json['data']['sid'] ?? '') : '';
             $item_v = is_array($json) ? (string)($json['data']['item_key'] ?? '') : '';
             check('sid devuelto', $sid_v !== '');
             check('item_key draft', strpos($item_v, 'draft-') === 0);
-            check('pdfs = muestra', is_array($json) && $json['data']['pdfs'] === ['muestra']);
+            $pdfD_v = is_array($json) ? (array)($json['data']['pdfs'][0] ?? []) : [];
+            check('pdf con datos de render', ($pdfD_v['pdf'] ?? '') === 'muestra');
+            $gid_v = null;
+            foreach ((array)($pdfD_v['grupos'] ?? []) as $gv) {
+                if (($gv['id'] ?? '') === '0000FF') { $gid_v = $gv; }
+            }
+            check('grupo con plantilla y preset', is_array($gid_v)
+                && $gid_v['preset'] === 'neon-glow' && $gid_v['value'] === '[campo1]'
+                && $gid_v['tipo'] === 'texto' && (int)$gid_v['w'] > 0 && (int)$gid_v['cont'] >= 1);
+            check('fotos y mockups del PDF', isset($pdfD_v['fotos']) && isset($pdfD_v['mockups']) && $pdfD_v['preview_omisible'] === false);
             $rutaMan = glob($testBase . '/uploads/pmu/tmp/sesion/sesion-' . $sid_v . '/' . $item_v . '/manifest.json');
             $man_v = $rutaMan ? json_decode((string)@file_get_contents($rutaMan[0]), true) : null;
             $cid_v = isset($GLOBALS['test_previa_cid']) ? (int)$GLOBALS['test_previa_cid'] : 1;
             check('manifest con valor dual', is_array($man_v) && isset($man_v['valores'][$cid_v]) && $man_v['valores'][$cid_v]['cliente'] === 'Ana');
             check('valor crudo acotado (sin strip)', is_array($man_v) && $man_v['valores'][$cid_v]['valor'] === '<b>Ana</b>');
             check('campo desconocido descartado', is_array($man_v) && !isset($man_v['valores'][999]));
-            check('mockups del PDF en la respuesta', is_array($json) && $json['data']['mockups'] === []);
             break;
         case 'vista_previa_mal':
             check('respuesta JSON error (seguridad)', is_array($json) && $json['success'] === false);
@@ -359,6 +367,33 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             $etiquetas = is_array($c['etiquetas'] ?? null) ? $c['etiquetas'] : [];
             check('etiqueta cliente con titulo del campo', count($etiquetas) === 1 && $etiquetas[0]['name'] === 'Nombre' && $etiquetas[0]['value'] === 'Ana');
             check('borrado quirurgico al quitar', isset($c['dir_item']) && !is_dir($c['dir_item']));
+            break;
+        case 'pool':
+        case 'pool_reem':
+            // T014: pool del comprador con fila de indice y hash de regeneracion.
+            check('respuesta JSON success', is_array($json) && $json['success'] === true);
+            $fila_p = is_array($json) ? (array)$json['data'] : [];
+            if ($fase === 'pool') {
+                check('fila del pool con n=1', ($fila_p['file'] ?? '') === 'img/muestra-0000FF-1.png' && (int)($fila_p['indice'] ?? -1) === 0);
+            } else {
+                // Reemplazo: los 2 PNG viejos desaparecen y la numeracion reinicia.
+                check('reemplazo reinicia numeracion', ($fila_p['file'] ?? '') === 'img/muestra-0000FF-1.png' && (int)($fila_p['indice'] ?? -1) === 0);
+            }
+            check('hash de regeneracion anotado', ($fila_p['hash'] ?? '') === sha1('Ana|neon-glow||300x200'));
+            $man_p = isset($GLOBALS['test_pool_item']) ? json_decode((string)@file_get_contents(glob($testBase . '/uploads/pmu/tmp/sesion/sesion-test-8f2a/' . $GLOBALS['test_pool_item'] . '/manifest.json')[0]), true) : null;
+            $filas_p = is_array($man_p) ? (array)($man_p['archivos'] ?? []) : [];
+            $delGrupo_p = 0;
+            foreach ($filas_p as $fp) {
+                if (($fp['grupo_id'] ?? '') === '0000FF') { $delGrupo_p++; }
+            }
+            if ($fase === 'pool') {
+                check('archivos[] con 1 fila del grupo', $delGrupo_p === 1);
+            } else {
+                check('reemplazo deja solo 1 fila del grupo', $delGrupo_p === 1);
+                $imgDir_p = $testBase . '/uploads/pmu/tmp/sesion/sesion-test-8f2a/' . $GLOBALS['test_pool_item'] . '/img';
+                check('PNG viejos eliminados del pool', (array)glob($imgDir_p . '/muestra-0000FF-*.png') !== [] && count(glob($imgDir_p . '/muestra-0000FF-*.png')) === 1);
+            }
+            check('PNG fisico con firma valida', isset($GLOBALS['test_pool_item']) && substr((string)@file_get_contents($testBase . '/uploads/pmu/tmp/sesion/sesion-test-8f2a/' . $GLOBALS['test_pool_item'] . '/img/' . basename((string)($fila_p['file'] ?? 'x'))), 0, 8) === "\x89PNG\r\n\x1a\n");
             break;
         case 'placeholder':
             // T026: placeholder al vuelo por id (sin archivos) + rechazo con id ausente.
@@ -589,6 +624,47 @@ switch ($fase) {
         $GLOBALS['test_wc'] = new TestWC();
         $GLOBALS['test_wc']->cart->cart_contents['abc123def456'] = ['pmu_sid' => $sid_c, 'pmu_item_key' => 'abc123def456'];
         $p->carrito_quitar('abc123def456');
+        break;
+
+    case 'pool':
+    case 'pool_reem':
+        // T014: pool del comprador (alta; en pool_reem, reemplazo idempotente).
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $sesion_p = new PMU_Sesion($p->motor_para_tests());
+        $sid_p = 'test-8f2a';
+        $draft_p = $sesion_p->crear_draft($sid_p, ['muestra']);
+        if ($fase === 'pool_reem') {
+            // Estado previo: 2 PNG del grupo (regeneracion debe reemplazar, no acumular).
+            $pngP = sys_get_temp_dir() . '/pd_puente_png_' . getmypid() . '_a.png';
+            \ExtractCorel\Engine\PngWriter::write($pngP, 300, 200);
+            $bytesP = (string)file_get_contents($pngP);
+            $sesion_p->guardar_png($sid_p, $draft_p, 'muestra', '0000FF', $bytesP, 'viejo1');
+            $sesion_p->guardar_png($sid_p, $draft_p, 'muestra', '0000FF', $bytesP, 'viejo2');
+        }
+        $pngQ = sys_get_temp_dir() . '/pd_puente_png_' . getmypid() . '_b.png';
+        \ExtractCorel\Engine\PngWriter::write($pngQ, 300, 200);
+        $_POST = [
+            'action' => 'personalizador_pdf_pool',
+            'sid' => $sid_p,
+            'item_key' => $draft_p,
+            'pdf' => 'muestra',
+            'grupo' => '0000FF',
+            'valor' => 'Ana',
+            'preset' => 'neon-glow',
+            'settings' => '',
+            'w' => '300',
+            'h' => '200',
+            'limpiar' => $fase === 'pool_reem' ? '1' : '',
+            'png_data' => 'data:image/png;base64,' . base64_encode((string)file_get_contents($pngQ)),
+            'ajax' => '1',
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $GLOBALS['test_pool_item'] = $draft_p;
+        $p->handle_pool_png(); // exit en wp_send_json_*
         break;
     case 'desactivar':
     case 'reanalizar':

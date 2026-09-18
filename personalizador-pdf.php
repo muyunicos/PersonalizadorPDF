@@ -75,6 +75,10 @@ class Personalizador_PDF_Plugin
         add_action('wp_ajax_personalizador_pdf_vista_previa', [$this, 'handle_vista_previa']);
         add_action('wp_ajax_nopriv_personalizador_pdf_vista_previa', [$this, 'handle_vista_previa']);
 
+        // Spec 004 (T014): pool del comprador (PNG del render cliente).
+        add_action('wp_ajax_personalizador_pdf_pool', [$this, 'handle_pool_png']);
+        add_action('wp_ajax_nopriv_personalizador_pdf_pool', [$this, 'handle_pool_png']);
+
         // Spec 004 (T015): ciclo del carrito (validar, promover el draft, etiquetas
         // cliente, cantidad fija 1 y borrado quirurgico al quitar la linea).
         add_filter('woocommerce_add_to_cart_validation', [$this, 'carrito_validar'], 10, 4);
@@ -367,6 +371,7 @@ class Personalizador_PDF_Plugin
             true
         );
         wp_localize_script('personalizador-pdf-tienda', 'PMU_TIENDA', [
+            'version' => PERSONALIZADOR_PDF_VERSION,
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'postUrl' => admin_url('admin-post.php'),
             'nonceVistaPrevia' => wp_create_nonce('personalizador_pdf_vista_previa'),
@@ -466,6 +471,53 @@ class Personalizador_PDF_Plugin
     }
 
     /**
+     * Datos de render por PDF para la ficha (spec 004, T013/T014): grupos
+     * fusionados con plantillas [campoN] (value/preset/settings/repetir),
+     * fotos del admin para capas img y mockups vigentes. Nunca lanza.
+     */
+    public function datos_pdf_render($nombre)
+    {
+        $vacio = ['pdf' => '', 'grupos' => [], 'fotos' => [], 'mockups' => [], 'preview_omisible' => false];
+        try {
+            $nombre = $this->pmu_uploads()->nombre_seguro($nombre, 'ficha_render');
+            $vista = $this->vista_grupos($nombre);
+            if (!$vista) {
+                return $vacio;
+            }
+            $config = $this->config_de($nombre);
+            $repetir = [];
+            foreach ((array)($config['placeholders'] ?? []) as $gid => $m) {
+                if (is_array($m) && !empty($m['repetir'])) {
+                    $repetir[(string)$gid] = true;
+                }
+            }
+            $grupos = [];
+            foreach ((array)($vista['grupos'] ?? []) as $g) {
+                $grupos[] = [
+                    'id' => (string)$g['id'],
+                    'w' => (int)$g['w'],
+                    'h' => (int)$g['h'],
+                    'cont' => isset($g['cont']) ? (int)$g['cont'] : 1,
+                    'tipo' => isset($g['default']) && $g['default'] !== '' ? (string)$g['default'] : 'texto',
+                    'value' => isset($g['value']) ? (string)$g['value'] : '',
+                    'preset' => isset($g['preset']) ? (string)$g['preset'] : '',
+                    'settings' => isset($g['config']) ? (string)$g['config'] : '',
+                    'repetir' => !empty($repetir[(string)$g['id']]),
+                ];
+            }
+            return [
+                'pdf' => $nombre,
+                'grupos' => $grupos,
+                'fotos' => $this->mockup_fotos_lista($nombre),
+                'mockups' => isset($config['mockups']) ? array_values((array)$config['mockups']) : [],
+                'preview_omisible' => !empty($config['preview_omisible']),
+            ];
+        } catch (\Throwable $e) {
+            return $vacio;
+        }
+    }
+
+    /**
      * T013: crea el draft de sesion con los valores del panel y devuelve
      * {sid, item_key, pdfs, mockups[]} al navegador. Anonimo permitido (cookie
      * pmu_sid); el nonce frena CSRF y la capacidad se evalua explicitamente.
@@ -506,9 +558,76 @@ class Personalizador_PDF_Plugin
         wp_send_json_success([
             'sid' => $sid,
             'item_key' => $item,
-            'pdfs' => [$pdf],
+            'pdfs' => [$this->datos_pdf_render($pdf)],
             'mockups' => isset($config['mockups']) ? array_values((array)$config['mockups']) : [],
         ]);
+    }
+
+    /**
+     * T014: recibe los PNG del pool renderizados en el navegador (RenderCore)
+     * y los guarda con PMU_Sesion::guardar_png() (pool dedicado del item).
+     * Anonimo permitido; nonce de la vista previa. Con `limpiar=1` reemplaza
+     * los PNG previos del grupo (regeneracion idempotente, nunca duplicados).
+     */
+    public function handle_pool_png()
+    {
+        if (!current_user_can('read')) {
+            wp_send_json_error('motor:capacidad:invalida');
+        }
+        $nonce = (string)($_REQUEST['_wpnonce'] ?? '');
+        if (!wp_verify_nonce($nonce, 'personalizador_pdf_vista_previa')) {
+            wp_send_json_error('motor:nonce:invalido');
+        }
+        try {
+            $sesion = $this->sesion();
+            $motor = $this->pmu_uploads();
+            $sid = sanitize_text_field(wp_unslash((string)($_POST['sid'] ?? '')));
+            $item = sanitize_text_field(wp_unslash((string)($_POST['item_key'] ?? '')));
+            $pdf = sanitize_file_name(wp_unslash((string)($_POST['pdf'] ?? '')));
+            $grupo = strtoupper(sanitize_text_field(wp_unslash((string)($_POST['grupo'] ?? ''))));
+            $manifest = $sesion->leer_manifest($sid, $item);
+            if (!is_array($manifest)
+                || ($manifest['item_key'] ?? '') !== $item
+                || !in_array($motor->nombre_seguro($pdf, 'pool'), array_map('strval', (array)($manifest['pdfs'] ?? [])), true)) {
+                throw new \RuntimeException('motor:sesion:item:ausente');
+            }
+            $pdf = $motor->nombre_seguro($pdf, 'pool');
+            $valido = false;
+            foreach ((array)($this->analisis_de($pdf)['grupos'] ?? []) as $g) {
+                if (isset($g['id']) && strtoupper((string)$g['id']) === $grupo) {
+                    $valido = true;
+                    break;
+                }
+            }
+            if (!$valido || !preg_match('/^[0-9A-F]{6}$/', $grupo)) {
+                throw new \RuntimeException('motor:pool:grupo:invalido');
+            }
+            $bytes = '';
+            if (isset($_FILES['png']) && is_array($_FILES['png']) && !empty($_FILES['png']['tmp_name'])) {
+                if ((int)$_FILES['png']['size'] > 8388608) {
+                    throw new \RuntimeException('motor:pool:png:tamano');
+                }
+                $bytes = (string)@file_get_contents((string)$_FILES['png']['tmp_name']);
+            } elseif (isset($_POST['png_data'])) {
+                $dataurl = (string)wp_unslash($_POST['png_data']);
+                $coma = strpos($dataurl, ',');
+                if ($coma !== false) {
+                    $bin = base64_decode(substr($dataurl, $coma + 1), true);
+                    $bytes = is_string($bin) ? $bin : '';
+                }
+            }
+            if (substr($bytes, 0, 8) !== "\x89PNG\r\n\x1a\n") {
+                throw new \RuntimeException('motor:pool:png:invalido');
+            }
+            if (!empty($_POST['limpiar'])) {
+                $sesion->limpiar_grupo($sid, $item, $pdf, $grupo);
+            }
+            $hash = sha1((string)($_POST['valor'] ?? '') . '|' . (string)($_POST['preset'] ?? '') . '|' . (string)($_POST['settings'] ?? '') . '|' . (int)($_POST['w'] ?? 0) . 'x' . (int)($_POST['h'] ?? 0));
+            $fila = $sesion->guardar_png($sid, $item, $pdf, $grupo, $bytes, $hash);
+        } catch (\Throwable $e) {
+            wp_send_json_error($e->getMessage());
+        }
+        wp_send_json_success($fila);
     }
 
     /**
