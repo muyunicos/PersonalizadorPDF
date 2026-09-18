@@ -122,6 +122,44 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
 
     $switch_fase = $fase;
     switch ($switch_fase) {
+        case 'desactivar':
+            $cfg_d = $p->motor_para_tests()->leer_config('muestra');
+            check('redirect de configuracion', strpos($redirect, 'ec_config=1') !== false);
+            check('PDF desactivado', $cfg_d['activo'] === false);
+            check('analisis intacto al desactivar', file_get_contents($uploads . '/pdfs/muestra/analisis.json') === $GLOBALS['test_analisis_previo']);
+            check('mapeos conservados al desactivar', $cfg_d['placeholders'] === $GLOBALS['test_config_previa']['placeholders']);
+            break;
+        case 'reanalizar':
+            check('redirect de reanalisis', strpos($redirect, 'ec_reanalizado=1') !== false);
+            $analisis_r = json_decode(file_get_contents($uploads . '/pdfs/muestra/analisis.json'), true);
+            check('grupos hex detectados', array_column($analisis_r['grupos'], 'id') === ['0000FF', 'FF0000']);
+            check('config preservada al reanalizar', $p->motor_para_tests()->leer_config('muestra') === $GLOBALS['test_config_previa']);
+            $archivos_r = array_values(array_diff(scandir($uploads . '/pdfs/muestra'), ['.', '..']));
+            sort($archivos_r);
+            check('solo PDF, analisis y config', $archivos_r === ['analisis.json', 'config.json', 'muestra.pdf']);
+            break;
+        case 'sesion':
+            // T003/T017: ciclo de vida completo del item.
+            $s = isset($GLOBALS['test_sesion']) ? $GLOBALS['test_sesion'] : null;
+            $err_s = isset($GLOBALS['test_sesion_error']) ? (string)$GLOBALS['test_sesion_error'] : '';
+            if ($err_s !== '') {
+                echo '  ERROR ' . $err_s . "\n";
+            }
+            check('ciclo sin error', $err_s === '' && is_array($s));
+            check('pool numerado -1/-2', is_array($s) && preg_match('/-1\.png$/', (string)$s['f1']['file']) === 1 && preg_match('/-2\.png$/', (string)$s['f2']['file']) === 1);
+            check('hash del llamador anotado', is_array($s) && $s['f1']['hash'] === sha1('Ana|neon-glow||300x200'));
+            check('archivos fisicos en img/', is_array($s) && is_file($s['dir_item'] . '/img/' . basename($s['f1']['file'])) && is_file($s['dir_item'] . '/img/' . basename($s['f2']['file'])));
+            check('webp congelado en el item', is_array($s) && is_file($s['dir_item'] . '/mockup-fiesta.webp'));
+            check('promover renombra sin cambiar sid', is_array($s) && is_dir($s['dir_item']) && !is_dir($s['dir_draft']));
+            check('manifest promovido con item_key nuevo', is_array($s) && is_array($s['man_item']) && $s['man_item']['item_key'] === 'abc123def456' && $s['man_item']['sid'] === $s['sid']);
+            check('archivos[] = 2 filas con indice y file', is_array($s) && is_array($s['man_item']['archivos']) && count($s['man_item']['archivos']) === 2 && $s['man_item']['archivos'][0]['file'] === 'img/muestra-0000FF-1.png' && $s['man_item']['archivos'][0]['indice'] === 0);
+            check('estado ok', is_array($s) && $s['estado'] === 'ok');
+            check('staging consumido por la promocion', is_array($s) && !is_dir($s['staging']) && is_dir($s['entregable']));
+            check('entregable promovido por rename', is_array($s) && is_dir($s['entregable']) && !is_dir($s['staging']) && is_file($s['entregable'] . '/mockup-fiesta.webp'));
+            check('borrado quirurgico de otro item', is_array($s) && isset($s['dir_otro']) && !is_dir($s['dir_otro']));
+            check('ttl elimino solo el draft vencido', is_array($s) && $s['ttl_eliminados'] === 1 && is_dir($s['dir_item']));
+            break;
+
         case 'admin':
             check('render sin fatal ni excepcion', $admin_error === '');
             check('aviso con la causa del motor', strpos($admin_html, 'motor:listar:') !== false);
@@ -201,7 +239,9 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('redirect a ec_borrado', strpos($redirect, 'ec_borrado=1') !== false);
             check('pdfs/{pdf}/ eliminado', !is_dir($testBase . '/uploads/pmu/pdfs/muestra'));
             check('tmp/muestras/{pdf}/ eliminado', !is_dir($testBase . '/uploads/pmu/tmp/muestras/muestra'));
-            check('orders/ intacto', !is_dir($testBase . '/uploads/pmu/orders'));
+            foreach ($GLOBALS['test_borrado_testigos'] as $ruta => $contenido) {
+                check('archivo ajeno intacto: ' . $ruta, @file_get_contents($uploads . '/' . $ruta) === $contenido);
+            }
             check('tmp/cart/ ajeno intacto', is_file($testBase . '/uploads/pmu/tmp/cart/linea-ajena/manifest.json'));
             break;
         case 'rechazo':
@@ -259,7 +299,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('creado + motor presentes', is_array($man) && isset($man['creado'], $man['motor']));
             break;
         case 'campos':
-            // 004/Fase A: CRUD del catalogo global con el motor (alta/edicion/baja).
+            // 004/Fase A: CRUD del catalogo global con el motor (alta/edicion/baja)
+            // + sandbox del script + flag array (tupla de 10 slots).
             $ver = isset($GLOBALS['test_campos']) ? $GLOBALS['test_campos'] : null;
             $err_c = isset($GLOBALS['test_campos_error']) ? (string)$GLOBALS['test_campos_error'] : '';
             check('alta/edicion/baja sin error', $err_c === '' && is_array($ver));
@@ -268,6 +309,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('id 1 activo en catalogo', is_array($ver) && in_array(1, $ver['ids'], true));
             check('id 2 dado de baja (tombstone)', is_array($ver) && !in_array(2, $ver['ids'], true));
             check('sin aviso de catalogo', is_array($ver) && $ver['aviso'] === null);
+            check('tupla de 10 slots con array', is_array($ver) && $ver['t1'] !== null && count($ver['t1']) === 10 && $ver['t1'][9] === true);
+            check('alta con script prohibido rechazada', (string)($ver['err_nueva'] ?? '') === '');
             break;
         case 'config':
             // 004/Fase A: config.json por PDF (activo/productos/campos/placeholders).
@@ -291,6 +334,19 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('mapeo 0000FF persiste', isset($cfg_t['placeholders']['0000FF']) && $cfg_t['placeholders']['0000FF']['value'] === '[campo2]' && $cfg_t['placeholders']['0000FF']['settings'] === '[campo1]');
             check('FFFFFF ausente del dataset', !isset($cfg_t['placeholders']['FFFFFF']));
             check('tipo foto descartado', !isset($cfg_t['placeholders']['FF0000']));
+            break;
+        case 'mockups':
+            // T011: mockups + mapeo con repetir + omisible con regla de mockups.
+            $mm = isset($GLOBALS['test_mockups']) ? $GLOBALS['test_mockups'] : null;
+            $err_m = isset($GLOBALS['test_mockups_error']) ? (string)$GLOBALS['test_mockups_error'] : '';
+            check('sin error', $err_m === '' && is_array($mm) && $mm['ok'] === true);
+            check('analisis intacto', ($GLOBALS['test_analisis_antes'] ?? null) === ($GLOBALS['test_analisis_despues'] ?? ''));
+            check('1 mockup valido', is_array($mm) && count($mm['cfg']['mockups']) === 1 && $mm['cfg']['mockups'][0]['id'] === 'fiesta');
+            check('capas 1,2,5 (limpieza)', is_array($mm) && count($mm['cfg']['mockups'][0]['capas']) === 3);
+            check('clamp de filtros/rot/sesgo', is_array($mm) && $mm['cfg']['mockups'][0]['capas'][2] === ['tipo' => 'img', 'ref' => 'marco', 'x' => 90, 'y' => 54, 'w' => 122, 'h' => 192, 'rot' => 360.0, 'sesgo' => 1.0, 'filtros' => ['brillo' => 200]]);
+            check('omisible persiste con mockups', is_array($mm) && $mm['cfg']['preview_omisible'] === true);
+            check('repetir=true en mapeo', is_array($mm) && $mm['cfg']['placeholders']['0000FF']['repetir'] === true);
+            check('omisible sin mockups queda false', isset($GLOBALS['test_mockups_sin']) && $GLOBALS['test_mockups_sin']['preview_omisible'] === false && $GLOBALS['test_mockups_sin']['mockups'] === []);
             break;
         case 'pedido':
             // T031b: staging promovido a entregable por rename.
@@ -361,6 +417,90 @@ function preparar_entorno($testBase, $base)
 }
 
 switch ($fase) {
+    case 'desactivar':
+    case 'reanalizar':
+        preparar_entorno($testBase, $base);
+        $motor_fr = $p->motor_para_tests();
+        $motor_fr->guardar_config('muestra', [
+            'activo' => true,
+            'productos' => [],
+            'campos_ids' => [],
+            'placeholders' => [
+                '0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => 'Ana', 'settings' => ''],
+            ],
+        ]);
+        $GLOBALS['test_config_previa'] = $motor_fr->leer_config('muestra');
+        $GLOBALS['test_analisis_previo'] = file_get_contents($motor_fr->ruta_analisis('muestra'));
+        $_POST = [
+            'action' => $fase === 'desactivar' ? 'personalizador_pdf_config' : 'personalizador_pdf_reanalizar',
+            'archivo' => 'muestra.pdf',
+            'placeholders' => $GLOBALS['test_config_previa']['placeholders'],
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        if ($fase === 'desactivar') {
+            $p->handle_config_guardar();
+        } else {
+            $p->handle_reanalizar();
+        }
+        break;
+    case 'sesion':
+        // T003/T017: ciclo completo del item (draft -> pool -> webp -> promover
+        // -> staging -> promover_order) + TTL, borrado quirurgico y estados.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $motor_s = $p->motor_para_tests();
+        $sesion = new PMU_Sesion($motor_s);
+        try {
+            $sid = 'test-8f2a';
+            $pngTemp = sys_get_temp_dir() . '/pd_puente_png_' . getmypid() . '.png';
+            \ExtractCorel\Engine\PngWriter::write($pngTemp, 300, 200);
+            $bytesPng = (string)file_get_contents($pngTemp);
+            $hashEsperado = sha1('Ana|neon-glow||300x200'); // hash de regeneracion del llamador
+            $draft = $sesion->crear_draft($sid, ['muestra']);
+            $f1 = $sesion->guardar_png($sid, $draft, 'muestra', '0000FF', $bytesPng, $hashEsperado);
+            $f2 = $sesion->guardar_png($sid, $draft, 'muestra', '0000FF', $bytesPng, $hashEsperado);
+            $GLOBALS['test_sesion'] = [
+                'sid' => $sid,
+                'draft' => $draft,
+                'f1' => $f1,
+                'f2' => $f2,
+                'dir_draft' => $sesion->dir_item($sid, $draft),
+                'man_draft' => $sesion->leer_manifest($sid, $draft),
+            ];
+            $sesion->congelar_webp($sid, $draft, 'fiesta', 'RIFF....WEBPVP8 ');
+            // Todas las vistas listas: el llamador marca ok (T015).
+            $manOk = $sesion->leer_manifest($sid, $draft);
+            $manOk['preview_estado'] = 'ok';
+            $sesion->guardar_manifest($sid, $draft, $manOk);
+            $sesion->promover($sid, $draft, 'abc123def456');
+            $GLOBALS['test_sesion']['dir_item'] = $sesion->dir_item($sid, 'abc123def456');
+            $GLOBALS['test_sesion']['man_item'] = $sesion->leer_manifest($sid, 'abc123def456');
+            $GLOBALS['test_sesion']['estado'] = $sesion->estado_preview($sid, 'abc123def456');
+            $sesion->staging_order(4242, 'abc123def456', $sid);
+            $GLOBALS['test_sesion']['staging'] = $sesion->staging_order(4242, 'abc123def456', $sid);
+            $GLOBALS['test_sesion']['entregable'] = $sesion->promover_order(4242, 'abc123def456');
+            // Borrado quirurgico de OTRO item: se crea, se borra y no debe quedar.
+            $otro = $sesion->crear_draft($sid, ['muestra']);
+            $dirOtro = $sesion->dir_item($sid, $otro);
+            $sesion->borrar_item($sid, $otro);
+            $GLOBALS['test_sesion']['dir_otro'] = $dirOtro;
+            $GLOBALS['test_sesion']['otro'] = $otro;
+            // TTL: draft creado ahora no vence en 24h; uno con manifest.creado
+            // viejo si (el TTL es por manifest.creado, no por mtime).
+            $viejo = $sesion->crear_draft($sid, ['muestra']);
+            $manViejo = $sesion->leer_manifest($sid, $viejo);
+            $manViejo['creado'] = gmdate('Y-m-d\TH:i:s\Z', time() - 48 * 3600);
+            $sesion->guardar_manifest($sid, $viejo, $manViejo);
+            $GLOBALS['test_sesion']['ttl_eliminados'] = $sesion->limpiar_ttl(24);
+            $GLOBALS['test_sesion']['viejo'] = $viejo;
+        } catch (\Throwable $e) {
+            $GLOBALS['test_sesion_error'] = $e->getMessage();
+        }
+        break;
+
     case 'admin':
         // El render se verifica en shutdown; aqui basta con salir limpio.
         break;
@@ -381,8 +521,8 @@ switch ($fase) {
             require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
         }
         $motor_t = new PMU_Uploads();
-        $motor_t->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '']);
-        $motor_t->campo_alta([0, 'Color', 'override', [], '', true, '<div></div>', '', '']);
+        $motor_t->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $motor_t->campo_alta([0, 'Color', 'override', [], '', true, '<div></div>', '', '', false]);
         $_POST = [
             'action' => 'personalizador_pdf_config',
             'archivo' => 'muestra.pdf',
@@ -471,6 +611,20 @@ switch ($fase) {
         // ejecuta aqui y el shutdown solo verifica el estado en disco.
         preparar_entorno($testBase, $base);
         $motor_b = $p->motor_para_tests();
+        $GLOBALS['test_borrado_testigos'] = [
+            'orders/4242/item-ajeno/resultado.pdf' => 'entregable a conservar',
+            'tmp/orders/4243/item-ajeno/manifest.json' => '{"estado":"staging"}',
+            'tmp/sesion-prueba/item-ajeno/manifest.json' => '{"estado":"carrito"}',
+            'pdfs/otro/otro.pdf' => 'otro producto',
+            'tmp/muestras/otro/0000FF.png' => 'muestra de otro producto',
+        ];
+        foreach ($GLOBALS['test_borrado_testigos'] as $ruta => $contenido) {
+            $destino = $testBase . '/uploads/pmu/' . $ruta;
+            wp_mkdir_p(dirname($destino));
+            file_put_contents($destino, $contenido);
+        }
+        $muestras_b = $motor_b->dir_tmp_muestras('muestra', true);
+        file_put_contents($muestras_b . '/0000FF.png', 'muestra a eliminar');
         // Linea de carrito ajena que debe sobrevivir al borrado.
         $motor_b->dir_tmp_cart('linea-ajena', true);
         file_put_contents($motor_b->manifest_cart('linea-ajena'), '{}');
@@ -547,6 +701,52 @@ switch ($fase) {
         $p->handle_procesar(); // exit en redirigir(ec_error)
         break;
 
+    case 'mockups':
+        // T011: mockups + mapeo con repetir en config.json; analisis intacto;
+        // preview_omisible solo persiste con mockups; mapeos invalidos fuera.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        try {
+            $motor_m = new PMU_Uploads();
+            $analisis_antes = file_get_contents($motor_m->ruta_analisis('muestra'));
+            $ok_m = $motor_m->guardar_config('muestra', [
+                'mockups' => [
+                    [
+                        'id' => 'fiesta',
+                        'titulo' => 'Fiesta',
+                        'creado' => '2026-09-17T14:00:00Z',
+                        'capas' => [
+                            ['tipo' => 'img', 'ref' => 'fondo', 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300, 'rot' => 0, 'sesgo' => 0, 'filtros' => ['brillo' => 95, 'contraste' => 110]],
+                            ['tipo' => 'placeholder', 'ref' => '0000FF#0', 'x' => 96, 'y' => 60, 'w' => 110, 'h' => 180, 'rot' => -3, 'sesgo' => 0.05, 'filtros' => []],
+                            ['tipo' => 'foto', 'ref' => 'x', 'x' => 0, 'y' => 0, 'w' => 1, 'h' => 1], // tipo invalido: fuera
+                            ['tipo' => 'img', 'ref' => '../fuera', 'x' => 0, 'y' => 0, 'w' => 1, 'h' => 1], // ref con ruta: fuera
+                            ['tipo' => 'img', 'ref' => 'marco', 'x' => 90, 'y' => 54, 'w' => 122, 'h' => 192, 'rot' => 400, 'sesgo' => 9, 'filtros' => ['brillo' => 999, 'xxx' => 1]],
+                        ],
+                    ],
+                    ['id' => 'vacio', 'capas' => []], // sin capas: fuera
+                    ['capas' => [['tipo' => 'img', 'ref' => 'f', 'x' => 0, 'y' => 0, 'w' => 1, 'h' => 1]]], // sin id: fuera
+                ],
+                'preview_omisible' => true,
+                'placeholders' => [
+                    '0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => '[campo1]', 'settings' => '', 'repetir' => '1'],
+                    'FF0000' => ['tipo' => 'imagen', 'value' => '[campo33]'],
+                ],
+            ]);
+            $cfg_m = $motor_m->leer_config('muestra');
+            $GLOBALS['test_mockups'] = ['ok' => $ok_m, 'cfg' => $cfg_m];
+            $GLOBALS['test_analisis_antes'] = $analisis_antes;
+            $GLOBALS['test_analisis_despues'] = file_get_contents($motor_m->ruta_analisis('muestra'));
+            // Sin mockups: preview_omisible NO persiste (queda false).
+            $motor_m->guardar_config('muestra', ['mockups' => [], 'preview_omisible' => true]);
+            $GLOBALS['test_mockups_sin'] = $motor_m->leer_config('muestra');
+        } catch (\Throwable $e) {
+            $GLOBALS['test_mockups_error'] = $e->getMessage();
+        }
+        break;
+
     case 'nonce':
         // La verificacion de seguridad ocurre antes de tocar datos: no requiere muestra.pdf.
         $sub = isset($argv[2]) ? (string)$argv[2] : 'nonce';
@@ -590,13 +790,21 @@ switch ($fase) {
         }
         try {
             $motor_c = new PMU_Uploads();
-            $id1 = $motor_c->campo_alta([0, 'Nombre', 'text', ['nombres'], 'Escribi tu nombre', true, '<div class="pmu-campo-x"><input name="nombre"></div>', '.x{}', 'function(ctx,root){return {valor:"",cliente:""};}']);
-            $id2 = $motor_c->campo_alta([0, 'Color', 'override', [], '', true, '<div class="c"></div>', '', '']);
-            $motor_c->campo_editar($id1, [$id1, 'Nombre editado', 'text', [], '', true, '<div></div>', '', '']);
+            $id1 = $motor_c->campo_alta([0, 'Nombre', 'text', ['nombres'], 'Escribi tu nombre', true, '<div class="pmu-campo-x"><input name="nombre"></div>', '.x{}', 'function(ctx,root){return {valor:"",cliente:""};}', true]);
+            $id2 = $motor_c->campo_alta([0, 'Color', 'override', [], '', true, '<div class="c"></div>', '', '', false]);
+            $motor_c->campo_editar($id1, [$id1, 'Nombre editado', 'text', [], '', true, '<div></div>', '', '', true]);
             $motor_c->campo_baja($id2);
+            // Sandbox: alta con script prohibido debe rechazar (motor:campos:script:invalido).
+            $err_nueva = '';
+            try {
+                $motor_c->campo_alta([0, 'Malo', 'text', [], '', true, '<div></div>', '', 'function(ctx,root){document.getElementById("x");}', false]);
+            } catch (\Throwable $e) {
+                $err_nueva = $e->getMessage();
+            }
             $res_c = $motor_c->campos_catalogo('listar');
             $ids_c = [];
             $tit1 = null;
+            $t1 = null;
             foreach ($res_c['cat']['items'] as $t) {
                 if (count($t) < 3 || $t[1] === '' || $t[2] === '') {
                     continue; // tombstone fuera
@@ -604,9 +812,10 @@ switch ($fase) {
                 $ids_c[] = (int)$t[0];
                 if ((int)$t[0] === $id1) {
                     $tit1 = $t[1];
+                    $t1 = $t;
                 }
             }
-            $GLOBALS['test_campos'] = ['id1' => $id1, 'id2' => $id2, 'ids' => $ids_c, 'tit1' => $tit1, 'aviso' => $res_c['aviso']];
+            $GLOBALS['test_campos'] = ['id1' => $id1, 'id2' => $id2, 'ids' => $ids_c, 'tit1' => $tit1, 'aviso' => $res_c['aviso'], 't1' => $t1, 'err_nueva' => ($err_nueva === 'motor:campos:script:invalido' ? '' : ($err_nueva !== '' ? $err_nueva : 'no-rechazo'))];
         } catch (\Throwable $e) {
             $GLOBALS['test_campos_error'] = $e->getMessage();
         }
@@ -632,7 +841,7 @@ switch ($fase) {
                 ],
             ]);
             $GLOBALS['test_config'] = $motor_g->leer_config('muestra');
-            $GLOBALS['test_config_defaults'] = ($motor_g->leer_config('inexistente') === ['activo' => false, 'productos' => [], 'campos_ids' => [], 'placeholders' => []]);
+            $GLOBALS['test_config_defaults'] = ($motor_g->leer_config('inexistente') === ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => []]);
         } catch (\Throwable $e) {
             $GLOBALS['test_config_error'] = $e->getMessage();
         }

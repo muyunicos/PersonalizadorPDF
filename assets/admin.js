@@ -438,7 +438,7 @@ jQuery(function ($) {
 
     /**
      * Los presets custom ya no viven en localStorage: desde 3.2.0 se guardan como
-     * .txm en modules/textmuy/presets/ y el listado completo llega desde el
+     * .txm en uploads/pmu/tm-presets/ y el listado completo llega desde el
      * servidor en los <option> del selector (presets_base()). Nada que mergear.
      */
 

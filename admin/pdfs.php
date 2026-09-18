@@ -209,7 +209,9 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
             return (int)($g['cont'] ?? 0);
         }, $grupos));
         // Configuracion tienda por PDF (plan 008: vista analisis+config fusionada).
-        $cfg_pdf = $vista_pdf ? $vista_pdf['config'] : ['activo' => false, 'productos' => [], 'campos_ids' => [], 'placeholders' => []];
+        // Spec 004: incluye preview_omisible y mockups[] de la config editable.
+        $cfg_pdf = $vista_pdf ? $vista_pdf['config'] : ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => []];
+        list($todos_campos, $aviso_cfg_campos2) = $this->campos_activos();
         list($todos_campos, $aviso_cfg_campos2) = $this->campos_activos();
         if ($aviso_cfg_campos === '' && $aviso_cfg_campos2 !== null && $aviso_cfg_campos2 !== '') {
             $aviso_cfg_campos = $aviso_cfg_campos2;
@@ -235,6 +237,9 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                 </span>
             </span>
             <a class="button button-small" href="<?php echo esc_url($link_desc('datos', ['archivo' => $seleccionado])); ?>">Descargar JSON</a>
+            <span class="description">El vinculo canonico producto -> PDF vive en la meta
+                <code>_pmu_pdf_slug</code> del producto Woo; el listado de abajo es su espejo
+                informativo (T010: edicion duradera desde el producto).</span>
             <form class="ec-form-inline" method="post" action="<?php echo esc_url($post_url); ?>">
                 <input type="hidden" name="action" value="personalizador_pdf_reanalizar">
                 <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
@@ -324,6 +329,9 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                         if ($tipo_g === '') {
                             $tipo_g = 'texto';
                         }
+                        // Aviso editorial previo al guardado: si el admin eligio "imagen" pero el
+                        // grupo aun conserva value/preset, el mapeo de texto se conserva y gana
+                        // (la UI pide confirmacion antes; ver checkpoint US1 del plan).
                         // Estado inicial del panel: campo, modo codigo o vacio.
                         $campo_id = 0;
                         if (preg_match('/^\[campo(\d+)\]$/i', trim($valor), $mm)) {
@@ -445,6 +453,9 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                         <input type="hidden" name="placeholders[<?php echo esc_attr($gid); ?>][preset]" class="ec-h-preset" value="<?php echo esc_attr($preset_g); ?>">
                         <input type="hidden" name="placeholders[<?php echo esc_attr($gid); ?>][value]" class="ec-h-value" value="<?php echo esc_attr($valor); ?>">
                         <input type="hidden" name="placeholders[<?php echo esc_attr($gid); ?>][settings]" class="ec-h-settings" value="<?php echo esc_attr($settings_g); ?>">
+                        <label class="ec-block-label ec-repetir"><input type="checkbox" name="placeholders[<?php echo esc_attr($gid); ?>][repetir]" value="1" <?php checked(!empty($m['repetir']), true); ?>> Repetir por placeholder</label>
+                        <span class="description">Si el valor resulta array, un valor por instancia; si no, el mismo valor en todas.</span>
+                        <label class="ec-block-label ec-repetir"><input type="checkbox" name="placeholders[<?php echo esc_attr($gid); ?>][repetir]" value="1" <?php checked(!empty($m['repetir']), true); ?>> Repetir por placeholder</label>
                     </div>
                     <?php endforeach; ?>
                 </div>
@@ -453,7 +464,21 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
             <details class="ec-acordeon ec-acordeon-mockups">
                 <summary class="ec-acordeon-cab">Mockups</summary>
                 <div class="ec-acordeon-cuerpo">
-                    <p class="description">Proximamente: previsualizacion de las paginas del PDF con los placeholders aplicados.</p>
+                    <p class="description">El mockup es una "fotografia" simulada 300x300px del
+                        producto en uso (NO el PDF): el cliente la aprueba al agregar al carrito.
+                        Sin miniaturas guardadas: la galeria renderiza al vuelo. Las fotos se
+                        suben y la composicion de capas se edita en el modulo TextMuy.</p>
+                    <label class="ec-block-label"><input type="checkbox" class="ec-omisible" name="preview_omisible" value="1" <?php checked(!empty($cfg_pdf['preview_omisible']), true); ?> <?php if (empty($cfg_pdf['mockups'])) : ?>disabled<?php endif; ?>> Vista previa omisible (el cliente agrega directo; visible solo con mockups creados)</label>
+                    <?php if (empty($cfg_pdf['mockups'])) : ?>
+                        <p class="description">Todavia no hay mockups. Crea el primero en el modulo.</p>
+                    <?php else : ?>
+                        <?php foreach ((array)$cfg_pdf['mockups'] as $mk) : ?>
+                            <div class="ec-mockup" data-id="<?php echo esc_attr(isset($mk['id']) ? $mk['id'] : ''); ?>">
+                                <strong><?php echo esc_html((isset($mk['id']) ? $mk['id'] : '') . (isset($mk['titulo']) && $mk['titulo'] !== '' ? ' — ' . $mk['titulo'] : '')); ?></strong>
+                                <span class="description"><?php echo count((array)(isset($mk['capas']) ? $mk['capas'] : [])); ?> capa(s)</span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </div>
             </details>
 

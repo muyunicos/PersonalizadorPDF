@@ -19,7 +19,7 @@ modules/textmuy/
 ├── js/                  <- editor, controls, preset-manager, catalog, api, fonts, galeria...
 ├── css/
 ├── tests/               <- 10 suites Node (NO corren en el servidor productivo de WP)
-└── AGENTS.md            <- Contexto propio del modulo (constitucion v3.1.0)
+└── AGENTS.md            <- Contexto propio del modulo (norma superior: .specify/memory/constitution.md)
 ```
 
 ## Datos (fuera de la carpeta del plugin)

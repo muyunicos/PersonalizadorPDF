@@ -1,8 +1,9 @@
 # Specification: Galería Engine (PMU Uploads)
 
-> **Estado: OBSOLETO (2026-09-15)** — superado por `006-align-textmuy-motor`
+> **Estado: OBSOLETO Y CONGELADO (2026-09-16)** — superado por `006-align-textmuy-motor`
 > (motor unico `PMU_Uploads` en `inc/class-pmu-uploads.php` + `PMU_Galeria` como
-> ayudante de miniaturas). Se conserva como trazabilidad; no implementar.
+> ayudante de miniaturas). Se conserva como trazabilidad; **no implementar**
+> (sus tareas referencian `engine/PMU_Uploads.php`, ruta inexistente).
 
 **Fecha**: 2026-09-13 | **Feature**: 003-galeria-engine | **Branch**: 002-galeria-engine
 

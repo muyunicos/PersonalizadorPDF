@@ -1,286 +1,277 @@
-# Data Model
+# Data Model: Personalización de Productos PDF para WooCommerce
 
-**Date**: 2026-09-13 | **Feature**: WooCommerce PDF Personalization
-**Actualizado**: 2026-09-15 — Diseno cerrado con admin (sesion de alineacion).
+**Feature**: 004-woocommerce-pdf-personalization | **Created**: 2026-09-13 | **Reescrito**: 2026-09-17
 
-> Decision general: `Motor.php` no cambia. Solo inyecta PNGs ya renderizados
-> (`letra => ruta`). Todo JS (value/settings/script) corre solo en navegador
-> para preview + render TextMuy / selector-pmu. PHP nunca evalua JS.
+Norma: `constitution` §I+§IV (decisiones 2026-09-17). Diseño anterior en
+`_archivo-data-model-2026-09-13.md` (historico, derogado).
 
-## Conciliacion 004 vs 007 (2026-09-15, decision vigente)
+## Layout en disco (uploads/pmu/, raiz unica)
 
-> ESTADO 008: el plan de conciliacion vigente es el spec 008 ("Plan de
-> conciliacion 004 vs 007", NO es feature implementable directa; norma los
-> specs 004 y 007), que adopta: `analisis.json`+`config.json` separados y
-> `tmp/sesion-{sid}/` como unidad de render/carrito con preview obligatoria
-> (`draft-{uuid}` -> `cart_item_key`). La implementacion futura sigue el
-> spec 008 (§0 decisiones normativas, §6 migracion); lo de abajo es el historial.
-
-Este documento convivia con dos verdades: `analisis.json`+`config.json` (secciones
-Layout/PDF) y `metadata.json` como unica fuente (contratos 007 vigentes). La decision
-vigente, alineada con el codigo ya construido y verificado, es:
-
-- **Unica fuente del producto: `pdfs/{slug}/metadata.json`** (dataset del Detector +
-  personalizacion plana `default`/`value`/`preset`/`config` + `activo` en la raiz).
-  NO existen `analisis.json` ni `config.json` separados. `Metadata::generar($pdf,
-  $grupos, $dpi, $previo)` preserva la personalizacion por `id` al re-analizar (D8).
-- **`activo` vive en `metadata.json`** (raiz), no en un config separado. Lo escribe el
-  re-analisis (preservado) y lo lee la tienda para decidir si ofrece el PDF.
-- **Vinculo PDF<->producto Woo**: `postmeta _pmu_pdf_slug` en el producto (canonico) +
-  espejo `metadata.json:productos[]` (solo lectura, informativo). La tienda resuelve
-  por postmeta; el admin edita el espejo en la consola y el vinculo en la ficha.
-- **Unidad de trabajo del comprador: `tmp/cart/{linea}/`** (clave unica por linea,
-  contrato rutas-pmu.md v2 + regla 7). NO existe `tmp/sesion-{sid}/`: la sesion solo
-  agrupa lineas para TTL/limpieza, nunca es unidad de render ni de carrito.
-- **Pool de imagenes**: `tmp/cart/{linea}/{pdf}/img/c{id}-{hash}.png` con
-  `hash = sha1(valor_resuelto + preset + settings + WxH)` (8-10 chars). Un mismo PNG
-  sirve a varios PDFs/placeholders via `manifest.json` unico por linea.
-- **Preview obligatoria**: el `add-to-cart` se bloquea hasta `preview OK`. Flujo
-  `draft-{uuid}` -> `woocommerce_add_to_cart` renombra a `{cart_item_key}` (PHP).
-  Editar item = re-render de esa carpeta; borrar item = borrar esa carpeta.
-- **`Motor.php` no cambia**: solo inyecta PNGs ya renderizados (`id => ruta`).
-  Todo JS (`value`/`settings`/`script`, `V(N)`/`[campoN]`) corre solo en navegador
-  (preview + render TextMuy/selector-pmu). PHP nunca evalua JS.
-
-Las secciones Layout/PDF/Placeholder/Item/Sesion de este archivo quedan como
-referencia historica del diseno charlado; lo normativo es lo de arriba + los
-contratos 007 (`metadata-pdf.md`, `contenido-grupo.md`, `admin-pdfs.md`,
-`rutas-pmu.md` v2).
-
-## Layout en disco (uploads/pmu/)
-
-```
+```text
 uploads/pmu/
-  campos.json                      <- catalogo global de campos (id auto)
-  pdfs/dia-madre-1/
-    dia-madre-1.pdf                <- plantilla subida por admin
-    analisis.json                  <- solo Detector, inmutable
-    config.json                    <- editable: activo, productos, campos, placeholders
-  tmp/muestras/dia-madre-1/        <- preview admin (Procesar muestra), se sobrescribe
-    {id}-{idx}.png
-    dia-madre-1_muestra.pdf
-  tmp/sesion-{sid}/                <- unidad de render/carrito (plan de conciliacion 008)
-    {item_key}/                    <- 1 personalizacion (puede llevar N PDFs)
-      manifest.json                <- valores + mapa pdf/grupo/inst -> img/
-      img/c{id}-{hash}.png         <- pool deduplicado por hash
-  orders/{order_id}/
-    {item_key}/                    <- copia de tmp/sesion-{sid}/{item_key}/
+  campos.json                    <- catalogo global de campos (id auto)
+  pdfs/{nombre}/
+    {nombre}.pdf                 <- plantilla subida por admin
+    analisis.json                <- Detector, INMUTABLE (id/w/h/cont/pgs)
+    config.json                  <- editable: activo, productos, campos_ids,
+                                    preview_omisible, mockups[], placeholders[id]
+    mockups/                     <- fotos del admin para plantillas mockup (datos usuario)
+  tmp/muestras/{pdf}/            <- muestras del panel (idempotentes, se sobrescriben)
+    {id}.{ext}                   <- un archivo por grupo cargado en la consola
+    {pdf}_procesado.pdf
+  tmp/sesion-{sid}/              <- sesion del comprador (UUID propio, cookie 30 dias)
+    draft-{uuid}/                <- antes de agregar al carrito
       manifest.json
-      img/*.png
-      {pdf}_procesado.pdf          <- PDF final por item+pdf
+      img/{pdf}-{id}-{n}.png     <- pool DEDICADO al item (sin dedup global)
+      mockup-{id}.webp           <- congelados 300x300 (prueba del visto bueno)
+    {cart_item_key}/             <- misma carpeta, renombrada al agregar
+  tmp/orders/{order_id}/         <- staging (copia del item al crearse el pedido)
+    {item_key}/ ...
+  orders/{order_id}/{item_key}/  <- entregable (rename solo al confirmarse el pago)
+    manifest.json
+    img/*.png
+    mockup-*.webp
+    {pdf}_procesado.pdf          <- un PDF final por PDF del item
 ```
-
-> NOTA 008: este layout con `tmp/sesion-{sid}/` es el plan de conciliacion
-> (spec 008, "plan de conciliacion para 004 vs 007"). Contrasta con la decision
-> anterior (`tmp/cart/{linea}/` sin nivel sesion); la implementacion futura sigue
-> el spec 008.
 
 Reglas:
-- `analisis.json` nunca se edita desde la UI. `config.json` nunca pisa el analisis
-  (preserva la paridad que valida `Motor::validarDataset()`).
-- `manifest.json` es unico por item. No hay un manifest por PDF.
-- `hash = sha1(valor_resuelto + preset + settings + WxH)` (8-10 chars). El prefijo
-  `c{id}` es solo ayuda visual para debug; la identidad es el hash.
-- Preview cliente: `draft-{uuid}` -> al agregar al carrito se renombra en PHP
-  (`woocommerce_add_to_cart`) a `{cart_item_key}`. Editar item = re-render de esa
-  carpeta. Borrar item (`woocommerce_remove_cart_item`) = borrar esa carpeta.
-- Preview admin (`tmp/muestras/`) es otro circuito: se borra y regenera siempre.
+- `analisis.json` nunca se edita desde la UI; `config.json` nunca lo pisa (paridad del Motor).
+- El `sid` NO cambia en todo el ciclo: el item se mueve, nunca se copia ni se duplica.
+- El pool es por item (dos items con mismo PDF/grupo/placeholder no comparten archivos).
+- El Motor lee `manifest.archivos[]` (indice explicito): nunca adivina por nombre.
 
-## Entities
+## Entidades
 
-### PDF (carpeta + analisis + config)
+### PDF (producto)
 
-Carpeta: `uploads/pmu/pdfs/{slug}/` con 3 piezas:
+| Campo | Tipo | Descripcion | Validacion |
+|-------|------|-------------|------------|
+| nombre | string | identificador del producto (base saneada) | `[a-z0-9_-]`, unico, no vacio |
+| archivo | string | `{nombre}.pdf` dentro de su carpeta | `.pdf`, dentro del limite del servidor |
+| analisis | string | `pdfs/{nombre}/analisis.json` (solo Detector) | inmutable, escrito por `Metadata::generarAnalisis` |
+| config | string | `pdfs/{nombre}/config.json` (editable) | escrito por `PMU_Uploads::guardar_config` |
+| grupos | Grupo[] | derivados del analisis | ver Grupo |
+| mockups | Mockup[] | plantillas de preview (`mockups[]`) | ver Mockup |
+| preview_omisible | bool | omite el visto bueno (default `false`) | visible solo con mockups creados |
+| total_paginas | int | paginas del PDF analizado | > 0 |
 
-| Archivo | Origen | Editable | Descripcion |
-|---|---|---|---|
-| `{slug}.pdf` | admin upload | no (re-subir) | plantilla |
-| `analisis.json` | Detector | no | grupos/instancias/tamanos (paridad Motor) |
-| `config.json` | admin UI | si | activo, productos, campos, placeholders |
+**Estados**: sin analizar (carpeta con PDF sin `analisis.json`) -> analizado -> borrado
+(carpeta eliminada + `tmp/muestras/{nombre}/`; nunca `orders/` ni sesiones ajenas).
 
-`config.json`:
+**Transiciones**: subir -> analizar/re-analizar (preserva `config.json` de los grupos que
+siguen existiendo) -> borrar. Sobrescribir un nombre regenera `analisis.json` y conserva
+`config.json`.
+
+### Grupo (placeholder)
+
+| Campo | Tipo | Descripcion | Validacion |
+|-------|------|-------------|------------|
+| id | string | clave del grupo = color hex sin `#` (`0000FF`) | `^[0-9A-F]{6}$`; usado en archivos, URLs, formularios y puente |
+| w, h | int | tamano base en px (base 200 ppp) | >= 10x5 pt equivalentes |
+| cont | int | instancias del grupo | >= 1 (valida el Motor) |
+| pgs | int[] | paginas (0-based) donde aparece | indices validos (informativo/UI) |
+
+Grupo NO define comportamiento: el render del hueco lo deciden los campos mapeados
+(`placeholders[id]`), inclusivo el tratamiento de arrays (loop por instancias).
+
+### Configuracion por grupo (`config.json:placeholders[id]`)
+
+| Campo | Tipo | Descripcion | Validacion |
+|-------|------|-------------|------------|
+| tipo | enum | `texto` \| `imagen` | requerido si el grupo participa |
+| preset | string/null | slug de preset TextMuy (solo tipo texto) | debe existir en `tm-presets/` al renderizar |
+| value | string/null | plantilla (`[campoN]` referencia; literal sin corchetes; `\[` escapa) | saneado; vacio = hueco intacto |
+| settings | string/null | overrides del preset (mismo lenguaje de plantilla) | saneado |
+| repetir | bool | checkbox `[v] Repetir por placeholder` (por campo/codigo): si el resultado es array, un valor por instancia en loop; si no, el mismo valor en todas | default `true` para arrays |
+
+### Campo (catalogo global reutilizable)
+
+Archivo: `uploads/pmu/campos.json`. Mismo `id` usable en N PDFs. **Sin miniaturas**: los
+campos se reconocen por su `id` numeral (no hay sprite/thumbs para este catalogo).
+
+| Campo | Tipo | Descripcion | Validacion |
+|-------|------|-------------|------------|
+| id | int (auto) | identificador unico | nunca se reutiliza (hueco mas bajo o max+1) |
+| titulo_cliente | string | etiqueta visible al cliente | vacio = campo oculto (pero evalua) |
+| tipo | enum | `texto` \| `imagen` \| `override` | requerido |
+| etiquetas | string[] | categorizacion para reutilizar | opcional |
+| texto_ayuda | string | ayuda breve en ficha | opcional |
+| visible | bool | se pinta en ficha/carrito | default true |
+| contenido | string | fragmento HTML con scope (`.pmu-campo-{id}`, `data-rol`) | sin `id` globales ni `document.getElementById` |
+| css | string | CSS plano con scope | prefijado `.pmu-campo-{id}` |
+| script | string | `function(ctx, root)` sandbox | via `root`, `ctx.set(id, {valor, cliente})` |
+| array | bool | el campo entrega array (un valor por instancia) | default `false` = valor unico |
+
+Valor dual obligatorio: `valor` (sistema, lo consume el Motor) + `cliente` (etiqueta que se
+muestra en ficha/carrito/pedido). Detalle en `contracts/campos.md`.
+
+### Mockup (plantilla de vista previa)
+
+`config.json:mockups[]` (N por PDF, sin limite):
+
+| Campo | Tipo | Descripcion | Validacion |
+|-------|------|-------------|------------|
+| id | string | identificador del mockup | `[a-z0-9_-]+`, unico por PDF |
+| titulo | string | etiqueta de la vista (opcional) | — |
+| capas | Capa[] | composicion ordenada (indice = z-order) | >= 1 |
+| creado | string | ISO-8601 UTC | informativo |
+
+**Capa**:
+
+| Campo | Tipo | Descripcion | Validacion |
+|-------|------|-------------|------------|
+| tipo | enum | `img` \| `placeholder` | requerido |
+| ref | string | `img` → id del catalogo `img/` o `mockups/{archivo}`; `placeholder` → `{grupo_id}` o `{grupo_id}#{indice}` | debe existir |
+| x, y | int | posicion en el canvas 300x300 (px) | 0..300 |
+| w, h | int | tamano (px) | > 0 (contiene el hueco sin deformar) |
+| rot | number | rotacion en grados | -360..360 |
+| sesgo | number | inclinacion/perspectiva (skew) | -1..1 |
+| filtros | object | brillo/gama/contraste/saturacion (solo mockup) | 0..200 % |
+
+Los filtros aplican SOLO al mockup: el PNG del pool y el PDF final van limpios.
+### Item (unidad de preview/carrito/pedido)
+
+Un item = una personalizacion (no un producto ni una sesion). Cantidad fija 1: cada item es
+un diseño unico (agregar dos veces = dos items con distinto `item_key`). Un producto con N
+PDFs sigue siendo 1 item con N PDFs.
+
+`tmp/sesion-{sid}/{item_key}/manifest.json`:
+
+| Campo | Tipo | Descripcion | Validacion |
+|-------|------|-------------|------------|
+| item_key | string | `draft-{uuid}` antes del carrito; `{cart_item_key}` despues | requerido |
+| sid | string | UUID PMU de la visita (cookie `pmu_sid`, 30 dias) | requerido |
+| pdfs | string[] | PDFs incluidos (1..N) | deben existir y estar activos |
+| valores | object | id campo → `{valor, cliente}` | `valor` = sistema, `cliente` = etiqueta |
+| archivos | object[] | indice `{pdf, grupo_id, indice, file}` | `file` relativo al pool del item |
+| mockup_vistas | string[] | ids de mockup generados | validos contra `config.json:mockups[]` |
+| mockup_visto | string | id del mockup visible al agregar (trazabilidad) | requerido si `preview_estado=ok` |
+| preview_estado | enum | `ok` \| `sin_vista` \| `omisible` | requerido antes del `add-to-cart` |
+| creado | string | ISO-8601 UTC (base del TTL) | requerido |
+| motor | string | version del motor que genero el pool | informativo |
+
+Nomenclatura del pool: `img/{pdf}-{id}-{n}.png`.
+- `{pdf}` = nombre saneado del PDF; `{id}` = grupo (hex); `{n}` = 1..N.
+- Un grupo puede necesitar varios PNGs (arrays/instancias repetidas): se numeran.
+- Cada PNG lleva su fila en `manifest.archivos[]`; falta de archivo ⇒ item `sin_vista` (el
+  estado no cambia, la causa parcial queda anotada en el manifest/meta para el admin).
+
+`mockup-{mockup_id}.webp`: 300x300, congelados al agregar (todos los mockups generados).
+Prueba del visto bueno para el admin; viven con el pedido.
+
+### Evento de vista previa (ficha → sesion)
+
+| Campo | Tipo | Descripcion |
+|-------|------|-------------|
+| accion | enum | `generar_preview` (crea draft si no existe) |
+| sid | string | cookie `pmu_sid` (se emite si falta) |
+| item_key | string | `draft-{uuid}` enviado/devuelto por la ficha |
+| valores | object | id campo → `{valor, cliente}` |
+| pdfs | string[] | PDFs del producto |
+
+Regeneracion parcial: el cliente re-renderiza solo los campos cuyo hash
+(`sha1(valor + preset + settings + WxH)`) cambio; el resto reusa el pool existente.
+
+### Pedido (order WooCommerce)
+
+| Campo | Tipo | Descripcion | Validacion |
+|-------|------|-------------|------------|
+| order_id | int | pedido WooCommerce | > 0 |
+| item_key | string | linea de pedido | requerido |
+| carpeta | string | `orders/{order_id}/{item_key}/` | la crea la promocion por `rename()` |
+| pdfs | string[] | PDFs del item | coincide con `manifest.pdfs` |
+| resultados | object[] | `{pdf, archivo}` de `{pdf}_procesado.pdf` | 1 por PDF del item |
+| generado | bool | PDF final ya emitido | false hasta que el cliente/admin descarga |
+
+Staging: `tmp/orders/{order_id}/{item_key}/` (copia al crearse el pedido; rename al
+confirmarse el pago, flag `.promocionando` si el rename queda a medias).
+
+### Registro admin "completados"
+
+Vista de solo lectura sobre `orders/` + meta de los items:
+
+| Campo | Tipo | Descripcion |
+|-------|------|-------------|
+| order_id, item_key | int, string | identifican la linea |
+| preview_estado | enum | `ok` \| `sin_vista` \| `omisible` (filtro principal) |
+| webp | string[] | rutas de `mockup-*.webp` congelados |
+| valores | object | valores del cliente (lectura) |
+| acciones | enum[] | `regenerar` (re-render del pool + PDF) |
+
+## Relaciones
+
+- PDF 1..N Grupo (los grupos viven en `analisis.json`).
+- PDF 1..N Mockup (en `config.json`); Mockup 1..N Capa.
+- Campo 1..N `placeholders[id]` (via plantillas `[campoN]`).
+- Item 1..N PDF (pool dedicado + indice en `manifest.archivos[]`).
+- Sesion 1..N Item (`tmp/sesion-{sid}/`; el sid agrupa, el item separa).
+- Pedido 1..N Item confirmado (`orders/{order_id}/{item_key}/`).
+
+## Reglas de validacion transversales
+
+- **V-1 (nombres)**: `nombre_seguro()` / `Metadata::nombreDesdeArchivo()` para PDF, `sid` y
+  `item_key` (minusculas, `[a-z0-9_-]`, sin `/`).
+- **V-2 (un grupo, N aplicaciones)**: el pool puede tener varios PNGs del mismo grupo
+  (numerados), pero cada fila de `manifest.archivos[]` referencia exactamente uno.
+- **V-3 (rutas)**: ninguna ruta se arma fuera de `PMU_Uploads`; `PMU_Sesion` opera sobre las
+  rutas que este le entrega.
+- **V-4 (escritura)**: JSON y manifest con `.tmp` + `rename`; lectura tolerante (aviso, sin
+  fatal).
+- **V-5 (personalizacion)**: se valida antes de persistir (texto saneado y limitado, preset
+  existente, ids presentes en el dataset).
+- **V-6 (limpieza)**: borrar item = borrado quirurgico de su carpeta; TTL individual
+  (drafts 24h); `orders/` nunca se toca automaticamente.
+- **V-7 (venta nunca bloqueada)**: si el render falla, `preview_estado=sin_vista` y la
+  compra se habilita; el admin lo resuelve despues.
+
+## Ejemplos completos
+
+`pdfs/dia-madre-1/config.json` (fragmento):
 
 ```json
 {
   "activo": true,
   "productos": [123, 456],
-  "campos_ids": [56, 2],
+  "campos_ids": [1, 56],
+  "preview_omisible": false,
   "placeholders": {
-    "a": {"tipo": "texto", "preset": "impacto", "value": "[campo2]", "settings": "[campo56]"}
-  }
-}
-```
-
-| Field | Type | Description | Validation |
-|-------|------|-------------|------------|
-| slug | string | nombre saneado del PDF | `[A-Za-z0-9_-]`, unico |
-| activo | bool | visible en productos | Default: false hasta detectar placeholders |
-| productos | int[] | IDs WooCommerce (espejo informativo; canonico: postmeta) | Optional, max 100 |
-| campos_ids | int[] | campos en orden de UI | FK a campos.json |
-| placeholders | object | id hex -> mapeo | Ver Placeholder |
-| mockups | object | `mckp.json` | Optional |
-
-**Relationships**:
-- ↔ Many WooCommerce Products (many-to-many via `productos`)
-- ↔ Many Placeholder Groups (one-to-many, desde `analisis.json`)
-
-**State transitions**:
-```
-inactivo → activo (tras deteccion + config guardada)
-activo → inactivo (switch admin, se conserva config)
-```
-
-### Campo (catalogo global reutilizable)
-
-Archivo: `uploads/pmu/campos.json`. Pestana propia. Mismo `id` usable en N PDFs.
-
-| Field | Type | Description | Validation |
-|-------|------|-------------|------------|
-| id | int (auto) | Unique identifier | Primary key, nunca se reutiliza |
-| titulo_cliente | string | etiqueta visible al cliente | Optional, si vacio el campo se oculta (pero igual evalua) |
-| tipo | enum | text/textarea/select/img/override | Required |
-| etiquetas | string[] | categorizacion para reutilizar | Optional |
-| texto_ayuda | string | tooltip | Optional |
-| visible | bool | se pinta en ficha/carrito | Default true; `false` = campo invisible que deriva de otros |
-| contenido | string | fragmento HTML con scope | Required; sin `id` globales, solo clases `.pmu-campo-{id}` + `data-rol` |
-| css | string | CSS plano con scope | Optional; siempre prefijado `.pmu-campo-{id}`; prohibido `100vh`/layout global |
-| script | string | `function(ctx, root)` | Optional; ver Lenguaje unico |
-
-Ejemplo (selector de color, normalizado):
-
-```json
-{
-  "id": 10,
-  "titulo_cliente": "Color",
-  "tipo": "override",
-  "etiquetas": ["color", "selector"],
-  "texto_ayuda": "selector rojo verde azul",
-  "visible": true,
-  "contenido": "<div class=\"pmu-campo-10\"><h3>Selecciona un color:</h3><div class=\"color-options\"><button type=\"button\" class=\"color-btn\" data-valor=\"fill.color='#ff4757'\" data-cliente=\"Rojo\" style=\"background:#ff4757\" title=\"Rojo\"></button><button type=\"button\" class=\"color-btn\" data-valor=\"fill.color='#2ed573'\" data-cliente=\"Verde\" style=\"background:#2ed573\" title=\"Verde\"></button><button type=\"button\" class=\"color-btn\" data-valor=\"fill.color='#1e90ff'\" data-cliente=\"Azul\" style=\"background:#1e90ff\" title=\"Azul\"></button></div><div class=\"preview-box\"><p>Color: <span data-rol=\"etiqueta\">Ninguno</span></p></div></div>",
-  "css": ".pmu-campo-10 .color-btn{width:45px;height:45px;border-radius:50%;border:3px solid transparent;cursor:pointer}.pmu-campo-10 .color-btn.active{border-color:#333}",
-  "script": "function(ctx, root){ var estado={valor:\"\",cliente:\"\"}; root.querySelectorAll('.color-btn').forEach(function(b){ b.addEventListener('click', function(){ root.querySelectorAll('.color-btn').forEach(function(x){x.classList.remove('active')}); b.classList.add('active'); estado={valor:b.dataset.valor, cliente:b.dataset.cliente}; root.querySelector('[data-rol=etiqueta]').textContent=estado.cliente; ctx.set(10, estado); }); }); return estado; }"
-}
-```
-
-Reglas de sandbox (obligatorias):
-- `contenido` es fragmento, nunca pagina. Prohibidos `id` fijos (`#preview-box`),
-  `document.getElementById`, `DOMContentLoaded`, variables globales (`let campo10`).
-- Todo acceso al DOM es via `root` (nodo del campo). `ctx.set(id, {valor, cliente})`
-  publica el valor; `ctx.get(id)` / `V(id)` lee otros campos.
-- Campos invisibles (`visible:false`) no pintan `contenido`, solo evaluan `script`
-  (ej: `campo78 = 'Feliz Cumple ' + V(1)`).
-- Orden de evaluacion topologico por dependencias `V(N)`/`[campoN]`. Ciclo = error
-  accionable, se bloquea preview.
-
-**Relationships**:
-- ↔ Many Placeholders (via `config.json` + expresiones `V(N)`)
-
-### Placeholder (mapeo por grupo de color)
-
-| Field | Type | Description | Validation |
-|-------|------|-------------|------------|
-| letra | string | grupo de color del analisis | FK a analisis.json |
-| tipo | enum | texto/imagen | Required |
-| preset | string | preset TextMuy (solo texto) | Optional |
-| value | string | expresion con `V(N)`/`[campoN]` | Required |
-| settings | string | expresion overrides (solo texto) | Optional |
-
-Semantica:
-- `V(N)` es oficial, `[campoN]` es alias. Compilan a `valores[N].valor`.
-- Ejemplos: `"'Feliz cumple ' + V(1)"`, `"(V(55) || []).concat(['muchas gracias'])"` (no mutar con `push` sobre el valor original: se comparte entre placeholders).
-- Si la expresion devuelve array, se hace loop sobre instancias del grupo (`FR-4.3`). Si `N != M` se avisa antes de generar.
-- `texto` -> TextMuy renderiza PNG exacto al hueco. `imagen` -> selector-pmu deja la imagen al tamano exacto. Ambos terminan en `img/*.png` del item.
-
-**Relationships**:
-- ↩ One PDF (`config.json`)
-- ↔ Many Campos (via expresiones)
-
-### Item de personalizacion (unidad de preview/carrito/pedido)
-
-Un item = una personalizacion (no un producto ni una sesion). Si el cliente agrega
-3x `dia-madre-1` con distintos nombres, son 3 items con 3 carpetas. Si un producto
-lleva 3 PDFs, el item contiene los 3.
-
-`tmp/sesion-{sid}/{item_key}/manifest.json`:
-
-```json
-{
-  "valores": {"1": {"valor": "Juan", "cliente": "Juan"}},
-  "pdfs": {
-    "dia-madre-1": {"a": [{"inst": 0, "file": "img/c1-a3f9c2.png", "origen": "V(1)"}]},
-    "dia-madre-2": {"b": [{"inst": 0, "file": "img/c1-a3f9c2.png", "origen": "V(1)"}]}
-  }
-}
-```
-
-| Field | Type | Description | Validation |
-|-------|------|-------------|------------|
-| item_key | string | `draft-{uuid}` pre-carrito, `{cart_item_key}` post-carrito (=`{linea}` en `tmp/cart/`) | Required |
-| valores | object | id campo -> `{valor, cliente}` | `valor` = sistema, `cliente` = etiqueta |
-| pdfs | object | slug pdf -> id hex -> instancias | `file` apunta a `img/` de la linea |
-| status | enum | draft/preview_ok/in_cart/ordered/failed | Required |
-
-Flujo: preview obligatoria bloquea `add-to-cart` hasta `preview OK`. Al pagar, la
-carpeta del item se copia a `orders/{order_id}/{item_key}/` + `{pdf}_procesado.pdf`.
-
-### Sesion y pedido (paraguas, no unidad de render)
-
-| Field | Type | Description | Validation |
-|-------|------|-------------|------------|
-| sid | string | cookie `pmu_sid` o user_id (solo agrupacion TTL/limpieza) | Required |
-| order_id | int | WooCommerce order | FK tras pagar |
-| items | string[] | `{cart_item_key}` (=`{linea}` en `tmp/cart/`) de la sesion | Required |
-
-**Validation Rules**
-- File uploads: max 10MB, allowed types (png, jpg, webp, gif)
-- Text fields: max 2000 chars (configurable per campo)
-- Image aspect ratio: enforced when configured
-
-## Contracts
-
-### API: `handle_procesar` (admin_post)
-
-**Request**:
-```json
-POST /wp-admin/admin-ajax.php?action=personalizador_pdf_procesar
-{
-  "pdf_id": 42,
-  "order_id": 1523,
-  "field_data": {
-    "56": "Sal, pimienta, orégano",
-    "33": null  // Optional image
+    "0000FF": {"tipo": "texto", "preset": "neon-glow", "value": "[campo1]", "settings": ""}
   },
-  "images": {
-    "33": "uploads/pmu/tmp/1523/campo33.webp  # temporary → orders/ after completion"
-  }
+  "mockups": [
+    {
+      "id": "fiesta",
+      "titulo": "Fiesta",
+      "capas": [
+        {"tipo": "img", "ref": "fondo-fiesta", "x": 0, "y": 0, "w": 300, "h": 300,
+         "rot": 0, "sesgo": 0, "filtros": {"brillo": 95, "contraste": 110}},
+        {"tipo": "placeholder", "ref": "0000FF#0", "x": 96, "y": 60, "w": 110, "h": 180,
+         "rot": -3, "sesgo": 0.05, "filtros": {}},
+        {"tipo": "img", "ref": "marco-madera", "x": 90, "y": 54, "w": 122, "h": 192,
+         "rot": -3, "sesgo": 0.05, "filtros": {}}
+      ]
+    }
+  ]
 }
 ```
 
-**Response**:
+`tmp/sesion-8f2a/draft-3c91/manifest.json` (fragmento):
+
 ```json
 {
-  "success": true,
-  "output_url": "https://site.com/uploads/pmu/outputs/1523.pdf",
-  "preview_url": "https://site.com/uploads/pmu/previews/1523.webp"
+  "item_key": "draft-3c91",
+  "sid": "8f2a",
+  "pdfs": ["dia-madre-1"],
+  "valores": {"1": {"valor": "Abuela Ana", "cliente": "Abuela Ana"}},
+  "archivos": [
+    {"pdf": "dia-madre-1", "grupo_id": "0000FF", "indice": 0,
+     "file": "img/dia-madre-1-0000FF-1.png"}
+  ],
+  "mockup_vistas": ["fiesta"],
+  "mockup_visto": "fiesta",
+  "preview_estado": "ok",
+  "creado": "2026-09-17T14:02:11Z",
+  "motor": "4.1.0"
 }
 ```
 
-### API: `selector-pmu` (client-side component)
-
-**Event**: `selector-pmu(id, maxW, maxH, aspectRatio, mode, category)`
-
-**Callbacks**:
-- `onSelect(imageUrl, metadata)`
-- `onError(message)`
-
-### Event Hooks (WordPress)
-
-| Hook | Type | Parameters |
-|------|------|------------|
-| `personalizador_pdf_before_generate` | action | `$order_id, $pdf_id, $field_data` |
-| `personalizador_pdf_after_generate` | action | `$order_id, $pdf_id, $output_url` |
-| `personalizador_pdf_error` | action | `$order_id, $pdf_id, $error` |
-
-## Quickstart Guide
-
-See `quickstart.md` for validation scenarios.
+| settings | string/null | overrides del preset (mismo lenguaje de plantilla) | saneado |

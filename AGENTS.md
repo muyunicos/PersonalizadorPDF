@@ -56,17 +56,20 @@ Integra el sistema **TextMuy** (editor de estilos de texto client-side) en la pe
   PDFs editados mediante una API con WordPress: el sistema recibe el nombre del PDF base y
   un conjunto de imágenes, y devuelve la URL al archivo procesado.
 
-## 2. Arquitectura y mapa de archivos (v4.3: 3 carpetas + conciliacion 008)
+## 2. Arquitectura y mapa de archivos (v4.4: modulo integrado + norma ex-008 preservada)
 
-La RAÍZ DEL PROYECTO (sin git) agrupa tres carpetas hermanas:
+Layout historico de despliegue (logico, sin git): la RAIZ DEL PROYECTO agrupaba
+tres carpetas hermanas `personalizador-pdf/` (plugin) + `textmuy/` + `uploads/pmu/`.
+Desde v4.2 ese `textmuy/` hermano es HISTORICO: el modulo vive integrado en
+`modules/textmuy/` de este repo (ver LEEME.md). En este checkout el layout real es:
 
 ```
-personalizador-pdf/              <- RAÍZ DEL PROYECTO (sin git)
-├── personalizador-pdf/          <- PLUGIN (repo git, el árbol de abajo; en WP vive en
-│                                   wp-content/plugins/personalizador-pdf/)
-├── textmuy/                     <- (HISTÓRICO: el módulo hoy vive integrado en
-│                                   modules/textmuy/ de este repo; ver LEEME.md)
-└── uploads/pmu/  <- DATOS DE USUARIO (sin git): espejo de
+personalizador-pdf/              <- REPO GIT (en WP vive en
+                                    wp-content/plugins/personalizador-pdf/)
+├── personalizador-pdf.php
+├── admin/ engine/ inc/ assets/ specs/ tests/
+├── modules/textmuy/            <- Motor frontend TextMuy (integrado, control total)
+└── uploads/pmu/                <- DATOS DE USUARIO (sin git): espejo de
                                     wp-content/uploads/pmu/. Se despliega
                                     COMPLETO al servidor.
 ```
@@ -79,12 +82,15 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │                                   ciclo carrito→pedido, puente TextMuy; sin migraciones)
 ├── admin/
 │   ├── page.php             ← Página admin con pestañas ("PDFs" | "Campos" | "Estilos de Texto" | "Ayuda")
-│   ├── pdfs.php             ← Consola: subir PDF, grupos, imágenes, Procesar
+│   ├── pdfs.php             ← Consola: subir PDF, grupos, mockups, imágenes, Procesar, completados
+│   ├── campos.php           ← Catálogo global de campos reutilizables (campos.json)
 │   ├── estilos-texto.php    ← Iframe del módulo TextMuy (aviso si no está integrado)
 │   └── ayuda.php            ← Documentación interna
 ├── assets/
-│   ├── admin.css            ← Estilos de consola + iframe
-│   └── admin.js             ← Interfaz, validaciones y puente RenderCore
+│   ├── admin.css            ← Estilos de consola + editor de mockups + iframe
+│   ├── admin.js             ← Interfaz, validaciones y puente RenderCore
+│   ├── tienda.js            ← Ficha Woo: campos, "Vista previa", galería, add-to-cart
+│   └── mockups.js           ← Editor de capas 300x300 (delegado al módulo TextMuy)
 ├── engine/                  ← MOTOR PHP PURO
 │   ├── Pdf.php              ← Parser (lectura de streams y objetos)
 │   ├── Detector.php         ← Detección y agrupación de placeholders
@@ -95,7 +101,9 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   └── Motor.php            ← Orquestador principal
 ├── inc/                     ← DUEÑO UNICO DE DATOS
 │   ├── class-pmu-uploads.php ← PMU_Uploads: rutas, catálogos, ops, handle_request
-│   └── class-pmu-galeria.php ← PMU_Galeria: ayudante puro de miniaturas
+│   ├── class-pmu-galeria.php ← PMU_Galeria: ayudante puro de miniaturas
+│   └── class-pmu-sesion.php  ← PMU_Sesion: ciclo del comprador (sid/item/pool/manifest;
+│                                   planeado en spec 004; T003)
 ├── modules/
 │   ├── LEEME.md             ← Ficha del módulo integrado TextMuy + despliegue de datos
 │   └── textmuy/             ← Motor frontend TextMuy (integrado, versionado, control total)
@@ -136,12 +144,14 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
    las imágenes se guardan SOLO por id numérico del catálogo `img.json`
    (la URL se resuelve al renderizar vía `prepareImgRefs`).
 4. **Puente de recursos**: el plugin pasa al iframe por postMessage
-   `{urls, nonces, presets, imagenes}`. El módulo interactúa SOLO con el endpoint
+   `{type:'textmuy-bridge', bridge:{urls:{motor, miniaturas, presetsBase, fuentesBase,
+   imagenesBase}, nonces:{motor}, presets, imagenes, fuentes}}` (fuente unica:
+   `Personalizador_PDF_Plugin::puente_textmuy()`). El módulo interactúa SOLO con el endpoint
    `admin_post_pmu_uploads` (una credencial `nonces.motor` + capability; operaciones
    `op=` de presets/imágenes/fuentes). Sin puente el editor NO opera: muestra un
    error accionable y hace cero peticiones locales (no hay modo standalone).
 5. **Versionado de estáticos (cache-bust)**: `render-core.html` e `index.html` referencian
-   sus scripts internos con `?v=RCn` (**RC29 hoy**): al cambiar cualquier JS del módulo,
+   sus scripts internos con `?v=RCn` (**RC36 hoy**): al cambiar cualquier JS del módulo,
    subir el número en ambos HTML.
 6. **Galería**: manejada internamente por el módulo (`js/galeria.js`), con preview en vivo.
 
@@ -200,9 +210,17 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   vigente). `pdfs/`, `orders/` y `tmp/` son ámbitos de datos del motor, sin catálogo ni sprite.
 - Datasets PDF: `pdfs/{nombre}/analisis.json` (geometría inmutable del Detector: grupos
   `id`/`w`/`h`/`cont`/`pgs`) + `pdfs/{nombre}/config.json` (editable: `activo`, `productos`,
-  `campos_ids`, `placeholders[id]` con `tipo`/`preset`/`value`/`settings`).
+  `campos_ids`, `preview_omisible` (bool, default `false` = mockup obligatorio en ficha),
+  `mockups[]` (plantillas de vista previa: `capas[]` con `tipo`/`ref`/`x`/`y`/`w`/`h`/
+  `rot`/`sesgo`/`filtros`; canvas 300x300), `placeholders[id]` con
+  `tipo`/`preset`/`value`/`settings`).
   Sin `textos.json` y sin `metadata.json`
-  (plan 008 vigente; la migración `.migrado-007` ya no se ejecuta).
+  (norma ex-008 + decision preview 2026-09-17; la migración `.migrado-007` ya no se ejecuta).
+- Fotos de mockups del admin: `pdfs/{nombre}/mockups/` (datos de usuario, sin catálogo);
+  las reutilizables viven en el catálogo `img/`.
+- Catálogo global de campos: `campos.json` en la raíz de `uploads/pmu/` (items con
+  `id` auto no reutilizable, `titulo_cliente`, `tipo`, `array`, valor dual
+  `valor`(sistema)/`cliente`(etiqueta); detalle en `specs/004.../contracts/campos.md`).
 - Imágenes aplicadas (muestras del panel): `tmp/muestras/{nombre}/{id}.{ext}` (un archivo
   por grupo, se sobrescribe en cada Procesar)
 - Placeholders: sin archivos en disco; marco dibujado en la consola + descarga generada
@@ -210,15 +228,22 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 - Salida de muestra: `tmp/muestras/{nombre}/{nombre}_procesado.pdf` (se sobrescribe)
 - Comprador (ciclo carrito → pedido; el cableado a hooks Woo vive en spec 004):
   borradores legacy en `tmp/cart/{linea}/` (`manifest.json` con `pdf`, personalizacion
-  canonica, `pmu_hash`, cantidad, `creado`, motor) + unidad vigente plan 008 en
-  `tmp/sesion-{sid}/{item_key}/` (`manifest.json` + pool `img/`; `draft-{uuid}` →
-  `cart_item_key`; preview obligatoria antes del add-to-cart); staging en
-  `tmp/orders/{order_id}/`, entregable por linea en `orders/{order_id}/{pdf}/`
-  (promocion por `rename()` solo al confirmarse el pago)
+  canonica, `pmu_hash`, cantidad, `creado`, motor) + unidad vigente ex-008 en
+  `tmp/sesion-{sid}/{item_key}/` por ITEM (`manifest.json` + pool `img/` DEDICADO
+  (`img/{pdf}-{id}-{n}.png`, numerados si hay varios por `id`; sin deduplicacion global
+  entre items) + `mockup-{id}.webp` congelados 300x300; `draft-{uuid}` →
+  `cart_item_key`; mockup obligatorio en ficha antes del add-to-cart, salvo
+  `config.json:preview_omisible=true`); `preview_estado` en meta (`ok`|`sin_vista`|`omisible`);
+  canonico comprador = meta del item Woo + espejo `tmp/sesion-{sid}/{item_key}/` para el Motor; staging en
+  `tmp/orders/{order_id}/`, entregable por linea en `orders/{order_id}/{item_key}/`
+  (promocion por `rename()` solo al confirmarse el pago); PDF final solo tras el pago
+  (boton "Descargar" en `mi-cuenta/descargas/`: render cliente + Motor, reintentable;
+  registro admin de pedidos "completados" para revisar/regenerar)
 - Migracion historica `.migrado-007` (`uploads/personalizador-pdf/` o `extractor-corel/`
   → `pdfs/{nombre}/`): ya retirada del codigo (fase `migracion` del arnes lo verifica:
-  sin metodo `migrar_datos_heredados`). Migracion 007 → 008 pendiente segun
-  `specs/008-sesion-cart-preview/spec.md` §6.
+  sin metodo `migrar_datos_heredados`). Migracion ex-008 pendiente (partir ex-`metadata.json`
+  en `analisis.json`+`config.json`, mover `tmp/cart/{linea}/` bajo `tmp/sesion-{sid}/{item_key}/`;
+  norma preservada en `constitution` §IV).
 - **Archivos TextMuy (datos de usuario, formato unico v5.0)** — ubicacion unica
   y definitiva `uploads/pmu/tm-presets/`:
   - Presets: `tm-presets/{nombre}.txm` (delta `textmuy-project` v1 con referencias numericas)
@@ -243,7 +268,8 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 - ❌ **Sin Python**: backend estrictamente en PHP (la v1 fue Flask + Python; migrada).
 - ✅ **Único panel UI para presets**: la galería inferior expandible de TextMuy es el único
   punto para buscar/guardar/borrar presets. No recrear los antiguos menús.
-- ✅ **Formato único para presets**: todo preset es `.txm` (delta de settings) + `.webp`.
+- ✅ **Formato único para presets**: todo preset es `.txm` (delta de settings) + celda
+  en el sprite unico `tm-presets/thumbs.webp` (200x100, sin `.webp` suelto por preset).
   Ya no se usa `localStorage` ni `.json` para guardar.
 - ✅ **Separación estricta de datos (v4.0.0)**: todo dato o recurso aportado por el
   administrador reside en `uploads/pmu/` (ámbitos `fonts`, `img`, `tm-presets`; ver §5). La carpeta del plugin y la
@@ -252,20 +278,24 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 - ✅ **Módulo integrado (v4.2)**: TextMuy vive en `modules/textmuy/` de este repositorio,
   bajo control total; se edita directamente, se corren sus tests Node y se hace bump
   `?v=RCn` en ambos HTML al tocar su JS.
-- ✅ **Layout de PDFs (plan 008 vigente, ex-007)**: cada producto vive en
+- ✅ **Layout de PDFs (norma ex-008 vigente, ex-007)**: cada producto vive en
   `uploads/pmu/pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` inmutable del Detector +
-  `config.json` editable con `activo`/`productos`/`campos_ids`/`placeholders[id]`, clave
+  `config.json` editable con `activo`/`productos`/`campos_ids`/`preview_omisible`/`placeholders[id]`, clave
   `id` = color hex; sin `textos.json` ni `metadata.json`);
   muestras idempotentes en `tmp/muestras/{nombre}/`; ciclo comprador en `tmp/cart/`
-  (legacy) + `tmp/sesion-{sid}/{item_key}/` (vigente, preview obligatoria
-  `draft-{uuid}` → `cart_item_key`), staging en `tmp/orders/` y entregable en
-  `orders/{order_id}/{pdf}/`; migracion `.migrado-007` ya retirada. La consola nunca muestra la pagina de error critico por fallos
+  (legacy) + `tmp/sesion-{sid}/{item_key}/` (vigente, mockup obligatorio en ficha
+  `draft-{uuid}` → `cart_item_key` salvo `preview_omisible=true`; canonico = meta item Woo +
+  espejo sesion), staging en `tmp/orders/` y entregable en
+  `orders/{order_id}/{item_key}/` (PDF final solo tras el pago, boton "Descargar" en
+  Descargas + registro admin "completados"); migracion `.migrado-007` ya retirada. La consola nunca muestra la pagina de error critico por fallos
   de recursos del motor (aviso con causa, HTTP 200).
-- ✅ **Conciliacion 008 (normativa)**: `specs/008-sesion-cart-preview/spec.md` NO es
-  feature implementable: norma 004 vs 007 (`analisis.json`+`config.json`,
-  `tmp/sesion-{sid}/{item_key}/`, preview obligatoria `draft-{uuid}` → `cart_item_key`).
+- ✅ **Conciliacion ex-008 (normativa, preservada en `constitution` §IV)**: el antiguo
+  `specs/008-sesion-cart-preview/spec.md` NO era feature implementable: normaba 004 vs 007
+  (`analisis.json`+`config.json`, `tmp/sesion-{sid}/{item_key}/`, preview obligatoria
+  `draft-{uuid}` → `cart_item_key`). Fue eliminado tras preservarse su §0+§6 en la
+  constitucion; lo nuevo se alinea a esa norma.
 - ✅ **Specs historicos**: 003 obsoleto (superado por 006); 004 tasks 100% pero diseño
-  historico (normativo = 008 §0+§6); 006/007 casi cerrados salvo verificaciones manuales
+  historico (normativo = constitucion §IV, ex-008); 006/007 casi cerrados salvo verificaciones manuales
   en panel WP real (ver sus `tasks.md`).
 - ✅ **Hooks legacy**: `seguridad()` acepta nonce historico `extractor_corel_*` (<= 2.0.0)
   ademas del vigente `personalizador_pdf_*` (se considera codigo legacy).

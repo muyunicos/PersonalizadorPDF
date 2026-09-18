@@ -80,6 +80,9 @@ $post_url = admin_url('admin-post.php');
                 <td><input id="ec-ayuda" name="texto_ayuda" class="regular-text" value="<?php echo esc_attr($tupla_ed ? $tupla_ed[4] : ''); ?>"></td></tr>
             <tr><th>Visible</th>
                 <td><label><input type="checkbox" name="visible" value="1" <?php checked($tupla_ed ? !empty($tupla_ed[5]) : true, true); ?>> Se pinta en ficha/carrito</label></td></tr>
+            <tr><th>Array</th>
+                <td><label><input type="checkbox" name="array" value="1" <?php checked($tupla_ed ? !empty($tupla_ed[9]) : false, true); ?>> Entrega array (un valor por instancia del grupo)</label>
+                <p class="description">Con <code>[v] Repetir por placeholder</code> del mapeo, cada valor va a una instancia.</p></td></tr>
             <tr><th><label for="ec-contenido">Contenido (HTML)</label></th>
                 <td><textarea id="ec-contenido" name="contenido" rows="6" cols="80" class="large-text code"><?php echo esc_textarea($tupla_ed ? $tupla_ed[6] : ''); ?></textarea>
                 <p class="description">Fragmento con scope <code>.pmu-campo-{id}</code>. Prohibidos <code>id=""</code>, script, iframe, form.</p></td></tr>

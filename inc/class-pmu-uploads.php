@@ -137,6 +137,45 @@ class PMU_Uploads
             . DIRECTORY_SEPARATOR . 'analisis.json';
     }
 
+    /**
+     * Carpeta de fotos de mockup del admin: uploads/pmu/pdfs/{nombre}/mockups/
+     * (spec 004, T004). Ambito de datos del producto, SIN catalogo ni sprite
+     * (a diferencia de fonts/img/tm-presets): las fotos reutilizables viven en
+     * el catalogo img/.
+     */
+    public function dir_mockups($pdf, $crear = false)
+    {
+        $pdf = $this->nombre_seguro($pdf, 'dir_mockups');
+        $dir = $this->dir_pdf($pdf, $crear) . DIRECTORY_SEPARATOR . 'mockups';
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        return $dir;
+    }
+
+    /** Archivo de una foto de mockup: pdfs/{nombre}/mockups/{archivo} (nombre ya saneado por el llamador). */
+    public function ruta_mockup($pdf, $archivo)
+    {
+        $pdf = $this->nombre_seguro($pdf, 'ruta_mockup');
+        $archivo = basename((string)$archivo); // sin subrutas
+        if ($archivo === '' || $archivo === '.' || $archivo === '..') {
+            throw new Exception('motor:ruta_mockup:nombre:invalido');
+        }
+        return $this->dir_mockups($pdf) . DIRECTORY_SEPARATOR . $archivo;
+    }
+
+    /** Carpeta contenedora del catalogo global de campos: uploads/pmu/ (spec 004, T004). */
+    public function dir_campos()
+    {
+        return $this->dir_pmu();
+    }
+
+    /** Catalogo global de campos: uploads/pmu/campos.json (spec 004, sin thumbs). */
+    public function ruta_campos()
+    {
+        return $this->dir_campos() . DIRECTORY_SEPARATOR . 'campos.json';
+    }
+
     /** Config editable del admin: uploads/pmu/pdfs/{nombre}/config.json (plan 008). */
     public function ruta_config($nombre)
     {
@@ -146,7 +185,11 @@ class PMU_Uploads
     }
 
     /** Asegura un subdirectorio bajo tmp/ (muestras|cart|orders). */
-    private function dir_tmp_sub($sub, $crear = false)
+    /**
+     * Raiz de un subambito de tmp/: uploads/pmu/tmp/{sub}/ (lectura de rutas
+     * para PMU_Sesion::limpiar_ttl; escritura pasa por metodos especificos).
+     */
+    public function dir_tmp_sub($sub, $crear = false)
     {
         if (!in_array($sub, self::$SUBAMBITOS_TMP, true)) {
             throw new Exception('motor:dir_tmp:subambito:invalido:' . $sub);
@@ -445,10 +488,10 @@ class PMU_Uploads
         return is_array($datos) ? $datos : null;
     }
 
-    /** Lee el catalogo global de campos (uploads/pmu/campos.json). */
+    /** Lee el catalogo global de campos (uploads/pmu/campos.json, sin thumbs). */
     public function campos_catalogo($op = 'campos')
     {
-        $ruta = $this->dir_pmu() . DIRECTORY_SEPARATOR . 'campos.json';
+        $ruta = $this->ruta_campos();
         if (!is_file($ruta)) {
             return ['cat' => ['items' => []], 'aviso' => null];
         }
@@ -466,11 +509,34 @@ class PMU_Uploads
         return ['cat' => ['items' => $items], 'aviso' => null];
     }
 
+    /**
+     * Reglas de sandbox del `script` de un campo (contract campos.md):
+     * `function(ctx, root)` con salida unica via ctx.set. Prohibidos
+     * document.getElementById / document.querySelector (usar root) y
+     * DOMContentLoaded. Lanza motor:campos:script:invalido si rompe una regla.
+     */
+    public function validar_script_campo($script)
+    {
+        $script = (string)$script;
+        if (trim($script) !== '' && stripos(trim($script), 'function') !== 0) {
+            throw new Exception('motor:campos:script:invalido');
+        }
+        if (preg_match('/document\\.\\s*(getElementById|querySelector)/i', $script)) {
+            throw new Exception('motor:campos:script:invalido');
+        }
+        if (stripos($script, 'DOMContentLoaded') !== false) {
+            throw new Exception('motor:campos:script:invalido');
+        }
+        if (preg_match('/\\bid\\s*=\\s*["\']/', $script)) {
+            throw new Exception('motor:campos:script:invalido');
+        }
+    }
+
     /** Guarda el catalogo global de campos (atomico). Devuelve true/false. */
     public function guardar_campos($items)
     {
         return $this->escribir_json(
-            $this->dir_pmu(true) . DIRECTORY_SEPARATOR . 'campos.json',
+            $this->ruta_campos(),
             ['items' => array_values($items)]
         );
     }
@@ -489,6 +555,11 @@ class PMU_Uploads
             $id++;
         }
         $tupla[0] = $id;
+        // Sandbox del script: se aplica al guardar (contract campos.md), sea
+        // via plugin (campo_desde_post) o via motor directo (tests/handlers).
+        if (isset($tupla[8])) {
+            $this->validar_script_campo($tupla[8]);
+        }
         $items[] = array_values($tupla);
         if (!$this->guardar_campos($items)) {
             throw new Exception('motor:alta:directorio:no_escribible');
@@ -535,6 +606,9 @@ class PMU_Uploads
         foreach ($items as &$t) {
             if ((int)$t[0] === $id) {
                 $tupla[0] = $id;
+                if (isset($tupla[8])) {
+                    $this->validar_script_campo($tupla[8]);
+                }
                 $t = array_values($tupla);
                 $hubo = true;
             }
@@ -562,7 +636,80 @@ class PMU_Uploads
         return array_values(array_slice(array_unique($ids), 0, 100));
     }
 
-    /** Normaliza el mapeo placeholders (id hex => tipo/preset/value/settings). */
+    /** Normaliza la seccion mockups de un config (composicion de capas 300x300). */
+    private function config_mockups($valor)
+    {
+        $out = [];
+        foreach ((array)$valor as $m) {
+            if (!is_array($m)) {
+                continue;
+            }
+            $id = isset($m['id']) ? $this->nombre_seguro((string)$m['id'], 'config_mockups') : '';
+            $capas = [];
+            foreach ((array)($m['capas'] ?? []) as $c) {
+                if (!is_array($c)) {
+                    continue;
+                }
+                $tipo = isset($c['tipo']) ? (string)$c['tipo'] : '';
+                if ($tipo !== 'img' && $tipo !== 'placeholder') {
+                    continue;
+                }
+                $ref = trim((string)($c['ref'] ?? ''));
+                if ($ref === '' || strpos($ref, '/') !== false || strpos($ref, '..') !== false) {
+                    continue;
+                }
+                $filtros = [];
+                foreach ((array)($c['filtros'] ?? []) as $k => $v) {
+                    $k = (string)$k;
+                    if (!in_array($k, ['brillo', 'gama', 'contraste', 'saturacion'], true)) {
+                        continue;
+                    }
+                    $v = (int)$v;
+                    if ($v < 0) {
+                        $v = 0;
+                    } elseif ($v > 200) {
+                        $v = 200;
+                    }
+                    $filtros[$k] = $v;
+                }
+                $rot = (float)($c['rot'] ?? 0);
+                if ($rot < -360) {
+                    $rot = -360;
+                } elseif ($rot > 360) {
+                    $rot = 360;
+                }
+                $sesgo = (float)($c['sesgo'] ?? 0);
+                if ($sesgo < -1) {
+                    $sesgo = -1;
+                } elseif ($sesgo > 1) {
+                    $sesgo = 1;
+                }
+                $capas[] = [
+                    'tipo' => $tipo,
+                    'ref' => substr($ref, 0, 128),
+                    'x' => (int)($c['x'] ?? 0),
+                    'y' => (int)($c['y'] ?? 0),
+                    'w' => max(1, (int)($c['w'] ?? 0)),
+                    'h' => max(1, (int)($c['h'] ?? 0)),
+                    'rot' => $rot,
+                    'sesgo' => $sesgo,
+                    'filtros' => $filtros,
+                ];
+            }
+            if ($id === '' || !$capas || isset($out[$id])) {
+                continue;
+            }
+            $out[$id] = [
+                'id' => $id,
+                'titulo' => isset($m['titulo']) ? substr(trim((string)$m['titulo']), 0, 200) : '',
+                'creado' => isset($m['creado']) ? substr((string)$m['creado'], 0, 32) : '',
+                'capas' => $capas,
+            ];
+        }
+        return array_values($out);
+    }
+
+    /** Normaliza el mapeo placeholders (id hex => tipo/preset/value/settings/repetir). */
     private function config_placeholders($valor)
     {
         $ph = [];
@@ -580,9 +727,19 @@ class PMU_Uploads
                 'preset' => isset($m['preset']) && $m['preset'] !== '' ? (string)$m['preset'] : null,
                 'value' => isset($m['value']) ? (string)$m['value'] : '',
                 'settings' => isset($m['settings']) ? (string)$m['settings'] : '',
+                'repetir' => !empty($m['repetir']),
             ];
         }
         return $ph;
+    }
+
+    /**
+     * Normaliza la seccion preview_omisible de un config (bool, solo persiste
+     * cuando el PDF ya tiene mockups creados; ver T011 y fase mockups).
+     */
+    private function config_omisible($valor, $tiene_mockups)
+    {
+        return $tiene_mockups ? !empty($valor) : false;
     }
 
     /** Lee el config.json editable de un PDF (o defaults si no existe). */
@@ -591,7 +748,7 @@ class PMU_Uploads
         $pdf = $this->nombre_seguro($pdf, 'leer_config');
         $ruta = $this->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . $pdf
             . DIRECTORY_SEPARATOR . 'config.json';
-        $base = ['activo' => false, 'productos' => [], 'campos_ids' => [], 'placeholders' => []];
+        $base = ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => []];
         $datos = $this->leer_json($ruta);
         if (!is_array($datos)) {
             return $base;
@@ -612,6 +769,13 @@ class PMU_Uploads
             }
             $base['campos_ids'] = array_values(array_unique($ids));
         }
+        if (isset($datos['mockups'])) {
+            $base['mockups'] = $this->config_mockups($datos['mockups']);
+        }
+        $base['preview_omisible'] = $this->config_omisible(
+            isset($datos['preview_omisible']) ? $datos['preview_omisible'] : false,
+            count($base['mockups']) > 0
+        );
         if (isset($datos['placeholders'])) {
             $base['placeholders'] = $this->config_placeholders($datos['placeholders']);
         }
@@ -620,7 +784,8 @@ class PMU_Uploads
 
     /**
      * Guarda el config.json editable de un PDF de forma atomica.
-     * Nunca toca el dataset: solo activo, productos, campos y mapeos.
+     * Nunca toca el dataset: solo activo, productos, campos, mockups,
+     * preview_omisible y mapeos.
      * Devuelve true/false (no lanza salvo nombre invalido).
      */
     public function guardar_config($pdf, array $config)
@@ -644,6 +809,13 @@ class PMU_Uploads
             }
             $canon['campos_ids'] = array_values(array_unique($ids));
         }
+        if (isset($config['mockups'])) {
+            $canon['mockups'] = $this->config_mockups($config['mockups']);
+        }
+        $canon['preview_omisible'] = $this->config_omisible(
+            isset($config['preview_omisible']) ? $config['preview_omisible'] : $canon['preview_omisible'],
+            count($canon['mockups']) > 0
+        );
         if (isset($config['placeholders'])) {
             $canon['placeholders'] = $this->config_placeholders($config['placeholders']);
         }

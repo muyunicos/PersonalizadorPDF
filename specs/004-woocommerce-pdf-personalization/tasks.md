@@ -1,134 +1,142 @@
----
-ription: "Task list for WooCommerce PDF Personalization"
----
-
 # Tasks: Personalización de Productos PDF para WooCommerce
 
-**Input**: Design documents from `/specs/004-woocommerce-pdf-personalization/`
+**Input**: Design documents from `specs/004-woocommerce-pdf-personalization/` (norma 2026-09-17)
 
-**Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
+**Prerequisites**: plan.md (required), spec.md (required), data-model.md, contracts/ (campos, mockups, sesion-item, selector-pmu), research.md
 
-**Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
+**Tests**: fases nuevas del arnes `tests/texto_puente.php` (`sesion`, `conciliacion`, `campos`) + puertas existentes (`php -l`, `motor_smoke`, `parity`, `node --check` + 10 suites si se toca el modulo) + recorrido manual de `quickstart.md`.
 
-## Format: `[ID] [P?] [Story] Description`
+**Organization**: Tasks grouped by user story (US1..US5), independent test per story.
 
-- **[P]**: Can run in parallel (different files, no dependencies)
-- **[Story]**: Which user story this task belongs to (e.g., US1, US2, US3)
-- Include exact file paths in descriptions
+## Format: `[ID] [P?] [Story] Description` — con ruta de archivo exacta.
 
 ## Path Conventions
 
-- WordPress plugin: `personalizador-pdf/` at repository root
-- Paths shown below assume WordPress plugin structure
+- Plugin en la raiz del repo: `personalizador-pdf.php`, `admin/`, `engine/`, `inc/`, `assets/`, `tests/`.
+- Datos de usuario: `uploads/pmu/` (raiz unica; nunca dentro del plugin).
 
 ---
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-**Purpose**: Project initialization and basic structure
+**Purpose**: Linea base verde y de datos antes de tocar nada.
 
-- [X] T001 Verify WordPress plugin structure in `personalizador-pdf/`
-- [X] T002 [P] Create `admin/` directory structure
-- [X] T003 [P] Create `engine/` directory structure
-- [X] T004 [P] Create `assets/` directory structure
-- [X] T005 [P] Create `tests/` directory structure
+- [X] T001 Verificar la linea base: `php -l personalizador-pdf.php`, `php -l admin/*.php`, `php -l engine/*.php`, `php -l inc/*.php`, `php tests/motor_smoke.php` (SMOKE OK), `php tests/parity.php` (PARIDAD OK).
+- [X] T001b Verificar que FR-1 preimplementado (subir/detectar/activar/desactivar/borrar PDF, consola vigente) se condice con la norma (`spec.md` FR-1.1..FR-1.4). Cubierto por fases del arnes `tests/texto_puente.php`: `desactivar` (config ajena intacta), `reanalizar` (analisis+config y layout exacto `PDF + analisis.json + config.json`), `borrado` (borrado quirurgico con testigos en `orders/`, `tmp/orders/`, `tmp/sesion-*/`, `pdfs/otro/`, `tmp/muestras/otro/` intactos). Verificacion con stubs: no sustituye la prueba manual en panel WP real (T030).
+- [X] T002 Inventariar `uploads/pmu/` (arbol + archivos) para comparar antes/despues y detectar escrituras accidentales (sin modificar datos). Script nuevo `tests/inventario_pmu.php` (manifiesto ruta+sha256+tamano por archivo; `--resumen|--guardar|--comparar`) + baseline versionado `tests/baseline_pmu_manifest.txt`. Linea base: 159 archivos (~25.6 MB) — fonts 16, img 131, pdfs 8, tm-presets 2, tmp 2. Hallazgos: `pdfs/circulo6cm/` es DATO LEGADO (`metadata.json` con letra/color, `textos.json`, PNGs sueltos, salida vieja) y `pdfs.json` (0 bytes, ilegible: lectura tolerante lo maneja); `tmp/circulo6cm/` legado; no existe `campos.json` ni carpetas `mockups/`; `orders/` vacio. El dato legado NO se toca (Const. V: el admin lo regenera al re-subir/re-analizar).
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-**Purpose**: Core infrastructure that MUST be complete before ANY user story can be implemented
+**Purpose**: Sesion del comprador (sid/item/pool/manifest), catalogo de campos y accesos de rutas. Bloquea US1–US5.
 
-**⚠️ CRITICAL**: No user story work can begin until this phase is complete
+**⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [X] T006 Create plugin main file `personalizador-pdf.php` with class definition and activation hooks
-- [X] T007 [P] Implement `Pdf.php` parser in `engine/` (object/stream/xref reading)
-- [X] T008 [P] Implement `Detector.php` in `engine/` (placeholder detection: 4-line rectangles, fill_opacity ≤ 0.001, min 10×5 pt)
-- [X] T009 [P] Implement `Imagen.php` in `engine/` (RGBA normalization, contain-scale logic)
-- [X] T010 [P] Implement `Overlay.php` in `engine/` (splice injection with q/Q isolation, /ECOp1 ExtGState)
-- [X] T011 [P] Implement `Motor.php` in `engine/` (orchestration: PDF + dataset + images → processed PDF)
-- [X] T012 Create `admin/page.php` with tab structure (PDFs | Estilos de Texto | Ayuda)
-- [X] T013 [P] Create assets/admin.css (tab layout, form styles, button styles)
-- [X] T014 [P] Create assets/admin.js (form validation, AJAX form submit, preview trigger)
+**Checkpoint**: Fundacion lista; las historias pueden arrancar.
 
-**Checkpoint**: Foundation ready - user story implementation can now begin
+- [X] T003 Crear `inc/class-pmu-sesion.php` segun `contracts/sesion-item.md`: `sid_actual()` (cookie `pmu_sid` UUID v4, 30 dias, httponly, sameSite=Lax, sobrevive al login), `dir_item()`, `crear_draft()` (`draft-{uuid}` + `manifest.json` inicial con `preview_estado=sin_vista`), `promover()` (rename a `{cart_item_key}` con el MISMO sid y `item_key` actualizado), `leer_manifest()`/`guardar_manifest()` (`.tmp` + `rename`), `guardar_png()` (`img/{pdf}-{id}-{n}.png` numerado, anota `archivos[]` con `indice`/`file`/`hash` del llamador), `congelar_webp()` (`mockup-{id}.webp` + `mockup_vistas`/`mockup_visto`), `estado_preview()`, `borrar_item()` (quirurgico e idempotente), `staging_order()` (copia idempotente a `tmp/orders/{order_id}/{item_key}/`), `promover_order()` (rename a `orders/...`, flag `.promocionando` y causa `motor:sesion:promocion:pendiente`), `limpiar_ttl()` (drafts por `manifest.creado`). Rutas SIEMPRE de `PMU_Uploads` (Const. II); causas `motor:sesion:<causa>`. Test: fase nueva `sesion` en `tests/texto_puente.php` (13 asserts). Bug propio detectado por el test y corregido: `siguiente_n()` numeraba sobre el nombre sin extension y sobrescribia el PNG anterior.
+- [X] T004 Agregar a `inc/class-pmu-uploads.php` los accesos que faltan. Ya existian (herencia del ciclo carrito): `dir_sesion/dir_sesion_item/dir_sesion_item_img/manifest_sesion_item` + saneo `sesion_segura()`/`item_segura()`. Agregados nuevos: `dir_mockups($pdf,$crear)` (`pdfs/{nombre}/mockups/`, ambito de datos sin catalogo), `ruta_mockup($pdf,$archivo)` (basename, sin subrutas) y wrappers `dir_campos()`/`ruta_campos()` (`uploads/pmu/campos.json`); `campos_catalogo()`/`guardar_campos()` ahora pasan por `ruta_campos()` (verdad unica de la ruta).
+- [X] T005 Siembra + CRUD de campos (extendido a norma 2026-09-17): `campos.json` `{items[]}` sin thumbs (los campos se reconocen por `id` numeral), CRUD existente (`campo_alta` hueco mas bajo/max+1, `campo_editar`, `campo_baja` tombstone, escritura atomica, lectura tolerante `motor:listar:catalogo:invalido:campos`) + **tupla de 10 slots** con flag `array` (indice 9) + **sandbox de `script`** `validar_script_campo()` (prohibidos `document.getElementById/querySelector`, `DOMContentLoaded`, `id=`; aplica en `campo_desde_post` y en `campo_alta/campo_editar` del motor con causa `motor:campos:script:invalido`). UI `admin/campos.php` con checkbox Array. Tests: fase `campos` ampliada (10 slots, array flag, rechazo de script prohibido) y `tienda` ajustada a 10 slots.
+- [X] T005b Adaptar el componente cliente `selector-pmu`: `assets/selector-pmu.js` reescrito (era un stub con `console.log`) — constructor `(elemento, config)` con `finalW`/`finalH` obligatorios (los define el campo/PDF; `maxW`/`maxH` eliminados), `mode` `crop|fit`, `aspectRatio`, `category`; `open()` con dialogo real (file input con allowlist `.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg`, canvas del tamano final, zoom, arrastre para encuadrar, Escape), `onSelect(url, meta)`, `onError(msg, err)`, `on(evento, cb)` (`progress`/`success`/`error`), `obtenerBlob()`, `close()`, `destroy()`; sin dependencias ni limite de peso; estilos inyectados por el propio componente; el llamador sube el blob al pool del item. Contrato actualizado (fuera `SIZE_EXCEEDED`). `node --check` OK.
+- [X] T006 Nueva pestaña "Campos" en `admin/page.php` + `admin/campos.php` (depende de T005): ya existia el catalogo global (tab en `page.php`, listado/alta/edicion/baja + modal de alta rapida en `assets/admin.js`); completado en esta pasada el checkbox **Array** (flag `array`, indice 9 de la tupla) y la validacion de sandbox del `script` al guardar. Sin `[P]`: depende de T005.
 
 ---
 
-## Phase 3: User Story 1 - Admin PDF Upload & Configuration (Priority: P1) 🎯 MVP
+## Phase 3: User Story 1 - Admin configura producto (P1) 🎯 MVP
 
-**Goal**: Admin can upload PDFs, view detected placeholder groups, and configure fields/mappings
+**Goal**: El admin compone mockups, mapea grupos a campos y asocia el PDF a un producto Woo.
 
-**Independent Test**: Upload `muestra.pdf`, verify 2 placeholder groups detected, assign text field to each group, see group listing with assigned fields
+**Independent Test**: Subir un PDF con 2 grupos, crear 2 mockups (fondo + placeholders), mapear `value="[campo1]"`, asociar a un producto; verificar `config.json` y que `analisis.json` no cambia.
 
 ### Implementation for User Story 1
 
-- [X] T015 [US1] Implement `Detector.php` color-based grouping (key = RGB with 3 decimals, order = a, b, c... z, aa...)
-- [X]6 [US1] Create `admin/pdfs.php` with PDF upload form and placeholder detection trigger
-- [X]7 [US1] Create `engine/Metadata.php` (JSON dataset: `datos/{pdf}/metadata.json`)
-- [X]8 [P] [US1] Create `engine/PngWriter.php` (transparent PNG generation without GD)
-- [X] T019 [P] [US1] Create `engine/Metadata.php` methods (save/load JSON, detect placeholders)
-- [X] T020 [US1] Create `admin/pdfs.php` group display table (group letter, count, placeholder image)
-- [X] T021 [US1] Implement campo UI in `admin/pdfs.php` (select existing campo, assign to group)
-- [X] T022 [P] [US1] Create mockup config structure in `uploads/pmu/pdfs/{pdf}/mckp.json`
-- [X] T023 [US1] Implement `engine/Motor.php` `upload()` method (validate PDF, call Detector, save Metadata)
-- [X] T024 [P] [US1] Create `tests/motor_smoke.php` test (PDF upload → placeholder detection → metadata save)
+- [ ] T007 [US1] Seccion "Mockups" en `admin/pdfs.php`: listar mockups del PDF (render al vuelo, sin miniaturas), crear/duplicar/eliminar, elegir `preview_omisible` (checkbox visible solo si hay >= 1 mockup) y subir fotos a `pdfs/{nombre}/mockups/` (ambito nuevo, sin catalogo). **Parcial hecho**: acordeon con listado vigente + explicacion de la norma + checkbox `preview_omisible` (disabled sin mockups; persiste via `guardar_config` con regla del motor: sin mockups queda `false`), handlers `personalizador_pdf_mockup_subir/borrar` registrados pero SIN implementar (proxima pasada).
+- [ ] T008 [US1] Editor embebido de mockups: iframe del modulo `modules/textmuy/` en modo reducido (`?modo=mockup&pdf={nombre}`) con canvas 300x300, capas `img`/`placeholder` ordenables (z-order), propiedades por capa (x, y, w, h, rot, sesgo, filtros 0..200%) y guardado en `config.json:mockups[]` via `PMU_Uploads::guardar_config()`; bump `?v=RCn` en `modules/textmuy/index.html` y `render-core.html`.
+- [X] T009 [US1] Mapeo de grupos a campos en `admin/pdfs.php`: por grupo elegir `tipo` (texto/imagen), `preset` (selector de `presets.json`), `value` y `settings` (plantillas `[campoN]` con autocompletado de `campos.json`) y checkbox `[v] Repetir por placeholder` (por campo/código: si el resultado es array, un valor por instancia; si no, el mismo valor en todas); guardar en `config.json:placeholders[id]` (con `repetir`) sin pisar `analisis.json`. Persistido en `handle_config_guardar` y normalizado en `PMU_Uploads::config_placeholders` (validado por fase `mockups`).
+- [X] T010 [US1] Asociacion PDF ↔ producto Woo (parcial backend): metodos `producto_pdf_slug/vincular/desvincular` en `personalizador-pdf.php` — canonico `postmeta _pmu_pdf_slug` (exige Woo; causa `motor:vinculo:sin_woo` en stubs) + espejo `config.json:productos[]` (espejo con dedupe); UI de la consola aclara que el vinculo canonico vive en la meta del producto (el listado actual es espejo). PENDIENTE (UI duradera): form de asociacion en ficha de producto Woo + forzar cantidad fija 1 (parte frontend de T010, requiere Woo real; se cierra con T012/T030).
+- [X] T011 [US1] Test de la historia: fase `mockups` en `tests/texto_puente.php` (guardar mockups + mapeo con `repetir` no pisa `analisis.json`; `preview_omisible` solo persiste con mockups — sin mockups queda `false` forzado; capas invalidas/refs con ruta descartadas; clamp filtros/rot/sesgo; asignacion postmeta/espejo pendiente de T010).
 
-**Checkpoint**: Admin can upload PDFs, view groups, and assign fields
 
 ---
 
-## Phase 4: User Story 2 - Client Personalization & Preview (Priority: P2)
+## Phase 4: User Story 2 - Cliente personaliza con mockup (P1)
 
-**Goal**: Client sees personalization panel on product page, enters data, and generates preview
+**Goal**: Ficha con campos, "Vista previa" (galeria paralela), add-to-cart como visto bueno y sesion completa.
 
-**Independent Test**: Visit product page, enter text in campo, click "Generar vista previa", see preview on mockup
+**Independent Test**: En la ficha de prueba, completar campos, pulsar "Vista previa", ver las vistas generadas en paralelo, agregar al carrito y verificar `tmp/sesion-{sid}/{cart_item_key}/` con pool + webp + `preview_estado=ok`.
 
 ### Implementation for User Story 2
 
-- [X]5 [US2] Implement `personalizador-pdf.php` WooCommerce filter to inject personalization panel on product page
-- [X]6 [US2] Create client-side panel HTML in `assets/panel-cliente.html` (fields from campo content)
-- [X]7 [US2] Implement `assets/admin.js` preview generator (Canvas 2D rendering using TextMuy iframe)
-- [X]8 [P] [US2] Create `admin/estilos-texto.php` with TextMuy iframe (`modules/textmuy/index.html`)
-- [X]9 [US2] Implement selector-pmu component in assets/selector-pmu.js per contracts/selector-pmu.md (upload, crop, save to uploads/pmu/tmp/ pending order confirmation)
-- [X] T030 [P] [US2] Create `uploads/pmu/tmp/order_id/` directory structure
-- [X]1 [US2] Implement `admin/pdfs.php` mockup editor (placeholder positioning on mockup image)
-- [X] T032 [P] [US2] Create quickstart.md validation for preview scenario
+- [ ] T012 [US2] Crear `assets/tienda.js` + encolado en ficha de producto con PDF activo: renderiza `campos.json` (contenido/css/script con sandbox `ctx`/`root`), recolecta el valor dual `{valor, cliente}` y expone el estado para el carrito; oculta el panel si el PDF esta inactivo o sin grupos.
+- [ ] T013 [US2] Handler AJAX `personalizador_pdf_vista_previa` en `personalizador-pdf.php` (nonce + cookie `pmu_sid`): crea/actualiza el draft (`PMU_Sesion::crear_draft()`), valida valores (sanitizados y limitados) y devuelve `{sid, item_key, pdfs, mockups[]}` al navegador.
+- [ ] T014 [US2] Render de vistas en `assets/tienda.js`: al pulsar "Vista previa" oculta el boton (leyenda "verifica tu personalizacion antes de continuar con la compra"), muestra la galeria 300x300 con flechas (mockups de todos los PDFs del producto concatenados), placeholder "Generando vista previa" por vista y render PARALELO via `TextMuyAPI.renderBatch` del RenderCore; sube cada PNG al pool (`PMU_Sesion::guardar_png()`).
+- [ ] T014b [US2] Resolucion de arrays en `assets/tienda.js`: si el campo/codigo resulta array (o `repetir` esta activo), un PNG por instancia (`img/{pdf}-{id}-{n}.png` con `-{n}` numerado y fila en `manifest.archivos[]`); si `N != M` (valores vs instancias), avisar y **bloquear la generacion de ese PDF** antes de renderizar (nunca PDF a medias); los mockups reflejan la misma resolucion.
+- [ ] T015 [US2] Habilitacion del carrito: el boton `add_to_cart` permanece deshabilitado hasta que todas las vistas de los PDFs no-omisibles esten listas; al agregar, interceptar el submit (`form.getAttribute('action')`, NUNCA `form.action`), enviar `cart_item_data` con `pmu_sid`/`pmu_item_key`/`unique_key=uuid` y promover el draft (`PMU_Sesion::promover()`); hooks `woocommerce_add_cart_item_data` + `woocommerce_get_item_data` para etiquetas `cliente` y meta canonica del item; congelar `mockup-{id}.webp` al agregar (`PMU_Sesion::congelar_webp()`).
+- [ ] T016 [US2] Re-edicion: link "Editar" en el carrito vuelve a la ficha con `item_key` cargado (valores + galeria ya generada); al re-pulsar "Vista previa" solo se regeneran los campos cuyo `hash` cambio; borrar item del carrito (`woocommerce_remove_cart_item`) dispara `PMU_Sesion::borrar_item()`.
+- [X] T017 [US2] Test de la historia: fase `sesion` en `tests/texto_puente.php` (draft -> promover con mismo sid; pool dedicado numerado con `-{n}`; manifest con indice `archivos[]`; webp congelados; TTL de drafts; array con `repetir` y bloqueo N≠M pendiente de la fase `conciliacion`/T024).
 
-**Checkpoint**: Client can personalize and preview
+**Checkpoint**: US2 independently functional — ficha completa sin mockup roto y carrito con sesion coherente.
 
 ---
 
-## Phase 5: User Story 3 - Purchase & PDF Generation (Priority: P3)
+## Phase 5: User Story 3 - Cliente omisible sin mockup (P2)
 
-**Goal**: After purchase, system generates personalized PDF and delivers to client
+**Goal**: PDFs con `preview_omisible=true` permiten comprar sin vista previa.
 
-**Independent Test**: Complete test purchase, access order confirmation page, download PDF, verify text/image overlays correct
+**Independent Test**: Con el flag activo, agregar sin pulsar "Vista previa" y verificar `preview_estado=omisible` en meta/manifest y generacion posterior del PDF.
 
 ### Implementation for User Story 3
 
-- [X]3 [US3] Implement `engine/Motor.php` `generate()` method (PDF + field_data + images → processed PDF)
-- [X]4 [US3] Create `admin/pdfs.php` "Procesar PDF" button (collects images/texts, calls Motor)
-- [X] T035 [P] [US3] Implement `engine/Overlay.php` `splice()` method (insert image before fill operator)
-- [X] T036 [P] [US3] Implement `engine/Overlay.php` `addExtGState()` (add /ECOp1 with ca=1 CA=1)
-- [X]7 [US3] Create WooCommerce order completion hook in `personalizador-pdf.php` (auto-generate PDF)
-- [X]8 [P] [US3] Create download handler in `personalizador-pdf.php` (deliver PDF using WooCommerce email hooks + download link)
-- [X] T039 [P] [US3] Add error handling to `engine/Motor.php` (invalid preset, script error → status=failed)
+- [ ] T018 [US3] Logica en `assets/tienda.js` + handler de ficha: si todos los PDFs del producto tienen `preview_omisible=true`, ocultar "Vista previa" y habilitar el carrito desde el inicio; al agregar, `preview_estado=omisible` y pool vacio (se generara despues).
+- [ ] T019 [US3] Manejo mixto (producto con PDF omisible + PDF obligatorio): el carrito se habilita solo cuando los obligatorios tienen sus vistas; el omisible no bloquea.
+- [ ] T020 [US3] Test de la historia: extender fase `sesion` (omisible: draft sin vistas + `preview_estado=omisible`; obligatorio sigue bloqueando).
 
-**Checkpoint**: PDF generation and delivery complete
+**Checkpoint**: US3 independently functional.
 
 ---
 
-## Phase 6: Polish & Cross-Cutting Concerns
+## Phase 6: User Story 4 - Fallo tolerado + pedido y descarga (P2)
 
-**Purpose**: Improvements that affect multiple user stories
+**Goal**: Los fallos de render no pierden la venta; el pedido se promueve al pago y se descarga por lista Woo.
 
-- [X] T040 [P] Add nonce validation to all admin_post handlers
-- [X]1 [P] Add error logging to `engine/Motor.php` (WordPress debug log)
-- [X]2 [P] Create `tests/parity.php` test (placeholder detection vs expected)
-- [X]3 [P] Create `tests/texto_puente.php` test (TextMuy bridge with WP stubs)
-- [X]4 Run quickstart.md validation scenarios
-- [X] T045 Documentation updates (admin guide in `admin/ayuda.php`)
+**Independent Test**: Provocar fallo de render (preset invalido), agregar con `sin_vista`, pagar y descargar con reintento silencioso.
+
+### Implementation for User Story 4
+
+- [ ] T021 [US4] Tolerancia en `assets/tienda.js`: vista con error se oculta (fotografia final, sin marcos de editor); si no queda ninguna, galeria oculta + mensaje "no hay vista previa" + carrito habilitado; `preview_estado=sin_vista` persistido en manifest/meta.
+- [ ] T022 [US4] Hooks Woo en `personalizador-pdf.php`: al crearse el pedido, `PMU_Sesion::staging_order()` (copia del item a `tmp/orders/{order_id}/`); al confirmarse el pago, `promover_order()` (rename a `orders/{order_id}/{item_key}/` con flag `.promocionando` y reintento en la siguiente accion); registrar `preview_estado` y valores en la meta del pedido.
+- [ ] T023 [US4] Descarga en `mi-cuenta/descargas/`: exponer cada `{pdf}_procesado.pdf` del item como fila de descarga Woo; el boton "Descargar" dispara render cliente (regenera el pool si falta algo) + `Motor.php` server-side (inyeccion por `manifest.archivos[]`), reintentable e idempotente; con `sin_vista`, reintento silencioso antes del Motor.
+- [ ] T024 [US4] Test de la historia: fase `conciliacion` en `tests/texto_puente.php` (sin vistas -> carrito habilitado; staging -> promote; descarga idempotente; analisis intacto tras todo el ciclo).
+
+**Checkpoint**: US4 independently functional — venta concretada aun con fallo de render.
+
+---
+
+## Phase 7: User Story 5 - Admin revisa "completados" (P2)
+
+**Goal**: Registro admin de pedidos completados con filtro por estado y regeneracion.
+
+**Independent Test**: Crear un pedido con `sin_vista`, abrir "completados" (aparece primero con el filtro), ver webp + valores y regenerar el PDF.
+
+### Implementation for User Story 5
+
+- [ ] T025 [US5] Seccion "Completados" en `admin/pdfs.php`: listado de pedidos completados con items (`orders/{order_id}/{item_key}/`), filtro por `preview_estado` (`sin_vista` primero), vista de webp congelados + valores del cliente (solo lectura) y causa si falta un archivo del indice.
+- [ ] T026 [US5] Accion "Regenerar" por item (admin): re-render del pool via RenderCore en el navegador del admin + Motor; actualiza manifest/meta y deja el PDF listo para el cliente (idempotente).
+- [ ] T027 [US5] Test de la historia: extender fase `conciliacion` (listado con filtro; regeneracion actualiza pool + PDF sin duplicar).
+
+**Checkpoint**: US5 independently functional — el admin puede recuperar cualquier caso.
+
+---
+
+## Phase 8: Polish & Cross-Cutting Concerns
+
+**Purpose**: Documentacion, arnes completo y verificacion final.
+
+- [ ] T028 [P] Actualizar `AGENTS.md` (§3 flujo comprador, §5 convenciones: `campos.json`, `pdfs/{nombre}/mockups/`, `tmp/sesion-{sid}/`, `preview_estado`) y `admin/ayuda.php` (flujo mockups/vista previa/descargas).
+- [ ] T029 [P] Actualizar `readme.txt` (Descripcion, FAQ y changelog) con el ciclo del comprador vigente.
+- [ ] T030 Correr `quickstart.md` completo (secciones 1-8) en panel WP real y limpiar los datos de prueba generados: solo `tmp/sesion-*`, `tmp/muestras/*` y `tmp/orders/*` creados en el recorrido; **nunca** `orders/` (entregables), ni `pdfs/`, ni catalogos del editor.
+- [ ] T031 Verificacion completa: `php -l` (todo), `motor_smoke` (SMOKE OK), `parity` (PARIDAD OK), `texto_puente` en todas las fases; `node --check` + 10 suites si se toco `modules/textmuy/` (bump `?v=RCn` aplicado).
 
 ---
 
@@ -136,77 +144,40 @@ ription: "Task list for WooCommerce PDF Personalization"
 
 ### Phase Dependencies
 
-- **Setup (Phase 1)**: No dependencies - can start immediately
-- **Foundational (Phase 2)**: Depends on Setup - BLOCKS all user stories
-- **User Story 1 (Phase 3)**: Depends on Foundational
-- **User Story 2 (Phase 4)**: Depends on Foundational
-- **User Story 3 (Phase 5)**: Depends on Foundational
-- **Polish (Phase 6)**: Depends on all desired user stories
+- **Setup (1)**: sin dependencias.
+- **Foundational (2)**: bloquea todas las historias (sesion + campos + rutas).
+- **US1 (3)**: depende de Foundational (usa `guardar_config` y ambito mockups).
+- **US2 (4)**: depende de Foundational y de US1 (necesita mockups/mapeos existentes).
+- **US3 (5)**: depende de US2 (mismo circuito de ficha, flag distinto).
+- **US4 (6)**: depende de US2/US3 (tolerancia + ciclo pedido/descarga).
+- **US5 (7)**: depende de US4 (lee pedidos promovidos).
+- **Polish (8)**: al cierre.
 
 ### Parallel Opportunities
 
-- All Phase 1 tasks can run in parallel
-- All Phase 2 tasks marked [P] can run in parallel
-- After Phase 2: US1, US2, US3 can be implemented in parallel by different team members
-
-### Parallel Example: Phase 2 (Foundational)
-
-```bash
-# Launch all foundational tasks together:
-Task: "Implement Pdf.php parser in engine/"
-Task: "Implement Detector.php in engine/"
-Task: "Implement Imagen.php in engine/"
-Task: "Implement Overlay.php in engine/"
-Task: "Implement Motor.php in engine/"
-```
-
-### Parallel Example: User Story 1
-
-```bash
-# Launch parallel tasks for US1:
-Task: "Create engine/Metadata.php (save/load JSON, detect placeholders)"
-Task: "Create admin/pdfs.php with PDF upload form"
-Task: "Create engine/PngWriter.php (transparent PNG generation)"
-```
-
----
+- T003/T004/T005/T006: archivos distintos ([P] donde corresponda).
+- T007/T009/T010 (US1) pueden avanzar en paralelo una vez existe T008 para probar.
+- US3 y la tolerancia de US4 comparten `assets/tienda.js` con US2: coordinar commits.
 
 ## Implementation Strategy
 
-### MVP First (User Story 1 Only)
+### MVP First (US1 + US2)
 
-1. Complete Phase 1: Setup
-2. Complete Phase 2: Foundational
-3. Complete Phase 3: User Story 1 (Admin upload & configuration)
-4. **STOP and VALIDATE**: Test PDF upload and group assignment
-5. Deploy/demo
+1. Setup + Foundational -> fundacion verde.
+2. US1 (mockups + mapeo + asociacion) -> validar en consola.
+3. US2 (ficha + vista previa + carrito) -> validar en tienda de prueba.
+4. STOP y VALIDAR el checkpoint de cada historia.
 
 ### Incremental Delivery
 
-1. Setup + Foundational → Foundation ready
-2. Add US1 → Admin can upload and configure PDFs → Deploy
-3. Add US2 → Client can personalize and preview → Deploy
-4. Add US3 → Full purchase flow → Deploy
-5. Each story adds value without breaking previous stories
-
-### Parallel Team Strategy
-
-With multiple developers:
-
-1. Team completes Setup + Foundational together
-2. Once Foundational is done:
-   - Developer A: User Story 1 (Admin configuration)
-   - Developer B: User Story 2 (Client preview)
-   - Developer C: User Story 3 (PDF generation)
-3. Stories complete and integrate independently
-
----
+1. US3 (omisible) -> 2. US4 (tolerancia + pedido/descarga) -> 3. US5 (completados) -> 4. Polish.
+Cada historia agrega valor sin romper la anterior; detenerse en cada checkpoint.
 
 ## Notes
 
-- [P] tasks = different files, no dependencies
-- [Story] label maps task to specific user story for traceability
-- Each user story should be independently completable and testable
-- Commit after each task or logical group
-- Stop at any checkpoint to validate story independently
-- Avoid: vague tasks, same file conflicts, cross-story dependencies
+- `engine/` (Motor PDF) sin cambios de algoritmo: solo consume `manifest.archivos[]`.
+- No crear arneses nuevos: extender `tests/texto_puente.php` (fases `sesion`, `conciliacion`, `campos`).
+- Tocar `modules/textmuy/` exige `node --check` + 10 suites + bump `?v=RCn` en ambos HTML.
+- La consola nunca muestra la pagina de error critico (aviso con causa, HTTP 200).
+- Evitar tareas vagas y mismos archivos en paralelo (los [P] respetan archivos distintos).
+**Checkpoint**: US1 independently functional — consola crea mockups/mapeos sin tocar el analisis.

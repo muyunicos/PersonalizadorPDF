@@ -60,6 +60,9 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_descargar', [$this, 'handle_descargar']);
         add_action('admin_post_personalizador_pdf_ver', [$this, 'handle_ver']);
         add_action('admin_post_personalizador_pdf_borrar', [$this, 'handle_borrar']);
+        // Spec 004 (T007): fotos de mockup del admin (subida/borrado).
+        add_action('admin_post_personalizador_pdf_mockup_subir', [$this, 'handle_mockup_subir']);
+        add_action('admin_post_personalizador_pdf_mockup_borrar', [$this, 'handle_mockup_borrar']);
 
         // Buscador de productos Woo para Configuracion tienda (autocompletado AJAX).
         add_action('wp_ajax_personalizador_pdf_buscar_productos', [$this, 'handle_buscar_productos']);
@@ -238,6 +241,64 @@ class Personalizador_PDF_Plugin
         }
         ksort($out);
         return $out;
+    }
+
+    /* ==================== Woo: asociacion producto <-> PDF (spec 004, T010) ==================== */
+
+    /**
+     * Lee el slug del PDF vinculado a un producto Woo (canonico: postmeta).
+     * Requiere WP real: en tests sin Woo devuelve '' (espejo no disponible).
+     */
+    public function producto_pdf_slug($product_id)
+    {
+        $product_id = (int)$product_id;
+        if ($product_id < 1 || !function_exists('get_post_meta')) {
+            return '';
+        }
+        return trim((string)get_post_meta($product_id, '_pmu_pdf_slug', true));
+    }
+
+    /**
+     * Vincula un producto Woo a un PDF: postmeta _pmu_pdf_slug (canonico) +
+     * espejo config.json:productos[] (solo lectura informativa).
+     */
+    public function producto_pdf_vincular($product_id, $pdf)
+    {
+        $product_id = (int)$product_id;
+        if ($product_id < 1 || !function_exists('update_post_meta')) {
+            throw new \RuntimeException('motor:vinculo:sin_woo');
+        }
+        $motor = $this->pmu_uploads();
+        $nombre = $motor->nombre_seguro($pdf, 'vinculo');
+        if (!is_file($motor->ruta_pdf($nombre))) {
+            throw new \RuntimeException('motor:vinculo:pdf:inexistente');
+        }
+        update_post_meta($product_id, '_pmu_pdf_slug', $nombre);
+        $config = $motor->leer_config($nombre);
+        $productos = isset($config['productos']) ? (array)$config['productos'] : [];
+        $productos[] = $product_id;
+        $motor->guardar_config($nombre, ['productos' => $productos]);
+        return $nombre;
+    }
+
+    /** Desvincula un producto Woo de un PDF (postmeta + espejo). */
+    public function producto_pdf_desvincular($product_id, $pdf)
+    {
+        $product_id = (int)$product_id;
+        if ($product_id < 1 || !function_exists('delete_post_meta')) {
+            throw new \RuntimeException('motor:vinculo:sin_woo');
+        }
+        $motor = $this->pmu_uploads();
+        $nombre = $motor->nombre_seguro($pdf, 'vinculo');
+        delete_post_meta($product_id, '_pmu_pdf_slug');
+        $config = $motor->leer_config($nombre);
+        $productos = [];
+        foreach ((array)($config['productos'] ?? []) as $pid) {
+            if ((int)$pid !== $product_id) {
+                $productos[] = (int)$pid;
+            }
+        }
+        $motor->guardar_config($nombre, ['productos' => $productos]);
     }
 
     /**
@@ -433,6 +494,12 @@ class Personalizador_PDF_Plugin
         $corta = function ($t, $n) {
             return function_exists('mb_substr') ? mb_substr($t, 0, $n, 'UTF-8') : substr($t, 0, $n);
         };
+        $script = isset($fuente['script']) ? (string)$fuente['script'] : '';
+        // Sandbox del script (contract campos.md): funcion pura con ctx/root;
+        // prohibidos document.getElementById/querySelector, DOMContentLoaded e id=.
+        $this->pmu_uploads()->validar_script_campo($script);
+        // Tupla de 10 slots: [id, titulo_cliente, tipo, etiquetas[], texto_ayuda,
+        // visible, contenido, css, script, array] (spec 004 contract campos.md).
         return [
             (int)$id,
             $corta($titulo, 200),
@@ -442,17 +509,18 @@ class Personalizador_PDF_Plugin
             empty($fuente['visible']) ? false : true,
             $contenido,
             isset($fuente['css']) ? (string)$fuente['css'] : '',
-            isset($fuente['script']) ? (string)$fuente['script'] : '',
+            $script,
+            !empty($fuente['array']) ? true : false,
         ];
     }
 
-    /** Lista de campos activos: id => tupla (tombstones fuera). */
+    /** Lista de campos activos: id => tupla de 10 slots (tombstones fuera). */
     private function campos_activos()
     {
         $res = $this->pmu_uploads()->campos_catalogo('listar');
         $out = [];
         foreach ($res['cat']['items'] as $t) {
-            if (count($t) < 9 || $t[1] === '' || $t[2] === '') {
+            if (count($t) < 10 || $t[1] === '' || $t[2] === '') {
                 continue;
             }
             $out[(int)$t[0]] = $t;
@@ -553,6 +621,7 @@ class Personalizador_PDF_Plugin
                 'preset' => isset($m['preset']) ? sanitize_key((string)$m['preset']) : null,
                 'value' => isset($m['value']) ? substr(trim((string)$m['value']), 0, 2000) : '',
                 'settings' => isset($m['settings']) ? substr(trim((string)$m['settings']), 0, 4000) : '',
+                'repetir' => !empty($m['repetir']),
             ];
         }
         $campos_ids = [];
@@ -581,6 +650,7 @@ class Personalizador_PDF_Plugin
             'activo' => !empty($_POST['activo']),
             'productos' => $productos,
             'campos_ids' => $campos_ids,
+            'preview_omisible' => !empty($_POST['preview_omisible']),
             'placeholders' => $placeholders,
         ];
         if (!$this->pmu_uploads()->guardar_config($nombre, $config)) {

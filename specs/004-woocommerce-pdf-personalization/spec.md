@@ -1,46 +1,141 @@
 # Personalización de Productos PDF para WooCommerce
 
-> **Estado (2026-09-15)**: tasks 100% pero diseño historico. Lo normativo es el plan
-> de conciliacion `008-sesion-cart-preview` (§0 decisiones + §6 migracion):
-> `analisis.json`+`config.json`, `tmp/sesion-{sid}/{item_key}/`, preview obligatoria
-> `draft-{uuid}` → `cart_item_key`. Ver tambien `data-model.md` (cabecera ESTADO 008).
+> **Estado (2026-09-17)**: reescrito a norma vigente (`constitution` §I+§IV +
+> decisiones 2026-09-17). Tasks viejas en `_archivo-tasks-2026-09-13.md`.
+
+**Branch**: `004-woocommerce-pdf-personalization` | **Created**: 2026-09-13 | **Reescrito**: 2026-09-17
 
 ## Contexto
 
-Plugin WordPress que permite asociar productos PDF (con placeholders personalizables) a productos WooCommerce. Los clientes personalizan sus productos antes de la compra mediante campos definidos por el administrador, pueden (en algunos casos) previsualizar un mockup del resultado final y reciben el PDF personalizado tras el pago.
+Plugin WordPress que asocia PDFs con placeholders a productos WooCommerce. El cliente
+personaliza en ficha, aprueba vía mockup ("Vista previa") y descarga el PDF tras el pago.
+Norma tecnica: `constitution` §I+§IV (mockup obligatorio salvo `preview_omisible`,
+sesion por item, pool dedicado, `preview_estado`).
 
 ---
 
 ## Descripción del Producto
 
-Este sistema permite a los administradores:
-1. Subir productos PDF con placeholders (rectángulos transparentes)
-2. Asociar un PDF a uno o más productos WooCommerce
-3. Definir campos de personalización que el cliente verá en la página del producto
-4. Mapear campos a placeholders con expresiones personalizadas (código script)
-5. Asignar presets de TextMuy para estilos de texto (con overrides opcionales)
+Admin: sube PDFs (grupos por color, `id` hex) → asocia a N productos Woo
+(`postmeta _pmu_pdf_slug` + espejo `config.json`) → define campos reutilizables
+→ mapea grupos (`value`/`settings` con `[campoN]`, array = loop) → compone N mockups
+(editor 300x300, capas + filtros) → decide `preview_omisible` (default `false`).
 
-Los clientes pueden:
-1. Ver un panel de personalización en la página del producto
-2. Ingresar textos, seleccionar opciones y subir imágenes
-3. Ver la vista previa del resultado sobre un mockup al tocar el botón de generar vista previa
-4. Comprar el producto personalizado
-5. Descargar el PDF final desde la página de éxito o por email
+Cliente: completa campos → "Vista previa" (galeria 300x300 + flechas) →
+agrega al carrito (el visto bueno ES agregar; cantidad 1) → paga →
+descarga desde lista Woo nativa (boton "Descargar": render cliente + Motor).
 
----
-
-## Roles de Usuario
+## Roles de Usuario (norma 2026-09-17)
 
 ### Administrador (WordPress)
-- Sube PDFs base desde el panel del plugin
-- Asigna PDFs a productos WooCommerce
-- Define campos de personalización (selecciona cuáles y su orden; puede ser campo de texto, imagen, color, fuente, etc.)
-- Configura restricciones por campo de imagen (transparencia sí/no, relación de aspecto, tamaño en px, opciones de editor simple de recorte/ajuste)
-- Mapea campos a placeholders con expresiones personalizadas (código script)
-- Asigna presets de TextMuy a placeholders (define overrides opcionales seleccionando campos de override o código script)
-- Sube imágenes de mockup y define la disposición de los placeholders para la vista previa
+- Sube PDFs, activa/desactiva (`config.json:activo`), asocia a productos Woo.
+- Crea campos reutilizables (texto, imagen con `selector-pmu`, override; valor dual).
+- Mapea grupos (`placeholders[id]`: `tipo`/`preset`/`value`/`settings`) + comportamiento array.
+- Compone mockups (`config.json:mockups[]`), sube fotos (`pdfs/{nombre}/mockups/` o `img/`), decide `preview_omisible`.
+- Revisa "completados" (filtro `preview_estado`) y regenera si hace falta.
 
 ### Cliente (WooCommerce)
+- Completa campos, pulsa "Vista previa", navega mockups, agrega al carrito.
+- Edita item desde carrito (misma carpeta, re-render in-place).
+- Descarga PDFs desde lista nativa Woo post-pago.
+
+## User Scenarios & Testing (norma 2026-09-17)
+
+### Escenario 1: Admin configura producto (P1)
+Sube PDF → 2 grupos → mapea campos → compone 2 mockups → asocia a producto Woo.
+**Aceptacion**: `analisis.json` + `config.json` listos; ficha muestra campos + "Vista previa".
+
+### Escenario 2: Cliente con mockup (P1)
+Completa → "Vista previa" (paralelo) → agrega → paga → descarga.
+**Aceptacion**: `preview_estado=ok`; pool + webp en sesion; PDF en `orders/`.
+
+### Escenario 3: Omisible sin mockup (P2)
+`preview_omisible=true`: agrega directo; PDF se genera al pagar/en Descargas.
+**Aceptacion**: `preview_estado=omisible`.
+
+### Escenario 4: Fallo no frena venta (P2)
+Vista rota → se oculta; sin vistas → "no hay vista previa" + compra habilitada.
+**Aceptacion**: `preview_estado=sin_vista`; reintento silencioso en Descargas.
+
+### Escenario 5: Admin revisa "completados" (P2)
+Filtra por estado, ve webp + valores, regenera.
+**Aceptacion**: filtro OK, prueba visible, regeneracion OK.
+
+## Funcionalidades Requeridas (norma 2026-09-17)
+
+### FR-1: PDFs
+- FR-1.1: Subir → `pdfs/{nombre}/{nombre}.pdf` + `analisis.json` inmutable.
+- FR-1.2: Deteccion (opacidad ≤0.001, min 10x5pt, `id` hex, orden lexicografico).
+- FR-1.3: Activar/desactivar. FR-1.4: Borrar (nunca `orders/` ni sesiones ajenas).
+
+### FR-2: Vinculo Woo
+- FR-2.1: 1 PDF → N productos (`postmeta _pmu_pdf_slug` + espejo `config.json`).
+- FR-2.2: Panel en ficha solo si activo y asignado. FR-2.3: Remover asignacion.
+- FR-2.4: Cantidad 1 + `unique_key=uuid` (jamas fusionar lineas).
+
+### FR-3: Campos
+- FR-3.1: CRUD `campos.json` (id auto, nunca reutilizado; sin miniaturas, se reconocen por id numeral).
+- FR-3.2: texto/imagen/override; `titulo_cliente`; HTML/CSS con scope; `script(ctx,root)` sandbox.
+- FR-3.3: Valor dual; array o unico lo define el campo.
+- FR-3.4: Imagen `selector-pmu` (subida + recorte/ajuste en Canvas): el **tamaño final en px lo define el campo/PDF**; sin límite de peso: el cliente edita la imagen y al aceptar el ajuste al marco se guarda en el servidor la versión recortada al tamaño indicado.
+
+### FR-4: Mapeo
+- FR-4.1: `placeholders[id]={tipo,preset,value,settings,repetir}` (`[campoN]`); `repetir` = checkbox `[v] Repetir por placeholder` (por campo/código).
+- FR-4.2: Un campo → N grupos. FR-4.3: Si el resultado es array (o `repetir` activo), un valor por instancia en loop; `N≠M` se avisa y bloquea la generación (nunca PDF a medias).
+- FR-4.4: `manifest.archivos[]={pdf,grupo_id,indice,file}` (Motor lee indice). Si falta un archivo del indice, el item queda `sin_vista` (el estado no cambia; la causa parcial queda en el detalle del manifest/meta para el admin).
+
+### FR-5: TextMuy
+- FR-5.1: Preset + overrides por grupo. FR-5.2: Render cliente → PNG al pool.
+- FR-5.3: Editor mockups reutiliza TextMuy (iframe/modo, bump `?v=RCn`).
+
+### FR-6: Mockups
+- FR-6.1: N mockups (`config.json:mockups[]`), capas en cualquier orden, filtros por capa (solo mockup).
+- FR-6.2: "Vista previa" + leyenda; galeria 300x300 + flechas; "Generando..." paralelo sin CLS.
+- FR-6.3: `preview_omisible` default false, visible solo con mockups.
+- FR-6.4: Re-edicion oculta galeria; regeneracion parcial por hash.
+- FR-6.5: Multi-PDF: carrito con todos los no-omisibles listos; carrusel concatena.
+
+### FR-7: Sesion
+- FR-7.1: `sid` UUID propio (cookie 30 dias); `draft-{uuid}/` → `{cart_item_key}/` → `tmp/orders/` → `orders/`.
+- FR-7.2: Pool dedicado (`img/{pdf}-{id}-{n}.png`); webp 300x300 al agregar (todos).
+- FR-7.3: Editar in-place; borrar quirurgico; TTL individual (drafts 24h).
+- FR-7.4: Meta canonica + espejo sesion (Motor nunca lee meta Woo).
+
+### FR-8: Pedidos
+- FR-8.1: `rename()` → `orders/{order_id}/{item_key}/` (+ `{pdf}_procesado.pdf`).
+- FR-8.2: Lista Woo nativa (fila por PDF; sin ZIP).
+- FR-8.3: "Descargar" = render + Motor (reintentable); `sin_vista` → reintento silencioso.
+- FR-8.4: `preview_estado` en meta; "completados" filtra (`sin_vista` primero).
+- FR-8.5: Sin vistas → "no hay vista previa" + compra habilitada.
+
+## Criterios de Éxito
+- SC-1: Admin configura en <10 min. SC-2: Cliente compra en <5 min.
+- SC-3: PDF <10 s tras pagar. SC-4: Vista <5 s (paralelo).
+- SC-5: 0 ventas perdidas por fallo render.
+- SC-6: 3 agregados del mismo producto con distintos valores conservan cada uno sus valores, pool y webp (0 lineas pisadas).
+- SC-7: 100% configs sin pisar analisis.
+
+## Casos Borde (norma 2026-09-17)
+- Sin placeholders: sin panel. Campo compartido: una vez. N≠M: se avisa y bloquea la generacion de ese PDF.
+- Imagen opcional vacia: hueco intacto (foto final, sin marcos).
+- Imagen del cliente: se guarda la version recortada al tamaño indicado (sin rechazo por peso); tipos no validos se rechazan con mensaje comprensible.
+- Preset invalido en vista: se oculta; sin vistas → `sin_vista` + venta OK.
+- Re-edicion: re-render in-place.
+
+## Supuestos
+- Placeholders transparentes (CorelDRAW). TextMuy integrado; PHP nunca evalua JS.
+- Woo activo; `uploads/pmu/` raiz unica; sin tablas custom ni datos en plugin.
+- Pool PNG (Motor) + webp (prueba); fotos en `pdfs/{nombre}/mockups/` o `img/`.
+- Sin limites de mockups/capas; imagen del cliente sin limite de peso (se guarda la version recortada al tamaño indicado).
+
+## Límites
+- Sin edicion avanzada (recorte + filtros mockup). Sin "re-comprar" (futuro).
+- Sin retencion auto de `orders/` (la programa el admin). Sin animacion.
+
+---
+--- HISTORICO 2026-09-13 (derogado por norma 2026-09-17, se conserva abajo) ---
+
+### Cliente (WooCommerce) [HISTORICO 2026-09-13, derogado arriba]
 - Ve campos de personalización en la página del producto
 - Ingresa textos, selecciona opciones (color, fuente, ajustes, etc.) y sube imágenes según lo permitido
 - Ve la vista previa del resultado sobre el mockup al tocar el botón de generar vista previa
@@ -49,9 +144,9 @@ Los clientes pueden:
 
 ---
 
-## User Scenarios & Testing
+## User Scenarios & Testing [HISTORICO 2026-09-13, derogado arriba]
 
-### Escenario 1: Administrador configura producto
+### Escenario 1 [HISTORICO]: Administrador configura producto
 
 **Flujo:**
 1. Admin sube PDF base (ej: `Etiquetas-condimentos-con-logo.pdf`)
@@ -122,9 +217,9 @@ script (opcional): (vacio)
 
 ---
 
-## Funcionalidades Requeridas
+## Funcionalidades Requeridas [HISTORICO 2026-09-13, derogado arriba]
 
-### FR-1: Gestión de Productos PDF
+### FR-1 [HISTORICO]: Gestión de Productos PDF
 - FR-1.1: Administrador puede subir PDFs base
 - FR-1.2: Sistema detecta placeholders automáticamente
 - FR-1.3: Administrador puede activar/desactivar PDFs (para que se muestren o no en las páginas de productos)
@@ -190,7 +285,7 @@ script (opcional): (vacio)
 
 ---
 
-## Entidades Clave
+## Entidades Clave [HISTORICO 2026-09-13, derogado arriba]
 
 ### PDF
 - ID (automático, único)
@@ -226,7 +321,7 @@ script (opcional): (vacio)
 
 ---
 
-## Casos Borde
+## Casos Borde [HISTORICO 2026-09-13, derogado arriba]
 
 - PDF sin placeholders detectados: el producto no muestra panel de personalización
 - Producto con más de un PDF asignado y un campo compartido: el campo se muestra una sola vez
@@ -238,7 +333,7 @@ script (opcional): (vacio)
 
 ---
 
-## Clarificaciones
+## Clarificaciones [HISTORICO 2026-09-13]
 
 ### Sesión 2026-09-13
 
@@ -250,7 +345,8 @@ script (opcional): (vacio)
 - Q: ¿La vista previa es automática o por botón? → A: Por botón, el cliente toca para generar la vista previa (no se actualiza automáticamente)
 - Q: ¿Qué alcance debe tener el componente `selector-pmu` en esta feature? → A: Incluir en scope como feature básica (subida + recorte simple)
 
-## Supuestos
+## Supuestos [HISTORICO 2026-09-13, derogado arriba]
+
 
 - Los placeholders en los PDF se detectan como rectángulos transparentes
 - TextMuy está disponible en `modules/textmuy/`
@@ -263,7 +359,7 @@ script (opcional): (vacio)
 
 ---
 
-## Límites
+## Límites [HISTORICO 2026-09-13, derogado arriba]
 
 - No incluye edición avanzada de imágenes (solo recorte/ajuste básico)
 - No incluye animación de los PDF generados

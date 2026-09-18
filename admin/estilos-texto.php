@@ -4,9 +4,9 @@ if (!defined('ABSPATH')) {
 }
 /** @var Personalizador_PDF_Plugin $this */
 
-// El modulo TextMuy NO se distribuye con el plugin (v4.0.0): se importa a mano
-// en modules/textmuy/ (ver modules/LEEME.md). Sin el modulo, la pestana muestra
-// el aviso y el resto del plugin funciona con normalidad.
+// Fallback defensivo (v4.2: TextMuy viene integrado en modules/textmuy/):
+// si el modulo falta en esta instalacion, la pestana muestra el aviso
+// y el resto del plugin funciona con normalidad.
 if (!$this->modulo_textmuy_disponible()) {
     ?>
     <div class="card">
