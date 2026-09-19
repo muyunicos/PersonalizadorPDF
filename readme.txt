@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.1.1
+Stable tag: 4.2.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -62,6 +62,11 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.2.0 =
+* **Ciclo completo del comprador (spec 004)**: panel del comprador en la ficha Woo (`woocommerce_before_add_to_cart_form` + shortcode `[pmu_personalizar]`) con los campos del catalogo; "Vista previa" genera mockups 300x300 en paralelo (RenderCore) y sube los PNG al pool de la sesion (`tmp/sesion-{sid}/{item_key}/img/`, cookie `pmu_sid`); el carrito exige vistas listas (salvo `preview_omisible`), congela las vistas aprobadas (`mockup-{id}.webp`) y promueve el item con cantidad fija 1 y `unique_key`; re-edicion desde el carrito reusa el item y regenera solo lo cambiado (hash `sha1(valor|preset|settings|WxH)`).
+* **Pedido y descarga**: staging al crearse el pedido (`tmp/orders/{id}/`), promocion a `orders/{id}/{item_key}/` al pagarse, descargas en `mi-cuenta` (PDF final generado al vuelo desde el indice del pool con `Motor::procesar_pedido`, idempotente) y seccion "4. Pedidos completados" en la consola con "Regenerar PDF".
+* **Conciliacion ex-008**: rutas de sesion alineadas a la norma (`tmp/sesion-{sid}/{item_key}/`, sin el nivel intermedio `tmp/sesion/`) y unico armador de datos de render (`datos_pdf_render`).
 
 = 4.1.1 =
 * **Corregido: puente faltante en el render-core**: la consola "PDFs" (Probar y Procesar) nunca enviaba el puente textmuy-bridge al iframe render-core.html, asi que todo render con preset TextMuy fallaba con presets:sin_puente. Ahora assets/admin.js envia el puente (urls + nonces + inventarios, construidos por el nuevo metodo unico puente_textmuy()) en los 3 momentos del contrato (AGENTS 2.1).

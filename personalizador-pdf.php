@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.1.1
+ * Version: 4.2.0
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('PERSONALIZADOR_PDF_VERSION', '4.1.1');
+define('PERSONALIZADOR_PDF_VERSION', '4.2.0');
 define('PERSONALIZADOR_PDF_PATH', plugin_dir_path(__FILE__));
 define('PERSONALIZADOR_PDF_URL', plugin_dir_url(__FILE__));
 
@@ -68,8 +68,10 @@ class Personalizador_PDF_Plugin
 
         // Spec 004 (T012): panel del comprador en la ficha del producto.
         // El shortcode expone el mismo panel fuera de Woo (manuales/test).
-        add_shortcode('pmu_personalizar', [$this, 'shortcode_panel']);
-        add_action('wp_enqueue_scripts', [$this, 'assets_ficha']);
+        add_shortcode('pmu_personalizar', [$this, 'shortcode_panel_render']);
+        add_action('wp_enqueue_scripts', [$this, 'assets_ficha_condicional']);
+        // Spec 004 (T016): panel del comprador en la ficha real del producto.
+        add_action('woocommerce_before_add_to_cart_form', [$this, 'ficha_panel_render']);
 
         // Spec 004 (T013): vista previa del comprador (AJAX; anonimo permitido).
         add_action('wp_ajax_personalizador_pdf_vista_previa', [$this, 'handle_vista_previa']);
@@ -85,6 +87,16 @@ class Personalizador_PDF_Plugin
         add_action('woocommerce_add_cart_item_data', [$this, 'carrito_agregar'], 10, 4);
         add_action('woocommerce_add_to_cart', [$this, 'carrito_promover'], 10, 5);
         add_action('woocommerce_get_item_data', [$this, 'carrito_mostrar'], 10, 2);
+        add_filter('woocommerce_cart_item_name', [$this, 'carrito_enlace_edicion'], 10, 2);
+
+        // Spec 004 (T022/T023): ciclo del pedido y descarga del PDF final.
+        add_action('woocommerce_checkout_create_order_line_item', [$this, 'pedido_item_crear'], 10, 4);
+        add_action('woocommerce_order_status_processing', [$this, 'pedido_promover'], 10, 1);
+        add_action('woocommerce_order_status_completed', [$this, 'pedido_promover'], 10, 1);
+        add_filter('woocommerce_customer_get_downloadable_products', [$this, 'descargas_cliente'], 10, 1);
+        add_action('admin_post_personalizador_pdf_item_descargar', [$this, 'handle_item_descargar']);
+        add_action('admin_post_nopriv_personalizador_pdf_item_descargar', [$this, 'handle_item_descargar']);
+        add_action('admin_post_personalizador_pdf_item_regenerar', [$this, 'handle_item_regenerar']);
         add_action('woocommerce_remove_cart_item', [$this, 'carrito_quitar']);
         add_filter('woocommerce_quantity_input_min', [$this, 'cantidad_fija'], 10, 2);
         add_filter('woocommerce_quantity_input_max', [$this, 'cantidad_fija'], 10, 2);
@@ -309,16 +321,101 @@ class Personalizador_PDF_Plugin
     /* ==================== Woo: asociacion producto <-> PDF (spec 004, T010) ==================== */
 
     /**
-     * Panel del comprador en la ficha (spec 004, T012). Wrappers:
-     * - Shortcode [pmu_personalizar pdf="slug"] (manuales/test, sin Woo).
-     * - Ficha Woo: se engancha cuando el producto tiene _pmu_pdf_slug vigente
-     *   (T016 cablea el hook en Woo real).
-     * Oculta el panel si el PDF esta inactivo, sin analisis o sin grupos.
+     * Panel del comprador en la ficha (spec 004, T012/T016). Wrappers:
+     * - Shortcode `[pmu_personalizar pdf="slug"]` -> `shortcode_panel_render()`
+     *   (HTML real; tambien sirve fuera de Woo en manuales).
+     * - Ficha Woo: `ficha_panel_render()` en `woocommerce_before_add_to_cart_form`
+     *   con el PDF vinculado por `_pmu_pdf_slug` (canonico).
+     * `shortcode_panel()` queda como API de DATOS (tests/manuales).
      */
     public function shortcode_panel($atributos = [])
     {
         $pdf = isset($atributos['pdf']) ? $this->pmu_uploads()->nombre_seguro((string)$atributos['pdf'], 'panel') : '';
         return $this->panel_ficha($pdf);
+    }
+
+    /** HTML del panel de ficha (datos o '' si el PDF no es ofrecible). */
+    public function shortcode_panel_render($atributos = [])
+    {
+        $pdf = isset($atributos['pdf']) ? $this->pmu_uploads()->nombre_seguro((string)$atributos['pdf'], 'panel') : '';
+        return $this->panel_ficha_html($pdf);
+    }
+
+    /** Hook Woo: panel en la ficha del producto (nada si no hay PDF vinculado). */
+    public function ficha_panel_render()
+    {
+        $producto = function_exists('wc_get_product') ? wc_get_product(get_the_ID()) : null;
+        $pid = $producto && method_exists($producto, 'get_id') ? (int)$producto->get_id() : 0;
+        echo $this->panel_ficha_html($pid > 0 ? $this->producto_pdf_slug($pid) : '');
+    }
+
+    /**
+     * Datos de los campos elegidos para el JS de la ficha: dict por campo
+     * (tupla de 10 slots -> claves nombradas; el JS monta el HTML/CSS/script).
+     */
+    public function campos_panel(array $elegidos)
+    {
+        $out = [];
+        foreach ($elegidos as $cid => $c) {
+            $out[] = [
+                'id' => (int)$cid,
+                'titulo_cliente' => (string)$c[1],
+                'tipo' => (string)$c[2],
+                'texto_ayuda' => (string)$c[4],
+                'contenido' => (string)$c[6],
+                'css' => (string)$c[7],
+                'script' => (string)$c[8],
+                'array' => !empty($c[9]),
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * HTML del panel + `PMU_FICHA` para `assets/tienda.js` (T016). Sin PDF
+     * ofrecible devuelve ''. Imprime una sola vez por request (hook + shortcode).
+     * En edicion (`?pmu_item_key=`) precarga los valores del manifest vigente.
+     */
+    public function panel_ficha_html($pdf = '')
+    {
+        static $impreso = false;
+        $panel = $this->panel_ficha($pdf);
+        if (!$panel || $impreso) {
+            return '';
+        }
+        $impreso = true;
+        $this->assets_ficha();
+        $valores = [];
+        $itemEdicion = '';
+        $sid = '';
+        try {
+            $sesion = $this->sesion();
+            $sid = $sesion->sid_actual();
+            $pedido = isset($_GET['pmu_item_key']) ? sanitize_text_field(wp_unslash((string)$_GET['pmu_item_key'])) : '';
+            $manifest = $pedido !== '' ? $sesion->leer_manifest($sid, $pedido) : null;
+            if (is_array($manifest)
+                && in_array($panel['pdf'], array_map('strval', (array)($manifest['pdfs'] ?? [])), true)) {
+                $itemEdicion = $pedido;
+                $valores = (array)($manifest['valores'] ?? []);
+            }
+        } catch (\Throwable $e) {
+            $itemEdicion = '';
+        }
+        wp_localize_script('personalizador-pdf-tienda', 'PMU_FICHA', [
+            'pdf' => $panel['pdf'],
+            'campos' => $this->campos_panel($panel['campos']),
+            'preview_omisible' => !empty($panel['preview_omisible']),
+            'valores' => $valores,
+            'sesion' => $itemEdicion !== '' ? ['sid' => $sid, 'item_key' => $itemEdicion] : null,
+        ]);
+        $html = '<div class="pmu-panel" data-pmu-panel data-pdf="' . esc_attr($panel['pdf']) . '">';
+        $html .= '<p class="pmu-panel-titulo"><strong>Personaliza tu diseno</strong></p>';
+        $html .= '<p class="pmu-panel-ayuda">Completa los campos y pulsa "Vista previa" para ver el resultado antes de comprar.</p>';
+        if ($itemEdicion !== '') {
+            $html .= '<p class="pmu-panel-edicion">Estas editando tu personalizacion guardada: la vista previa se regenerara solo donde cambiaste algo.</p>';
+        }
+        $html .= '</div>';
+        return $html;
     }
 
     /** Datos del panel de ficha para un PDF (false si el PDF no es ofrecible). */
@@ -353,9 +450,26 @@ class Personalizador_PDF_Plugin
         ];
     }
 
+    /**
+     * Enqueue condicional (T016, riesgo 7): los assets del comprador solo
+     * cargan en la ficha de producto (o cuando el shortcode los pide). Antes
+     * se encolaban en TODO el front.
+     */
+    public function assets_ficha_condicional()
+    {
+        if (function_exists('is_product') && is_product()) {
+            $this->assets_ficha();
+        }
+    }
+
     /** Assets de la ficha (spec 004, T012): tienda.js + selector-pmu + puente. */
     public function assets_ficha()
     {
+        static $listo = false;
+        if ($listo) {
+            return;
+        }
+        $listo = true;
         wp_enqueue_script(
             'personalizador-pdf-selector',
             PERSONALIZADOR_PDF_URL . 'assets/selector-pmu.js',
@@ -542,25 +656,53 @@ class Personalizador_PDF_Plugin
             $crudos = json_decode(wp_unslash($crudos), true);
         }
         $valores = $this->valores_sanitizados($crudos, $panel['campos']);
+        $edicion = false;
         try {
             $sesion = $this->sesion();
             $sid = $sesion->sid_actual();
-            $item = $sesion->crear_draft($sid, [$pdf]);
-            $manifest = $sesion->leer_manifest($sid, $item);
-            if (is_array($manifest)) {
+            // T016 (re-edicion): con `item_key` vigente se REUSA el item (mismo
+            // item_key, mismos PNG del pool) y solo se refrescan los valores; sin
+            // el, se crea el borrador habitual.
+            $previo = isset($_POST['item_key']) ? sanitize_text_field(wp_unslash((string)$_POST['item_key'])) : '';
+            $manifest = $previo !== '' ? $sesion->leer_manifest($sid, $previo) : null;
+            if (is_array($manifest)
+                && in_array($pdf, array_map('strval', (array)($manifest['pdfs'] ?? [])), true)) {
+                $item = (string)$manifest['item_key'];
                 $manifest['valores'] = $valores ? $valores : new \stdClass();
+                // Re-editar invalida el visto bueno anterior: el estado vuelve a
+                // sin_vista hasta que se regenere el pool (o queda omisible).
+                $manifest['preview_estado'] = $manifest['preview_estado'] === PMU_Sesion::ESTADO_OMISIBLE
+                    ? PMU_Sesion::ESTADO_OMISIBLE : PMU_Sesion::ESTADO_SIN_VISTA;
                 $sesion->guardar_manifest($sid, $item, $manifest);
+                $edicion = true;
+            } else {
+                $item = $sesion->crear_draft($sid, [$pdf]);
+                $manifest = $sesion->leer_manifest($sid, $item);
+                if (is_array($manifest)) {
+                    $manifest['valores'] = $valores ? $valores : new \stdClass();
+                    $sesion->guardar_manifest($sid, $item, $manifest);
+                }
             }
+            $manifest = $sesion->leer_manifest($sid, $item);
         } catch (\Throwable $e) {
             wp_send_json_error($e->getMessage());
         }
-        $config = $this->config_de($pdf);
         wp_send_json_success([
             'sid' => $sid,
             'item_key' => $item,
+            'edicion' => $edicion,
             'pdfs' => [$this->datos_pdf_render($pdf)],
-            'mockups' => isset($config['mockups']) ? array_values((array)$config['mockups']) : [],
+            // Render parcial (T016): hashes ya generados + URL del pool para
+            // recomponer los mockups sin volver a subir lo que no cambio.
+            'archivos' => is_array($manifest) ? array_values((array)($manifest['archivos'] ?? [])) : [],
+            'pool_url' => $this->pmu_uploads()->url_sesion_item($sid, $item),
         ]);
+    }
+
+    /** El PDF admite compra sin vistas (`preview_omisible`, US3). */
+    private static function omisible_ok($config)
+    {
+        return !empty($config['preview_omisible']);
     }
 
     /**
@@ -647,6 +789,31 @@ class Personalizador_PDF_Plugin
         $sid = isset($_POST['pmu_sid']) ? sanitize_text_field(wp_unslash((string)$_POST['pmu_sid'])) : '';
         $item = isset($_POST['pmu_item_key']) ? sanitize_text_field(wp_unslash((string)$_POST['pmu_item_key'])) : '';
         if ($sid === '' || $item === '') {
+            // US3 (T018/T019): sin draft previo y PDF omisible, el item se crea
+            // con estado omisible y los valores del panel (los obligatorios
+            // siguen exigiendo su draft previo).
+            $panel = $this->panel_ficha($pdf);
+            if (self::omisible_ok($this->config_de($pdf))) {
+                try {
+                    $sesion = $this->sesion();
+                    $sid = $sesion->sid_actual();
+                    $item = $sesion->crear_draft($sid, [$pdf]);
+                    $manifest = $sesion->leer_manifest($sid, $item);
+                    if (is_array($manifest)) {
+                        $crudos = isset($_POST['pmu_valores']) ? json_decode(wp_unslash((string)$_POST['pmu_valores']), true) : [];
+                        $manifest['valores'] = $this->valores_sanitizados($crudos, $panel['campos'])
+                            ?: new \stdClass();
+                        $manifest['preview_estado'] = PMU_Sesion::ESTADO_OMISIBLE;
+                        $sesion->guardar_manifest($sid, $item, $manifest);
+                    }
+                    $_POST['pmu_sid'] = $sid;
+                    $_POST['pmu_item_key'] = $item;
+                    $this->item_draft_valido = ['sid' => $sid, 'item_key' => $item];
+                    return true;
+                } catch (\Throwable $e) {
+                    // cae al aviso habitual (nunca bloquea por error de datos)
+                }
+            }
             if (function_exists('wc_add_notice')) {
                 wc_add_notice('Completa tu personalizacion y genera la vista previa antes de agregar al carrito.', 'error');
             }
@@ -680,8 +847,8 @@ class Personalizador_PDF_Plugin
     {
         // Con Woo, la validacion detecta el draft; sin Woo (shortcode/manuales),
         // el draft viaja por el POST (mismo contrato).
-        $sid = (string)(isset($this->item_draft_valido['sid']) ? $this->item_draft_valido['sid'] : (isset($_POST['pmu_sid']) ? sanitize_text_field(wp_unslash((string)$_POST['pmu_sid'])) : ''));
-        $item = (string)(isset($this->item_draft_valido['item_key']) ? $this->item_draft_valido['item_key'] : (isset($_POST['pmu_item_key']) ? sanitize_text_field(wp_unslash((string)$_POST['pmu_item_key'])) : ''));
+        $sid = (string)(!empty($this->item_draft_valido['sid']) ? $this->item_draft_valido['sid'] : (isset($_POST['pmu_sid']) ? sanitize_text_field(wp_unslash((string)$_POST['pmu_sid'])) : ''));
+        $item = (string)(!empty($this->item_draft_valido['item_key']) ? $this->item_draft_valido['item_key'] : (isset($_POST['pmu_item_key']) ? sanitize_text_field(wp_unslash((string)$_POST['pmu_item_key'])) : ''));
         if ($sid === '' || $item === '' || !is_array($datos)) {
             return $datos;
         }
@@ -689,6 +856,284 @@ class Personalizador_PDF_Plugin
         $datos['pmu_item_key'] = $item;
         $datos['unique_key'] = $this->sesion_uuid_publico();
         return $datos;
+    }
+
+    /* ==================== Pedido y descarga (spec 004, T022/T023) ==================== */
+
+    /**
+     * T022: al crearse el pedido se copia la meta del item y se hace el staging
+     * (`tmp/orders/{order_id}/{item_key}/`). Fail-safe: nunca tumba el checkout.
+     */
+    public function pedido_item_crear($item, $clave, $values, $order = null)
+    {
+        if (empty($values['pmu_sid']) || empty($values['pmu_item_key']) || !is_object($item)) {
+            return;
+        }
+        $sid = (string)$values['pmu_sid'];
+        $itemKey = (string)$values['pmu_item_key'];
+        $item->add_meta_data('_pmu_sid', $sid);
+        $item->add_meta_data('_pmu_item_key', $itemKey);
+        try {
+            $sesion = $this->sesion();
+            $manifest = $sesion->leer_manifest($sid, $itemKey);
+            $estado = $sesion->estado_preview($sid, $itemKey);
+            $item->add_meta_data('_pmu_preview_estado', $estado);
+            $item->add_meta_data('_pmu_valores', wp_json_encode((array)($manifest['valores'] ?? [])));
+            $item->add_meta_data('_pmu_pdfs', wp_json_encode(array_values((array)($manifest['pdfs'] ?? []))));
+            if ($order && method_exists($order, 'get_id')) {
+                $pendientes = (array)$order->get_meta('_pmu_items');
+                $pendientes[$itemKey] = $estado === PMU_Sesion::ESTADO_OK ? 'ok' : 'pendiente';
+                $order->update_meta_data('_pmu_items', $pendientes);
+                $sesion->staging_order((int)$order->get_id(), $itemKey, $sid);
+            }
+        } catch (\Throwable $e) {
+            // Sin staging/estado el item se regenera al descargar (T023).
+        }
+    }
+
+    /**
+     * T022: al confirmarse el pago, los items del pedido pasan de staging a
+     * entregable (`orders/{order_id}/{item_key}/` por rename). Idempotente y
+     * reintentable en cada cambio de estado.
+     */
+    public function pedido_promover($order_id)
+    {
+        if (!function_exists('wc_get_order')) {
+            return;
+        }
+        $order = wc_get_order($order_id);
+        if (!$order || !method_exists($order, 'get_meta')) {
+            return;
+        }
+        $items = (array)$order->get_meta('_pmu_items');
+        if (!$items) {
+            return;
+        }
+        $sesion = $this->sesion();
+        $cambios = false;
+        foreach ($items as $itemKey => $estado) {
+            if ($estado === 'entregado') {
+                continue;
+            }
+            try {
+                $sesion->promover_order((int)$order_id, (string)$itemKey);
+                $items[$itemKey] = 'entregado';
+                $cambios = true;
+            } catch (\Throwable $e) {
+                // Queda pendiente: se reintenta en el proximo cambio de estado.
+            }
+        }
+        if ($cambios) {
+            $order->update_meta_data('_pmu_items', $items);
+            if (method_exists($order, 'save')) {
+                $order->save();
+            }
+        }
+    }
+
+    /**
+     * T023: cada item personalizado aparece como fila de descarga en
+     * `mi-cuenta/descargas/` (PDF final; se genera al pedirlo si falta).
+     */
+    public function descargas_cliente($productos)
+    {
+        if (!is_array($productos) || !$productos || !function_exists('wc_get_order')) {
+            return $productos;
+        }
+        $vistos = [];
+        foreach ($productos as $fila) {
+            $oid = isset($fila['order_id']) ? (int)$fila['order_id'] : 0;
+            if ($oid < 1 || isset($vistos[$oid])) {
+                continue;
+            }
+            $vistos[$oid] = true;
+            $order = wc_get_order($oid);
+            if (!$order || !method_exists($order, 'get_meta')) {
+                continue;
+            }
+            foreach ((array)$order->get_meta('_pmu_items') as $itemKey => $estado) {
+                $productos[] = [
+                    'download_url' => add_query_arg([
+                        'action' => 'personalizador_pdf_item_descargar',
+                        'order_id' => $oid,
+                        'item_key' => (string)$itemKey,
+                        'clave' => method_exists($order, 'get_order_key') ? (string)$order->get_order_key() : '',
+                    ], admin_url('admin-post.php')),
+                    'download_id' => 'pmu-' . $oid . '-' . $itemKey,
+                    'product_id' => isset($fila['product_id']) ? (int)$fila['product_id'] : 0,
+                    'product_name' => isset($fila['product_name']) ? (string)$fila['product_name'] : 'Personalizado',
+                    'download_name' => 'Diseno personalizado (' . $itemKey . ').pdf',
+                    'order_id' => $oid,
+                    'order_key' => isset($fila['order_key']) ? (string)$fila['order_key'] : '',
+                    'downloads_remaining' => '',
+                    'access_expires' => null,
+                    'file' => '',
+                ];
+            }
+        }
+        return $productos;
+    }
+
+    /**
+     * T023: entrega el PDF final del item (idempotente): si ya existe lo sirve;
+     * si falta, lo genera con `Motor::procesar_pedido()` desde el pool del item.
+     * Autorizado por dueno del pedido o por `order_key` (invitado).
+     */
+    public function handle_item_descargar()
+    {
+        if (!function_exists('wc_get_order')) {
+            wp_die('WooCommerce no esta activo.');
+        }
+        $order_id = isset($_GET['order_id']) ? (int)$_GET['order_id'] : 0;
+        $itemKey = isset($_GET['item_key']) ? sanitize_text_field(wp_unslash((string)$_GET['item_key'])) : '';
+        $clave = isset($_GET['clave']) ? sanitize_text_field(wp_unslash((string)$_GET['clave'])) : '';
+        $order = $order_id > 0 ? wc_get_order($order_id) : null;
+        if (!$order || $itemKey === '') {
+            wp_die('Descarga no disponible.');
+        }
+        $uid = function_exists('get_current_user_id') ? (int)get_current_user_id() : 0;
+        $dueno = $uid > 0 && method_exists($order, 'get_customer_id') && (int)$order->get_customer_id() === $uid;
+        $porClave = $clave !== '' && method_exists($order, 'get_order_key')
+            && hash_equals((string)$order->get_order_key(), $clave);
+        // T025: el admin de la consola tambien puede descargar el entregable.
+        $esAdmin = function_exists('current_user_can') && current_user_can('manage_options');
+        if (!$dueno && !$porClave && !$esAdmin) {
+            wp_die('Permiso denegado');
+        }
+        try {
+            $ruta = $this->item_generar_pdf($order_id, $itemKey);
+        } catch (\Throwable $e) {
+            wp_die('No se pudo preparar la descarga: ' . esc_html($e->getMessage()));
+        }
+        nocache_headers();
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="' . basename($ruta) . '"');
+        header('Content-Length: ' . (string)filesize($ruta));
+        readfile($ruta);
+        exit;
+    }
+
+    /**
+     * Genera (o reusa) el PDF final del item desde `manifest.archivos[]` (el
+     * indice del pool; nunca adivina por nombre). Devuelve la ruta del PDF.
+     */
+    public function item_generar_pdf($order_id, $item_key)
+    {
+        $order_id = (int)$order_id;
+        $motor = $this->pmu_uploads();
+        $item_key = $motor->item_seguro($item_key, 'item_descarga');
+        $dir = $motor->dir_ambito('orders') . DIRECTORY_SEPARATOR . $order_id . DIRECTORY_SEPARATOR . $item_key;
+        if (!is_dir($dir)) {
+            // Aun sin promover: se genera desde el staging (boton "Descargar").
+            $dir = $motor->dir_tmp_order($order_id) . DIRECTORY_SEPARATOR . $item_key;
+        }
+        if (!is_dir($dir)) {
+            throw new \RuntimeException('motor:descarga:item:ausente');
+        }
+        $manifest = json_decode((string)@file_get_contents($dir . DIRECTORY_SEPARATOR . 'manifest.json'), true);
+        if (!is_array($manifest) || empty($manifest['pdfs'])) {
+            throw new \RuntimeException('motor:descarga:manifest:invalido');
+        }
+        $pdf = (string)reset($manifest['pdfs']);
+        $salida = $dir . DIRECTORY_SEPARATOR . $pdf . '_procesado.pdf';
+        if (is_file($salida)) {
+            return $salida; // idempotente: ya generado
+        }
+        $mapa = [];
+        foreach ((array)($manifest['archivos'] ?? []) as $fila) {
+            if (!is_array($fila) || empty($fila['file'])) {
+                continue;
+            }
+            $gid = strtoupper((string)($fila['grupo_id'] ?? ''));
+            $ruta = $dir . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string)$fila['file']);
+            if ($gid === '' || isset($mapa[$gid]) || !is_file($ruta)) {
+                continue;
+            }
+            $mapa[$gid] = $ruta;
+        }
+        if (!$mapa) {
+            throw new \RuntimeException('motor:descarga:pool:vacio');
+        }
+        $resultado = Motor::procesar_pedido($motor->ruta_pdf($pdf), $mapa);
+        file_put_contents($salida, $resultado['bytes']);
+        return $salida;
+    }
+
+    /**
+     * T025: inventario de pedidos completados (`orders/{order_id}/{item_key}/`)
+     * para la consola: estado, etiquetas cliente (solo lectura), webps y salida.
+     * Lectura tolerante: un item roto se lista con su causa, sin tumbar la seccion.
+     */
+    public function pedidos_completados()
+    {
+        $out = [];
+        try {
+            $raiz = $this->pmu_uploads()->dir_ambito('orders');
+        } catch (\Throwable $e) {
+            return $out;
+        }
+        foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirOrder) {
+            $order_id = (int)basename($dirOrder);
+            if ($order_id < 1) {
+                continue;
+            }
+            foreach ((array)glob($dirOrder . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirItem) {
+                $item = basename($dirItem);
+                $manifest = json_decode((string)@file_get_contents($dirItem . DIRECTORY_SEPARATOR . 'manifest.json'), true);
+                $valores = [];
+                foreach ((array)($manifest['valores'] ?? []) as $cid => $par) {
+                    $campo = $this->campo_por_id((int)$cid);
+                    $valores[] = [
+                        'titulo' => is_array($campo) && $campo[1] !== '' ? $campo[1] : ('Campo ' . (int)$cid),
+                        'cliente' => (string)($par['cliente'] ?? ''),
+                    ];
+                }
+                $salida = '';
+                foreach ((array)glob($dirItem . DIRECTORY_SEPARATOR . '*_procesado.pdf') as $pdfOut) {
+                    $salida = basename($pdfOut);
+                }
+                $out[] = [
+                    'order_id' => $order_id,
+                    'item_key' => $item,
+                    'estado' => is_array($manifest) ? (string)($manifest['preview_estado'] ?? 'sin_vista') : 'motor:descarga:manifest:invalido',
+                    'pdfs' => is_array($manifest) ? array_values((array)($manifest['pdfs'] ?? [])) : [],
+                    'archivos' => is_array($manifest) ? count((array)($manifest['archivos'] ?? [])) : 0,
+                    'webps' => count((array)glob($dirItem . DIRECTORY_SEPARATOR . 'mockup-*.webp')),
+                    'valores' => $valores,
+                    'salida' => $salida,
+                ];
+            }
+        }
+        usort($out, function ($a, $b) {
+            $peso = function ($r) { return ($r['estado'] ?? '') === 'sin_vista' ? 0 : 1; };
+            return [$peso($b), $b['order_id']] <=> [$peso($a), $a['order_id']];
+        });
+        return $out;
+    }
+
+    /**
+     * T026: regenera el PDF final del item desde el pool vigente (idempotente:
+     * borra la salida previa y la rearma con `item_generar_pdf`). Solo admin.
+     */
+    public function handle_item_regenerar()
+    {
+        $this->seguridad('personalizador_pdf_item_regenerar');
+        $order_id = isset($_POST['order_id']) ? (int)$_POST['order_id'] : 0;
+        $item = isset($_POST['item_key']) ? $this->pmu_uploads()->item_seguro((string)$_POST['item_key'], 'item_regenerar') : '';
+        try {
+            $motor = $this->pmu_uploads();
+            $dir = $motor->dir_ambito('orders') . DIRECTORY_SEPARATOR . $order_id . DIRECTORY_SEPARATOR . $item;
+            if ($order_id < 1 || $item === '' || !is_dir($dir)) {
+                throw new \RuntimeException('motor:regenerar:item:ausente');
+            }
+            foreach ((array)glob($dir . DIRECTORY_SEPARATOR . '*_procesado.pdf') as $previo) {
+                @unlink($previo);
+            }
+            $this->item_generar_pdf($order_id, $item);
+        } catch (\Throwable $e) {
+            $this->redirigir(['ec_error' => $e->getMessage(), 'ec_tab' => 'pdfs']);
+        }
+        $this->redirigir(['ec_regenerado' => 1, 'ec_tab' => 'pdfs']);
     }
 
     /** UUID v4 para unique_key (sin depender del uuid privado de PMU_Sesion). */
@@ -756,6 +1201,23 @@ class Personalizador_PDF_Plugin
         }
         $bin = base64_decode(substr((string)$dataurl, $coma + 1), true);
         return is_string($bin) ? $bin : '';
+    }
+
+    /**
+     * T016 (re-edicion): link "Editar" en el carrito que vuelve a la ficha con
+     * el `item_key` cargado (misma carpeta; el pool se reusa).
+     */
+    public function carrito_enlace_edicion($nombre, $item, $clave = '')
+    {
+        if (empty($item['pmu_item_key']) || empty($item['pmu_sid']) || !function_exists('get_permalink')) {
+            return $nombre;
+        }
+        $pid = isset($item['product_id']) ? (int)$item['product_id'] : 0;
+        if ($pid < 1 || $this->producto_pdf_slug($pid) === '') {
+            return $nombre;
+        }
+        $url = add_query_arg(['pmu_item_key' => (string)$item['pmu_item_key']], get_permalink($pid));
+        return $nombre . ' <a class="pmu-editar" href="' . esc_url($url) . '">Editar</a>';
     }
 
     /** T015: etiquetas `cliente` visibles en carrito/checkout (item Woo + espejo). */
@@ -1417,9 +1879,10 @@ class Personalizador_PDF_Plugin
     }
 
     /**
-     * Datos para el editor de mockups (spec 004, T008): PDF seleccionado,
-     * grupos del analisis (para capas placeholder), fotos del admin y los
-     * mockups vigentes. Solo lectura; nunca tumba el enqueue.
+     * Datos para el editor de mockups (spec 004, T008): PDF seleccionado por
+     * `?ec_pdf=` (o el primero) y sus datos de render. FUENTE UNICA: delega en
+     * `datos_pdf_render()` (evita duplicar el armado de grupos/fotos/mockups).
+     * Solo lectura; nunca tumba el enqueue.
      */
     public function mockups_para_editor()
     {
@@ -1434,29 +1897,15 @@ class Personalizador_PDF_Plugin
             } else {
                 return $vacio;
             }
-            $nombre = $this->nombre_de($archivo);
-            $vista = $this->vista_grupos($nombre);
-            $grupos = [];
-            foreach ((array)($vista['grupos'] ?? []) as $g) {
-                $grupos[] = [
-                    'id' => (string)$g['id'],
-                    'w' => (int)$g['w'],
-                    'h' => (int)$g['h'],
-                    'cont' => (int)$g['cont'],
-                    'default' => isset($g['default']) ? (string)$g['default'] : '',
-                    'value' => isset($g['value']) ? (string)$g['value'] : '',
-                    'preset' => isset($g['preset']) ? (string)$g['preset'] : '',
-                    'tipo' => isset($g['default']) && $g['default'] !== '' ? (string)$g['default'] : 'texto',
-                ];
+            $datos = $this->datos_pdf_render($this->nombre_de($archivo));
+            if (empty($datos['pdf'])) {
+                return $vacio;
             }
-            $config = $this->config_de($nombre);
-            return [
-                'pdf' => $nombre,
-                'grupos' => $grupos,
-                'fotos' => $this->mockup_fotos_lista($nombre),
-                'mockups' => isset($config['mockups']) ? (array)$config['mockups'] : [],
-                'preview_omisible' => !empty($config['preview_omisible']),
-            ];
+            // Compatibilidad del editor: `default` = tipo mapeado ('' sin mapeo).
+            foreach ($datos['grupos'] as $i => $g) {
+                $datos['grupos'][$i]['default'] = $g['value'] !== '' || $g['preset'] !== '' ? $g['tipo'] : '';
+            }
+            return $datos;
         } catch (\Throwable $e) {
             return $vacio;
         }

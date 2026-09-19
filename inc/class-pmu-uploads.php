@@ -30,9 +30,8 @@ class PMU_Uploads
         'tm-presets' => 'presets.json',
     ];
 
-    /** Subambitos de trabajo bajo tmp/ (contrato rutas-pmu.md v2, spec 007;
-     *  plan 008: se suma 'sesion' para tmp/sesion-{sid}/). */
-    private static $SUBAMBITOS_TMP = ['muestras', 'cart', 'orders', 'sesion'];
+    /** Subambitos de trabajo bajo tmp/ (contrato rutas-pmu.md v2, spec 007). */
+    private static $SUBAMBITOS_TMP = ['muestras', 'cart', 'orders'];
 
     /** Grilla del sprite por ambito (defaults; el catalogo vigente manda). */
     private static $THUMBS = [
@@ -300,7 +299,7 @@ class PMU_Uploads
     public function dir_sesion($sid, $crear = false)
     {
         $sid = $this->sesion_segura($sid, 'dir_sesion');
-        $dir = $this->dir_tmp_sub('sesion', $crear) . DIRECTORY_SEPARATOR . 'sesion-' . $sid;
+        $dir = $this->dir_ambito('tmp', $crear) . DIRECTORY_SEPARATOR . 'sesion-' . $sid;
         if ($crear && !is_dir($dir)) {
             wp_mkdir_p($dir);
         }
@@ -330,8 +329,20 @@ class PMU_Uploads
     {
         $sid = $this->sesion_segura($sid, 'manifest_sesion_item');
         $item = $this->item_seguro($item, 'manifest_sesion_item');
-        return $this->dir_tmp_sub('sesion') . DIRECTORY_SEPARATOR . 'sesion-' . $sid
+        return $this->dir_ambito('tmp') . DIRECTORY_SEPARATOR . 'sesion-' . $sid
             . DIRECTORY_SEPARATOR . $item . DIRECTORY_SEPARATOR . 'manifest.json';
+    }
+
+    /**
+     * URL publica del item de sesion: uploads/pmu/tmp/sesion-{sid}/{item_key}/
+     * (el cliente la usa para recomponer los mockups ya renderizados sin volver
+     * a subirlos: render parcial por hash, T016).
+     */
+    public function url_sesion_item($sid, $item)
+    {
+        $sid = $this->sesion_segura($sid, 'url_sesion_item');
+        $item = $this->item_seguro($item, 'url_sesion_item');
+        return $this->url_ambito('tmp') . 'sesion-' . rawurlencode($sid) . '/' . rawurlencode($item) . '/';
     }
 
     /** Pool de imagenes del item: uploads/pmu/tmp/sesion-{sid}/{item_key}/img/ (plan 008). */

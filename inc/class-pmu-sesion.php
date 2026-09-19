@@ -357,7 +357,7 @@ class PMU_Sesion
      */
     public function limpiar_ttl($horas = 24)
     {
-        $raiz = $this->motor->dir_tmp_sub('sesion');
+        $raiz = $this->motor->dir_ambito('tmp');
         if (!is_dir($raiz)) {
             return 0;
         }

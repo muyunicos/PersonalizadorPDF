@@ -62,6 +62,29 @@ if (!defined('ABSPATH')) {
 </div>
 
 <div class="card">
+    <h2>Tienda: vista previa y descargas del comprador</h2>
+    <ol>
+        <li><strong>Asocia el PDF a un producto</strong> (canonico: postmeta
+            <code>_pmu_pdf_slug</code> del producto; el listado de la consola es su espejo).
+            En la ficha del producto aparece el panel del comprador con los campos del
+            catalogo elegidos en "Configuracion tienda".</li>
+        <li><strong>"Vista previa"</strong>: el cliente completa los campos y genera la vista
+            previa: mockups 300x300 con su personalizacion (render cliente TextMuy + pool en
+            <code>uploads/pmu/tmp/sesion-{sid}/{item_key}/img/</code>). El boton
+            "Agregar al carrito" queda bloqueado hasta que las vistas terminan
+            (salvo <code>preview_omisible=true</code>).</li>
+        <li><strong>Carrito y pedido</strong>: al agregar se congela lo aprobado
+            (<code>mockup-{id}.webp</code>) y el item se promueve a su
+            <code>cart_item_key</code>; al pagarse pasa a
+            <code>orders/{order_id}/{item_key}/</code>. La seccion
+            <strong>"4. Pedidos completados"</strong> de la consola lista cada item
+            (estado, etiquetas del cliente, vistas congeladas) con
+            <strong>"Regenerar PDF"</strong> (rearma la salida desde el pool) y el
+            comprador descarga su PDF en <code>mi-cuenta/descargas/</code>.</li>
+    </ol>
+</div>
+
+<div class="card">
     <h2>Reglas y casos especiales</h2>
     <ul>
         <li><strong>Nombre repetido:</strong> al subir un PDF con un nombre existente se pregunta si renombrar

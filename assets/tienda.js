@@ -123,10 +123,21 @@
         };
     }
 
-    /** Compila los campos: CSS con scope + contenido + script (T012). */
-    function montarCampos(raizEl, campos) {
+    /**
+     * Compila los campos: CSS con scope + contenido + script (T012). Con
+     * `inicial` (edicion, T016) los valores guardados quedan disponibles en
+     * `ctx.get()` y prellenan el input/textarea/select del campo.
+     */
+    function montarCampos(raizEl, campos, inicial) {
         var estado = {};
         (campos || []).forEach(function (campo) {
+            var previo = inicial && (inicial[String(campo.id)] || inicial[campo.id]);
+            if (previo) {
+                estado[campo.id] = {
+                    valor: previo.valor === undefined ? '' : previo.valor,
+                    cliente: previo.cliente === undefined ? '' : String(previo.cliente)
+                };
+            }
             var envoltura = document.createElement('div');
             envoltura.className = 'pmu-campo pmu-campo-' + campo.id;
             envoltura.setAttribute('data-campo', campo.id);
@@ -163,6 +174,10 @@
                     var recolectar = function () {
                         estado[campo.id] = { valor: entrada.value, cliente: entrada.value };
                     };
+                    if (previo) {
+                        // Edicion (T016): lo guardado manda si el campo es un input.
+                        entrada.value = previo.cliente !== '' ? previo.cliente : previo.valor;
+                    }
                     entrada.addEventListener('input', recolectar);
                     recolectar();
                 }
@@ -288,10 +303,18 @@
             if (c.tipo === 'img') {
                 promesa = cargarImagen((pdfDatos.fotos || {})[c.ref]);
             } else {
+                // Capa placeholder: Blob (render nuevo) o URL (reuso del pool).
                 var partes = String(c.ref || '').split('#');
                 var lista = pngsPorGrupo[partes[0]] || [];
                 var k = partes.length > 1 ? (parseInt(partes[1], 10) - 1) : 0;
-                promesa = lista[k] ? cargarImagen(URL.createObjectURL(lista[k])) : Promise.resolve(null);
+                var recurso = lista[k];
+                if (typeof recurso === 'string') {
+                    promesa = cargarImagen(recurso);
+                } else if (recurso) {
+                    promesa = cargarImagen(URL.createObjectURL(recurso));
+                } else {
+                    promesa = Promise.resolve(null);
+                }
             }
             return promesa.then(function (img) {
                 if (img && img.naturalWidth) {
@@ -381,6 +404,23 @@
             mostrar();
         });
         mostrar();
+        /**
+         * T021 (tolerancia): quita de la galeria las vistas fallidas (fotografia
+         * final, sin marcos de editor); devuelve cuantas quedan visibles.
+         */
+        estado.podar = function () {
+            estado.vistas = estado.vistas.filter(function (v) { return !v.fallida; });
+            estado.idx = 0;
+            estado.vistas.forEach(function (v) {
+                v.marco.style.display = 'none';
+            });
+            if (!estado.vistas.length) {
+                gal.style.display = 'none';
+                return 0;
+            }
+            mostrar();
+            return estado.vistas.length;
+        };
         galeriaActual = estado;
         return estado;
     }
@@ -421,7 +461,11 @@
         if (!form || form.getAttribute('data-pmu-carrito') === '1') { return; }
         form.setAttribute('data-pmu-carrito', '1');
         form.addEventListener('submit', function () {
-            if (!global.PMU_API || !global.PMU_API.sesion) { return; }
+            if (!global.PMU_API) { return; }
+            // US3 (T018/T019): sin sesion (omisible sin vistas) se envian los
+            // valores del panel y el SERVIDOR crea el item omisible.
+            inyectar(form, 'pmu_valores', JSON.stringify(global.PMU_API.valores()));
+            if (!global.PMU_API.sesion) { return; }
             var webps = {};
             (galeriaActual && galeriaActual.vistas || []).forEach(function (v) {
                 if (v.canvas && v.mockup && v.mockup.id) {
@@ -439,8 +483,26 @@
         });
     }
 
-    /** Genera la vista de UN pdf: concilia, renderiza, sube y compone. */
-    function generarPdf(pdfDatos, sid, itemKey, vista) {
+    /**
+     * Render parcial (T016): hash ya generado en el pool del item -> URL del
+     * PNG existente (evita re-renderizar y re-subir lo que no cambio).
+     */
+    function poolPrevio(pdf, archivos, poolUrl) {
+        var mapa = {};
+        (archivos || []).forEach(function (f) {
+            if (!f || String(f.pdf) !== String(pdf)) { return; }
+            mapa[String(f.hash)] = poolUrl + String(f.file);
+        });
+        return mapa;
+    }
+
+    /**
+     * Genera la vista de UN pdf: concilia, renderiza, sube y compone. Con
+     * `previo` (render parcial, T016) cada instancia cuyo hash ya existe en el
+     * pool se RESUELVE con la URL del PNG guardado (sin re-render ni subida).
+     */
+    function generarPdf(pdfDatos, sid, itemKey, vista, previo) {
+        previo = previo || { mapa: {} };
         var valores = (global.PMU_API && global.PMU_API.valores()) || {};
         var pendientes = [];
         var avisos = [];
@@ -452,7 +514,11 @@
                 return;
             }
             c.textos.forEach(function (texto, i) {
-                pendientes.push({ gid: g.id, i: i, texto: texto, g: g, primero: i === 0 });
+                var hash = PURO.hashRender(texto, g.preset, g.settings, g.w, g.h);
+                pendientes.push({
+                    gid: g.id, i: i, texto: texto, g: g, primero: i === 0,
+                    urlGuardada: previo.mapa[hash] || null
+                });
             });
         });
         if (avisos.length) { mostrarAviso(pdfDatos, avisos.join(' ')); }
@@ -463,15 +529,18 @@
             }
             return Promise.resolve();
         }
+        // Solo renderiza lo que NO esta en el pool (render parcial, T016).
+        var nuevos = pendientes.filter(function (p) { return !p.urlGuardada; });
         return renderCore().then(function (core) {
-            var items = pendientes.map(function (p) {
+            if (!nuevos.length) { return []; }
+            var items = nuevos.map(function (p) {
                 return { id: p.gid + '-' + (p.i + 1), text: p.texto, preset: p.g.preset, width: p.g.w, height: p.g.h };
             });
             return core.TextMuyAPI.renderBatch(items);
         }).then(function (out) {
             var porId = {};
             (out || []).forEach(function (r) { porId[r.id] = r.blob; });
-            var subidas = pendientes.map(function (p) {
+            var subidas = nuevos.map(function (p) {
                 var blob = porId[p.gid + '-' + (p.i + 1)];
                 if (!blob) { return Promise.resolve(null); }
                 return subirPool(sid, itemKey, pdfDatos.pdf, p.gid, blob, {
@@ -481,10 +550,10 @@
             return Promise.all(subidas).then(function () {
                 var pngsPorGrupo = {};
                 pendientes.forEach(function (p) {
-                    var blob = porId[p.gid + '-' + (p.i + 1)];
-                    if (!blob) { return; }
+                    var recurso = p.urlGuardada || porId[p.gid + '-' + (p.i + 1)];
+                    if (!recurso) { return; }
                     var lista = pngsPorGrupo[p.gid] || [];
-                    lista.push(blob);
+                    lista.push(recurso);
                     pngsPorGrupo[p.gid] = lista;
                 });
                 return componerMockup(pdfDatos, vista.mockup, pngsPorGrupo).then(function (canvas) {
@@ -495,10 +564,13 @@
                 });
             });
         }).catch(function (e) {
-            // Vista rota: se oculta con aviso (T021 pule el mensaje); nunca rompe la ficha.
+            // T021 (tolerancia): la vista rota se oculta (fotografia final, sin
+            // marcos de editor) y el estado del manifest queda `sin_vista`
+            // (el carrito se habilita igual: la venta nunca se bloquea).
             if (window.console && console.warn) { console.warn('[PersonalizadorPDF]', e); }
-            var espera = vista.marco.querySelector('.pmu-gal-espera');
-            if (espera) { espera.textContent = 'Vista no disponible'; }
+            vista.fallida = true;
+            vista.marco.style.display = 'none';
+            vista.marco.setAttribute('data-pmu-error', '1');
         });
     }
     /** Flujo completo de "Vista previa" (T014): draft -> pool -> galeria. */
@@ -509,6 +581,10 @@
         fd.append('_wpnonce', cfg.nonceVistaPrevia || '');
         fd.append('pdf', ficha.pdf);
         fd.append('valores', JSON.stringify(global.PMU_API.valores()));
+        if (global.PMU_API.sesion && global.PMU_API.sesion.item_key) {
+            // Re-edicion (T016): se reusa el item vigente (mismo item_key/pool).
+            fd.append('item_key', global.PMU_API.sesion.item_key);
+        }
         return postAjax(fd).then(function (json) {
             if (!json || !json.success) {
                 throw new Error((json && json.data) || 'motor:previa:falla');
@@ -516,6 +592,7 @@
             var datos = json.data;
             global.PMU_API.sesion = { sid: datos.sid, item_key: datos.item_key };
             var pdfDatos = (datos.pdfs || [])[0] || { pdf: ficha.pdf, grupos: [], fotos: {}, mockups: [] };
+            var previo = { mapa: poolPrevio(pdfDatos.pdf, datos.archivos, datos.pool_url) };
             var vistas = (pdfDatos.mockups || []).map(function (m) { return { mockup: m }; });
             var galeria = prepararGaleria(vistas);
             if (!galeria || !galeria.vistas.length) {
@@ -523,24 +600,41 @@
                 return null;
             }
             return Promise.all(galeria.vistas.map(function (v) {
-                return generarPdf(pdfDatos, datos.sid, datos.item_key, v);
+                return generarPdf(pdfDatos, datos.sid, datos.item_key, v, previo);
             })).then(function () {
-                bloquearCarrito(false); // vistas listas: carrito habilitado
+                // T021: si TODAS las vistas fallaron no hay galeria: mensaje
+                // "no hay vista previa" + carrito habilitado (venta asegurada).
+                var quedan = galeria.podar ? galeria.podar() : galeria.vistas.length;
+                if (quedan === 0) {
+                    mostrarAviso(pdfDatos, 'No hay vista previa disponible: podes comprar igual y la revisamos antes de la entrega.');
+                }
+                bloquearCarrito(false); // vistas listas (o sin vista): carrito habilitado
             });
         });
     }
 
-    /** Punto de entrada (T012/T014): monta campos + boton "Vista previa". */
+    /** Punto de entrada (T012/T014/T016): monta campos + boton "Vista previa". */
     function iniciar() {
         var panel = raiz();
         if (!panel) { return null; }
         ficha = global.PMU_FICHA || {};
         if (!ficha.pdf || !(ficha.campos || []).length) { return null; }
-        var estado = montarCampos(panel, ficha.campos);
+        // Edicion (T016): valores guardados -> precarga de campos (ctx + inputs).
+        var estado = montarCampos(panel, ficha.campos, ficha.valores);
         var api = { pdf: ficha.pdf, estado: estado, valores: function () { return estado; } };
+        if (ficha.sesion && ficha.sesion.item_key) {
+            // Re-edicion: el item vigente se reusa (mismo item_key/pool).
+            api.sesion = { sid: ficha.sesion.sid, item_key: ficha.sesion.item_key };
+        }
         global.PMU_API = api;
-        // T015: sin vistas el carrito permanece bloqueado (excepto omisible, T018).
-        if (!ficha.preview_omisible) { bloquearCarrito(true); }
+        // US3 (T018): omisible = sin boton de vistas + carrito libre (el item
+        // se crea en el servidor al agregar, con preview_estado=omisible).
+        if (ficha.preview_omisible) {
+            engancharCarrito();
+            return api;
+        }
+        // T015: sin vistas el carrito permanece bloqueado.
+        bloquearCarrito(true);
         engancharCarrito();
         var btn = document.createElement('button');
         btn.type = 'button';

@@ -174,6 +174,24 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
    - Sobrescribir un PDF borra sus datos, imágenes y salida previas.
    - Grupos sin imagen asignada mantienen su transparencia original (el resumen avisa).
    - **Re-analizar** regenera el dataset si el PDF cambió manteniendo el nombre.
+4. **Ciclo del comprador (spec 004, ficha → pedido)**:
+   - La ficha Woo pinta el panel del comprador (`woocommerce_before_add_to_cart_form`,
+     `panel_ficha_html()` + `PMU_FICHA`) si el producto lleva `_pmu_pdf_slug` y el PDF está
+     activo con grupos; también existe el shortcode `[pmu_personalizar pdf="slug"]`.
+   - "Vista previa" → `handle_vista_previa` crea/reusa el item (`tmp/sesion-{sid}/`,
+     cookie `pmu_sid`), renderiza con RenderCore (`tienda.js`, paralelo), sube los PNG al
+     pool por `handle_pool_png` (hash `sha1(valor|preset|settings|WxH)`; `limpiar=1`
+     reemplaza el grupo) y compone los mockups 300x300 en la galería. Re-edición desde
+     el carrito (`?pmu_item_key=`) reusa el item y regenera SOLO los hashes cambiados.
+   - `add-to-cart` → `carrito_validar` (exige draft ok/omisible; con `preview_omisible`
+     crea el item en el servidor) + `carrito_promover` (rename a `{cart_item_key}`,
+     congela `mockup-{id}.webp` y marca `preview_estado=ok`). Cantidad fija 1;
+     quitar del carrito borra el item. "Editar" vuelve a la ficha con el item cargado.
+   - Pedido → `pedido_item_crear` copia la meta al item Woo y hace staging
+     (`tmp/orders/{id}/`); al pagarse `pedido_promover` lo renombra a `orders/{id}/{item}/`.
+     El comprador descarga en `mi-cuenta/descargas/` (`item_generar_pdf`, idempotente,
+     arma el PDF desde el índice del pool con `Motor::procesar_pedido`). La consola lista
+     los completados (sección 4) con "Regenerar PDF".
 
 ## 4. Reglas técnicas críticas (¡NO MODIFICAR sin entenderlas!)
 

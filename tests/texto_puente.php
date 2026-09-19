@@ -42,13 +42,20 @@ function add_menu_page(...$a) { return true; }
 function wp_enqueue_style(...$a) { return true; }
 function wp_enqueue_script(...$a) { return true; }
 function wp_enqueue_media() { return true; }
-function wp_localize_script(...$a) { return true; }
+function wp_localize_script(...$a) { $GLOBALS['test_localizados'][($a[0] ?? '') . '#' . ($a[1] ?? '')] = $a[2] ?? null; return true; }
 function wp_create_nonce($a) { return 'nonce'; }
 function wp_nonce_url($u, $a = '') { return $u; }
 function wp_nonce_field($a = '') { return ''; }
 function size_format($n) { return (string)$n . ' B'; }
 function wp_max_upload_size() { return 10485760; }
-function add_query_arg($k, $v, $u = '') { return (string)$u . '?' . urlencode((string)$k) . '=' . urlencode((string)$v); }
+function add_query_arg($k, $v = '', $u = '') {
+    if (is_array($k)) {
+        $out = (string)$v;
+        foreach ($k as $a => $b) { $out .= (strpos($out, '?') === false ? '?' : '&') . urlencode((string)$a) . '=' . urlencode((string)$b); }
+        return $out;
+    }
+    return (string)$u . '?' . urlencode((string)$k) . '=' . urlencode((string)$v);
+}
 function esc_html($t) { return htmlspecialchars((string)$t, ENT_QUOTES, 'UTF-8'); }
 function esc_attr($t) { return htmlspecialchars((string)$t, ENT_QUOTES, 'UTF-8'); }
 function esc_url($u) { return (string)$u; }
@@ -88,6 +95,14 @@ class TestWC
     public function __construct() { $this->cart = new TestWC_Cart(); }
 }
 function WC() { return isset($GLOBALS['test_wc']) ? $GLOBALS['test_wc'] : null; }
+// Vinculo producto<->PDF (canonico postmeta): el arnes sabe de UN producto (4242).
+function get_post_meta($id, $key = '', $single = false) { return ($key === '_pmu_pdf_slug' && (int)$id === 4242) ? 'muestra' : ''; }
+function update_post_meta($id, $key = '', $value = '') { $GLOBALS['test_postmeta'][(int)$id][$key] = $value; return true; }
+function delete_post_meta($id, $key = '') { unset($GLOBALS['test_postmeta'][(int)$id][$key]); return true; }
+function get_permalink($id = 0) { return 'http://test/?p=' . (int)$id; }
+function get_the_ID() { return 4242; }
+class TestWC_Product { private $id = 0; public function __construct($id = 0) { $this->id = (int)$id; } public function get_id() { return $this->id; } }
+function wc_get_product($p = null) { return $p instanceof TestWC_Product ? $p : new TestWC_Product((int)$p); }
 
 require $plugin;
 $p = Personalizador_PDF_Plugin::instance();
@@ -207,6 +222,9 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('render sin fatal ni excepcion', $admin_error === '');
             check('aviso con la causa del motor', strpos($admin_html, 'motor:listar:') !== false);
             check('el selector de estilos sigue presente', strpos($admin_html, 'ec-select-estilo') !== false);
+            // T025: la consola incluye la seccion de pedidos completados (render real).
+            check('seccion 4. Pedidos completados', strpos($admin_html, '4. Pedidos completados') !== false
+                && strpos($admin_html, 'personalizador_pdf_item_regenerar') !== false);
             break;
         case 'setup':
             check('PDF en pdfs/muestra/muestra.pdf', is_file($uploads . '/pdfs/muestra/muestra.pdf'));
@@ -321,6 +339,16 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('omisible por defecto false', is_array($ficha) && $ficha['preview_omisible'] === false);
             check('shortcode devuelve el mismo panel', is_array($sc) && $sc == $ficha);
             check('PDF inactivo/sin analisis se oculta', $GLOBALS['test_ficha_oculta'] === false);
+            // T016: HTML real del panel (hook Woo y shortcode pintan esto).
+            // T016: HTML real del panel (hook Woo y shortcode pintan esto).
+            $html = isset($GLOBALS['test_ficha_html1']) ? (string)$GLOBALS['test_ficha_html1'] : '';
+            check('HTML con data-pmu-panel + pdf', strpos($html, 'data-pmu-panel') !== false && strpos($html, 'data-pdf="muestra"') !== false);
+            check('HTML una sola vez por request', ($GLOBALS['test_ficha_html2'] ?? 'x') === '');
+            $pf = isset($GLOBALS['test_ficha_localizados']['personalizador-pdf-tienda#PMU_FICHA'])
+                ? $GLOBALS['test_ficha_localizados']['personalizador-pdf-tienda#PMU_FICHA'] : null;
+            check('PMU_FICHA con campos serializados', is_array($pf) && $pf['pdf'] === 'muestra'
+                && isset($pf['campos'][0]['id']) && (int)$pf['campos'][0]['id'] === 1
+                && !array_key_exists('etiquetas', $pf['campos'][0]));
             break;
         case 'vista_previa':
             // T013/T014: draft de sesion con valores duales saneados + datos de render.
@@ -339,12 +367,50 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && $gid_v['preset'] === 'neon-glow' && $gid_v['value'] === '[campo1]'
                 && $gid_v['tipo'] === 'texto' && (int)$gid_v['w'] > 0 && (int)$gid_v['cont'] >= 1);
             check('fotos y mockups del PDF', isset($pdfD_v['fotos']) && isset($pdfD_v['mockups']) && $pdfD_v['preview_omisible'] === false);
-            $rutaMan = glob($testBase . '/uploads/pmu/tmp/sesion/sesion-' . $sid_v . '/' . $item_v . '/manifest.json');
+            $rutaMan = glob($testBase . '/uploads/pmu/tmp/sesion-' . $sid_v . '/' . $item_v . '/manifest.json');
             $man_v = $rutaMan ? json_decode((string)@file_get_contents($rutaMan[0]), true) : null;
             $cid_v = isset($GLOBALS['test_previa_cid']) ? (int)$GLOBALS['test_previa_cid'] : 1;
             check('manifest con valor dual', is_array($man_v) && isset($man_v['valores'][$cid_v]) && $man_v['valores'][$cid_v]['cliente'] === 'Ana');
             check('valor crudo acotado (sin strip)', is_array($man_v) && $man_v['valores'][$cid_v]['valor'] === '<b>Ana</b>');
             check('campo desconocido descartado', is_array($man_v) && !isset($man_v['valores'][999]));
+            // T016 (render parcial): hashes vigentes + URL del pool en la respuesta.
+            check('archivos[] + pool_url normativos', is_array($json) && is_array($json['data']['archivos'] ?? null)
+                && (bool)preg_match('#uploads/pmu/tmp/sesion-[a-z0-9_-]+/draft-[a-z0-9_-]+/$#', (string)($json['data']['pool_url'] ?? '')));
+            break;
+        case 'completados':
+            // T025/T026: listado + PDF final + regeneracion idempotente.
+            $comp = isset($GLOBALS['test_completados']) ? (array)$GLOBALS['test_completados'] : [];
+            check('listado con 1 item completado', count($comp) === 1 && (int)$comp[0]['order_id'] === 4242 && $comp[0]['item_key'] === 'item-abc');
+            check('estado + etiquetas cliente en el listado', ($comp[0]['estado'] ?? '') === 'ok' && ($comp[0]['valores'][0]['titulo'] ?? '') === 'Nombre' && ($comp[0]['valores'][0]['cliente'] ?? '') === 'Ana');
+            check('PDF final con firma %PDF', ($GLOBALS['test_completados_pdf'] ?? '') === '%PDF');
+            check('generacion idempotente', ($GLOBALS['test_completados_idem'] ?? false) === true);
+            check('redirect de regeneracion', strpos($redirect, 'ec_regenerado=1') !== false);
+            $salidaK = (array)glob(($GLOBALS['test_completados_dir'] ?? '') . DIRECTORY_SEPARATOR . '*_procesado.pdf');
+            check('salida rearmada tras regenerar', count($salidaK) === 1 && substr((string)@file_get_contents($salidaK[0], false, null, 0, 4), 0, 4) === '%PDF');
+            break;
+        case 'ficha_edicion':
+            // T016: re-edicion: HTML con leyenda de edicion + PMU_FICHA precargada;
+            // la re-vista previa REUSA el item (sin duplicados) y refresca valores.
+            $html_e = isset($GLOBALS['test_edicion_html']) ? (string)$GLOBALS['test_edicion_html'] : '';
+            check('HTML anuncia edicion guardada', strpos($html_e, 'pmu-panel-edicion') !== false);
+            $pf_e = isset($GLOBALS['test_localizados']['personalizador-pdf-tienda#PMU_FICHA'])
+                ? $GLOBALS['test_localizados']['personalizador-pdf-tienda#PMU_FICHA'] : null;
+            check('PMU_FICHA precarga valores + sesion', is_array($pf_e) && ($pf_e['valores'][1]['cliente'] ?? '') === 'Ana'
+                && is_array($pf_e['sesion'] ?? null) && strpos((string)($pf_e['sesion']['item_key'] ?? ''), 'draft-') === 0);
+            check('respuesta JSON success', is_array($json) && $json['success'] === true);
+            check('item_key REUSADO (sin draft nuevo)', is_array($json) && ($json['data']['item_key'] ?? '') === ($GLOBALS['test_edicion_draft'] ?? ''));
+            check('flag edicion=true', is_array($json) && ($json['data']['edicion'] ?? false) === true);
+            break;
+        case 'ficha_omisible':
+            // T018/T019: omisible = panel activo, flag true, item creado con
+            // estado omisible + valores duales, sin bloquear la venta.
+            check('panel omisible vigente', is_array($GLOBALS['test_omisible_panel'] ?? null) && $GLOBALS['test_omisible_panel']['preview_omisible'] === true);
+            check('validacion acepta sin draft previo', ($GLOBALS['test_omisible_valido'] ?? false) === true);
+            $meta_o = is_array($GLOBALS['test_omisible_meta'] ?? null) ? $GLOBALS['test_omisible_meta'] : [];
+            check('meta con sid/item/unique_key', !empty($meta_o['pmu_sid']) && strpos((string)($meta_o['pmu_item_key'] ?? ''), 'draft-') === 0 && !empty($meta_o['unique_key']));
+            $man_o = isset($meta_o['pmu_item_key'], $meta_o['pmu_sid']) ? json_decode((string)@file_get_contents($testBase . '/uploads/pmu/tmp/sesion-' . $meta_o['pmu_sid'] . '/' . $meta_o['pmu_item_key'] . '/manifest.json'), true) : null;
+            $cid_o = (int)($GLOBALS['test_omisible_cid'] ?? 1);
+            check('item omisible con valores duales', is_array($man_o) && ($man_o['preview_estado'] ?? '') === 'omisible' && ($man_o['valores'][$cid_o]['cliente'] ?? '') === 'Luz');
             break;
         case 'vista_previa_mal':
             check('respuesta JSON error (seguridad)', is_array($json) && $json['success'] === false);
@@ -382,7 +448,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 check('reemplazo reinicia numeracion', ($fila_p['file'] ?? '') === 'img/muestra-0000FF-1.png' && (int)($fila_p['indice'] ?? -1) === 0);
             }
             check('hash de regeneracion anotado', ($fila_p['hash'] ?? '') === sha1('Ana|neon-glow||300x200'));
-            $man_p = isset($GLOBALS['test_pool_item']) ? json_decode((string)@file_get_contents(glob($testBase . '/uploads/pmu/tmp/sesion/sesion-test-8f2a/' . $GLOBALS['test_pool_item'] . '/manifest.json')[0]), true) : null;
+            $dirSes_p = $testBase . '/uploads/pmu/tmp/sesion-test-8f2a/' . $GLOBALS['test_pool_item'];
+            $man_p = isset($GLOBALS['test_pool_item']) ? json_decode((string)@file_get_contents($dirSes_p . '/manifest.json'), true) : null;
             $filas_p = is_array($man_p) ? (array)($man_p['archivos'] ?? []) : [];
             $delGrupo_p = 0;
             foreach ($filas_p as $fp) {
@@ -392,10 +459,10 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 check('archivos[] con 1 fila del grupo', $delGrupo_p === 1);
             } else {
                 check('reemplazo deja solo 1 fila del grupo', $delGrupo_p === 1);
-                $imgDir_p = $testBase . '/uploads/pmu/tmp/sesion/sesion-test-8f2a/' . $GLOBALS['test_pool_item'] . '/img';
+                $imgDir_p = $dirSes_p . '/img';
                 check('PNG viejos eliminados del pool', (array)glob($imgDir_p . '/muestra-0000FF-*.png') !== [] && count(glob($imgDir_p . '/muestra-0000FF-*.png')) === 1);
             }
-            check('PNG fisico con firma valida', isset($GLOBALS['test_pool_item']) && substr((string)@file_get_contents($testBase . '/uploads/pmu/tmp/sesion/sesion-test-8f2a/' . $GLOBALS['test_pool_item'] . '/img/' . basename((string)($fila_p['file'] ?? 'x'))), 0, 8) === "\x89PNG\r\n\x1a\n");
+            check('PNG fisico con firma valida', isset($GLOBALS['test_pool_item']) && substr((string)@file_get_contents($dirSes_p . '/img/' . basename((string)($fila_p['file'] ?? 'x'))), 0, 8) === "\x89PNG\r\n\x1a\n");
             break;
         case 'placeholder':
             // T026: placeholder al vuelo por id (sin archivos) + rechazo con id ausente.
@@ -457,7 +524,9 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             $cfg_t = $p->motor_para_tests()->leer_config('muestra');
             check('redirect a ec_config', strpos($redirect, 'ec_config=1') !== false);
             check('activo=true', $cfg_t['activo'] === true);
-            check('productos vacios sin Woo', $cfg_t['productos'] === []);
+            // T016: el arnes trae stub de wc_get_product, asi que el filtro de
+            // productos Woo ya filtra de verdad (antes los descartaba sin Woo).
+            check('productos validados por Woo (stub)', $cfg_t['productos'] === [123, 456]);
             check('campos 2,1 (999 descartado)', $cfg_t['campos_ids'] === [2, 1]);
             check('mapeo 0000FF persiste', isset($cfg_t['placeholders']['0000FF']) && $cfg_t['placeholders']['0000FF']['value'] === '[campo2]' && $cfg_t['placeholders']['0000FF']['settings'] === '[campo1]');
             check('FFFFFF ausente del dataset', !isset($cfg_t['placeholders']['FFFFFF']));
@@ -509,6 +578,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
 });
 
 // ====== Fases (cada una es un proceso propio; el handler cierra con exit) ======
+putenv('PD_PUENTE_SIN_NONCE');
+putenv('PD_PUENTE_SIN_CAP');
 $base = dirname($plugin);
 
 function preparar_entorno($testBase, $base)
@@ -563,6 +634,10 @@ switch ($fase) {
         $GLOBALS['test_ficha'] = $p->panel_ficha('muestra');
         $GLOBALS['test_ficha_shortcode'] = $p->shortcode_panel(['pdf' => 'muestra']);
         $GLOBALS['test_ficha_oculta'] = $p->panel_ficha('inexistente');
+        // T016: HTML del panel (shortcode render): una sola vez, con PMU_FICHA.
+        $GLOBALS['test_ficha_html1'] = $p->shortcode_panel_render(['pdf' => 'muestra']);
+        $GLOBALS['test_ficha_html2'] = $p->shortcode_panel_render(['pdf' => 'muestra']);
+        $GLOBALS['test_ficha_localizados'] = isset($GLOBALS['test_localizados']) ? $GLOBALS['test_localizados'] : [];
         break;
 
     case 'vista_previa':
@@ -593,6 +668,128 @@ switch ($fase) {
         ];
         $_REQUEST = $_POST;
         $p->handle_vista_previa(); // exit en wp_send_json_*
+        break;
+
+    case 'completados':
+        // T025/T026: entregable en orders/ + listado + regeneracion idempotente.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $motor_k = $p->motor_para_tests();
+        $cid_k = $motor_k->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $motor_k->guardar_config('muestra', [
+            'activo' => true,
+            'campos_ids' => [$cid_k],
+            'placeholders' => ['0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => '[campo1]', 'settings' => '', 'repetir' => false]],
+        ]);
+        $dirK = $motor_k->dir_ambito('orders', true) . DIRECTORY_SEPARATOR . '4242' . DIRECTORY_SEPARATOR . 'item-abc';
+        wp_mkdir_p($dirK . DIRECTORY_SEPARATOR . 'img');
+        $pngK = sys_get_temp_dir() . '/pd_puente_png_' . getmypid() . '_c.png';
+        \ExtractCorel\Engine\PngWriter::write($pngK, 300, 200);
+        copy($pngK, $dirK . DIRECTORY_SEPARATOR . 'img' . DIRECTORY_SEPARATOR . 'muestra-0000FF-1.png');
+        file_put_contents($dirK . DIRECTORY_SEPARATOR . 'manifest.json', json_encode([
+            'item_key' => 'item-abc',
+            'sid' => 'test-8f2a',
+            'pdfs' => ['muestra'],
+            'valores' => [$cid_k => ['valor' => 'Ana', 'cliente' => 'Ana']],
+            'archivos' => [['pdf' => 'muestra', 'grupo_id' => '0000FF', 'indice' => 0, 'file' => 'img/muestra-0000FF-1.png', 'hash' => 'h1']],
+            'preview_estado' => 'ok',
+        ]));
+        $GLOBALS['test_completados'] = $p->pedidos_completados();
+        $rutaK = $p->item_generar_pdf(4242, 'item-abc');
+        $GLOBALS['test_completados_pdf'] = is_file($rutaK) ? (string)file_get_contents($rutaK, false, null, 0, 4) : '';
+        clearstatcache();
+        $mK = filemtime($rutaK);
+        $rutaK2 = $p->item_generar_pdf(4242, 'item-abc');
+        $GLOBALS['test_completados_idem'] = ($rutaK2 === $rutaK && filemtime($rutaK2) === $mK);
+        $_POST = [
+            'action' => 'personalizador_pdf_item_regenerar',
+            'order_id' => '4242',
+            'item_key' => 'item-abc',
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $GLOBALS['test_completados_dir'] = $dirK;
+        $p->handle_item_regenerar(); // exit en redirigir(ec_regenerado)
+        break;
+
+    case 'ficha_edicion':
+        // T016: re-edicion (item_key vigente): se REUSA el item, no se duplica.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $motor_e = new PMU_Uploads();
+        $cid_e = $motor_e->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $motor_e->guardar_config('muestra', [
+            'activo' => true,
+            'campos_ids' => [$cid_e],
+            'placeholders' => ['0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => '[campo1]', 'settings' => '', 'repetir' => false]],
+        ]);
+        $sesion_e = new PMU_Sesion($motor_e);
+        $sid_e = 'test-edit-1';
+        $draft_e = $sesion_e->crear_draft($sid_e, ['muestra']);
+        $man_e = $sesion_e->leer_manifest($sid_e, $draft_e);
+        $man_e['valores'] = [$cid_e => ['valor' => 'Ana', 'cliente' => 'Ana']];
+        $man_e['preview_estado'] = 'ok';
+        $man_e['archivos'] = [['pdf' => 'muestra', 'grupo_id' => '0000FF', 'indice' => 0, 'file' => 'img/muestra-0000FF-1.png', 'hash' => sha1('Ana|neon-glow||1532x1145')]];
+        $sesion_e->guardar_manifest($sid_e, $draft_e, $man_e);
+        // Editar con ?pmu_item_key= en el panel + re-vista previa sobre el item.
+        $_GET = ['pmu_item_key' => $draft_e];
+        $_COOKIE[PMU_Sesion::COOKIE] = $sid_e;
+        $GLOBALS['test_edicion_html'] = $p->panel_ficha_html('muestra');
+        $_GET = [];
+        $_POST = [
+            'action' => 'personalizador_pdf_vista_previa',
+            'pdf' => 'muestra.pdf',
+            'item_key' => $draft_e,
+            'valores' => json_encode([$cid_e => ['valor' => 'Beto', 'cliente' => 'Beto']]),
+            'ajax' => '1',
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $GLOBALS['test_edicion_draft'] = $draft_e;
+        $p->handle_vista_previa(); // exit en wp_send_json_*
+        break;
+
+    case 'ficha_omisible':
+        // T018/T019: compra omisible sin vistas: panel omisible + HTML sin boton
+        // (el JS no monta vistas); el carrito crea el item con estado omisible.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $motor_o = new PMU_Uploads();
+        $cid_o = $motor_o->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $motor_o->guardar_config('muestra', [
+            'activo' => true,
+            'campos_ids' => [$cid_o],
+            'preview_omisible' => true,
+            'mockups' => [['id' => 'm1', 'titulo' => 'Vista', 'capas' => [['tipo' => 'placeholder', 'ref' => '0000FF', 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300, 'rot' => 0, 'sesgo' => 0, 'filtros' => []]]]],
+            'placeholders' => ['0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => '[campo1]', 'settings' => '', 'repetir' => false]],
+        ]);
+        $panel_o = $p->panel_ficha('muestra');
+        $GLOBALS['test_omisible_html'] = $p->panel_ficha_html('muestra');
+        $GLOBALS['test_omisible_ficha'] = isset($GLOBALS['test_localizados']['personalizador-pdf-tienda#PMU_FICHA'])
+            ? $GLOBALS['test_localizados']['personalizador-pdf-tienda#PMU_FICHA'] : null;
+        // Add-to-cart SIN draft previo: valores via POST, sin sid/item_key.
+        $_POST = [
+            'pmu_valores' => json_encode([$cid_o => ['valor' => 'Luz', 'cliente' => 'Luz']]),
+        ];
+        $_REQUEST = $_POST;
+        $GLOBALS['test_omisible_valido'] = $p->carrito_validar(true, 4242, 1, 0);
+        $GLOBALS['test_omisible_panel'] = $panel_o;
+        $GLOBALS['test_omisible_cid'] = $cid_o;
+        $GLOBALS['test_omisible_meta'] = $p->carrito_agregar([], 4242, 0, 1);
         break;
 
     case 'carrito':
@@ -764,6 +961,21 @@ switch ($fase) {
 
     case 'admin':
         // El render se verifica en shutdown; aqui basta con salir limpio.
+        // T025: se siembra un entregable para que la consola renderice la tabla
+        // de completados (con el form de "Regenerar PDF") y no solo el vacio.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $dirAd = $p->motor_para_tests()->dir_ambito('orders', true) . DIRECTORY_SEPARATOR . '4242' . DIRECTORY_SEPARATOR . 'item-abc';
+        wp_mkdir_p($dirAd);
+        file_put_contents($dirAd . DIRECTORY_SEPARATOR . 'manifest.json', json_encode([
+            'item_key' => 'item-abc',
+            'pdfs' => ['muestra'],
+            'valores' => [],
+            'archivos' => [],
+            'preview_estado' => 'sin_vista',
+        ]));
         break;
 
     case 'setup':
