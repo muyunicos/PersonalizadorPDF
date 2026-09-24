@@ -168,6 +168,13 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
      la geometría vive en `analisis.json` y nunca se edita desde la UI; la consola muestra
      la fusión de ambos en `vista_grupos()`). El Motor orquesta
      y entrega el PDF editado (encajado, sin deformar ni recortar).
+   - **Configuración tienda → "Validez por producto"** (spec 005): por cada producto
+     asociado (chips) se declaran `activo` (hidden+checkbox), `validez` (expresión JS que
+     evalúa el navegador; el servidor solo valida su sintaxis al guardar), `mensaje_html`
+     (allowlist) y `bloquear` (visible solo si hay `validez`). El handler guarda con
+     `tienda_presente=1` (nunca toca `tienda` si la sección no viajó) y poda asociaciones
+     huérfanas; un valor viejo que hoy no compila se conserva (lectura tolerante) y solo se
+     rechaza lo nuevo/alterado con causa visible.
 2. **Estilos de Texto** (`admin/estilos-texto.php`): laboratorio frontend TextMuy. Guardar
    un estilo crea un `.txm` + miniatura `.webp` en el servidor (uploads).
 3. **Manejo de estados**:
@@ -176,7 +183,8 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
    - **Re-analizar** regenera el dataset si el PDF cambió manteniendo el nombre.
 4. **Ciclo del comprador (spec 004, ficha → pedido)**:
    - La ficha Woo pinta el panel del comprador (`woocommerce_before_add_to_cart_form`,
-     `panel_ficha_html()` + `PMU_FICHA`) si el producto lleva `_pmu_pdf_slug` y el PDF está
+     `panel_ficha_html()` + `PMU_FICHA`) si el producto lleva `_pmu_pdf_slugs` (lista;
+   spec 005, con respaldo tolerante del singular `_pmu_pdf_slug`) y el PDF está
      activo con grupos; también existe el shortcode `[pmu_personalizar pdf="slug"]`.
    - "Vista previa" → `handle_vista_previa` crea/reusa el item (`tmp/sesion-{sid}/`,
      cookie `pmu_sid`), renderiza con RenderCore (`tienda.js`, paralelo), sube los PNG al
@@ -189,9 +197,11 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
      quitar del carrito borra el item. "Editar" vuelve a la ficha con el item cargado.
    - Pedido → `pedido_item_crear` copia la meta al item Woo y hace staging
      (`tmp/orders/{id}/`); al pagarse `pedido_promover` lo renombra a `orders/{id}/{item}/`.
-     El comprador descarga en `mi-cuenta/descargas/` (`item_generar_pdf`, idempotente,
-     arma el PDF desde el índice del pool con `Motor::procesar_pedido`). La consola lista
-     los completados (sección 4) con "Regenerar PDF".
+     El comprador descarga en `mi-cuenta/descargas/` (una fila por cada PDF aceptado
+     del snapshot; `item_generar_pdfs`, idempotente, arma cada PDF desde las filas
+     indexadas de `manifest.archivos[]` con `Motor::procesar_pedido`). La consola lista
+     los completados (sección 4) con "Regenerar PDF" y muestra `pdfs[]` +
+     `pdfs_descartados[]`; la regeneración nunca usa un PDF descartado.
 
 ## 4. Reglas técnicas críticas (¡NO MODIFICAR sin entenderlas!)
 
@@ -230,7 +240,9 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `id`/`w`/`h`/`cont`/`pgs`) + `pdfs/{nombre}/config.json` (editable: `activo`, `productos`,
   `campos_ids`, `preview_omisible` (bool, default `false` = mockup obligatorio en ficha),
   `mockups[]` (plantillas de vista previa: `capas[]` con `tipo`/`ref`/`x`/`y`/`w`/`h`/
-  `rot`/`sesgo`/`filtros`; canvas 300x300), `placeholders[id]` con
+  `rot`/`sesgo`/`filtros`; canvas 300x300), `tienda{product_id}` (spec 005: Configuracion
+  tienda por asociacion PDFxproducto: `activo`/`validez`/`mensaje_html`/`bloquear`;
+  la expresion `validez` se evalua SOLO en el navegador, PHP nunca evalua JS), `placeholders[id]` con
   `tipo`/`preset`/`value`/`settings`).
   Sin `textos.json` y sin `metadata.json`
   (norma ex-008 + decision preview 2026-09-17; la migración `.migrado-007` ya no se ejecuta).
@@ -307,14 +319,20 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `orders/{order_id}/{item_key}/` (PDF final solo tras el pago, boton "Descargar" en
   Descargas + registro admin "completados"); migracion `.migrado-007` ya retirada. La consola nunca muestra la pagina de error critico por fallos
   de recursos del motor (aviso con causa, HTTP 200).
-- ✅ **Conciliacion ex-008 (normativa, preservada en `constitution` §IV)**: el antiguo
+- ✅ **Conciliacion ex-008 (normativa, preservada en `constitution` §IV)** + **spec 005
+  (PDF condicionales por producto)**: validez por asociacion PDFxproducto
+  (`config.json:tienda{product_id}` con `activo`/`validez`/`mensaje_html`/`bloquear`;
+  JS solo en navegador; servidor sanea e intersecta asociacion+activo y congela
+  `manifest.pdfs[]` + `pdfs_descartados[]` para auditoria). El antiguo
   `specs/008-sesion-cart-preview/spec.md` NO era feature implementable: normaba 004 vs 007
   (`analisis.json`+`config.json`, `tmp/sesion-{sid}/{item_key}/`, preview obligatoria
   `draft-{uuid}` → `cart_item_key`). Fue eliminado tras preservarse su §0+§6 en la
   constitucion; lo nuevo se alinea a esa norma.
-- ✅ **Specs historicos**: 003 obsoleto (superado por 006); 004 tasks 100% pero diseño
-  historico (normativo = constitucion §IV, ex-008); 006/007 casi cerrados salvo verificaciones manuales
-  en panel WP real (ver sus `tasks.md`).
+- ✅ **Specs historicos**: 003 obsoleto (superado por 006); 004 con 33/34 tareas
+  completadas (solo T030 manual en WP real; diseño historico, normativo = constitucion §IV,
+  ex-008); 005 con T001–T011 completadas y T012 pendiente por el mismo recorrido manual;
+  006 con 27/29 tareas completadas (T017/T029 manuales); 007 es auditoria integrada de
+  galeria RC34–RC36, sin backlog formal propio.
 - ✅ **Hooks legacy**: `seguridad()` acepta nonce historico `extractor_corel_*` (<= 2.0.0)
   ademas del vigente `personalizador_pdf_*` (se considera codigo legacy).
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
@@ -346,7 +364,9 @@ php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
                               # setup | guardar_ajax | guardar_vacio | procesar |
                               # rechazo | contenido | placeholder | admin |
                               # linea | campos | config | tienda | pedido |
-                              # migracion | nonce [cap]
+                              # migracion | nonce [cap] | validez | validez_admin |
+                              # validez_admin_mal | ficha* | vista_previa* | carrito |
+                              # pool* | sesion | completados | mockups*
 ```
 Los tests leen `muestra.pdf` desde `uploads/pmu/pdfs/` (datos del
 usuario, NO versionados). `parity.php` acepta la ruta como argumento opcional.

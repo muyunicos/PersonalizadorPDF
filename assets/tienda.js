@@ -86,6 +86,119 @@
         hashRender: function (valor, preset, settings, w, h) {
             return String(valor) + '|' + String(preset || '') + '|' + String(settings || '') + '|' +
                 parseInt(w, 10) + 'x' + parseInt(h, 10);
+        },
+
+        /* ============ Spec 005: validez de asociacion PDFxproducto ============ */
+
+        /** Contexto de la expresion (contracts/validez.md): helpers del admin. */
+        helpers: {
+            trim: function (x) { return x === undefined || x === null ? '' : String(x).trim(); },
+            incluye: function (x, sub) {
+                if (Object.prototype.toString.call(x) === '[object Array]') { return x.indexOf(sub) !== -1; }
+                return String(x === undefined || x === null ? '' : x).indexOf(String(sub)) !== -1;
+            },
+            regex: function (x, patron) {
+                try {
+                    return new RegExp(patron).test(String(x === undefined || x === null ? '' : x));
+                } catch (e) {
+                    return false;
+                }
+            },
+            vacio: function (x) {
+                if (x === undefined || x === null) { return true; }
+                if (Object.prototype.toString.call(x) === '[object Array]') { return x.length === 0; }
+                return String(x).trim() === '';
+            },
+            len: function (x) {
+                if (Object.prototype.toString.call(x) === '[object Array]') { return x.length; }
+                return x === undefined || x === null ? 0 : String(x).length;
+            }
+        },
+
+        /**
+         * Compila la expresion `validez` (T006): `campoN` = valor de SISTEMA del
+         * campo (undefined si no existe: se inyecta igual como parametro). Vacia
+         * = sin expresion; una que no compila = `ok:false` (el spec manda `true`
+         * + aviso, nunca romper la ficha).
+         */
+        compilarValidez: function (expr) {
+            var texto = String(expr === undefined || expr === null ? '' : expr).trim();
+            if (texto === '') {
+                return { ok: true, fn: null, vacia: true, ids: [] };
+            }
+            var ids = [];
+            var re = /campo(\d+)/g;
+            var m;
+            while ((m = re.exec(texto)) !== null) {
+                var id = parseInt(m[1], 10);
+                if (ids.indexOf(id) === -1) { ids.push(id); }
+            }
+            var nombres = ids.map(function (i) { return 'campo' + i; });
+            nombres.push('trim', 'incluye', 'regex', 'vacio', 'len');
+            try {
+                // Mismo sandbox que el `script` de un campo (new Function).
+                var fn = new Function(nombres.join(','), 'return (' + texto + ');');
+                return { ok: true, fn: fn, vacia: false, ids: ids };
+            } catch (e) {
+                return { ok: false, error: String((e && e.message) || e), vacia: false, ids: ids };
+            }
+        },
+
+        /**
+         * Evalua una validez compilada con los valores actuales. Sin expresion,
+         * o con una que no compila, o con un error de ejecucion => `true`
+         * (nunca rompe la ficha; el aviso va por consola en modo admin).
+         */
+        evaluarValidez: function (compilada, valores) {
+            if (!compilada || !compilada.fn) { return true; }
+            var h = this.helpers;
+            var args = (compilada.ids || []).map(function (id) {
+                var par = (valores || {})[String(id)] || (valores || {})[id];
+                if (par && Object.prototype.hasOwnProperty.call(par, 'valor')) {
+                    var v = par.valor;
+                    return v === null || v === undefined ? undefined : v;
+                }
+                return undefined;
+            });
+            args.push(h.trim, h.incluye, h.regex, h.vacio, h.len);
+            try {
+                return !!compilada.fn.apply(null, args);
+            } catch (e) {
+                return true;
+            }
+        },
+
+        /**
+         * Filtra las asociaciones del producto (T007/T008): elegibles, primer
+         * `mensaje_html` de las fallidas, bloqueo. Orden determinista = el de
+         * `pdfs` (alfabetico por PDF, el mismo de la consola). 0 elegibles
+         * SIEMPRE bloquea (FR-4.2); `bloquear` solo con validez (D6).
+         */
+        filtrarPdfs: function (pdfs, valores) {
+            var self = this;
+            var elegibles = [];
+            var fallidas = [];
+            var mensaje = '';
+            (pdfs || []).forEach(function (p) {
+                var comp = self.compilarValidez(p && p.validez);
+                var ok = self.evaluarValidez(comp, valores);
+                if (ok) {
+                    elegibles.push(p);
+                    return;
+                }
+                fallidas.push({ asoc: p, compilada: comp });
+                if (!mensaje && p && p.mensaje_html) { mensaje = String(p.mensaje_html); }
+            });
+            var bloqueo = false;
+            fallidas.forEach(function (f) {
+                if (f.asoc && f.asoc.bloquear) { bloqueo = true; }
+            });
+            return {
+                elegibles: elegibles,
+                fallidas: fallidas,
+                mensaje: mensaje,
+                bloqueo: bloqueo || elegibles.length === 0
+            };
         }
     };
 
@@ -100,6 +213,8 @@
     var renderCorePromesa = null;
     var ficha = null;
     var galeriaActual = null;
+    var filtroActual = null;
+    var bloqueos = { vistas: false, validez: false };
 
     function raiz() {
         return document.querySelector('[data-pmu-panel]') || null;
@@ -433,10 +548,71 @@
         return form ? form.querySelector('.single_add_to_cart_button') : null;
     }
 
-    /** T015: el carrito queda bloqueado hasta que las vistas esten listas. */
+    /** T015: vistas del comprador (true = pendientes hasta la vista previa). */
     function bloquearCarrito(bloquear) {
+        bloqueos.vistas = !!bloquear;
+        refrescarCarrito();
+    }
+
+    /** Spec 005 (T008): el boton combina vistas pendientes + validez/bloqueo. */
+    function refrescarCarrito() {
         var b = botonWoo();
-        if (b) { b.disabled = bloquear; }
+        if (b) { b.disabled = !!(bloqueos.vistas || bloqueos.validez); }
+    }
+
+    /**
+     * Spec 005 (T006/T007/T008): evalua las valideces de la ficha con los
+     * valores actuales, muestra el PRIMER mensaje_html de las fallidas al final
+     * de los campos, actualiza el bloqueo del boton y (con manage_options)
+     * deja el diagnostico en la consola del navegador.
+     */
+    function aplicarFiltro() {
+        if (!ficha || !(ficha.pdfs || []).length) { return null; }
+        var valores = (global.PMU_API && global.PMU_API.valores()) || {};
+        var res = PURO.filtrarPdfs(ficha.pdfs, valores);
+        filtroActual = res;
+        var panel = raiz();
+        if (panel) {
+            var aviso = panel.querySelector('.pmu-validez-aviso');
+            if (!aviso) {
+                aviso = document.createElement('div');
+                aviso.className = 'pmu-validez-aviso pmu-aviso';
+                aviso.setAttribute('role', 'alert');
+                panel.appendChild(aviso);
+            }
+            if (res.mensaje) {
+                // HTML ya saneado por allowlist al guardar (wp_kses).
+                aviso.innerHTML = res.mensaje;
+                aviso.style.display = '';
+            } else {
+                aviso.innerHTML = '';
+                aviso.style.display = 'none';
+            }
+        }
+        if (ficha.admin && global.console && console.warn) {
+            console.warn('[PersonalizadorPDF] 005 validez', {
+                elegibles: res.elegibles.map(function (p) { return p.pdf; }),
+                fallidas: res.fallidas.map(function (f) {
+                    return {
+                        pdf: f.asoc && f.asoc.pdf,
+                        validez: f.asoc && f.asoc.validez,
+                        error: (f.compilada && f.compilada.error) || ''
+                    };
+                }),
+                mensaje: res.mensaje,
+                bloqueo: res.bloqueo,
+                valores: valores
+            });
+        }
+        bloqueos.validez = !!res.bloqueo;
+        refrescarCarrito();
+        return res;
+    }
+
+    /** Elegibles declarados ahora mismo (spec 005): [] si no hay filtro. */
+    function elegibles() {
+        var res = filtroActual || aplicarFiltro();
+        return res && res.elegibles ? res.elegibles : [];
     }
 
     /** Inyecta (o actualiza) un input oculto en el form del carrito. */
@@ -480,6 +656,8 @@
             inyectar(form, 'pmu_sid', global.PMU_API.sesion.sid);
             inyectar(form, 'pmu_item_key', global.PMU_API.sesion.item_key);
             inyectar(form, 'pmu_mockups', JSON.stringify(webps));
+            // Spec 005 (T009): snapshot declarado = elegibles de este momento.
+            inyectar(form, 'pmu_pdfs', JSON.stringify(elegibles().map(function (p) { return p.pdf; })));
         });
     }
 
@@ -573,13 +751,18 @@
             vista.marco.setAttribute('data-pmu-error', '1');
         });
     }
-    /** Flujo completo de "Vista previa" (T014): draft -> pool -> galeria. */
+    /** Flujo completo de "Vista previa" (T014 + spec 005): draft -> pool -> galeria. */
     function generarVista() {
         if (!ficha || !global.PMU_API) { return Promise.resolve(); }
+        aplicarFiltro();
         var fd = new FormData();
         fd.append('action', 'personalizador_pdf_vista_previa');
         fd.append('_wpnonce', cfg.nonceVistaPrevia || '');
         fd.append('pdf', ficha.pdf);
+        fd.append('producto', String(ficha.producto || 0));
+        // Spec 005 (T009): el navegador declara los elegibles; el servidor los
+        // sanea (asociado + activo) antes de congelarlos en el item.
+        fd.append('pmu_pdfs', JSON.stringify(elegibles().map(function (p) { return p.pdf; })));
         fd.append('valores', JSON.stringify(global.PMU_API.valores()));
         if (global.PMU_API.sesion && global.PMU_API.sesion.item_key) {
             // Re-edicion (T016): se reusa el item vigente (mismo item_key/pool).
@@ -591,45 +774,69 @@
             }
             var datos = json.data;
             global.PMU_API.sesion = { sid: datos.sid, item_key: datos.item_key };
-            var pdfDatos = (datos.pdfs || [])[0] || { pdf: ficha.pdf, grupos: [], fotos: {}, mockups: [] };
-            var previo = { mapa: poolPrevio(pdfDatos.pdf, datos.archivos, datos.pool_url) };
-            var vistas = (pdfDatos.mockups || []).map(function (m) { return { mockup: m }; });
+            var pdfs = (datos.pdfs || []).filter(function (p) { return p && p.pdf; });
+            if (!pdfs.length) {
+                pdfs = [{ pdf: ficha.pdf, grupos: [], fotos: {}, mockups: [] }];
+            }
+            // Spec 005 (T007): la galeria solo muestra mockups de los PDFs
+            // elegibles (el servidor ya devolvio unicamente esos).
+            var vistas = [];
+            pdfs.forEach(function (pdfDatos) {
+                var previo = { mapa: poolPrevio(pdfDatos.pdf, datos.archivos, datos.pool_url) };
+                (pdfDatos.mockups || []).forEach(function (m) {
+                    vistas.push({ mockup: m, pdfDatos: pdfDatos, previo: previo });
+                });
+            });
             var galeria = prepararGaleria(vistas);
             if (!galeria || !galeria.vistas.length) {
                 bloquearCarrito(false); // sin mockups: sin vista previa, venta libre (T021)
                 return null;
             }
             return Promise.all(galeria.vistas.map(function (v) {
-                return generarPdf(pdfDatos, datos.sid, datos.item_key, v, previo);
+                return generarPdf(v.pdfDatos, datos.sid, datos.item_key, v, v.previo);
             })).then(function () {
                 // T021: si TODAS las vistas fallaron no hay galeria: mensaje
                 // "no hay vista previa" + carrito habilitado (venta asegurada).
                 var quedan = galeria.podar ? galeria.podar() : galeria.vistas.length;
                 if (quedan === 0) {
-                    mostrarAviso(pdfDatos, 'No hay vista previa disponible: podes comprar igual y la revisamos antes de la entrega.');
+                    mostrarAviso(null, 'No hay vista previa disponible: podes comprar igual y la revisamos antes de la entrega.');
                 }
                 bloquearCarrito(false); // vistas listas (o sin vista): carrito habilitado
             });
         });
     }
 
-    /** Punto de entrada (T012/T014/T016): monta campos + boton "Vista previa". */
+    /** Punto de entrada (T012/T014/T016 + spec 005): campos + filtro + "Vista previa". */
     function iniciar() {
         var panel = raiz();
         if (!panel) { return null; }
         ficha = global.PMU_FICHA || {};
         if (!ficha.pdf || !(ficha.campos || []).length) { return null; }
+        // Spec 005: asociaciones de la ficha (validez/bloquear/mensaje por PDF).
+        if (!(ficha.pdfs || []).length) {
+            ficha.pdfs = [{ pdf: ficha.pdf, validez: '', mensaje_html: '', bloquear: false }];
+        }
         // Edicion (T016): valores guardados -> precarga de campos (ctx + inputs).
         var estado = montarCampos(panel, ficha.campos, ficha.valores);
-        var api = { pdf: ficha.pdf, estado: estado, valores: function () { return estado; } };
+        var api = {
+            pdf: ficha.pdf,
+            estado: estado,
+            valores: function () { return estado; },
+            filtro: function () { return filtroActual; }
+        };
         if (ficha.sesion && ficha.sesion.item_key) {
             // Re-edicion: el item vigente se reusa (mismo item_key/pool).
             api.sesion = { sid: ficha.sesion.sid, item_key: ficha.sesion.item_key };
         }
         global.PMU_API = api;
+        // T006/T007: la validez se re-evalua al instante con cada cambio.
+        panel.addEventListener('input', aplicarFiltro);
+        panel.addEventListener('change', aplicarFiltro);
+        aplicarFiltro();
         // US3 (T018): omisible = sin boton de vistas + carrito libre (el item
         // se crea en el servidor al agregar, con preview_estado=omisible).
         if (ficha.preview_omisible) {
+            bloquearCarrito(false);
             engancharCarrito();
             return api;
         }

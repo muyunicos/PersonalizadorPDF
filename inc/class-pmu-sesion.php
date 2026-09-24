@@ -277,6 +277,37 @@ class PMU_Sesion
         return $dir . DIRECTORY_SEPARATOR . 'mockup-' . $mockup_id . '.webp';
     }
 
+    /**
+     * Recorta el pool al snapshot vigente (spec 005/T009). Las filas de PDFs
+     * excluidos salen de `archivos[]` y sus PNG se borran; las filas aceptadas
+     * se conservan para que la regeneracion parcial siga reutilizandolas.
+     */
+    public function pool_filtrar_pdfs($sid, $item_key, array $pdfs)
+    {
+        $aceptados = [];
+        foreach ($pdfs as $pdf) {
+            $aceptados[(string)$this->motor->nombre_seguro($pdf, 'sesion:pool_filtrar_pdfs')] = true;
+        }
+        $manifest = $this->leer_manifest($sid, $item_key);
+        if (!is_array($manifest)) {
+            throw new Exception('motor:sesion:item:ausente');
+        }
+        $imgDir = $this->dir_item($sid, $item_key) . DIRECTORY_SEPARATOR . 'img';
+        $resto = [];
+        foreach ((array)($manifest['archivos'] ?? []) as $fila) {
+            $pdf = is_array($fila) ? (string)($fila['pdf'] ?? '') : '';
+            if ($pdf !== '' && !isset($aceptados[$pdf])) {
+                if (!empty($fila['file']) && is_dir($imgDir)) {
+                    @unlink($imgDir . DIRECTORY_SEPARATOR . basename((string)$fila['file']));
+                }
+                continue;
+            }
+            $resto[] = $fila;
+        }
+        $manifest['archivos'] = $resto;
+        $this->guardar_manifest($sid, $item_key, $manifest);
+    }
+
     /** Estado de preview del item: ok | sin_vista | omisible. */
     public function estado_preview($sid, $item_key)
     {

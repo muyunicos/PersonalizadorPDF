@@ -288,8 +288,24 @@ jQuery(function ($) {
         $(this).closest('.ec-resultados-producto').attr('hidden', true).empty();
     });
 
+    // Spec 005 (T004): al quitar el chip se quita tambien su bloque de validez.
     $(document).on('click', '.ec-chip-x', function () {
-        $(this).closest('.ec-chip').remove();
+        var $chip = $(this).closest('.ec-chip');
+        var id = parseInt($chip.data('id'), 10) || 0;
+        if (id > 0) {
+            $('.ec-tienda-producto[data-id="' + id + '"]').remove();
+        }
+        $chip.remove();
+    });
+
+    // Spec 005 (T004): `bloquear` solo se muestra si hay validez declarada.
+    $(document).on('input', '.ec-tienda-validez', function () {
+        var $bloque = $(this).closest('.ec-tienda-producto').find('.ec-tienda-bloquear');
+        if (($(this).val() || '').trim() === '') {
+            $bloque.attr('hidden', true);
+        } else {
+            $bloque.removeAttr('hidden');
+        }
     });
 
     // Cerrar el dropdown al hacer clic fuera.

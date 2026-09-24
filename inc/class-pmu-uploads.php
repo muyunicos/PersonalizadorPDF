@@ -634,6 +634,60 @@ class PMU_Uploads
         return true;
     }
 
+    /**
+     * Bool tolerante para valores de formulario (spec 005): acepta bool,
+     * string, numero o lista. El patron hidden(0) + checkbox(1) manda una
+     * lista donde gana el ultimo valor enviado (el checkbox real).
+     */
+    private function bool_form($v)
+    {
+        if (is_array($v)) {
+            $v = end($v);
+        }
+        return !empty($v);
+    }
+
+    /**
+     * Normaliza la seccion tienda{pid} de un config (spec 005 T002).
+     * La validez se valida SOLO si es nueva o cambio respecto de `$previo`:
+     * un valor guardado viejo que hoy no compila se conserva tal cual (el
+     * spec lo tolera: la ficha lo trata como true) y jamas bloquea al resto
+     * de la consola; lo nuevo o alterado se rechaza con causa.
+     */
+    private function config_tienda($valor, $previo = [])
+    {
+        $out = [];
+        foreach ((array)$valor as $pid => $t) {
+            if (!preg_match('/^[0-9]+$/', (string)$pid) || (int)$pid < 1 || !is_array($t)) {
+                continue;
+            }
+            $k = (string)(int)$pid;
+            $validez = isset($t['validez']) ? substr(trim((string)$t['validez']), 0, 2000) : '';
+            if ($validez !== '') {
+                $vieja = isset($previo[$k]['validez']) && is_scalar($previo[$k]['validez'])
+                    ? substr(trim((string)$previo[$k]['validez']), 0, 2000) : null;
+                if ($validez !== $vieja) {
+                    $this->validar_script_campo('function(){' . $validez . '}');
+                }
+            }
+            $mensaje = isset($t['mensaje_html']) ? substr(trim((string)$t['mensaje_html']), 0, 2000) : '';
+            if ($mensaje !== '' && function_exists('wp_kses')) {
+                $mensaje = wp_kses($mensaje, [
+                    'p' => [], 'b' => [], 'i' => [], 'strong' => [], 'em' => [],
+                    'br' => [], 'ul' => [], 'li' => [],
+                ]);
+            }
+            $out[$k] = [
+                'activo' => !array_key_exists('activo', $t) ? true : $this->bool_form($t['activo']),
+                'validez' => $validez,
+                'mensaje_html' => $mensaje,
+                // `bloquear` solo tiene efecto con validez (data-model 005).
+                'bloquear' => $validez !== '' && $this->bool_form(isset($t['bloquear']) ? $t['bloquear'] : false),
+            ];
+        }
+        return $out;
+    }
+
     /** Normaliza la seccion productos de un config (int[] unico, max 100). */
     private function config_productos($valor)
     {
@@ -759,7 +813,7 @@ class PMU_Uploads
         $pdf = $this->nombre_seguro($pdf, 'leer_config');
         $ruta = $this->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . $pdf
             . DIRECTORY_SEPARATOR . 'config.json';
-        $base = ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => []];
+        $base = ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => [], 'tienda' => []];
         $datos = $this->leer_json($ruta);
         if (!is_array($datos)) {
             return $base;
@@ -790,13 +844,18 @@ class PMU_Uploads
         if (isset($datos['placeholders'])) {
             $base['placeholders'] = $this->config_placeholders($datos['placeholders']);
         }
+        if (isset($datos['tienda'])) {
+            // Lectura tolerante: `previo` = el mismo valor crudo del disco, asi
+            // una validez vieja que hoy no compila se conserva (no rompe leer).
+            $base['tienda'] = $this->config_tienda($datos['tienda'], $datos['tienda']);
+        }
         return $base;
     }
 
     /**
      * Guarda el config.json editable de un PDF de forma atomica.
      * Nunca toca el dataset: solo activo, productos, campos, mockups,
-     * preview_omisible y mapeos.
+     * preview_omisible, mapeos y tienda (spec 005).
      * Devuelve true/false (no lanza salvo nombre invalido).
      */
     public function guardar_config($pdf, array $config)
@@ -829,6 +888,10 @@ class PMU_Uploads
         );
         if (isset($config['placeholders'])) {
             $canon['placeholders'] = $this->config_placeholders($config['placeholders']);
+        }
+        if (isset($config['tienda'])) {
+            // Validacion por cambio: compara contra lo ya guardado (`$canon`).
+            $canon['tienda'] = $this->config_tienda($config['tienda'], $canon['tienda']);
         }
         return $this->escribir_json($dir . DIRECTORY_SEPARATOR . 'config.json', $canon);
     }

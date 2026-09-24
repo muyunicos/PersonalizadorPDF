@@ -1,0 +1,23 @@
+{
+    "nota": "Fixture compartida spec 005: la fase PHP `validez` verifica el SANEO (no evalua JS) y tests/validez.js la EVALUACION en el navegador.",
+    "valores": {
+        "1": {"valor": "libelulas", "cliente": "Libelulas"},
+        "2": {"valor": "a4", "cliente": "A4"},
+        "3": {"valor": "Ana", "cliente": "Ana"},
+        "5": {"valor": ["a", "b", "c"], "cliente": "a, b, c"}
+    },
+    "casos": [
+        {"nombre": "diseno1-a4 aplica", "validez": "campo1 === 'libelulas' && campo2 === 'a4'", "saneo_php": true, "evaluacion_js": true},
+        {"nombre": "diseno1-legal no aplica", "validez": "campo1 === 'libelulas' && campo2 === 'legal'", "saneo_php": true, "evaluacion_js": false},
+        {"nombre": "diseno2-a4 no aplica", "validez": "campo1 === 'mariposas' && campo2 === 'a4'", "saneo_php": true, "evaluacion_js": false},
+        {"nombre": "diseno2-legal no aplica", "validez": "campo1 === 'mariposas' && campo2 === 'legal'", "saneo_php": true, "evaluacion_js": false},
+        {"nombre": "FR-6 requerido (trim)", "validez": "trim(campo3) !== ''", "saneo_php": true, "evaluacion_js": true},
+        {"nombre": "FR-6 formato (regex)", "validez": "regex(campo3, '^[A-Za-z ]{2,20}$')", "saneo_php": true, "evaluacion_js": true},
+        {"nombre": "FR-6 rango + array", "validez": "len(campo5) >= 3 && incluye(campo5, 'b')", "saneo_php": true, "evaluacion_js": true},
+        {"nombre": "campo inexistente = undefined", "validez": "campo9 === 'x'", "saneo_php": true, "evaluacion_js": false},
+        {"nombre": "vacia = siempre aplica", "validez": "", "saneo_php": true, "evaluacion_js": true},
+        {"nombre": "solo espacios = ausente", "validez": "   ", "saneo_php": true, "evaluacion_js": true},
+        {"nombre": "document prohibido (sandbox)", "validez": "document.getElementById('x')", "saneo_php": false, "evaluacion_js": true},
+        {"nombre": "sintaxis rota = true (PHP no es parser)", "validez": "campo1 ==", "saneo_php": true, "evaluacion_js": true}
+    ]
+}

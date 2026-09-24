@@ -64,23 +64,32 @@ if (!defined('ABSPATH')) {
 <div class="card">
     <h2>Tienda: vista previa y descargas del comprador</h2>
     <ol>
-        <li><strong>Asocia el PDF a un producto</strong> (canonico: postmeta
-            <code>_pmu_pdf_slug</code> del producto; el listado de la consola es su espejo).
-            En la ficha del producto aparece el panel del comprador con los campos del
-            catalogo elegidos en "Configuracion tienda".</li>
+        <li><strong>Asocia uno o varios PDFs a un producto</strong> (canonico: postmeta
+            <code>_pmu_pdf_slugs</code> del producto; el singular
+            <code>_pmu_pdf_slug</code> se conserva como respaldo de productos antigos;
+            el listado de la consola es su espejo). En la ficha del producto aparece el
+            panel del comprador con los campos del catalogo elegidos en
+            "Configuracion tienda".</li>
         <li><strong>"Vista previa"</strong>: el cliente completa los campos y genera la vista
             previa: mockups 300x300 con su personalizacion (render cliente TextMuy + pool en
             <code>uploads/pmu/tmp/sesion-{sid}/{item_key}/img/</code>). El boton
             "Agregar al carrito" queda bloqueado hasta que las vistas terminan
             (salvo <code>preview_omisible=true</code>).</li>
+        <li><strong>Validez y snapshot</strong>: en la consola, "Configuracion tienda"
+            permite activar cada asociacion y escribir una expresion JS opcional
+            (<code>campo1 === 'libelulas' &amp;&amp; campo2 === 'a4'</code>), un mensaje
+            HTML y si un fallo debe bloquear el carrito. La expresion se evalua solo en
+            el navegador. Al agregar, el servidor conserva en
+            <code>manifest.pdfs[]</code> solo los PDFs aceptados y registra los descartados
+            en <code>pdfs_descartados[]</code>; un snapshot vacio rechaza la compra.</li>
         <li><strong>Carrito y pedido</strong>: al agregar se congela lo aprobado
             (<code>mockup-{id}.webp</code>) y el item se promueve a su
             <code>cart_item_key</code>; al pagarse pasa a
             <code>orders/{order_id}/{item_key}/</code>. La seccion
-            <strong>"4. Pedidos completados"</strong> de la consola lista cada item
-            (estado, etiquetas del cliente, vistas congeladas) con
-            <strong>"Regenerar PDF"</strong> (rearma la salida desde el pool) y el
-            comprador descarga su PDF en <code>mi-cuenta/descargas/</code>.</li>
+            <strong>"4. Pedidos completados"</strong> de la consola lista cada item con
+            PDFs aceptados, PDFs descartados, estado, etiquetas del cliente y vistas
+            congeladas. <strong>"Regenerar PDF"</strong> rearma todos los PDFs aceptados
+            desde el pool; en Descargas hay una fila por PDF del snapshot.</li>
     </ol>
 </div>
 

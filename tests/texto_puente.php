@@ -70,6 +70,7 @@ function trailingslashit($s) { return rtrim($s, '/\\') . '/'; }
 function sanitize_key($k) { return strtolower(preg_replace('/[^a-z0-9_\-]/', '', (string)$k)); }
 function sanitize_file_name($n) { return preg_replace('/[^A-Za-z0-9_\-\.]/', '_', (string)$n); }
 function sanitize_text_field($t) { return trim(strip_tags((string)$t)); }
+function wp_kses($t, $allowed = []) { $tags = ''; foreach ((array)$allowed as $tag => $attrs) { $tags .= '<' . $tag . '>'; } return strip_tags((string)$t, $tags ?: '<p><b><i><strong><em><br><ul><li>'); }
 function wp_unslash($v) { return $v; }
 function wp_die($m = '') { throw new Exception('wp_die: ' . $m); }
 function admin_url($p = '') { return 'http://test/wp-admin/' . $p; }
@@ -95,13 +96,38 @@ class TestWC
     public function __construct() { $this->cart = new TestWC_Cart(); }
 }
 function WC() { return isset($GLOBALS['test_wc']) ? $GLOBALS['test_wc'] : null; }
-// Vinculo producto<->PDF (canonico postmeta): el arnes sabe de UN producto (4242).
-function get_post_meta($id, $key = '', $single = false) { return ($key === '_pmu_pdf_slug' && (int)$id === 4242) ? 'muestra' : ''; }
+// Vinculo producto<->PDF (canonico postmeta lista): el arnes sabe de UN producto (4242).
+function get_post_meta($id, $key = '', $single = false) {
+    if ((int)$id !== 4242) { return ($single || $key === '_pmu_pdf_slugs') ? '' : []; }
+    if ($key === '_pmu_pdf_slugs') {
+        return isset($GLOBALS['test_postmeta'][4242]['_pmu_pdf_slugs'])
+            ? $GLOBALS['test_postmeta'][4242]['_pmu_pdf_slugs']
+            : (isset($GLOBALS['test_postmeta'][4242]['_pmu_pdf_slug']) ? '' : '');
+    }
+    if ($key === '_pmu_pdf_slug' && $single) {
+        if (isset($GLOBALS['test_postmeta'][4242]['_pmu_pdf_slugs'])) { return ''; }
+        return isset($GLOBALS['test_postmeta'][4242]['_pmu_pdf_slug'])
+            ? $GLOBALS['test_postmeta'][4242]['_pmu_pdf_slug'] : 'muestra';
+    }
+    if ($key === '') { return isset($GLOBALS['test_postmeta'][4242]) ? $GLOBALS['test_postmeta'][4242] : []; }
+    return $single ? '' : [];
+}
 function update_post_meta($id, $key = '', $value = '') { $GLOBALS['test_postmeta'][(int)$id][$key] = $value; return true; }
 function delete_post_meta($id, $key = '') { unset($GLOBALS['test_postmeta'][(int)$id][$key]); return true; }
 function get_permalink($id = 0) { return 'http://test/?p=' . (int)$id; }
 function get_the_ID() { return 4242; }
-class TestWC_Product { private $id = 0; public function __construct($id = 0) { $this->id = (int)$id; } public function get_id() { return $this->id; } }
+class TestWC_Product { private $id = 0; public function __construct($id = 0) { $this->id = (int)$id; } public function get_id() { return $this->id; } public function get_name() { return 'Producto ' . $this->id; } }
+class TestPMUOrder {
+    private $id;
+    private $meta = [];
+    public function __construct($id = 0, array $meta = []) { $this->id = (int)$id; $this->meta = $meta; }
+    public function get_id() { return $this->id; }
+    public function get_meta($key = '', $single = false) { return $this->meta[$key] ?? ''; }
+    public function get_order_key() { return 'test-order-key'; }
+    public function get_customer_id() { return 1; }
+}
+function wc_get_order($id = 0) { return $GLOBALS['test_order'] ?? null; }
+function get_current_user_id() { return (int)($GLOBALS['test_user_id'] ?? 1); }
 function wc_get_product($p = null) { return $p instanceof TestWC_Product ? $p : new TestWC_Product((int)$p); }
 
 require $plugin;
@@ -217,6 +243,14 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('borrado quirurgico de otro item', is_array($s) && isset($s['dir_otro']) && !is_dir($s['dir_otro']));
             check('ttl elimino solo el draft vencido', is_array($s) && $s['ttl_eliminados'] === 1 && is_dir($s['dir_item']));
             break;
+        case 'conciliacion':
+            // 004/T024: el analisis sigue inmutable y un draft sin pool no habilita carrito.
+            $c = isset($GLOBALS['test_conciliacion']) ? (array)$GLOBALS['test_conciliacion'] : [];
+            check('analisis intacto tras guardar config', ($c['analisis_antes'] ?? '') === ($c['analisis_despues'] ?? ''));
+            check('config editable conserva preview obligatoria', ($c['preview_omisible'] ?? true) === false && ($c['repetir'] ?? false) === true);
+            check('draft sin pool no habilita carrito', ($c['carrito_ok'] ?? true) === false);
+            check('no hay salida parcial', count((array)glob($uploads . '/tmp/muestras/muestra/*_procesado.pdf')) === 0);
+            break;
 
         case 'admin':
             check('render sin fatal ni excepcion', $admin_error === '');
@@ -225,6 +259,16 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             // T025: la consola incluye la seccion de pedidos completados (render real).
             check('seccion 4. Pedidos completados', strpos($admin_html, '4. Pedidos completados') !== false
                 && strpos($admin_html, 'personalizador_pdf_item_regenerar') !== false);
+            // Spec 005 (T004): "Configuracion tienda" por asociacion (render real).
+            check('tienda: bloque por producto asociado', strpos($admin_html, 'class="ec-tienda-producto" data-id="4242"') !== false
+                && strpos($admin_html, 'class="ec-tienda-producto" data-id="4243"') !== false
+                && strpos($admin_html, 'name="tienda_presente"') !== false);
+            check('tienda: validez y mensaje precargados', strpos($admin_html, 'libelulas') !== false
+                && strpos($admin_html, '&lt;b&gt;Sin stock&lt;/b&gt;') !== false);
+            check('tienda: activo con hidden + checkbox', substr_count($admin_html, 'name="tienda[4242][activo]"') === 2
+                && substr_count($admin_html, 'name="tienda[4242][validez]"') === 1);
+            check('tienda: bloquear visible solo con validez', substr_count($admin_html, 'class="ec-tienda-bloquear"') === 2
+                && substr_count($admin_html, 'class="ec-tienda-bloquear" hidden') === 1);
             break;
         case 'setup':
             check('PDF en pdfs/muestra/muestra.pdf', is_file($uploads . '/pdfs/muestra/muestra.pdf'));
@@ -385,8 +429,19 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('PDF final con firma %PDF', ($GLOBALS['test_completados_pdf'] ?? '') === '%PDF');
             check('generacion idempotente', ($GLOBALS['test_completados_idem'] ?? false) === true);
             check('redirect de regeneracion', strpos($redirect, 'ec_regenerado=1') !== false);
+            $rutasK = (array)($GLOBALS['test_completados_rutas'] ?? []);
+            check('dos PDFs aceptados regenerados', count($rutasK) === 2
+                && isset($rutasK['muestra'], $rutasK['otro'])
+                && is_file($rutasK['muestra']) && is_file($rutasK['otro']));
+            $descargasK = (array)($GLOBALS['test_descargas'] ?? []);
+            check('descargas: una fila por PDF aceptado', count($descargasK) === 3
+                && strpos((string)($descargasK[1]['download_url'] ?? ''), 'pdf=muestra') !== false
+                && strpos((string)($descargasK[2]['download_url'] ?? ''), 'pdf=otro') !== false);
             $salidaK = (array)glob(($GLOBALS['test_completados_dir'] ?? '') . DIRECTORY_SEPARATOR . '*_procesado.pdf');
-            check('salida rearmada tras regenerar', count($salidaK) === 1 && substr((string)@file_get_contents($salidaK[0], false, null, 0, 4), 0, 4) === '%PDF');
+            check('salida rearmada solo para aceptados', count($salidaK) === 2
+                && is_file(($GLOBALS['test_completados_dir'] ?? '') . DIRECTORY_SEPARATOR . 'muestra_procesado.pdf')
+                && is_file(($GLOBALS['test_completados_dir'] ?? '') . DIRECTORY_SEPARATOR . 'otro_procesado.pdf')
+                && !is_file(($GLOBALS['test_completados_dir'] ?? '') . DIRECTORY_SEPARATOR . 'x_procesado.pdf'));
             break;
         case 'ficha_edicion':
             // T016: re-edicion: HTML con leyenda de edicion + PMU_FICHA precargada;
@@ -463,6 +518,148 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 check('PNG viejos eliminados del pool', (array)glob($imgDir_p . '/muestra-0000FF-*.png') !== [] && count(glob($imgDir_p . '/muestra-0000FF-*.png')) === 1);
             }
             check('PNG fisico con firma valida', isset($GLOBALS['test_pool_item']) && substr((string)@file_get_contents($dirSes_p . '/img/' . basename((string)($fila_p['file'] ?? 'x'))), 0, 8) === "\x89PNG\r\n\x1a\n");
+            break;
+        case 'validez':
+            // Spec 005 (T001-T003/T005): multivinculo + tienda{} + saneado.
+            $val = isset($GLOBALS['test_validez']) ? $GLOBALS['test_validez'] : null;
+            $err_v = isset($GLOBALS['test_validez_error']) ? (string)$GLOBALS['test_validez_error'] : '';
+            if ($err_v !== '') {
+                echo '  ERROR ' . $err_v . "\n";
+            }
+            check('ciclo sin error', $err_v === '' && is_array($val));
+            check('lista canonica con 1 slug', is_array($val) && $val['lista'] === ['muestra']);
+            check('compat singular = primero', is_array($val) && $val['primero'] === 'muestra');
+            check('re-vincular no duplica', is_array($val) && $val['lista2'] === ['muestra']);
+            check('lista multiple: dedupe + compat', is_array($val)
+                && $val['dedupe'] === ['muestra', 'otro'] && $val['compat2'] === 'muestra');
+            check('baja parcial conserva el otro', is_array($val) && $val['baja_parcial'] === ['otro']);
+            check('elemento invalido se descarta solo', is_array($val) && $val['tolerante'] === ['muestra', 'otro']);
+            check('respaldo singular sin lista', is_array($val) && $val['respaldo'] === ['muestra']);
+            check('desvincular vacia la lista', is_array($val) && $val['tras_baja'] === []);
+            check('tienda guarda ok', is_array($val) && !empty($val['ok_tienda']));
+            $tie_v = is_array($val) && is_array($val['tienda']) ? $val['tienda'] : [];
+            check('tienda normalizada (bool+pid)', isset($tie_v['4242'])
+                && $tie_v['4242']['activo'] === true && $tie_v['4242']['bloquear'] === false
+                && $tie_v['4242']['validez'] === "campo1 === 'libelulas' && campo2 === 'a4'"
+                && !isset($tie_v['no-numerico']));
+            check('mensaje saneado sin script', isset($tie_v['4242'])
+                && strpos($tie_v['4242']['mensaje_html'], '<script') === false
+                && strpos($tie_v['4242']['mensaje_html'], '<b>') !== false);
+            check('activo false persiste', isset($tie_v['4243']) && $tie_v['4243']['activo'] === false);
+            check('bloquear sin validez se ignora', isset($tie_v['4243']) && $tie_v['4243']['bloquear'] === false);
+            check('bloquear con validez persiste', isset($tie_v['4244']) && $tie_v['4244']['bloquear'] === true);
+            check('recorte a 2000 (validez+mensaje)', isset($tie_v['4244'])
+                && strlen((string)$tie_v['4244']['validez']) === 2000
+                && strlen((string)$tie_v['4244']['mensaje_html']) === 2000);
+            check('validez prohibida rechazada', is_array($val) && $val['err_mala'] === 'motor:campos:script:invalido');
+            check('rechazo deja el config intacto', is_array($val) && !empty($val['tienda_intacta']));
+            check('guardar tienda no pisa el resto', is_array($val) && !empty($val['resto_intacto']));
+            check('validez vieja: lectura tolerante', is_array($val) && !empty($val['legacy_leida']));
+            check('validez vieja: re-guardable sin cambios', is_array($val) && !empty($val['legacy_guardable']));
+            $fx_v = is_array($val) && isset($val['fixture']) ? (array)$val['fixture'] : [];
+            $fx_acepta = count($fx_v) > 0;
+            $fx_recorta = count($fx_v) > 0;
+            foreach ($fx_v as $fila_fx) {
+                if ($fila_fx['aceptado'] !== $fila_fx['esperado']) { $fx_acepta = false; }
+                if (empty($fila_fx['coincide'])) { $fx_recorta = false; }
+            }
+            check('fixture compartida: saneo PHP coincide', $fx_acepta);
+            check('fixture compartida: recorte exacto', $fx_recorta);
+            check('sanea activo: aceptado sin duplicar', is_array($val)
+                && $val['sanea_ok'] === ['pdfs' => ['muestra'], 'descartados' => ['otro']]);
+            check('sanea inactivo: cae a descartados', is_array($val)
+                && $val['sanea_inactivo'] === ['pdfs' => [], 'descartados' => ['muestra', 'otro']]);
+            check('declarado no saneable: auditado crudo', is_array($val)
+                && $val['sanea_invalido'] === ['pdfs' => [], 'descartados' => ['///']]);
+            check('sanea vacio: nada de nada', is_array($val)
+                && $val['sanea_vacio'] === ['pdfs' => [], 'descartados' => []]);
+            break;
+        case 'validez_admin':
+        case 'validez_admin_mal':
+            // Spec 005 (T004/T005): handler de config con "Configuracion tienda".
+            $json_va = isset($GLOBALS['test_json']) ? $GLOBALS['test_json'] : null;
+            $cfg_va = null;
+            $tie_va = [];
+            try {
+                $cfg_va = (new \PMU_Uploads())->leer_config('muestra');
+                $tie_va = is_array($cfg_va) && isset($cfg_va['tienda']) && is_array($cfg_va['tienda']) ? $cfg_va['tienda'] : [];
+            } catch (\Throwable $e_va) {
+                $cfg_va = null;
+            }
+            if ($fase === 'validez_admin_mal') {
+                check('validez invalida: JSON con causa', is_array($json_va) && empty($json_va['success'])
+                    && strpos((string)$json_va['data'], 'Validez invalida') !== false);
+                check('validez invalida: tienda sin escribir', is_array($cfg_va) && $tie_va === []);
+            } else {
+                check('guardado JSON ok', is_array($json_va) && !empty($json_va['success']));
+                check('tienda del form (hidden+checkbox)', isset($tie_va['4242'])
+                    && $tie_va['4242']['activo'] === true && $tie_va['4242']['bloquear'] === true
+                    && $tie_va['4242']['validez'] === "campo1 === 'libelulas' && campo2 === 'a4'"
+                    && strpos($tie_va['4242']['mensaje_html'], '<script') === false);
+                check('activo desmarcado + bloquear sin validez', isset($tie_va['4243'])
+                    && $tie_va['4243']['activo'] === false && $tie_va['4243']['bloquear'] === false);
+                check('huerfano podado', !isset($tie_va['9999']));
+                check('productos espejo del POST', is_array($cfg_va) && $cfg_va['productos'] === [4242, 4243]);
+            }
+            break;
+        case 'ficha_pdfs':
+            // Spec 005 (US2): panel del producto con N PDFs + tienda{}.
+            $fp = isset($GLOBALS['test_fp']) ? $GLOBALS['test_fp'] : [];
+            $pn = isset($fp['panel']) ? $fp['panel'] : null;
+            check('panel_producto con 2 PDFs (alfabetico)', is_array($pn) && count($pn['pdfs']) === 2
+                && $pn['pdfs'][0]['pdf'] === 'muestra' && $pn['pdfs'][1]['pdf'] === 'otro');
+            check('validez/mensaje/bloquear por asociacion', is_array($pn)
+                && $pn['pdfs'][0]['validez'] === "campo1 === 'libelulas'"
+                && $pn['pdfs'][0]['bloquear'] === true
+                && strpos((string)$pn['pdfs'][0]['mensaje_html'], '<b>') !== false);
+            check('bloquear sin validez se ignora (ficha)', is_array($pn) && $pn['pdfs'][1]['bloquear'] === false);
+            check('union de campos (D4)', is_array($pn) && array_keys($pn['campos']) === (array)$fp['campos']);
+            check('omisible solo si TODOS lo son', is_array($pn) && $pn['preview_omisible'] === false);
+            $fic = isset($fp['ficha']) ? $fp['ficha'] : null;
+            check('PMU_FICHA con pdfs/producto/admin', is_array($fic) && count((array)$fic['pdfs']) === 2
+                && $fic['producto'] === 4242 && $fic['admin'] === true && $fic['pdf'] === 'muestra');
+            check('inactivo fuera de la ficha', isset($fp['panel_uno']) && is_array($fp['panel_uno'])
+                && count($fp['panel_uno']['pdfs']) === 1 && $fp['panel_uno']['pdfs'][0]['pdf'] === 'muestra');
+            break;
+        case 'ficha_pdfs_previa':
+            // Spec 005 (T009): snapshot saneado del draft declarado por la ficha.
+            $json_fp = isset($GLOBALS['test_json']) ? $GLOBALS['test_json'] : null;
+            check('previa JSON ok', is_array($json_fp) && !empty($json_fp['success']));
+            $pdfs_fp = is_array($json_fp) ? (array)($json_fp['data']['pdfs'] ?? []) : [];
+            check('render de los 2 elegibles', count($pdfs_fp) === 2
+                && $pdfs_fp[0]['pdf'] === 'muestra' && $pdfs_fp[1]['pdf'] === 'otro');
+            check('elegibles declarados saneados', is_array($json_fp)
+                && $json_fp['data']['elegibles'] === ['muestra', 'otro']);
+            $man_fp = null;
+            foreach ((array)glob($uploads . '/tmp/sesion-*/*/manifest.json') as $m_fp) {
+                $man_fp = json_decode((string)@file_get_contents($m_fp), true);
+            }
+            check('draft con snapshot congelado', is_array($man_fp) && $man_fp['pdfs'] === ['muestra', 'otro']);
+            check('previa audita descartados', is_array($json_fp)
+                && $json_fp['data']['descartados'] === ['x']
+                && is_array($man_fp) && $man_fp['pdfs_descartados'] === ['x']);
+            break;
+        case 'ficha_pdfs_vacio':
+            // T009: una declaración explícitamente vacía no vuelve al modo 004.
+            check('previa vacía rechazada', is_array($json) && empty($json['success'])
+                && ($json['data'] ?? '') === 'motor:sesion:snapshot:vacio');
+            check('previa vacía no crea draft', (function () use ($testBase) {
+                foreach ((array)glob($testBase . '/uploads/pmu/tmp/sesion-*/*/manifest.json') as $manifest) {
+                    if (is_file($manifest)) {
+                        return false;
+                    }
+                }
+                return true;
+            })());
+            break;
+        case 'ficha_pdfs_carrito':
+            // Spec 005 (US4/T009): la rama omisible crea el item con snapshot.
+            $fp = isset($GLOBALS['test_fp']) ? $GLOBALS['test_fp'] : [];
+            check('carrito_validar omisible ok', !empty($fp['carrito_ok']));
+            $man_c = isset($fp['manifiesto']) ? $fp['manifiesto'] : null;
+            check('snapshot saneado del declarado', is_array($man_c) && $man_c['pdfs'] === ['muestra', 'otro']);
+            check('descartados auditados', is_array($man_c) && $man_c['pdfs_descartados'] === ['x']);
+            check('estado omisible', is_array($man_c) && $man_c['preview_estado'] === 'omisible');
             break;
         case 'placeholder':
             // T026: placeholder al vuelo por id (sin archivos) + rechazo con id ausente.
@@ -685,19 +882,33 @@ switch ($fase) {
         ]);
         $dirK = $motor_k->dir_ambito('orders', true) . DIRECTORY_SEPARATOR . '4242' . DIRECTORY_SEPARATOR . 'item-abc';
         wp_mkdir_p($dirK . DIRECTORY_SEPARATOR . 'img');
+        $dirOtroK = $motor_k->dir_ambito('pdfs', true) . DIRECTORY_SEPARATOR . 'otro';
+        wp_mkdir_p($dirOtroK);
+        copy($testBase . '/uploads/pmu/pdfs/muestra/muestra.pdf', $dirOtroK . DIRECTORY_SEPARATOR . 'otro.pdf');
         $pngK = sys_get_temp_dir() . '/pd_puente_png_' . getmypid() . '_c.png';
         \ExtractCorel\Engine\PngWriter::write($pngK, 300, 200);
         copy($pngK, $dirK . DIRECTORY_SEPARATOR . 'img' . DIRECTORY_SEPARATOR . 'muestra-0000FF-1.png');
+        copy($pngK, $dirK . DIRECTORY_SEPARATOR . 'img' . DIRECTORY_SEPARATOR . 'otro-0000FF-1.png');
         file_put_contents($dirK . DIRECTORY_SEPARATOR . 'manifest.json', json_encode([
             'item_key' => 'item-abc',
             'sid' => 'test-8f2a',
-            'pdfs' => ['muestra'],
+            'pdfs' => ['muestra', 'otro'],
+            'pdfs_descartados' => ['x'],
             'valores' => [$cid_k => ['valor' => 'Ana', 'cliente' => 'Ana']],
-            'archivos' => [['pdf' => 'muestra', 'grupo_id' => '0000FF', 'indice' => 0, 'file' => 'img/muestra-0000FF-1.png', 'hash' => 'h1']],
+            'archivos' => [
+                ['pdf' => 'muestra', 'grupo_id' => '0000FF', 'indice' => 0, 'file' => 'img/muestra-0000FF-1.png', 'hash' => 'h1'],
+                ['pdf' => 'otro', 'grupo_id' => '0000FF', 'indice' => 0, 'file' => 'img/otro-0000FF-1.png', 'hash' => 'h2'],
+            ],
             'preview_estado' => 'ok',
         ]));
         $GLOBALS['test_completados'] = $p->pedidos_completados();
+        $GLOBALS['test_completados_rutas'] = $p->item_generar_pdfs(4242, 'item-abc');
         $rutaK = $p->item_generar_pdf(4242, 'item-abc');
+        $GLOBALS['test_completados_pdf'] = is_file($rutaK) ? (string)file_get_contents($rutaK, false, null, 0, 4) : '';
+        $GLOBALS['test_order'] = new TestPMUOrder(4242, ['_pmu_items' => ['item-abc' => 'entregado']]);
+        $GLOBALS['test_descargas'] = $p->descargas_cliente([
+            ['order_id' => 4242, 'product_id' => 123, 'product_name' => 'Producto', 'order_key' => 'test-order-key'],
+        ]);
         $GLOBALS['test_completados_pdf'] = is_file($rutaK) ? (string)file_get_contents($rutaK, false, null, 0, 4) : '';
         clearstatcache();
         $mK = filemtime($rutaK);
@@ -875,6 +1086,380 @@ switch ($fase) {
         $GLOBALS['test_pool_item'] = $draft_p;
         $p->handle_pool_png(); // exit en wp_send_json_*
         break;
+
+    case 'validez':
+        // Spec 005 (T001-T003/T005): multivinculo + tienda{} + saneado del snapshot.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        try {
+            $motor_v = new PMU_Uploads();
+            // T001: lista canonica + respaldo singular + sin duplicados.
+            $p->producto_pdf_vincular(4242, 'muestra.pdf');
+            $lista_v = $p->producto_pdf_slugs(4242);
+            $primero_v = $p->producto_pdf_slug(4242);
+            $p->producto_pdf_vincular(4242, 'muestra.pdf'); // re-vincular: no duplica
+            $lista2_v = $p->producto_pdf_slugs(4242);
+            // Lista multiple (multi-PDF): duplicado dentro de la lista + baja parcial.
+            $GLOBALS['test_postmeta'][4242]['_pmu_pdf_slugs'] = ['muestra', 'otro', 'muestra'];
+            $dedupe_v = $p->producto_pdf_slugs(4242);
+            $compat2_v = $p->producto_pdf_slug(4242);
+            $GLOBALS['test_postmeta'][4242]['_pmu_pdf_slugs'] = ['muestra', 'otro'];
+            $p->producto_pdf_desvincular(4242, 'muestra.pdf');
+            $baja_parcial_v = $p->producto_pdf_slugs(4242);
+            // Elemento invalido entre validos: se descarta solo el invalido.
+            $GLOBALS['test_postmeta'][4242]['_pmu_pdf_slugs'] = ['muestra', '///', 'otro'];
+            $tolerante_v = $p->producto_pdf_slugs(4242);
+            unset($GLOBALS['test_postmeta'][4242]['_pmu_pdf_slugs']);
+            $GLOBALS['test_postmeta'][4242]['_pmu_pdf_slug'] = 'muestra';
+            $respaldo_v = $p->producto_pdf_slugs(4242);
+            $p->producto_pdf_desvincular(4242, 'muestra.pdf');
+            $tras_baja_v = $p->producto_pdf_slugs(4242);
+            $GLOBALS['test_validez'] = [
+                'lista' => $lista_v, 'primero' => $primero_v, 'lista2' => $lista2_v,
+                'dedupe' => $dedupe_v, 'compat2' => $compat2_v, 'baja_parcial' => $baja_parcial_v,
+                'tolerante' => $tolerante_v, 'respaldo' => $respaldo_v, 'tras_baja' => $tras_baja_v,
+            ];
+            // T002: tienda{} normalizada (bool, recorte, allowlist, claves pid,
+            // bloquear solo con validez) sin pisar el resto del config.
+            $motor_v->guardar_config('muestra', [
+                'activo' => true,
+                'productos' => [4242],
+                'campos_ids' => [7],
+                'placeholders' => ['0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => 'Ana', 'settings' => '', 'repetir' => false]],
+            ]);
+            $ok_t = $motor_v->guardar_config('muestra', [
+                'tienda' => [
+                    '4242' => [
+                        'activo' => '1',
+                        'validez' => "campo1 === 'libelulas' && campo2 === 'a4'",
+                        'mensaje_html' => '<b>Ese diseno no viene en ese tamano.</b><script>alert(1)</script>',
+                        'bloquear' => '',
+                    ],
+                    '4243' => [
+                        'activo' => false,
+                        'validez' => '',
+                        'bloquear' => '1', // sin validez: se ignora
+                    ],
+                    '4244' => [
+                        'validez' => str_repeat('a', 2100),
+                        'mensaje_html' => str_repeat('b', 2100),
+                        'bloquear' => '1',
+                    ],
+                    'no-numerico' => ['activo' => true],
+                ],
+            ]);
+            $cfg_v = $motor_v->leer_config('muestra');
+            $GLOBALS['test_validez']['ok_tienda'] = $ok_t;
+            $GLOBALS['test_validez']['tienda'] = isset($cfg_v['tienda']) ? $cfg_v['tienda'] : null;
+            $GLOBALS['test_validez']['resto_intacto'] = (!empty($cfg_v['activo'])
+                && $cfg_v['productos'] === [4242] && $cfg_v['campos_ids'] === [7]
+                && isset($cfg_v['placeholders']['0000FF']) && $cfg_v['placeholders']['0000FF']['value'] === 'Ana');
+            // Validez con sintaxis prohibida: rechazo con causa de campos, sin
+            // dejar el config a medias (el motor escribe al final).
+            try {
+                $motor_v->guardar_config('muestra', ['tienda' => ['4242' => ['validez' => 'document.getElementById("x")']]]);
+                $GLOBALS['test_validez']['err_mala'] = 'sin-rechazo';
+            } catch (\Throwable $e_mala) {
+                $GLOBALS['test_validez']['err_mala'] = $e_mala->getMessage();
+            }
+            $tras_mala_v = $motor_v->leer_config('muestra');
+            $GLOBALS['test_validez']['tienda_intacta'] = (isset($tras_mala_v['tienda']['4242']['validez'])
+                && $tras_mala_v['tienda']['4242']['validez'] === "campo1 === 'libelulas' && campo2 === 'a4'");
+            // Borde del spec (005): una validez vieja que hoy no compila se lee y
+            // se re-guarda sin cambios (nunca bloquea el resto de la consola).
+            file_put_contents($motor_v->ruta_config('muestra'), wp_json_encode([
+                'activo' => true,
+                'tienda' => ['4242' => ['validez' => 'document.getElementById("legacy")']],
+            ]));
+            $legacy_v = $motor_v->leer_config('muestra');
+            $GLOBALS['test_validez']['legacy_leida'] = (isset($legacy_v['tienda']['4242']['validez'])
+                && $legacy_v['tienda']['4242']['validez'] === 'document.getElementById("legacy")');
+            $GLOBALS['test_validez']['legacy_guardable'] = true;
+            try {
+                $motor_v->guardar_config('muestra', ['tienda' => $legacy_v['tienda']]);
+            } catch (\Throwable $e_leg) {
+                $GLOBALS['test_validez']['legacy_guardable'] = false;
+            }
+            // T011: la MISMA fixture que tests/validez.js — el servidor verifica
+            // el SANEO (no evalua la expresion: Const. III) y el navegador la
+            // evaluacion; ambas puertas deben coincidir en que aceptan/rechazan.
+            $fixture_v = json_decode((string)@file_get_contents(dirname(__DIR__) . '/tests/validez-fixture.json'), true);
+            $fixture_res = [];
+            foreach ((array)($fixture_v['casos'] ?? []) as $caso_v) {
+                $aceptado = true;
+                try {
+                    $motor_v->guardar_config('muestra', ['tienda' => ['4242' => ['validez' => (string)$caso_v['validez']]]]);
+                } catch (\Throwable $e_fx) {
+                    $aceptado = false;
+                }
+                $leido_fx = $motor_v->leer_config('muestra');
+                $guardado_fx = isset($leido_fx['tienda']['4242']['validez'])
+                    ? (string)$leido_fx['tienda']['4242']['validez'] : null;
+                $fixture_res[] = [
+                    'nombre' => (string)$caso_v['nombre'],
+                    'aceptado' => $aceptado,
+                    'esperado' => !empty($caso_v['saneo_php']),
+                    'coincide' => !$aceptado || $guardado_fx === trim((string)$caso_v['validez']),
+                ];
+            }
+            $GLOBALS['test_validez']['fixture'] = $fixture_res;
+            // T003: saneado del snapshot (asociado + activo; inactivo descartado).
+            $p->producto_pdf_vincular(4242, 'muestra.pdf'); // re-asociar tras la baja de T001
+            $motor_v->guardar_config('muestra', ['tienda' => ['4242' => ['activo' => true]]]);
+            $GLOBALS['test_validez']['sanea_ok'] = $p->sanear_pdfs_declarados(4242, ['muestra', 'otro', 'muestra']);
+            $motor_v->guardar_config('muestra', ['tienda' => ['4242' => ['activo' => false]]]);
+            $GLOBALS['test_validez']['sanea_inactivo'] = $p->sanear_pdfs_declarados(4242, ['muestra', 'otro', 'muestra']);
+            $GLOBALS['test_validez']['sanea_invalido'] = $p->sanear_pdfs_declarados(4242, ['///', '']);
+            $GLOBALS['test_validez']['sanea_vacio'] = $p->sanear_pdfs_declarados(4242, []);
+        } catch (\Throwable $e_v) {
+            $GLOBALS['test_validez_error'] = $e_v->getMessage();
+        }
+        break;
+
+    case 'validez_admin':
+    case 'validez_admin_mal':
+        // Spec 005 (T004/T005): "Configuracion tienda" por asociacion — el
+        // handler arma `tienda{pid}` desde el POST (poda huerfanos) y rechaza
+        // la validez invalida con causa, sin escribir nada.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        $motor_va = new PMU_Uploads();
+        $cid_va = $motor_va->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $motor_va->guardar_config('muestra', ['activo' => true, 'productos' => [4242], 'campos_ids' => [$cid_va]]);
+        $_POST = [
+            'action' => 'personalizador_pdf_config',
+            'ajax' => '1',
+            'archivo' => 'muestra.pdf',
+            'activo' => '1',
+            'productos' => ['4242', '4243'],
+            'campos_ids' => [(string)$cid_va],
+            'placeholders' => [],
+            'tienda_presente' => '1',
+            'tienda' => [
+                '4242' => [
+                    'activo' => ['0', '1'], // hidden(0) + checkbox(1)
+                    'validez' => "campo1 === 'libelulas' && campo2 === 'a4'",
+                    'mensaje_html' => '<b>Ese diseno no viene en ese tamanio.</b><script>alert(1)</script>',
+                    'bloquear' => '1',
+                ],
+                '4243' => [
+                    'activo' => ['0'], // checkbox desmarcado
+                    'validez' => '',
+                    'mensaje_html' => '',
+                    'bloquear' => '1', // sin validez: se ignora
+                ],
+                '9999' => [ // producto no asociado: se poda
+                    'activo' => ['0', '1'],
+                    'validez' => '',
+                    'mensaje_html' => '',
+                    'bloquear' => '',
+                ],
+            ],
+        ];
+        if ($fase === 'validez_admin_mal') {
+            $_POST['tienda']['4242']['validez'] = 'document.getElementById("x")';
+        }
+        $_REQUEST = $_POST;
+        $p->handle_config_guardar(); // exit (JSON)
+        break;
+
+    case 'ficha_pdfs':
+        // Spec 005 (US2, T006-T008): ficha del producto con N PDFs y tienda{}.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        $motor_fp = new PMU_Uploads();
+        // Segundo PDF del producto: mismo fixture, otra carpeta (otro id).
+        $dirOtro = $testBase . '/uploads/pmu/pdfs/otro';
+        wp_mkdir_p($dirOtro);
+        copy($testBase . '/uploads/pmu/pdfs/muestra/muestra.pdf', $dirOtro . '/otro.pdf');
+        $anal_fp = \ExtractCorel\Engine\Metadata::cargar($testBase . '/uploads/pmu/pdfs/muestra/analisis.json');
+        \ExtractCorel\Engine\Metadata::guardar(
+            \ExtractCorel\Engine\Metadata::generarAnalisis('otro', $anal_fp['grupos']),
+            $dirOtro . '/analisis.json'
+        );
+        $GLOBALS['test_postmeta'][4242]['_pmu_pdf_slugs'] = ['muestra', 'otro'];
+        $c1_fp = $motor_fp->campo_alta([0, 'Diseno', 'select', [], '', true, '<select></select>', '', '', false]);
+        $c2_fp = $motor_fp->campo_alta([0, 'Tamanio', 'select', [], '', true, '<select></select>', '', '', false]);
+        $motor_fp->guardar_config('muestra', [
+            'activo' => true,
+            'productos' => [4242],
+            'campos_ids' => [$c1_fp],
+            'tienda' => ['4242' => [
+                'validez' => "campo1 === 'libelulas'",
+                'mensaje_html' => '<b>Ese diseno no viene en ese tamanio.</b>',
+                'bloquear' => true,
+            ]],
+        ]);
+        $motor_fp->guardar_config('otro', [
+            'activo' => true,
+            'productos' => [4242],
+            'campos_ids' => [$c1_fp, $c2_fp],
+            'tienda' => ['4242' => ['validez' => '', 'bloquear' => true]], // sin validez: se ignora
+        ]);
+        $GLOBALS['test_fp']['campos'] = [$c1_fp, $c2_fp];
+        $GLOBALS['test_fp']['panel'] = $p->panel_producto(4242);
+        $p->panel_ficha_html('', 4242);
+        $GLOBALS['test_fp']['ficha'] = isset($GLOBALS['test_localizados']['personalizador-pdf-tienda#PMU_FICHA'])
+            ? $GLOBALS['test_localizados']['personalizador-pdf-tienda#PMU_FICHA'] : null;
+        // Inactivo para el producto: no existe en la ficha (FR-1.1/FR-3.1).
+        $motor_fp->guardar_config('otro', ['tienda' => ['4242' => ['activo' => false]]]);
+        $GLOBALS['test_fp']['panel_uno'] = $p->panel_producto(4242);
+        break;
+
+    case 'ficha_pdfs_previa':
+        // Spec 005 (US2/US4, T009): el navegador declara elegibles; el servidor
+        // los sanea y congela el snapshot del draft (sin evaluar la validez).
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        $motor_fp = new PMU_Uploads();
+        $dirOtro = $testBase . '/uploads/pmu/pdfs/otro';
+        wp_mkdir_p($dirOtro);
+        copy($testBase . '/uploads/pmu/pdfs/muestra/muestra.pdf', $dirOtro . '/otro.pdf');
+        $anal_fp = \ExtractCorel\Engine\Metadata::cargar($testBase . '/uploads/pmu/pdfs/muestra/analisis.json');
+        \ExtractCorel\Engine\Metadata::guardar(
+            \ExtractCorel\Engine\Metadata::generarAnalisis('otro', $anal_fp['grupos']),
+            $dirOtro . '/analisis.json'
+        );
+        $GLOBALS['test_postmeta'][4242]['_pmu_pdf_slugs'] = ['muestra', 'otro'];
+        $c1_fp = $motor_fp->campo_alta([0, 'Diseno', 'select', [], '', true, '<select></select>', '', '', false]);
+        foreach (['muestra', 'otro'] as $nom_fp) {
+            $motor_fp->guardar_config($nom_fp, [
+                'activo' => true,
+                'productos' => [4242],
+                'campos_ids' => [$c1_fp],
+                'mockups' => [['id' => 'vista1', 'titulo' => 'Vista', 'creado' => '', 'capas' => [
+                    ['tipo' => 'img', 'ref' => 'foto.png', 'x' => 0, 'y' => 0, 'w' => 100, 'h' => 100],
+                ]]],
+            ]);
+        }
+        $_POST = [
+            'action' => 'personalizador_pdf_vista_previa',
+            'ajax' => '1',
+            'producto' => '4242',
+            'pdf' => 'muestra.pdf',
+            'pmu_pdfs' => json_encode(['muestra', 'otro', 'x']),
+            'valores' => json_encode(['1' => ['valor' => 'libelulas', 'cliente' => 'Libelulas']]),
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_vista_previa(); // exit (JSON)
+        break;
+
+    case 'ficha_pdfs_vacio':
+        // T009: una lista pmu_pdfs vacía se rechaza y no crea draft.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        $motor_vacio = new PMU_Uploads();
+        $motor_vacio->guardar_config('muestra', ['activo' => true, 'productos' => [4242]]);
+        $GLOBALS['test_postmeta'][4242]['_pmu_pdf_slugs'] = ['muestra'];
+        $_POST = [
+            'action' => 'personalizador_pdf_vista_previa',
+            'ajax' => '1',
+            'producto' => '4242',
+            'pdf' => 'muestra.pdf',
+            'pmu_pdfs' => '[]',
+            'valores' => json_encode([]),
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_vista_previa(); // exit (JSON)
+        break;
+
+
+    case 'ficha_pdfs_carrito':
+        // con el snapshot saneado + `pdfs_descartados` (auditoria).
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        $motor_fp = new PMU_Uploads();
+        $dirOtro = $testBase . '/uploads/pmu/pdfs/otro';
+        wp_mkdir_p($dirOtro);
+        copy($testBase . '/uploads/pmu/pdfs/muestra/muestra.pdf', $dirOtro . '/otro.pdf');
+        $anal_fp = \ExtractCorel\Engine\Metadata::cargar($testBase . '/uploads/pmu/pdfs/muestra/analisis.json');
+        \ExtractCorel\Engine\Metadata::guardar(
+            \ExtractCorel\Engine\Metadata::generarAnalisis('otro', $anal_fp['grupos']),
+            $dirOtro . '/analisis.json'
+        );
+        $GLOBALS['test_postmeta'][4242]['_pmu_pdf_slugs'] = ['muestra', 'otro'];
+        // omisible: exige mockups en la config (T011/T018); una capa valida
+        // (config_mockups descarta mockups sin capas).
+        $motor_fp->guardar_config('muestra', [
+            'activo' => true,
+            'productos' => [4242],
+            'mockups' => [['id' => 'vista1', 'titulo' => 'Vista', 'creado' => '', 'capas' => [
+                ['tipo' => 'img', 'ref' => 'foto.png', 'x' => 0, 'y' => 0, 'w' => 100, 'h' => 100],
+            ]]],
+            'preview_omisible' => true,
+        ]);
+        $motor_fp->guardar_config('otro', [
+            'activo' => true,
+            'productos' => [4242],
+            'mockups' => [['id' => 'vista1', 'titulo' => 'Vista', 'creado' => '', 'capas' => [
+                ['tipo' => 'img', 'ref' => 'foto.png', 'x' => 0, 'y' => 0, 'w' => 100, 'h' => 100],
+            ]]],
+            'preview_omisible' => true,
+        ]);
+        $_POST = [
+            'action' => 'woocommerce_add_to_cart',
+            'pmu_pdfs' => json_encode(['muestra', 'otro', 'x']),
+            'pmu_valores' => json_encode([]),
+        ];
+        $_REQUEST = $_POST;
+        $GLOBALS['test_fp']['carrito_ok'] = $p->carrito_validar(true, 4242, 1);
+        foreach ((array)glob($testBase . '/uploads/pmu/tmp/sesion-*/*/manifest.json') as $man_fp) {
+            $GLOBALS['test_fp']['manifiesto'] = json_decode((string)@file_get_contents($man_fp), true);
+        }
+        break;
+
+    case 'conciliacion':
+        // 004/T024: config editable, analisis inmutable y draft sin pool bloqueado.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $motor_c = $p->motor_para_tests();
+        $analisis_c = (string)file_get_contents($motor_c->ruta_analisis('muestra'));
+        $motor_c->guardar_config('muestra', [
+            'activo' => true,
+            'campos_ids' => [],
+            'placeholders' => [
+                '0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => 'Ana', 'repetir' => true],
+            ],
+            'preview_omisible' => false,
+        ]);
+        $sesion_c = new PMU_Sesion($motor_c);
+        $draft_c = $sesion_c->crear_draft('test-conc', ['muestra']);
+        $_POST = ['pmu_sid' => 'test-conc', 'pmu_item_key' => $draft_c];
+        $_REQUEST = $_POST;
+        $GLOBALS['test_conciliacion'] = [
+            'analisis_antes' => $analisis_c,
+            'analisis_despues' => (string)file_get_contents($motor_c->ruta_analisis('muestra')),
+            'preview_omisible' => $motor_c->leer_config('muestra')['preview_omisible'],
+            'repetir' => !empty($motor_c->leer_config('muestra')['placeholders']['0000FF']['repetir']),
+            'carrito_ok' => $p->carrito_validar(true, 4242, 1),
+        ];
+        break;
+
     case 'desactivar':
     case 'reanalizar':
         preparar_entorno($testBase, $base);
@@ -976,6 +1561,16 @@ switch ($fase) {
             'archivos' => [],
             'preview_estado' => 'sin_vista',
         ]));
+        // Spec 005 (T004): asociaciones + tienda{} para el render real de la
+        // consola ("Configuracion tienda" por producto).
+        $p->motor_para_tests()->guardar_config('muestra', [
+            'activo' => true,
+            'productos' => [4242, 4243],
+            'tienda' => [
+                '4242' => ['activo' => true, 'validez' => "campo1 === 'libelulas' && campo2 === 'a4'", 'mensaje_html' => '<b>Sin stock</b>', 'bloquear' => true],
+                '4243' => ['activo' => false],
+            ],
+        ]);
         break;
 
     case 'setup':
@@ -1383,7 +1978,7 @@ switch ($fase) {
                 ],
             ]);
             $GLOBALS['test_config'] = $motor_g->leer_config('muestra');
-            $GLOBALS['test_config_defaults'] = ($motor_g->leer_config('inexistente') === ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => []]);
+            $GLOBALS['test_config_defaults'] = ($motor_g->leer_config('inexistente') === ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => [], 'tienda' => []]);
         } catch (\Throwable $e) {
             $GLOBALS['test_config_error'] = $e->getMessage();
         }

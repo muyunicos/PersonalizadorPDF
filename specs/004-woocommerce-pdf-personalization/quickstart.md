@@ -11,7 +11,7 @@ y [contracts/](./contracts/).
 - Dato de usuario: `uploads/pmu/pdfs/{nombre}/{nombre}.pdf` (con rectangulos 100%
   transparentes), al menos un preset en `uploads/pmu/tm-presets/` y una imagen de fondo en
   `uploads/pmu/img/` para el mockup.
-- Producto Woo de prueba con `postmeta _pmu_pdf_slug` apuntando al PDF.
+- Producto Woo de prueba con `postmeta _pmu_pdf_slugs` (lista) apuntando a uno o varios PDFs; el singular `_pmu_pdf_slug` se acepta como respaldo.
 
 ## 1. Verificacion automatica (obligatoria tras tocar `engine/`, `inc/` o `admin/`)
 

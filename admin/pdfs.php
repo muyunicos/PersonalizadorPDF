@@ -210,8 +210,7 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
         }, $grupos));
         // Configuracion tienda por PDF (plan 008: vista analisis+config fusionada).
         // Spec 004: incluye preview_omisible y mockups[] de la config editable.
-        $cfg_pdf = $vista_pdf ? $vista_pdf['config'] : ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => []];
-        list($todos_campos, $aviso_cfg_campos2) = $this->campos_activos();
+        $cfg_pdf = $vista_pdf ? $vista_pdf['config'] : ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => [], 'tienda' => []];
         list($todos_campos, $aviso_cfg_campos2) = $this->campos_activos();
         if ($aviso_cfg_campos === '' && $aviso_cfg_campos2 !== null && $aviso_cfg_campos2 !== '') {
             $aviso_cfg_campos = $aviso_cfg_campos2;
@@ -238,7 +237,8 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
             </span>
             <a class="button button-small" href="<?php echo esc_url($link_desc('datos', ['archivo' => $seleccionado])); ?>">Descargar JSON</a>
             <span class="description">El vinculo canonico producto -> PDF vive en la meta
-                <code>_pmu_pdf_slug</code> del producto Woo; el listado de abajo es su espejo
+                <code>_pmu_pdf_slugs</code> del producto Woo; <code>_pmu_pdf_slug</code>
+                se conserva como respaldo de productos antiguos. El listado de abajo es su espejo
                 informativo (T010: edicion duradera desde el producto).</span>
             <form class="ec-form-inline" method="post" action="<?php echo esc_url($post_url); ?>">
                 <input type="hidden" name="action" value="personalizador_pdf_reanalizar">
@@ -301,6 +301,65 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                         </select>
                         <span class="description">Los campos elegidos aca alimentan el selector de cada placeholder.</span>
                     </p>
+                    <?php
+                    // Spec 005 (T004): "Configuracion tienda" por asociacion PDFxproducto.
+                    // `validez` es una expresion JS que se evalua SOLO en el navegador
+                    // (PHP nunca evalua JS); `bloquear` solo tiene efecto con validez.
+                    $productos_cfg = [];
+                    foreach ((array)$cfg_pdf['productos'] as $pid_cfg) {
+                        $pid_cfg = (int)$pid_cfg;
+                        if ($pid_cfg > 0) {
+                            $productos_cfg[] = $pid_cfg;
+                        }
+                    }
+                    if ($productos_cfg) :
+                        // Marcador: el handler solo toca `tienda` si la seccion viajo.
+                        ?>
+                    <input type="hidden" name="tienda_presente" value="1">
+                    <p class="ec-block-label">Validez por producto (opcional)</p>
+                    <?php foreach ($productos_cfg as $pid_cfg) :
+                        $tie = isset($cfg_pdf['tienda'][(string)$pid_cfg]) && is_array($cfg_pdf['tienda'][(string)$pid_cfg])
+                            ? $cfg_pdf['tienda'][(string)$pid_cfg]
+                            : ['activo' => true, 'validez' => '', 'mensaje_html' => '', 'bloquear' => false];
+                        $titulo_cfg = '';
+                        if (function_exists('wc_get_product')) {
+                            $prod_cfg = wc_get_product($pid_cfg);
+                            if ($prod_cfg) {
+                                $titulo_cfg = (string)$prod_cfg->get_name();
+                            }
+                        }
+                        ?>
+                    <div class="ec-tienda-producto" data-id="<?php echo (int)$pid_cfg; ?>">
+                        <p class="ec-tienda-activo">
+                            <label class="ec-block-label">
+                                <input type="hidden" name="tienda[<?php echo (int)$pid_cfg; ?>][activo]" value="0">
+                                <input type="checkbox" name="tienda[<?php echo (int)$pid_cfg; ?>][activo]" value="1" <?php checked(!empty($tie['activo']), true); ?>>
+                                Aplica al producto #<?php echo (int)$pid_cfg; ?><?php echo $titulo_cfg !== '' ? ' — ' . esc_html($titulo_cfg) : ''; ?>
+                            </label>
+                            <span class="description">Desmarcado: este PDF no existe para ese producto (ni campos, ni mockups, ni descarga).</span>
+                        </p>
+                        <p>
+                            <span class="ec-block-label">Validez (expresion JS, opcional)</span>
+                            <textarea name="tienda[<?php echo (int)$pid_cfg; ?>][validez]" rows="2" class="large-text code ec-tienda-validez"
+                                      placeholder="campo1 === 'libelulas' && campo2 === 'a4'"><?php echo esc_textarea((string)$tie['validez']); ?></textarea>
+                            <span class="description">Devuelve true si el PDF aplica con las selecciones del cliente. Vacio = siempre aplica.</span>
+                        </p>
+                        <p>
+                            <span class="ec-block-label">Mensaje HTML (si la validez falla)</span>
+                            <textarea name="tienda[<?php echo (int)$pid_cfg; ?>][mensaje_html]" rows="2" class="large-text"
+                                      placeholder="Ese diseno no viene en ese tamanio."><?php echo esc_textarea((string)$tie['mensaje_html']); ?></textarea>
+                            <span class="description">Se muestra al final de los campos si la validez da false. Etiquetas permitidas: p, b, i, strong, em, br, ul, li.</span>
+                        </p>
+                        <p class="ec-tienda-bloquear"<?php echo (string)$tie['validez'] === '' ? ' hidden' : ''; ?>>
+                            <label class="ec-block-label"><input type="checkbox" name="tienda[<?php echo (int)$pid_cfg; ?>][bloquear]" value="1" <?php checked(!empty($tie['bloquear']), true); ?>> Bloquear producto si la validez falla (sin agregar al carrito)</label>
+                        </p>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php else : ?>
+                    <p class="ec-tienda-sin-productos">
+                        <span class="description">Agrega un producto arriba para declarar su validez (se evalua en la ficha de ese producto).</span>
+                    </p>
+                    <?php endif; ?>
                 </div>
             </details>
 
@@ -587,7 +646,7 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
     <table class="widefat striped">
         <thead>
             <tr>
-                <th>Pedido</th><th>Item</th><th>Estado</th><th>Pool</th><th>Vistas</th>
+                <th>Pedido</th><th>Item</th><th>Estado</th><th>PDFs aceptados</th><th>PDFs descartados</th><th>Pool</th><th>Vistas</th>
                 <th>Personalizacion</th><th>Salida</th><th>Acciones</th>
             </tr>
         </thead>
@@ -597,6 +656,19 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                 <td>#<?php echo (int)$r['order_id']; ?></td>
                 <td><code><?php echo esc_html($r['item_key']); ?></code></td>
                 <td><?php echo esc_html($r['estado']); ?></td>
+                <td>
+                    <?php if (empty($r['pdfs'])) : ?>—<?php endif; ?>
+                    <?php foreach ((array)$r['pdfs'] as $pdfR) : ?>
+                        <div><code><?php echo esc_html((string)$pdfR); ?></code></div>
+                    <?php endforeach; ?>
+                </td>
+                <td>
+                    <?php if (empty($r['descartados'])) : ?>—<?php else : ?>
+                        <?php foreach ((array)$r['descartados'] as $pdfD) : ?>
+                            <div><code><?php echo esc_html((string)$pdfD); ?></code></div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </td>
                 <td><?php echo (int)$r['archivos']; ?> PNG</td>
                 <td><?php echo (int)$r['webps']; ?> webp</td>
                 <td>
