@@ -1,6 +1,9 @@
-# Research: galeria-textmuy
+# Auditoria galeria TextMuy RC34-RC36 (ARCHIVADA 2026-09-28)
 
-**Feature**: 007-galeria-textmuy | **Fecha**: 2026-09-17
+> **Origen**: `specs/007-galeria-textmuy/research.md` (nunca fue feature implementable:
+> auditoria + decisiones RC34/RC35/RC36). **Fecha original**: 2026-09-17.
+> Canonico tecnico vigente: `modules/textmuy/AGENTS.md` (§4 contrato, §7 decisiones,
+> §9 pruebas); este archivo solo registra el por que de cada arreglo.
 
 Auditoria de la galeria de imagenes (RC34) y de la galeria de fuentes (RC35/RC36),
 con la decision de centralizar la invalidacion post-mutacion. Canonico tecnico:

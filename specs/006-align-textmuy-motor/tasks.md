@@ -1,5 +1,10 @@
 # Tasks: align-textmuy-motor
 
+> **Estado (2026-09-28)**: CODIGO COMPLETO — 27/29 tareas `[X]`. Pendientes solo
+> T017/T029 `[PENDIENTE-MANUAL]`, cubiertos por
+> `specs/MANUAL-PENDIENTE-WP-REAL.md` (una sola sesion WP real con datos del
+> administrador). Puertas automaticas en verde (T026/T027/T028).
+
 **Input**: Design documents from `specs/006-align-textmuy-motor/`
 
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/

@@ -1,5 +1,9 @@
 # Tasks: 005-pdf-condicionales
 
+> **Estado (2026-09-28)**: CODIGO COMPLETO — T001–T011 `[X]`. Docs automaticos
+> listos; pendiente solo T012-recorrido manual, cubierto por
+> `specs/MANUAL-PENDIENTE-WP-REAL.md` (sesion unica con T030 de 004).
+
 **Input**: `specs/005-pdf-condicionales/` (spec, plan, data-model, contracts/validez, research D1–D9)
 
 **Prerequisites**: 004 cerrado (multivínculo `_pmu_pdf_slugs` es deuda de 004; si
@@ -147,19 +151,22 @@ habilitado; 0 elegibles bloquea aunque todo sea `false`.
   vacía, sintaxis, campo inexistente, arrays); la fase PHP `validez` verifica el
   mismo resultado de saneado sobre la misma fixture. Ejecutado:
   `FASE validez OK` + `VALIDEZ OK`.
-- [ ] T012 [Polish] Docs: AGENTS.md §5 (`tienda{}`) + §7 (decisión), ayuda de la
-  consola (Configuración tienda), checklist abajo, `quickstart.md` recorrido
-  manual en WP real (T030 de 004 lo cubre si sigue abierto). La ayuda y el
-  quickstart 005 ya documentan multivínculo, validez, snapshot, descartados y
-  descargas por PDF; queda únicamente el recorrido manual en WP real.
+- [ ] T012 [Polish-docs-restante] Recorrido manual en WP real, cubierto por
+  `specs/MANUAL-PENDIENTE-WP-REAL.md` (sesion unica con T030 de 004 + T017/T029
+  de 006). Docs automaticos listos: `AGENTS.md` §5 (`tienda{product_id}` con
+  `activo`/`validez`/`mensaje_html`/`bloquear`; JS solo navegador) + §7 (decision
+  005), ayuda de consola y `quickstart.md` 005 ya documentan multivinculo,
+  validez, snapshot, descartados y descargas por PDF. Checklist de calidad abajo:
+  pasa salvo el recorrido manual (se marca al cerrar la sesion unica).
 
 ---
 
-## Checklist de calidad de esta spec
+## Checklist de calidad de esta spec (verificado 2026-09-28; pendiente solo manual)
 
-- [ ] Sin marcadores por aclarar; requisitos testeables y sin ambigüedad.
-- [ ] SC medibles (SC-1..SC-7 con medición declarada).
-- [ ] Casos borde identificados (6 en spec.md).
-- [ ] Alcance acotado (sin parser en servidor; puerta abierta versionando el contrato).
-- [ ] Dependencias declaradas (004 cerrado; multivínculo aquí si falta).
-- [ ] Trazabilidad: cada FR (FR-1..FR-6) tiene ≥1 tarea (T001..T010).
+- [X] Sin marcadores por aclarar; requisitos testeables y sin ambigüedad.
+- [X] SC medibles (SC-1..SC-7 con medición declarada).
+- [X] Casos borde identificados (6 en spec.md).
+- [X] Alcance acotado (sin parser en servidor; puerta abierta versionando el contrato).
+- [X] Dependencias declaradas (004 codigo completo; multivinculo T001 aqui).
+- [X] Trazabilidad: cada FR (FR-1..FR-6) tiene ≥1 tarea (T001..T010).
+- [ ] Recorrido manual SC-1..SC-7 en WP real → `specs/MANUAL-PENDIENTE-WP-REAL.md` §3+§5.

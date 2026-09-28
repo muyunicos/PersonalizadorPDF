@@ -328,11 +328,14 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   (`analisis.json`+`config.json`, `tmp/sesion-{sid}/{item_key}/`, preview obligatoria
   `draft-{uuid}` → `cart_item_key`). Fue eliminado tras preservarse su §0+§6 en la
   constitucion; lo nuevo se alinea a esa norma.
-- ✅ **Specs historicos**: 003 obsoleto (superado por 006); 004 con 33/34 tareas
-  completadas (solo T030 manual en WP real; diseño historico, normativo = constitucion §IV,
-  ex-008); 005 con T001–T011 completadas y T012 pendiente por el mismo recorrido manual;
-  006 con 27/29 tareas completadas (T017/T029 manuales); 007 es auditoria integrada de
-  galeria RC34–RC36, sin backlog formal propio.
+- ✅ **Specs historicos**: 003 archivado (`specs/_archivo/003-galeria-engine/`, superado
+  por 006); 004/005/006 con codigo completo 2026-09-28 (004: 33/34, 005: T001–T011,
+  006: 27/29; puertas automaticas en verde) y pendiente solo el recorrido manual
+  unificado en WP real (`specs/MANUAL-PENDIENTE-WP-REAL.md`, cubre T030+T012+T017+T029
+  en una sesion; indice en `specs/INDICE.md`); diseno historico 004-2026-09-13 en
+  `specs/004-.../_archivo/`; norma vigente = `constitution` §IV (ex-008); auditoria
+  de galeria RC34–RC36 archivada (`specs/_archivo/auditoria-galeria-RC34-RC36.md`,
+  sin backlog propio; canonico `modules/textmuy/AGENTS.md`).
 - ✅ **Hooks legacy**: `seguridad()` acepta nonce historico `extractor_corel_*` (<= 2.0.0)
   ademas del vigente `personalizador_pdf_*` (se considera codigo legacy).
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,

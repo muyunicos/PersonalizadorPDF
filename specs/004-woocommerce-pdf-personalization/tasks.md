@@ -1,5 +1,10 @@
 # Tasks: Personalización de Productos PDF para WooCommerce
 
+> **Estado (2026-09-28)**: CODIGO COMPLETO — 33/34 tareas `[X]`. Pendiente solo
+> verificacion manual unificada en WP real: ver
+> `specs/MANUAL-PENDIENTE-WP-REAL.md` (cubre T030 de esta spec + T012 de 005 +
+> T017/T029 de 006 en una sola sesion). Puertas automaticas en verde (T031).
+
 **Input**: Design documents from `specs/004-woocommerce-pdf-personalization/` (norma 2026-09-17)
 
 **Prerequisites**: plan.md (required), spec.md (required), data-model.md, contracts/ (campos, mockups, sesion-item, selector-pmu), research.md
