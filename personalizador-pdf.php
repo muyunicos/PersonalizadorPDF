@@ -50,7 +50,8 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_subir_pdf', [$this, 'handle_subir_pdf']);
         add_action('admin_post_personalizador_pdf_reanalizar', [$this, 'handle_reanalizar']);
         add_action('admin_post_personalizador_pdf_subir_imagen', [$this, 'handle_subir_imagen']);
-        add_action('admin_post_personalizador_pdf_imagen_galeria', [$this, 'handle_imagen_galeria']);
+        // Alias historico: la galeria reutiliza el mismo handler de subida.
+        add_action('admin_post_personalizador_pdf_imagen_galeria', [$this, 'handle_subir_imagen']);
         add_action('admin_post_personalizador_pdf_quitar_imagen', [$this, 'handle_quitar_imagen']);
         add_action('admin_post_personalizador_pdf_guardar_texto', [$this, 'handle_guardar_texto']);
         add_action('admin_post_personalizador_pdf_procesar', [$this, 'handle_procesar']);
@@ -1518,9 +1519,9 @@ class Personalizador_PDF_Plugin
             }
             $this->item_generar_pdfs($order_id, $item);
         } catch (\Throwable $e) {
-            $this->redirigir(['ec_error' => $e->getMessage(), 'ec_tab' => 'pdfs']);
+            $this->responder(false, [], $e->getMessage());
         }
-        $this->redirigir(['ec_regenerado' => 1, 'ec_tab' => 'pdfs']);
+        $this->responder(true, ['ec_regenerado' => 1]);
     }
 
     /** UUID v4 para unique_key (sin depender del uuid privado de PMU_Sesion). */
@@ -1891,17 +1892,10 @@ class Personalizador_PDF_Plugin
     {
         $this->seguridad('personalizador_pdf_campo');
         $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
-        $ajax = !empty($_POST['ajax']);
-        $fallo = function ($mensaje) use ($ajax) {
-            if ($ajax) {
-                wp_send_json_error($mensaje);
-            }
-            $this->redirigir(['ec_error' => $mensaje, 'ec_tab' => 'campos']);
-        };
         try {
             $tupla = $this->campo_desde_post($_POST, $id);
         } catch (\Throwable $e) {
-            $fallo($e->getMessage());
+            $this->responder(false, [], $e->getMessage());
         }
         try {
             if ($id > 0) {
@@ -1910,12 +1904,9 @@ class Personalizador_PDF_Plugin
                 $id = $this->pmu_uploads()->campo_alta($tupla);
             }
         } catch (\Throwable $e) {
-            $fallo($e->getMessage());
+            $this->responder(false, [], $e->getMessage());
         }
-        if ($ajax) {
-            wp_send_json_success(['id' => $id]);
-        }
-        $this->redirigir(['ec_campo' => $id, 'ec_tab' => 'campos']);
+        $this->responder(true, ['id' => $id, 'ec_campo' => $id, 'tab' => 'campos']);
     }
 
     /** Da de baja un campo (tombstone). Responde JSON o redirige. */
@@ -1923,19 +1914,12 @@ class Personalizador_PDF_Plugin
     {
         $this->seguridad('personalizador_pdf_campo');
         $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
-        $ajax = !empty($_POST['ajax']);
         try {
             $this->pmu_uploads()->campo_baja($id);
         } catch (\Throwable $e) {
-            if ($ajax) {
-                wp_send_json_error($e->getMessage());
-            }
-            $this->redirigir(['ec_error' => $e->getMessage(), 'ec_tab' => 'campos']);
+            $this->responder(false, [], $e->getMessage());
         }
-        if ($ajax) {
-            wp_send_json_success(['id' => $id]);
-        }
-        $this->redirigir(['ec_campo_baja' => $id, 'ec_tab' => 'campos']);
+        $this->responder(true, ['id' => $id, 'ec_campo_baja' => $id, 'tab' => 'campos']);
     }
 
     /* ==================== Mockups: fotos del admin (spec 004, T007) ==================== */
@@ -1948,21 +1932,18 @@ class Personalizador_PDF_Plugin
     {
         $this->seguridad('personalizador_pdf_mockup_subir');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
-        $fallo = function ($mensaje) use ($archivo) {
-            $this->redirigir(['ec_error' => $mensaje, 'ec_pdf' => $archivo]);
-        };
         if (!$archivo || !is_file($this->ruta_pdf($archivo))) {
-            $fallo('pdf_inexistente');
+            $this->responder(false, [], 'pdf_inexistente');
         }
         if (empty($_FILES['foto']) || !is_array($_FILES['foto'])
             || ($_FILES['foto']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            $fallo('no_file');
+            $this->responder(false, [], 'no_file');
         }
         $file = $_FILES['foto'];
         $nombre = sanitize_file_name((string)$file['name']);
         $ext = strtolower(pathinfo($nombre, PATHINFO_EXTENSION));
         if (!in_array($ext, ['png', 'jpg', 'jpeg', 'gif', 'webp'], true)) {
-            $fallo('formato');
+            $this->responder(false, [], 'formato');
         }
         $dir = $this->pmu_uploads()->dir_mockups($this->nombre_de($archivo), true);
         $base = $this->pmu_uploads()->nombre_seguro(
@@ -1978,9 +1959,9 @@ class Personalizador_PDF_Plugin
         // es legible en CLI (tests) y en WP; evita el chequeo is_uploaded_file.
         $bytes = @file_get_contents((string)$file['tmp_name']);
         if ($bytes === false || $bytes === '' || @file_put_contents($destino, $bytes) === false) {
-            $fallo('move');
+            $this->responder(false, [], 'move');
         }
-        $this->redirigir(['ec_mockup_subida' => 1, 'ec_pdf' => $archivo, 'foto' => basename($destino)]);
+        $this->responder(true, ['ec_mockup_subida' => 1, 'ec_pdf' => $archivo, 'foto' => basename($destino)]);
     }
 
     /** Borra una foto de mockup del admin (dentro de pdfs/{nombre}/mockups/). */
@@ -1989,17 +1970,14 @@ class Personalizador_PDF_Plugin
         $this->seguridad('personalizador_pdf_mockup_borrar');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
         $foto = isset($_POST['foto']) ? basename((string)$_POST['foto']) : '';
-        $fallo = function ($mensaje) use ($archivo) {
-            $this->redirigir(['ec_error' => $mensaje, 'ec_pdf' => $archivo]);
-        };
         if (!$archivo || !is_file($this->ruta_pdf($archivo)) || $foto === '') {
-            $fallo('datos_invalidos');
+            $this->responder(false, [], 'datos_invalidos');
         }
         $ruta = $this->pmu_uploads()->ruta_mockup($this->nombre_de($archivo), $foto);
         if (!is_file($ruta) || !@unlink($ruta)) {
-            $fallo('foto_inexistente');
+            $this->responder(false, [], 'foto_inexistente');
         }
-        $this->redirigir(['ec_mockup_baja' => 1, 'ec_pdf' => $archivo, 'foto' => $foto]);
+        $this->responder(true, ['ec_mockup_baja' => 1, 'ec_pdf' => $archivo, 'foto' => $foto]);
     }
 
     /**
@@ -2012,24 +1990,17 @@ class Personalizador_PDF_Plugin
     {
         $this->seguridad('personalizador_pdf_mockups');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
-        $ajax = !empty($_POST['ajax']);
-        $fallo = function ($mensaje) use ($ajax, $archivo) {
-            if ($ajax) {
-                wp_send_json_error($mensaje);
-            }
-            $this->redirigir(['ec_error' => $mensaje, 'ec_pdf' => $archivo]);
-        };
         if (!$archivo || !is_file($this->ruta_pdf($archivo))) {
-            $fallo('datos_invalidos');
+            $this->responder(false, [], 'datos_invalidos');
         }
         $nombre = $this->nombre_de($archivo);
         if (!$this->analisis_de($nombre)) {
-            $fallo('Este PDF no tiene datos analizados. Usa "Re-analizar".');
+            $this->responder(false, [], 'Este PDF no tiene datos analizados. Usa "Re-analizar".');
         }
         $crudo = isset($_POST['mockups']) ? (string)$_POST['mockups'] : '';
         $decodificado = $crudo === '' ? [] : json_decode($crudo, true);
         if (!is_array($decodificado)) {
-            $fallo('mockups_invalidos');
+            $this->responder(false, [], 'mockups_invalidos');
         }
         // Solo capas bien formadas; el motor normaliza rangos y refs.
         $mockups = [];
@@ -2070,12 +2041,9 @@ class Personalizador_PDF_Plugin
             'preview_omisible' => !empty($_POST['preview_omisible']),
         ]);
         if (!$ok) {
-            $fallo('No se pudieron guardar los mockups.');
+            $this->responder(false, [], 'No se pudieron guardar los mockups.');
         }
-        if ($ajax) {
-            wp_send_json_success(['archivo' => $archivo, 'mockups' => count($mockups)]);
-        }
-        $this->redirigir(['ec_config' => 1, 'ec_pdf' => $archivo]);
+        $this->responder(true, ['archivo' => $archivo, 'mockups' => count($mockups), 'ec_config' => 1, 'ec_pdf' => $archivo]);
     }
 
     /** Guarda el config.json de un PDF (activo, productos, campos, mapeos). */
@@ -2083,20 +2051,13 @@ class Personalizador_PDF_Plugin
     {
         $this->seguridad('personalizador_pdf_config');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
-        $ajax = !empty($_POST['ajax']);
-        $fallo = function ($mensaje) use ($ajax, $archivo) {
-            if ($ajax) {
-                wp_send_json_error($mensaje);
-            }
-            $this->redirigir(['ec_error' => $mensaje, 'ec_pdf' => $archivo]);
-        };
         if (!$archivo || !is_file($this->ruta_pdf($archivo))) {
-            $fallo('datos_invalidos');
+            $this->responder(false, [], 'datos_invalidos');
         }
         $nombre = $this->nombre_de($archivo);
         $analisis = $this->analisis_de($nombre);
         if (!$analisis) {
-            $fallo('Este PDF no tiene datos analizados. Usa "Re-analizar".');
+            $this->responder(false, [], 'Este PDF no tiene datos analizados. Usa "Re-analizar".');
         }
         $ids_dataset = [];
         foreach (($analisis['grupos'] ?? []) as $g) {
@@ -2163,17 +2124,14 @@ class Personalizador_PDF_Plugin
             $ok = $this->pmu_uploads()->guardar_config($nombre, $config);
         } catch (\Throwable $e) {
             $causa = $e->getMessage();
-            $fallo($causa === 'motor:campos:script:invalido'
+            $this->responder(false, [], $causa === 'motor:campos:script:invalido'
                 ? 'Validez invalida: la expresion no puede usar document, el DOM ni DOMContentLoaded. No se guardo nada.'
                 : 'No se pudo guardar la configuracion: ' . $causa);
         }
         if (!$ok) {
-            $fallo('No se pudo guardar la configuracion.');
+            $this->responder(false, [], 'No se pudo guardar la configuracion.');
         }
-        if ($ajax) {
-            wp_send_json_success(['archivo' => $archivo]);
-        }
-        $this->redirigir(['ec_config' => 1, 'ec_pdf' => $archivo]);
+        $this->responder(true, ['archivo' => $archivo, 'ec_config' => 1, 'ec_pdf' => $archivo]);
     }
 
     /**
@@ -2261,8 +2219,25 @@ class Personalizador_PDF_Plugin
             [],
             PERSONALIZADOR_PDF_VERSION
         );
-        // El JS de la consola (modal, galeria wp.media) y wp.media solo se usan en "PDFs".
-        if ($tab !== 'pdfs') {
+        // El JS de la consola (modal, galeria wp.media) solo se usa en "PDFs";
+        // pmu-core (admin.js: pmuPost/pmuAviso/pmuForm) tambien en "Campos".
+        if ($tab !== 'pdfs' && $tab !== 'campos') {
+            return;
+        }
+        if ($tab === 'campos') {
+            wp_enqueue_script(
+                'personalizador-pdf',
+                PERSONALIZADOR_PDF_URL . 'assets/admin.js',
+                ['jquery'],
+                PERSONALIZADOR_PDF_VERSION,
+                true
+            );
+            wp_localize_script('personalizador-pdf', 'PersonalizadorPDF', [
+                'postUrl' => admin_url('admin-post.php'),
+                'nonceAccion' => [
+                    'campo' => wp_create_nonce('personalizador_pdf_campo'),
+                ],
+            ]);
             return;
         }
         wp_enqueue_media();
@@ -2280,13 +2255,17 @@ class Personalizador_PDF_Plugin
             PERSONALIZADOR_PDF_VERSION,
             true
         );
-        wp_enqueue_script(
-            'personalizador-pdf-mockups',
-            PERSONALIZADOR_PDF_URL . 'assets/mockups.js',
-            ['jquery', 'personalizador-pdf'],
-            PERSONALIZADOR_PDF_VERSION,
-            true
-        );
+        // pmu-core: admin.js expone pmuPost/pmuAviso/pmuForm; mockups.js y la
+        // pestana Campos lo reutilizan (sin duplicar fetch/FormData).
+        if ($tab === 'pdfs') {
+            wp_enqueue_script(
+                'personalizador-pdf-mockups',
+                PERSONALIZADOR_PDF_URL . 'assets/mockups.js',
+                ['jquery', 'personalizador-pdf'],
+                PERSONALIZADOR_PDF_VERSION,
+                true
+            );
+        }
         wp_localize_script('personalizador-pdf', 'PersonalizadorPDF', [
             'existentes' => $this->pdfs_subidos(),
             'nonce' => wp_create_nonce('personalizador_pdf_nonce'),
@@ -2304,6 +2283,20 @@ class Personalizador_PDF_Plugin
             'nonceCampo' => wp_create_nonce('personalizador_pdf_campo'),
             'nonceConfig' => wp_create_nonce('personalizador_pdf_config'),
             'nonceMockups' => wp_create_nonce('personalizador_pdf_mockups'),
+            'nonceAccion' => [
+                'subir_pdf' => wp_create_nonce('personalizador_pdf_subir_pdf'),
+                'reanalizar' => wp_create_nonce('personalizador_pdf_reanalizar'),
+                'borrar' => wp_create_nonce('personalizador_pdf_borrar'),
+                'subir_imagen' => wp_create_nonce('personalizador_pdf_subir_imagen'),
+                'galeria' => wp_create_nonce('personalizador_pdf_imagen_galeria'),
+                'quitar_imagen' => wp_create_nonce('personalizador_pdf_quitar_imagen'),
+                'guardar_texto' => wp_create_nonce('personalizador_pdf_guardar_texto'),
+                'procesar' => wp_create_nonce('personalizador_pdf_procesar'),
+                'mockups' => wp_create_nonce('personalizador_pdf_mockups'),
+                'mockup_subir' => wp_create_nonce('personalizador_pdf_mockup_subir'),
+                'mockup_borrar' => wp_create_nonce('personalizador_pdf_mockup_borrar'),
+                'item_regenerar' => wp_create_nonce('personalizador_pdf_item_regenerar'),
+            ],
             // Editor de mockups (spec 004, T008): datos del PDF seleccionado.
             'mockups' => $this->mockups_para_editor(),
         ]);
@@ -2417,17 +2410,20 @@ class Personalizador_PDF_Plugin
     private function seguridad($accion)
     {
         if (!current_user_can('manage_options')) {
-            wp_die('Permiso denegado');
+            $this->fallar_seguridad();
         }
         $nonce = (string)($_REQUEST['_wpnonce'] ?? '');
         if (wp_verify_nonce($nonce, $accion)) {
             return;
         }
-        // Compatibilidad temporal: acepta el nonce del prefijo historico
-        // "extractor_corel_*" generado por formularios o bookmarks de <= 2.0.0.
-        $legacy = str_replace('personalizador_pdf_', 'extractor_corel_', $accion);
-        if ($legacy !== $accion && wp_verify_nonce($nonce, $legacy)) {
-            return;
+        $this->fallar_seguridad();
+    }
+
+    /** Responde a fallos de seguridad sin pagina blanca: JSON si es AJAX. */
+    private function fallar_seguridad()
+    {
+        if (!empty($_REQUEST['ajax'])) {
+            wp_send_json_error('Permiso denegado o sesion vencida. Recarga la pagina y reintenta.');
         }
         wp_die('Permiso denegado');
     }
@@ -2435,9 +2431,36 @@ class Personalizador_PDF_Plugin
     /** Redirige a la pagina del plugin con parametros extra. */
     private function redirigir(array $args = [])
     {
+        if (!isset($args['tab'])) {
+            $args['tab'] = 'pdfs';
+        }
         $args['page'] = 'personalizador-pdf';
         wp_redirect(admin_url('admin.php?' . http_build_query($args)));
         exit;
+    }
+
+    /**
+     * Respuesta unica admin: JSON con ajax=1 (sin recarga) o redirect clasico.
+     * $ok=true redirige a $args; $ok=false redirige con ec_error=mensaje.
+     * Las claves ec_* solo tienen sentido en redirect: en JSON viajan igual
+     * para que el JS las lea, pero la UI muestra toasts (no notices por GET).
+     */
+    private function responder($ok, array $args = [], $mensaje_error = '')
+    {
+        $ajax = !empty($_POST['ajax']) || !empty($_GET['ajax']);
+        if ($ajax) {
+            if ($ok) {
+                wp_send_json_success($args);
+            }
+            wp_send_json_error($mensaje_error !== '' ? $mensaje_error : 'Error desconocido');
+        }
+        if (!$ok) {
+            $args = ['ec_error' => $mensaje_error !== '' ? $mensaje_error : 'Error desconocido'];
+            if (isset($_POST['archivo'])) {
+                $args['ec_pdf'] = sanitize_file_name((string)$_POST['archivo']);
+            }
+        }
+        $this->redirigir($args);
     }
 
     /**
@@ -2534,61 +2557,39 @@ class Personalizador_PDF_Plugin
     /** Sube una imagen real para un grupo (color hex) de un PDF. */
     public function handle_subir_imagen()
     {
-        $this->seguridad('personalizador_pdf_subir_imagen');
+        $es_galeria = ($_POST['action'] ?? '') === 'personalizador_pdf_imagen_galeria';
+        $this->seguridad($es_galeria ? 'personalizador_pdf_imagen_galeria' : 'personalizador_pdf_subir_imagen');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
         $gid = $this->id_recibido($_POST);
-        $ajax = !empty($_POST['ajax']);
-        $fallo = function ($mensaje) use ($ajax, $archivo) {
-            if ($ajax) {
-                wp_send_json_error($mensaje);
-            }
-            $this->redirigir(['ec_error' => $mensaje, 'ec_pdf' => $archivo]);
-        };
         if (!$archivo || !is_file($this->ruta_pdf($archivo)) || $gid === '') {
-            $fallo('datos_invalidos');
+            $this->responder(false, [], 'datos_invalidos');
         }
-        if (empty($_FILES['imagen']) || ($_FILES['imagen']['error'] ?? 1) !== UPLOAD_ERR_OK) {
-            $fallo('No se recibio ninguna imagen (o el servidor rechazo la subida).');
-        }
-        $ext = $this->extension_imagen($_FILES['imagen']['name']);
-        if (!$ext) {
-            $fallo('Formato de imagen no permitido (usa PNG, JPG, GIF o WebP).');
-        }
-        try {
-            $this->guardar_imagen($archivo, $gid, $_FILES['imagen']['tmp_name'], $ext);
-        } catch (\Throwable $e) {
-            $fallo($e->getMessage());
-        }
-        if ($ajax) {
-            wp_send_json_success(['id' => $gid, 'ext' => $ext]);
-        }
-        $this->redirigir(['ec_imagen' => 1, 'ec_pdf' => $archivo]);
-    }
-
-    /** Toma una imagen de la galeria de medios para un grupo. */
-    public function handle_imagen_galeria()
-    {
-        $this->seguridad('personalizador_pdf_imagen_galeria');
-        $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
-        $gid = $this->id_recibido($_POST);
+        // Fuente: adjunto de la galeria (attachment_id) o subida directa ($_FILES).
         $attachment_id = isset($_POST['attachment_id']) ? (int)$_POST['attachment_id'] : 0;
-        if (!$archivo || !is_file($this->ruta_pdf($archivo)) || $gid === '' || $attachment_id <= 0) {
-            $this->redirigir(['ec_error' => 'datos_invalidos', 'ec_pdf' => $archivo]);
+        if ($attachment_id > 0) {
+            $ruta = get_attached_file($attachment_id);
+            if (!$ruta || !is_file($ruta)) {
+                $this->responder(false, [], 'La imagen de la galeria no esta disponible.');
+            }
+            $origen = $ruta;
+            $origen_nombre = $ruta;
+        } else {
+            if (empty($_FILES['imagen']) || ($_FILES['imagen']['error'] ?? 1) !== UPLOAD_ERR_OK) {
+                $this->responder(false, [], 'No se recibio ninguna imagen (o el servidor rechazo la subida).');
+            }
+            $origen = $_FILES['imagen']['tmp_name'];
+            $origen_nombre = $_FILES['imagen']['name'];
         }
-        $ruta = get_attached_file($attachment_id);
-        if (!$ruta || !is_file($ruta)) {
-            $this->redirigir(['ec_error' => 'La imagen de la galeria no esta disponible.', 'ec_pdf' => $archivo]);
-        }
-        $ext = $this->extension_imagen($ruta);
+        $ext = $this->extension_imagen($origen_nombre);
         if (!$ext) {
-            $this->redirigir(['ec_error' => 'El adjunto de la galeria no es una imagen permitida.', 'ec_pdf' => $archivo]);
+            $this->responder(false, [], 'Formato de imagen no permitido (usa PNG, JPG, GIF o WebP).');
         }
         try {
-            $this->guardar_imagen($archivo, $gid, $ruta, $ext);
+            $this->guardar_imagen($archivo, $gid, $origen, $ext);
         } catch (\Throwable $e) {
-            $this->redirigir(['ec_error' => $e->getMessage(), 'ec_pdf' => $archivo]);
+            $this->responder(false, [], $e->getMessage());
         }
-        $this->redirigir(['ec_imagen' => 1, 'ec_pdf' => $archivo]);
+        $this->responder(true, ['id' => $gid, 'ext' => $ext, 'ec_imagen' => 1, 'ec_pdf' => $archivo]);
     }
 
     /** Quita la imagen asignada a un grupo. */
@@ -2597,18 +2598,11 @@ class Personalizador_PDF_Plugin
         $this->seguridad('personalizador_pdf_quitar_imagen');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
         $gid = $this->id_recibido($_POST);
-        $ajax = !empty($_POST['ajax']);
         if (!$archivo || $gid === '') {
-            if ($ajax) {
-                wp_send_json_error('datos_invalidos');
-            }
-            $this->redirigir(['ec_error' => 'datos_invalidos', 'ec_pdf' => $archivo]);
+            $this->responder(false, [], 'datos_invalidos');
         }
         $this->quitar_imagen($archivo, $gid);
-        if ($ajax) {
-            wp_send_json_success(['id' => $gid]);
-        }
-        $this->redirigir(['ec_imagen_quitada' => 1, 'ec_pdf' => $archivo]);
+        $this->responder(true, ['id' => $gid, 'ec_imagen_quitada' => 1, 'ec_pdf' => $archivo]);
     }
 
     /** Guarda la imagen del grupo con extension normalizada (unico archivo por id). */
@@ -2679,29 +2673,20 @@ class Personalizador_PDF_Plugin
     /**
      * Guarda/quita el texto estilizado de un grupo (puente TextMuy).
      * Escribe el mapeo en config.json placeholders[id] (nunca el analisis).
-     * Con $_POST['ajax']=1 responde JSON (autoguardado sin recarga); si no,
-     * redirige como el resto de los handlers (compatible sin JS).
      */
     public function handle_guardar_texto()
     {
         $this->seguridad('personalizador_pdf_guardar_texto');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
         $gid = $this->id_recibido($_POST);
-        $ajax = !empty($_POST['ajax']);
-        $fallo = function ($mensaje) use ($ajax, $archivo) {
-            if ($ajax) {
-                wp_send_json_error($mensaje);
-            }
-            $this->redirigir(['ec_error' => $mensaje, 'ec_pdf' => $archivo]);
-        };
         if (!$archivo || !is_file($this->ruta_pdf($archivo)) || $gid === '') {
-            $fallo('datos_invalidos');
+            $this->responder(false, [], 'datos_invalidos');
         }
         $activo = !empty($_POST['activo']);
         $texto = isset($_POST['texto']) ? $this->limitar_texto(sanitize_text_field(wp_unslash($_POST['texto']))) : '';
         $estilo = isset($_POST['estilo']) ? sanitize_key((string)wp_unslash($_POST['estilo'])) : '';
         if ($activo && ($texto === '' || $estilo === '')) {
-            $fallo('Escribe un texto y elige un estilo para activar el grupo.');
+            $this->responder(false, [], 'Escribe un texto y elige un estilo para activar el grupo.');
         }
         if ($activo && $estilo !== '') {
             $presets = [];
@@ -2711,21 +2696,18 @@ class Personalizador_PDF_Plugin
                 $presets = [];
             }
             if (!in_array($estilo, $presets, true)) {
-                $fallo('El estilo elegido ya no existe. Elegi otro de la lista.');
+                $this->responder(false, [], 'El estilo elegido ya no existe. Elegi otro de la lista.');
             }
         }
         $nombre = $this->nombre_de($archivo);
         try {
             $this->guardar_personalizacion($nombre, $gid, $activo ? 'texto' : 'limpiar', $texto, $estilo);
         } catch (\Throwable $e) {
-            $fallo($e->getMessage());
+            $this->responder(false, [], $e->getMessage());
         }
-        if ($ajax) {
-            wp_send_json_success(['id' => $gid, 'activo' => $activo]);
-        }
-        $this->redirigir($activo
-            ? ['ec_texto' => 1, 'ec_pdf' => $archivo]
-            : ['ec_texto_quitado' => 1, 'ec_pdf' => $archivo]);
+        $this->responder(true, $activo
+            ? ['id' => $gid, 'activo' => $activo, 'ec_texto' => 1, 'ec_pdf' => $archivo]
+            : ['id' => $gid, 'activo' => $activo, 'ec_texto_quitado' => 1, 'ec_pdf' => $archivo]);
     }
 
     /* ==================== Recursos TextMuy (presets .txm + imagenes) ==================== */
@@ -2748,15 +2730,15 @@ class Personalizador_PDF_Plugin
     {
         $this->seguridad('personalizador_pdf_subir_pdf');
         if (empty($_FILES['pdf']) || !is_array($_FILES['pdf'])) {
-            $this->redirigir(['ec_error' => 'no_file']);
+            $this->responder(false, [], 'no_file');
         }
         $file = $_FILES['pdf'];
         if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            $this->redirigir(['ec_error' => 'upload']);
+            $this->responder(false, [], 'upload');
         }
         $archivo = sanitize_file_name($file['name']);
         if (strtolower(pathinfo($archivo, PATHINFO_EXTENSION)) !== 'pdf') {
-            $this->redirigir(['ec_error' => 'tipo']);
+            $this->responder(false, [], 'tipo');
         }
         $modo = isset($_POST['modo']) ? $_POST['modo'] : '';
         $existe = is_file($this->ruta_pdf($archivo));
@@ -2765,7 +2747,7 @@ class Personalizador_PDF_Plugin
                 $archivo = $this->nombre_disponible($archivo);
             } else {
                 // Sin decision: volver a preguntar (el form con JS ya la pide).
-                $this->redirigir(['ec_pregunta' => 'nombre', 'nombre' => $archivo]);
+                $this->responder(false, [], 'nombre_existente:' . $archivo);
             }
         }
         // Sobrescribir: limpiar los datos previos ANTES de mover (la limpieza
@@ -2776,18 +2758,18 @@ class Personalizador_PDF_Plugin
         try {
             $this->dir_producto($this->nombre_de($archivo));
         } catch (\Throwable $e) {
-            $this->redirigir(['ec_error' => $e->getMessage(), 'ec_pdf' => $archivo]);
+            $this->responder(false, [], $e->getMessage());
         }
         if (!@move_uploaded_file($file['tmp_name'], $this->ruta_pdf($archivo))) {
-            $this->redirigir(['ec_error' => 'move']);
+            $this->responder(false, [], 'move');
         }
         try {
             $resumen = $this->analizar_y_guardar($archivo);
         } catch (\Throwable $e) {
             @unlink($this->ruta_pdf($archivo));
-            $this->redirigir(['ec_error' => $e->getMessage(), 'ec_pdf' => $archivo]);
+            $this->responder(false, [], $e->getMessage());
         }
-        $this->redirigir([
+        $this->responder(true, [
             'ec_subido' => 1,
             'ec_pdf' => $archivo,
             'grupos' => $resumen['total_grupos'],
@@ -2801,19 +2783,19 @@ class Personalizador_PDF_Plugin
         $this->seguridad('personalizador_pdf_reanalizar');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
         if (!$archivo || !is_file($this->ruta_pdf($archivo))) {
-            $this->redirigir(['ec_error' => 'pdf_inexistente']);
+            $this->responder(false, [], 'pdf_inexistente');
         }
         try {
             $resumen = $this->analizar_y_guardar($archivo);
         } catch (\Throwable $e) {
-            $this->redirigir(['ec_error' => $e->getMessage(), 'ec_pdf' => $archivo]);
+            $this->responder(false, [], $e->getMessage());
         }
         $args = ['ec_reanalizado' => 1, 'ec_pdf' => $archivo];
         if (!empty($resumen['personalizacion_perdida'])) {
             // Grupos con personalizacion que desaparecieron del analisis (T019).
             $args['ec_perdidos'] = implode(',', $resumen['personalizacion_perdida']);
         }
-        $this->redirigir($args);
+        $this->responder(true, $args);
     }
 
     /** Borra un PDF subido con todo su dataset, imagenes y salida. */
@@ -2822,10 +2804,10 @@ class Personalizador_PDF_Plugin
         $this->seguridad('personalizador_pdf_borrar');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
         if (!$archivo || !is_file($this->ruta_pdf($archivo))) {
-            $this->redirigir(['ec_error' => 'pdf_inexistente']);
+            $this->responder(false, [], 'pdf_inexistente');
         }
         $this->limpiar_datos_de($this->nombre_de($archivo));
-        $this->redirigir(['ec_borrado' => 1]);
+        $this->responder(true, ['ec_borrado' => 1]);
     }
 
     /** Primer nombre libre: nombre.pdf, nombre-2.pdf, nombre-3.pdf... */
@@ -2910,12 +2892,12 @@ class Personalizador_PDF_Plugin
         $this->seguridad('personalizador_pdf_procesar');
         $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
         if (!$archivo || !is_file($this->ruta_pdf($archivo))) {
-            $this->redirigir(['ec_error' => 'pdf_inexistente']);
+            $this->responder(false, [], 'pdf_inexistente');
         }
         $nombre = $this->nombre_de($archivo);
         $vista = $this->vista_grupos($nombre);
         if (!$vista || (!$vista['analisis'] && !$vista['config']['placeholders'])) {
-            $this->redirigir(['ec_error' => 'Este PDF no tiene datos analizados. Usa "Re-analizar".', 'ec_pdf' => $archivo]);
+            $this->responder(false, [], 'Este PDF no tiene datos analizados. Usa "Re-analizar".');
         }
         $datos = $vista['analisis'];
 
@@ -2963,24 +2945,19 @@ class Personalizador_PDF_Plugin
                 continue; // Nunca guardar archivos de ids inexistentes.
             }
             if (!is_array($file) || ($file['error'] ?? 1) !== UPLOAD_ERR_OK || empty($file['tmp_name'])) {
-                $this->redirigir([
-                    'ec_error' => 'No se pudo recibir el texto renderizado del grupo ' . strtoupper($gid)
-                        . ' (revisa el tamano maximo de subida del servidor).',
-                    'ec_pdf' => $archivo,
-                ]);
+                $this->responder(false, [],
+                    'No se pudo recibir el texto renderizado del grupo ' . strtoupper($gid)
+                        . ' (revisa el tamano maximo de subida del servidor).');
             }
             // Firma PNG: evitar guardar como imagen algo que no sea un PNG del render.
             $firma = (string)@file_get_contents($file['tmp_name'], false, null, 0, 8);
             if ($firma !== "\x89PNG\r\n\x1a\n") {
-                $this->redirigir([
-                    'ec_error' => 'El archivo del grupo ' . strtoupper($gid) . ' no es un PNG valido.',
-                    'ec_pdf' => $archivo,
-                ]);
+                $this->responder(false, [], 'El archivo del grupo ' . strtoupper($gid) . ' no es un PNG valido.');
             }
             try {
                 $this->guardar_imagen($archivo, $gid, $file['tmp_name'], 'png');
             } catch (\Throwable $e) {
-                $this->redirigir(['ec_error' => $e->getMessage(), 'ec_pdf' => $archivo]);
+                $this->responder(false, [], $e->getMessage());
             }
         }
 
@@ -2993,14 +2970,33 @@ class Personalizador_PDF_Plugin
             $salida = $this->ruta_salida($nombre);
             file_put_contents($salida, $resultado['bytes']);
         } catch (\Throwable $e) {
-            $this->redirigir(['ec_error' => $e->getMessage(), 'ec_pdf' => $archivo]);
+            $this->responder(false, [], $e->getMessage());
         }
         set_transient(
             'personalizador_pdf_proceso',
             $resultado['resumen'] + ['archivo' => $archivo],
             HOUR_IN_SECONDS
         );
-        $this->redirigir(['ec_procesado' => 1, 'ec_pdf' => $archivo]);
+        $this->responder(true, [
+            'ec_procesado' => 1,
+            'ec_pdf' => $archivo,
+            'grupos' => count($resultado['resumen']['grupos_aplicados'] ?? []),
+            'instancias' => $resultado['resumen']['imagenes_insertadas'] ?? 0,
+            'descarga' => $this->url_descarga_salida($nombre),
+        ]);
+    }
+
+    /** URL firmada (nonce) para descargar la salida sin recargar (etapa 3). */
+    private function url_descarga_salida($nombre)
+    {
+        return wp_nonce_url(
+            admin_url('admin-post.php') . '?' . http_build_query([
+                'action' => 'personalizador_pdf_descargar',
+                'tipo' => 'salida',
+                'archivo' => $nombre . '.pdf',
+            ]),
+            'personalizador_pdf_descargar'
+        );
     }
 
     /** Descarga archivos: pdf | datos | placeholder | salida. */

@@ -65,14 +65,6 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
         <?php endif; ?>
 <?php elseif (isset($get['ec_borrado'])) : ?>
     <div class="notice notice-success"><p><strong>PDF eliminado</strong> con sus datos, imagenes y salida.</p></div>
-<?php elseif (isset($get['ec_imagen'])) : ?>
-    <div class="notice notice-success"><p><strong>Imagen guardada</strong> para el grupo.</p></div>
-<?php elseif (isset($get['ec_imagen_quitada'])) : ?>
-    <div class="notice notice-success"><p><strong>Imagen quitada</strong> del grupo.</p></div>
-<?php elseif (isset($get['ec_texto'])) : ?>
-    <div class="notice notice-success"><p><strong>Texto estilizado guardado</strong> para el grupo. Al procesar, se renderizara como imagen del grupo.</p></div>
-<?php elseif (isset($get['ec_texto_quitado'])) : ?>
-    <div class="notice notice-success"><p><strong>Texto estilizado quitado</strong> del grupo.</p></div>
 <?php endif; ?>
 
 <?php if ($proceso) : ?>
@@ -103,6 +95,15 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
             <button type="button" class="button ec-modo" data-modo="sobrescribir">Sobrescribir (regenera datos)</button>
         </p>
     </div>
+<?php endif; ?>
+<?php if (isset($get['ec_mockup_subida'])) : ?>
+    <div class="notice notice-success"><p><strong>Foto de mockup subida:</strong> <?php echo esc_html((string)($get['foto'] ?? '')); ?>.</p></div>
+<?php elseif (isset($get['ec_mockup_baja'])) : ?>
+    <div class="notice notice-success"><p><strong>Foto de mockup borrada:</strong> <?php echo esc_html((string)($get['foto'] ?? '')); ?>.</p></div>
+<?php elseif (isset($get['ec_config'])) : ?>
+    <div class="notice notice-success"><p><strong>Configuracion guardada.</strong></p></div>
+<?php elseif (isset($get['ec_regenerado'])) : ?>
+    <div class="notice notice-success"><p><strong>PDF regenerado</strong> para el pedido.</p></div>
 <?php endif; ?>
 
 <div class="card">
@@ -181,7 +182,7 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
 
     <?php if (!$datos) : ?>
         <p class="ec-aviso">Este PDF no tiene datos analizados.</p>
-        <form class="ec-form-inline" method="post" action="<?php echo esc_url($post_url); ?>">
+        <form class="ec-form-inline ec-form-reanalizar" method="post" action="<?php echo esc_url($post_url); ?>">
             <input type="hidden" name="action" value="personalizador_pdf_reanalizar">
             <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
             <?php wp_nonce_field('personalizador_pdf_reanalizar'); ?>
@@ -240,7 +241,7 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                 <code>_pmu_pdf_slugs</code> del producto Woo; <code>_pmu_pdf_slug</code>
                 se conserva como respaldo de productos antiguos. El listado de abajo es su espejo
                 informativo (T010: edicion duradera desde el producto).</span>
-            <form class="ec-form-inline" method="post" action="<?php echo esc_url($post_url); ?>">
+            <form class="ec-form-inline ec-form-reanalizar" method="post" action="<?php echo esc_url($post_url); ?>">
                 <input type="hidden" name="action" value="personalizador_pdf_reanalizar">
                 <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
                 <?php wp_nonce_field('personalizador_pdf_reanalizar'); ?>
@@ -514,7 +515,6 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                         <input type="hidden" name="placeholders[<?php echo esc_attr($gid); ?>][settings]" class="ec-h-settings" value="<?php echo esc_attr($settings_g); ?>">
                         <label class="ec-block-label ec-repetir"><input type="checkbox" name="placeholders[<?php echo esc_attr($gid); ?>][repetir]" value="1" <?php checked(!empty($m['repetir']), true); ?>> Repetir por placeholder</label>
                         <span class="description">Si el valor resulta array, un valor por instancia; si no, el mismo valor en todas.</span>
-                        <label class="ec-block-label ec-repetir"><input type="checkbox" name="placeholders[<?php echo esc_attr($gid); ?>][repetir]" value="1" <?php checked(!empty($m['repetir']), true); ?>> Repetir por placeholder</label>
                     </div>
                     <?php endforeach; ?>
                 </div>
@@ -612,6 +612,7 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                         <?php if ($conImagen === 0) : ?>disabled<?php endif; ?>>
                     Procesar PDF
                 </button>
+                <span class="ec-procesar-status" aria-live="polite"></span>
             </form>
             <p class="description">
                 <?php if ($conImagen === 0) : ?>
@@ -679,7 +680,7 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                 </td>
                 <td><?php echo $r['salida'] !== '' ? esc_html($r['salida']) : '— (se genera al descargar)'; ?></td>
                 <td>
-                    <form method="post" action="<?php echo esc_url($post_url); ?>" style="display:inline">
+                    <form method="post" action="<?php echo esc_url($post_url); ?>" style="display:inline" class="ec-form-regenerar">
                         <input type="hidden" name="action" value="personalizador_pdf_item_regenerar">
                         <input type="hidden" name="order_id" value="<?php echo (int)$r['order_id']; ?>">
                         <input type="hidden" name="item_key" value="<?php echo esc_attr($r['item_key']); ?>">

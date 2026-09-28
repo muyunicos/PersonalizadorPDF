@@ -44,7 +44,7 @@ function wp_enqueue_script(...$a) { return true; }
 function wp_enqueue_media() { return true; }
 function wp_localize_script(...$a) { $GLOBALS['test_localizados'][($a[0] ?? '') . '#' . ($a[1] ?? '')] = $a[2] ?? null; return true; }
 function wp_create_nonce($a) { return 'nonce'; }
-function wp_nonce_url($u, $a = '') { return $u; }
+function wp_nonce_url($u, $a = '') { return $u . (strpos($u, '?') === false ? '?' : '&') . '_wpnonce=nonce'; }
 function wp_nonce_field($a = '') { return ''; }
 function size_format($n) { return (string)$n . ' B'; }
 function wp_max_upload_size() { return 10485760; }
@@ -318,7 +318,12 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             $resumen = isset($GLOBALS['test_transients']['personalizador_pdf_proceso']) ? $GLOBALS['test_transients']['personalizador_pdf_proceso'] : [];
             check('resumen: grupo 0000FF aplicado', in_array('0000FF', (array)($resumen['grupos_aplicados'] ?? []), true));
             check('resumen: grupo FF0000 sin imagen', in_array('FF0000', (array)($resumen['grupos_sin_imagen'] ?? []), true));
-            check('redirect final a la consola', strpos($redirect, 'ec_procesado=1') !== false);
+            // Etapa 3: con ajax=1 responde JSON (resumen + descarga); sin ajax, redirect.
+            check('JSON con resumen de grupos/instancias', is_array($json) && $json['success'] === true
+                && ($json['data']['grupos'] ?? 0) >= 1 && ($json['data']['instancias'] ?? 0) >= 1);
+            check('JSON con URL de descarga firmada', is_array($json)
+                && strpos((string)($json['data']['descarga'] ?? ''), 'personalizador_pdf_descargar') !== false
+                && strpos((string)($json['data']['descarga'] ?? ''), 'tipo=salida') !== false);
             // T030: muestras idempotentes: los aplicados usan un archivo por id
             // (ruta_aplicado) y la salida se sobrescribe (ruta_salida_tmp).
             $archivos_m = array_values(array_filter((array)@scandir($uploads . '/tmp/muestras/muestra'), function ($x) {
@@ -1666,10 +1671,11 @@ switch ($fase) {
             'archivo' => 'muestra.pdf',
             'texto_0000FF' => 'Juan <b>Perez</b>', // sanitize_text_field debe limpiarlo
             'estilo_0000FF' => 'clean-modern',
+            'ajax' => '1', // etapa 3: procesar responde JSON (sin recarga)
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
-        $p->handle_procesar(); // exit en redirigir(ec_procesado)
+        $p->handle_procesar(); // exit en responder(JSON con descarga)
         break;
 
     case 'borrado':

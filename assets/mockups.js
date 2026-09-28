@@ -15,6 +15,9 @@ jQuery(function ($) {
     'use strict';
 
     var cfg = window.PersonalizadorPDF || {};
+    // pmu-core expone el POST unico (mockups.js depende de admin.js, no de fetch suelto).
+    var api = cfg.pmuPost || null;
+    var aviso = cfg.pmuAviso || null;
     var datos = cfg.mockups || {};
     var $raiz = $('.ec-acordeon-mockups .ec-acordeon-cuerpo');
     if (!$raiz.length || !datos.pdf) {
@@ -310,22 +313,24 @@ jQuery(function ($) {
     $ed.on('click', '.ec-mk-guardar', function () {
         var $btn = $(this).prop('disabled', true);
         var $st = $ed.find('.ec-mk-status').removeClass('ec-error').text('Guardando...');
-        var fd = new FormData();
-        fd.set('action', 'personalizador_pdf_mockups');
-        fd.set('archivo', datos.pdf + '.pdf');
-        fd.set('ajax', '1');
-        fd.set('_wpnonce', cfg.nonceMockups || '');
-        fd.set('mockups', JSON.stringify(estado.mockups));
-        if (datos.preview_omisible) { fd.set('preview_omisible', '1'); }
-        fetch(cfg.postUrl || window.location.href, { method: 'POST', body: fd, credentials: 'same-origin' })
-            .then(function (r) { return r.json(); })
-            .then(function (j) {
-                if (!(j && j.success)) { throw new Error((j && j.data) || 'No se pudo guardar.'); }
+        if (!api) {
+            $st.addClass('ec-error').text('pmu-core no cargado (admin.js). Recarga la pagina.');
+            $btn.prop('disabled', false);
+            return;
+        }
+        var pares = [
+            ['archivo', datos.pdf + '.pdf'],
+            ['mockups', JSON.stringify(estado.mockups)]
+        ];
+        if (datos.preview_omisible) { pares.push(['preview_omisible', '1']); }
+        api('personalizador_pdf_mockups', pares, cfg.nonceAccion ? cfg.nonceAccion.mockups : (cfg.nonceMockups || ''))
+            .then(function () {
                 $st.addClass('ec-ok').text('Guardado ✓');
             })
             .catch(function (e) {
                 var msg = (e instanceof Error && e.message) ? e.message : 'No se pudo guardar (red).';
                 $st.addClass('ec-error').text(msg);
+                if (aviso) { aviso($ed.closest('.card, .wrap'), msg, true); }
             })
             .then(function () { $btn.prop('disabled', false); });
     });

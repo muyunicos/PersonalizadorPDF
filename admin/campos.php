@@ -32,9 +32,9 @@ $post_url = admin_url('admin-post.php');
     <?php else : ?>
         <table class="widefat striped">
             <thead><tr><th>id</th><th>Titulo cliente</th><th>Tipo</th><th>Etiquetas</th><th>Visible</th><th></th><th></th></tr></thead>
-            <tbody>
+            <tbody class="ec-campos-cuerpo">
                 <?php foreach ($todos as $cid => $t) : ?>
-                    <tr>
+                    <tr data-id="<?php echo (int)$cid; ?>">
                         <td><strong><?php echo (int)$cid; ?></strong></td>
                         <td><?php echo esc_html($t[1] !== '' ? $t[1] : '(oculto)'); ?></td>
                         <td><code><?php echo esc_html($t[2]); ?></code></td>
@@ -57,41 +57,61 @@ $post_url = admin_url('admin-post.php');
 </div>
 
 
+<?php if ($tupla_ed) : ?>
 <div class="card">
-    <h2><?php echo $tupla_ed ? ('Editar campo ' . (int)$tupla_ed[0]) : 'Nuevo campo'; ?></h2>
+    <h2>Editar campo <?php echo (int)$tupla_ed[0]; ?></h2>
     <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo">
         <input type="hidden" name="action" value="personalizador_pdf_campo">
-        <?php if ($tupla_ed) : ?><input type="hidden" name="id" value="<?php echo (int)$tupla_ed[0]; ?>"><?php endif; ?>
+        <input type="hidden" name="id" value="<?php echo (int)$tupla_ed[0]; ?>">
         <?php wp_nonce_field('personalizador_pdf_campo'); ?>
         <table class="form-table">
             <tr><th><label for="ec-titulo">Titulo cliente</label></th>
-                <td><input id="ec-titulo" name="titulo_cliente" class="regular-text" value="<?php echo esc_attr($tupla_ed ? $tupla_ed[1] : ''); ?>">
+                <td><input id="ec-titulo" name="titulo_cliente" class="regular-text" value="<?php echo esc_attr($tupla_ed[1]); ?>">
                 <p class="description">Vacio = campo invisible (igual evalua su script).</p></td></tr>
             <tr><th><label for="ec-tipo">Tipo</label></th>
                 <td><select id="ec-tipo" name="tipo">
                     <?php foreach (['text', 'textarea', 'select', 'img', 'override'] as $tipo) : ?>
-                        <option value="<?php echo esc_attr($tipo); ?>" <?php selected($tupla_ed ? $tupla_ed[2] : 'text', $tipo); ?>><?php echo esc_html($tipo); ?></option>
+                        <option value="<?php echo esc_attr($tipo); ?>" <?php selected($tupla_ed[2], $tipo); ?>><?php echo esc_html($tipo); ?></option>
                     <?php endforeach; ?>
                 </select></td></tr>
             <tr><th><label for="ec-etiquetas">Etiquetas</label></th>
-                <td><input id="ec-etiquetas" name="etiquetas" class="regular-text" value="<?php echo esc_attr($tupla_ed ? implode(',', (array)$tupla_ed[3]) : ''); ?>">
+                <td><input id="ec-etiquetas" name="etiquetas" class="regular-text" value="<?php echo esc_attr(implode(',', (array)$tupla_ed[3])); ?>">
                 <p class="description">Separadas por coma.</p></td></tr>
             <tr><th><label for="ec-ayuda">Texto de ayuda</label></th>
-                <td><input id="ec-ayuda" name="texto_ayuda" class="regular-text" value="<?php echo esc_attr($tupla_ed ? $tupla_ed[4] : ''); ?>"></td></tr>
+                <td><input id="ec-ayuda" name="texto_ayuda" class="regular-text" value="<?php echo esc_attr($tupla_ed[4]); ?>"></td></tr>
             <tr><th>Visible</th>
-                <td><label><input type="checkbox" name="visible" value="1" <?php checked($tupla_ed ? !empty($tupla_ed[5]) : true, true); ?>> Se pinta en ficha/carrito</label></td></tr>
+                <td><label><input type="checkbox" name="visible" value="1" <?php checked(!empty($tupla_ed[5]), true); ?>> Se pinta en ficha/carrito</label></td></tr>
             <tr><th>Array</th>
-                <td><label><input type="checkbox" name="array" value="1" <?php checked($tupla_ed ? !empty($tupla_ed[9]) : false, true); ?>> Entrega array (un valor por instancia del grupo)</label>
+                <td><label><input type="checkbox" name="array" value="1" <?php checked(!empty($tupla_ed[9]), true); ?>> Entrega array (un valor por instancia del grupo)</label>
                 <p class="description">Con <code>[v] Repetir por placeholder</code> del mapeo, cada valor va a una instancia.</p></td></tr>
             <tr><th><label for="ec-contenido">Contenido (HTML)</label></th>
-                <td><textarea id="ec-contenido" name="contenido" rows="6" cols="80" class="large-text code"><?php echo esc_textarea($tupla_ed ? $tupla_ed[6] : ''); ?></textarea>
+                <td><textarea id="ec-contenido" name="contenido" rows="6" cols="80" class="large-text code"><?php echo esc_textarea($tupla_ed[6]); ?></textarea>
                 <p class="description">Fragmento con scope <code>.pmu-campo-{id}</code>. Prohibidos <code>id=""</code>, script, iframe, form.</p></td></tr>
             <tr><th><label for="ec-css">CSS</label></th>
-                <td><textarea id="ec-css" name="css" rows="4" cols="80" class="large-text code"><?php echo esc_textarea($tupla_ed ? $tupla_ed[7] : ''); ?></textarea></td></tr>
+                <td><textarea id="ec-css" name="css" rows="4" cols="80" class="large-text code"><?php echo esc_textarea($tupla_ed[7]); ?></textarea></td></tr>
             <tr><th><label for="ec-script">Script</label></th>
-                <td><textarea id="ec-script" name="script" rows="6" cols="80" class="large-text code"><?php echo esc_textarea($tupla_ed ? $tupla_ed[8] : ''); ?></textarea>
+                <td><textarea id="ec-script" name="script" rows="6" cols="80" class="large-text code"><?php echo esc_textarea($tupla_ed[8]); ?></textarea>
                 <p class="description"><code>function(ctx, root){ ... return {valor, cliente}; }</code>. <code>ctx.set(id)</code> publica, <code>V(N)</code> lee.</p></td></tr>
         </table>
-        <?php submit_button($tupla_ed ? 'Guardar cambios' : 'Crear campo', 'primary', 'submit', false); ?>
+        <?php submit_button('Guardar cambios', 'primary', 'submit', false); ?>
+        <span class="ec-campo-status" aria-live="polite"></span>
+    </form>
+</div>
+<?php endif; ?>
+
+<div class="card">
+    <h2>Nuevo campo</h2>
+    <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo">
+        <input type="hidden" name="action" value="personalizador_pdf_campo">
+        <?php wp_nonce_field('personalizador_pdf_campo'); ?>
+        <p class="description">Se crea sin recargar; aparece en la tabla de arriba al guardar.</p>
+        <p><label>Titulo cliente<br><input name="titulo_cliente" class="regular-text" value=""></label></p>
+        <p><label>Tipo<br><select name="tipo">
+            <?php foreach (['text', 'textarea', 'select', 'img', 'override'] as $tipo) : ?>
+                <option value="<?php echo esc_attr($tipo); ?>"><?php echo esc_html($tipo); ?></option>
+            <?php endforeach; ?>
+        </select></label></p>
+        <?php submit_button('Crear campo', 'primary', 'submit', false); ?>
+        <span class="ec-campo-status" aria-live="polite"></span>
     </form>
 </div>
