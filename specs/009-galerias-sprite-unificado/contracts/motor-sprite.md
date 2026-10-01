@@ -20,13 +20,15 @@ Sin campos nuevos: este es el contrato de 006 (`contracts/motor-resources.md`) c
 
 ## Validación server-side (en orden)
 
+El orden refleja la **precedencia vigente del motor** (la que fijan los tests) y se conserva para los tres ámbitos: **firma → dimensiones → tamaño/formato**.
+
 1. Nonce → `motor:nonce:invalido`.
 2. `op` y `scope` válidos → `motor:op:*`, `motor:dir_ambito:ambito:invalido`.
-3. Archivo presente → `motor:sprite:falta:archivo`; tamaño ≤ 4 MB → `motor:sprite:archivo:tamano`; firma WEBP → `motor:sprite:archivo:formato`.
+3. Archivo presente → `motor:sprite:falta:archivo`.
 4. **Firma**: decodificada e igualdad estricta con `[thumbs.w, thumbs.h, thumbs.c, items]` del inventario **en disco** → distinta/ausente → `motor:sprite:catalogo:desactualizado`.
-5. **Dimensiones**: `getimagesize(archivo)` con `ancho === c × w` y `alto === ceil(max(1, maxId) / c) × h` de la retícula del ámbito → distinta → `motor:sprite:dimensiones:invalidas`.
+5. **Dimensiones**: `getimagesize(archivo)` con `ancho === c × w` y `alto === ceil(max(1, maxId) / c) × h` de la retícula del ámbito → distinta o ilegible → `motor:sprite:dimensiones:invalidas`.
 6. Invalidar (`guardar_catalogo`: elimina `thumbs.sprite_firma` de **los tres ámbitos**) **antes** de reemplazar: un fallo nunca certifica una hoja vieja.
-7. Mover el archivo a `uploads/pmu/{ambito}/thumbs.webp` → error de directorio → `motor:sprite:directorio:no_escribible`.
+7. Validar y mover el archivo (dentro de `PMU_Galeria::sprite`): tamaño ≤ 4 MB (`SPRITE_MAX_BYTES`) → `motor:sprite:archivo:tamano`; firma binaria WEBP (`RIFF…WEBP`) → `motor:sprite:archivo:formato`; escritura a `uploads/pmu/{ambito}/thumbs.webp` → `motor:sprite:directorio:no_escribible`.
 8. Releer el inventario y comparar `items`: si cambiaron durante la operación → `motor:sprite:catalogo:desactualizado`.
 9. Escribir `thumbs.sprite_firma = firma` en el inventario (escritura atómica `.tmp` + `rename`) → fallo → `motor:sprite:catalogo:no_escribible`.
 

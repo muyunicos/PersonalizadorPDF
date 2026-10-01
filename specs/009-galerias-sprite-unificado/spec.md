@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-30
 
-**Status**: Borrador (decisiones de alcance resueltas; pendiente `/speckit-plan`)
+**Status**: Borrador — clarificaciones, `plan.md` y `tasks.md` completos (checklist 16/16); pendiente implementación (T001+).
 
 **Input**: User description: "Unificar el comportamiento de las tres galerías del editor (imágenes, tipografías, estilos guardados): al abrirlas leen el inventario (catálogo) y luego la hoja de miniaturas (thumbs.webp) para llenar cada celda con el recorte del sprite correspondiente; si un elemento no existe en la hoja, se genera y se guarda en ese momento para que la próxima vez no haya que cargar el objeto real. Sin botón 'Generar miniaturas' si las faltantes se generan solas. Resolver las limitaciones de Google Fonts para elegir el mejor enfoque. Tiles a altura completa en dos columnas. Igual comportamiento en las tres galerías, reutilizando recursos. Continúa el contrato del spec 006-align-textmuy-motor."
 
