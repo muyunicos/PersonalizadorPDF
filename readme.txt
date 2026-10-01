@@ -14,13 +14,14 @@ Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde
 
 Personalizador PDF (antes "Extractor Corel") automatiza el reemplazo de placeholders en PDFs exportados desde CorelDRAW. Cuando Corel exporta un documento con marcos vacios donde iran las imagenes o nombres (credenciales, certificados, etc.), esos huecos llegan al PDF como rectangulos vectoriales con transparencia total. El plugin los detecta, los agrupa por color, deja cargar una imagen real por grupo y la inserta en cada placeholder del PDF, entregando un PDF editado optimizado listo para descargar.
 
-La administracion funciona como consola de trabajo con 5 pestanas:
+La administracion funciona como consola de trabajo con 6 pestanas:
 
 1. **PDFs y procesamiento**: se detectan los placeholders, se agrupan por color y se generan `analisis.json` + `config.json` del PDF; se carga una imagen por grupo (computadora o galeria de medios) y se procesa el PDF final.
 2. **Campos**: catalogo reutilizable de campos (`campos.json`) para la tienda (spec 004 / plan 008).
 3. **Estilos de Texto**: editor integrado del sistema TextMuy (100% en el navegador, estilo TextStudio) para disenar estilos de texto y guardarlos como presets `.txm` en el servidor (disponibles en todos los navegadores y en el selector de estilo de cada grupo del PDF). Las imagenes para rellenos y fondos se suben a `uploads/pmu/img/` y se reutilizan entre presets.
-4. **Test**: smoke test en vivo del sitio (entorno, permisos, catalogos, motor sobre los PDFs subidos, hooks, TextMuy, WooCommerce y render de la consola) con tabla OK/FALLA; avisa si la version instalada cambio desde la ultima corrida.
-5. **Ayuda**: documentacion interna (resumen; canonico en `AGENTS.md` §5).
+4. **Pedidos**: lista de pedidos completados con sus PDFs; permite revisar y **Regenerar PDF** por linea (entrega en `orders/{order_id}/{item_key}/`).
+5. **Test**: smoke test en vivo del sitio (entorno, permisos, catalogos, motor sobre los PDFs subidos, hooks, TextMuy, WooCommerce y render de la consola) con tabla OK/FALLA; avisa si la version instalada cambio desde la ultima corrida.
+6. **Ayuda**: documentacion interna (resumen; canonico en `AGENTS.md` §5).
 
 A diferencia de la version original (Flask + Python), esta es **100% PHP puro** en el servidor y se ejecuta directamente en WordPress, por lo que funciona en alojamientos compartidos (Hostinger, etc.) sin Python, Node ni procesos persistentes. El modulo TextMuy corre en el navegador del administrador (Canvas + WebGL); no agrega carga al servidor.
 

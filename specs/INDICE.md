@@ -1,7 +1,7 @@
 # Indice de specs — Personalizador PDF
 
 > Jerarquia: `constitution` (.specify/memory/constitution.md) > `AGENTS.md` > resto.
-> Ultima actualizacion: 2026-09-28 (Opcion 1: codigo completo, pendiente manual unificado).
+> Ultima actualizacion: 2026-10-01 (auditoria de documentacion: RC37 + 16 suites sincronizados; 009 en especificacion con plan y tasks).
 
 ## Activos (codigo completo, falta solo manual WP real)
 
@@ -13,6 +13,12 @@
 
 Recorrido manual unico (cubre T030 + T012 + T017 + T029 en una sesion):
 [MANUAL-PENDIENTE-WP-REAL.md](./MANUAL-PENDIENTE-WP-REAL.md).
+
+## En especificacion (sin implementar)
+
+| Spec | Estado | Docs normativos |
+|------|--------|-----------------|
+| [009-galerias-sprite-unificado](./009-galerias-sprite-unificado/) | spec + clarificaciones (2026-09-30), checklist 16/16, `plan.md` + `tasks.md` (2026-10-01); pendiente implementacion | spec + plan + data-model + contracts/ + quickstart + tasks (continua el contrato de 006: certificacion de hoja para los 3 ambitos, generacion automatica de huecos, Google Fonts por familia unica) |
 
 ## Archivados (trazabilidad, no implementar)
 

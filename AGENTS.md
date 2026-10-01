@@ -153,7 +153,7 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
    `op=` de presets/imágenes/fuentes). Sin puente el editor NO opera: muestra un
    error accionable y hace cero peticiones locales (no hay modo standalone).
 5. **Versionado de estáticos (cache-bust)**: `render-core.html` e `index.html` referencian
-   sus scripts internos con `?v=RCn` (**RC36 hoy**): al cambiar cualquier JS del módulo,
+   sus scripts internos con `?v=RCn` (**RC37 hoy**): al cambiar cualquier JS del módulo,
    subir el número en ambos HTML.
 6. **Galería**: manejada internamente por el módulo (`js/galeria.js`), con preview en vivo.
 
@@ -413,12 +413,14 @@ usuario, NO versionados). `parity.php` acepta la ruta como argumento opcional.
 ### Entorno Node (módulo TextMuy) — si se modifica `modules/textmuy/`
 ```bash
 cd modules/textmuy
-node tests/catalog-unified.test.js && node tests/fonts-catalog.test.js && node tests/img-refs.test.js
-node tests/preset-cache.test.js && node tests/preset-delta.test.js && node tests/preset-load.test.js
-node tests/distort-engine.test.js && node tests/flag-wave.test.js && node tests/pattern-block-box.test.js
-node tests/controls-init.test.js
+node tests/catalog-unified.test.js && node tests/tile-geometria.test.js && node tests/fonts-catalog.test.js
+node tests/img-refs.test.js && node tests/preset-cache.test.js && node tests/preset-ambito.test.js
+node tests/preset-delta.test.js && node tests/preset-load.test.js && node tests/distort-engine.test.js
+node tests/flag-wave.test.js && node tests/pattern-block-box.test.js && node tests/controls-init.test.js
+node tests/galeria-items.test.js && node tests/invalidacion.test.js && node tests/sprite-canonico.test.js
+node tests/rc-bump.test.js
 ```
-(Node NO corre en el servidor productivo de WP: es solo testing del módulo.)
+(16 suites `*.test.js`; Node NO corre en el servidor productivo de WP: es solo testing del módulo.)
 
 ## 10. Reglas para la IA al editar
 
@@ -430,7 +432,7 @@ node tests/controls-init.test.js
   existe código que resuelva el problema.
 - ❌ NO DEBES: reintroducir Python.
 - ✅ El módulo `modules/textmuy/` es parte de este repositorio y está bajo control total:
-  se edita directamente, se corren sus tests Node (`node --check` + 10 suites) y se hace
+  se edita directamente, se corren sus tests Node (`node --check` + 16 suites) y se hace
   bump `?v=RCn` en ambos HTML al tocar su JS.
 - ❌ NO DEBES: guardar datos generados por el admin dentro de la carpeta del plugin
   (siempre usar `uploads/` según §5).

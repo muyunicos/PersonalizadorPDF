@@ -18,7 +18,7 @@ modules/textmuy/
 ├── render-core.html     <- Motor de render headless (API renderBatch, iframe off-screen)
 ├── js/                  <- editor, controls, preset-manager, catalog, api, fonts, galeria...
 ├── css/
-├── tests/               <- 10 suites Node (NO corren en el servidor productivo de WP)
+├── tests/               <- 16 suites Node `*.test.js` (NO corren en el servidor productivo de WP)
 └── AGENTS.md            <- Contexto propio del modulo (norma superior: .specify/memory/constitution.md)
 ```
 
