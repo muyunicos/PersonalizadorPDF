@@ -1,4 +1,8 @@
 <?php
+// Smoke CLI: nunca ejecutable por HTTP (tests/ viaja con el plugin al hosting).
+if (PHP_SAPI !== 'cli') {
+    exit;
+}
 /**
  * Smoke test CLI del motor (herramienta de desarrollo).
  * Ejercita Imagen (GD y PHP puro), Motor, Overlay y la validacion de dataset

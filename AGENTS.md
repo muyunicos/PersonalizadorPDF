@@ -81,10 +81,11 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 ├── personalizador-pdf.php   ← Plugin WP (clase principal, menús, handlers PDFs/campos/config,
 │                                   ciclo carrito→pedido, puente TextMuy; sin migraciones)
 ├── admin/
-│   ├── page.php             ← Página admin con pestañas ("PDFs" | "Campos" | "Estilos de Texto" | "Ayuda")
+│   ├── page.php             ← Página admin con pestañas ("PDFs" | "Campos" | "Estilos de Texto" | "Test" | "Ayuda")
 │   ├── pdfs.php             ← Consola: subir PDF, grupos, mockups, imágenes, Procesar, completados
 │   ├── campos.php           ← Catálogo global de campos reutilizables (campos.json)
 │   ├── estilos-texto.php    ← Iframe del módulo TextMuy (aviso si no está integrado)
+│   ├── test.php             ← Pestaña Test: botón del smoke test en vivo (tabla OK/FALLA)
 │   └── ayuda.php            ← Documentación interna
 ├── assets/
 │   ├── admin.css            ← Estilos de consola + editor de mockups + iframe
@@ -162,6 +163,18 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
    - **Grupos** → el admin asigna una imagen (Media Library o PC) o activa **"Usar texto"**
      (texto + preset de TextMuy) u otras opciones según los módulos que se vayan
      incorporando al sistema.
+   - **Acciones sin recarga**: todo POST de la consola pasa por `pmuPost()` (`pmu-core`
+     en `assets/admin.js`) y **la unica via de respuesta es JSON** (`responder()` nunca
+     redirige; sin JS la consola muestra un `<noscript>` de aviso). Los errores se
+     pintan inline en vez de pagina en blanco. Solo recargan en exito: **Subir PDF**
+     (lista de grupos nueva), **Re-analizar** y **Borrar**; esas recargas llevan
+     `ec_subido`/`ec_reanalizado`/`ec_borrado` en la URL para pintar el notice. Un
+     nombre ya usado abre el modal del JS (`nombre_existente:`).
+   - **Mockups** (acordeon): las fotos de referencia se suben/borran desde la consola
+     (`handle_mockup_subir/borrar`, respuesta JSON con la lista `fotos` refrescada) y
+     quedan en `pdfs/{nombre}/mockups/`; el editor (`mockups.js`) las lee de
+     `PersonalizadorPDF.mockups.fotos` al momento de listar/renderizar, por lo que
+     **la capa "Foto" recien es utilizable**.
    - **Procesar PDF** → si hay textos activos, `admin.js` renderiza PNGs vía RenderCore en
      el navegador (tamaño exacto del hueco) y envía UN POST único a `handle_procesar` con
      imágenes y textos (los mapeos persisten en `config.json` por grupo, `placeholders[id]`;
@@ -177,11 +190,18 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
      rechaza lo nuevo/alterado con causa visible.
 2. **Estilos de Texto** (`admin/estilos-texto.php`): laboratorio frontend TextMuy. Guardar
    un estilo crea un `.txm` + miniatura `.webp` en el servidor (uploads).
-3. **Manejo de estados**:
-   - Sobrescribir un PDF borra sus datos, imágenes y salida previas.
-   - Grupos sin imagen asignada mantienen su transparencia original (el resumen avisa).
-   - **Re-analizar** regenera el dataset si el PDF cambió manteniendo el nombre.
-4. **Ciclo del comprador (spec 004, ficha → pedido)**:
+3. **Test** (`admin/test.php`): botón **Ejecutar smoke test** → `handle_smoke_test`
+   (`admin_post_personalizador_pdf_smoke`) corre `smoke_checks()` contra el sitio real
+   (entorno, permisos, catálogos, motor sobre los PDFs subidos, hooks, TextMuy, Woo y
+   render de la consola) y devuelve la tabla OK/FALLA. Guarda
+   `personalizador_pdf_smoke_ultimo` (option) y avisa si la versión instalada cambió
+   desde la última corrida: sirve como control post-deploy (el webhook de Hostinger solo
+   sube archivos, no ejecuta nada). No usa `exec()` ni modifica datos.
+4. **Manejo de estados**:
+  - Sobrescribir un PDF borra sus datos, imágenes y salida previas.
+  - Grupos sin imagen asignada mantienen su transparencia original (el resumen avisa).
+  - **Re-analizar** regenera el dataset si el PDF cambió manteniendo el nombre.
+5. **Ciclo del comprador (spec 004, ficha → pedido)**:
    - La ficha Woo pinta el panel del comprador (`woocommerce_before_add_to_cart_form`,
      `panel_ficha_html()` + `PMU_FICHA`) si el producto lleva `_pmu_pdf_slugs` (lista;
    spec 005, con respaldo tolerante del singular `_pmu_pdf_slug`) y el PDF está
@@ -336,8 +356,8 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `specs/004-.../_archivo/`; norma vigente = `constitution` §IV (ex-008); auditoria
   de galeria RC34–RC36 archivada (`specs/_archivo/auditoria-galeria-RC34-RC36.md`,
   sin backlog propio; canonico `modules/textmuy/AGENTS.md`).
-- ✅ **Hooks legacy**: `seguridad()` acepta nonce historico `extractor_corel_*` (<= 2.0.0)
-  ademas del vigente `personalizador_pdf_*` (se considera codigo legacy).
+- ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
+  (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
   `admin/ayuda.php`, `modules/LEEME.md` solo resumen y apuntan aqui). El `== Changelog ==`
   de `readme.txt` es historial, no normativa.
@@ -365,12 +385,24 @@ php tests/motor_smoke.php     # Smoke del motor (debe decir "SMOKE OK")
 php tests/parity.php          # Oráculo del detector (debe decir "PARIDAD OK")
 php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
                               # setup | guardar_ajax | guardar_vacio | procesar |
-                              # rechazo | contenido | placeholder | admin |
+                              # rechazo | imagen_adjunto [mal] |
+                              # subir_conflicto | placeholder | admin |
                               # linea | campos | config | tienda | pedido |
                               # migracion | nonce [cap] | validez | validez_admin |
-                              # validez_admin_mal | ficha* | vista_previa* | carrito |
-                              # pool* | sesion | completados | mockups*
+                              # validez_admin_mal | ficha* | vista_previa* |
+                              # carrito | pool* | sesion | conciliacion |
+                              # completados | mockups* | mockup_foto |
+                              # mockup_foto_baja | mockup_foto_ajax |
+                              # desactivar | reanalizar | borrado | smoke
 ```
+Los 3 arneses CLI salen de inmediato si no corren por CLI (`PHP_SAPI !== 'cli'`):
+la carpeta `tests/` viaja con el plugin al hosting y no debe ser ejecutable por HTTP.
+
+### Verificación en el sitio real (WordPress + Woo)
+Consola → pestaña **Test** → botón **Ejecutar smoke test**. Corre con WordPress/Woo
+reales (sin `exec`): entorno PHP, permisos de `uploads/pmu/*`, catálogos, motor sobre
+los PDFs subidos, hooks `admin_post`, TextMuy, Woo y render de la consola. Avisa si la
+versión instalada cambió desde la última corrida (control post-deploy).
 Los tests leen `muestra.pdf` desde `uploads/pmu/pdfs/` (datos del
 usuario, NO versionados). `parity.php` acepta la ruta como argumento opcional.
 `texto_puente.php` crea su entorno aislado en `%TEMP%` (`preparar_entorno()`:
@@ -418,5 +450,4 @@ node tests/controls-init.test.js
 | El texto renderizado sale con otra fuente | Google Fonts sin internet o TTF local ausente | `ensureFontReady` fuerza la carga; verificar conexión |
 | Un preset guardado no aparece en otro navegador | — | Resuelto: presets `.txm` en `uploads/pmu/tm-presets/` |
 | Un preset recién guardado no aparece en el selector de un grupo | Página "PDFs" abierta antes de guardar | Recargar: el listado se genera con glob en cada carga |
-| Navegación a `wp-admin/[object HTMLInputElement]` al Procesar | Colisión de atributos del `<form>` | Usar `form.getAttribute('action')`, NUNCA `form.action`, al interceptar |
 | Error del puente tras tener el admin mucho tiempo abierto | Nonce expirado (~12-24 h) | Recargar la página y reintentar |

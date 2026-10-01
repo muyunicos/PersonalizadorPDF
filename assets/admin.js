@@ -16,11 +16,11 @@ jQuery(function ($) {
     }
 
     /**
-     * POST unico a admin-post.php: antepone ajax=1, manda FormData con
-     * credentials same-origin y resuelve {ok, data} sin recargar.
-     * Los arrays se envian como campos repetidos (igual que un POST nativo).
-     * Sin ajax en el servidor (fallback) navega a la URL devuelta.
-     * Acepta pares [[k,v]] o FormData ya armado (caso Procesar con blobs).
+     * POST unico a admin-post.php: manda FormData con credentials same-origin
+     * y resuelve {ok, data} sin recargar. Los arrays se envian como campos
+     * repetidos (igual que un POST nativo). Si la respuesta no es JSON (p.
+     * ej. un HTML de error del servidor), navega para que el usuario vea la
+     * causa. Acepta pares [[k,v]] o FormData ya armado (caso Procesar con blobs).
      */
     function pmuPost(action, campos, nonce, senal) {
         function agregar(fd, k, v) {
@@ -41,7 +41,6 @@ jQuery(function ($) {
             }
         }
         fd.set('action', action);
-        fd.set('ajax', '1');
         if (nonce) { fd.set('_wpnonce', nonce); }
         var opciones = { method: 'POST', body: fd, credentials: 'same-origin' };
         if (senal) { opciones.signal = senal; }
@@ -67,7 +66,6 @@ jQuery(function ($) {
                 throw err instanceof Error ? err : new Error('Fallo la operacion.');
             });
     }
-
     /** Toast inline unico: ok=verde, error=rojo; se autocierra a los 6 s. */
     function pmuAviso($ctx, mensaje, esError) {
         var $zona = $ctx && $ctx.length ? $ctx : $('.wrap.personalizador-pdf');
@@ -89,7 +87,7 @@ jQuery(function ($) {
             // Pares crudos (preserva repetidos: tienda[pid][activo]=0+1, etc.).
             var pares = [];
             $.each($form.serializeArray(), function (_, kv) {
-                if (kv.name === 'action' || kv.name === '_wpnonce' || kv.name === 'ajax') { return; }
+                if (kv.name === 'action' || kv.name === '_wpnonce') { return; }
                 pares.push([kv.name, kv.value]);
             });
             var $btn = $form.find('button[type=submit], input[type=submit]').first().prop('disabled', true);
@@ -200,24 +198,11 @@ jQuery(function ($) {
         if (!$estado.length) { $estado = $('<span class="ec-subir-status"></span>').appendTo($formSubir); }
         $estado.text('Subiendo y analizando...');
         var fd = new FormData();
-        fd.append('action', 'personalizador_pdf_subir_pdf');
-        fd.append('ajax', '1');
-        fd.append('_wpnonce', NONCES.subir_pdf || $formSubir.find('input[name=_wpnonce]').val());
         fd.append('pdf', file, file.name);
-        fd.append('modo', modoElegido || $formSubir.find('input[name=modo]').val() || '');
-        fetch(POST_URL, { method: 'POST', body: fd, credentials: 'same-origin' })
-            .then(function (resp) { return resp.json(); })
-            .then(function (json) {
-                if (!json || json.success !== true) {
-                    var msg = (json && json.data) || 'Fallo la subida.';
-                    if (String(msg).indexOf('nombre_existente:') === 0) {
-                        abrirModal(String(msg).slice('nombre_existente:'.length));
-                        $estado.text('');
-                        return;
-                    }
-                    throw new Error(String(msg));
-                }
-                var d = json.data || {};
+        fd.append('modo', modoElegido || '');
+        pmuPost('personalizador_pdf_subir_pdf', fd, NONCES.subir_pdf || $formSubir.find('input[name=_wpnonce]').val())
+            .then(function (res) {
+                var d = res.data || {};
                 var url = window.location.pathname + '?page=personalizador-pdf&tab=pdfs'
                     + '&ec_subido=1&ec_pdf=' + encodeURIComponent(d.ec_pdf || nombre)
                     + '&grupos=' + (d.grupos || 0) + '&instancias=' + (d.instancias || 0);
@@ -225,7 +210,13 @@ jQuery(function ($) {
             })
             .catch(function (err) {
                 $estado.text('');
-                pmuAviso($formSubir.closest('.card, .wrap'), (err && err.message) || 'Fallo la subida.', true);
+                var msg = (err && err.message) || 'Fallo la subida.';
+                // Sin decision de modo, el servidor pide resolver el conflicto de nombre.
+                if (String(msg).indexOf('nombre_existente:') === 0) {
+                    abrirModal(String(msg).slice('nombre_existente:'.length));
+                    return;
+                }
+                pmuAviso($formSubir.closest('.card, .wrap'), msg, true);
             })
             .then(function () { $btn.prop('disabled', false); modoElegido = null; });
     });
@@ -246,19 +237,9 @@ jQuery(function ($) {
     $(document).on('click', '.ec-modal-cancelar', function () {
         $('.ec-modal').attr('hidden', true);
     });
-
-    /* Botones del aviso de conflicto (sin JS previo): fijan el modo en el form. */
-    $('.ec-pregunta .ec-modo').on('click', function () {
-        $formSubir.find('input[name=modo]').val($(this).data('modo'));
-        $formSubir.find('input[type=file]').trigger('focus');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
     } // fin guarda $formSubir (pestana PDFs)
 
     /* ============ 2. Imagenes por grupo sin recargar (galeria, drag & drop, quitar) ============ */
-
-    var EXT_IMAGEN = /\.(png|jpe?g|gif|webp)$/i;
-    var MIME_EXT = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp' };
 
     function panelDeId(id) { return $('.ec-panel-grupo[data-id="' + id + '"]'); }
 
@@ -286,15 +267,22 @@ jQuery(function ($) {
         refrescarProcesar();
     }
 
-    /** Sube una imagen para el grupo via pmuPost (sin recarga). */
-    function subirImagen($form, file, $status) {
+    /**
+     * Sube una imagen para el grupo via pmuPost (sin recarga).
+     * Con $adjuntoId > 0 manda el attachment de la galeria (el servidor lo lee
+     * del disco: sin descarga ni re-subida); si no, manda el archivo $file.
+     */
+    function subirImagen($form, file, $status, adjuntoId) {
         var $panel = panelDeId(String($form.attr('data-id') || ''));
         var paresSubida = paresDe($form);
-        paresSubida.push(['imagen', file]);
+        if (adjuntoId > 0) {
+            paresSubida.push(['attachment_id', adjuntoId]);
+        } else {
+            paresSubida.push(['attachment_id', '0']);
+            paresSubida.push(['imagen', file]);
+        }
         $status.removeClass('ec-error ec-ok').text('Subiendo...');
-        var esGaleria = String($form.attr('data-galeria') || '') === '1';
-        var accion = esGaleria ? 'personalizador_pdf_imagen_galeria' : 'personalizador_pdf_subir_imagen';
-        return pmuPost(accion, paresSubida, NONCES[esGaleria ? 'galeria' : 'subir_imagen'] || $form.find('input[name=_wpnonce]').val())
+        return pmuPost('personalizador_pdf_subir_imagen', paresSubida, NONCES.subir_imagen || $form.find('input[name=_wpnonce]').val())
             .then(function (j) {
                 $status.addClass('ec-ok').text('Imagen cargada ✓');
                 marcarImagen($panel);
@@ -309,8 +297,8 @@ jQuery(function ($) {
 
     if (typeof wp !== 'undefined' && wp.media) {
         // El marco del placeholder y el boton del pool oculto abren la misma galeria;
-        // la eleccion se descarga y se sube por AJAX (sin recargar la consola).
-        $(document).on('click', '.ec-galeria, .ec-marco-btn', function (e) {
+        // se manda el id del adjunto (el servidor copia el archivo original).
+        $(document).on('click', '.ec-marco-btn', function (e) {
             e.preventDefault();
             var idGrupo = (String($(this).data('id') || '')).toUpperCase();
             var $form = $('form.ec-form-imagen[data-id="' + idGrupo + '"]').first();
@@ -323,26 +311,18 @@ jQuery(function ($) {
             });
             frame.on('select', function () {
                 var att = frame.state().get('selection').first().toJSON();
-                fetch(att.url, { credentials: 'same-origin' })
-                    .then(function (r) {
-                        if (!r.ok) { throw new Error('La imagen de la galeria no esta disponible.'); }
-                        return r.blob();
-                    })
-                    .then(function (blob) {
-                        var nombre = String(att.filename || 'imagen');
-                        if (!EXT_IMAGEN.test(nombre)) {
-                            nombre = nombre.replace(EXT_IMAGEN, '') + (MIME_EXT[blob.type] || '.png');
-                        }
-                        return subirImagen($form, new File([blob], nombre, { type: blob.type }), $status);
-                    })
-                    .catch(function (err) {
-                        if (window.console && console.warn) { console.warn('[PersonalizadorPDF] galeria', err); }
-                    });
+                var idAdj = parseInt(att.id, 10) || 0;
+                if (!idAdj) {
+                    $status.addClass('ec-error').text('La imagen elegida no tiene id de adjunto.');
+                    return;
+                }
+                subirImagen($form, null, $status, idAdj)
+                    .catch(function () { /* el status ya muestra el error */ });
             });
             frame.open();
         });
     } else {
-        $('.ec-galeria, .ec-marco-btn').attr('title', 'Galeria no disponible');
+        $('.ec-marco-btn').attr('title', 'Galeria no disponible');
     }
 
     // Arrastrar y soltar una imagen sobre el marco (sin recargar).
@@ -372,6 +352,12 @@ jQuery(function ($) {
         subirImagen($form, file, $status).catch(function () { /* el status ya muestra el error */ });
     });
 
+    // "Subir desde PC" (boton visible del panel) dispara el input del pool oculto.
+    $(document).on('click', '.ec-subir-archivo', function () {
+        var id = String($(this).data('id') || '');
+        $('form.ec-form-imagen[data-id="' + id + '"] .ec-input-imagen').trigger('click');
+    });
+
     // Seleccion manual con el input de archivo del pool (tambien por AJAX).
     $(document).on('change', '.ec-input-imagen', function () {
         var $form = $(this).closest('form.ec-form-imagen');
@@ -386,7 +372,7 @@ jQuery(function ($) {
     function paresDe($form) {
         var pares = [];
         $.each($form.serializeArray(), function (_, kv) {
-            if (kv.name === 'action' || kv.name === '_wpnonce' || kv.name === 'ajax') { return; }
+            if (kv.name === 'action' || kv.name === '_wpnonce') { return; }
             pares.push([kv.name, kv.value]);
         });
         return pares;
@@ -413,7 +399,6 @@ jQuery(function ($) {
 
     /* ============ 2c. Buscador de productos Woo (chips + autocompletado) ============ */
 
-    var cfgBusqueda = window.PersonalizadorPDF || {};
     var debounceBusqueda = null;
 
     /** Escape HTML reutilizable para titulos dinamicos. */
@@ -448,8 +433,9 @@ jQuery(function ($) {
             return;
         }
         debounceBusqueda = setTimeout(function () {
-            fetch(cfgBusqueda.ajaxUrl + '?action=personalizador_pdf_buscar_productos&_wpnonce=' +
-                encodeURIComponent(cfgBusqueda.nonceBuscar || '') + '&q=' + encodeURIComponent(q),
+            // Con nonce vencido el servidor responde JSON accionable (no HTML en blanco).
+            fetch(cfgGlobal.ajaxUrl + '?action=personalizador_pdf_buscar_productos&_wpnonce=' +
+                encodeURIComponent(cfgGlobal.nonceBuscar || '') + '&q=' + encodeURIComponent(q),
                 { credentials: 'same-origin' })
                 .then(function (r) { return r.json(); })
                 .then(function (j) {
@@ -468,11 +454,13 @@ jQuery(function ($) {
                     $caja.removeAttr('hidden');
                 })
                 .catch(function (err) {
-                    if (String(err && err.message) === 'woocommerce_inactivo') {
+                    var msg = String((err && err.message) || 'La busqueda fallo.');
+                    if (msg === 'woocommerce_inactivo') {
                         $caja.empty().append('<span class="ec-resultado-vacio">WooCommerce no esta activo: escribi un ID y pulsas Enter.</span>').removeAttr('hidden');
                         return;
                     }
                     if (window.console && console.warn) { console.warn('[PersonalizadorPDF] buscar', err); }
+                    $caja.empty().append($('<span class="ec-resultado-vacio"></span>').text(msg)).removeAttr('hidden');
                 });
         }, 300);
     });
@@ -524,7 +512,7 @@ jQuery(function ($) {
         }
     });
 
-    // --- Alta rapida de campos (modal; reusa handle_campo_guardar con ajax=1) ---
+    // --- Alta rapida de campos (modal; reusa handle_campo_guardar via pmuPost) ---
     $(document).on('click', '.ec-nuevo-campo', function () {
         $('.ec-modal-campo').removeAttr('hidden');
         $('.ec-modal-campo .ec-campo-status').removeClass('ec-error ec-ok').text('');
@@ -550,7 +538,7 @@ jQuery(function ($) {
             etiquetas: ($('.ec-modal-campo .ec-campo-etiquetas').val() || '').trim(),
             visible: $('.ec-modal-campo .ec-campo-visible').prop('checked') ? '1' : ''
         };
-        pmuPost('personalizador_pdf_campo', nuevo, cfgBusqueda.nonceCampo || '')
+        pmuPost('personalizador_pdf_campo', nuevo, cfgGlobal.nonceCampo || '')
             .then(function (res) { campoCreado(res.data, titulo, tipo, $status); })
             .catch(function (e) {
                 var msg = (e instanceof Error && e.message) ? e.message : 'No se pudo crear el campo (red).';
@@ -630,6 +618,97 @@ jQuery(function ($) {
             .catch(function (err) {
                 pmuAviso($form.closest('.card, .wrap'), (err && err.message) || 'Fallo la regeneracion.', true);
             });
+    });
+
+    /* ============ 3b. Fotos de mockup (subir/borrar sin recarga) ============ */
+
+    /** Reconstruye la lista del acordeon y avisa al editor (lee datos.fotos). */
+    function refrescarFotosMockup(fotos) {
+        fotos = fotos || {};
+        var $ul = $('.ec-mockup-fotos').empty();
+        Object.keys(fotos).forEach(function (nombre) {
+            $('<li>').attr('data-foto', nombre)
+                .append($('<img alt="">').attr('src', fotos[nombre]))
+                .append($('<span class="ec-mockup-foto-nombre"></span>').text(nombre))
+                .append($('<button type="button" class="button button-small button-link-delete ec-mockup-borrar">Borrar</button>'))
+                .appendTo($ul);
+        });
+        $('.ec-mockup-fotos-vacio').toggle(!Object.keys(fotos).length);
+        if (cfgGlobal.mockups) { cfgGlobal.mockups.fotos = fotos; }
+    }
+
+    $(document).on('click', '.ec-mockup-subir', function () {
+        var $caja = $(this).closest('.ec-mockup-fotos-admin');
+        var $input = $caja.find('.ec-mockup-foto-input');
+        var $status = $caja.find('.ec-mockup-status').removeClass('ec-ok ec-error');
+        var file = $input[0] && $input[0].files ? $input[0].files[0] : null;
+        if (!file) { $status.addClass('ec-error').text('Elegi una imagen desde tu PC.'); return; }
+        $status.text('Subiendo...');
+        pmuPost('personalizador_pdf_mockup_subir', [
+            ['archivo', String($caja.data('pdf') || '')],
+            ['foto', file]
+        ], NONCES.mockup_subir || '')
+            .then(function (res) {
+                $status.addClass('ec-ok').text('Foto subida ✓');
+                $input.val('');
+                refrescarFotosMockup(res.data && res.data.fotos);
+            })
+            .catch(function (err) {
+                $status.addClass('ec-error').text((err && err.message) || 'No se pudo subir la foto.');
+            });
+    });
+
+    $(document).on('click', '.ec-mockup-borrar', function () {
+        var $caja = $(this).closest('.ec-mockup-fotos-admin');
+        var nombre = String($(this).closest('li').data('foto') || '');
+        if (!nombre || !window.confirm('¿Borrar la foto "' + nombre + '"?')) { return; }
+        var $status = $caja.find('.ec-mockup-status').removeClass('ec-ok ec-error').text('Borrando...');
+        pmuPost('personalizador_pdf_mockup_borrar', [
+            ['archivo', String($caja.data('pdf') || '')],
+            ['foto', nombre]
+        ], NONCES.mockup_borrar || '')
+            .then(function (res) {
+                $status.addClass('ec-ok').text('Foto borrada.');
+                refrescarFotosMockup(res.data && res.data.fotos);
+            })
+            .catch(function (err) {
+                $status.addClass('ec-error').text((err && err.message) || 'No se pudo borrar la foto.');
+            });
+    });
+
+    /* ============ 3c. Smoke test de la pestana Test ============ */
+
+    $(document).on('click', '.ec-smoke-correr', function () {
+        var $btn = $(this).prop('disabled', true);
+        var $status = $('.ec-smoke-status').removeClass('ec-ok ec-error').text('Ejecutando...');
+        var $caja = $('.ec-smoke-resultado');
+        var $filas = $caja.find('.ec-smoke-filas').empty();
+        pmuPost('personalizador_pdf_smoke', {}, $(this).data('nonce') || NONCES.smoke || '')
+            .then(function (res) {
+                var d = res.data || {};
+                var checks = d.checks || [];
+                var fallas = d.fallas || [];
+                checks.forEach(function (c) {
+                    $('<tr>')
+                        .append($('<td></td>').append(c.ok
+                            ? $('<span class="ec-smoke-ok">OK</span>')
+                            : $('<span class="ec-smoke-falla">FALLA</span>')))
+                        .append($('<td></td>').text(c.nombre))
+                        .append($('<td><code></code></td>').find('code').text(c.detalle || '').end())
+                        .appendTo($filas);
+                });
+                $caja.removeAttr('hidden');
+                if (fallas.length) {
+                    $status.addClass('ec-error')
+                        .text(fallas.length + ' de ' + checks.length + ' checks fallaron.');
+                } else {
+                    $status.addClass('ec-ok').text('Todo OK: ' + checks.length + ' checks.');
+                }
+            })
+            .catch(function (err) {
+                $status.addClass('ec-error').text((err && err.message) || 'No se pudo ejecutar el smoke test.');
+            })
+            .then(function () { $btn.prop('disabled', false); });
     });
 
     /* ============ 4. Personalizacion por grupo (estado, guardado y puente TextMuy) ============ */
@@ -819,12 +898,12 @@ jQuery(function ($) {
         // Pares crudos de serializeArray: preservan repetidos (hidden 0 + checkbox 1).
         var pares = [];
         $.each($form.serializeArray(), function (_, kv) {
-            if (kv.name === 'action' || kv.name === '_wpnonce' || kv.name === 'ajax') { return; }
+            if (kv.name === 'action' || kv.name === '_wpnonce') { return; }
             pares.push([kv.name, kv.value]);
         });
         var $status = $form.find('.ec-guardar-status');
         $status.removeClass('ec-ok ec-error').text('Guardando...');
-        return pmuPost('personalizador_pdf_config', pares, cfgBusqueda.nonceConfig || '')
+        return pmuPost('personalizador_pdf_config', pares, cfgGlobal.nonceConfig || '')
             .then(function (j) {
                 $status.addClass('ec-ok').text('Guardado ✓');
                 actualizarBadge();

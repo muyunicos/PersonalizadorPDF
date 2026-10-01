@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.2.0
+Stable tag: 4.2.2
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -14,12 +14,13 @@ Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde
 
 Personalizador PDF (antes "Extractor Corel") automatiza el reemplazo de placeholders en PDFs exportados desde CorelDRAW. Cuando Corel exporta un documento con marcos vacios donde iran las imagenes o nombres (credenciales, certificados, etc.), esos huecos llegan al PDF como rectangulos vectoriales con transparencia total. El plugin los detecta, los agrupa por color, deja cargar una imagen real por grupo y la inserta en cada placeholder del PDF, entregando un PDF editado optimizado listo para descargar.
 
-La administracion funciona como consola de trabajo con 4 pestanas:
+La administracion funciona como consola de trabajo con 5 pestanas:
 
 1. **PDFs y procesamiento**: se detectan los placeholders, se agrupan por color y se generan `analisis.json` + `config.json` del PDF; se carga una imagen por grupo (computadora o galeria de medios) y se procesa el PDF final.
 2. **Campos**: catalogo reutilizable de campos (`campos.json`) para la tienda (spec 004 / plan 008).
 3. **Estilos de Texto**: editor integrado del sistema TextMuy (100% en el navegador, estilo TextStudio) para disenar estilos de texto y guardarlos como presets `.txm` en el servidor (disponibles en todos los navegadores y en el selector de estilo de cada grupo del PDF). Las imagenes para rellenos y fondos se suben a `uploads/pmu/img/` y se reutilizan entre presets.
-4. **Ayuda**: documentacion interna (resumen; canonico en `AGENTS.md` §5).
+4. **Test**: smoke test en vivo del sitio (entorno, permisos, catalogos, motor sobre los PDFs subidos, hooks, TextMuy, WooCommerce y render de la consola) con tabla OK/FALLA; avisa si la version instalada cambio desde la ultima corrida.
+5. **Ayuda**: documentacion interna (resumen; canonico en `AGENTS.md` §5).
 
 A diferencia de la version original (Flask + Python), esta es **100% PHP puro** en el servidor y se ejecuta directamente en WordPress, por lo que funciona en alojamientos compartidos (Hostinger, etc.) sin Python, Node ni procesos persistentes. El modulo TextMuy corre en el navegador del administrador (Canvas + WebGL); no agrega carga al servidor.
 
@@ -43,7 +44,7 @@ Instalacion desde cero (recomendada):
 Despues de activar:
 
 3. Subi `uploads/pmu/` COMPLETA a `wp-content/uploads/` (incluye `{fonts,img,tm-presets}` con sus catalogos: son los datos del administrador; ver `AGENTS.md` §5).
-4. Accede al menu "Personalizador PDF" en el panel de administracion (pestanas "PDFs y procesamiento", "Campos", "Estilos de Texto" y "Ayuda").
+4. Accede al menu "Personalizador PDF" en el panel de administracion (pestanas "PDFs y procesamiento", "Campos", "Estilos de Texto", "Test" y "Ayuda").
 
 Nota: los PDFs de muestra (`muestra.pdf`, `muestra2.pdf`), la carpeta `tests/` y `AGENTS.md` son archivos de desarrollo del repositorio; no se incluyen en el ZIP de instalacion.
 
@@ -62,6 +63,25 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.2.2 =
+* **Pestana "Test" con smoke test en vivo**: quinta pestana de la consola con un boton que verifica el sitio REAL (WordPress y WooCommerce activos) sin `exec()` ni procesos externos: entorno PHP (version, zlib, GD), permisos de escritura de `uploads/pmu/{pdfs,img,tm-presets,tmp,orders}`, catalogos legibles, motor (deteccion + `validarDataset` sobre cada PDF subido), hooks `admin_post` registrados, TextMuy integrado, Woo (`wc_get_products` + asociaciones PDF-producto validas) y render de la consola sin fatal. Devuelve tabla OK/FALLA con el detalle de cada check.
+* **Aviso de version nueva**: la pestana guarda `personalizador_pdf_smoke_ultimo` (version + fecha + fallas) y muestra un aviso destacado cuando la version instalada cambio desde la ultima corrida; asi, despues de cada deploy se ve si el smoke quedo pendiente.
+* **Seguridad de los arneses CLI**: `tests/{motor_smoke,parity,texto_puente}.php` salen de inmediato si no corren por CLI (`PHP_SAPI !== 'cli'`), porque la carpeta `tests/` viaja con el plugin al hosting y era alcanzable por HTTP.
+* Interno: `handle_smoke_test` + `smoke_checks()` (endpoint `personalizador_pdf_smoke`, nonce + `manage_options`), fase de test `smoke` y actualizacion de AGENTS/ayuda.
+
+= 4.2.1 =
+* **Consola sin recargas (pmu-core)**: nuevo nucleo `pmuPost()` en `assets/admin.js` (POST unico a admin-post). Todo el admin lo usa: guardar configuracion, campos (alta/edicion/baja), subir/quitar imagen, re-analizar, borrar, regenerar pedido, procesar y subir PDF. Los errores se pintan inline (aviso rojo) en vez de pagina en blanco, y las acciones que cambian el contenido (Subir/Re-analizar/Borrar) recargan solo en exito.
+* **Unica via JSON**: `responder()` ya no redirige; los handlers contestan JSON y la consola pinta los resultados. Si JavaScript esta desactivado, la consola muestra un `<noscript>` explicandolo (antes existia un segundo camino con notices en la URL que no operaba de verdad). Las claves `ec_*` del JSON se reemplazaron por datos reales (`grupos`, `instancias`, `descarga`, `fotos`, `ec_perdidos`).
+* **Seguridad sin paginas blancas**: `seguridad()` siempre responde JSON accionable (nonce vencido o capacidad faltante).
+* **Galeria sin doble transferencia**: elegir una imagen de la Biblioteca de Medios manda el `attachment_id` y el servidor la copia desde disco (`handle_subir_imagen`); desaparecen la descarga del blob, la re-subida y el alias de accion `personalizador_pdf_imagen_galeria`.
+* **Subir desde PC recuperado**: boton visible por grupo que dispara el input del pool oculto (ademas del arrastrar-y-soltar y la galeria); fuera el boton submit oculto que podia provocar un envio sin JS.
+* **Procesar sin salir de la consola**: `handle_procesar` responde JSON con resumen (grupos/instancias) y URL de descarga firmada; el resultado se baja por iframe oculto. El envio unico con los PNG de RenderCore conserva su timeout de 90 s.
+* **Fotos de mockups utilizables**: el acordeon "Mockups" ahora tiene subida y borrado de fotos (`handle_mockup_subir/borrar`, JSON con la lista `fotos` refrescada) y el editor las lee al momento del clic, de modo que la capa "Foto" por fin puede elegirse.
+* **Conflicto de nombre**: si el PDF ya existe, el JS abre su modal (`nombre_existente:`) y decide renombrar o sobrescribir (un solo camino, sin avisos HTML paralelos).
+* **Endpoint `personalizador_pdf_guardar_texto` eliminado**: su logica (texto/estilo vigente -> `config.json`) vive en `handle_procesar`, que es la via que usa la consola; las fases de test ahora ejercitan ese camino real.
+* **Limpieza**: fuera los hooks/nonce legacy `extractor_corel_*`, la rama muerta del endpoint de galeria, el `ec_tab`, `redirigir()`/`conflicto_nombre()`, las claves `ec_*` que nadie leia, el alias duplicado de config en el JS y los campos sin consumidor; los estados de subir/procesar/campo ahora tienen color en el CSS.
+* **Tests**: guard `PHP_SAPI !== 'cli'` en los 3 arneses (hoy el plugin viaja con `tests/` al hosting); fases nuevas `imagen_adjunto [mal]`, `subir_conflicto [ajax]` y `mockup_foto_ajax`; la fase `contenido` se fusiono en `guardar_ajax` y las verificaciones de redirect pasaron a JSON. AGENTS.md actualizado (hooks legacy retirados, fases del arnes y flujo de consola).
 
 = 4.2.0 =
 * **Ciclo completo del comprador (spec 004)**: panel del comprador en la ficha Woo (`woocommerce_before_add_to_cart_form` + shortcode `[pmu_personalizar]`) con los campos del catalogo; "Vista previa" genera mockups 300x300 en paralelo (RenderCore) y sube los PNG al pool de la sesion (`tmp/sesion-{sid}/{item_key}/img/`, cookie `pmu_sid`); el carrito exige vistas listas (salvo `preview_omisible`), congela las vistas aprobadas (`mockup-{id}.webp`) y promueve el item con cantidad fija 1 y `unique_key`; re-edicion desde el carrito reusa el item y regenera solo lo cambiado (hash `sha1(valor|preset|settings|WxH)`).

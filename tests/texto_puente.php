@@ -1,16 +1,27 @@
 <?php
+// Arnés CLI: nunca ejecutable por HTTP (tests/ viaja con el plugin al hosting).
+if (PHP_SAPI !== 'cli') {
+    exit;
+}
 /**
  * Test CLI del puente TextMuy (herramienta de desarrollo).
  * Ejercita, con un entorno WordPress minimo (stubs), las partes del plugin
- * que conectan con el modulo TextMuy:
- *   - handle_guardar_texto: mapeo en config.json placeholders[id] (modo AJAX y fallback)
- *   - handle_procesar con el puente: texto_{id}/estilo_{id} + imagen_{id}
- *     sobre muestra.pdf, verificando que los PNG llegan al motor como imagenes.
+ * que conectan con el modulo TextMuy y la consola admin:
+ *   - handle_procesar: texto_{id}/estilo_{id} + imagen_{id} -> mapeo en
+ *     config.json placeholders[id] + PDF de salida.
+ *   - handle_subir_imagen con attachment_id (galeria): copia del adjunto
+ *     desde el disco, sin subida del navegador.
+ *   - Conflicto de nombre al subir un PDF (JSON nombre_existente:).
  *
- * Los handlers terminan en exit (wp_redirect/wp_send_json), por lo que cada
+ * Los handlers terminan en exit (wp_send_json), por lo que cada
  * fase se corre como proceso independiente y verifica en shutdown:
- *   php tests/texto_puente.php setup | guardar_ajax | guardar_vacio | procesar | rechazo
- *   php tests/texto_puente.php nonce [cap]   (seguridad del motor: nonce y capacidad)
+ *   `setup | guardar_ajax | guardar_vacio | procesar | rechazo |
+ *    subir_conflicto | imagen_adjunto [mal] | placeholder | admin |
+ *    linea | campos | config | tienda | pedido | migracion | nonce [cap] |
+ *    validez | validez_admin | validez_admin_mal | ficha* | vista_previa* |
+ *    carrito | pool* | sesion | conciliacion | completados | mockups* |
+ *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
+ *    reanalizar | borrado`
  */
 
 $fase = isset($argv[1]) ? $argv[1] : 'setup';
@@ -36,7 +47,9 @@ function wp_upload_dir() { global $testBase; return ['basedir' => $testBase . '/
 function plugin_dir_path($f) { return dirname($f) . DIRECTORY_SEPARATOR; }
 function plugin_dir_url($f) { return 'http://test/wp-content/plugins/personalizador-pdf/'; }
 function add_shortcode(...$a) { return true; }
-function add_action(...$a) { return true; }
+// add_action/has_action con registro real: el smoke verifica el contrato de hooks.
+function add_action(...$a) { $GLOBALS['test_hooks'][] = (string)($a[0] ?? ''); return true; }
+function has_action($h) { return in_array((string)$h, (array)($GLOBALS['test_hooks'] ?? []), true); }
 function add_filter(...$a) { return true; }
 function add_menu_page(...$a) { return true; }
 function wp_enqueue_style(...$a) { return true; }
@@ -74,7 +87,6 @@ function wp_kses($t, $allowed = []) { $tags = ''; foreach ((array)$allowed as $t
 function wp_unslash($v) { return $v; }
 function wp_die($m = '') { throw new Exception('wp_die: ' . $m); }
 function admin_url($p = '') { return 'http://test/wp-admin/' . $p; }
-function wp_redirect($u) { $GLOBALS['test_redirect'] = $u; }
 function wp_send_json_success($d) { $GLOBALS['test_json'] = ['success' => true, 'data' => $d]; exit; }
 function wp_send_json_error($d) { $GLOBALS['test_json'] = ['success' => false, 'data' => $d]; exit; }
 function set_transient($k, $v, $e = 0) { $GLOBALS['test_transients'][$k] = $v; return true; }
@@ -115,6 +127,8 @@ function get_post_meta($id, $key = '', $single = false) {
 function update_post_meta($id, $key = '', $value = '') { $GLOBALS['test_postmeta'][(int)$id][$key] = $value; return true; }
 function delete_post_meta($id, $key = '') { unset($GLOBALS['test_postmeta'][(int)$id][$key]); return true; }
 function get_permalink($id = 0) { return 'http://test/?p=' . (int)$id; }
+// Adjunto de la biblioteca (galeria del admin): el arnes apunta a un PNG real.
+function get_attached_file($id = 0) { return isset($GLOBALS['test_adjunto_png']) ? (string)$GLOBALS['test_adjunto_png'] : ''; }
 function get_the_ID() { return 4242; }
 class TestWC_Product { private $id = 0; public function __construct($id = 0) { $this->id = (int)$id; } public function get_id() { return $this->id; } public function get_name() { return 'Producto ' . $this->id; } }
 class TestPMUOrder {
@@ -129,6 +143,11 @@ class TestPMUOrder {
 function wc_get_order($id = 0) { return $GLOBALS['test_order'] ?? null; }
 function get_current_user_id() { return (int)($GLOBALS['test_user_id'] ?? 1); }
 function wc_get_product($p = null) { return $p instanceof TestWC_Product ? $p : new TestWC_Product((int)$p); }
+// Smoke test (pestana Test): el arnes simula un Woo con un producto publicado.
+function wc_get_products($args = []) { return [new TestWC_Product(4242)]; }
+function update_option($k, $v = '', $auto = null) { $GLOBALS['test_options'][(string)$k] = $v; return true; }
+function get_option($k, $def = false) { return isset($GLOBALS['test_options'][(string)$k]) ? $GLOBALS['test_options'][(string)$k] : $def; }
+function current_time($tipo = 'mysql') { return gmdate('Y-m-d H:i:s'); }
 
 require $plugin;
 $p = Personalizador_PDF_Plugin::instance();
@@ -149,7 +168,6 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
     $base = $base_admin;
     global $fallos;
     $uploads = $testBase . '/uploads/pmu';
-    $redirect = isset($GLOBALS['test_redirect']) ? $GLOBALS['test_redirect'] : '';
     $json = isset($GLOBALS['test_json']) ? $GLOBALS['test_json'] : null;
 
     $admin_html = '';
@@ -181,13 +199,14 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
     switch ($switch_fase) {
         case 'desactivar':
             $cfg_d = $p->motor_para_tests()->leer_config('muestra');
-            check('redirect de configuracion', strpos($redirect, 'ec_config=1') !== false);
+            check('JSON de configuracion', is_array($json) && $json['success'] === true);
             check('PDF desactivado', $cfg_d['activo'] === false);
             check('analisis intacto al desactivar', file_get_contents($uploads . '/pdfs/muestra/analisis.json') === $GLOBALS['test_analisis_previo']);
             check('mapeos conservados al desactivar', $cfg_d['placeholders'] === $GLOBALS['test_config_previa']['placeholders']);
             break;
         case 'reanalizar':
-            check('redirect de reanalisis', strpos($redirect, 'ec_reanalizado=1') !== false);
+            check('JSON de reanalisis', is_array($json) && $json['success'] === true
+                && ($json['data']['ec_pdf'] ?? '') === 'muestra.pdf');
             $analisis_r = json_decode(file_get_contents($uploads . '/pdfs/muestra/analisis.json'), true);
             check('grupos hex detectados', array_column($analisis_r['grupos'], 'id') === ['0000FF', 'FF0000']);
             check('config preservada al reanalizar', $p->motor_para_tests()->leer_config('muestra') === $GLOBALS['test_config_previa']);
@@ -210,7 +229,6 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             break;
         case 'mockup_foto':
             // T007: la foto queda en pdfs/{nombre}/mockups/ con nombre saneado.
-            check('redirect de subida', strpos($redirect, 'ec_mockup_subida=1') !== false);
             $dirF = $uploads . '/pdfs/muestra/mockups';
             check('carpeta mockups creada', is_dir($dirF));
             check('foto guardada con nombre saneado', is_file($dirF . '/fiesta.png'));
@@ -218,9 +236,44 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             break;
         case 'mockup_foto_baja':
             // T007: borrado quirurgico dentro de mockups/, sin tocar vecinos.
-            check('redirect de baja', strpos($redirect, 'ec_mockup_baja=1') !== false);
+            $fotos_baja = is_array($json) ? (array)($json['data']['fotos'] ?? []) : [];
+            check('JSON de baja con lista refrescada', is_array($json) && $json['success'] === true
+                && !isset($fotos_baja['fiesta.png']) && isset($fotos_baja['otra.png']));
             check('foto eliminada', !is_file($uploads . '/pdfs/muestra/mockups/fiesta.png'));
             check('vecina intacta', is_file($uploads . '/pdfs/muestra/mockups/otra.png'));
+            break;
+        case 'mockup_foto_ajax':
+            // Etapa 5 (B): JSON con la lista refrescada (admin.js la repinta).
+            check('respuesta JSON success', is_array($json) && $json['success'] === true);
+            check('fotos incluye la recien subida', is_array($json)
+                && isset($json['data']['fotos']['fiesta.png'])
+                && strpos((string)$json['data']['fotos']['fiesta.png'], 'fiesta.png') !== false);
+            check('archivo guardado en pdfs/{pdf}/mockups/', is_file($uploads . '/pdfs/muestra/mockups/fiesta.png'));
+            break;
+        case 'smoke':
+            // Pestana Test: el smoke corre con WP real y devuelve checks + fallas.
+            $checks_s = is_array($json) ? (array)($json['data']['checks'] ?? []) : [];
+            $fallas_s = is_array($json) ? (array)($json['data']['fallas'] ?? []) : [];
+            $nombres_s = array_column($checks_s, 'nombre');
+            check('JSON del smoke con checks', is_array($json) && $json['success'] === true && count($checks_s) >= 12);
+            check('check de entorno (PHP/zlib)', in_array('PHP >= 7.4', $nombres_s, true) && in_array('Extension zlib', $nombres_s, true));
+            check('check de escritura en uploads/pmu', in_array('Escritura en uploads/pmu/pdfs', $nombres_s, true));
+            check('check de catalogos', in_array('Catalogo tm-presets/presets.json', $nombres_s, true));
+            check('check del motor con PDF real', in_array('Motor: deteccion y dataset vigentes', $nombres_s, true));
+            check('check de hooks admin-post', in_array('Hooks admin-post registrados', $nombres_s, true));
+            check('check de TextMuy integrado', in_array('TextMuy: render-core.html', $nombres_s, true));
+            check('check de Woo', in_array('Woo: wc_get_products responde', $nombres_s, true));
+            check('check de render de la consola', in_array('Consola: render sin fatal', $nombres_s, true));
+            check('sin fallas en el entorno de test', $fallas_s === []);
+            check('marca de ultima corrida guardada', is_array($GLOBALS['test_options']['personalizador_pdf_smoke_ultimo'] ?? null)
+                && ($GLOBALS['test_options']['personalizador_pdf_smoke_ultimo']['total'] ?? 0) === count($checks_s));
+            check('smoke_pendiente false tras correr', $p->smoke_pendiente() === false);
+            break;
+        case 'subir_conflicto':
+            // D2: unica via JSON (el JS abre su modal con nombre_existente:).
+            check('JSON del conflicto', is_array($json) && $json['success'] === false
+                && strpos((string)$json['data'], 'nombre_existente:muestra.pdf') === 0);
+            check('el PDF original sigue intacto', is_file($uploads . '/pdfs/muestra/muestra.pdf'));
             break;
         case 'sesion':
             // T003/T017: ciclo de vida completo del item.
@@ -282,10 +335,11 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('PNG del puente generado', !empty($GLOBALS['test_png']) && is_file($GLOBALS['test_png']));
             break;
         case 'guardar_ajax':
-            // Plan 008: mapeo en config.json (el analisis no se toca).
+            // D1: mapeo texto/estilo persistido por handle_procesar (config, no analisis).
             $cfg_ga = $p->motor_para_tests()->leer_config('muestra');
             $mapa_ga = isset($cfg_ga['placeholders']['0000FF']) ? $cfg_ga['placeholders']['0000FF'] : null;
-            check('respuesta JSON success', is_array($json) && $json['success'] === true);
+            check('respuesta JSON success', is_array($json) && $json['success'] === true
+                && !empty($json['data']['descarga']));
             check('config tipo=texto', $mapa_ga !== null && $mapa_ga['tipo'] === 'texto');
             check('config value saneado', $mapa_ga !== null && $mapa_ga['value'] === 'Juan Perez');
             check('config preset', $mapa_ga !== null && $mapa_ga['preset'] === 'neon-glow');
@@ -301,7 +355,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('sin textos.json (SC-004)', !is_file($uploads . '/tmp/muestras/muestra/textos.json'));
             break;
         case 'guardar_vacio':
-            check('activo sin texto rechazado (JSON error)', is_array($json) && $json['success'] === false);
+            check('texto vacio: JSON success (limpia, no rechaza)', is_array($json) && $json['success'] === true);
             check('sin mapeo 0000FF en config', (function () use ($p) {
                 $c = $p->motor_para_tests()->leer_config('muestra');
                 return !isset($c['placeholders']['0000FF']);
@@ -309,6 +363,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('sin textos.json (SC-004)', !is_file($uploads . '/tmp/muestras/muestra/textos.json'));
             break;
         case 'procesar':
+            // Etapa 3: JSON con resumen + descarga firmada (unica via).
             $cfg_p = $p->motor_para_tests()->leer_config('muestra');
             $estilo_p = isset($cfg_p['placeholders']['0000FF']['preset']) ? $cfg_p['placeholders']['0000FF']['preset'] : null;
             check('PNG del puente guardado como imagen del grupo 0000FF', is_file($uploads . '/tmp/muestras/muestra/0000FF.png'));
@@ -318,7 +373,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             $resumen = isset($GLOBALS['test_transients']['personalizador_pdf_proceso']) ? $GLOBALS['test_transients']['personalizador_pdf_proceso'] : [];
             check('resumen: grupo 0000FF aplicado', in_array('0000FF', (array)($resumen['grupos_aplicados'] ?? []), true));
             check('resumen: grupo FF0000 sin imagen', in_array('FF0000', (array)($resumen['grupos_sin_imagen'] ?? []), true));
-            // Etapa 3: con ajax=1 responde JSON (resumen + descarga); sin ajax, redirect.
+            // Etapa 3 (D2): unica via JSON con resumen + descarga firmada.
             check('JSON con resumen de grupos/instancias', is_array($json) && $json['success'] === true
                 && ($json['data']['grupos'] ?? 0) >= 1 && ($json['data']['instancias'] ?? 0) >= 1);
             check('JSON con URL de descarga firmada', is_array($json)
@@ -345,8 +400,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         case 'borrado':
             // T030: borra el producto y verifica que no queden residuos de
             // pdfs/{pdf}/ ni tmp/muestras/{pdf}/, sin tocar tmp/cart/ (FR-019).
-            // handle_borrar() ya corrio (exit en redirigir): verificar el disco.
-            check('redirect a ec_borrado', strpos($redirect, 'ec_borrado=1') !== false);
+            // handle_borrar() ya corrio (exit en JSON): verificar el disco.
+            check('JSON de borrado', is_array($json) && $json['success'] === true);
             check('pdfs/{pdf}/ eliminado', !is_dir($testBase . '/uploads/pmu/pdfs/muestra'));
             check('tmp/muestras/{pdf}/ eliminado', !is_dir($testBase . '/uploads/pmu/tmp/muestras/muestra'));
             foreach ($GLOBALS['test_borrado_testigos'] as $ruta => $contenido) {
@@ -357,27 +412,23 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         case 'rechazo':
             check('id inexistente (FFFFFF) no se guarda', !is_file($uploads . '/tmp/muestras/muestra/FFFFFF.png'));
             check('archivo no-PNG no se guarda', !is_file($uploads . '/tmp/muestras/muestra/FF0000.png'));
-            check('redirect con error de PNG invalido', strpos($redirect, 'ec_error=') !== false);
+            check('error JSON de PNG invalido', is_array($json) && $json['success'] === false
+                && strpos((string)$json['data'], 'PNG valido') !== false);
             break;
-        case 'contenido':
-            // Plan 008: la personalizacion del grupo vive en config.json
-            // placeholders[id] (el analisis nunca se edita desde la UI).
-            $cfg_c = $p->motor_para_tests()->leer_config('muestra');
-            $mapa_c = isset($cfg_c['placeholders']['0000FF']) ? $cfg_c['placeholders']['0000FF'] : null;
-            check('respuesta JSON success', is_array($json) && $json['success'] === true);
-            check('tipo=texto', $mapa_c !== null && $mapa_c['tipo'] === 'texto');
-            check('value=Hola Mundo', $mapa_c !== null && $mapa_c['value'] === 'Hola Mundo');
-            check('preset=neon-glow', $mapa_c !== null && $mapa_c['preset'] === 'neon-glow');
-            check('analisis intacto (SC-001)', (function () use ($uploads) {
-                $a = json_decode((string)@file_get_contents($uploads . '/pdfs/muestra/analisis.json'), true);
-                foreach ((array)($a['grupos'] ?? []) as $g) {
-                    if (isset($g['id']) && $g['id'] === '0000FF') {
-                        return !isset($g['value']) && !isset($g['preset']);
-                    }
-                }
-                return false;
-            })());
-            check('sin textos.json (SC-004)', !is_file($uploads . '/tmp/muestras/muestra/textos.json'));
+        case 'imagen_adjunto':
+            // Etapa 4: el adjunto de la galeria se copia del disco (sin subida del navegador).
+            $sub_adj = isset($GLOBALS['test_adjunto_sub']) ? (string)$GLOBALS['test_adjunto_sub'] : '';
+            $ruta_adj = $uploads . '/tmp/muestras/muestra/FF0000.png';
+            if ($sub_adj === 'mal') {
+                check('adjunto ausente: error JSON', is_array($json) && $json['success'] === false
+                    && strpos((string)$json['data'], 'galeria') !== false);
+                check('adjunto ausente: sin archivo en muestras', !is_file($ruta_adj));
+            } else {
+                check('respuesta JSON success', is_array($json) && $json['success'] === true);
+                check('adjunto copiado como imagen del grupo', is_file($ruta_adj));
+                check('copia con firma PNG', substr((string)@file_get_contents($ruta_adj, false, null, 0, 4), 0, 4) === "\x89PNG");
+                check('sin $_FILES en la operacion', empty($_FILES));
+            }
             break;
         case 'ficha':
             // T012: panel del comprador (oculto si el PDF no es ofrecible).
@@ -433,7 +484,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('estado + etiquetas cliente en el listado', ($comp[0]['estado'] ?? '') === 'ok' && ($comp[0]['valores'][0]['titulo'] ?? '') === 'Nombre' && ($comp[0]['valores'][0]['cliente'] ?? '') === 'Ana');
             check('PDF final con firma %PDF', ($GLOBALS['test_completados_pdf'] ?? '') === '%PDF');
             check('generacion idempotente', ($GLOBALS['test_completados_idem'] ?? false) === true);
-            check('redirect de regeneracion', strpos($redirect, 'ec_regenerado=1') !== false);
+            check('JSON de regeneracion', is_array($json) && $json['success'] === true);
             $rutasK = (array)($GLOBALS['test_completados_rutas'] ?? []);
             check('dos PDFs aceptados regenerados', count($rutasK) === 2
                 && isset($rutasK['muestra'], $rutasK['otro'])
@@ -722,9 +773,9 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('defaults sin config', $GLOBALS['test_config_defaults'] === true);
             break;
         case 'tienda':
-            // 004/Fase B: handler personalizador_pdf_config con POST clasico.
+            // 004/Fase B: handler personalizador_pdf_config (via pmuPost).
             $cfg_t = $p->motor_para_tests()->leer_config('muestra');
-            check('redirect a ec_config', strpos($redirect, 'ec_config=1') !== false);
+            check('JSON de configuracion', is_array($json) && $json['success'] === true);
             check('activo=true', $cfg_t['activo'] === true);
             // T016: el arnes trae stub de wc_get_product, asi que el filtro de
             // productos Woo ya filtra de verdad (antes los descartaba sin Woo).
@@ -865,7 +916,6 @@ switch ($fase) {
             'action' => 'personalizador_pdf_vista_previa',
             'pdf' => 'muestra.pdf',
             'valores' => json_encode([$cid_f => ['valor' => '<b>Ana</b>', 'cliente' => 'Ana'], 999 => ['valor' => 'intruso', 'cliente' => 'intruso']]),
-            'ajax' => '1',
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
@@ -927,7 +977,7 @@ switch ($fase) {
         ];
         $_REQUEST = $_POST;
         $GLOBALS['test_completados_dir'] = $dirK;
-        $p->handle_item_regenerar(); // exit en redirigir(ec_regenerado)
+        $p->handle_item_regenerar(); // exit en responder(JSON)
         break;
 
     case 'ficha_edicion':
@@ -965,7 +1015,6 @@ switch ($fase) {
             'pdf' => 'muestra.pdf',
             'item_key' => $draft_e,
             'valores' => json_encode([$cid_e => ['valor' => 'Beto', 'cliente' => 'Beto']]),
-            'ajax' => '1',
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
@@ -1084,7 +1133,6 @@ switch ($fase) {
             'h' => '200',
             'limpiar' => $fase === 'pool_reem' ? '1' : '',
             'png_data' => 'data:image/png;base64,' . base64_encode((string)file_get_contents($pngQ)),
-            'ajax' => '1',
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
@@ -1242,7 +1290,6 @@ switch ($fase) {
         $motor_va->guardar_config('muestra', ['activo' => true, 'productos' => [4242], 'campos_ids' => [$cid_va]]);
         $_POST = [
             'action' => 'personalizador_pdf_config',
-            'ajax' => '1',
             'archivo' => 'muestra.pdf',
             'activo' => '1',
             'productos' => ['4242', '4243'],
@@ -1354,7 +1401,6 @@ switch ($fase) {
         }
         $_POST = [
             'action' => 'personalizador_pdf_vista_previa',
-            'ajax' => '1',
             'producto' => '4242',
             'pdf' => 'muestra.pdf',
             'pmu_pdfs' => json_encode(['muestra', 'otro', 'x']),
@@ -1377,7 +1423,6 @@ switch ($fase) {
         $GLOBALS['test_postmeta'][4242]['_pmu_pdf_slugs'] = ['muestra'];
         $_POST = [
             'action' => 'personalizador_pdf_vista_previa',
-            'ajax' => '1',
             'producto' => '4242',
             'pdf' => 'muestra.pdf',
             'pmu_pdfs' => '[]',
@@ -1587,7 +1632,7 @@ switch ($fase) {
         break;
 
     case 'tienda':
-        // 004/Fase B: dispara handle_config_guardar (hace exit en redirigir).
+        // 004/Fase B: dispara handle_config_guardar (exit en responder JSON).
         preparar_entorno($testBase, $base);
         if (!class_exists('PMU_Uploads')) {
             require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
@@ -1610,39 +1655,43 @@ switch ($fase) {
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
-        $p->handle_config_guardar(); // exit en redirigir(ec_config)
+        $p->handle_config_guardar(); // exit en responder(JSON ec_config)
         break;
 
     case 'guardar_ajax':
+        // D1: el mapeo texto/estilo se persiste via handle_procesar (texto_[id]/estilo_[id]).
         preparar_entorno($testBase, $base);
+        // El Motor exige al menos una imagen del grupo: se siembra como si
+        // hubiera sido cargada antes (igual que un grupo con imagen manual).
+        $pngTexto = sys_get_temp_dir() . '/pd_puente_png_' . getmypid() . '_g.png';
+        \ExtractCorel\Engine\PngWriter::write($pngTexto, 240, 160);
+        copy($pngTexto, $p->motor_para_tests()->dir_tmp_muestras('muestra', true) . '/0000FF.png');
         $_POST = [
-            'action' => 'personalizador_pdf_guardar_texto',
+            'action' => 'personalizador_pdf_procesar',
             'archivo' => 'muestra.pdf',
-            'id' => '0000FF',
-            'activo' => '1',
-            'texto' => 'Juan Perez',
-            'estilo' => 'neon-glow',
-            'ajax' => '1',
+            'texto_0000FF' => 'Juan Perez',
+            'estilo_0000FF' => 'neon-glow',
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
-        $p->handle_guardar_texto(); // exit en wp_send_json_success
+        $p->handle_procesar(); // exit en responder(JSON)
         break;
 
     case 'guardar_vacio':
+        // Texto vacio = limpiar el mapeo (no se guarda plantilla vacia).
         preparar_entorno($testBase, $base);
+        $pngTexto2 = sys_get_temp_dir() . '/pd_puente_png_' . getmypid() . '_v.png';
+        \ExtractCorel\Engine\PngWriter::write($pngTexto2, 240, 160);
+        copy($pngTexto2, $p->motor_para_tests()->dir_tmp_muestras('muestra', true) . '/0000FF.png');
         $_POST = [
-            'action' => 'personalizador_pdf_guardar_texto',
+            'action' => 'personalizador_pdf_procesar',
             'archivo' => 'muestra.pdf',
-            'id' => '0000FF',
-            'activo' => '1',
-            'texto' => '',
-            'estilo' => 'neon-glow',
-            'ajax' => '1',
+            'texto_0000FF' => '',
+            'estilo_0000FF' => 'neon-glow',
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
-        $p->handle_guardar_texto(); // exit en wp_send_json_error
+        $p->handle_procesar(); // exit en responder(JSON)
         break;
 
     case 'procesar':
@@ -1671,7 +1720,6 @@ switch ($fase) {
             'archivo' => 'muestra.pdf',
             'texto_0000FF' => 'Juan <b>Perez</b>', // sanitize_text_field debe limpiarlo
             'estilo_0000FF' => 'clean-modern',
-            'ajax' => '1', // etapa 3: procesar responde JSON (sin recarga)
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
@@ -1681,7 +1729,7 @@ switch ($fase) {
     case 'borrado':
         // T030: borra el producto y verifica que no queden residuos de
         // pdfs/{pdf}/ ni tmp/muestras/{pdf}/, sin tocar tmp/cart/ (FR-019).
-        // handle_borrar() termina en exit (redirigir): el borrado real se
+        // handle_borrar() termina en exit (JSON): el borrado real se
         // ejecuta aqui y el shutdown solo verifica el estado en disco.
         preparar_entorno($testBase, $base);
         $motor_b = $p->motor_para_tests();
@@ -1708,24 +1756,27 @@ switch ($fase) {
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
-        $p->handle_borrar(); // exit en redirigir(ec_borrado)
+        $p->handle_borrar(); // exit en responder(JSON ec_borrado)
         break;
 
-    case 'contenido':
-        // Guardar mapeo en config.json placeholders[0000FF].
+    case 'imagen_adjunto':
+        // Galeria (T007/T008 + etapa 4): el adjunto se copia desde el disco del
+        // servidor; el navegador NO descarga ni re-sube la imagen.
         preparar_entorno($testBase, $base);
+        $pngAdj = sys_get_temp_dir() . '/pd_puente_png_' . getmypid() . '_adj.png';
+        \ExtractCorel\Engine\PngWriter::write($pngAdj, 240, 160);
+        // 'mal' simula un adjunto cuyo archivo no esta disponible en el disco.
+        $GLOBALS['test_adjunto_sub'] = isset($argv[2]) ? (string)$argv[2] : '';
+        $GLOBALS['test_adjunto_png'] = (isset($argv[2]) && $argv[2] === 'mal') ? '' : $pngAdj;
         $_POST = [
-            'action' => 'personalizador_pdf_guardar_texto',
+            'action' => 'personalizador_pdf_subir_imagen',
             'archivo' => 'muestra.pdf',
-            'id' => '0000FF',
-            'activo' => '1',
-            'texto' => 'Hola Mundo',
-            'estilo' => 'neon-glow',
-            'ajax' => '1',
+            'id' => 'FF0000',
+            'attachment_id' => '777',
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
-        $p->handle_guardar_texto(); // exit en wp_send_json_success
+        $p->handle_subir_imagen(); // exit en responder(JSON)
         break;
 
     case 'placeholder':
@@ -1772,7 +1823,7 @@ switch ($fase) {
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
-        $p->handle_procesar(); // exit en redirigir(ec_error)
+        $p->handle_procesar(); // exit en responder(JSON error)
         break;
 
     case 'mockups':
@@ -1838,7 +1889,7 @@ switch ($fase) {
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
-        $p->handle_mockup_subir(); // exit en redirigir(ec_mockup_subida)
+        $p->handle_mockup_subir(); // exit en responder(JSON con fotos)
         break;
 
     case 'mockup_foto_baja':
@@ -1856,7 +1907,59 @@ switch ($fase) {
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
-        $p->handle_mockup_borrar(); // exit en redirigir(ec_mockup_baja)
+        $p->handle_mockup_borrar(); // exit en responder(JSON con fotos)
+        break;
+
+    case 'mockup_foto_ajax':
+        // Etapa 5 (B): la subida via pmuPost responde JSON con la lista refrescada.
+        preparar_entorno($testBase, $base);
+        $pngAdj2 = sys_get_temp_dir() . '/pd_puente_png_' . getmypid() . '_mk.png';
+        \ExtractCorel\Engine\PngWriter::write($pngAdj2, 120, 90);
+        $_FILES = [
+            'foto' => [
+                'name' => 'fiesta.png', 'type' => 'image/png',
+                'tmp_name' => $pngAdj2, 'error' => UPLOAD_ERR_OK, 'size' => filesize($pngAdj2),
+            ],
+        ];
+        $_POST = [
+            'action' => 'personalizador_pdf_mockup_subir',
+            'archivo' => 'muestra.pdf',
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_mockup_subir(); // exit en wp_send_json_success
+        break;
+
+    case 'smoke':
+        // Pestana Test: smoke nativo con WP/Woo (stubs) -> JSON de checks.
+        preparar_entorno($testBase, $base);
+        $_POST = [
+            'action' => 'personalizador_pdf_smoke',
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_smoke_test(); // exit en responder(JSON con checks)
+        break;
+
+    case 'subir_conflicto':
+        // D2: subir un PDF con nombre ya usado -> JSON nombre_existente:{archivo}
+        // (el JS abre su modal de decision Renombrar/Sobrescribir).
+        preparar_entorno($testBase, $base);
+        $tmpPdf = sys_get_temp_dir() . '/pd_puente_pdf_' . getmypid() . '.pdf';
+        copy($testBase . '/uploads/pmu/pdfs/muestra/muestra.pdf', $tmpPdf);
+        $_FILES = [
+            'pdf' => [
+                'name' => 'muestra.pdf', 'type' => 'application/pdf',
+                'tmp_name' => $tmpPdf, 'error' => UPLOAD_ERR_OK, 'size' => filesize($tmpPdf),
+            ],
+        ];
+        $_POST = [
+            'action' => 'personalizador_pdf_subir_pdf',
+            'modo' => '', // sin decision: debe preguntar
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_subir_pdf(); // exit en responder(JSON nombre_existente:)
         break;
 
     case 'mockups_guardar':
@@ -1874,7 +1977,6 @@ switch ($fase) {
         $_POST = [
             'action' => 'personalizador_pdf_mockups',
             'archivo' => 'muestra.pdf',
-            'ajax' => '1',
             'preview_omisible' => '1',
             'mockups' => json_encode([[
                 'id' => 'fiesta',

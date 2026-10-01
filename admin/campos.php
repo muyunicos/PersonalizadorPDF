@@ -11,14 +11,12 @@ $editando = isset($get['ec_campo_editar']) ? (int)$get['ec_campo_editar'] : 0;
 $tupla_ed = ($editando > 0 && isset($todos[$editando])) ? $todos[$editando] : null;
 $post_url = admin_url('admin-post.php');
 ?>
-<?php if (!empty($get['ec_campo'])) : ?>
-    <div class="notice notice-success"><p><strong>Campo guardado:</strong> id <?php echo (int)$get['ec_campo']; ?>.</p></div>
-<?php elseif (!empty($get['ec_campo_baja'])) : ?>
-    <div class="notice notice-success"><p><strong>Campo dado de baja:</strong> id <?php echo (int)$get['ec_campo_baja']; ?> (tombstone, el id no se reutiliza).</p></div>
-<?php endif; ?>
-<?php if (!empty($get['ec_error'])) : ?>
-    <div class="notice notice-error"><p><strong>Error:</strong> <?php echo esc_html(rawurldecode((string)$get['ec_error'])); ?></p></div>
-<?php endif; ?>
+<noscript>
+    <div class="notice notice-warning">
+        <p><strong>Esta pestana necesita JavaScript.</strong>
+        El alta, la edicion y la baja de campos se envian por AJAX.</p>
+    </div>
+</noscript>
 <?php if ($aviso_campos !== null && $aviso_campos !== '') : ?>
     <div class="notice notice-warning"><p><strong>Aviso de recursos:</strong> <?php echo esc_html($aviso_campos); ?></p></div>
 <?php endif; ?>

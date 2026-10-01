@@ -1,4 +1,8 @@
 <?php
+// Paridad CLI: nunca ejecutable por HTTP (tests/ viaja con el plugin al hosting).
+if (PHP_SAPI !== 'cli') {
+    exit;
+}
 /**
  * Test de paridad: compara la deteccion PHP contra expected_muestra.json
  * (generado por el analizador Python) para muestra.pdf.

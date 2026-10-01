@@ -28,6 +28,17 @@ if (!defined('ABSPATH')) {
 </div>
 
 <div class="card">
+    <h2>Test (smoke en vivo)</h2>
+    <p>La pestana <strong>Test</strong> verifica la instalacion real (WordPress y WooCommerce activos)
+        sin ejecutar procesos externos: version de PHP y extensiones, permisos de escritura en
+        <code>uploads/pmu/</code>, catalogos de recursos, deteccion y dataset vigente sobre cada PDF
+        subido, hooks de la consola, modulo TextMuy integrado, WooCommerce (consulta de productos y
+        asociaciones PDF-producto) y render del panel. Devuelve una tabla OK/FALLA con el detalle.</p>
+    <p>Guarda la marca de la ultima corrida y avisa cuando la version instalada cambio desde
+        entonces: despues de cada despliegue, corre el smoke para confirmar el sitio.</p>
+</div>
+
+<div class="card">
     <h2>Estilos de Texto (modulo TextMuy)</h2>
     <p>La pestana <strong>Estilos de Texto</strong> embebe el editor de textos estilizados TextMuy (client-side,
         estilo TextStudio). Se disenan estilos (fuente, relleno, contorno, sombras, efectos) y se guardan como

@@ -20,6 +20,7 @@ if ($seleccionado !== '' && !in_array($seleccionado, $pdfs, true)) {
 $vista_pdf = $seleccionado ? $this->vista_grupos($this->nombre_de($seleccionado)) : null;
 $datos = $vista_pdf ? $vista_pdf['analisis'] : null;
 $imagenes = $seleccionado ? $this->imagenes_de($this->nombre_de($seleccionado)) : [];
+$fotos_mockup = $seleccionado ? $this->mockup_fotos_lista($this->nombre_de($seleccionado)) : [];
 $presets = [];
 $aviso_presets = '';
 if ($seleccionado) {
@@ -40,12 +41,14 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
     return wp_nonce_url($post_url . '?' . http_build_query($params), 'personalizador_pdf_ver');
 };
 
-$error = isset($get['ec_error']) ? rawurldecode((string)$get['ec_error']) : '';
-$proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proceso') : null;
 ?>
-<?php if ($error) : ?>
-    <div class="notice notice-error"><p><strong>Error:</strong> <?php echo esc_html($error); ?></p></div>
-<?php endif; ?>
+<noscript>
+    <div class="notice notice-warning">
+        <p><strong>Esta consola necesita JavaScript.</strong>
+        Las acciones (cargar PDF, imagenes, guardar, procesar) se envian por AJAX y no
+        tienen version sin JS: activalo para operar la consola.</p>
+    </div>
+</noscript>
 <?php if ($aviso_presets !== '') : ?>
     <div class="notice notice-warning"><p><strong>Aviso de recursos:</strong> <?php echo esc_html($aviso_presets); ?> (el selector de estilos queda vacio; el resto de la consola sigue operativa).</p></div>
 <?php endif; ?>
@@ -65,45 +68,6 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
         <?php endif; ?>
 <?php elseif (isset($get['ec_borrado'])) : ?>
     <div class="notice notice-success"><p><strong>PDF eliminado</strong> con sus datos, imagenes y salida.</p></div>
-<?php endif; ?>
-
-<?php if ($proceso) : ?>
-    <div class="notice notice-success ec-proceso">
-        <p><strong>PDF procesado:</strong> <?php echo esc_html($proceso['archivo'] ?? ''); ?></p>
-        <p>
-            Grupos aplicados: <strong><?php echo esc_html(implode(', ', $proceso['grupos_aplicados'] ?: ['-'])); ?></strong>
-            — Imagenes insertadas: <strong><?php echo (int)($proceso['imagenes_insertadas'] ?? 0); ?></strong>
-            <?php if (!empty($proceso['grupos_sin_imagen'])) : ?>
-                — <span class="ec-aviso">Sin imagen (quedaron como estaban):
-                <strong><?php echo esc_html(implode(', ', $proceso['grupos_sin_imagen'])); ?></strong></span>
-            <?php endif; ?>
-        </p>
-        <?php if (!empty($proceso['archivo'])) : ?>
-            <p><a class="button button-primary"
-                href="<?php echo esc_url($link_desc('salida', ['archivo' => $proceso['archivo']])); ?>">
-                Descargar PDF procesado</a></p>
-        <?php endif; ?>
-    </div>
-<?php endif; ?>
-
-<?php if (isset($get['ec_pregunta']) && $get['ec_pregunta'] === 'nombre') : ?>
-    <div class="notice notice-warning ec-pregunta">
-        <p>
-            <strong>Ya existe un PDF llamado "<?php echo esc_html((string)($get['nombre'] ?? '')); ?>".</strong>
-            Volve a seleccionar el archivo y elegi que hacer:
-            <button type="button" class="button ec-modo" data-modo="renombrar">Renombrar automaticamente</button>
-            <button type="button" class="button ec-modo" data-modo="sobrescribir">Sobrescribir (regenera datos)</button>
-        </p>
-    </div>
-<?php endif; ?>
-<?php if (isset($get['ec_mockup_subida'])) : ?>
-    <div class="notice notice-success"><p><strong>Foto de mockup subida:</strong> <?php echo esc_html((string)($get['foto'] ?? '')); ?>.</p></div>
-<?php elseif (isset($get['ec_mockup_baja'])) : ?>
-    <div class="notice notice-success"><p><strong>Foto de mockup borrada:</strong> <?php echo esc_html((string)($get['foto'] ?? '')); ?>.</p></div>
-<?php elseif (isset($get['ec_config'])) : ?>
-    <div class="notice notice-success"><p><strong>Configuracion guardada.</strong></p></div>
-<?php elseif (isset($get['ec_regenerado'])) : ?>
-    <div class="notice notice-success"><p><strong>PDF regenerado</strong> para el pedido.</p></div>
 <?php endif; ?>
 
 <div class="card">
@@ -441,6 +405,10 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                                    href="<?php echo esc_url($link_desc('placeholder', ['archivo' => $seleccionado, 'id' => $gid])); ?>">
                                     Descargar placeholder
                                 </a>
+                                <button type="button" class="button button-small ec-subir-archivo"
+                                        data-id="<?php echo esc_attr($gid); ?>">
+                                    Subir desde PC
+                                </button>
                                 <button type="button" class="button button-small button-link-delete ec-quitar"
                                         data-id="<?php echo esc_attr($gid); ?>"<?php if (!$tiene) : ?> hidden<?php endif; ?>>
                                     Quitar imagen
@@ -525,9 +493,29 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                 <div class="ec-acordeon-cuerpo">
                     <p class="description">El mockup es una "fotografia" simulada 300x300px del
                         producto en uso (NO el PDF): el cliente la aprueba al agregar al carrito.
-                        Sin miniaturas guardadas: la galeria renderiza al vuelo. Las fotos se
-                        suben y la composicion de capas se edita en el modulo TextMuy.</p>
+                        Las fotos de referencia se suben aqui abajo y la composicion de capas se
+                        edita en el editor embebido.</p>
                     <label class="ec-block-label"><input type="checkbox" class="ec-omisible" name="preview_omisible" value="1" <?php checked(!empty($cfg_pdf['preview_omisible']), true); ?> <?php if (empty($cfg_pdf['mockups'])) : ?>disabled<?php endif; ?>> Vista previa omisible (el cliente agrega directo; visible solo con mockups creados)</label>
+
+                    <?php // Fotos de referencia para las capas "Foto" del editor (sin form: JSON via pmuPost). ?>
+                    <div class="ec-mockup-fotos-admin" data-pdf="<?php echo esc_attr($seleccionado); ?>">
+                        <p class="ec-block-label">Fotos del mockup <span class="description">(van en pdfs/<?php echo esc_html($this->nombre_de($seleccionado)); ?>/mockups/ y sirven de capa "Foto" en el editor)</span></p>
+                        <input type="file" class="ec-mockup-foto-input" accept="image/png,image/jpeg,image/gif,image/webp">
+                        <button type="button" class="button button-small ec-mockup-subir">Subir foto</button>
+                        <span class="ec-mockup-status" aria-live="polite"></span>
+                        <ul class="ec-mockup-fotos">
+                            <?php foreach ($fotos_mockup as $f_nombre => $f_url) : ?>
+                                <li data-foto="<?php echo esc_attr($f_nombre); ?>">
+                                    <img src="<?php echo esc_url($f_url); ?>" alt="">
+                                    <span class="ec-mockup-foto-nombre"><?php echo esc_html($f_nombre); ?></span>
+                                    <button type="button" class="button button-small button-link-delete ec-mockup-borrar">Borrar</button>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                        <?php if (!$fotos_mockup) : ?>
+                            <p class="description ec-mockup-fotos-vacio">Todavia no hay fotos. Sube una desde tu PC para poder usarla como capa.</p>
+                        <?php endif; ?>
+                    </div>
                     <?php if (empty($cfg_pdf['mockups'])) : ?>
                         <p class="description">Todavia no hay mockups. Crea el primero en el modulo.</p>
                     <?php else : ?>
@@ -553,7 +541,7 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
             </div>
         </form>
 
-        <?php // Modal de alta rapida de campo (spec 004: reusa handle_campo_guardar con ajax=1). ?>
+        <?php // Modal de alta rapida de campo (spec 004: reusa handle_campo_guardar via pmuPost). ?>
         <div class="ec-modal ec-modal-campo" hidden>
             <div class="ec-modal-caja">
                 <h3>Nuevo campo</h3>
@@ -586,11 +574,9 @@ $proceso = $get['ec_procesado'] ?? null ? get_transient('personalizador_pdf_proc
                 <input type="hidden" name="action" value="personalizador_pdf_subir_imagen">
                 <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
                 <input type="hidden" name="id" value="<?php echo esc_attr($gid); ?>">
-                <input type="hidden" name="attachment_id" value="">
                 <?php wp_nonce_field('personalizador_pdf_subir_imagen'); ?>
                 <input type="file" name="imagen" accept="image/png,image/jpeg,image/gif,image/webp" class="ec-input-imagen">
-                <button type="button" class="button button-small ec-galeria" data-id="<?php echo esc_attr($gid); ?>">Desde galeria</button>
-                <button type="submit" class="button button-small">Cargar imagen</button>
+                <?php // Pool oculto: el boton visible "Subir desde PC" dispara este input (ver admin.js). ?>
             </form>
             <?php if ($tiene) : ?>
             <form class="ec-form-inline ec-form-quitar" method="post" action="<?php echo esc_url($post_url); ?>" data-id="<?php echo esc_attr($gid); ?>">

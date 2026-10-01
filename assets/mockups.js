@@ -26,8 +26,9 @@ jQuery(function ($) {
 
     var LIENZO = 300;
     var estado = { mockups: datos.mockups || [], actual: 0, seleccion: -1 };
-    var fotos = datos.fotos || {};
     var grupos = datos.grupos || [];
+    // Las fotos se leen SIEMPRE de datos.fotos (admin.js las refresca tras subir/borrar).
+    function fotos() { return datos.fotos || {}; }
 
     function plantilla() {
         return '' +
@@ -161,7 +162,7 @@ jQuery(function ($) {
             if (c.sesgo) { ctx.transform(1, 0, c.sesgo, 1, 0, 0); }
             ctx.filter = filtroCss(c.filtros);
             if (c.tipo === 'img') {
-                var img = imagenDe(fotos[c.ref]);
+                var img = imagenDe(fotos()[c.ref]);
                 if (img && img.complete && img.naturalWidth) {
                     ctx.drawImage(img, -c.w / 2, -c.h / 2, c.w, c.h);
                 } else if (img) {
@@ -234,7 +235,7 @@ jQuery(function ($) {
     $ed.on('click', '.ec-mk-add-img', function () {
         var m = mockup();
         if (!m) { window.alert('Crea primero un mockup.'); return; }
-        var nombres = Object.keys(fotos);
+        var nombres = Object.keys(fotos());
         if (!nombres.length) { window.alert('Sube primero una foto en este mismo acordeon.'); return; }
         var elegido = window.prompt('Foto (nombre de archivo):\n' + nombres.join('\n'), nombres[0]);
         if (!elegido || nombres.indexOf(elegido) === -1) { return; }

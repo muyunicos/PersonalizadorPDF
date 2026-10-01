@@ -304,6 +304,27 @@
 .ec-guardar-status { font-size: 12px; }
 .ec-guardar-status.ec-ok { color: #00a32a; }
 .ec-guardar-status.ec-error { color: #d63638; }
+/* Estados de subir PDF, procesar y campo (mismo lenguaje visual que los demas). */
+.ec-subir-status, .ec-procesar-status, .ec-campo-status { font-size: 12px; }
+.ec-subir-status.ec-ok, .ec-procesar-status.ec-ok, .ec-campo-status.ec-ok { color: #00a32a; }
+.ec-subir-status.ec-error, .ec-procesar-status.ec-error, .ec-campo-status.ec-error { color: #d63638; }
+.ec-procesar-status a { margin-left: 6px; }
+/* Fotos del mockup: lista con miniatura (editor de capas "Foto"). */
+.ec-mockup-fotos-admin { margin-top: 8px; }
+.ec-mockup-status { font-size: 12px; margin-left: 6px; }
+.ec-mockup-status.ec-ok { color: #00a32a; }
+.ec-mockup-status.ec-error { color: #d63638; }
+.ec-mockup-fotos { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
+.ec-mockup-fotos li { width: 96px; text-align: center; font-size: 11px; }
+.ec-mockup-fotos img { width: 64px; height: 64px; object-fit: contain; background: #f0f0f1; display: block; margin: 0 auto 3px; }
+.ec-mockup-foto-nombre { display: block; word-break: break-all; color: #50575e; }
+/* Smoke test (pestana Test): resultado por check. */
+.ec-smoke-status { font-size: 12px; margin-left: 6px; }
+.ec-smoke-status.ec-ok { color: #00a32a; }
+.ec-smoke-status.ec-error { color: #d63638; }
+.ec-smoke-ok { color: #00a32a; font-weight: 600; }
+.ec-smoke-falla { color: #d63638; font-weight: 600; }
+.ec-smoke-resultado { margin-top: 12px; }
 .ec-forms-imagen[hidden], .ec-acordeon-cuerpo [hidden] { display: none; }
 .ec-datos-grupo {
     color: #50575e;
