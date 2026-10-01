@@ -96,8 +96,8 @@ if (!defined('ABSPATH')) {
         <li><strong>Carrito y pedido</strong>: al agregar se congela lo aprobado
             (<code>mockup-{id}.webp</code>) y el item se promueve a su
             <code>cart_item_key</code>; al pagarse pasa a
-            <code>orders/{order_id}/{item_key}/</code>. La seccion
-            <strong>"4. Pedidos completados"</strong> de la consola lista cada item con
+            <code>orders/{order_id}/{item_key}/</code>. La pestana
+            <strong>Pedidos</strong> de la consola lista cada item con
             PDFs aceptados, PDFs descartados, estado, etiquetas del cliente y vistas
             congeladas. <strong>"Regenerar PDF"</strong> rearma todos los PDFs aceptados
             desde el pool; en Descargas hay una fila por PDF del snapshot.</li>

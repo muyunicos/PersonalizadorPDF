@@ -3,6 +3,12 @@
 > **Estado (2026-09-28)**: CODIGO COMPLETO — T001–T011 `[X]`. Docs automaticos
 > listos; pendiente solo T012-recorrido manual, cubierto por
 > `specs/MANUAL-PENDIENTE-WP-REAL.md` (sesion unica con T030 de 004).
+>
+> **Nota posterior**: la auditoria de T010 vive hoy en la pestana **Pedidos**
+> (`admin/pedidos.php`, `?tab=pedidos`), movida desde `admin/pdfs.php` (ver nota
+> en `specs/004-woocommerce-pdf-personalization/tasks.md`). Las columnas
+> `pdfs[]` / `pdfs_descartados[]` y la regla "regenerar usa solo el snapshot"
+> siguen intactas.
 
 **Input**: `specs/005-pdf-condicionales/` (spec, plan, data-model, contracts/validez, research D1–D9)
 

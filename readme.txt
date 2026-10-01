@@ -85,7 +85,7 @@ Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}
 
 = 4.2.0 =
 * **Ciclo completo del comprador (spec 004)**: panel del comprador en la ficha Woo (`woocommerce_before_add_to_cart_form` + shortcode `[pmu_personalizar]`) con los campos del catalogo; "Vista previa" genera mockups 300x300 en paralelo (RenderCore) y sube los PNG al pool de la sesion (`tmp/sesion-{sid}/{item_key}/img/`, cookie `pmu_sid`); el carrito exige vistas listas (salvo `preview_omisible`), congela las vistas aprobadas (`mockup-{id}.webp`) y promueve el item con cantidad fija 1 y `unique_key`; re-edicion desde el carrito reusa el item y regenera solo lo cambiado (hash `sha1(valor|preset|settings|WxH)`).
-* **Pedido y descarga**: staging al crearse el pedido (`tmp/orders/{id}/`), promocion a `orders/{id}/{item_key}/` al pagarse, descargas en `mi-cuenta` (PDF final generado al vuelo desde el indice del pool con `Motor::procesar_pedido`, idempotente) y seccion "4. Pedidos completados" en la consola con "Regenerar PDF".
+* **Pedido y descarga**: staging al crearse el pedido (`tmp/orders/{id}/`), promocion a `orders/{id}/{item_key}/` al pagarse, descargas en `mi-cuenta` (PDF final generado al vuelo desde el indice del pool con `Motor::procesar_pedido`, idempotente) y pestana "Pedidos" en la consola con "Regenerar PDF".
 * **Conciliacion ex-008**: rutas de sesion alineadas a la norma (`tmp/sesion-{sid}/{item_key}/`, sin el nivel intermedio `tmp/sesion/`) y unico armador de datos de render (`datos_pdf_render`).
 
 = 4.1.1 =

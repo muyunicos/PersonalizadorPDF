@@ -172,6 +172,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
 
     $admin_html = '';
     $admin_error = '';
+    $pedidos_html = '';
+    $pedidos_error = '';
     if ($fase === 'admin') {
         preparar_entorno($testBase, $base);
         // Catalogo sembrado por el motor y luego corrompido (0 bytes, quickstart 007 §6).
@@ -191,6 +193,36 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             $admin_html = (string)ob_get_clean();
         } catch (\Throwable $e) {
             $admin_error = $e->getMessage();
+            while (ob_get_level() > 0) { @ob_end_clean(); }
+        }
+        // La seccion de pedidos completados vive en su propia pestana (admin/pedidos.php):
+        // se siembra un item entregado para que la fila y sus acciones se rendericen.
+        try {
+            $m_ped = $p->motor_para_tests();
+            $cid_ped = $m_ped->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+            $dir_ped = $m_ped->dir_ambito('orders', true) . DIRECTORY_SEPARATOR . '4242'
+                . DIRECTORY_SEPARATOR . 'item-abc';
+            wp_mkdir_p($dir_ped . DIRECTORY_SEPARATOR . 'img');
+            file_put_contents($dir_ped . DIRECTORY_SEPARATOR . 'manifest.json', json_encode([
+                'item_key' => 'item-abc',
+                'sid' => 'test-8f2a',
+                'pdfs' => ['muestra'],
+                'pdfs_descartados' => ['otro'],
+                'valores' => [$cid_ped => ['valor' => 'Ana', 'cliente' => 'Ana']],
+                'archivos' => [
+                    ['pdf' => 'muestra', 'grupo_id' => '0000FF', 'indice' => 0, 'file' => 'img/muestra-0000FF-1.png', 'hash' => 'h1'],
+                ],
+                'preview_estado' => 'ok',
+            ]));
+            ob_start();
+            $render_ped = function () use ($base) {
+                include $base . '/admin/pedidos.php';
+            };
+            $render_ped = $render_ped->bindTo($p, get_class($p));
+            $render_ped();
+            $pedidos_html = (string)ob_get_clean();
+        } catch (\Throwable $e) {
+            $pedidos_error = $e->getMessage();
             while (ob_get_level() > 0) { @ob_end_clean(); }
         }
     }
@@ -309,9 +341,19 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('render sin fatal ni excepcion', $admin_error === '');
             check('aviso con la causa del motor', strpos($admin_html, 'motor:listar:') !== false);
             check('el selector de estilos sigue presente', strpos($admin_html, 'ec-select-estilo') !== false);
-            // T025: la consola incluye la seccion de pedidos completados (render real).
-            check('seccion 4. Pedidos completados', strpos($admin_html, '4. Pedidos completados') !== false
-                && strpos($admin_html, 'personalizador_pdf_item_regenerar') !== false);
+            // T025: los pedidos completados se listan en su propia pestana (admin/pedidos.php).
+            check('pestana PDFs ya no trae la seccion de completados', strpos($admin_html, 'Pedidos completados') === false
+                && strpos($admin_html, 'personalizador_pdf_item_regenerar') === false);
+            check('pestana Pedidos: render sin fatal', $pedidos_error === '');
+            check('pestana Pedidos: titulo sin numerar', strpos($pedidos_html, '<h2>Pedidos completados</h2>') !== false
+                && strpos($pedidos_html, '4. Pedidos completados') === false);
+            // Fila real del item sembrado (no solo el estado vacio) + ambas acciones.
+            // `otro` esta en pdfs_descartados[]: la columna de auditoría debe pintarlo.
+            check('pestana Pedidos: item listado con snapshot', strpos($pedidos_html, 'item-abc') !== false
+                && strpos($pedidos_html, '<code>otro</code>') !== false
+                && strpos($pedidos_html, 'Ana') !== false);
+            check('pestana Pedidos: regenerar y descargar', strpos($pedidos_html, 'personalizador_pdf_item_regenerar') !== false
+                && strpos($pedidos_html, 'personalizador_pdf_item_descargar') !== false);
             // Spec 005 (T004): "Configuracion tienda" por asociacion (render real).
             check('tienda: bloque por producto asociado', strpos($admin_html, 'class="ec-tienda-producto" data-id="4242"') !== false
                 && strpos($admin_html, 'class="ec-tienda-producto" data-id="4243"') !== false

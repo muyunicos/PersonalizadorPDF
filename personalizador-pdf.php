@@ -1736,6 +1736,28 @@ class Personalizador_PDF_Plugin
             $detalle = $e->getMessage();
         }
         $add('Consola: render sin fatal', $ok, $detalle);
+        // La pestana Pedidos es un include propio: se renderiza aparte para que
+        // un error de despliegue se vea en el smoke (no al navegar a la tab).
+        $ok_ped = true;
+        $detalle_ped = '';
+        try {
+            ob_start();
+            $render_ped = function () {
+                include PERSONALIZADOR_PDF_PATH . 'admin/pedidos.php';
+            };
+            $render_ped = $render_ped->bindTo($this, get_class($this));
+            $render_ped();
+            $html_ped = (string)ob_get_clean();
+            $ok_ped = $html_ped !== '';
+            $detalle_ped = strlen($html_ped) . ' bytes de HTML';
+        } catch (\Throwable $e) {
+            while (ob_get_level() > 0) {
+                @ob_end_clean();
+            }
+            $ok_ped = false;
+            $detalle_ped = $e->getMessage();
+        }
+        $add('Consola: render pestana Pedidos', $ok_ped, $detalle_ped);
     }
 
     /** UUID v4 para unique_key (sin depender del uuid privado de PMU_Sesion). */
@@ -2426,9 +2448,10 @@ class Personalizador_PDF_Plugin
         if ($hook !== 'toplevel_page_personalizador-pdf') {
             return;
         }
-        // Pestana activa: pdfs (default) | campos | textos | ayuda (misma whitelist que page.php).
+        // Pestana activa: pdfs (default) | campos | textos | pedidos | test | ayuda
+        // (misma whitelist que page.php).
         $tab = isset($_GET['tab']) ? sanitize_key((string)$_GET['tab']) : 'pdfs';
-        if (!in_array($tab, ['pdfs', 'campos', 'textos', 'test', 'ayuda'], true)) {
+        if (!in_array($tab, ['pdfs', 'campos', 'textos', 'pedidos', 'test', 'ayuda'], true)) {
             $tab = 'pdfs';
         }
         wp_enqueue_style(
@@ -2438,11 +2461,12 @@ class Personalizador_PDF_Plugin
             PERSONALIZADOR_PDF_VERSION
         );
         // El JS de la consola (modal, galeria wp.media) solo se usa en "PDFs";
-        // pmu-core (admin.js: pmuPost/pmuAviso/pmuForm) tambien en "Campos"/"Test".
-        if ($tab !== 'pdfs' && $tab !== 'campos' && $tab !== 'test') {
+        // pmu-core (admin.js: pmuPost/pmuAviso/pmuForm) tambien en "Campos",
+        // "Pedidos" (solo el submit "Regenerar PDF") y "Test".
+        if ($tab !== 'pdfs' && $tab !== 'campos' && $tab !== 'pedidos' && $tab !== 'test') {
             return;
         }
-        if ($tab === 'campos' || $tab === 'test') {
+        if ($tab === 'campos' || $tab === 'pedidos' || $tab === 'test') {
             wp_enqueue_script(
                 'personalizador-pdf',
                 PERSONALIZADOR_PDF_URL . 'assets/admin.js',
@@ -2453,6 +2477,8 @@ class Personalizador_PDF_Plugin
             $local = ['postUrl' => admin_url('admin-post.php'), 'nonceAccion' => []];
             if ($tab === 'campos') {
                 $local['nonceAccion']['campo'] = wp_create_nonce('personalizador_pdf_campo');
+            } elseif ($tab === 'pedidos') {
+                $local['nonceAccion']['item_regenerar'] = wp_create_nonce('personalizador_pdf_item_regenerar');
             } else {
                 $local['nonceAccion']['smoke'] = wp_create_nonce('personalizador_pdf_smoke');
             }

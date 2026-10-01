@@ -81,10 +81,11 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 ├── personalizador-pdf.php   ← Plugin WP (clase principal, menús, handlers PDFs/campos/config,
 │                                   ciclo carrito→pedido, puente TextMuy; sin migraciones)
 ├── admin/
-│   ├── page.php             ← Página admin con pestañas ("PDFs" | "Campos" | "Estilos de Texto" | "Test" | "Ayuda")
-│   ├── pdfs.php             ← Consola: subir PDF, grupos, mockups, imágenes, Procesar, completados
+│   ├── page.php             ← Página admin con pestañas ("PDFs" | "Campos" | "Estilos de Texto" | "Pedidos" | "Test" | "Ayuda")
+│   ├── pdfs.php             ← Consola: subir PDF, grupos, mockups, imágenes, Procesar
 │   ├── campos.php           ← Catálogo global de campos reutilizables (campos.json)
 │   ├── estilos-texto.php    ← Iframe del módulo TextMuy (aviso si no está integrado)
+│   ├── pedidos.php          ← Pestaña Pedidos: items entregados (orders/), Regenerar PDF / Descargar
 │   ├── test.php             ← Pestaña Test: botón del smoke test en vivo (tabla OK/FALLA)
 │   └── ayuda.php            ← Documentación interna
 ├── assets/
@@ -219,9 +220,10 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
      (`tmp/orders/{id}/`); al pagarse `pedido_promover` lo renombra a `orders/{id}/{item}/`.
      El comprador descarga en `mi-cuenta/descargas/` (una fila por cada PDF aceptado
      del snapshot; `item_generar_pdfs`, idempotente, arma cada PDF desde las filas
-     indexadas de `manifest.archivos[]` con `Motor::procesar_pedido`). La consola lista
-     los completados (sección 4) con "Regenerar PDF" y muestra `pdfs[]` +
-     `pdfs_descartados[]`; la regeneración nunca usa un PDF descartado.
+     indexadas de `manifest.archivos[]` con `Motor::procesar_pedido`). La pestaña
+     **Pedidos** (`admin/pedidos.php`) lista los completados con "Regenerar PDF"
+     y muestra `pdfs[]` + `pdfs_descartados[]`; la regeneración nunca usa un PDF
+     descartado.
 
 ## 4. Reglas técnicas críticas (¡NO MODIFICAR sin entenderlas!)
 

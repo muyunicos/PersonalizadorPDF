@@ -4,6 +4,12 @@
 > verificacion manual unificada en WP real: ver
 > `specs/MANUAL-PENDIENTE-WP-REAL.md` (cubre T030 de esta spec + T012 de 005 +
 > T017/T029 de 006 en una sola sesion). Puertas automaticas en verde (T031).
+>
+> **Nota posterior**: el listado de completados que T025 creo como "4. Pedidos
+> completados" dentro de `admin/pdfs.php` **se movio a su propia pestana**
+> `Pedidos` (`admin/pedidos.php`, `?tab=pedidos`): no pertenece al flujo del PDF
+> seleccionado (lee `orders/{order_id}/{item_key}/`) y se paginaba en cada carga
+> de la consola de PDFs. Comportamiento, columnas y acciones sin cambios.
 
 **Input**: Design documents from `specs/004-woocommerce-pdf-personalization/` (norma 2026-09-17)
 
