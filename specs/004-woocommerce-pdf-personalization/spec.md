@@ -7,7 +7,7 @@
 
 ## Contexto
 
-Plugin WordPress que asocia PDFs con placeholders a productos WooCommerce. El cliente
+El plugin para WordPress "Personalizador PDF" asocia PDFs con placeholders a productos WooCommerce. El cliente
 personaliza en ficha, aprueba vía mockup ("Vista previa") y descarga el PDF tras el pago.
 Norma tecnica: `constitution` §I+§IV (mockup obligatorio salvo `preview_omisible`,
 sesion por item, pool dedicado, `preview_estado`).

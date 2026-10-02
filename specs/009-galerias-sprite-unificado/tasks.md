@@ -16,7 +16,7 @@
 
 ## Path Conventions
 
-Plugin WordPress con módulo integrado (plan.md §Project Structure): `inc/` (motor PHP), `modules/textmuy/` (cliente JS/CSS + `tests/`), `assets/` (ThumbEngine, sin cambios), `uploads/pmu/{fonts,img,tm-presets}/` (dato del admin), `tests/` (suites del plugin).
+plugin para WordPress "Personalizador PDF" con módulo integrado (plan.md §Project Structure): `inc/` (motor PHP), `modules/textmuy/` (cliente JS/CSS + `tests/`), `assets/` (ThumbEngine, sin cambios), `uploads/pmu/{fonts,img,tm-presets}/` (dato del admin), `tests/` (suites del plugin).
 
 ---
 

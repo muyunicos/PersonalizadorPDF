@@ -20,7 +20,7 @@ Las tres galerías del editor (imágenes, tipografías, estilos guardados) compa
 
 **Target Platform**: servidor WordPress compartido (PHP puro) + panel de administración en navegador de escritorio.
 
-**Project Type**: WordPress plugin con módulo frontend integrado (dos capas en el mismo repositorio: `inc/` + `assets/` del plugin, `modules/textmuy/` del módulo).
+**Project Type**: plugin para WordPress "Personalizador PDF" con módulo frontend integrado (dos capas en el mismo repositorio: `inc/` + `assets/` del plugin, `modules/textmuy/` del módulo).
 
 **Performance Goals**: apertura con hoja certificada = 0 descargas de contenido; generación completa de la galería de tipografías (72 celdas: 57 Google + 15 físicas) una sola vez con máximo aceptable 5 MB y 60 s; exactamente 1 escritura `op=sprite` por ámbito y apertura; concurrencia limitada a 4 peticiones para Google.
 
@@ -109,7 +109,7 @@ tests/                         # Pruebas del plugin (motor_smoke, parity, texto_
 uploads/pmu/{fonts,img,tm-presets}/   # Dato del admin (no versionado): inventarios + thumbs.webp
 ```
 
-**Structure Decision**: estructura única por repo (plugin WordPress con módulo integrado), sin nuevas carpetas ni proyectos. La lógica nueva se reparte entre el dueño del almacenamiento (`inc/class-pmu-uploads.php`, validación/certificación de `op=sprite`) y el cliente de galerías (`modules/textmuy/js/api.js` como núcleo compartido por `galeria.js`, `fuentes-galeria.js` y `controls.js`). `contracts/` documenta el contrato de motor (extendido) y el de lectura/generación del cliente; los artefactos de este feature viven en `specs/009-galerias-sprite-unificado/`.
+**Structure Decision**: estructura única por repo (plugin para WordPress "Personalizador PDF" con módulo integrado), sin nuevas carpetas ni proyectos. La lógica nueva se reparte entre el dueño del almacenamiento (`inc/class-pmu-uploads.php`, validación/certificación de `op=sprite`) y el cliente de galerías (`modules/textmuy/js/api.js` como núcleo compartido por `galeria.js`, `fuentes-galeria.js` y `controls.js`). `contracts/` documenta el contrato de motor (extendido) y el de lectura/generación del cliente; los artefactos de este feature viven en `specs/009-galerias-sprite-unificado/`.
 
 ## Complexity Tracking
 

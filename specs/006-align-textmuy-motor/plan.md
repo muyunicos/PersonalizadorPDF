@@ -28,7 +28,7 @@ Alinear el cliente del editor (módulo integrado `modules/textmuy/`, bajo contro
 
 **Target Platform**: Hosting compartido del servidor del sitio (procesamiento server-side en PHP) + navegador del administrador (editor client-side).
 
-**Project Type**: Plugin WordPress (PHP) + modulo frontend integrado en `modules/textmuy/` de este repo.
+**Project Type**: plugin para WordPress "Personalizador PDF" (PHP) + modulo frontend integrado en `modules/textmuy/` de este repo.
 
 **Performance Goals**: Restauracion completa de los recursos del editor en instalacion limpia en menos de 2 minutos con una sola copia de carpeta (SC-006); recorrido principal (subir imagen + guardar estilo + procesar un grupo) sin errores al primer intento (SC-008).
 

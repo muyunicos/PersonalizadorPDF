@@ -160,4 +160,4 @@ Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}
 * Corregido: los segundos y siguientes draws en una misma pagina heredaban el CTM acumulado (cm) y se dibujaban mal; ahora cada draw va en su propio par q...Q.
 
 = 1.0.0 =
-* Version inicial: motor PHP completo (deteccion, marcos, overlay) y plugin WordPress.
+* Version inicial: motor PHP completo (deteccion, marcos, overlay) y el plugin para WordPress "Personalizador PDF".

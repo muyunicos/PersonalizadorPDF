@@ -37,7 +37,7 @@ pool `img/{pdf}-{id}-{n}.png` + `mockup-{id}.webp`) + `tmp/orders/{order_id}/{it
 
 **Target Platform**: Hostinger Business (PHP 8.5.4) + navegador moderno del cliente.
 
-**Project Type**: Plugin WordPress (backend PHP + consola admin + modulo frontend en iframe
+**Project Type**: plugin para WordPress "Personalizador PDF" (backend PHP + consola admin + modulo frontend en iframe
 same-origin `modules/textmuy/`).
 
 **Performance Goals**: vista previa lista <5 s tras pulsar (render paralelo de N mockups
