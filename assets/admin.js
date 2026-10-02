@@ -885,13 +885,16 @@ jQuery(function ($) {
         e.stopPropagation();
     });
 
-    // Cualquier cambio de control re-sincroniza el estado canonico del panel.
+    // Cualquier cambio de control re-sincroniza el estado canonico del panel
+    // e INVALIDA el preview de ese grupo (T023): su render ya no corresponde.
     $(document).on('input change',
         '.ec-panel-grupo .ec-modo-codigo, .ec-panel-grupo .ec-select-tipo, ' +
         '.ec-panel-grupo .ec-select-campo, .ec-panel-grupo .ec-select-estilo, ' +
         '.ec-panel-grupo .ec-input-codigo, .ec-panel-grupo .ec-input-settings',
         function () {
-            syncPanel($(this).closest('.ec-panel-grupo'));
+            var $panel = $(this).closest('.ec-panel-grupo');
+            syncPanel($panel);
+            invalidarPreview(String($panel.data('id') || ''));
             refrescarProcesar();
         });
 
@@ -956,6 +959,42 @@ jQuery(function ($) {
         guardarConfigAjax().catch(function () { /* el status ya muestra el error */ });
     });
 
+    /**
+     * Store de previews de grupo (spec 011, D2/T022).
+     *
+     * El render lo produce el boton "Probar" de cada grupo con el motor ya
+     * cargado. El editor de mockups NO renderiza: consume este store y se
+     * repinta con el evento `pmu:preview-listo`. El hash evita volver a
+     * renderizar lo mismo (FR-021) y la URL revocada sale del store.
+     */
+    var PREVIEWS = {};
+    window.PersonalizadorPDF = window.PersonalizadorPDF || {};
+    window.PersonalizadorPDF.previews = PREVIEWS;
+
+    /** Hash del render: mismo texto/estilo/tamano => mismo render. */
+    function hashPreview(texto, preset, w, h) {
+        var crudo = [texto || '', preset || '', String(w || 0), String(h || 0)].join('|');
+        var hash = 0;
+        for (var i = 0; i < crudo.length; i++) {
+            hash = ((hash << 5) - hash + crudo.charCodeAt(i)) | 0;
+        }
+        return String(hash);
+    }
+
+    function publicarPreview(id, detalle) {
+        PREVIEWS[String(id)] = detalle;
+        window.dispatchEvent(new CustomEvent('pmu:preview-listo', { detail: detalle }));
+    }
+
+    /** Invalida el preview de un grupo (cambio de tipo/estilo/codigo/campo). */
+    function invalidarPreview(id) {
+        delete PREVIEWS[String(id)];
+    }
+
+    function cajaPreview($panel) {
+        return $panel.find('.ec-texto-preview-caja');
+    }
+
     /** Vista previa del grupo al tamano exacto del hueco (texto de muestra). */
     $(document).on('click', '.ec-probar', function () {
         var $btn = $(this);
@@ -967,20 +1006,36 @@ jQuery(function ($) {
             $status.addClass('ec-error').text('Elegi tipo texto, un campo o codigo y un estilo.');
             return;
         }
+        var texto = textoMuestra(st);
+        var hash = hashPreview(texto, st.preset, st.w, st.h);
+        var previo = PREVIEWS[st.id];
+        // FR-021: si el render vigente es el mismo, no se vuelve a renderizar:
+        // abrir el editor o pulsar dos veces no genera renders duplicados.
+        if (previo && previo.hash === hash && previo.url) {
+            cajaPreview($panel).find('img').attr('src', previo.url).data('url', previo.url);
+            cajaPreview($panel).removeAttr('hidden');
+            $status.removeClass('ec-error').text('');
+            window.dispatchEvent(new CustomEvent('pmu:preview-listo', { detail: previo }));
+            return;
+        }
         $btn.prop('disabled', true).text('Renderizando...');
         renderCore().then(function (core) {
-            return core.TextMuyAPI.renderBatch([{ id: st.id, text: textoMuestra(st), preset: st.preset, width: st.w, height: st.h }]);
+            return core.TextMuyAPI.renderBatch([{ id: st.id, text: texto, preset: st.preset, width: st.w, height: st.h }]);
         }).then(function (out) {
             var url = URL.createObjectURL(out[0].blob);
-            var $caja = $panel.find('.ec-texto-preview-caja');
+            var $caja = cajaPreview($panel);
             var $img = $caja.find('img');
             if ($img.data('url')) { URL.revokeObjectURL($img.data('url')); }
             $img.attr('src', url).data('url', url);
             $caja.find('.ec-texto-preview-dims').text(st.w + 'x' + st.h + ' px');
             $caja.removeAttr('hidden');
             $status.removeClass('ec-error').text('');
+            publicarPreview(st.id, {
+                id: st.id, url: url, w: st.w, h: st.h,
+                hash: hash, ts: new Date().toISOString()
+            });
         }).catch(function (err) {
-            if (window.console && console.warn) { console.warn('[PersonalizadorPDF] probar', err); }
+            if (window.console && window.console.warn) { window.console.warn('[PersonalizadorPDF] probar', err); }
             $status.addClass('ec-error').text((err && err.message) || 'Fallo la vista previa.');
         }).finally(function () {
             $btn.prop('disabled', false).text('Probar');

@@ -701,7 +701,23 @@ class PMU_Uploads
         return array_values(array_slice(array_unique($ids), 0, 100));
     }
 
-    /** Normaliza la seccion mockups de un config (composicion de capas 300x300). */
+    /**
+     * Normaliza la seccion mockups de un config (composicion de capas 300x300).
+     *
+     * Spec 011: el contrato de capa se amplia de forma retrocompatible.
+     * - `ref` con namespace `{ambito}:{valor}` (`pdf:` = foto del PDF,
+     *   `img:` = id numerico del catalogo `img.json`). Un `ref` plano se lee
+     *   como `pdf:` (compatibilidad con los mockups previos), porque antes el
+     *   validador rechazaba cualquier `ref` con `/` y hacia imposible el
+     *   formato del contrato 004.
+     * - `filtros` acepta brillo/gama/contraste/saturacion 0..200, opacidad
+     *   0..100, desenfoque 0..20 y tono -180..180. El valor igual al default
+     *   se borra (no se persiste lo neutro).
+     * - Campos nuevos opcionales: `modo` (normal|multiply), `nombre`,
+     *   `oculta`, `bloqueada`.
+     * Un mockup puede guardarse sin capas (se crea vacio y se completa
+     * despues); lo que no se permite es una capa invalida.
+     */
     private function config_mockups($valor)
     {
         $out = [];
@@ -719,49 +735,27 @@ class PMU_Uploads
                 if ($tipo !== 'img' && $tipo !== 'placeholder') {
                     continue;
                 }
-                $ref = trim((string)($c['ref'] ?? ''));
-                if ($ref === '' || strpos($ref, '/') !== false || strpos($ref, '..') !== false) {
+                $ref = $this->mockup_ref_capa($tipo, trim((string)($c['ref'] ?? '')));
+                if ($ref === '') {
                     continue;
-                }
-                $filtros = [];
-                foreach ((array)($c['filtros'] ?? []) as $k => $v) {
-                    $k = (string)$k;
-                    if (!in_array($k, ['brillo', 'gama', 'contraste', 'saturacion'], true)) {
-                        continue;
-                    }
-                    $v = (int)$v;
-                    if ($v < 0) {
-                        $v = 0;
-                    } elseif ($v > 200) {
-                        $v = 200;
-                    }
-                    $filtros[$k] = $v;
-                }
-                $rot = (float)($c['rot'] ?? 0);
-                if ($rot < -360) {
-                    $rot = -360;
-                } elseif ($rot > 360) {
-                    $rot = 360;
-                }
-                $sesgo = (float)($c['sesgo'] ?? 0);
-                if ($sesgo < -1) {
-                    $sesgo = -1;
-                } elseif ($sesgo > 1) {
-                    $sesgo = 1;
                 }
                 $capas[] = [
                     'tipo' => $tipo,
-                    'ref' => substr($ref, 0, 128),
+                    'ref' => $ref,
                     'x' => (int)($c['x'] ?? 0),
                     'y' => (int)($c['y'] ?? 0),
                     'w' => max(1, (int)($c['w'] ?? 0)),
                     'h' => max(1, (int)($c['h'] ?? 0)),
-                    'rot' => $rot,
-                    'sesgo' => $sesgo,
-                    'filtros' => $filtros,
+                    'rot' => $this->clamp_float((float)($c['rot'] ?? 0), -360, 360),
+                    'sesgo' => $this->clamp_float((float)($c['sesgo'] ?? 0), -1, 1),
+                    'filtros' => $this->mockup_filtros($c['filtros'] ?? []),
+                    'modo' => $this->mockup_modo($c['modo'] ?? 'normal'),
+                    'nombre' => substr(trim((string)($c['nombre'] ?? '')), 0, 60),
+                    'oculta' => !empty($c['oculta']),
+                    'bloqueada' => !empty($c['bloqueada']),
                 ];
             }
-            if ($id === '' || !$capas || isset($out[$id])) {
+            if ($id === '' || isset($out[$id])) {
                 continue;
             }
             $out[$id] = [
@@ -773,6 +767,123 @@ class PMU_Uploads
         }
         return array_values($out);
     }
+
+    /**
+     * Publica la normalizacion de mockups para que el handler que guarda el
+     * editor use EXACTAMENTE la misma regla (una sola implementacion: si el
+     * handler sanea distinto, se pierde lo que el motor no acepta).
+     */
+    public function normalizar_mockups($valor)
+    {
+        return $this->config_mockups($valor);
+    }
+
+    /**
+     * `ref` de capa normalizado. Vacio = ref invalida.
+     * - tipo `img`: namespace `{ambito}:{valor}`; `pdf:` = nombre de archivo
+     *   del ambito del PDF, `img:` = id numerico del catalogo `img.json`. Un
+     *   `ref` plano se lee como `pdf:` (compatibilidad con mockups previos).
+     * - tipo `placeholder`: NO lleva namespace; es `{grupo_id}` o
+     *   `{grupo_id}#{indice}` (id de color hex de `analisis.json`).
+     */
+    private function mockup_ref_capa($tipo, $ref)
+    {
+        $ref = trim((string)$ref);
+        if ($ref === '') {
+            return '';
+        }
+        if ($tipo === 'placeholder') {
+            // Grupo = id hex de 6 digitos, con indice de instancia opcional.
+            // Se aceptan indices 0-based (`#0`, historico) y 1-based (`#1`,
+            // los que genera el editor): el validador no debe rechazar un
+            // mockup previo por el formato del indice.
+            if (!preg_match('/^([0-9A-F]{6})(?:#([0-9]{1,3}))?$/', $ref, $mm)) {
+                return '';
+            }
+            return isset($mm[2]) && $mm[2] !== '' ? $mm[1] . '#' . $mm[2] : $mm[1];
+        }
+        $ambito = 'pdf';
+        $valor = $ref;
+        $corte = strpos($ref, ':');
+        if ($corte !== false && $corte > 0) {
+            $ambito = substr($ref, 0, $corte);
+            $valor = substr($ref, $corte + 1);
+        }
+        $ambito = strtolower(trim($ambito));
+        if ($ambito === 'img') {
+            $id = (int)$valor;
+            return $id > 0 ? 'img:' . $id : '';
+        }
+        if ($ambito !== 'pdf') {
+            return '';
+        }
+        // Nombre de archivo plano: sin rutas ni traversal.
+        $valor = trim($valor);
+        if ($valor === '' || $valor === '.' || $valor === '..'
+            || strpos($valor, '/') !== false || strpos($valor, '\\') !== false) {
+            return '';
+        }
+        return 'pdf:' . substr($valor, 0, 128);
+    }
+
+    /**
+     * Ajustes por capa: allowlist cerrada y clamp por clave. El valor igual al
+     * default NO se persiste, para que la ausencia signifique "neutro".
+     */
+    private function mockup_filtros($valor)
+    {
+        // clave => [min, max, default, admite decimales]
+        $rangos = [
+            'brillo' => [0, 200, 100, false],
+            'gama' => [0, 200, 100, false],
+            'contraste' => [0, 200, 100, false],
+            'saturacion' => [0, 200, 100, false],
+            'opacidad' => [0, 100, 100, false],
+            'desenfoque' => [0, 20, 0, true],
+            'tono' => [-180, 180, 0, true],
+        ];
+        $filtros = [];
+        foreach ((array)$valor as $k => $v) {
+            $k = (string)$k;
+            if (!isset($rangos[$k])) {
+                continue;
+            }
+            $rango = $rangos[$k];
+            $num = $this->clamp_float((float)$v, $rango[0], $rango[1]);
+            if ($rango[3]) {
+                $num = round($num, 2);
+            } else {
+                $num = (int)round($num);
+            }
+            if (abs($num - $rango[2]) < 0.001) {
+                continue; // neutro: no se persiste
+            }
+            $filtros[$k] = $num;
+        }
+        return $filtros;
+    }
+
+    /** Modo de fusion de la capa (allowlist corta, extensible). */
+    private function mockup_modo($valor)
+    {
+        $modo = strtolower(trim((string)$valor));
+        return in_array($modo, ['normal', 'multiply'], true) ? $modo : 'normal';
+    }
+
+    /** Clamp de float con limites inclusivos. */
+    private function clamp_float($valor, $min, $max)
+    {
+        $valor = (float)$valor;
+        if ($valor < $min) {
+            return (float)$min;
+        }
+        if ($valor > $max) {
+            return (float)$max;
+        }
+        return $valor;
+    }
+
+
 
     /** Normaliza el mapeo placeholders (id hex => tipo/preset/value/settings/repetir). */
     private function config_placeholders($valor)

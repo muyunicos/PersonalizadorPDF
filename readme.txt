@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.2.2
+Stable tag: 4.3.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,17 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.3.0 =
+* **Editor de mockups visual (escritorio)**: la seccion "Mockups" pasa de un formulario de numeros a un editor de capas en dos columnas (lienzo de trabajo a la izquierda, recursos/capas/propiedades a la derecha). El lienzo es ampliable (100-300 %) con nitidez en pantallas de alta densidad y la salida sigue siendo 300x300. Se puede colocar, redimensionar y rotar arrastrando con el raton, con imanes a centros y bordes, guias, tiradores de esquinas y lados, tirador de rotacion y la medida en pixeles siempre a la vista; los campos numericos siguen disponibles y se sincronizan en ambos sentidos.
+* **Ver el resultado real antes de guardar**: las capas de hueco muestran en el lienzo el texto renderizado con su estilo al tamano exacto del hueco, reutilizando el preview que genera el boton "Probar" (con cache por hash: no se vuelve a renderizar lo mismo). El editor NO tiene motor de render propio.
+* **Una sola funcion de render (criterio de la 004 cumplido)**: `assets/mockup-render.js` compone el mockup para el editor y para la ficha. El hueco ahora se **encaja sin deformar** (antes se estiraba a la caja y deformaba la imagen) y el editor avisa si la proporcion de la capa difiere de la del recurso.
+* **Recursos sin escribir nombres**: arrastrar una imagen desde el escritorio al lienzo la sube y la anade como capa; galeria con miniaturas de las fotos del PDF y del catalogo de imagenes; lista de huecos con id, tamano real e instancias. Fin de los dos `window.prompt` y del listado de mockups duplicado.
+* **Capas y ajustes**: renombrar, duplicar, ocultar, bloquear, reordenar y alinear (6 posiciones); ajustes como sliders con vista en vivo (brillo, contraste, saturacion, **gama** —que antes se guardaba y no se aplicaba—, opacidad, desenfoque, tono y modo de fusion "multiplicar").
+* **No se pierde el trabajo**: autoguardado con retardo, deshacer/rehacer, estado visible ("Sin guardar"/"Guardando"/"Guardado"), aviso al salir con cambios pendientes y atajos de teclado para todo el editor.
+* **Robustez**: una capa sin recurso (foto borrada o grupo que ya no existe) queda marcada y avisada en vez de desaparecer en silencio; la geometria fuera de rango se normaliza al abrir.
+* **Contrato de capa ampliado (retrocompatible)**: `capas[].ref` con namespace `pdf:{archivo}` / `img:{id}` (el ref plano previo se lee como `pdf:`), y campos opcionales `modo`/`nombre`/`oculta`/`bloqueada`. Sin migracion.
+* Interno: `assets/mockup-render.js` + `assets/mockup-geometria.js` (geometria pura con test Node `tests/mockup-geometria.test.js`), reescritura de `assets/mockups.js`, store de previews en `assets/admin.js`, `PMU_Uploads::config_mockups` ampliado, handler de guardado con el saneo unico del motor, ficha migrada al nucleo compartido, estilos `.ec-mk-*` en `assets/admin.css`, fases `mockup_capas` y `mockup_preview` del arnes y check de despliegue en el smoke test.
 
 = 4.2.2 =
 * **Pestana "Test" con smoke test en vivo**: quinta pestana de la consola con un boton que verifica el sitio REAL (WordPress y WooCommerce activos) sin `exec()` ni procesos externos: entorno PHP (version, zlib, GD), permisos de escritura de `uploads/pmu/{pdfs,img,tm-presets,tmp,orders}`, catalogos legibles, motor (deteccion + `validarDataset` sobre cada PDF subido), hooks `admin_post` registrados, TextMuy integrado, Woo (`wc_get_products` + asociaciones PDF-producto validas) y render de la consola sin fatal. Devuelve tabla OK/FALLA con el detalle de cada check.

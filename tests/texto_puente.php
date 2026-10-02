@@ -259,6 +259,80 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('campos intactos', $cfg_g['campos_ids'] === $previo['campos_ids']);
             check('mapeos intactos', $cfg_g['placeholders'] === $previo['placeholders']);
             break;
+        case 'mockup_capas':
+            // Spec 011: contrato de capa ampliado. `ref` con namespace
+            // (pdf:/img:) con lectura tolerante del plano legado, ajustes
+            // ampliados con clamp por clave, y campos nuevos opcionales.
+            $mc = isset($GLOBALS['test_mockup_capas']) ? $GLOBALS['test_mockup_capas'] : null;
+            check('sin error', (string)($GLOBALS['test_mockup_capas_error'] ?? '') === '' && is_array($mc));
+            $capas = (array)($mc['capas'] ?? []);
+            check('mockups guardados (con el vacio)', is_array($mc) && count($mc['mockups']) === 2);
+            check('ref plano legado se lee como pdf:', is_array($mc)
+                && ($capas[0]['ref'] ?? '') === 'pdf:fondo.png');
+            check('ref del catalogo con namespace img:', is_array($mc)
+                && ($capas[1]['ref'] ?? '') === 'img:7');
+            check('ref con traversal rechazado y capa fuera', is_array($mc) && count($capas) === 4);
+            check('ajustes ampliados persistidos', is_array($mc)
+                && count((array)($capas[2]['filtros'] ?? [])) === 4
+                && (int)($capas[2]['filtros']['gama'] ?? -1) === 0
+                && (int)($capas[2]['filtros']['opacidad'] ?? -1) === 80
+                && (float)($capas[2]['filtros']['desenfoque'] ?? -1) === 4.5
+                && (float)($capas[2]['filtros']['tono'] ?? 1) === -30.0);
+            check('valor neutro (brillo 100) NO se persiste', is_array($mc)
+                && !array_key_exists('brillo', (array)($capas[0]['filtros'] ?? [])));
+            check('clamp de opacidad a 100 = neutro, no se persiste', is_array($mc)
+                && !array_key_exists('opacidad', (array)($capas[3]['filtros'] ?? [])));
+            check('clamp de desenfoque a 20', is_array($mc) && (float)($capas[3]['filtros']['desenfoque'] ?? 0) === 20.0);
+            check('clamp de tono a -180', is_array($mc) && (float)($capas[3]['filtros']['tono'] ?? 0) === -180.0);
+            check('clave de filtro desconocida descartada', is_array($mc)
+                && !array_key_exists('xxx', (array)($capas[2]['filtros'] ?? [])));
+            check('modo de fusion persistido', is_array($mc) && ($capas[2]['modo'] ?? '') === 'multiply');
+            check('modo invalido cae a normal', is_array($mc) && ($capas[3]['modo'] ?? '') === 'normal');
+            check('nombre/oculta/bloqueada persistidos', is_array($mc)
+                && ($capas[2]['nombre'] ?? '') === 'Marco' && ($capas[2]['oculta'] ?? false) === true
+                && ($capas[2]['bloqueada'] ?? false) === true);
+            check('defaults de los campos nuevos ausentes', is_array($mc)
+                && ($capas[0]['modo'] ?? '') === 'normal' && ($capas[0]['nombre'] ?? '') === ''
+                && ($capas[0]['oculta'] ?? true) === false && ($capas[0]['bloqueada'] ?? true) === false);
+            check('rot y sesgo siguen clampeados', is_array($mc)
+                && ($capas[2]['rot'] ?? 0) === 360.0 && ($capas[2]['sesgo'] ?? 0) === 1.0);
+            check('analisis intacto', ($GLOBALS['test_mc_analisis_antes'] ?? null)
+                === ($GLOBALS['test_mc_analisis_despues'] ?? 'x'));
+            check('mockup sin capas se conserva (se crea vacio)', is_array($mc) && count($mc['vacio']) === 1
+                && $mc['vacio'][0]['capas'] === []);
+            check('handler y motor usan la misma normalizacion', is_array($mc)
+                && $mc['handler'] === $mc['directo']);
+            break;
+
+        case 'mockup_preview':
+            // Spec 011 (T021): la ficha recibe la composicion con la clave
+            // `imagenes` del catalogo (capas `img:{id}`), y la marca de vista
+            // previa omisible se guarda desde el estado vigente del editor sin
+            // tocar el resto de la configuracion.
+            $mp = isset($GLOBALS['test_mp']) ? $GLOBALS['test_mp'] : null;
+            // El handler termina en exit: el config se relee aqui (shutdown).
+            if (is_array($mp)) { $mp['cfg'] = $p->motor_para_tests()->leer_config('muestra'); }
+            check('sin error', (string)($GLOBALS['test_mp_error'] ?? '') === '' && is_array($mp));
+            check('nucleo compartido desplegado', is_array($mp) && !empty($mp['nucleo']));
+            check('ficha con clave imagenes (catalogo)', is_array($mp)
+                && array_key_exists('imagenes', (array)($mp['render'] ?? [])));
+            check('fotos y mockups siguen llegando a la ficha', is_array($mp)
+                && isset($mp['render']['fotos'], $mp['render']['mockups'])
+                && $mp['render']['pdf'] === 'muestra');
+            check('capas con namespace sobreviven al viaje a la ficha', is_array($mp)
+                && isset($mp['cfg']['mockups'][0]['capas'][0]['ref'])
+                && $mp['cfg']['mockups'][0]['capas'][0]['ref'] === 'img:3'
+                && $mp['cfg']['mockups'][0]['capas'][1]['ref'] === '0000FF#1');
+            check('ajustes de la capa persistidos para la ficha', is_array($mp)
+                && (array)($mp['cfg']['mockups'][0]['capas'][1]['filtros'] ?? []) === ['gama' => 0, 'opacidad' => 90]);
+            check('omisible guardado desde el editor', is_array($mp)
+                && $mp['cfg']['preview_omisible'] === true);
+            check('el resto del config intacto', is_array($mp)
+                && $mp['cfg']['activo'] === $mp['previo']['activo']
+                && $mp['cfg']['productos'] === $mp['previo']['productos']
+                && $mp['cfg']['placeholders'] === $mp['previo']['placeholders']);
+            break;
+
         case 'mockup_foto':
             // T007: la foto queda en pdfs/{nombre}/mockups/ con nombre saneado.
             $dirF = $uploads . '/pdfs/muestra/mockups';
@@ -833,9 +907,23 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             $err_m = isset($GLOBALS['test_mockups_error']) ? (string)$GLOBALS['test_mockups_error'] : '';
             check('sin error', $err_m === '' && is_array($mm) && $mm['ok'] === true);
             check('analisis intacto', ($GLOBALS['test_analisis_antes'] ?? null) === ($GLOBALS['test_analisis_despues'] ?? ''));
-            check('1 mockup valido', is_array($mm) && count($mm['cfg']['mockups']) === 1 && $mm['cfg']['mockups'][0]['id'] === 'fiesta');
+            check('1 mockup con capas + el vacio (ya no se poda)', is_array($mm)
+                && count($mm['cfg']['mockups']) === 2
+                && $mm['cfg']['mockups'][0]['id'] === 'fiesta'
+                && $mm['cfg']['mockups'][1]['id'] === 'vacio'
+                && $mm['cfg']['mockups'][1]['capas'] === []);
             check('capas 1,2,5 (limpieza)', is_array($mm) && count($mm['cfg']['mockups'][0]['capas']) === 3);
-            check('clamp de filtros/rot/sesgo', is_array($mm) && $mm['cfg']['mockups'][0]['capas'][2] === ['tipo' => 'img', 'ref' => 'marco', 'x' => 90, 'y' => 54, 'w' => 122, 'h' => 192, 'rot' => 360.0, 'sesgo' => 1.0, 'filtros' => ['brillo' => 200]]);
+            // Spec 011: `ref` con namespace, campos nuevos con default y
+            // filtros con allowlist ampliada (clamp 200 para brillo).
+            check('clamp de filtros/rot/sesgo + contrato ampliado', is_array($mm)
+                && $mm['cfg']['mockups'][0]['capas'][2] === [
+                    'tipo' => 'img', 'ref' => 'pdf:marco', 'x' => 90, 'y' => 54, 'w' => 122, 'h' => 192,
+                    'rot' => 360.0, 'sesgo' => 1.0, 'filtros' => ['brillo' => 200],
+                    'modo' => 'normal', 'nombre' => '', 'oculta' => false, 'bloqueada' => false,
+                ]);
+            check('refs planos legados con namespace pdf:', is_array($mm)
+                && $mm['cfg']['mockups'][0]['capas'][0]['ref'] === 'pdf:fondo'
+                && $mm['cfg']['mockups'][0]['capas'][1]['ref'] === '0000FF#0');
             check('omisible persiste con mockups', is_array($mm) && $mm['cfg']['preview_omisible'] === true);
             check('repetir=true en mapeo', is_array($mm) && $mm['cfg']['placeholders']['0000FF']['repetir'] === true);
             check('omisible sin mockups queda false', isset($GLOBALS['test_mockups_sin']) && $GLOBALS['test_mockups_sin']['preview_omisible'] === false && $GLOBALS['test_mockups_sin']['mockups'] === []);
@@ -1893,7 +1981,7 @@ switch ($fase) {
                             ['tipo' => 'img', 'ref' => 'marco', 'x' => 90, 'y' => 54, 'w' => 122, 'h' => 192, 'rot' => 400, 'sesgo' => 9, 'filtros' => ['brillo' => 999, 'xxx' => 1]],
                         ],
                     ],
-                    ['id' => 'vacio', 'capas' => []], // sin capas: fuera
+                    ['id' => 'vacio', 'capas' => []], // sin capas: se conserva (se completa despues)
                     ['capas' => [['tipo' => 'img', 'ref' => 'f', 'x' => 0, 'y' => 0, 'w' => 1, 'h' => 1]]], // sin id: fuera
                 ],
                 'preview_omisible' => true,
@@ -2002,6 +2090,117 @@ switch ($fase) {
         ];
         $_REQUEST = $_POST;
         $p->handle_subir_pdf(); // exit en responder(JSON nombre_existente:)
+        break;
+
+    case 'mockup_preview':
+        // Spec 011 (T021): datos de render con el catalogo (para que una capa
+        // `img:{id}` se vea igual en la ficha que en el editor) y guardado del
+        // editor con la marca de vista previa omisible tomada del estado vigente.
+        preparar_entorno($testBase, $base);
+        $motor_mp = $p->motor_para_tests();
+        $motor_mp->guardar_config('muestra', [
+            'activo' => true,
+            'productos' => [7],
+            'placeholders' => ['0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow',
+                'value' => 'Ana', 'settings' => '', 'repetir' => true]],
+        ]);
+        $previo_mp = $motor_mp->leer_config('muestra');
+        try {
+            $nucleo = [];
+            foreach (['assets/mockup-render.js', 'assets/mockup-geometria.js',
+                'assets/mockups.js'] as $rel) {
+                $nucleo[basename($rel)] = is_file(dirname(__DIR__) . '/' . $rel);
+            }
+            $render_mp = $p->datos_pdf_render('muestra');
+            $_POST = [
+                'action' => 'personalizador_pdf_mockups',
+                'archivo' => 'muestra.pdf',
+                'preview_omisible' => '1',
+                'mockups' => json_encode([[
+                    'id' => 'fiesta',
+                    'titulo' => 'Fiesta',
+                    'capas' => [
+                        ['tipo' => 'img', 'ref' => 'img:3', 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300],
+                        ['tipo' => 'placeholder', 'ref' => '0000FF#1', 'x' => 90, 'y' => 60,
+                            'w' => 110, 'h' => 180, 'filtros' => ['gama' => 0, 'opacidad' => 90]],
+                    ],
+                ]]),
+                '_wpnonce' => 'nonce',
+            ];
+            $_REQUEST = $_POST;
+            $cfg_mp = null;
+            // handle_mockups_guardar() termina en exit (wp_send_json): el
+            // shutdown de esta fase verifica con lo que dejo en el disco.
+            $GLOBALS['test_mp'] = [
+                'nucleo' => !in_array(false, $nucleo, true),
+                'render' => $render_mp,
+                'previo' => $previo_mp,
+            ];
+            $p->handle_mockups_guardar(); // exit en wp_send_json_success
+            // Al salir por wp_send_json, el shutdown de la fase relee el config.
+            $GLOBALS['test_mp']['cfg'] = $motor_mp->leer_config('muestra');
+        } catch (\Throwable $e) {
+            $GLOBALS['test_mp_error'] = $e->getMessage();
+        }
+        break;
+
+    case 'mockup_capas':
+        // Spec 011: contrato de capa ampliado (namespace en `ref`, ajustes con
+        // rango propio por clave, campos nuevos opcionales, mockup vacio
+        // permitido) y equivalencia entre el saneo del handler y el del motor.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        $motor_mc = $p->motor_para_tests();
+        $analisis_mc_antes = file_get_contents($motor_mc->ruta_analisis('muestra'));
+        $entrada_mc = [
+            [
+                'id' => 'vistas',
+                'titulo' => 'Vistas',
+                'capas' => [
+                    // 0: ref plano legado (compatibilidad con mockups previos).
+                    ['tipo' => 'img', 'ref' => 'fondo.png', 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300,
+                        'filtros' => ['brillo' => 100]],
+                    // 1: imagen del catalogo por id numerico.
+                    ['tipo' => 'img', 'ref' => 'img:7', 'x' => 10, 'y' => 10, 'w' => 50, 'h' => 50],
+                    // 2: ajustes ampliados + campos nuevos.
+                    ['tipo' => 'placeholder', 'ref' => '0000FF#1', 'x' => 5, 'y' => 5, 'w' => 40, 'h' => 60,
+                        'rot' => 400, 'sesgo' => 9, 'nombre' => 'Marco', 'modo' => 'multiply',
+                        'oculta' => true, 'bloqueada' => true,
+                        'filtros' => ['gama' => 0, 'opacidad' => 80, 'desenfoque' => 4.5, 'tono' => -30, 'xxx' => 1]],
+                    // 3: fuera de rango -> clamp; modo invalido -> normal.
+                    ['tipo' => 'img', 'ref' => 'pdf:marco.png', 'x' => 0, 'y' => 0, 'w' => 10, 'h' => 10,
+                        'modo' => 'inventado',
+                        'filtros' => ['opacidad' => 500, 'desenfoque' => 99, 'tono' => -900]],
+                    // 4: traversal -> capa fuera.
+                    ['tipo' => 'img', 'ref' => '../fuera', 'x' => 0, 'y' => 0, 'w' => 1, 'h' => 1],
+                    // 5: namespace desconocido -> fuera.
+                    ['tipo' => 'img', 'ref' => 'http://x/y.png', 'x' => 0, 'y' => 0, 'w' => 1, 'h' => 1],
+                ],
+            ],
+            // 2: mockup sin capas: se conserva (se crea vacio y se completa).
+            ['id' => 'pendiente', 'titulo' => '', 'capas' => []],
+        ];
+        try {
+            $directo = $motor_mc->normalizar_mockups($entrada_mc);
+            $motor_mc->guardar_config('muestra', ['mockups' => $entrada_mc]);
+            $leido = $motor_mc->leer_config('muestra');
+            $GLOBALS['test_mockup_capas'] = [
+                'directo' => json_encode($directo),
+                'handler' => json_encode($leido['mockups']),
+                'mockups' => $leido['mockups'],
+                'capas' => (array)($leido['mockups'][0]['capas'] ?? []),
+                'vacio' => array_values(array_filter((array)$leido['mockups'], function ($m) {
+                    return (string)($m['id'] ?? '') === 'pendiente';
+                })),
+            ];
+            $GLOBALS['test_mc_analisis_antes'] = $analisis_mc_antes;
+            $GLOBALS['test_mc_analisis_despues'] = file_get_contents($motor_mc->ruta_analisis('muestra'));
+        } catch (\Throwable $e) {
+            $GLOBALS['test_mockup_capas_error'] = $e->getMessage();
+        }
         break;
 
     case 'mockups_guardar':

@@ -99,7 +99,17 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   ├── admin.css            ← Estilos de consola + editor de mockups + iframe
 │   ├── admin.js             ← Interfaz, validaciones y puente RenderCore
 │   ├── tienda.js            ← Ficha Woo: campos, "Vista previa", galería, add-to-cart
-│   ├── mockups.js           ← Editor de capas 300x300 (delegado al módulo TextMuy)
+│   ├── mockups.js           ← Editor de mockups del admin (2 columnas, lienzo
+│   │                             ampliable, manipulacion directa; DELEGA el render
+│   │                             en `mockup-render.js` y la geometria en
+│   │                             `mockup-geometria.js`; spec 011)
+│   ├── mockup-render.js      ← NUCLEO de composicion del mockup (Canvas 2D):
+│   │                             `PMUMockup.componer/contener/filtroCss/esValida`.
+│   │                             UNICA funcion de render del sistema: la usan el
+│   │                             editor y la ficha (spec 011, R1)
+│   ├── mockup-geometria.js   ← Geometria PURA del editor (acotar, imanes, tiradores,
+│   │                             rotacion, acertar, alinear, distribuir). Sin DOM;
+│   │                             testeada con `node tests/mockup-geometria.test.js`
 │   ├── selector-pmu.js      ← Cliente de subida/recorte de imágenes de campos (spec 004,
 │   │                          contrato `specs/004.../contracts/selector-pmu.md`)
 │   └── miniaturas.js        ← ThumbEngine: miniaturas `.webp` y sprites por ámbito; único
@@ -288,10 +298,18 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `id`/`w`/`h`/`cont`/`pgs`) + `pdfs/{nombre}/config.json` (editable: `activo`, `productos`,
   `campos_ids`, `preview_omisible` (bool, default `false` = mockup obligatorio en ficha),
   `mockups[]` (plantillas de vista previa: `capas[]` con `tipo`/`ref`/`x`/`y`/`w`/`h`/
-  `rot`/`sesgo`/`filtros`; canvas 300x300), `tienda{product_id}` (spec 005: Configuracion
+  `rot`/`sesgo`/`filtros`/`modo`/`nombre`/`oculta`/`bloqueada`; canvas 300x300),
+  `tienda{product_id}` (spec 005: Configuracion
   tienda por asociacion PDFxproducto: `activo`/`validez`/`mensaje_html`/`bloquear`;
   la expresion `validez` se evalua SOLO en el navegador, PHP nunca evalua JS), `placeholders[id]` con
   `tipo`/`preset`/`value`/`settings`).
+  **Spec 011 (contrato de capa)**: `capas[].ref` lleva **namespace** — `pdf:{archivo}`
+  (foto del PDF) o `img:{id}` (id numerico del catálogo `img`); un `ref` plano se lee
+  como `pdf:` (compatibilidad con los mockups previos). `capas[].filtros` admite
+  `brillo`/`gama`/`contraste`/`saturacion` 0..200, `opacidad` 0..100, `desenfoque` 0..20 y
+  `tono` -180..180; el valor igual al default **no se persiste**. `capas[].modo` es
+  `normal`|`multiply`. Todo es opcional: ausente = comportamiento actual.
+  Contrato completo: `specs/011-editor-mockups-visual/contracts/mockup-capas.md`.
   Sin `textos.json` y sin `metadata.json`
   (norma ex-008 + decision preview 2026-09-17; la migración `.migrado-007` ya no se ejecuta).
 - Fotos de mockups del admin: `pdfs/{nombre}/mockups/` (datos de usuario, sin catálogo);
@@ -441,6 +459,8 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 php -l personalizador-pdf.php && php -l admin/*.php && php -l engine/*.php && php -l inc/*.php
 php tests/motor_smoke.php     # Smoke del motor (debe decir "SMOKE OK")
 php tests/parity.php          # Oráculo del detector (debe decir "PARIDAD OK")
+node tests/mockup-geometria.test.js   # Geometria pura del editor de mockups (spec 011):
+                              # debe decir "GEOMETRIA OK (N checks)"
 php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
                               # setup | guardar_ajax | guardar_vacio | procesar |
                               # rechazo | imagen_adjunto [mal] |
@@ -449,7 +469,8 @@ php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
                               # migracion | nonce [cap] | validez | validez_admin |
                               # validez_admin_mal | ficha* | vista_previa* |
                               # carrito | pool* | sesion | conciliacion |
-                              # completados | mockups* | mockup_foto |
+                              # completados | mockups* | mockup_capas |
+                             # mockup_preview | mockup_foto |
                               # mockup_foto_baja | mockup_foto_ajax |
                               # desactivar | reanalizar | borrado | smoke
 ```

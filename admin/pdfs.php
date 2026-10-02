@@ -493,13 +493,14 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                 <div class="ec-acordeon-cuerpo">
                     <p class="description">El mockup es una "fotografia" simulada 300x300px del
                         producto en uso (NO el PDF): el cliente la aprueba al agregar al carrito.
-                        Las fotos de referencia se suben aqui abajo y la composicion de capas se
-                        edita en el editor embebido.</p>
-                    <label class="ec-block-label"><input type="checkbox" class="ec-omisible" name="preview_omisible" value="1" <?php checked(!empty($cfg_pdf['preview_omisible']), true); ?> <?php if (empty($cfg_pdf['mockups'])) : ?>disabled<?php endif; ?>> Vista previa omisible (el cliente agrega directo; visible solo con mockups creados)</label>
+                        El editor de abajo compone la escena por capas; el boton "Probar" de cada
+                        grupo te deja ver el texto real dentro de la foto antes de guardar.</p>
 
-                    <?php // Fotos de referencia para las capas "Foto" del editor (sin form: JSON via pmuPost). ?>
+                    <?php // Fuente unica de la marca "vista previa omisible" (spec 011, FR-037):
+                          // el editor la refleja y la guarda; el servidor normaliza con la
+                          // regla vigente (sin mockups queda false). ?>
                     <div class="ec-mockup-fotos-admin" data-pdf="<?php echo esc_attr($seleccionado); ?>">
-                        <p class="ec-block-label">Fotos del mockup <span class="description">(van en pdfs/<?php echo esc_html($this->nombre_de($seleccionado)); ?>/mockups/ y sirven de capa "Foto" en el editor)</span></p>
+                        <p class="ec-block-label">Fotos de referencia <span class="description">(van en pdfs/<?php echo esc_html($this->nombre_de($seleccionado)); ?>/mockups/ y sirven de capa "Foto"; tambien podes arrastrarlas sobre el lienzo del editor)</span></p>
                         <input type="file" class="ec-mockup-foto-input" accept="image/png,image/jpeg,image/gif,image/webp">
                         <button type="button" class="button button-small ec-mockup-subir">Subir foto</button>
                         <span class="ec-mockup-status" aria-live="polite"></span>
@@ -513,19 +514,12 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                             <?php endforeach; ?>
                         </ul>
                         <?php if (!$fotos_mockup) : ?>
-                            <p class="description ec-mockup-fotos-vacio">Todavia no hay fotos. Sube una desde tu PC para poder usarla como capa.</p>
+                            <p class="description ec-mockup-fotos-vacio">Todavia no hay fotos. Sube una o arrastrala sobre el lienzo del editor.</p>
                         <?php endif; ?>
                     </div>
-                    <?php if (empty($cfg_pdf['mockups'])) : ?>
-                        <p class="description">Todavia no hay mockups. Crea el primero en el modulo.</p>
-                    <?php else : ?>
-                        <?php foreach ((array)$cfg_pdf['mockups'] as $mk) : ?>
-                            <div class="ec-mockup" data-id="<?php echo esc_attr(isset($mk['id']) ? $mk['id'] : ''); ?>">
-                                <strong><?php echo esc_html((isset($mk['id']) ? $mk['id'] : '') . (isset($mk['titulo']) && $mk['titulo'] !== '' ? ' — ' . $mk['titulo'] : '')); ?></strong>
-                                <span class="description"><?php echo count((array)(isset($mk['capas']) ? $mk['capas'] : [])); ?> capa(s)</span>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
+                    <?php // El editor (assets/mockups.js) se inyecta al inicio de este
+                          // acordeon y es el UNICO listado de mockups: el bloque PHP
+                          // duplicado se elimino en la spec 011 (FR-031). ?>
                 </div>
             </details>
 

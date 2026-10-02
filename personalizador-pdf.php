@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.2.2
+ * Version: 4.3.0
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -592,6 +592,16 @@ class Personalizador_PDF_Plugin
             return;
         }
         $listo = true;
+        // Nucleo de composicion del mockup (spec 011, R1): la ficha compone con
+        // la MISMA funcion que el editor del admin. Se encola antes que
+        // selector-pmu/tienda, que dependen de PMUMockup.
+        wp_enqueue_script(
+            'personalizador-pdf-mockup-render',
+            PERSONALIZADOR_PDF_URL . 'assets/mockup-render.js',
+            [],
+            PERSONALIZADOR_PDF_VERSION,
+            true
+        );
         wp_enqueue_script(
             'personalizador-pdf-selector',
             PERSONALIZADOR_PDF_URL . 'assets/selector-pmu.js',
@@ -602,7 +612,7 @@ class Personalizador_PDF_Plugin
         wp_enqueue_script(
             'personalizador-pdf-tienda',
             PERSONALIZADOR_PDF_URL . 'assets/tienda.js',
-            ['personalizador-pdf-selector'],
+            ['personalizador-pdf-mockup-render', 'personalizador-pdf-selector'],
             PERSONALIZADOR_PDF_VERSION,
             true
         );
@@ -760,7 +770,8 @@ class Personalizador_PDF_Plugin
      */
     public function datos_pdf_render($nombre)
     {
-        $vacio = ['pdf' => '', 'grupos' => [], 'fotos' => [], 'mockups' => [], 'preview_omisible' => false];
+        $vacio = ['pdf' => '', 'grupos' => [], 'fotos' => [], 'mockups' => [], 'preview_omisible' => false,
+            'imagenes' => []];
         try {
             $nombre = $this->pmu_uploads()->nombre_seguro($nombre, 'ficha_render');
             $vista = $this->vista_grupos($nombre);
@@ -794,10 +805,43 @@ class Personalizador_PDF_Plugin
                 'fotos' => $this->mockup_fotos_lista($nombre),
                 'mockups' => isset($config['mockups']) ? array_values((array)$config['mockups']) : [],
                 'preview_omisible' => !empty($config['preview_omisible']),
+                // Spec 011: catalogo global de imagenes como fuente valida de
+                // capas del mockup (capas con `ref = "img:{id}"`). Solo lectura:
+                // el catalogo lo escribe unicamente el modulo TextMuy.
+                'imagenes' => $this->mockup_catalogo_imagenes(),
             ];
         } catch (\Throwable $e) {
             return $vacio;
         }
+    }
+
+    /**
+     * Inventario del catalogo `img` para el editor de mockups y la ficha.
+     * Devuelve `[{id, file, title, cats, url}]` con fisicos verificados
+     * (cero 404) y **nunca lanza**: un catalogo ilegible deja la lista vacia y
+     * el resto de la consola sigue operativa.
+     */
+    private function mockup_catalogo_imagenes()
+    {
+        try {
+            $items = $this->pmu_uploads()->listar('img')['items'] ?? [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+        $salida = [];
+        foreach ((array)$items as $it) {
+            if (!is_array($it) || empty($it['id']) || empty($it['file']) || empty($it['url'])) {
+                continue;
+            }
+            $salida[] = [
+                'id' => (int)$it['id'],
+                'file' => (string)$it['file'],
+                'title' => (string)($it['title'] ?? ''),
+                'cats' => (string)($it['cats'] ?? ''),
+                'url' => (string)$it['url'],
+            ];
+        }
+        return $salida;
     }
 
     /**
@@ -1758,6 +1802,31 @@ class Personalizador_PDF_Plugin
             $detalle_ped = $e->getMessage();
         }
         $add('Consola: render pestana Pedidos', $ok_ped, $detalle_ped);
+        // Spec 011 (T049): el editor de mockups tiene su nucleo compartido; si
+        // el despliegue subio la consola sin esos estaticos, el editor no
+        // monta y el admin pierde la herramienta. Se verifica el fichero y el
+        // punto de entrada que usa la pagina.
+        $ok_mk = true;
+        $detalle_mk = '';
+        try {
+            $nucleo = PERSONALIZADOR_PDF_PATH . 'assets/mockup-render.js';
+            $geometria = PERSONALIZADOR_PDF_PATH . 'assets/mockup-geometria.js';
+            $editor = PERSONALIZADOR_PDF_PATH . 'assets/mockups.js';
+            $faltan = [];
+            foreach (['nucleo' => $nucleo, 'geometria' => $geometria, 'editor' => $editor] as $etiqueta => $ruta) {
+                if (!is_file($ruta)) {
+                    $faltan[] = $etiqueta;
+                }
+            }
+            $ok_mk = $faltan === [];
+            $detalle_mk = $faltan === []
+                ? 'nucleo + geometria + editor presentes'
+                : 'faltan: ' . implode(', ', $faltan);
+        } catch (\Throwable $e) {
+            $ok_mk = false;
+            $detalle_mk = $e->getMessage();
+        }
+        $add('Mockups: nucleo de render del editor desplegado', $ok_mk, $detalle_mk);
     }
 
     /** UUID v4 para unique_key (sin depender del uuid privado de PMU_Sesion). */
@@ -2242,40 +2311,11 @@ class Personalizador_PDF_Plugin
         if (!is_array($decodificado)) {
             $this->responder(false, [], 'mockups_invalidos');
         }
-        // Solo capas bien formadas; el motor normaliza rangos y refs.
-        $mockups = [];
-        foreach ($decodificado as $mk) {
-            if (!is_array($mk)) {
-                continue;
-            }
-            $capas = [];
-            foreach ((array)($mk['capas'] ?? []) as $c) {
-                if (!is_array($c)) {
-                    continue;
-                }
-                $tipo = isset($c['tipo']) ? (string)$c['tipo'] : '';
-                if ($tipo !== 'img' && $tipo !== 'placeholder') {
-                    continue;
-                }
-                $capas[] = [
-                    'tipo' => $tipo,
-                    'ref' => isset($c['ref']) ? substr(trim((string)$c['ref']), 0, 128) : '',
-                    'x' => (int)($c['x'] ?? 0),
-                    'y' => (int)($c['y'] ?? 0),
-                    'w' => (int)($c['w'] ?? 0),
-                    'h' => (int)($c['h'] ?? 0),
-                    'rot' => (float)($c['rot'] ?? 0),
-                    'sesgo' => (float)($c['sesgo'] ?? 0),
-                    'filtros' => isset($c['filtros']) && is_array($c['filtros']) ? $c['filtros'] : [],
-                ];
-            }
-            $mockups[] = [
-                'id' => isset($mk['id']) ? sanitize_key((string)$mk['id']) : '',
-                'titulo' => isset($mk['titulo']) ? substr(trim((string)$mk['titulo']), 0, 200) : '',
-                'creado' => isset($mk['creado']) && $mk['creado'] !== '' ? substr((string)$mk['creado'], 0, 32) : gmdate('Y-m-d\TH:i:s\Z'),
-                'capas' => $capas,
-            ];
-        }
+        // Spec 011: el saneo vive en el motor (`PMU_Uploads::normalizar_mockups`)
+        // y es el MISMO que aplica `guardar_config`. Aqui no se reimplementa
+        // (si difirieran, el editor creeria que guardo algo que el motor
+        // descarto) y no se pierde ninguna capa valida.
+        $mockups = $this->pmu_uploads()->normalizar_mockups($decodificado);
         $ok = $this->pmu_uploads()->guardar_config($nombre, [
             'mockups' => $mockups,
             'preview_omisible' => !empty($_POST['preview_omisible']),
@@ -2503,10 +2543,27 @@ class Personalizador_PDF_Plugin
         // pmu-core: admin.js expone pmuPost/pmuAviso/pmuForm; mockups.js y la
         // pestana Campos lo reutilizan (sin duplicar fetch/FormData).
         if ($tab === 'pdfs') {
+            // Nucleo de composicion del mockup (spec 011): lo consumen el
+            // editor y la ficha, y es la UNICA funcion de render del sistema.
+            wp_enqueue_script(
+                'personalizador-pdf-mockup-render',
+                PERSONALIZADOR_PDF_URL . 'assets/mockup-render.js',
+                [],
+                PERSONALIZADOR_PDF_VERSION,
+                true
+            );
+            wp_enqueue_script(
+                'personalizador-pdf-mockup-geometria',
+                PERSONALIZADOR_PDF_URL . 'assets/mockup-geometria.js',
+                [],
+                PERSONALIZADOR_PDF_VERSION,
+                true
+            );
             wp_enqueue_script(
                 'personalizador-pdf-mockups',
                 PERSONALIZADOR_PDF_URL . 'assets/mockups.js',
-                ['jquery', 'personalizador-pdf'],
+                ['jquery', 'personalizador-pdf', 'personalizador-pdf-mockup-render',
+                    'personalizador-pdf-mockup-geometria'],
                 PERSONALIZADOR_PDF_VERSION,
                 true
             );
@@ -2553,7 +2610,8 @@ class Personalizador_PDF_Plugin
      */
     public function mockups_para_editor()
     {
-        $vacio = ['pdf' => '', 'grupos' => [], 'fotos' => [], 'mockups' => [], 'preview_omisible' => false];
+        $vacio = ['pdf' => '', 'grupos' => [], 'fotos' => [], 'mockups' => [], 'preview_omisible' => false,
+            'imagenes' => []];
         try {
             $get = isset($_GET['ec_pdf']) ? sanitize_file_name(wp_unslash((string)$_GET['ec_pdf'])) : '';
             $pdfs = $this->pdfs_subidos();

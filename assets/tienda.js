@@ -411,29 +411,13 @@
         });
     }
 
-    /** Filtros CSS por capa (mismo contrato que el editor de mockups). */
-    function filtroCss(f) {
-        if (!f) { return 'none'; }
-        var partes = [];
-        if (f.brillo && +f.brillo !== 100) { partes.push('brightness(' + (+f.brillo / 100) + ')'); }
-        if (f.contraste && +f.contraste !== 100) { partes.push('contrast(' + (+f.contraste / 100) + ')'); }
-        if (f.saturacion && +f.saturacion !== 100) { partes.push('saturate(' + (+f.saturacion / 100) + ')'); }
-        return partes.length ? partes.join(' ') : 'none';
-    }
-
-    /** Carga una imagen (Promesa); falla en silencio (vista rota = se oculta). */
-    function cargarImagen(url) {
-        return new Promise(function (resolver) {
-            var img = new Image();
-            img.onload = function () { resolver(img); };
-            img.onerror = function () { resolver(null); };
-            img.src = url;
-        });
-    }
-
     /**
-     * Compone un mockup 300x300 con capas img/placeholder (misma geometria
-     * que el editor del admin: x/y/w/h/rot/sesgo + filtros solo mockup).
+     * Compone un mockup 300x300 con capas img/placeholder.
+     *
+     * Spec 011 (R1/R13): la composicion la hace `PMUMockup`, la MISMA funcion
+     * que usa el editor del admin. Aqui solo se resuelve el recurso de cada
+     * capa: los huecos contra los PNG del pool del item y las fotos contra
+     * las del PDF. El encaje sin deformar y los ajustes viven en el nucleo.
      */
     function componerMockup(pdfDatos, mockup, pngsPorGrupo) {
         var canvas = document.createElement('canvas');
@@ -441,42 +425,42 @@
         canvas.height = 300;
         canvas.className = 'pmu-gal-canvas';
         var ctx = canvas.getContext('2d');
-        var capas = (mockup && mockup.capas) || [];
-        var cargas = capas.map(function (c) {
-            ctx.save();
-            ctx.translate(c.x + c.w / 2, c.y + c.h / 2);
-            ctx.rotate((c.rot || 0) * Math.PI / 180);
-            if (c.sesgo) { ctx.transform(1, 0, c.sesgo, 1, 0, 0); }
-            ctx.filter = filtroCss(c.filtros);
-            var promesa;
-            if (c.tipo === 'img') {
-                promesa = cargarImagen((pdfDatos.fotos || {})[c.ref]);
-            } else {
-                // Capa placeholder: Blob (render nuevo) o URL (reuso del pool).
-                var partes = String(c.ref || '').split('#');
-                var lista = pngsPorGrupo[partes[0]] || [];
-                var k = partes.length > 1 ? (parseInt(partes[1], 10) - 1) : 0;
-                var recurso = lista[k];
-                if (typeof recurso === 'string') {
-                    promesa = cargarImagen(recurso);
-                } else if (recurso) {
-                    promesa = cargarImagen(URL.createObjectURL(recurso));
-                } else {
-                    promesa = Promise.resolve(null);
-                }
+        var datos = pdfDatos || {};
+        var fotos = datos.fotos || {};
+        var imagenes = datos.imagenes || [];
+        var losPngs = pngsPorGrupo || {};
+
+        /**
+         * Resuelve el recurso de una capa contra el pool del item.
+         * Capa img: foto del PDF (`pdf:{archivo}`) o catalogo (`img:{id}`).
+         * Capa placeholder: PNG del pool por grupo e indice de instancia.
+         */
+        function resolver(capa) {
+            if (!capa) { return null; }
+            if (capa.tipo === 'img') {
+                var url = window.PMUMockup.urlDeImagen(capa.ref, {
+                    fotos: fotos, imagenes: imagenes
+                });
+                return url ? { url: url } : null;
             }
-            return promesa.then(function (img) {
-                if (img && img.naturalWidth) {
-                    ctx.drawImage(img, -c.w / 2, -c.h / 2, c.w, c.h);
-                } else {
-                    // Placeholder sin render: caja neutra (nunca rompe la vista).
-                    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-                    ctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h);
-                }
-                ctx.restore();
-            });
+            var partes = String(capa.ref || '').split('#');
+            var lista = losPngs[partes[0]] || [];
+            // El editor numera las instancias desde 1; se acepta el 0 heredado.
+            var indice = partes.length > 1 ? (parseInt(partes[1], 10) - 1) : 0;
+            var recurso = lista[indice];
+            if (recurso === undefined && indice === -1) { recurso = lista[0]; }
+            if (typeof recurso === 'string') { return { url: recurso }; }
+            if (recurso) { return { url: URL.createObjectURL(recurso) }; }
+            return null;
+        }
+
+        return window.PMUMockup.componer(ctx, (mockup && mockup.capas) || [], {
+            resolver: resolver,
+            contexto: { fotos: fotos, imagenes: imagenes, grupos: datos.grupos || [] },
+            lienzo: 300
+        }).then(function () {
+            return canvas;
         });
-        return Promise.all(cargas).then(function () { return canvas; });
     }
     /** Aviso por PDF (N != M o fallos): siempre visible y accionable. */
     function mostrarAviso(pdfDatos, texto) {

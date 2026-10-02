@@ -10,8 +10,9 @@
 | [004-woocommerce-pdf-personalization](./004-woocommerce-pdf-personalization/) | 33/34 `[X]` (T031 verde) | T030 | spec, plan, data-model, contracts/, quickstart §1 (auto) |
 | [005-pdf-condicionales](./005-pdf-condicionales/) | T001–T011 `[X]` | T012-recorrido (lo cubre T030) | spec, contracts/validez.md, quickstart §1 (auto) |
 | [006-align-textmuy-motor](./006-align-textmuy-motor/) | 27/29 `[X]` (T026/T027/T028 verde) | T017 + T029 | spec, contracts/, quickstart §1+§2+§7 (auto) |
+| [011-editor-mockups-visual](./011-editor-mockups-visual/) | **53/53 `[X]`** (v4.3.0) | T051 (recorrido manual en `MANUAL-PENDIENTE-WP-REAL.md` §2) | spec + plan + research + data-model + contracts/mockup-capas.md + quickstart + tasks. Editor de mockups en 2 columnas con manipulacion directa; nucleo de render compartido `assets/mockup-render.js` (editor + ficha), geometria pura `assets/mockup-geometria.js` (test Node `tests/mockup-geometria.test.js`), `ref` con namespace `pdf:`/`img:`, ajustes por capa ampliados (incluye `gama`, antes guardada y no aplicada), encaje sin deformar, autoguardado + deshacer; sin tocar `modules/textmuy/` |
 
-Recorrido manual unico (cubre T030 + T012 + T017 + T029 en una sesion):
+Recorrido manual unico (cubre T030 + T012 + T017 + T029 + T051 en una sesion):
 [MANUAL-PENDIENTE-WP-REAL.md](./MANUAL-PENDIENTE-WP-REAL.md).
 
 ## En especificacion (sin implementar)

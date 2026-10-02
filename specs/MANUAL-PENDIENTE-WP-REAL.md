@@ -46,16 +46,30 @@ Detalle completo por spec: [004/quickstart.md §1](./004-woocommerce-pdf-persona
    sin `uploads/tm/` ni `uploads/pmu/tm/` (solo vigente `tm-presets/`).
    (Origen: [006/quickstart.md §3](./006-align-textmuy-motor/quickstart.md).)
 
-## 2. Mockups + mapeo admin (004 T030 §2, 006 §4-parcial)
+## 2. Mockups + mapeo admin (004 T030 §2, 006 §4-parcial, **011 T051**)
 
-1. En PDFs, abrir "Mockups" del PDF de prueba; crear mockup `fiesta` (capa `img`
-   fondo + 2 capas `placeholder`, tamano/posicion/rotacion/sesgo/filtros).
-2. Guardar y recargar: `config.json:mockups[0].capas` con el orden; galeria admin
-   renderiza al vuelo; `analisis.json` intacto.
-3. Asignar a un grupo el estilo del paso 1 y Procesar: PDF incorpora el texto
-   estilizado sin recursos ausentes.
+1. En PDFs, abrir "Mockups" del PDF de prueba; el editor aparece en **dos columnas**
+   con estilos (paneles, lienzo con fondo damero, marco 300x300).
+2. Crear vista `fiesta`: **arrastrar una imagen desde el escritorio al lienzo** (se sube y
+   queda como capa, sin escribir el nombre) y agregar **2 huecos** desde la lista de
+   grupos con un clic.
+3. Colocar y alinear **solo con el raton**: arrastrar, redimensionar con los tiradores,
+   rotar; comprobar la guia del imán al llegar al centro y la medida en px junto a la
+   seleccion. Subir el zoom a 200 % y repetir un arrastre: el resultado es identico.
+4. Pulsar **"Probar"** en un grupo con estilo: el lienzo muestra el texto real en las
+   capas de ese grupo. Pulsarlo otra vez **no** genera un render nuevo.
+5. Mover un slider (p. ej. **gama**, que antes se guardaba y no se aplicaba) y comprobar
+   el efecto en vivo; "Restablecer ajustes" vuelve al neutro.
+6. Esperar el autoguardado ("Guardado"), **recargar** y comprobar que todo persiste.
+   `Ctrl+Z` revierte un movimiento.
+7. Guardar y recargar: `config.json:mockups[0].capas` con el orden, `ref` con namespace
+   (`pdf:...`, `img:{id}`) y los ajustes; `analisis.json` intacto.
+8. Borrar una foto en uso: aparece el conteo de capas afectadas; al confirmar, la capa
+   queda **marcada**, no desaparece.
+9. "Ver como lo ve el cliente": composicion 300x300 sin marcas de edicion.
    (Origen: [004/quickstart.md §2](./004-woocommerce-pdf-personalization/quickstart.md),
-   [006/quickstart.md §4](./006-align-textmuy-motor/quickstart.md).)
+   [006/quickstart.md §4](./006-align-textmuy-motor/quickstart.md),
+   [011/quickstart.md §5](./011-editor-mockups-visual/quickstart.md).)
 
 ## 3. Validez por producto (005 T012, 004 T030 §3)
 
