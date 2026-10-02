@@ -52,11 +52,18 @@ Integra el sistema **TextMuy** (editor de estilos de texto client-side) en la pe
   Procesar, 100% client-side (Canvas 2D + WebGL).
 - **100% PHP**: el servidor funciona en hosting compartido sin Python ni Node. El código en
   servidor es PHP; el JS de TextMuy corre solo en el navegador.
-- **API (uso principal a futuro)**: el principal uso del sistema es procesar compras de
-  PDFs editados mediante una API con WordPress: el sistema recibe el nombre del PDF base y
-  un conjunto de imágenes, y devuelve la URL al archivo procesado.
+- **API (objetivo de negocio, uso principal a futuro)**: procesar compras de PDFs editados
+  mediante una API con WordPress: el sistema recibe el nombre del PDF base y un conjunto de
+  imágenes, y devuelve la URL al archivo procesado. **Especificada, sin implementar**:
+  [spec 010](./specs/010-api-wordpress/spec.md) + contrato
+  [contracts/api.md](./specs/010-api-wordpress/contracts/api.md). Decisiones cerradas 2026-10-01:
+  raster por grupo (el texto con estilo llega ya rasterizado desde el consumidor; el servidor
+  nunca renderiza texto, constitution §III), validación estricta de ids contra `analisis.json`,
+  autenticación por Application Passwords + `manage_options` + HTTPS, entregable en
+  `uploads/pmu/api/{job_id}/` con TTL de 7 días e idempotencia por `job_id`, respuesta síncrona, y
+  **un único endpoint** `admin_post_pmu_api` con `op=` (sin rutas REST).
 
-## 2. Arquitectura y mapa de archivos (v4.4: modulo integrado + norma ex-008 preservada)
+## 2. Arquitectura y mapa de archivos (v4.2.2: modulo integrado + norma ex-008 preservada)
 
 Layout historico de despliegue (logico, sin git): la RAIZ DEL PROYECTO agrupaba
 tres carpetas hermanas `personalizador-pdf/` (plugin) + `textmuy/` + `uploads/pmu/`.
@@ -92,7 +99,12 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   ├── admin.css            ← Estilos de consola + editor de mockups + iframe
 │   ├── admin.js             ← Interfaz, validaciones y puente RenderCore
 │   ├── tienda.js            ← Ficha Woo: campos, "Vista previa", galería, add-to-cart
-│   └── mockups.js           ← Editor de capas 300x300 (delegado al módulo TextMuy)
+│   ├── mockups.js           ← Editor de capas 300x300 (delegado al módulo TextMuy)
+│   ├── selector-pmu.js      ← Cliente de subida/recorte de imágenes de campos (spec 004,
+│   │                          contrato `specs/004.../contracts/selector-pmu.md`)
+│   └── miniaturas.js        ← ThumbEngine: miniaturas `.webp` y sprites por ámbito; único
+│                              cliente de `op=sprite`/`op=miniatura` (envía `firma`; nunca
+│                              escribe catálogos). Se encola en admin y su URL viaja al iframe
 ├── engine/                  ← MOTOR PHP PURO
 │   ├── Pdf.php              ← Parser (lectura de streams y objetos)
 │   ├── Detector.php         ← Detección y agrupación de placeholders
@@ -153,9 +165,17 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
    `op=` de presets/imágenes/fuentes). Sin puente el editor NO opera: muestra un
    error accionable y hace cero peticiones locales (no hay modo standalone).
 5. **Versionado de estáticos (cache-bust)**: `render-core.html` e `index.html` referencian
-   sus scripts internos con `?v=RCn` (**RC37 hoy**): al cambiar cualquier JS del módulo,
+   sus scripts internos con `?v=RCn` (**RC38 hoy**): al cambiar cualquier JS del módulo,
    subir el número en ambos HTML.
 6. **Galería**: manejada internamente por el módulo (`js/galeria.js`), con preview en vivo.
+   La lectura es **canónica y certificada**: `ensureSpriteCanonico(ambito)` +
+   `drawTileCanonico(ambito, id)`, con la celda derivada del identificador (`id-1`) y la
+   vigencia atestiguada por `thumbs.sprite_firma` del catálogo. Si la hoja no certifica, se
+   pinta el **placeholder del nombre** y la reconstrucción es explícita por botón
+   ("Generar miniaturas" en la galería de fuentes, `generarMiniaturasPresets` en la galería
+   inferior de presets). El único cliente que escribe es `assets/miniaturas.js` (ThumbEngine),
+   vía `op=sprite`/`op=miniatura`. Limitación vigente (= spec 009): al certificar solo `img`,
+   las galerías de `fonts` y `tm-presets` no llegan a leer su hoja (ver §5).
 
 ## 3. Flujo de trabajo (cómo lo usa el admin de WordPress para pruebas)
 
@@ -254,10 +274,16 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 - Raíz de datos: `uploads/pmu/`
 - Ámbitos del editor: `fonts/` (catálogo `fonts.json`), `img/` (catálogo `img.json`) y
   `tm-presets/` (catálogo `presets.json`); un sprite `thumbs.webp` por ámbito, junto a su
-  catálogo. El sprite está **certificado** por su catálogo (`thumbs.{w,h,c}` +
-  `thumbs.sprite_firma` = `[w,h,c,items]`; `op=sprite` rechaza con causa
-  `motor:sprite:catalogo:desactualizado` si la firma no coincide con el catálogo
-  vigente). `pdfs/`, `orders/` y `tmp/` son ámbitos de datos del motor, sin catálogo ni sprite.
+  catálogo. La **certificación** de la hoja es `thumbs.sprite_firma` = `[w,h,c,items]`
+  (derivada de `thumbs.{w,h,c}` + `items` del catálogo).
+  ⚠️ **Hoy la certifica y valida SOLO el ámbito `img`**: en `PMU_Uploads::sprite()` toda la
+  cadena (firma → dimensiones → escribir firma) vive dentro de `if ($ambito === 'img')`, con
+  causas `motor:sprite:catalogo:desactualizado`, `motor:sprite:dimensiones:invalidas` y
+  `motor:sprite:catalogo:no_escribible`. En `fonts` y `tm-presets` el motor **solo mueve el
+  archivo, sin certificar**, y `guardar_catalogo()` solo invalida la firma cuando `$ambito ===
+  'img'`: por eso la lectura canónica del módulo rechaza siempre esas hojas y sus galerías
+  muestran etiquetas en cada F5. Ampliarlo a los tres ámbitos es la spec 009 (T004/T005).
+  `pdfs/`, `orders/` y `tmp/` son ámbitos de datos del motor, sin catálogo ni sprite.
 - Datasets PDF: `pdfs/{nombre}/analisis.json` (geometría inmutable del Detector: grupos
   `id`/`w`/`h`/`cont`/`pgs`) + `pdfs/{nombre}/config.json` (editable: `activo`, `productos`,
   `campos_ids`, `preview_omisible` (bool, default `false` = mockup obligatorio en ficha),
@@ -278,6 +304,11 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 - Placeholders: sin archivos en disco; marco dibujado en la consola + descarga generada
   al vuelo (`PngWriter::bytes(w, h)`)
 - Salida de muestra: `tmp/muestras/{nombre}/{nombre}_procesado.pdf` (se sobrescribe)
+- Trabajos de la API (spec 010, **aún no implementado**): `api/{job_id}/` = `manifest.json`
+  (`pdf`, grupos + hash de contenido, `expira`, `creado`) + pool `img/` + `{pdf}_procesado.pdf`.
+  El `job_id` es la clave de idempotencia que elige el consumidor, siempre saneado con
+  `nombre_seguro`; retención por TTL (7 días por defecto, configurable) con purga de la carpeta
+  completa. Es un ámbito **de la API**: no lo tocan la consola, la ficha ni Woo.
 - Comprador (ciclo carrito → pedido; el cableado a hooks Woo vive en spec 004):
   borradores legacy en `tmp/cart/{linea}/` (`manifest.json` con `pdf`, personalizacion
   canonica, `pmu_hash`, cantidad, `creado`, motor) + unidad vigente ex-008 en
@@ -358,6 +389,31 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `specs/004-.../_archivo/`; norma vigente = `constitution` §IV (ex-008); auditoria
   de galeria RC34–RC36 archivada (`specs/_archivo/auditoria-galeria-RC34-RC36.md`,
   sin backlog propio; canonico `modules/textmuy/AGENTS.md`).
+- ✅ **Spec 009 `galerias-sprite-unificado` (en especificación, SIN implementar)**: unifica
+  las tres galerías del editor (imágenes, tipografías, estilos guardados) sobre un único
+  mecanismo de lectura certificada (`thumbs.webp` + `thumbs.sprite_firma`), hoy operativo
+  solo en `img` (ver §5). Entrega: (a) certificación de hoja en los **tres** ámbitos en el
+  motor + invalidación de la firma al mutar cualquiera de ellos; (b) generación automática
+  de **solo los huecos**, con **una única escritura por apertura** (pre-dibujado en memoria y
+  un solo `POST op=sprite`; nunca un lote parcial); (c) retiro de los botones "Generar
+  miniaturas"/"Miniaturas"; (d) Google Fonts por familia única (sin `text=` ni `wght@`,
+  concurrencia acotada, la familia se descarga al elegirla); (e) geometría de celda con
+  ratio simplificado y alto completo (fin del recorte de las tiras de tipografías).
+  Artefactos en `specs/009-galerias-sprite-unificado/` (checklist 16/16, `plan.md`, `tasks.md`
+  T001–T036, 0 implementadas); índice y estado en `specs/INDICE.md`. Al tocarla: enumerar
+  primero el Phase 2 del `tasks.md` (certificación en el motor), porque bloquea US1–US4.
+- ✅ **Spec 010 `api-wordpress` (especificada, SIN implementar)**: es el objetivo de negocio
+  declarado en §1. Endpoint **único** `admin_post_pmu_api` (+ `nopriv`) con dispatcher `op=`
+  (`procesar`/`estado`/`limpiar`); **no** se introducen rutas REST ni un segundo camino de
+  escritura. Recibe un raster por grupo (PNG/JPG/WebP/GIF; el texto con estilo llega ya
+  rasterizado desde el consumidor: el servidor nunca renderiza texto, constitution §III), valida
+  los ids contra `analisis.json` y procesa con `Motor::procesar()` **con** dataset. Autenticación
+  por **Application Passwords** del núcleo + `manage_options` + HTTPS (no usa `seguridad()`).
+  Entregable en el ámbito `api/{job_id}/` (ver §5) con TTL de 7 días, idempotencia por `job_id` y
+  respuesta síncrona. Errores con la convención `api:<op>:<motivo>`. Artefactos en
+  `specs/010-api-wordpress/` (`spec.md`, `contracts/api.md`); pendiente `plan.md` + `tasks.md`.
+  Al implementarla: amendá la constitución (Sync Impact Report), subí `Requires at least` de
+  `readme.txt` a **5.6** (Application Passwords) y agregá las fases al arnés `texto_puente.php`.
 - ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
   (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
@@ -420,7 +476,14 @@ node tests/flag-wave.test.js && node tests/pattern-block-box.test.js && node tes
 node tests/galeria-items.test.js && node tests/invalidacion.test.js && node tests/sprite-canonico.test.js
 node tests/rc-bump.test.js
 ```
-(16 suites `*.test.js`; Node NO corre en el servidor productivo de WP: es solo testing del módulo.)
+(16 suites `*.test.js` + `tests/galerias.browser.js`; Node NO corre en el servidor productivo
+de WP: es solo testing del módulo.)
+
+`tests/galerias.browser.js` es la única prueba con **navegador real** (Playwright + Chrome vía
+la variable de entorno `TEXTMUY_CHROME`): valida el DOM de las galerías (celdas, descargas,
+geometría). No corre en el hosting; es la puerta que consume la spec 009 (SC-006, T027/T031).
+Esa spec suma además `tests/hoja-generacion.test.js` al llegar la implementación (17 suites
+entonces): si el conteo no da 16, revisar si la 009 ya entró.
 
 ## 10. Reglas para la IA al editar
 

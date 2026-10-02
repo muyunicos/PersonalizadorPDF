@@ -314,14 +314,44 @@
             iframe.setAttribute('aria-hidden', 'true');
             iframe.tabIndex = -1;
             iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;border:0;';
+
+            // HANDSHAKE DEL PUENTE: el iframe confirma con 'textmuy-bridge-ok' que YA
+            // aplico el puente. Sin esa espera hay una carrera: el postMessage del
+            // puente se entrega como TAREA, pero resolve() dispara el .then() como
+            // MICROTAREA, asi que la PRIMERA vista previa del comprador arrancaba con
+            // bridge=null y fallaba con "presets:sin_puente".
+            var apiLista = false;
+            // Sin puente configurado no hay nada que confirmar: se resuelve igual.
+            var puenteConfirmado = !cfg.puente;
+            var resueltos = false;
+            var fallback = null;
+            var intentos = 0;
+
+            function resolverSiListo() {
+                if (resueltos || !apiLista || !puenteConfirmado) { return; }
+                resueltos = true;
+                resolve(iframe.contentWindow);
+            }
+            /**
+             * Red de seguridad: si la API esta lista pero el ack no llega (modulo
+             * viejo en cache, sin la confirmacion), no dejamos la promesa colgada.
+             */
+            function programarFallback() {
+                if (fallback || resueltos) { return; }
+                fallback = setTimeout(function () {
+                    puenteConfirmado = true;
+                    resolverSiListo();
+                }, 3000);
+            }
             iframe.addEventListener('load', function () {
                 enviarPuente();
-                var intentos = 0;
                 (function sondeo() {
                     var w = iframe.contentWindow;
                     if (w && w.RenderCore && w.TextMuyAPI && typeof w.TextMuyAPI.renderBatch === 'function') {
-                        enviarPuente();
-                        resolve(w);
+                        enviarPuente(); // garantia extra: el modulo pudo anunciarse antes
+                        apiLista = true;
+                        programarFallback();
+                        resolverSiListo();
                     } else if (++intentos < 100) {
                         setTimeout(sondeo, 100);
                     } else {
@@ -339,8 +369,12 @@
                 } catch (e) { /* el iframe puede no estar listo aun */ }
             }
             window.addEventListener('message', function (ev) {
-                if (ev.source === iframe.contentWindow && ev.data && ev.data.type === 'textmuy-ready') {
+                if (!ev || ev.source !== iframe.contentWindow || !ev.data) { return; }
+                if (ev.data.type === 'textmuy-ready') {
                     enviarPuente();
+                } else if (ev.data.type === 'textmuy-bridge-ok') {
+                    puenteConfirmado = true;
+                    resolverSiListo();
                 }
             });
             document.body.appendChild(iframe);

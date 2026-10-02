@@ -1,7 +1,7 @@
 # Indice de specs — Personalizador PDF
 
 > Jerarquia: `constitution` (.specify/memory/constitution.md) > `AGENTS.md` > resto.
-> Ultima actualizacion: 2026-10-01 (auditoria de documentacion: RC37 + 16 suites sincronizados; 009 en especificacion con plan y tasks).
+> Ultima actualizacion: 2026-10-01 (RC38: handshake del puente con ack `textmuy-bridge-ok` en consola y ficha; 010 en especificacion con spec, contrato y plan).
 
 ## Activos (codigo completo, falta solo manual WP real)
 
@@ -19,6 +19,7 @@ Recorrido manual unico (cubre T030 + T012 + T017 + T029 en una sesion):
 | Spec | Estado | Docs normativos |
 |------|--------|-----------------|
 | [009-galerias-sprite-unificado](./009-galerias-sprite-unificado/) | spec + clarificaciones (2026-09-30), checklist 16/16, `plan.md` + `tasks.md` (2026-10-01); pendiente implementacion | spec + plan + data-model + contracts/ + quickstart + tasks (continua el contrato de 006: certificacion de hoja para los 3 ambitos, generacion automatica de huecos, Google Fonts por familia unica) |
+| [010-api-wordpress](./010-api-wordpress/) | spec + contrato + `plan.md` (2026-10-01), decisiones D1-D5 cerradas; pendiente `data-model.md` + `quickstart.md` + `tasks.md` | spec + plan + contracts/api.md (endpoint unico `admin_post_pmu_api` con `op=`; raster por grupo, Application Passwords, `uploads/pmu/api/{job_id}/` con TTL 7 dias, sincrono; enmienda de constitucion 2.0.1 -> 2.1.0 declarada) |
 
 ## Archivados (trazabilidad, no implementar)
 

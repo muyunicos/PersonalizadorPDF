@@ -736,16 +736,53 @@ jQuery(function ($) {
             iframe.setAttribute('aria-hidden', 'true');
             iframe.tabIndex = -1;
             iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;border:0;';
+
+            // HANDSHAKE DEL PUENTE: el iframe confirma con 'textmuy-bridge-ok' que YA
+            // aplico el puente. Sin esa espera hay una carrera: el postMessage del
+            // puente se entrega como TAREA, pero resolve() dispara el .then() como
+            // MICROTAREA, asi que el primer render arrancaba con bridge=null y
+            // fallaba con "presets:sin_puente" (el segundo clic si funcionaba).
+            var apiLista = false;
+            // Sin puente configurado no hay nada que confirmar: se resuelve igual.
+            var puenteConfirmado = !puente;
+            var resueltos = false;
+            var fallback = null;
+            var intentos = 0;
+
+            function resolverSiListo() {
+                if (resueltos || !apiLista || !puenteConfirmado) { return; }
+                resueltos = true;
+                resolve(iframe.contentWindow);
+            }
+            /**
+             * Red de seguridad: si la API esta lista pero el ack no llega (modulo
+             * viejo en cache, sin la confirmacion), no dejamos la promesa colgada.
+             */
+            function programarFallback() {
+                if (fallback || resueltos) { return; }
+                fallback = setTimeout(function () {
+                    puenteConfirmado = true;
+                    resolverSiListo();
+                }, 3000);
+            }
+            /** Envia el puente al iframe (idempotente: el modulo guarda el ultimo). */
+            function enviarPuente() {
+                if (!puente) { return; }
+                try {
+                    iframe.contentWindow.postMessage({ type: 'textmuy-bridge', bridge: puente }, window.location.origin);
+                } catch (e) { /* el iframe puede no estar listo aun */ }
+            }
             iframe.addEventListener('load', function () {
                 enviarPuente();
-                var intentos = 0;
                 (function sondeo() {
                     var w = iframe.contentWindow;
                     // Contrato RenderCore v1: la API debe exponer renderBatch (evita
                     // que una copia en cache del navegador use un modulo viejo).
                     if (w && w.RenderCore && w.TextMuyAPI && typeof w.TextMuyAPI.renderBatch === 'function' && w.TextEditor && w.ExportManager) {
-                        enviarPuente(); // garantia extra: puente antes de cualquier renderBatch
-                        resolve(w);
+                        enviarPuente(); // garantia extra: el modulo pudo anunciarse antes
+                        apiLista = true;
+                        programarFallback();
+                        resolverSiListo();
                     } else if (++intentos < 100) {
                         setTimeout(sondeo, 100);
                     } else if (w && w.TextMuyAPI && typeof w.TextMuyAPI.renderBatch !== 'function') {
@@ -758,19 +795,16 @@ jQuery(function ($) {
             iframe.addEventListener('error', function () {
                 reject(new Error('No se pudo cargar el motor de render TextMuy.'));
             });
-            /** Envia el puente al iframe (idempotente: el modulo guarda el ultimo). */
-            function enviarPuente() {
-                if (!puente) { return; }
-                try {
-                    iframe.contentWindow.postMessage({ type: 'textmuy-bridge', bridge: puente }, window.location.origin);
-                } catch (e) { /* el iframe puede no estar listo aun */ }
-            }
             // Tres momentos de envio (igual que la pestana "Estilos de Texto"):
             // aviso textmuy-ready del modulo, carga del iframe y ya-mismo
             // (por si el iframe termino de cargar antes que este emisor).
             window.addEventListener('message', function (ev) {
-                if (ev.source === iframe.contentWindow && ev.data && ev.data.type === 'textmuy-ready') {
+                if (!ev || ev.source !== iframe.contentWindow || !ev.data) { return; }
+                if (ev.data.type === 'textmuy-ready') {
                     enviarPuente();
+                } else if (ev.data.type === 'textmuy-bridge-ok') {
+                    puenteConfirmado = true;
+                    resolverSiListo();
                 }
             });
             document.body.appendChild(iframe);
