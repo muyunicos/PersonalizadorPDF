@@ -3,7 +3,7 @@
  *
  * El mockup es la "fotografia" simulada 300x300px del producto en uso: capas
  * `img` (fotos del PDF `pdfs/{nombre}/mockups/` o del catalogo `img:{id}`) y
- * `placeholder` (huecos del PDF, `{grupo}` o `{grupo}#{indice}`), cada una con
+ * `placeholder` (huecos del PDF, `{grupo}` o `{grupo}#{indice}` 1-based), cada una con
  * geometria (x/y/w/h/rot/sesgo) y ajustes que afectan SOLO al mockup.
  *
  * Reglas de la feature:
@@ -83,13 +83,32 @@ jQuery(function ($) {
     function nombreCapa(c) {
         if (!c) { return ''; }
         if (c.nombre) { return c.nombre; }
-        return (c.tipo === 'img' ? 'Foto: ' : 'Hueco: ') + c.ref;
+        if (c.tipo === 'img') { return 'Foto: ' + c.ref; }
+        return etiquetaPlaceholder(c.ref);
+    }
+    /**
+     * Nombre legible de un placeholder (FR-015). El `ref` sigue siendo
+     * `{grupo}` o `{grupo}#{n}` (n 1-based, el que usa el motor); esto es
+     * solo presentacion: los mockups ya guardados siguen funcionando.
+     */
+    function etiquetaPlaceholder(ref) {
+        var partes = String(ref || '').split('#');
+        var base = 'PH-' + partes[0];
+        if (partes.length < 2 || !partes[1]) { return base; }
+        var n = parseInt(partes[1], 10);
+        return isNaN(n) ? base : base + '-0' + n;
+    }
+
+    /** Etiqueta corta de la capa (en el lienzo). */
+    /** Etiqueta de una instancia concreta: PH-FF0000-01 (1-based). */
+    function etiquetaInstancia(idGrupo, n) {
+        var base = etiquetaPlaceholder(idGrupo);
+        var k = parseInt(n, 10);
+        if (isNaN(k) || k < 1) { return base; }
+        return base + '-' + (k < 10 ? '0' : '') + k;
     }
     function etiquetaRef(c) {
-        if (!c) { return ''; }
-        if (c.tipo !== 'placeholder') { return c.ref; }
-        var partes = String(c.ref || '').split('#');
-        return partes[0] + (partes[1] ? ' #' + partes[1] : '');
+        return etiquetaPlaceholder(c.ref);
     }
 
     /* ============ Montaje (T014) ============ */
@@ -142,7 +161,7 @@ jQuery(function ($) {
             '        <div class="ec-mk-acciones">' +
             '          <button type="button" class="button button-small" data-mk="add-foto">+ Foto</button>' +
             '          <button type="button" class="button button-small" data-mk="add-catalogo">+ Catalogo</button>' +
-            '          <button type="button" class="button button-small" data-mk="add-hueco">+ Hueco</button>' +
+            '          <button type="button" class="button button-small" data-mk="add-placeholder">+ Placeholder</button>' +
             '        </div>' +
             '        <div class="ec-mk-acciones">' +
             '          <button type="button" class="button button-small" data-mk="subir" title="Subir capa">Subir</button>' +
@@ -175,7 +194,7 @@ jQuery(function ($) {
             '        <p class="ec-mk-vacio">Sin imagenes en el catalogo del proyecto.</p>' +
             '      </div>' +
             '      <div class="ec-mk-panel">' +
-            '        <h4>Huecos del PDF</h4>' +
+            '        <h4>Placeholders</h4>' +
             '        <ul class="ec-mk-grupos"></ul>' +
             '        <p class="ec-mk-vacio">Este PDF no tiene grupos detectados.</p>' +
             '      </div>' +
@@ -606,7 +625,7 @@ jQuery(function ($) {
         var $ul = $ed.find('.ec-mk-capas').empty();
         var lista = capas();
         if (!lista.length) {
-            $ul.append('<li class="description">Sin capas: agrega una foto o un hueco.</li>');
+            $ul.append('<li class="description">Sin capas: agrega una foto o un placeholder.</li>');
         }
         // Se lista de arriba hacia abajo: la ultima del array esta al fondo.
         for (var i = lista.length - 1; i >= 0; i--) {
@@ -650,8 +669,9 @@ jQuery(function ($) {
                 .toggleClass('ec-usada', !!usadas['pdf:' + nombre] || !!usadas[nombre])
                 .attr('tabindex', '0').attr('role', 'button')
                 .attr('data-foto', nombre)
-                .attr('aria-label', 'Agregar la foto ' + nombre + ' como capa');
-            $li.append($('<img alt="">').attr('src', fotos[nombre]));
+                            .attr('aria-label', 'Agregar '
+                                + etiquetaInstancia(g.id, n) + ' de ' + g.w
+                                + ' por ' + g.h + ' pixeles')
             $li.append($('<span>').text(nombre));
             $ul.append($li);
         });
@@ -675,8 +695,9 @@ jQuery(function ($) {
                 .toggleClass('ec-usada', !!usadas[ref])
                 .attr('tabindex', '0').attr('role', 'button')
                 .attr('data-img', it.id)
-                .attr('aria-label', 'Agregar la imagen ' + (it.title || it.file) + ' como capa');
-            $li.append($('<img alt="">').attr('src', it.url));
+                            .attr('aria-label', 'Agregar '
+                                + etiquetaInstancia(g.id, n) + ' de ' + g.w
+                                + ' por ' + g.h + ' pixeles')
             $li.append($('<span>').text(it.title || it.file));
             $ul.append($li);
         });
@@ -686,20 +707,38 @@ jQuery(function ($) {
         var $ul = $ed.find('.ec-mk-grupos').empty();
         $ed.find('.ec-mk-grupos').siblings('.ec-mk-vacio').toggle(!grupos.length);
         grupos.forEach(function (g) {
+            var cont = parseInt(g.cont, 10) || 1;
             var $li = $('<li>');
             $li.append($('<button type="button" class="ec-mk-grupo">')
                 .attr('data-grupo', g.id)
-                .attr('aria-label', 'Agregar el hueco ' + g.id + ' de ' + g.w + ' por ' + g.h
-                    + ' pixeles, ' + g.cont + ' instancia(s)')
+                .attr('aria-label', 'Agregar el placeholder '
+                    + etiquetaPlaceholder(g.id) + ' de ' + g.w + ' por '
+                    + g.h + ' pixeles')
                 .append($('<span class="swatch">').css('background', '#' + g.id))
                 .append($('<span class="ec-mk-grupo-info">')
-                    .append($('<b>').text('#' + g.id))
-                    .append($('<span class="description">').text(' ' + g.w + '×' + g.h + ' px · '
-                        + g.cont + ' instancia' + (g.cont > 1 ? 's' : '')))));
-            $ul.append($li);
+                    .append($('<b>').text(etiquetaPlaceholder(g.id)))
+                    .append($('<span class="description">').text(' '
+                        + g.w + '×' + g.h + ' px · '
+                        + cont + ' instancia' + (cont > 1 ? 's' : '')))));
+            // Con varias instancias se listan, para poder elegir una concreta
+            // (FR-015). El chip del grupo inserta siempre la #01.
+            if (cont > 1) {
+                var $inst = $('<ul class="ec-mk-instancias">');
+                for (var n = 1; n <= cont; n++) {
+                    var et = etiquetaInstancia(g.id, n);
+                    var $b = $('<button type="button" class="ec-mk-instancia">');
+                    $b.attr('data-grupo', g.id);
+                    $b.attr('data-instancia', n);
+                    $b.attr('aria-label', 'Agregar ' + et
+                        + ' de ' + g.w + ' por ' + g.h
+                        + ' pixeles');
+                    $b.text(et);
+                    $inst.append($('<li>').append($b));
+                }
+                $li.append($inst);
+            }
         });
     }
-
     /* ============ Propiedades y ajustes (T020, T035) ============ */
 
     var AJUSTES = [
@@ -805,15 +844,19 @@ jQuery(function ($) {
         });
     }
 
-    /** Hueco del PDF: encuadre inicial a escala, centrado y seleccionado. */
-    function agregarHueco(idGrupo, indice) {
+    /** Placeholder del PDF: encuadre inicial a escala, centrado y seleccionado. */
+    function agregarPlaceholder(idGrupo, indice) {
         var g = null;
         grupos.forEach(function (x) { if (String(x.id) === String(idGrupo)) { g = x; } });
         if (!g) { return; }
         var escala = Math.min(1, 240 / Math.max(1, g.w), 240 / Math.max(1, g.h));
         var w = Math.max(20, Math.round(g.w * escala));
         var h = Math.max(20, Math.round(g.h * escala));
-        var ref = indice ? String(g.id) + '#' + indice : String(g.id);
+        // El `ref` guarda la instancia SOLO si no es la primera: para la
+        // #01 el ref plano es el legado y lo leen el motor y la ficha.
+        // El indice es 1-based (PH-FF0000-01); `esValida` lo espera asi.
+        var n = parseInt(indice, 10) || 0;
+        var ref = n > 1 ? String(g.id) + '#' + n : String(g.id);
         agregarCapa({
             tipo: 'placeholder', ref: ref,
             x: Math.round((LIENZO - w) / 2), y: Math.round((LIENZO - h) / 2), w: w, h: h,
@@ -985,7 +1028,7 @@ jQuery(function ($) {
             $ed.find('.ec-mk-buscar-catalogo').trigger('focus');
             return;
         }
-        if (accion === 'add-hueco') {
+        if (accion === 'add-placeholder') {
             if (!grupos.length) { window.alert('Este PDF no tiene grupos detectados.'); return; }
             $ed.find('.ec-mk-grupo').eq(0).trigger('click');
             return;
@@ -1110,7 +1153,7 @@ jQuery(function ($) {
         refrescar();
     });
 
-    /* Recursos: miniaturas de fotos, catalogo y huecos (un clic = capa). */
+    /* Recursos: miniaturas de fotos, catalogo y placeholders (un clic = capa). */
     $ed.on('click', '.ec-mk-mini', function () {
         var foto = $(this).attr('data-foto');
         if (foto) { agregarFoto(foto); return; }
@@ -1123,8 +1166,14 @@ jQuery(function ($) {
             $(this).trigger('click');
         }
     });
+    // Una instancia concreta: PH-FF0000-02 (FR-015). El chip del grupo
+    // sigue insertando la #01.
+    $ed.on('click', '.ec-mk-instancia', function () {
+        agregarPlaceholder($(this).attr('data-grupo'),
+            parseInt($(this).attr('data-instancia'), 10) || 1);
+    });
     $ed.on('click', '.ec-mk-grupo', function () {
-        agregarHueco($(this).attr('data-grupo'), 0);
+        agregarPlaceholder($(this).attr('data-grupo'), 0);
     });
 
 

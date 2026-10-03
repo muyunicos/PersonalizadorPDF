@@ -282,8 +282,45 @@ check('ningun literal jQuery sin > de cierre (tag sin cerrar = selector)',
 check('el detector de etiquetas realmente recorre literales',
     literalesVistos >= 20,
     'solo vio ' + literalesVistos + ': el check seria inerte');
-/* ============ Ejecucion ============ */
+/* ============ Placeholders e instancias (spec 011, FR-015) ============ */
 
+var ed = leer('assets/mockups.js');
+var clickInstancia = '.ec-mk-instancia';
+var manejadorInstancia = "$ed.on('click', '.ec-mk-instancia', function";
+
+// Y que el clic este ENLAZADO: tener los botones no basta si nada los escucha.
+check('el clic en una instancia inserta esa instancia',
+    ed.indexOf(manejadorInstancia) !== -1,
+    'hay botones PH-<grupo>-<nn> pero ningun manejador: no insertarian nada');
+
+// El chip y el boton deben ofrecer el placeholder con el prefijo PH-.
+check('el editor nombra los placeholders PH-<grupo>',
+    ed.indexOf('PH-') !== -1 && ed.indexOf('etiquetaPlaceholder') !== -1);
+
+// Con varias instancias se listan los botones PH-<grupo>-01..nn.
+check('el grupo con varias instancias ofrece elegir la instancia',
+    ed.indexOf('ec-mk-instancia') !== -1
+        && ed.indexOf('data-instancia') !== -1
+        && ed.indexOf('etiquetaInstancia') !== -1);
+
+// El indice del ref es 1-based: la #01 es el ref plano (legado).
+check('el ref de la instancia es 1-based (#01 = ref plano)',
+    ed.indexOf('n > 1 ? String(g.id)') !== -1,
+    'si se guardara la #01 como <grupo>#1, el motor la cuenta como instancia 1 de 0');
+
+// No debe quedar el vocabulario viejo en la UI del editor.
+check('la UI dice Placeholders, no Huecos',
+    ed.indexOf('<h4>Placeholders</h4>') !== -1
+        && ed.indexOf('add-hueco') === -1
+        && ed.indexOf('+ Hueco') === -1);
+
+/* El indice que espera el nucleo: esValida() acepta 1..cont. */
+check('el nucleo acepta el indice de instancia 1-based',
+    leer('assets/mockup-render.js').indexOf('indice < 1') !== -1
+        && leer('assets/mockup-render.js').indexOf('indice <= (parseInt(grupo.cont, 10) || 1)') !== -1);
+
+
+/* ============ Ejecucion ============ */
 var i = 0;
 function correr() {
     if (i >= pruebas.length) { fin(); return; }

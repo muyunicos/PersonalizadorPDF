@@ -714,3 +714,27 @@
 .ec-mk-filtro-texto { display: flex; gap: 6px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
 .ec-mk-filtro-texto label { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
 
+/* Placeholders con varias instancias (spec 011, FR-015): cada instancia es
+ * un boton PH-<grupo>-<nn> debajo del chip del grupo. */
+.ec-mk-instancias {
+    margin: 4px 0 0 0;
+    padding: 0 0 0 18px;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.ec-mk-instancias li { margin: 0; }
+.ec-mk-instancia {
+    font: 11px/1.6 Consolas, Monaco, monospace;
+    padding: 2px 6px;
+    border: 1px solid #c3c4c7;
+    border-radius: 3px;
+    background: #fff;
+    color: #2c3338;
+    cursor: pointer;
+}
+.ec-mk-instancia:hover {
+    border-color: #2271b1;
+    color: #2271b1;
+}
