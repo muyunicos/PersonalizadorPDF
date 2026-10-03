@@ -1,0 +1,5 @@
+{
+  // Entorno de desarrollo: terminal integrada en PowerShell (VS Code usa pwsh si esta
+  // instalado). La heredan la terminal de VS Code y Cline. Ver docs/entorno-desarrollo.md.
+  "terminal.integrated.defaultProfile.windows": "PowerShell"
+}

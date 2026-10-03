@@ -138,8 +138,18 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   ├── texto_puente.php     ← Puente TextMuy con stubs WP (fases separadas)
 │   ├── expected_muestra.json
 │   └── fixtures/            ← Imágenes de prueba
+├── .vscode/
+│   └── settings.json        ← Terminal integrada en PowerShell (pwsh si está instalado)
+├── docs/
+│   └── entorno-desarrollo.md ← Entorno canónico: Windows + PowerShell 7, Spec Kit + Cline
+├── README.md                ← Presentación del repo + resumen del entorno
 └── readme.txt               ← Metadatos WP (README del plugin)
 ```
+
+Herramientas locales de desarrollo (en `.gitignore`, no versionadas): `.specify/` (estado
+del flujo Spec Kit y scripts `powershell/`) y `.clinerules/` (workflows `/speckit-*` de la
+integración `cline`). El entorno (Windows + PowerShell 7, Spec Kit/Cline, verificaciones y
+diagnóstico) está documentado en `docs/entorno-desarrollo.md` y resumido en §8.
 
 **Despliegue (v4.2)**: (1) subir la carpeta del plugin a `wp-content/plugins/`
 (el módulo TextMuy ya viene integrado en `modules/textmuy/`); (2) subir
@@ -452,10 +462,18 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 
 ## 8. Dificultades del entorno (IMPORTANTE AL TRABAJAR AQUÍ)
 
+**Entorno declarado (verificado 2026-10-03)**: Windows + **PowerShell 7 (`pwsh`) 7.6.6** +
+VS Code + extensión **Cline**. La integración de **Spec Kit** es `cline` (predeterminada y
+única) con scripts **`ps`**. Detalle, verificaciones y diagnóstico: `docs/entorno-desarrollo.md`.
+
+- ⚠️ **Diagnóstico antes que cambios**: ante un fallo, verificá primero shell activo
+  (`$PSVersionTable.PSVersion` → 7.x; `(Get-Process -Id $PID).Path` → `pwsh.exe`), directorio
+  actual (`Get-Location`), PATH y herramientas (`Get-Command pwsh,specify,uv,node,php,git`).
+  No asumas Bash, WSL, `cmd` ni Windows PowerShell 5.1 como shell activo.
+- ⚠️ **Ejecución**: todos los comandos se corren desde la **raíz del proyecto** (salvo los
+  tests del módulo TextMuy, que exigen `modules/textmuy/`). En pwsh secuenciá con `;` (y `&&`
+  cuando el primer fallo deba cortar); no uses sintaxis de bash ni de cmd.
 - ⚠️ **Rutas con espacios**: al ejecutar comandos, envolvé las rutas entre comillas.
-- ⚠️ **PowerShell/cmd con escaping problemático**: preferí comandos simples de `cmd /c`;
-  no encadenes con `&&` (falla en esta versión de PowerShell) ni anides comillas.
-  `findstr` con patrones de paréntesis o pipes no matchea en este entorno.
 - ⚠️ **Búsquedas de código**: `search_codebase` no indexa bien los `.php`; si un patrón no
   aparece, leé el archivo directamente.
 - ⚠️ **Permisos Windows**: si un script PHP de testing falla al escribir en Documents,
@@ -463,12 +481,26 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `wp_upload_dir()`.
 - ⚠️ **Rutas web**: no intentes fetch a URLs de `wp-admin` (requiere auth → 404); asumí la
   lógica según `admin/*.php`.
+- 🚫 **Sin aprobación explícita**: no modificar bases de datos, credenciales ni servicios
+  externos, y no desplegar a producción (el deploy lo dispara el push a los webhooks de
+  Hostinger; ver §2).
+
+**Spec Kit**: los workflows `.clinerules/workflows/speckit-*.md` ejecutan
+`.specify/scripts/powershell/*.ps1` desde la raíz del repo. `.specify/` y `.clinerules/`
+están en `.gitignore` (tooling local: no aparecen en `git status`; no editarlos a mano,
+son archivos gestionados por el CLI). Para verificar/actualizar:
+
+```powershell
+specify integration status                      # esperado: OK; cline (default + instalada)
+specify integration upgrade cline --script ps   # diff-aware; --force solo si es deliberado
+```
 
 ## 9. Cómo probar
 
-### Entorno PHP (plugin) — desde la carpeta del plugin, tras tocar `engine/` o `admin/`
-```bash
-php -l personalizador-pdf.php && php -l admin/*.php && php -l engine/*.php && php -l inc/*.php
+### Entorno PHP (plugin) — desde la raíz del proyecto, tras tocar `engine/` o `admin/`
+```powershell
+php -l personalizador-pdf.php
+Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.FullName }
 php tests/motor_smoke.php     # Smoke del motor (debe decir "SMOKE OK")
 php tests/parity.php          # Oráculo del detector (debe decir "PARIDAD OK")
 node tests/mockup-geometria.test.js   # Geometria pura del editor de mockups (spec 011):
@@ -504,14 +536,15 @@ usuario, NO versionados). `parity.php` acepta la ruta como argumento opcional.
 `pdfs/muestra/` + `analisis.json` + `config.json` + preset `neon-glow`).
 
 ### Entorno Node (módulo TextMuy) — si se modifica `modules/textmuy/`
-```bash
-cd modules/textmuy
+```powershell
+Set-Location modules\textmuy
 node tests/catalog-unified.test.js && node tests/tile-geometria.test.js && node tests/fonts-catalog.test.js
 node tests/img-refs.test.js && node tests/preset-cache.test.js && node tests/preset-ambito.test.js
 node tests/preset-delta.test.js && node tests/preset-load.test.js && node tests/distort-engine.test.js
 node tests/flag-wave.test.js && node tests/pattern-block-box.test.js && node tests/controls-init.test.js
 node tests/galeria-items.test.js && node tests/invalidacion.test.js && node tests/sprite-canonico.test.js
 node tests/rc-bump.test.js
+Set-Location ..\..
 ```
 (16 suites `*.test.js` + `tests/galerias.browser.js`; Node NO corre en el servidor productivo
 de WP: es solo testing del módulo.)
@@ -526,11 +559,17 @@ entonces): si el conteo no da 16, revisar si la 009 ya entró.
 
 - ✅ OBLIGATORIO: leer este AGENTS.md completo antes de proponer cambios arquitectónicos.
 - ✅ OBLIGATORIO: ejecutar `php tests/motor_smoke.php` y `php -l` tras cambiar `engine/`.
+- ✅ OBLIGATORIO: trabajar en **PowerShell 7 (`pwsh`)** desde la raíz del proyecto; ante un
+  fallo, verificar shell, directorio, PATH y herramientas antes de cambiar el entorno (§8).
 - ✅ OBLIGATORIO: mantener mensajes, variables e interfaz estrictamente en español (sin
   tildes en código puro para evitar problemas de encoding).
 - ❌ NO DEBES: crear nuevos archivos, páginas o motores sin confirmar con el usuario si ya
   existe código que resuelva el problema.
 - ❌ NO DEBES: reintroducir Python.
+- ❌ NO DEBES: modificar bases de datos, credenciales o servicios externos, ni desplegar a
+  producción sin aprobación explícita del usuario (el push dispara deploy; §2).
+- ❌ NO DEBES: editar a mano `.specify/` ni `.clinerules/` (gestionados por el CLI y
+  gitignored): actualizá con `specify integration upgrade cline --script ps` (§8).
 - ✅ El módulo `modules/textmuy/` es parte de este repositorio y está bajo control total:
   se edita directamente, se corren sus tests Node (`node --check` + 16 suites) y se hace
   bump `?v=RCn` en ambos HTML al tocar su JS.
