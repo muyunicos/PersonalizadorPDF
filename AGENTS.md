@@ -528,6 +528,16 @@ entonces): si el conteo no da 16, revisar si la 009 ya entró.
 - ❌ NO DEBES: leer `form.action` del DOM con el patrón admin-post: usar
   `form.getAttribute('action')` (ver tabla §11).
 
+## 10.bis Fuente unica de la version (spec 011, 2026-10-01)
+
+La version del plugin esta en **un solo sitio**: la cabecera `* Version:` de `personalizador-pdf.php`.
+La constante `PERSONALIZADOR_PDF_VERSION` se deriva de ahi con `get_file_data()`, asi que
+cache-busting (`?ver=`), el smoke de version y las pantallas usan siempre el mismo numero.
+Estaban duplicadas (cabecera 4.3.0 y `define` 4.2.2) y divergieron: los CSS/JS se servian con la
+version vieja. **Para cambiar la version, editar SOLO la cabecera** (y el `Stable tag` de
+`readme.txt` si se publica en el repo de WordPress.org). No volver a escribir un `define` con
+el numero a mano. El stub `get_file_data` del arnes esta en `tests/texto_puente.php`.
+
 ## 11. Tabla de errores comunes (resolver antes de preguntar)
 
 | Error | Causa | Solución |

@@ -46,6 +46,21 @@ define('DAY_IN_SECONDS', 86400);
 function wp_upload_dir() { global $testBase; return ['basedir' => $testBase . '/uploads', 'baseurl' => 'http://test/uploads']; }
 function plugin_dir_path($f) { return dirname($f) . DIRECTORY_SEPARATOR; }
 function plugin_dir_url($f) { return 'http://test/wp-content/plugins/personalizador-pdf/'; }
+// Stub de get_file_data: el plugin toma la version de la cabecera del propio
+// fichero (fuente unica). Sin este stub el arnes no podria cargar el plugin.
+function get_file_data($f, $cabeceras = []) {
+    $salida = [];
+    $lineas = @file($f) ?: [];
+    foreach ($cabeceras as $clave => $etiqueta) {
+        foreach ($lineas as $linea) {
+            if (preg_match('/^[ 	-]**[ 	]*' . preg_quote($etiqueta, '/') .':[ 	]*(.+)$/', $linea, $mm)) {
+                $salida[$clave] = trim($mm[1]);
+                break;
+            }
+        }
+    }
+    return $salida;
+}
 function add_shortcode(...$a) { return true; }
 // add_action/has_action con registro real: el smoke verifica el contrato de hooks.
 function add_action(...$a) { $GLOBALS['test_hooks'][] = (string)($a[0] ?? ''); return true; }

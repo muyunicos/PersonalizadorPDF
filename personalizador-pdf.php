@@ -14,7 +14,17 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('PERSONALIZADOR_PDF_VERSION', '4.2.2');
+// Version: FUENTE UNICA = la cabecera `* Version:` de este fichero, que es la que
+// WordPress lee para la pagina de plugins y para las actualizaciones. Antes
+// estaba duplicada en un `define` y se desincronizo (cabecera 4.3.0 con define
+// 4.2.2), lo que dejaba el cache-busting de CSS/JS congelado en la version vieja.
+// Para cambiar la version: SOLO la cabecera de arriba.
+if (!defined('PERSONALIZADOR_PDF_VERSION')) {
+    $pmu_datos = get_file_data(__FILE__, ['Version' => 'Version']);
+    define('PERSONALIZADOR_PDF_VERSION',
+        (string)(!empty($pmu_datos['Version']) ? $pmu_datos['Version'] : '0.0.0'));
+    unset($pmu_datos);
+}
 define('PERSONALIZADOR_PDF_PATH', plugin_dir_path(__FILE__));
 define('PERSONALIZADOR_PDF_URL', plugin_dir_url(__FILE__));
 
