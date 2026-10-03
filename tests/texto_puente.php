@@ -53,7 +53,7 @@ function get_file_data($f, $cabeceras = []) {
     $lineas = @file($f) ?: [];
     foreach ($cabeceras as $clave => $etiqueta) {
         foreach ($lineas as $linea) {
-            if (preg_match('/^[ 	-]**[ 	]*' . preg_quote($etiqueta, '/') .':[ 	]*(.+)$/', $linea, $mm)) {
+            if (preg_match('~^[ 	-]*[*][ 	]*' . preg_quote($etiqueta, '~') .':[ 	]*(.+)$~', $linea, $mm)) {
                 $salida[$clave] = trim($mm[1]);
                 break;
             }
@@ -99,7 +99,17 @@ function sanitize_key($k) { return strtolower(preg_replace('/[^a-z0-9_\-]/', '',
 function sanitize_file_name($n) { return preg_replace('/[^A-Za-z0-9_\-\.]/', '_', (string)$n); }
 function sanitize_text_field($t) { return trim(strip_tags((string)$t)); }
 function wp_kses($t, $allowed = []) { $tags = ''; foreach ((array)$allowed as $tag => $attrs) { $tags .= '<' . $tag . '>'; } return strip_tags((string)$t, $tags ?: '<p><b><i><strong><em><br><ul><li>'); }
-function wp_unslash($v) { return $v; }
+// wp_unslash hace stripslashes_deep COMO WordPress: el nucleo real aplica
+// add_magic_quotes() a $_POST, asi que el JSON de los handlers llega escapado.
+// Con un stub identidad el arnes no reproducia ese entorno (bug en vivo:
+// `mockups_invalidos` al guardar la primera vista, que solo aparecia en WP).
+function wp_unslash($v) {
+    if (is_array($v)) { return array_map('wp_unslash', $v); }
+    return is_string($v) ? stripslashes($v) : $v;
+}
+function add_magic_quotes_simulado($v) {
+    return is_string($v) ? addslashes($v) : $v;
+}
 function wp_die($m = '') { throw new Exception('wp_die: ' . $m); }
 function admin_url($p = '') { return 'http://test/wp-admin/' . $p; }
 function wp_send_json_success($d) { $GLOBALS['test_json'] = ['success' => true, 'data' => $d]; exit; }
@@ -278,6 +288,19 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             // Spec 011: contrato de capa ampliado. `ref` con namespace
             // (pdf:/img:) con lectura tolerante del plano legado, ajustes
             // ampliados con clamp por clave, y campos nuevos opcionales.
+            // El handler de guardado termina en exit (wp_send_json): aqui, en el
+            // shutdown, se relee lo que quedo en disco (mismo patron que mockup_preview).
+            $leido_mc = $p->motor_para_tests()->leer_config('muestra');
+            $GLOBALS['test_mc_analisis_despues'] = file_get_contents($p->motor_para_tests()->ruta_analisis('muestra'));
+            $GLOBALS['test_mockup_capas'] = [
+                'directo' => (string)($GLOBALS['test_mc_directo'] ?? ''),
+                'handler' => json_encode($leido_mc['mockups']),
+                'mockups' => $leido_mc['mockups'],
+                'capas' => (array)($leido_mc['mockups'][0]['capas'] ?? []),
+                'vacio' => array_values(array_filter((array)$leido_mc['mockups'], function ($m) {
+                    return (string)($m['id'] ?? '') === 'pendiente';
+                })),
+            ];
             $mc = isset($GLOBALS['test_mockup_capas']) ? $GLOBALS['test_mockup_capas'] : null;
             check('sin error', (string)($GLOBALS['test_mockup_capas_error'] ?? '') === '' && is_array($mc));
             $capas = (array)($mc['capas'] ?? []);
@@ -2131,7 +2154,7 @@ switch ($fase) {
                 'action' => 'personalizador_pdf_mockups',
                 'archivo' => 'muestra.pdf',
                 'preview_omisible' => '1',
-                'mockups' => json_encode([[
+                'mockups' => add_magic_quotes_simulado(json_encode([[
                     'id' => 'fiesta',
                     'titulo' => 'Fiesta',
                     'capas' => [
@@ -2139,7 +2162,7 @@ switch ($fase) {
                         ['tipo' => 'placeholder', 'ref' => '0000FF#1', 'x' => 90, 'y' => 60,
                             'w' => 110, 'h' => 180, 'filtros' => ['gama' => 0, 'opacidad' => 90]],
                     ],
-                ]]),
+                ]])),
                 '_wpnonce' => 'nonce',
             ];
             $_REQUEST = $_POST;
@@ -2200,19 +2223,24 @@ switch ($fase) {
         ];
         try {
             $directo = $motor_mc->normalizar_mockups($entrada_mc);
-            $motor_mc->guardar_config('muestra', ['mockups' => $entrada_mc]);
-            $leido = $motor_mc->leer_config('muestra');
-            $GLOBALS['test_mockup_capas'] = [
-                'directo' => json_encode($directo),
-                'handler' => json_encode($leido['mockups']),
-                'mockups' => $leido['mockups'],
-                'capas' => (array)($leido['mockups'][0]['capas'] ?? []),
-                'vacio' => array_values(array_filter((array)$leido['mockups'], function ($m) {
-                    return (string)($m['id'] ?? '') === 'pendiente';
-                })),
+            // El guardado pasa por el HANDLER real (no por guardar_config directo):
+            // asi la fase cubre tambien el camino HTTP, incluida la lectura del
+            // JSON escapado por `add_magic_quotes` que rompia el editor en vivo.
+            $GLOBALS['test_mc_entrada'] = $entrada_mc;
+            $GLOBALS['test_mc_analisis_antes'] = file_get_contents($motor_mc->ruta_analisis('muestra'));
+            if (isset($GLOBALS['test_mc_analisis_antes']) && $GLOBALS['test_mc_analisis_antes'] === $analisis_mc_antes) {
+                // ya estaba: no hace falta volver a leerlo
+            }
+            $GLOBALS['test_mc_directo'] = json_encode($directo);
+            $_POST = [
+                'action' => 'personalizador_pdf_mockups',
+                'archivo' => 'muestra.pdf',
+                'preview_omisible' => '0',
+                'mockups' => add_magic_quotes_simulado(json_encode($entrada_mc)),
+                '_wpnonce' => 'nonce',
             ];
-            $GLOBALS['test_mc_analisis_antes'] = $analisis_mc_antes;
-            $GLOBALS['test_mc_analisis_despues'] = file_get_contents($motor_mc->ruta_analisis('muestra'));
+            $_REQUEST = $_POST;
+            $p->handle_mockups_guardar(); // exit en wp_send_json_success
         } catch (\Throwable $e) {
             $GLOBALS['test_mockup_capas_error'] = $e->getMessage();
         }
@@ -2234,7 +2262,7 @@ switch ($fase) {
             'action' => 'personalizador_pdf_mockups',
             'archivo' => 'muestra.pdf',
             'preview_omisible' => '1',
-            'mockups' => json_encode([[
+            'mockups' => add_magic_quotes_simulado(json_encode([[
                 'id' => 'fiesta',
                 'titulo' => 'Fiesta',
                 'capas' => [
@@ -2242,7 +2270,7 @@ switch ($fase) {
                     ['tipo' => 'placeholder', 'ref' => '0000FF#0', 'x' => 96, 'y' => 60, 'w' => 110, 'h' => 180, 'rot' => -3, 'sesgo' => 0.05, 'filtros' => []],
                     ['tipo' => 'otro', 'ref' => 'x', 'x' => 0, 'y' => 0, 'w' => 1, 'h' => 1],
                 ],
-            ]]),
+            ]])),
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;

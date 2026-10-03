@@ -2316,10 +2316,16 @@ class Personalizador_PDF_Plugin
         if (!$this->analisis_de($nombre)) {
             $this->responder(false, [], 'Este PDF no tiene datos analizados. Usa "Re-analizar".');
         }
-        $crudo = isset($_POST['mockups']) ? (string)$_POST['mockups'] : '';
+        // OJO: WordPress aplica `add_magic_quotes()` a `$_POST`, asi que el
+        // JSON llega con las comillas escapadas (`\"`). Sin `wp_unslash()` el
+        // `json_decode` falla y el editor no podia guardar NADA (bug en vivo:
+        // error `mockups_invalidos` al crear la primera vista). El arnes lo
+        // reproduce: su stub de `wp_unslash` hace `stripslashes_deep`.
+        $crudo = isset($_POST['mockups']) ? (string)wp_unslash($_POST['mockups']) : '';
         $decodificado = $crudo === '' ? [] : json_decode($crudo, true);
         if (!is_array($decodificado)) {
-            $this->responder(false, [], 'mockups_invalidos');
+            $motivo = function_exists('json_last_error_msg') ? json_last_error_msg() : '?';
+            $this->responder(false, [], 'No se pudo leer el contenido del editor (JSON invalido: ' . $motivo .'). Recarga la pagina.');
         }
         // Spec 011: el saneo vive en el motor (`PMU_Uploads::normalizar_mockups`)
         // y es el MISMO que aplica `guardar_config`. Aqui no se reimplementa
