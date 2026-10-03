@@ -243,18 +243,45 @@ check('el editor dibuja la capa de edicion DESPUES de componer',
 check('el editor reestablece el transform antes de la capa de edicion',
     /setTransform\(f2, 0, 0, f2, 0, 0\)/.test(cuerpo));
 
-// Regresion del bug que rompio el editor en el sitio real: una etiqueta HTML
-// sin `>` de cierre hace que jQuery la interprete como SELECTOR y lance
-// "unrecognized expression" al pintar la galeria de vistas. El cierre correcto
-// es la secuencia `">'` (comilla doble del atributo, > de la etiqueta, comilla
-// simple que cierra el literal JS).
-var lineaBorrar = leer('assets/mockups.js').split(/\r?\n/).filter(function (l) {
-    return l.indexOf('data-borrar=') !== -1;
-})[0] || '';
-check('la etiqueta del boton de borrar vista cierra con >',
-    lineaBorrar.indexOf('">\'') !== -1,
-    'falta el > de cierre: jQuery lo trataria como selector y lanzaria');
-
+// Regresion de los bugs que rompieron el editor en el sitio real: una etiqueta
+// HTML sin > de cierre hace que jQuery la interprete como SELECTOR y lance
+// "unrecognized expression". Ocurrio DOS veces: el boton de borrar vista y
+// los 4 botones de capa (arriba/abajo/ocultar/bloquear). El primer arreglo
+// dejo el check limitado a una sola linea, y eso dio falsa confianza.
+//
+// Por eso se recorren TODOS los literales de etiqueta de los modulos cliente.
+// Ojo: node --check NO lo detecta (el literal JS es valido; el defecto es
+// semantico: jQuery espera HTML y recibe un selector). Los literales
+// concatenados con + se saltan: su cierre puede venir en la siguiente parte.
+// Se hace con indexOf, sin regex: el patron de apertura dentro de una
+// expresion regular abriria un grupo sin cerrar.
+var modulosCliente = ['assets/mockups.js', 'assets/admin.js', 'assets/tienda.js'];
+var literalesSinCierre = [];
+var literalesVistos = 0;
+modulosCliente.forEach(function (rel) {
+    var codigo = leer(rel);
+    var APD = String.fromCharCode(36, 40) + String.fromCharCode(39, 60);
+    var CIERRE = String.fromCharCode(62);
+    var i = codigo.indexOf(APD);
+    while (i !== -1) {
+        var finLiteral = codigo.indexOf(String.fromCharCode(39), i + APD.length);
+        if (finLiteral === -1) { break; }
+        var html = codigo.slice(i + APD.length, finLiteral);
+        var resto = codigo.slice(finLiteral + 1);
+        var concat = String(resto).trim().charAt(0) === String.fromCharCode(43);
+        literalesVistos++;
+        if (!concat && html.charAt(html.length - 1) !== CIERRE) {
+            literalesSinCierre.push(rel + String.fromCharCode(58) + html.slice(0, 60));
+        }
+        i = codigo.indexOf(APD, finLiteral + 1);
+    }
+});
+check('ningun literal jQuery sin > de cierre (tag sin cerrar = selector)',
+    literalesSinCierre.length === 0,
+    literalesSinCierre.join(String.fromCharCode(32, 124, 32)));
+check('el detector de etiquetas realmente recorre literales',
+    literalesVistos >= 20,
+    'solo vio ' + literalesVistos + ': el check seria inerte');
 /* ============ Ejecucion ============ */
 
 var i = 0;

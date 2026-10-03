@@ -622,14 +622,14 @@ jQuery(function ($) {
                     .attr('aria-label', nombreCapa(c) + (c.oculta ? ' (oculta)' : '')
                         + (c.bloqueada ? ' (bloqueada)' : ''));
                 $li.append($('<span class="ec-mk-capa-nombre">').text(nombreCapa(c)));
-                $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="arriba"')
+                $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="arriba">')
                     .attr('aria-label', 'Subir la capa ' + nombreCapa(c)).text('▲'));
-                $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="abajo"')
+                $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="abajo">')
                     .attr('aria-label', 'Bajar la capa ' + nombreCapa(c)).text('▼'));
-                $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="ocultar"')
+                $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="ocultar">')
                     .attr('aria-label', (c.oculta ? 'Mostrar' : 'Ocultar') + ' la capa ' + nombreCapa(c))
                     .text(c.oculta ? '◻' : '◼'));
-                $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="bloquear"')
+                $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="bloquear">')
                     .attr('aria-label', (c.bloqueada ? 'Desbloquear' : 'Bloquear') + ' la capa ' + nombreCapa(c))
                     .text(c.bloqueada ? '🔒' : '🔓'));
                 $ul.append($li);

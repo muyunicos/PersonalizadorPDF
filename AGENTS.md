@@ -150,6 +150,17 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 - Plugin (este repo): `https://webhooks.hostinger.com/deploy/1f050c10cad12026236eb07cf9fc7c11`
 - Módulo TextMuy: `https://webhooks.hostinger.com/deploy/4df90409198182acd0a39f9fe786a033`
 
+**Deploy: el usuario despliega con el boton Implementar de Hostinger**, sobre 3 repos:
+
+| Repositorio | Rama | Ruta en el servidor |
+|---|---|---|
+| `muyunicos/muyunicos` | `main` | `/wp-content/themes/generatepress-child` |
+| `muyunicos/PersonalizadorPDF` (este) | `main` | `/wp-content/plugins/personalizador-pdf` |
+| `muyunicos/textmuy` | `main` | `/wp-content/plugins/personalizador-pdf/modules/textmuy` |
+
+Cuando haya que levar cambios al servidor: **commitear y pushear** y decirle solo
+"implementa y hace Ctrl+F5". **No pedirle que suba ficheros a mano.** Si se toco
+`modules/textmuy/`, ademas hay que commitear y pushear alli (repo aparte).
 **Regla de oro: no crear duplicados.** Antes de agregar algo, revisá el árbol y reutilizá
 lo existente. El módulo `modules/textmuy/` se versiona en este repositorio.
 
@@ -553,6 +564,7 @@ el numero a mano. El stub `get_file_data` del arnes esta en `tests/texto_puente.
 | `Unrecognized expression: <button ...` al crear una vista | Etiqueta HTML sin `>` de cierre pasada a `$()` (jQuery la lee como selector) | Cerrar la etiqueta. Lo atrapa `node tests/mockup-contrato.test.js` |
 | Las capas tapan los tiradores / no se ven las guías | La capa de edición se dibujó antes de la composición asíncrona | `componer` debe recibir `limpiar: false` y la capa de edición dibujarse en el `.then` (`dibujar()` en `mockups.js`) |
 | Error `mockups_invalidos` al guardar una vista | WordPress aplica `add_magic_quotes()` a `$_POST`: el JSON llega con `"` y `json_decode` falla | Leer SIEMPRE con `wp_unslash()` antes de `json_decode` (ver `handle_mockups_guardar`). Ojo: el stub de `wp_unslash` del arnes debe hacer `stripslashes_deep` (identidad = tests ciegos) |
+| Los controles de capa no se pintan / `unrecognized expression` en el editor | **Clase de bug**: cualquier `$('<tag ...')` sin el `>` de cierre. jQuery lo lee como SELECTOR. Ya ocurrio dos veces (boton de borrar vista; luego los 4 botones ▲▼◻🔒 de capa) | Cerrar la etiqueta. `node --check` NO lo detecta (el literal JS es valido). Lo cubre `node tests/mockup-contrato.test.js`, que recorre **todos** los literales de los modulos cliente (NO dejar el check atado a una sola linea: asi dio falsa confianza) |
 | `PMUMockup.componer is not a function` | El núcleo exporta otro nombre | El nombre canónico es `componer` (`composicion` es alias). Lo verifica `tests/mockup-contrato.test.js` |
 | "No se pudo recibir el texto renderizado del grupo X" | PNG supera límites del servidor | Subir `upload_max_filesize`/`post_max_size` o usar estilos más livianos |
 | El texto renderizado sale con otra fuente | Google Fonts sin internet o TTF local ausente | `ensureFontReady` fuerza la carga; verificar conexión |
