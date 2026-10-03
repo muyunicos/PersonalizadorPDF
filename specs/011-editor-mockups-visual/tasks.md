@@ -21,6 +21,17 @@ nuevo es `tests/mockup-geometria.test.js` (Node, sin framework) y dos fases nuev
 independientes. Clave de trazabilidad: `contracts/mockup-capas.md` (contrato) y `data-model.md`
 (campos y rangos).
 
+**Estado de las marcas**: `[X]` = implementada y verificada. `[~]` = **implementada a medias**:
+la parte lista funciona, pero queda un requisito del enunciado sin hacer (se detalla en la tarea).
+La revision en el sitio real del 2026-10-01 detecto que 5 tareas estaban marcadas `[X]` sin
+estar completas (T031, T032, T033, T034, T036): se corrigieron a `[~]` con su pendiente explicito.
+**No marcar como hecha una tarea por aproximacion**: si falta un requisito, se marca `[~]`.
+
+**Puertas de validacion (todas obligatorias antes de dar por buena una fase)**:
+`php -l`, `php tests/motor_smoke.php`, `php tests/parity.php`, las 37 fases de
+`php tests/texto_puente.php`, `node tests/mockup-geometria.test.js` (geometria pura) y
+`node tests/mockup-contrato.test.js` (cableado nucleo-consumidores + comportamiento del nucleo).
+
 **Regla de oro de esta feature (research.md R1)**: el render del mockup tiene **una sola
 implementacion** (`assets/mockup-render.js`). Ninguna tarea puede escribir logica de composicion
 nueva en `mockups.js` o `tienda.js`: ambos la consumen.
@@ -147,12 +158,12 @@ el camino.
 - [X] T028 [US3] Galeria de fotos de referencia en `assets/mockups.js`: miniaturas de `datos.fotos` con previsualizacion, y **eliminacion de los dos `window.prompt`** de agregar foto y agregar hueco (`assets/mockups.js:240` y `:255`); la accion de agregar pasa a pedir la eleccion con un clic en la miniatura o en la ficha del grupo (FR-012, FR-042)
 - [X] T029 [US3] Arrastre de archivo al area de trabajo en `assets/mockups.js`: soltar un archivo de imagen lo sube con la accion vigente de subida de foto de mockup, lo anade a la galeria **y** crea la capa que cubre todo el lienzo, sin pedir el nombre (FR-013)
 - [X] T030 [US3] Selector del catalogo del proyecto en `assets/mockups.js`: miniaturas de `datos.imagenes` con busqueda por titulo y filtro por categoria; al elegir, se anade como capa con la misma geometria que las demas y `ref = "img:{id}"`; **el editor no escribe en el catalogo ni en sprites** (FR-014)
-- [X] T031 [US3] Lista de grupos en `assets/mockups.js`: cada grupo con identificador, tamano real y numero de instancias; al elegirlo se inserta la capa de hueco encuadrada a escala, centrada y seleccionada, con `ref = "{grupo}"` o `"{grupo}#{indice}"` para repetir el mismo grupo varias veces (FR-015)
-- [X] T032 [US3] Aviso de borrado de foto en uso en `assets/mockups.js`: al borrar una foto, contar en el estado en memoria cuantas capas la referencian y pedir confirmacion mostrando el numero, con opcion de quitar la capa o cancelar (FR-016)
-- [X] T033 [US3] Panel de capas en `assets/mockups.js`: miniaturas ordenables por arrastre, y por capa las acciones renombrar, duplicar, ocultar, bloquear y eliminar (con confirmacion); `oculta` y `bloqueada` se reflejan en el lienzo y respetan `PMUGeometria.acertarCapa` (FR-026)
-- [X] T034 [US3] Alineacion y distribucion en `assets/mockups.js` via `PMUGeometria.alinear` y `distribuir`, para las 6 posiciones, sin mover las capas no seleccionadas (FR-027)
+- [~] T031 [US3] Lista de grupos en `assets/mockups.js`: cada grupo con identificador, tamano real y numero de instancias; al elegirlo se inserta la capa de hueco encuadrada a escala, centrada y seleccionada. **PENDIENTE**: elegir el indice de instancia (`{grupo}#{n}`) para repetir el mismo grupo varias veces (hoy `agregarHueco` siempre usa indice 0; repetir un grupo exige duplicar la capa y no hay selector de instancia) (FR-015)
+- [~] T032 [US3] Aviso de borrado de foto en uso en `assets/mockups.js`: **PARCIAL**: las fotos en uso se marcan con un punto verde (`.ec-usada`) al pintar la galeria. **PENDIENTE**: al borrar, mostrar cuantos layers la referencian y ofrecer quitar la capa o cancelar; hoy el borrado lo hace `admin.js` (`.ec-mockup-borrar`), que no conoce las capas (FR-016)
+- [~] T033 [US3] Panel de capas en `assets/mockups.js`: **PARCIAL**: acciones por capa (renombrar via propiedad, duplicar, ocultar, bloquear, eliminar) y reordenar con botones Subir/Bajar. **PENDIENTE**: miniaturas en cada fila y reordenamiento arrastrando (FR-026)
+- [~] T034 [US3] Alineacion y distribucion en `assets/mockups.js` via `PMUGeometria.alinear` y `distribuir`, para las 6 posiciones, sin mover las capas no seleccionadas. **PARCIAL**: los 6 botones de alinear estan en la UI. **PENDIENTE**: exponer `distribuir` (la funcion existe y esta testeada, pero sin boton) (FR-027)
 - [X] T035 [US3] Panel de propiedades en `assets/mockups.js`: geometria mas **ajustes como controles deslizantes con vista en vivo** (brillo, contraste, saturacion, gama, opacidad, desenfoque, tono) y el modo de fusion, con "restablecer a neutro" por capa; los valores salen de `PMUMockup.filtroCss` (FR-028)
-- [X] T036 [US3] Galeria de mockups en `assets/mockups.js`: miniaturas renderizadas en vivo con el nucleo, y navegacion crear / seleccionar / duplicar / renombrar / eliminar / reordenar (FR-030)
+- [~] T036 [US3] Galeria de mockups en `assets/mockups.js`: miniaturas renderizadas en vivo con el nucleo, y navegacion crear / seleccionar / duplicar / renombrar / eliminar. **PARCIAL**: no se puede **reordenar** las vistas arrastrarlas (el orden es el del array) (FR-030)
 - [X] T037 [US3] Fuente unica de estado: **eliminar el listado estatico duplicado de `admin/pdfs.php:519-528`** y refrescar la galeria al instante tras cualquier cambio, sin recarga de pagina (FR-031)
 
 ---

@@ -110,6 +110,7 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   ├── mockup-geometria.js   ← Geometria PURA del editor (acotar, imanes, tiradores,
 │   │                             rotacion, acertar, alinear, distribuir). Sin DOM;
 │   │                             testeada con `node tests/mockup-geometria.test.js`
+│   │                             y `node tests/mockup-contrato.test.js` (cableado)
 │   ├── selector-pmu.js      ← Cliente de subida/recorte de imágenes de campos (spec 004,
 │   │                          contrato `specs/004.../contracts/selector-pmu.md`)
 │   └── miniaturas.js        ← ThumbEngine: miniaturas `.webp` y sprites por ámbito; único
@@ -461,6 +462,10 @@ php tests/motor_smoke.php     # Smoke del motor (debe decir "SMOKE OK")
 php tests/parity.php          # Oráculo del detector (debe decir "PARIDAD OK")
 node tests/mockup-geometria.test.js   # Geometria pura del editor de mockups (spec 011):
                               # debe decir "GEOMETRIA OK (N checks)"
+node tests/mockup-contrato.test.js    # Cableado nucleo-consumidores + comportamiento del
+                              # nucleo de render (spec 011): debe decir "CONTRATO OK (N checks)"
+                              # ATRAPA: miembro de PMUMockup que el editor/ficha llaman y no
+                              # existe; orden de dibujo asincrono; HTML mal formado en jQuery.
 php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
                               # setup | guardar_ajax | guardar_vacio | procesar |
                               # rechazo | imagen_adjunto [mal] |
@@ -534,6 +539,10 @@ entonces): si el conteo no da 16, revisar si la 009 ya entró.
 | Iframe de "Estilos" no carga el editor | Módulo ausente | Verificar importación de `textmuy/` a `modules/` (LEEME.md) |
 | "El modulo TextMuy en cache esta desactualizado" | JS viejo del módulo en cache | Ctrl+F5; bump `?v=RCn` al cambiar JS del módulo |
 | Error guardando preset o subiendo imagen | Permisos de escritura | Asegurar permisos en la carpeta respectiva de `uploads/` |
+| El editor de mockups no aparece (ni galería ni lienzo) | Falta `mockup-render.js` o `mockup-geometria.js` en el servidor | Subir **los dos** módulos cliente: son dependencia dura (`mockups.js` hace `return` temprano si `window.PMUMockup` o `window.PMUGeometria` no están). Verificar con `smoke_checks()` → "Mockups: nucleo de render del editor desplegado" |
+| `Unrecognized expression: <button ...` al crear una vista | Etiqueta HTML sin `>` de cierre pasada a `$()` (jQuery la lee como selector) | Cerrar la etiqueta. Lo atrapa `node tests/mockup-contrato.test.js` |
+| Las capas tapan los tiradores / no se ven las guías | La capa de edición se dibujó antes de la composición asíncrona | `componer` debe recibir `limpiar: false` y la capa de edición dibujarse en el `.then` (`dibujar()` en `mockups.js`) |
+| `PMUMockup.componer is not a function` | El núcleo exporta otro nombre | El nombre canónico es `componer` (`composicion` es alias). Lo verifica `tests/mockup-contrato.test.js` |
 | "No se pudo recibir el texto renderizado del grupo X" | PNG supera límites del servidor | Subir `upload_max_filesize`/`post_max_size` o usar estilos más livianos |
 | El texto renderizado sale con otra fuente | Google Fonts sin internet o TTF local ausente | `ensureFontReady` fuerza la carga; verificar conexión |
 | Un preset guardado no aparece en otro navegador | — | Resuelto: presets `.txm` en `uploads/pmu/tm-presets/` |

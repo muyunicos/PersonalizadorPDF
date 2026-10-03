@@ -49,6 +49,9 @@ global.Image = function () {
             self.complete = true;
             self.naturalWidth = 300;
             self.naturalHeight = 300;
+            // La URL identifica la imagen en el trazo de drawImage: permite
+            // verificar el z-order y que las capas ocultas no se dibujen.
+            self.url = valor;
             if (self.onload) { self.onload(); }
         }
     });
@@ -102,8 +105,8 @@ function ctxFalso() {
         measureText: function () { return { width: 10 }; },
         setLineDash: function () { },
         drawImage: function (img, x, y, w, h) {
-            ops.push('drawImage:' + Math.round(x) + ',' + Math.round(y) + ',' +
-                Math.round(w) + ',' + Math.round(h));
+            ops.push('drawImage:' + (img && img.url ? img.url : '?') + '@' +
+                Math.round(x) + ',' + Math.round(y) + ',' + Math.round(w) + ',' + Math.round(h));
         }
     };
 }
@@ -162,8 +165,28 @@ pruebas.push(function () {
             lienzo: 300
         }).then(function () {
         var dibuja = ctx.ops.filter(function (o) { return o.indexOf('drawImage') === 0; });
+        // El stub de Image marca cada URL, asi que el trazo identifica la capa.
         check('oculta: la capa `oculta` no se dibuja',
-            dibuja.length === 1 && dibuja[0].indexOf('b.png') === 0, dibuja.join(' | '));
+            dibuja.length === 1 && dibuja[0].indexOf('pdf:b.png') !== -1, dibuja.join(' | '));
+    });
+});
+
+pruebas.push(function () {
+    var ctx = ctxFalso();
+    // Z-order: indice 0 al fondo, indice 1 encima (orden de resolucion).
+    var orden = [];
+    return R.componer(ctx,
+        [capa('img', 'pdf:uno', { x: 0, y: 0, w: 10, h: 10 }),
+            capa('img', 'pdf:dos', { x: 0, y: 0, w: 10, h: 10 })],
+        {
+            resolver: function (c) { return Promise.resolve({ url: c.ref }); },
+            contexto: {},
+            lienzo: 300
+        }).then(function () {
+        var trazos = ctx.ops.filter(function (o) { return o.indexOf('drawImage') === 0; });
+        check('z-order: primero la capa del fondo, despues la de encima',
+            trazos.length === 2 && trazos[0].indexOf('pdf:uno') !== -1
+            && trazos[1].indexOf('pdf:dos') !== -1, trazos.join(' | '));
     });
 });
 
@@ -205,21 +228,32 @@ pruebas.push(function () {
 /* ============ 3. Orden de dibujo del editor (estructural) ============ */
 
 var editor = leer('assets/mockups.js');
-var iComponer = editor.indexOf('R.componer(ctx, capas()');
-var cuerpo = editor.slice(iComponer, iComponer + 1400);
-check('el editor llama a R.componer (nombre canonico del nucleo)', iComponer !== -1);
-check('el editor NO pide al nucleo que limpie (limpiar: false)',
-    /limpiar:\s*false/.test(cuerpo),
-    'sin limpiar:false el nucleo borra la capa de edicion');
-var editor = leer('assets/mockups.js');
 var iDibujar = editor.indexOf('function dibujar()');
 // Ventana amplia: cubre la llamada a componer, la opcion `limpiar` y el
 // `setTransform` que restablece la escala antes de la capa de edicion.
 var cuerpo = editor.slice(iDibujar, iDibujar + 2000);
 check('el editor llama a R.componer (nombre canonico del nucleo)',
     /R\.componer\(ctx, capas\(\)/.test(cuerpo));
+check('el editor NO pide al nucleo que limpie (limpiar: false)',
+    /limpiar:\s*false/.test(cuerpo),
+    'sin limpiar:false el nucleo borra la capa de edicion');
+check('el editor dibuja la capa de edicion DESPUES de componer',
+    /\.then\(capaEdicion\)/.test(cuerpo) && /function capaEdicion\(\)\s*\{[\s\S]*dibujarGuias\(\)/.test(cuerpo),
+    'la capa de edicion debe invocarse desde el then de componer');
 check('el editor reestablece el transform antes de la capa de edicion',
     /setTransform\(f2, 0, 0, f2, 0, 0\)/.test(cuerpo));
+
+// Regresion del bug que rompio el editor en el sitio real: una etiqueta HTML
+// sin `>` de cierre hace que jQuery la interprete como SELECTOR y lance
+// "unrecognized expression" al pintar la galeria de vistas. El cierre correcto
+// es la secuencia `">'` (comilla doble del atributo, > de la etiqueta, comilla
+// simple que cierra el literal JS).
+var lineaBorrar = leer('assets/mockups.js').split(/\r?\n/).filter(function (l) {
+    return l.indexOf('data-borrar=') !== -1;
+})[0] || '';
+check('la etiqueta del boton de borrar vista cierra con >',
+    lineaBorrar.indexOf('">\'') !== -1,
+    'falta el > de cierre: jQuery lo trataria como selector y lanzaria');
 
 /* ============ Ejecucion ============ */
 
