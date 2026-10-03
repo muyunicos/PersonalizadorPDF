@@ -5,10 +5,11 @@
 
 ## Que es
 
-**TextMuy vive integrado en este repositorio** (`modules/textmuy/`), bajo control total
-del plugin. Ya NO existe un repositorio hermano ni flujo de importacion manual: se edita
-directo aca, se corren sus tests Node y se hace bump `?v=RCn` en `index.html` y
-`render-core.html` al tocar cualquier JS del modulo.
+**TextMuy vive en este checkout** (`modules/textmuy/`), que es el **repositorio propio del
+modulo** (`muyunicos/textmuy`, el original; no un clon). Se edita directo aca, se corren
+sus tests Node y se hace bump `?v=RCn` en `index.html` y `render-core.html` al tocar
+cualquier JS del modulo; sus commits y push van EN ESE repo (el plugin solo registra su
+commit).
 
 ## Estructura
 
@@ -18,7 +19,7 @@ modules/textmuy/
 ├── render-core.html     <- Motor de render headless (API renderBatch, iframe off-screen)
 ├── js/                  <- editor, controls, preset-manager, catalog, api, fonts, galeria...
 ├── css/
-├── tests/               <- 16 suites Node `*.test.js` (NO corren en el servidor productivo de WP)
+├── tests/               <- 21 suites Node `*.test.js` (NO corren en el servidor productivo de WP)
 └── AGENTS.md            <- Contexto propio del modulo (norma superior: .specify/memory/constitution.md)
 ```
 

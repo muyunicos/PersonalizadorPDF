@@ -67,15 +67,17 @@ Integra el sistema **TextMuy** (editor de estilos de texto client-side) en la pe
 
 Layout historico de despliegue (logico, sin git): la RAIZ DEL PROYECTO agrupaba
 tres carpetas hermanas `personalizador-pdf/` (plugin) + `textmuy/` + `uploads/pmu/`.
-Desde v4.2 ese `textmuy/` hermano es HISTORICO: el modulo vive integrado en
-`modules/textmuy/` de este repo (ver LEEME.md). En este checkout el layout real es:
+Desde v4.2 ese `textmuy/` hermano es HISTORICO: el modulo vive en
+`modules/textmuy/`, que es su **repositorio propio** (`muyunicos/textmuy`, el original;
+no un clon) dentro del arbol del plugin (ver LEEME.md). Se edita aqui, pero sus commits
+y push van EN ESE repo. En este checkout el layout real es:
 
 ```
 personalizador-pdf/              <- REPO GIT (en WP vive en
                                     wp-content/plugins/personalizador-pdf/)
 ├── personalizador-pdf.php
 ├── admin/ engine/ inc/ assets/ specs/ tests/
-├── modules/textmuy/            <- Motor frontend TextMuy (integrado, control total)
+├── modules/textmuy/            <- Motor frontend TextMuy (repo propio: muyunicos/textmuy)
 └── uploads/pmu/                <- DATOS DE USUARIO (sin git): espejo de
                                     wp-content/uploads/pmu/. Se despliega
                                     COMPLETO al servidor.
@@ -170,9 +172,12 @@ diagnóstico) está documentado en `docs/entorno-desarrollo.md` y resumido en §
 
 Cuando haya que levar cambios al servidor: **commitear y pushear** y decirle solo
 "implementa y hace Ctrl+F5". **No pedirle que suba ficheros a mano.** Si se toco
-`modules/textmuy/`, ademas hay que commitear y pushear alli (repo aparte).
+`modules/textmuy/`, ademas hay que commitear y pushear alli (su repo propio:
+`muyunicos/textmuy`).
 **Regla de oro: no crear duplicados.** Antes de agregar algo, revisá el árbol y reutilizá
-lo existente. El módulo `modules/textmuy/` se versiona en este repositorio.
+lo existente. El módulo `modules/textmuy/` es un repositorio git propio dentro de este
+checkout: se edita aquí, pero sus commits y push van EN ESE repo (este repo solo registra
+el commit del módulo).
 
 ### 2.1 Contrato RenderCore (comunicación plugin ↔ módulo TextMuy)
 
@@ -197,7 +202,7 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
    `op=` de presets/imágenes/fuentes). Sin puente el editor NO opera: muestra un
    error accionable y hace cero peticiones locales (no hay modo standalone).
 5. **Versionado de estáticos (cache-bust)**: `render-core.html` e `index.html` referencian
-   sus scripts internos con `?v=RCn` (**RC38 hoy**): al cambiar cualquier JS del módulo,
+   sus scripts internos con `?v=RCn` (**RC40 hoy**): al cambiar cualquier JS del módulo,
    subir el número en ambos HTML.
 6. **Galería**: manejada internamente por el módulo (`js/galeria.js`), con preview en vivo.
    La lectura es **canónica y certificada**: `ensureSpriteCanonico(ambito)` +
@@ -540,20 +545,23 @@ usuario, NO versionados). `parity.php` acepta la ruta como argumento opcional.
 Set-Location modules\textmuy
 node tests/catalog-unified.test.js && node tests/tile-geometria.test.js && node tests/fonts-catalog.test.js
 node tests/img-refs.test.js && node tests/preset-cache.test.js && node tests/preset-ambito.test.js
-node tests/preset-delta.test.js && node tests/preset-load.test.js && node tests/distort-engine.test.js
-node tests/flag-wave.test.js && node tests/pattern-block-box.test.js && node tests/controls-init.test.js
-node tests/galeria-items.test.js && node tests/invalidacion.test.js && node tests/sprite-canonico.test.js
-node tests/rc-bump.test.js
+node tests/preset-delta.test.js && node tests/preset-load.test.js && node tests/preset-roundtrip.test.js
+node tests/distort-engine.test.js && node tests/flag-wave.test.js && node tests/pattern-block-box.test.js
+node tests/controls-init.test.js && node tests/galeria-items.test.js && node tests/invalidacion.test.js
+node tests/sprite-canonico.test.js && node tests/fuente-compuesta.test.js && node tests/fuente-carga-estados.test.js
+node tests/fuente-selector.test.js && node tests/integridad-archivos.test.js && node tests/rc-bump.test.js
 Set-Location ..\..
 ```
-(16 suites `*.test.js` + `tests/galerias.browser.js`; Node NO corre en el servidor productivo
-de WP: es solo testing del módulo.)
+(21 suites `*.test.js` + `tests/galerias.browser.js`; Node NO corre en el servidor productivo
+de WP: es solo testing del módulo. Las ultimas 5 en entrar: `preset-roundtrip`,
+`fuente-compuesta`, `fuente-carga-estados`, `fuente-selector` e `integridad-archivos`;
+`?v=RC40` hoy en ambos HTML.)
 
 `tests/galerias.browser.js` es la única prueba con **navegador real** (Playwright + Chrome vía
 la variable de entorno `TEXTMUY_CHROME`): valida el DOM de las galerías (celdas, descargas,
 geometría). No corre en el hosting; es la puerta que consume la spec 009 (SC-006, T027/T031).
-Esa spec suma además `tests/hoja-generacion.test.js` al llegar la implementación (17 suites
-entonces): si el conteo no da 16, revisar si la 009 ya entró.
+Esa spec suma además `tests/hoja-generacion.test.js` al llegar la implementación (22 suites
+entonces): si el conteo no da 21, revisar si la 009 ya entró.
 
 ## 10. Reglas para la IA al editar
 
@@ -570,9 +578,10 @@ entonces): si el conteo no da 16, revisar si la 009 ya entró.
   producción sin aprobación explícita del usuario (el push dispara deploy; §2).
 - ❌ NO DEBES: editar a mano `.specify/` ni `.clinerules/` (gestionados por el CLI y
   gitignored): actualizá con `specify integration upgrade cline --script ps` (§8).
-- ✅ El módulo `modules/textmuy/` es parte de este repositorio y está bajo control total:
-  se edita directamente, se corren sus tests Node (`node --check` + 16 suites) y se hace
-  bump `?v=RCn` en ambos HTML al tocar su JS.
+- ✅ El módulo `modules/textmuy/` es un repositorio git propio (`muyunicos/textmuy`, el
+  original) que vive dentro de este checkout: se edita directamente y se corren sus tests
+  Node (`node --check` + 21 suites), pero sus commits y push van EN ESE repo; se hace bump
+  `?v=RCn` en ambos HTML al tocar su JS.
 - ❌ NO DEBES: guardar datos generados por el admin dentro de la carpeta del plugin
   (siempre usar `uploads/` según §5).
 - ❌ NO DEBES: leer `form.action` del DOM con el patrón admin-post: usar

@@ -1,7 +1,7 @@
 # Indice de specs — Personalizador PDF
 
 > Jerarquia: `constitution` (.specify/memory/constitution.md) > `AGENTS.md` > resto.
-> Ultima actualizacion: 2026-10-01 (RC38: handshake del puente con ack `textmuy-bridge-ok` en consola y ficha; 010 en especificacion con spec, contrato y plan).
+> Ultima actualizacion: 2026-10-03 (modulo en RC40 con 21 suites Node; documentacion de entorno del plugin alineada).
 
 ## Activos (codigo completo, falta solo manual WP real)
 

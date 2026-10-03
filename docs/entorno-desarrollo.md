@@ -12,6 +12,9 @@
 - Todos los comandos se ejecutan desde la **raíz del proyecto** (esta carpeta, que es la
   carpeta del plugin en WordPress), salvo los tests del módulo TextMuy, que exigen
   `modules/textmuy/` como directorio actual.
+- `modules/textmuy/` es el **repositorio propio del módulo** (`muyunicos/textmuy`, el
+  original; no un clon): se edita directamente, pero sus commits y push van EN ESE repo
+  (el plugin solo registra el commit del módulo).
 
 ### Comprobación del shell
 
@@ -24,16 +27,19 @@ Esperado: `7.x` y una ruta terminada en `pwsh.exe`.
 
 ## 2. Herramientas requeridas
 
-| Herramienta | Verificación | Uso |
-|---|---|---|
-| PowerShell 7 | `$PSVersionTable.PSVersion` | Shell de VS Code/Cline y de los scripts Spec Kit (`ps`). |
-| VS Code | `code --version` | IDE; su terminal integrada la usa Cline. |
-| Cline | Extensión instalada | Agente (modos Plan/Act). |
-| `uv` | `uv --version` / `uv tool list` | Gestor con el que está instalado `specify-cli`. |
-| `specify` | `specify version` | Flujo SDD (specify → plan → tasks → implement). |
-| Node.js | `node --version` | Solo tests del módulo TextMuy; nunca en el servidor. |
-| PHP | `php -v` | Motor y tests `tests/*.php`. |
-| Git | `git --version` | Versionado; el deploy lo dispara el push (webhooks Hostinger). |
+| Herramienta | Verificación | Uso | Versión verificada (2026-10-03) |
+|---|---|---|---|
+| PowerShell 7 | `$PSVersionTable.PSVersion` | Shell de VS Code/Cline y de los scripts Spec Kit (`ps`). | 7.6.6 |
+| VS Code | `code --version` | IDE; su terminal integrada la usa Cline. | 1.140.0 |
+| Cline | `code --list-extensions --show-versions` | Agente (modos Plan/Act). | `saoudrizwan.claude-dev@4.1.22` |
+| `uv` | `uv --version` / `uv tool list` | Gestor con el que está instalado `specify-cli`. | 0.12.3 |
+| `specify` | `specify version` | Flujo SDD (specify → plan → tasks → implement). | 1.1.0 |
+| Node.js | `node --version` | Solo tests del módulo TextMuy; nunca en el servidor. | 22.20.0 |
+| PHP | `php -v` | Motor y tests `tests/*.php`. | 8.5.9 |
+| Git | `git --version` | Versionado; el deploy lo dispara el push (webhooks Hostinger). | 2.48.1 |
+
+Las versiones son un **snapshot** del 2026-10-03: la fuente de verdad es el comando de la
+columna *Verificación*.
 
 Comprobación conjunta:
 
@@ -46,13 +52,22 @@ specify check
 
 - Integración **predeterminada y única**: `cline`.
 - Scripts generados para PowerShell (`--script ps`): `.specify/scripts/powershell/*.ps1`.
-  Los workflows (`/speckit-*`) los ejecutan **desde la raíz del repo**.
+  Los workflows (`/speckit-*`) los ejecutan **desde la raíz del repo**. El juego
+  `.specify/scripts/bash/*.sh` también existe pero **no se usa**.
 - Estado actual (2026-10-03):
   - `.specify/init-options.json` → `ai=cline`, `integration=cline`, `script=ps`, `speckit_version=1.1.0`.
   - `.specify/integration.json` → `integration=cline`, `default_integration=cline`,
-    `settings.cline.script=ps`.
+    `integration_settings.cline` → `script=ps`, `invoke_separator="-"`.
   - `specify integration status` → `Integration status: OK`, `Default integration: cline`,
-    `Installed integrations: cline`, `0` modificados / `0` faltantes.
+    `Installed integrations: cline`, `Multi-install safe: yes`, `Shared templates target
+    alignment: cline`, `Modified managed files: 0`, `Missing managed files: 0`,
+    `Invalid manifest paths: 0`, `Unchecked manifests: 0`.
+  - `specify check` → `Specify CLI is ready to use!` (Cline figura como *IDE-based, no CLI
+    check*; VS Code como disponible).
+  - Los hashes gestionados viven en `.specify/integrations/*.manifest.json`;
+    `specify integration status` los contrasta contra el disco.
+  - El módulo (`modules/textmuy/`) tiene su propio Spec Kit (misma integración `cline` +
+    `ps`); allí `.specify/` y `.clinerules/` **sí están versionados** y su estado también es OK.
 - **`.specify/` y `.clinerules/` están en `.gitignore`** (tooling local, no versionado):
   sus cambios **no** aparecen en `git status` ni en `git diff`. La verificación real es
   `specify integration status` (campos *Modified managed files* / *Missing managed files*).
@@ -71,15 +86,17 @@ specify integration status                      # después: 0 modificados / 0 fa
 ## 4. Terminal de VS Code y Cline
 
 - `.vscode/settings.json` (versionado) fija
-  `terminal.integrated.defaultProfile.windows: "PowerShell"`: VS Code resuelve al perfil
-  PowerShell, que usa **`pwsh` cuando PowerShell 6+ está instalado** (y Windows PowerShell
-  como respaldo), por lo que la terminal integrada queda en PowerShell 7 en este equipo.
-- **Cline hereda ese shell**: su ajuste *Default Terminal Profile* (Cline → Settings →
-  Terminal) en valor `Default` usa la configuración global de VS Code; además, si no hay
-  perfil configurado, replica el default de VS Code (PowerShell con `pwsh`, nunca `cmd.exe`).
-  Opcionalmente se puede fijar ahí mismo el perfil sin tocar VS Code.
-- Si Cline reporta *Shell Integration Unavailable*: reabrir la terminal, actualizar VS Code
-  y seguir la guía oficial (ver §7).
+  `terminal.integrated.defaultProfile.windows: "PowerShell"`: VS Code resuelve ese perfil a
+  **`pwsh` cuando PowerShell 6+ está instalado** (con 6+ presente, Windows PowerShell no se
+  lista por defecto), por lo que la terminal integrada queda en PowerShell 7 en este equipo.
+- **Cline hereda esa terminal**: su ajuste *Default Terminal Profile* (Cline → Settings →
+  Terminal) en valor `Default` no impone un shell propio y usa el perfil por defecto de VS
+  Code; opcionalmente se puede fijar ahí mismo el perfil sin tocar VS Code. Verificado el
+  2026-10-03: los comandos de la sesión de Cline corren en `pwsh` 7.6.6.
+- Si Cline reporta *Shell Integration Unavailable*: reabrir la terminal o reiniciar VS Code;
+  si persiste en Windows con PowerShell, revisar la política de ejecución
+  (`Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`, como
+  administrador) y abrir una terminal nueva.
 - Verificación efectiva (en la terminal integrada y en cualquier sesión de Cline):
 
 ```powershell
@@ -111,5 +128,3 @@ No cambiar perfiles, PATH ni versiones sin evidencia de los pasos 1–3.
 
 - `AGENTS.md` §8–§10 (canónico técnico) y `.specify/memory/constitution.md` (jerarquía).
 - VS Code — *Terminal Profiles*: https://code.visualstudio.com/docs/terminal/profiles
-- Cline — *Terminal Quick Fixes*: https://docs.cline.bot/troubleshooting/terminal-quick-fixes
-- Cline — *Terminal Integration Guide*: https://docs.cline.bot/troubleshooting/terminal-integration-guide
