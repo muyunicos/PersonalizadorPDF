@@ -320,6 +320,51 @@ check('el nucleo acepta el indice de instancia 1-based',
         && leer('assets/mockup-render.js').indexOf('indice <= (parseInt(grupo.cont, 10) || 1)') !== -1);
 
 
+/* ============ Miniaturas de capa (T033) y reordenacion de vistas (T036) ============ */
+
+var ed = leer('assets/mockups.js');
+var geo = require(path.join(RAIZ, 'assets/mockup-geometria.js'));
+
+// La miniatura va ANTES del nombre (formato [img] nombre).
+check('T033: la fila de capa antepone la miniatura',
+    ed.indexOf('$li.append(miniaturaCapa(c))') !== -1
+        && ed.indexOf('ec-mk-capa-nombre') !== -1);
+
+// Reutiliza resolverCapa: la imagen real si existe, no un marcador fijo.
+check('T033: la miniatura muestra la imagen real cuando la hay',
+    ed.indexOf('if (r && r.url) {') !== -1,
+    'debe reusar el resolver de la capa, no un marcador fijo');
+// El CUERPO de la funcion (no su llamada) debe usar el render.
+var cuerpoMini = ed.slice(ed.indexOf('function miniaturaCapa'), ed.indexOf('function pintarCapas'));
+check('T033: el cuerpo de miniaturaCapa resuelve el render de la capa',
+    cuerpoMini.indexOf('resolverCapa(c)') !== -1 && cuerpoMini.indexOf('r.url') !== -1);
+
+
+// Sin recurso, cae al swatch de color del grupo.
+check('T033: sin recurso cae al swatch de color del grupo',
+    ed.indexOf('ec-mk-capa-mini-swatch') !== -1
+        && ed.indexOf('ec-mk-capa-mini-img') !== -1);
+
+// El nucleo de geometria expone reordenar y el editor lo usa.
+check('T036: el nucleo expone reordenar(lista, desde, hasta)',
+    typeof geo.reordenar === 'function');
+check('T036: el editor reordena las vistas con la funcion del nucleo',
+    ed.indexOf('G.reordenar(estado.mockups') !== -1);
+
+// Arrastre con pointer events sobre la galeria.
+check('T036: arrastre de vistas enlazado con pointerdown',
+    ed.indexOf("$ed.on('pointerdown', '.ec-mk-mockup[data-arrastre]") !== -1,
+    'hay CSS y marca arrastrable, pero si nada escucha no hay arrastre');
+
+// Un clic simple NO debe reordenar: hace falta umbral.
+check('T036: umbral de arrastre (un clic no reordena)',
+    ed.indexOf('Math.abs(dx) < 6') !== -1
+        && ed.indexOf('!arrastreVista.movido') !== -1);
+
+// La vista seleccionada sigue a su nueva posicion.
+check('T036: la vista seleccionada sigue a su nueva posicion',
+    ed.indexOf('estado.actual = hasta') !== -1
+        && ed.indexOf('estado.actual = estado.actual - 1') !== -1);
 /* ============ Ejecucion ============ */
 var i = 0;
 function correr() {

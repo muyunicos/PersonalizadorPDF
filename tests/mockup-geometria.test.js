@@ -150,6 +150,24 @@ igual('distribuir: ancho de hueco esperado', dist[1].x - dist[0].x - 20, (300 - 
 var pocas = G.distribuir(cuatro, [0, 1], 'x', { x: 0, y: 0, w: 300, h: 300 });
 igual('distribuir: con menos de 3 capas no hace nada', pocas[0].x, 0);
 
+/* ============ Reordenar (T036) ============ */
+
+var abc = ['a', 'b', 'c', 'd'];
+check('reordenar: mueve al principio', G.reordenar(abc, 2, 0).join('') === 'cabd');
+check('reordenar: mueve al final', G.reordenar(abc, 0, 3).join('') === 'bcda');
+check('reordenar: mueve al medio', G.reordenar(abc, 3, 1).join('') === 'adbc');
+check('reordenar: origen igual que destino = sin cambios', G.reordenar(abc, 1, 1).join('') === 'abcd');
+check('reordenar: NO muta la entrada', abc.join('') === 'abcd');
+check('reordenar: devuelve copia', G.reordenar(abc, 0, 1) !== abc);
+check('reordenar: origen fuera de rango', G.reordenar(abc, 9, 0).join('') === 'abcd');
+check('reordenar: destino fuera de rango', G.reordenar(abc, 0, 9).join('') === 'abcd');
+check('reordenar: indice negativo', G.reordenar(abc, -1, 0).join('') === 'abcd');
+check('reordenar: no numerico', G.reordenar(abc, 'x', 0).join('') === 'abcd');
+igual('reordenar: lista vacia', G.reordenar([], 0, 1).length, 0);
+igual('reordenar: null es lista vacia', G.reordenar(null, 0, 0).length, 0);
+igual('reordenar: conserva la longitud', G.reordenar(abc, 0, 3).length, 4);
+check('reordenar: conserva los mismos elementos', G.reordenar(abc, 1, 3).slice().sort().join('') === 'abcd');
+
 /* ============ Normalizacion al abrir ============ */
 
 var norm = G.normalizarCapa({ x: -40, y: 10, w: 400, h: 50 });

@@ -25,7 +25,8 @@ independientes. Clave de trazabilidad: `contracts/mockup-capas.md` (contrato) y 
 la parte lista funciona, pero queda un requisito del enunciado sin hacer (se detalla en la tarea).
 La revision en el sitio real del 2026-10-01 detecto que 5 tareas estaban marcadas `[X]` sin
 estar completas (T031, T032, T033, T034, T036): se corrigieron a `[~]` con su pendiente explicito.
-T031 quedo cerrada en esta revision (2026-10-01): quedan 4 pendientes ([~] T032, T033, T034, T036).
+T031 quedo cerrada en esta revision (2026-10-01): T033 y T036 quedaron cerradas en esta revision (2026-10-01); quedan 2 pendientes
+([~] T032 y T034, que se aplaza a peticion del usuario).
 **No marcar como hecha una tarea por aproximacion**: si falta un requisito, se marca `[~]`.
 
 **Puertas de validacion (todas obligatorias antes de dar por buena una fase)**:
@@ -161,10 +162,10 @@ el camino.
 - [X] T030 [US3] Selector del catalogo del proyecto en `assets/mockups.js`: miniaturas de `datos.imagenes` con busqueda por titulo y filtro por categoria; al elegir, se anade como capa con la misma geometria que las demas y `ref = "img:{id}"`; **el editor no escribe en el catalogo ni en sprites** (FR-014)
 - [X] T031 [US3] Placeholders del PDF: cada grupo se muestra como `PH-<grupo>` (con su tamano real y numero de instancias) y, si tiene varias, lista sus instancias `PH-<grupo>-01..nn` para elegir una concreta; al elegirla se inserta la capa encuadrada a escala, centrada y seleccionada. El `ref` guardado es `{grupo}` para la #01 (legado) y `{grupo}#{n}` 1-based para las demas, que es lo que espera `esValida()` del nucleo. Vocabulario unificado en "placeholder" (FR-015)
 - [~] T032 [US3] Aviso de borrado de foto en uso en `assets/mockups.js`: **PARCIAL**: las fotos en uso se marcan con un punto verde (`.ec-usada`) al pintar la galeria. **PENDIENTE**: al borrar, mostrar cuantos layers la referencian y ofrecer quitar la capa o cancelar; hoy el borrado lo hace `admin.js` (`.ec-mockup-borrar`), que no conoce las capas (FR-016)
-- [~] T033 [US3] Panel de capas en `assets/mockups.js`: **PARCIAL**: acciones por capa (renombrar via propiedad, duplicar, ocultar, bloquear, eliminar) y reordenar con botones Subir/Bajar. **PENDIENTE**: miniaturas en cada fila y reordenamiento arrastrando (FR-026)
+- [X] T033 [US3] Panel de capas en `assets/mockups.js`: acciones por capa (renombrar, duplicar, ocultar, bloquear, eliminar), reordenar con botones Subir/Bajar y **arrastrando**, y **miniatura al inicio de cada fila** tipo Photoshop (`[img] nombre`). La miniatura reusa `resolverCapa()`: muestra la imagen real (foto del PDF, catalogo o el render del placeholder ya previsualizado con "Probar") y cae al swatch de color del grupo cuando aun no hay recurso (FR-026)
 - [~] T034 [US3] Alineacion y distribucion en `assets/mockups.js` via `PMUGeometria.alinear` y `distribuir`, para las 6 posiciones, sin mover las capas no seleccionadas. **PARCIAL**: los 6 botones de alinear estan en la UI. **PENDIENTE**: exponer `distribuir` (la funcion existe y esta testeada, pero sin boton) (FR-027)
 - [X] T035 [US3] Panel de propiedades en `assets/mockups.js`: geometria mas **ajustes como controles deslizantes con vista en vivo** (brillo, contraste, saturacion, gama, opacidad, desenfoque, tono) y el modo de fusion, con "restablecer a neutro" por capa; los valores salen de `PMUMockup.filtroCss` (FR-028)
-- [~] T036 [US3] Galeria de mockups en `assets/mockups.js`: miniaturas renderizadas en vivo con el nucleo, y navegacion crear / seleccionar / duplicar / renombrar / eliminar. **PARCIAL**: no se puede **reordenar** las vistas arrastrarlas (el orden es el del array) (FR-030)
+- [X] T036 [US3] Galeria de mockups en `assets/mockups.js`: miniaturas renderizadas en vivo con el nucleo, navegacion crear / seleccionar / duplicar / renombrar / eliminar y **reordenar arrastrando** (pointer events con umbral, para que un clic simple no mueva la vista). El reordenamiento usa `PMUGeometria.reordenar(lista, desde, hasta)`, funcion pura que devuelve una copia y no muta la entrada (FR-030)
 - [X] T037 [US3] Fuente unica de estado: **eliminar el listado estatico duplicado de `admin/pdfs.php:519-528`** y refrescar la galeria al instante tras cualquier cambio, sin recarga de pagina (FR-031)
 
 ---

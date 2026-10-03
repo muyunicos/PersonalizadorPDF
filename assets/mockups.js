@@ -592,6 +592,23 @@ jQuery(function ($) {
         }
     }
 
+    /** Reordena las vistas arrastrando una sobre otra (T036). */
+    function moverVista(desde, hasta) {
+        if (desde === hasta || desde < 0 || hasta < 0) { return; }
+        estado.mockups = G.reordenar(estado.mockups, desde, hasta);
+        // El indice de la seleccionada cambia al moverla: se sigue a la vista.
+        if (estado.actual === desde) {
+            estado.actual = hasta;
+        } else if (desde < estado.actual && hasta >= estado.actual) {
+            estado.actual = estado.actual - 1;
+        } else if (desde > estado.actual && hasta <= estado.actual) {
+            estado.actual = estado.actual + 1;
+        }
+        marcarPaso();
+        sinGuardar();
+        refrescar();
+    }
+
     function pintarMockups() {
         var $ul = $ed.find('.ec-mk-mockups').empty();
         if (!estado.mockups.length) {
@@ -601,6 +618,7 @@ jQuery(function ($) {
             var $li = $('<li>').toggleClass('ec-mk-mockup', true)
                 .toggleClass('ec-sel', i === estado.actual)
                 .attr('data-i', i).attr('tabindex', '0')
+                .attr('data-arrastre', 'vista')
                 .attr('role', 'button')
                 .attr('aria-label', 'Vista ' + (i + 1) + (m.titulo ? ': ' + m.titulo : ''));
             var c = document.createElement('canvas');
@@ -621,6 +639,26 @@ jQuery(function ($) {
             .prop('disabled', !estado.mockups.length);
     }
 
+    /**
+     * Miniatura de una capa para la lista (T033): la imagen real cuando la hay
+     * (foto del PDF, catalogo o el render del placeholder ya previsualizado) y
+     * el swatch de color del grupo cuando todavia no hay recurso.
+     */
+    function miniaturaCapa(c) {
+        var $m = $('<span class="ec-mk-capa-mini">');
+        var r = resolverCapa(c);
+        if (r && r.url) {
+            $m.addClass('ec-mk-capa-mini-img');
+            $m.append($('<img alt="">').attr('src', r.url));
+            return $m;
+        }
+        if (c && c.tipo === 'placeholder') {
+            var id = String(c.ref || '').split('#')[0];
+            return $m.addClass('ec-mk-capa-mini-swatch')
+                .css('background', '#' + id);
+        }
+        return $m.addClass('ec-mk-capa-mini-vacia');
+    }
     function pintarCapas() {
         var $ul = $ed.find('.ec-mk-capas').empty();
         var lista = capas();
@@ -640,6 +678,7 @@ jQuery(function ($) {
                     .attr('role', 'button')
                     .attr('aria-label', nombreCapa(c) + (c.oculta ? ' (oculta)' : '')
                         + (c.bloqueada ? ' (bloqueada)' : ''));
+                $li.append(miniaturaCapa(c));
                 $li.append($('<span class="ec-mk-capa-nombre">').text(nombreCapa(c)));
                 $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="arriba">')
                     .attr('aria-label', 'Subir la capa ' + nombreCapa(c)).text('▲'));
@@ -1062,6 +1101,50 @@ jQuery(function ($) {
         estado.actual = parseInt($(this).attr('data-i'), 10) || 0;
         estado.seleccion = -1;
         refrescar();
+    });
+    /* Reordenar vistas arrastrando (T036). Pointer events, igual que el
+       lienzo: no depende de HTML5 drag&drop (que no se puede estilizar). */
+    var arrastreVista = null;
+
+    $ed.on('pointerdown', '.ec-mk-mockup[data-arrastre]', function (ev) {
+        if (ev.button !== 0 || ev.target.closest('.ec-mk-x')) { return; }
+        var $li = $(this);
+        arrastreVista = {
+            $li: $li,
+            desde: parseInt($li.attr('data-i'), 10),
+            x0: ev.clientX,
+            y0: ev.clientY,
+            movido: false
+        };
+        $(document).on('pointermove.pmu-mkv', function (mev) {
+            if (!arrastreVista) { return; }
+            var dx = mev.clientX - arrastreVista.x0;
+            var dy = mev.clientY - arrastreVista.y0;
+            // Umbral: sin el, un clic simple moveria la vista.
+            if (!arrastreVista.movido && (Math.abs(dx) < 6 && Math.abs(dy) < 6)) { return; }
+            arrastreVista.movido = true;
+            arrastreVista.$li.addClass('ec-mk-mockup-arrastre');
+            var bajo = document.elementFromPoint(mev.clientX, mev.clientY);
+            var $destino = $(bajo).closest('.ec-mk-mockup');
+            $ed.find('.ec-mk-soltar').removeClass('ec-mk-soltar');
+            if ($destino.length && $destino[0] !== arrastreVista.$li[0]) {
+                $destino.addClass('ec-mk-soltar');
+            }
+        });
+        $(document).on('pointerup.pmu-mkv', function (uev) {
+            if (!arrastreVista) { return; }
+            var bajo = document.elementFromPoint(uev.clientX, uev.clientY);
+            var $destino = $(bajo).closest('.ec-mk-mockup');
+            var arr = arrastreVista;
+            arrastreVista = null;
+            $(document).off('.pmu-mkv');
+            arr.$li.removeClass('ec-mk-mockup-arrastre');
+            $ed.find('.ec-mk-soltar').removeClass('ec-mk-soltar');
+            if (!arr.movido || !$destino.length) { return; }
+            var hasta = parseInt($destino.attr('data-i'), 10);
+            if (isNaN(hasta) || hasta === arr.desde) { return; }
+            moverVista(arr.desde, hasta);
+        });
     });
     $ed.on('keydown', '.ec-mk-mockup', function (ev) {
         if (ev.key === 'Enter' || ev.key === ' ') {

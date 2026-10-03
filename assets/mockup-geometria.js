@@ -301,6 +301,24 @@
         return lista;
     }
 
+    /**
+     * Reordena una lista moviendo el elemento de `desde` a la posicion `hasta`
+     * (indices 0-based, ambos incluidos). Devuelve una COPIA: no muta la
+     * entrada, para que la geometria siga siendo pura y testeable. Un indice
+     * fuera de rango devuelve la lista sin cambios.
+     */
+    function reordenar(lista, desde, hasta) {
+        var l = (lista || []).slice();
+        var d = parseInt(desde, 10);
+        var h = parseInt(hasta, 10);
+        if (isNaN(d) || isNaN(h) || d < 0 || h < 0 || d >= l.length || h >= l.length) {
+            return l;
+        }
+        if (d === h) { return l; }
+        l.splice(h, 0, l.splice(d, 1)[0]);
+        return l;
+    }
+
     /* ============ Normalizacion al abrir ============ */
 
     /**
@@ -334,6 +352,7 @@
         acertarCapa: acertarCapa,
         alinear: alinear,
         distribuir: distribuir,
+        reordenar: reordenar,
         normalizarCapa: normalizarCapa
     };
 }));
