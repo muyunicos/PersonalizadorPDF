@@ -589,7 +589,7 @@ jQuery(function ($) {
             c.height = LIENZO;
             $li.append(c);
             $li.append($('<span>').text(m.titulo || m.id));
-            $li.append($('<button type="button" class="ec-mk-x" data-borrar="' + i + '"')
+            $li.append($('<button type="button" class="ec-mk-x" data-borrar="' + i + '">')
                 .attr('aria-label', 'Eliminar la vista ' + (i + 1)).text('×'));
             $ul.append($li);
             // Miniatura en vivo con el nucleo (sin capas marco de editor).
