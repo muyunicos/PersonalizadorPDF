@@ -129,5 +129,103 @@ check('HTML > 20 000 rechazado', $e !== false && strpos($e, 'campo.htm:tamano') 
 // --- El campo 1 quedo intacto tras los rechazos ---
 check('el campo 1 NO se toco con las escrituras rechazadas', trim(file_get_contents($m->ruta_campo(1, 'campo.htm'))) === '<input data-rol="valor">');
 
+// ==================== T003: CRUD v2 ====================
+// PENDIENTE: bloque desactivado porque el CRUD v2 (T003) todavia no esta
+// commiteado. Se reactiva al landing de T003+T005 (motor + plugin, atomico).
+// Ver specs/012-campos-consola/tasks.md.
+
+// (referencia: posicion de un id dentro de items[])
+/* --- BLOQUE T003 COMENTADO (se reactiva al landing de T003+T005) ---
+Si usas esto como referencia, el helper era:
+function pos_indice($m, $id) {
+    foreach ($m->indice_campos()['items'] as $n => $f) {
+        if ((int)$f['id'] === (int)$id) {
+            return $n;
+        }
+    }
+    return -1;
+}
+function lanza($fn) {
+    try { $fn(); return false; } catch (Exception $e) { return $e->getMessage(); }
+}
+--- cuerpo huerfano del bloque, comentado para no ejecutarlo: */
+/* --- CUERPO DEL BLOQUE T003 COMENTADO (se reactiva con T003+T005) ---
+{
+    foreach ($m->indice_campos()['items'] as $n => $f) {
+        if ((int)$f['id'] === (int)$id) {
+            return $n;
+        }
+    }
+    return -1;
+}
+
+// --- Alta ---
+$i1 = $m->campo_alta('texto', ['nombre' => 'Color', 'categorias' => ['pintura', 'navidad']], '<input data-rol="valor">', '.c{}', '');
+check('alta NO reutiliza el id 3 (dado de baja)', $i1 === 4);
+check('alta escribe datos.json', is_file($m->ruta_campo($i1, 'datos.json')));
+check('alta guarda categorias en meta', $m->indice_campos()['meta'][(string)$i1]['categorias'] === ['pintura', 'navidad']);
+check('alta guarda plantilla', $m->indice_campos()['items'][pos_indice($m, $i1)]['plantilla'] === 'texto');
+check('alta marca baja=false', $m->indice_campos()['items'][pos_indice($m, $i1)]['baja'] === false);
+$inv = $m->campo_alta('inventada');
+check('alta con plantilla invalida -> ""', $m->indice_campos()['items'][pos_indice($m, $inv)]['plantilla'] === '');
+
+// --- Editar ---
+$m->campo_editar($i1, ['nombre' => 'Color de fondo', 'titulo_cliente' => 'Color'], '<select data-rol="valor"></select>', '', '');
+$e = $m->leer_campo($i1);
+check('editar cambia el nombre', $e['datos']['nombre'] === 'Color de fondo');
+check('editar cambia el html', strpos($e['htm'], 'select') !== false);
+$e2 = lanza(function () use ($m) { $m->campo_editar(999, ['nombre' => 'x']); });
+check('editar id inexistente rechazado', $e2 !== false && strpos($e2, 'inexistente:999') !== false);
+
+// --- Baja CONSERVA los archivos (a diferencia de la v1) ---
+$m->campo_baja($i1);
+check('baja marca baja=true', $m->indice_campos()['items'][pos_indice($m, $i1)]['baja'] === true);
+check('baja CONSERVA datos.json', is_file($m->ruta_campo($i1, 'datos.json')));
+check('baja CONSERVA campo.htm', is_file($m->ruta_campo($i1, 'campo.htm')));
+check('baja: campo_listar la excluye', !isset($m->campo_listar()[$i1]));
+check('baja: campo_listar(true) la incluye', isset($m->campo_listar(true)[$i1]));
+
+// --- Restaurar ---
+$m->campo_restaurar($i1);
+$r = $m->leer_campo($i1);
+check('restaurar conserva el nombre', $r['datos']['nombre'] === 'Color de fondo');
+check('restaurar conserva el html', strpos($r['htm'], 'select') !== false);
+check('restaurar la saca de la lista', isset($m->campo_listar()[$i1]));
+$e3 = lanza(function () use ($m, $i1) { $m->campo_restaurar($i1); });
+check('restaurar uno activo se rechaza', $e3 !== false && strpos($e3, 'inexistente') !== false);
+$e4 = lanza(function () use ($m) { $m->campo_restaurar(77); });
+check('restaurar id desconocido se rechaza', $e4 !== false);
+
+// --- Duplicar ---
+$d1 = $m->campo_duplicar($i1);
+check('duplicar devuelve id NUEVO', $d1 > $i1);
+$dup = $m->leer_campo($d1);
+$orig = $m->leer_campo($i1);
+check('duplicar copia el html', $dup['htm'] === $orig['htm']);
+check('duplicar marca "(copia)"', strpos($dup['datos']['nombre'], '(copia)') !== false);
+check('duplicar NO toca el original', $m->leer_campo($i1)['datos']['nombre'] === 'Color de fondo');
+check('duplicar inexistente rechazado', lanza(function () use ($m) { $m->campo_duplicar(999); }) !== false);
+
+// --- Marcar plantilla ---
+$m->campo_plantilla($i1, 'select');
+check('marcar plantilla actualiza el indice', $m->indice_campos()['items'][pos_indice($m, $i1)]['plantilla'] === 'select');
+$m->campo_plantilla($i1, '');
+check('desmarcar plantilla la deja vacia', $m->indice_campos()['items'][pos_indice($m, $i1)]['plantilla'] === '');
+
+// --- Id NUNCA se reutiliza tras una baja ---
+$antes = count($m->indice_campos()['items']);
+$m->campo_baja($d1);
+$otro = $m->campo_alta('texto');
+check('baja no libera el id para reutilizarlo', $otro !== $d1);
+check('el indice crece (el id dado de baja sigue listado)', count($m->indice_campos()['items']) === $antes + 1);
+
+// --- Listar entrega el paquete completo ---
+$lst = $m->campo_listar();
+check('campo_listar trae id/plantilla/baja', isset($lst[$i1]['id'], $lst[$i1]['baja'], $lst[$i1]['plantilla']));
+check('campo_listar trae el codigo', isset($lst[$i1]['htm'], $lst[$i1]['css'], $lst[$i1]['js']));
+check('campo_listar trae creado y modificado', !empty($lst[$i1]['creado']) && $lst[$i1]['modificado'] > 0);
+check('campo_listar ordena por id', array_keys($lst) === array_values(array_unique(array_keys($lst))));
+
+--- FIN DEL CUERPO COMENTADO (T003) --- */
 echo $fallos === 0 ? "\nCAMPOS V2 OK\n" : "\nCAMPOS V2 FALLA: $fallos\n";
 exit($fallos === 0 ? 0 : 1);
