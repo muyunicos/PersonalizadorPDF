@@ -64,6 +64,7 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_procesar', [$this, 'handle_procesar']);
         add_action('admin_post_personalizador_pdf_campo', [$this, 'handle_campo_guardar']);
         add_action('admin_post_personalizador_pdf_campo_baja', [$this, 'handle_campo_baja']);
+        add_action('admin_post_personalizador_pdf_campo_restaurar', [$this, 'handle_campo_restaurar']);
         add_action('admin_post_personalizador_pdf_config', [$this, 'handle_config_guardar']);
         add_action('admin_post_personalizador_pdf_descargar', [$this, 'handle_descargar']);
         add_action('admin_post_personalizador_pdf_ver', [$this, 'handle_ver']);
@@ -2346,6 +2347,127 @@ class Personalizador_PDF_Plugin
             } else {
                 $id = $this->pmu_uploads()->campo_alta($plantilla, $c['datos'], $c['htm'], $c['css'], $c['js']);
             }
+        } catch (\Throwable $e) {
+            $this->responder(false, [], $e->getMessage());
+        }
+        $guardado = $this->campo_guardado($id);
+        $this->responder(true, ['id' => $id, 'ec_campo' => $id, 'tab' => 'campos',
+            'campo' => $guardado,
+            'html' => $guardado ? $this->fila_campo_html($id, $guardado) : '']);
+    }
+
+    /**
+     * Fila v2 de un campo tal como la ve la consola (spec 012, FR-002): el
+     * navegador repinta con lo que devuelve el servidor, no con lo del formulario.
+     */
+    public function campo_guardado($id)
+    {
+        $todos = $this->cargar_campos();
+        return isset($todos[(int)$id]) ? $todos[(int)$id] : null;
+    }
+
+    /**
+     * HTML de la fila de un campo (resumen + editor plegado). **Fuente unica del
+     * markup**: la usan `admin/campos.php` y la respuesta JSON del alta, para que
+     * el navegador inserte exactamente lo mismo que el servidor (sin duplicar la
+     * plantilla en JS).
+     *
+     * @param int   $cid
+     * @param array $c Fila v2 de cargar_campos().
+     */
+    public function fila_campo_html($cid, array $c)
+    {
+        $d = $c['datos'];
+        $post = esc_url(admin_url('admin-post.php'));
+        $cats = implode(',', $c['categorias']);
+        $cargador = !empty($d['cargador']) ? wp_json_encode($d['cargador']) : '';
+        ob_start();
+        ?>
+                <tr data-id="<?php echo (int)$cid; ?>" data-plantilla="<?php echo esc_attr($c['plantilla']); ?>">
+                    <td><strong><?php echo (int)$cid; ?></strong></td>
+                    <td class="ec-c-nombre"><?php echo esc_html($d['nombre'] !== '' ? $d['nombre'] : '(sin nombre)'); ?></td>
+                    <td class="ec-c-titulo"><?php echo esc_html($d['titulo_cliente'] !== '' ? $d['titulo_cliente'] : '(vacio)'); ?></td>
+                    <td class="ec-c-cats"><?php echo esc_html($c['categorias'] ? implode(', ', $c['categorias']) : '-'); ?></td>
+                    <td><code class="ec-c-plantilla"><?php echo esc_html($c['plantilla'] !== '' ? $c['plantilla'] : '-'); ?></code></td>
+                    <td class="ec-c-uso"><?php echo (int)$c['usado_pdf_n']; ?> PDF(s)</td>
+                    <td class="ec-c-acciones">
+                        <button type="button" class="button button-small ec-editar">Editar</button>
+                        <form method="post" action="<?php echo $post; ?>" class="ec-form-campo-baja">
+                            <input type="hidden" name="action" value="personalizador_pdf_campo_baja">
+                            <input type="hidden" name="id" value="<?php echo (int)$cid; ?>">
+                            <?php wp_nonce_field('personalizador_pdf_campo'); ?>
+                            <button type="submit" class="button button-small button-link-delete">Baja</button>
+                        </form>
+                    </td>
+                </tr>
+        <?php
+        $resumen = (string) ob_get_clean();
+        $form = $this->form_campo_html($cid, $c, $post, $cats, $cargador);
+        return $resumen . $form;
+    }
+
+    /** Fila del editor plegado de un campo (se muestra al pulsar "Editar"). */
+    private function form_campo_html($cid, array $c, $post, $cats, $cargador)
+    {
+        $d = $c['datos'];
+        ob_start();
+        ?>
+                <tr class="ec-campo-form-fila" data-form="<?php echo (int)$cid; ?>" hidden>
+                    <td colspan="7">
+                        <form method="post" action="<?php echo $post; ?>" class="ec-form-campo">
+                            <input type="hidden" name="action" value="personalizador_pdf_campo">
+                            <input type="hidden" name="id" value="<?php echo (int)$cid; ?>">
+                            <?php wp_nonce_field('personalizador_pdf_campo'); ?>
+                            <table class="form-table">
+                                <tr><th><label>Nombre</label></th>
+                                    <td><input name="nombre" class="regular-text" value="<?php echo esc_attr($d['nombre']); ?>">
+                                        <p class="description">Como lo ves vos en esta consola.</p></td></tr>
+                                <tr><th><label>Titulo para el comprador</label></th>
+                                    <td><input name="titulo_cliente" class="regular-text" value="<?php echo esc_attr($d['titulo_cliente']); ?>">
+                                        <p class="description">La etiqueta del carrito y el pedido. Vacio = no se anuncia.</p></td></tr>
+                                <tr><th><label>Descripcion</label></th>
+                                    <td><input name="descripcion" class="regular-text" value="<?php echo esc_attr($d['descripcion']); ?>">
+                                        <p class="description">Nota interna; no la ve el comprador.</p></td></tr>
+                                <tr><th><label>Categorias</label></th>
+                                    <td><input name="categorias" class="regular-text" value="<?php echo esc_attr($cats); ?>">
+                                        <p class="description">Separadas por coma.</p></td></tr>
+                                <tr><th>Opciones</th>
+                                    <td>
+                                        <label><input type="checkbox" name="array" value="1" <?php checked(!empty($d['array']), true); ?>> Array (un valor por instancia)</label><br>
+                                        <label><input type="checkbox" name="protegido" value="1" <?php checked(!empty($d['protegido']), true); ?>> Protegido (nunca va al comprador)</label>
+                                    </td></tr>
+                                <tr><th><label>HTML</label></th>
+                                    <td><textarea name="html" rows="6" class="large-text code"><?php echo esc_textarea($c['htm']); ?></textarea>
+                                        <p class="description">Lo que ve el comprador. <code>data-rol="valor"</code> marca el control que publica el valor.</p></td></tr>
+                                <tr><th><label>CSS propio</label></th>
+                                    <td><textarea name="css" rows="4" class="large-text code"><?php echo esc_textarea($c['css']); ?></textarea>
+                                        <p class="description">Solo si el campo se sale del estilo global.</p></td></tr>
+                                <tr><th><label>JS propio</label></th>
+                                    <td><textarea name="js" rows="6" class="large-text code"><?php echo esc_textarea($c['js']); ?></textarea>
+                                        <p class="description"><code>function(ctx, root){ ... }</code>. <code>ctx.set(id, {valor, cliente})</code> publica.</p></td></tr>
+                                <tr><th>Cargador de imagenes</th>
+                                    <td><textarea name="cargador" rows="3" class="large-text code" placeholder="size:1000 max:6"><?php echo esc_textarea($cargador); ?></textarea>
+                                        <p class="description">Atajos: <code>canvas:circle size:1000</code> ·
+                                            <code>size:2000 max:6</code> ·
+                                            <code>1_size:1000 1_canvas:circle 2_size:1024x768 2_min:2 2_max:2</code>. Vacio = sin cargador.</p></td></tr>
+                            </table>
+                            <button type="submit" class="button button-primary">Guardar cambios</button>
+                            <button type="button" class="button ec-cancelar">Cancelar</button>
+                            <span class="ec-campo-status" aria-live="polite"></span>
+                        </form>
+                    </td>
+                </tr>
+        <?php
+        return (string) ob_get_clean();
+    }
+
+    /** Restaura un campo dado de baja (conserva sus archivos). Responde JSON. */
+    public function handle_campo_restaurar()
+    {
+        $this->seguridad('personalizador_pdf_campo');
+        $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+        try {
+            $this->pmu_uploads()->campo_restaurar($id);
         } catch (\Throwable $e) {
             $this->responder(false, [], $e->getMessage());
         }

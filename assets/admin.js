@@ -106,53 +106,115 @@ jQuery(function ($) {
         });
     }
 
-    /* Campos: alta/edicion/baja sin recarga (la edicion reusa ec-form-campo). */
+    /* Campos v2 (spec 012, F1): alta/edicion/baja sin recarga. El editor se abre
+       DENTRO de la fila (`ec-campo-form-fila`), sin navegar. */
     $(function () {
-        if (!$('form.ec-form-campo, form.ec-form-campo-baja').length) { return; }
+        if (!$('form.ec-form-campo, form.ec-form-campo-baja, form.ec-form-campo-restaurar').length) { return; }
         var nonceCampo = (cfgGlobal.nonceAccion && cfgGlobal.nonceAccion.campo)
             || (window.PMU_CAMPO && PMU_CAMPO.nonce) || '';
-        $('form.ec-form-campo').each(function () {
-            var $f = $(this);
-            var esEdicion = $f.find('input[name=id]').length > 0;
-            pmuForm($f, 'personalizador_pdf_campo', nonceCampo, function (d) {
-                var id = (d && d.id) || 0;
-                if (esEdicion) {
-                    pmuAviso($f.closest('.card, .wrap'), 'Campo ' + id + ' guardado.');
-                    return;
-                }
-                // Alta: agrega la fila a la tabla sin recargar.
-                var $cuerpo = $('.ec-campos-cuerpo');
-                var titulo = $f.find('input[name=titulo_cliente]').val() || '(oculto)';
-                var tipo = $f.find('select[name=tipo]').val() || 'text';
-                var fila = '<tr data-id="' + id + '"><td><strong>' + id + '</strong></td>'
-                    + '<td></td><td><code>' + $('<div>').text(tipo).html() + '</code></td>'
-                    + '<td></td><td>si</td>'
-                    + '<td><a class="button button-small" href="'
-                    + window.location.pathname + '?page=personalizador-pdf&tab=campos&ec_campo_editar=' + id + '">Editar</a></td>'
-                    + '<td><form method="post" class="ec-form-campo-baja">'
-                    + '<input type="hidden" name="id" value="' + id + '">'
-                    + '<button type="submit" class="button button-small button-link-delete">Baja</button>'
-                    + '</form></td></tr>';
-                var $fila = $(fila);
-                $fila.find('td').eq(1).text(titulo);
-                $cuerpo.prepend($fila);
-                enlazarBaja($fila.find('form.ec-form-campo-baja'));
-                $f[0].reset();
-                pmuAviso($f.closest('.card, .wrap'), 'Campo ' + id + ' creado.');
-            });
+
+        /* Repinta una fila con los datos que devuelve el SERVIDOR (FR-002), no
+           con los del formulario. `campo` es la fila v2 de cargar_campos(). */
+        function pintarFila(campo) {
+            if (!campo) { return null; }
+            var $fila = $('.ec-campos-cuerpo tr[data-id="' + campo.id + '"]');
+            if (!$fila.length) { return null; }
+            var d = campo.datos || {};
+            var cats = (campo.categorias || []).join(', ');
+            $fila.find('.ec-c-nombre').text(d.nombre || '(sin nombre)');
+            $fila.find('.ec-c-titulo').text(d.titulo_cliente || '(vacio)');
+            $fila.find('.ec-c-cats').text(cats || '-');
+            $fila.find('.ec-c-plantilla').text(campo.plantilla || '-');
+            $fila.find('.ec-c-uso').text((campo.usado_pdf_n || 0) + ' PDF(s)');
+            $fila.attr('data-plantilla', campo.plantilla || '');
+            // Refleja los flags tambien en el formulario (checkbox/textarea).
+            var $form = $fila.next('.ec-campo-form-fila').find('form.ec-form-campo');
+            if ($form.length) {
+                $form.find('input[name=nombre]').val(d.nombre || '');
+                $form.find('input[name=titulo_cliente]').val(d.titulo_cliente || '');
+                $form.find('input[name=descripcion]').val(d.descripcion || '');
+                $form.find('input[name=categorias]').val(cats);
+                $form.find('input[name=array]').prop('checked', !!d.array);
+                $form.find('input[name=protegido]').prop('checked', !!d.protegido);
+                $form.find('textarea[name=html]').val(campo.htm || '');
+                $form.find('textarea[name=css]').val(campo.css || '');
+                $form.find('textarea[name=js]').val(campo.js || '');
+            }
+            return $fila;
+        }
+
+        /* Abrir/cerrar el editor de una fila (FR-001, FR-003). */
+        function alternarEditor($fila, abrir) {
+            var $formFila = $fila.next('.ec-campo-form-fila');
+            var $acciones = $fila.find('.ec-c-acciones');
+            if (!$formFila.length) { return; }
+            $formFila.prop('hidden', !abrir);
+            $acciones.find('.ec-editar').text(abrir ? 'Cerrar' : 'Editar');
+            $fila.toggleClass('ec-editando', !!abrir);
+        }
+
+        $(document).on('click', '.ec-c-acciones .ec-editar', function (ev) {
+            ev.preventDefault();
+            var $fila = $(this).closest('tr[data-id]');
+            alternarEditor($fila, $fila.next('.ec-campo-form-fila').prop('hidden'));
         });
+
+        $(document).on('click', '.ec-cancelar', function (ev) {
+            ev.preventDefault();
+            var $formFila = $(this).closest('.ec-campo-form-fila');
+            var $fila = $formFila.prev('tr[data-id]');
+            alternarEditor($fila, false);   // cerrar sin escribir (FR-003)
+        });
+
+        function enlazarFormularios($forms) {
+            $forms.each(function () {
+                var $f = $(this);
+                var esEdicion = $f.find('input[name=id]').length > 0;
+                pmuForm($f, 'personalizador_pdf_campo', nonceCampo, function (d) {
+                    var id = (d && d.id) || 0;
+                    if (esEdicion && d && d.campo) {
+                        var $fila = pintarFila(d.campo);
+                        if ($fila) { alternarEditor($fila, false); }
+                        pmuAviso($f.closest('.card, .wrap'), 'Campo ' + id + ' guardado.');
+                        return;
+                    }
+                // Alta: el servidor devuelve el HTML de la fila (fuente unica
+                    // del markup, la misma que pinta campos.php). Sin recargar.
+                    if (d && d.html) {
+                        var $vacia = $('.ec-campos-vacio');
+                        if ($vacia.length) {
+                            $vacia.replaceWith(d.html);
+                        } else {
+                            $('.ec-campos-cuerpo').append(d.html);
+                        }
+                        var $nuevas = $(d.html);
+                        enlazarBaja($nuevas.find('form.ec-form-campo-baja'));
+                        enlazarFormularios($nuevas.find('form.ec-form-campo'));
+                        $f[0].reset();
+                        pmuAviso($f.closest('.card, .wrap'), 'Campo ' + id + ' creado.');
+                        return;
+                    }
+                    $f[0].reset();
+                    pmuAviso($f.closest('.card, .wrap'), 'Campo ' + id + ' creado.');
+                });
+            });
+        }
+        enlazarFormularios($('form.ec-form-campo'));
         function enlazarBaja($forms) {
             $forms.each(function () {
                 var $f = $(this);
                 pmuForm($f, 'personalizador_pdf_campo_baja', nonceCampo, function (d) {
                     var id = (d && d.id) || $f.find('input[name=id]').val();
+                    // La fila se va con su formulario de edicion pegado debajo.
                     var $fila = $f.closest('tr[data-id]');
-                    if ($fila.length) { $fila.fadeOut(300, function () { $fila.remove(); }); }
-                    pmuAviso($f.closest('.card, .wrap'), 'Campo ' + id + ' dado de baja.');
+                    var $formFila = $fila.next('.ec-campo-form-fila');
+                    $formFila.fadeOut(200, function () { $formFila.remove(); });
+                    $fila.fadeOut(300, function () { $fila.remove(); });
+                    pmuAviso($f.closest('.card, .wrap'), 'Campo ' + id + ' dado de baja (podes restaurarlo abajo).');
                 });
                 // Confirmacion una sola vez (pmuForm ya evita doble enlace).
                 $f.off('submit.pmu-confirma').on('submit.pmu-confirma', function (ev) {
-                    if (!window.confirm('¿Dar de baja este campo? Los PDFs que lo usan quedan sin ese dato.')) {
+                    if (!window.confirm('¿Dar de baja este campo? Los PDFs que lo usan quedan sin ese dato, pero podes restaurarlo despues.')) {
                         ev.stopImmediatePropagation();
                         ev.preventDefault();
                     }
@@ -160,6 +222,18 @@ jQuery(function ($) {
             });
         }
         enlazarBaja($('form.ec-form-campo-baja'));
+
+        // Restaurar: la fila vuelve sola (el servidor la reinyecta).
+        $('form.ec-form-campo-restaurar').each(function () {
+            var $f = $(this);
+            pmuForm($f, 'personalizador_pdf_campo_restaurar', nonceCampo, function (d) {
+                var id = (d && d.id) || $f.find('input[name=id]').val();
+                var $fila = $f.closest('tr[data-id]');
+                $fila.fadeOut(300, function () { $fila.remove(); });
+                pmuAviso($f.closest('.card, .wrap'), 'Campo ' + id + ' restaurado. Recargando la tabla…');
+                window.setTimeout(function () { window.location.reload(); }, 700);
+            });
+        });
     });
 
     window.PersonalizadorPDF = window.PersonalizadorPDF || {};

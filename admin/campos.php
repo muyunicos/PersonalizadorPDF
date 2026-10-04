@@ -4,12 +4,21 @@ if (!defined('ABSPATH')) {
 }
 /** @var Personalizador_PDF_Plugin $this */
 
-/** [id, titulo_cliente, tipo, etiquetas, texto_ayuda, visible, contenido, css, script] */
-$get = wp_unslash($_GET);
-list($todos, $aviso_campos) = $this->campos_activos();
-$editando = isset($get['ec_campo_editar']) ? (int)$get['ec_campo_editar'] : 0;
-$tupla_ed = ($editando > 0 && isset($todos[$editando])) ? $todos[$editando] : null;
+/**
+ * Campos reutilizables (spec 012, F1). El formato es v2: cada campo es una
+ * carpeta uploads/pmu/campos/{id}/ con datos.json + campo.htm|css|js, y el
+ * catalogo `campos.json` es solo el indice con los metadatos.
+ *
+ * El editor se abre DENTRO de la fila (`data-editando`), sin navegar: por eso
+ * ya no existe el GET `ec_campo_editar` (FR-001).
+ */
+$campos = $this->cargar_campos();
+$bajas = $this->cargar_campos(true);
+$nuevos = array_diff_key($bajas, $campos); // dados de baja, para el panel de abajo
+$aviso_campos = '';
+list(, $aviso_campos) = $this->campos_activos();
 $post_url = admin_url('admin-post.php');
+$plantillas = ['texto' => 'Texto', 'select' => 'Opciones', 'imagen' => 'Imagenes (cargador)'];
 ?>
 <noscript>
     <div class="notice notice-warning">
@@ -22,94 +31,68 @@ $post_url = admin_url('admin-post.php');
 <?php endif; ?>
 
 <div class="card">
-    <h2>Campos reutilizables (<?php echo count($todos); ?>)</h2>
-    <p class="description">Mismo <code>id</code> usable en N PDFs. El <code>script</code> corre solo en el
-        navegador con firma <code>function(ctx, root)</code>; <code>V(N)</code> lee otros campos.</p>
-    <?php if (!$todos) : ?>
-        <p>Todavia no hay campos. Crea el primero abajo.</p>
-    <?php else : ?>
-        <table class="widefat striped">
-            <thead><tr><th>id</th><th>Titulo cliente</th><th>Tipo</th><th>Etiquetas</th><th>Visible</th><th></th><th></th></tr></thead>
-            <tbody class="ec-campos-cuerpo">
-                <?php foreach ($todos as $cid => $t) : ?>
-                    <tr data-id="<?php echo (int)$cid; ?>">
-                        <td><strong><?php echo (int)$cid; ?></strong></td>
-                        <td><?php echo esc_html($t[1] !== '' ? $t[1] : '(oculto)'); ?></td>
-                        <td><code><?php echo esc_html($t[2]); ?></code></td>
-                        <td><?php echo esc_html(implode(', ', (array)$t[3])); ?></td>
-                        <td><?php echo !empty($t[5]) ? 'si' : 'no'; ?></td>
-                        <td><a class="button button-small" href="<?php echo esc_url(add_query_arg('ec_campo_editar', $cid, admin_url('admin.php?page=personalizador-pdf&tab=campos'))); ?>">Editar</a></td>
-                        <td>
-                            <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo-baja">
-                                <input type="hidden" name="action" value="personalizador_pdf_campo_baja">
-                                <input type="hidden" name="id" value="<?php echo (int)$cid; ?>">
-                                <?php wp_nonce_field('personalizador_pdf_campo'); ?>
-                                <button type="submit" class="button button-small button-link-delete">Baja</button>
-                            </form>
-                        </td>
-                    </tr>
+    <h2>Nuevo campo</h2>
+    <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo">
+        <input type="hidden" name="action" value="personalizador_pdf_campo">
+        <?php wp_nonce_field('personalizador_pdf_campo'); ?>
+        <p class="description">Se crea sin recargar. La <strong>plantilla</strong> solo deja el formulario
+            prepared; despues editas el HTML, el CSS y el JS a tu medida. El mismo <code>id</code> se
+            puede usar en N PDFs.</p>
+        <p><label>Nombre (para vos)<br>
+            <input name="nombre" class="regular-text" placeholder="Fotos polaroid cuadradas x6"></label></p>
+        <p><label>Plantilla<br>
+            <select name="plantilla">
+                <?php foreach ($plantillas as $valor => $texto) : ?>
+                    <option value="<?php echo esc_attr($valor); ?>"><?php echo esc_html($texto); ?></option>
                 <?php endforeach; ?>
+            </select></label></p>
+        <p><label>Titulo para el comprador<br>
+            <input name="titulo_cliente" class="regular-text" placeholder="Fotos"></label>
+            <span class="description">Es la etiqueta que aparece en el carrito y el pedido (ej.: "Seleccion: sal, oregano...").</span></p>
+        <?php submit_button('Crear campo', 'primary', 'submit', false); ?>
+        <span class="ec-campo-status" aria-live="polite"></span>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Campos reutilizables (<?php echo count($campos); ?>)</h2>
+    <p class="description">Mismo <code>id</code> usable en N PDFs. El <code>campo.js</code> corre solo en el
+        navegador con firma <code>function(ctx, root)</code>; <code>V(N)</code> lee otros campos.</p>
+    <?php if (!$campos) : ?>
+        <p class="ec-campos-vacio">Todavia no hay campos. Crea el primero con el formulario de arriba.</p>
+    <?php else : ?>
+        <table class="widefat striped ec-campos-tabla">
+            <thead><tr><th>id</th><th>Nombre</th><th>Titulo comprador</th><th>Categorias</th>
+                <th>Plantilla</th><th>Uso</th><th>Acciones</th></tr></thead>
+            <tbody class="ec-campos-cuerpo">
+            <?php foreach ($campos as $cid => $c) : echo $this->fila_campo_html($cid, $c); endforeach; ?>
             </tbody>
         </table>
     <?php endif; ?>
 </div>
 
-
-<?php if ($tupla_ed) : ?>
+<?php if ($nuevos) : ?>
 <div class="card">
-    <h2>Editar campo <?php echo (int)$tupla_ed[0]; ?></h2>
-    <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo">
-        <input type="hidden" name="action" value="personalizador_pdf_campo">
-        <input type="hidden" name="id" value="<?php echo (int)$tupla_ed[0]; ?>">
-        <?php wp_nonce_field('personalizador_pdf_campo'); ?>
-        <table class="form-table">
-            <tr><th><label for="ec-titulo">Titulo cliente</label></th>
-                <td><input id="ec-titulo" name="titulo_cliente" class="regular-text" value="<?php echo esc_attr($tupla_ed[1]); ?>">
-                <p class="description">Vacio = campo invisible (igual evalua su script).</p></td></tr>
-            <tr><th><label for="ec-tipo">Tipo</label></th>
-                <td><select id="ec-tipo" name="tipo">
-                    <?php foreach (['text', 'textarea', 'select', 'img', 'override'] as $tipo) : ?>
-                        <option value="<?php echo esc_attr($tipo); ?>" <?php selected($tupla_ed[2], $tipo); ?>><?php echo esc_html($tipo); ?></option>
-                    <?php endforeach; ?>
-                </select></td></tr>
-            <tr><th><label for="ec-etiquetas">Etiquetas</label></th>
-                <td><input id="ec-etiquetas" name="etiquetas" class="regular-text" value="<?php echo esc_attr(implode(',', (array)$tupla_ed[3])); ?>">
-                <p class="description">Separadas por coma.</p></td></tr>
-            <tr><th><label for="ec-ayuda">Texto de ayuda</label></th>
-                <td><input id="ec-ayuda" name="texto_ayuda" class="regular-text" value="<?php echo esc_attr($tupla_ed[4]); ?>"></td></tr>
-            <tr><th>Visible</th>
-                <td><label><input type="checkbox" name="visible" value="1" <?php checked(!empty($tupla_ed[5]), true); ?>> Se pinta en ficha/carrito</label></td></tr>
-            <tr><th>Array</th>
-                <td><label><input type="checkbox" name="array" value="1" <?php checked(!empty($tupla_ed[9]), true); ?>> Entrega array (un valor por instancia del grupo)</label>
-                <p class="description">Con <code>[v] Repetir por placeholder</code> del mapeo, cada valor va a una instancia.</p></td></tr>
-            <tr><th><label for="ec-contenido">Contenido (HTML)</label></th>
-                <td><textarea id="ec-contenido" name="contenido" rows="6" cols="80" class="large-text code"><?php echo esc_textarea($tupla_ed[6]); ?></textarea>
-                <p class="description">Fragmento con scope <code>.pmu-campo-{id}</code>. Prohibidos <code>id=""</code>, script, iframe, form.</p></td></tr>
-            <tr><th><label for="ec-css">CSS</label></th>
-                <td><textarea id="ec-css" name="css" rows="4" cols="80" class="large-text code"><?php echo esc_textarea($tupla_ed[7]); ?></textarea></td></tr>
-            <tr><th><label for="ec-script">Script</label></th>
-                <td><textarea id="ec-script" name="script" rows="6" cols="80" class="large-text code"><?php echo esc_textarea($tupla_ed[8]); ?></textarea>
-                <p class="description"><code>function(ctx, root){ ... return {valor, cliente}; }</code>. <code>ctx.set(id)</code> publica, <code>V(N)</code> lee.</p></td></tr>
-        </table>
-        <?php submit_button('Guardar cambios', 'primary', 'submit', false); ?>
-        <span class="ec-campo-status" aria-live="polite"></span>
-    </form>
+    <h2>Dados de baja (<?php echo count($nuevos); ?>)</h2>
+    <p class="description">Conservan su HTML, CSS y JS: restaurarlos no pierde nada.</p>
+    <table class="widefat striped">
+        <thead><tr><th>id</th><th>Nombre</th><th>Acciones</th></tr></thead>
+        <tbody>
+        <?php foreach ($nuevos as $cid => $c) : ?>
+            <tr data-id="<?php echo (int)$cid; ?>">
+                <td><strong><?php echo (int)$cid; ?></strong></td>
+                <td><?php echo esc_html($c['datos']['nombre'] !== '' ? $c['datos']['nombre'] : '(sin nombre)'); ?></td>
+                <td>
+                    <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo-restaurar">
+                        <input type="hidden" name="action" value="personalizador_pdf_campo_restaurar">
+                        <input type="hidden" name="id" value="<?php echo (int)$cid; ?>">
+                        <?php wp_nonce_field('personalizador_pdf_campo'); ?>
+                        <button type="submit" class="button button-small">Restaurar</button>
+                    </form>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
 </div>
 <?php endif; ?>
-
-<div class="card">
-    <h2>Nuevo campo</h2>
-    <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo">
-        <input type="hidden" name="action" value="personalizador_pdf_campo">
-        <?php wp_nonce_field('personalizador_pdf_campo'); ?>
-        <p class="description">Se crea sin recargar; aparece en la tabla de arriba al guardar.</p>
-        <p><label>Titulo cliente<br><input name="titulo_cliente" class="regular-text" value=""></label></p>
-        <p><label>Tipo<br><select name="tipo">
-            <?php foreach (['text', 'textarea', 'select', 'img', 'override'] as $tipo) : ?>
-                <option value="<?php echo esc_attr($tipo); ?>"><?php echo esc_html($tipo); ?></option>
-            <?php endforeach; ?>
-        </select></label></p>
-        <?php submit_button('Crear campo', 'primary', 'submit', false); ?>
-        <span class="ec-campo-status" aria-live="polite"></span>
-    </form>
-</div>

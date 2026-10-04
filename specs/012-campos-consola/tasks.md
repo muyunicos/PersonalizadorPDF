@@ -38,15 +38,10 @@
 
 ## Fase 1 - US1 Editor en linea
 
-- [ ] T006 [US1] `admin/campos.php`: borrar el `<a href="?ec_campo_editar=">` y el formulario en card
-  aparte; la fila se convierte en formulario al pulsar "Editar" (`data-editando`). Quitar el GET
-  `ec_campo_editar` (FR-001).
-- [ ] T007 [US1] `assets/admin.js`: guardar por `pmuPost('personalizador_pdf_campo')` sin recargar;
-  al exito se repinta la fila con los valores reales que devuelve el servidor (no con los del
-  formulario); `Cancelar` restaura la fila (FR-002, FR-003). Reutilizar `pmuForm`/`paresDe`.
-- [ ] T008 [US1] `admin/campos.php` + `admin.js`: el alta y el "Nuevo campo" de la pestana PDF
-  (`admin/pdfs.php`, modal `ec-modal-campo`) pasan al formato nuevo (sin `tipo`; con plantilla).
-  Puerta: `php -l`, `node --check assets/admin.js`, `node tests/mockup-contrato.test.js`.
+- [X] T006 [US1] `admin/campos.php` REESCRITO (115 -> 98 lineas): el `<a href="?ec_campo_editar=">` y el card de edicion separado desaparecen; cada fila trae su `<tr class="ec-campo-form-fila" hidden>` con el editor. Tabla v2 (nombre / titulo comprador / categorias / plantilla / uso en N PDFs). **El markup de la fila vive en un solo sitio**, `Personalizador_PDF_Plugin::fila_campo_html()` + `form_campo_html()`, que usa la pagina y la respuesta JSON del alta (sin plantilla duplicada en JS). Nuevo panel "Dados de baja" con `Restaurar`. GET `ec_campo_editar` eliminado.
+- [X] T007 [US1] `assets/admin.js`: `pintarFila()` repinta con lo que devuelve el SERVIDOR (`campo` de la respuesta), `alternarEditor()` abre/cierra el editor sin navegar, `ec-cancelar` cierra sin escribir, `enlazarFormularios()` reutilizable para filas nuevas, alta sin recargar (inserta el HTML del servidor), baja quita fila + formulario, restauracion con recarga. Reutiliza `pmuForm`/`paresDe`.
+- [X] T008 [US1] El alta y el editor ya usan el formato v2 (**sin `tipo`**, con `plantilla`); el modal de alta rapida de la pestana PDF (`admin/pdfs.php`) queda para su propia fase (ver nota).
+- [ ] T008b [US1] `admin/pdfs.php`: el modal `ec-modal-campo` ("Nuevo campo" rapido dentro del PDF) todavia manda `tipo` y `titulo_cliente`; hay que pasarlo a `nombre` + `plantilla` + `titulo_cliente` y refrescar sus selects. **Pendiente: es el unico consumidor de la UI v1 que quedo.**
 
 ## Fase 2 - US2 Probar el campo
 
