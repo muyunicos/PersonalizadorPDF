@@ -65,6 +65,10 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_campo', [$this, 'handle_campo_guardar']);
         add_action('admin_post_personalizador_pdf_campo_baja', [$this, 'handle_campo_baja']);
         add_action('admin_post_personalizador_pdf_campo_restaurar', [$this, 'handle_campo_restaurar']);
+        add_action('admin_post_personalizador_pdf_campo_plantilla', [$this, 'handle_campo_plantilla']);
+        add_action('admin_post_personalizador_pdf_campo_duplicar', [$this, 'handle_campo_duplicar']);
+        add_action('admin_post_personalizador_pdf_campo_exportar', [$this, 'handle_campo_exportar']);
+        add_action('admin_post_personalizador_pdf_campo_importar', [$this, 'handle_campo_importar']);
         add_action('admin_post_personalizador_pdf_config', [$this, 'handle_config_guardar']);
         add_action('admin_post_personalizador_pdf_descargar', [$this, 'handle_descargar']);
         add_action('admin_post_personalizador_pdf_ver', [$this, 'handle_ver']);
@@ -2367,6 +2371,17 @@ class Personalizador_PDF_Plugin
             if ($id > 0) {
                 $this->pmu_uploads()->campo_editar($id, $c['datos'], $c['htm'], $c['css'], $c['js']);
             } else {
+                // Alta desde plantilla: si el POST no trae codigo propio, la
+                // plantilla deja el formulario preparado (T015/D5).
+                $base = $this->plantilla_campo($plantilla);
+                if ($c['htm'] === '') {
+                    $c['htm'] = $base['htm'];
+                    $c['css'] = $base['css'];
+                    $c['js'] = $base['js'];
+                    if (empty($c['datos']['cargador'])) {
+                        $c['datos']['cargador'] = $base['cargador'];
+                    }
+                }
                 $id = $this->pmu_uploads()->campo_alta($plantilla, $c['datos'], $c['htm'], $c['css'], $c['js']);
             }
         } catch (\Throwable $e) {
@@ -2379,6 +2394,204 @@ class Personalizador_PDF_Plugin
     }
 
     /**
+     * Las 3 plantillas base de un campo (spec 012, T015 / D5). Solo dejan el
+     * formulario **prepared**: el admin edita el HTML, el CSS y el JS a su medida
+     * (FR-016). Devuelve ['htm','css','js','cargador']; plantilla desconocida o
+     * vacia = campo en blanco.
+     */
+    public function plantilla_campo($plantilla)
+    {
+    $espejo = <<<'JS'
+function (ctx, root) {
+    var i = root.querySelector('[data-rol="valor"]');
+    if (!i) { return; }
+    function publicar() { ctx.set(ctx.id, { valor: i.value, cliente: i.value }); }
+    i.addEventListener('input', publicar);
+    i.addEventListener('change', publicar);
+    publicar();
+}
+JS;
+    $vacío = ['htm' => '', 'css' => '', 'js' => '', 'cargador' => null];
+    switch ((string)$plantilla) {
+        case 'texto':
+            return [
+                'htm' => "<label class=\"pmu-et\">Escribi tu texto</label>\n"
+                    . "<input type=\"text\" data-rol=\"valor\" placeholder=\"tu texto\">",
+                'css' => '',
+                'js' => $espejo,
+                'cargador' => null,
+            ];
+        case 'select':
+            return [
+                'htm' => "<label class=\"pmu-et\">Elegi una opcion</label>\n"
+                    . "<select data-rol=\"valor\">\n"
+                    . "    <option value=\"\">(elegi...)</option>\n"
+                    . "    <option value=\"opcion-1\">Opcion 1</option>\n"
+                    . "    <option value=\"opcion-2\">Opcion 2</option>\n"
+                    . "</select>",
+                'css' => '',
+                'js' => $espejo,
+                'cargador' => null,
+            ];
+        case 'imagen':
+            return [
+                'htm' => "<label class=\"pmu-et\">Subi tus imagenes</label>\n"
+                    . "<button type=\"button\" class=\"pmu-subir\" data-pmu-subir>Subir imagenes</button>\n"
+                    . "<span class=\"pmu-lista\" data-pmu-lista></span>",
+                'css' => ".pmu-lista{display:block;margin-top:8px;font-size:13px}\n"
+                    . ".pmu-lista img{width:72px;height:72px;object-fit:cover;margin:4px;border-radius:4px}",
+                // El cargador real llega en F6 (assets/cargador-pmu.js); mientras
+                // tanto el boton avisa en vez de romper la ficha.
+                'js' => "function (ctx, root) {\n"
+                    . "    var b = root.querySelector('[data-pmu-subir]');\n"
+                    . "    if (!b) { return; }\n"
+                    . "    b.addEventListener('click', function () {\n"
+                    . "        if (window.PMUCargador) { new window.PMUCargador(root).abrir(); }\n"
+                    . "        else { b.textContent = 'El cargador todavia no esta disponible'; }\n"
+                    . "    });\n"
+                    . "}",
+                'cargador' => 'size:1000 max:6',
+            ];
+    }
+    return $vacío;
+}
+
+    /** Marca o desmarca un campo como plantilla reutilizable (T016). */
+    public function handle_campo_plantilla()
+    {
+        $this->seguridad('personalizador_pdf_campo');
+        $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+        $plantilla = isset($_POST['plantilla']) ? (string) $_POST['plantilla'] : '';
+        try {
+            $this->pmu_uploads()->campo_plantilla($id, $plantilla);
+        } catch (\Throwable $e) {
+            $this->responder(false, [], $e->getMessage());
+        }
+        $this->responder(true, ['id' => $id, 'campo' => $this->campo_guardado($id)]);
+    }
+
+    /** Duplica un campo a un id NUEVO (T016). */
+    public function handle_campo_duplicar()
+    {
+        $this->seguridad('personalizador_pdf_campo');
+        $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+        try {
+            $nuevo = $this->pmu_uploads()->campo_duplicar($id);
+        } catch (\Throwable $e) {
+            $this->responder(false, [], $e->getMessage());
+        }
+        $guardado = $this->campo_guardado($nuevo);
+        $this->responder(true, ['id' => $nuevo, 'campo' => $guardado,
+            'html' => $guardado ? $this->fila_campo_html($nuevo, $guardado) : '']);
+    }
+
+    /**
+     * Exporta el catalogo entero (T017): un `campos.json` autocontenido con el
+     * indice, las fechas y el codigo de cada campo, para poder restaurarlo en
+     * otra instalacion.
+     */
+    public function handle_campo_exportar()
+    {
+        $this->seguridad('personalizador_pdf_campo');
+        $motor = $this->pmu_uploads();
+        $indice = $motor->indice_campos();
+        $campos = [];
+        foreach ($indice['items'] as $fila) {
+            $id = (int) $fila['id'];
+            $c = $motor->leer_campo($id);
+            $meta = isset($indice['meta'][(string) $id]) ? $indice['meta'][(string) $id] : [];
+            $campos[(string) $id] = [
+                'datos' => $c !== null ? $c['datos'] : [],
+                'htm' => $c !== null ? $c['htm'] : '',
+                'css' => $c !== null ? $c['css'] : '',
+                'js' => $c !== null ? $c['js'] : '',
+                'creado' => isset($meta['creado']) ? $meta['creado'] : '',
+                'modificado' => isset($meta['modificado']) ? (int) $meta['modificado'] : 0,
+            ];
+        }
+        $json = wp_json_encode([
+            'version' => 2,
+            'items' => $indice['items'],
+            'meta' => $indice['meta'],
+            'campos' => $campos,
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        if ($json === false) {
+            $this->responder(false, [], 'motor:campos:exportar:fallo');
+        }
+        $nombre = 'campos-' . gmdate('Ymd-His') . '.json';
+        header('Content-Type: application/json; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $nombre . '"');
+        header('Content-Length: ' . (string) strlen($json));
+        echo $json; // phpcs:ignore WordPress.Security.EscapeOutput
+        exit;
+    }
+
+    /**
+     * Importa un `campos.json` exportado (T017). **Todo-o-nada**: valida el
+     * lote entero antes de escribir; si algun id ya existe, rechaza todo
+     * (motor:campos:importar:id:ocupado) para no pisar campos que ya tenes.
+     */
+    public function handle_campo_importar()
+    {
+        $this->seguridad('personalizador_pdf_campo');
+        $crudo = '';
+        if (isset($_FILES['archivo']['tmp_name']) && is_uploaded_file($_FILES['archivo']['tmp_name'])) {
+            $crudo = (string) @file_get_contents($_FILES['archivo']['tmp_name']);
+        } elseif (isset($_POST['json'])) {
+            $crudo = (string) wp_unslash($_POST['json']);
+        }
+        $datos = $crudo === '' ? null : json_decode($crudo, true);
+        if (!is_array($datos) || !isset($datos['items']) || !is_array($datos['items'])) {
+            $this->responder(false, [], 'motor:campos:importar:invalido');
+        }
+        $motor = $this->pmu_uploads();
+        $indice = $motor->indice_campos();
+        $existentes = [];
+        foreach ($indice['items'] as $f) {
+            $existentes[(int) $f['id']] = true;
+        }
+        $previstos = [];
+        foreach ($datos['items'] as $fila) {
+            if (!is_array($fila) || !isset($fila['id'])) {
+                $this->responder(false, [], 'motor:campos:importar:invalido');
+            }
+            $id = (int) $fila['id'];
+            if ($id < 1 || isset($existentes[$id]) || isset($previstos[$id])) {
+                $this->responder(false, [], 'motor:campos:importar:id:ocupado');
+            }
+            $previstos[$id] = true;
+            $c = isset($datos['campos'][(string) $id]) ? $datos['campos'][(string) $id] : [];
+            try {
+                // Valida sandbox/HTML/tamanos/cargador antes de seguir.
+                $motor->escribir_campo(
+                    $id,
+                    isset($c['datos']) ? (array) $c['datos'] : [],
+                    isset($c['htm']) ? (string) $c['htm'] : '',
+                    isset($c['css']) ? (string) $c['css'] : '',
+                    isset($c['js']) ? (string) $c['js'] : ''
+                );
+            } catch (\Throwable $e) {
+                $this->responder(false, [], $e->getMessage());
+            }
+        }
+        foreach ($datos['items'] as $fila) {
+            $id = (int) $fila['id'];
+            $indice['items'][] = ['id' => $id,
+                'plantilla' => isset($fila['plantilla']) ? (string) $fila['plantilla'] : '',
+                'baja' => !empty($fila['baja'])];
+            $c = isset($datos['campos'][(string) $id]) ? $datos['campos'][(string) $id] : [];
+            $indice['meta'][(string) $id] = [
+                'creado' => !empty($c['creado']) ? (string) $c['creado'] : gmdate('Y-m-d\TH:i:s\Z'),
+                'modificado' => time(),
+                'categorias' => isset($c['datos']['categorias']) ? (array) $c['datos']['categorias'] : [],
+            ];
+        }
+        if (!$motor->guardar_indice_campos($indice)) {
+            $this->responder(false, [], 'motor:campos:importar:indice:no_escribible');
+        }
+        $this->responder(true, ['id' => 0, 'creados' => count($previstos), 'tab' => 'campos']);
+    }
+     /**
      * Fila v2 de un campo tal como la ve la consola (spec 012, FR-002): el
      * navegador repinta con lo que devuelve el servidor, no con lo del formulario.
      */
@@ -2432,6 +2645,10 @@ class Personalizador_PDF_Plugin
                     <td class="ec-c-acciones">
                         <button type="button" class="button button-small ec-editar">Editar</button>
                         <button type="button" class="button button-small ec-probar">Probar</button>
+                        <button type="button" class="button button-small ec-marcar" <?php
+                            if ($c['plantilla'] !== '') { echo 'aria-pressed="true"'; }
+                        ?>><?php echo $c['plantilla'] !== '' ? '★ Plantilla' : 'Plantilla'; ?></button>
+                        <button type="button" class="button button-small ec-duplicar">Duplicar</button>
                         <form method="post" action="<?php echo $post; ?>" class="ec-form-campo-baja">
                             <input type="hidden" name="action" value="personalizador_pdf_campo_baja">
                             <input type="hidden" name="id" value="<?php echo (int)$cid; ?>">

@@ -32,6 +32,19 @@ $plantillas = ['texto' => 'Texto', 'select' => 'Opciones', 'imagen' => 'Imagenes
 
 <div class="card">
     <h2>Nuevo campo</h2>
+    <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo-importar">
+        <input type="hidden" name="action" value="personalizador_pdf_campo_importar">
+        <?php wp_nonce_field('personalizador_pdf_campo'); ?>
+        <input type="file" name="archivo" accept=".json,application/json">
+        <button type="submit" class="button">Importar campos</button>
+        <span class="ec-campo-status" aria-live="polite"></span>
+    </form>
+    <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo-exportar">
+        <input type="hidden" name="action" value="personalizador_pdf_campo_exportar">
+        <?php wp_nonce_field('personalizador_pdf_campo'); ?>
+        <button type="submit" class="button">Exportar campos (.json)</button>
+        <span class="ec-campo-status" aria-live="polite"></span>
+    </form>
     <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo">
         <input type="hidden" name="action" value="personalizador_pdf_campo">
         <?php wp_nonce_field('personalizador_pdf_campo'); ?>
@@ -60,8 +73,8 @@ $plantillas = ['texto' => 'Texto', 'select' => 'Opciones', 'imagen' => 'Imagenes
         navegador con firma <code>function(ctx, root)</code>; <code>V(N)</code> lee otros campos.</p>
     <?php if (!$campos) : ?>
         <p class="ec-campos-vacio">Todavia no hay campos. Crea el primero con el formulario de arriba.</p>
-    <?php else : ?>
-        <div class="ec-c-filtros">
+    <?php endif; ?>
+    <div class="ec-c-filtros">
             <p class="ec-buscador">
                 <input type="search" class="ec-c-buscar" placeholder="Buscar por nombre, descripcion, titulo o categoria"
                        autocomplete="off">
@@ -106,7 +119,6 @@ $plantillas = ['texto' => 'Texto', 'select' => 'Opciones', 'imagen' => 'Imagenes
             <?php foreach ($campos as $cid => $c) : echo $this->fila_campo_html($cid, $c); endforeach; ?>
             </tbody>
         </table>
-    <?php endif; ?>
 </div>
 
 <?php if ($nuevos) : ?>

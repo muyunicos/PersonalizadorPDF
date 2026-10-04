@@ -25,20 +25,27 @@
 (function (global) {
     'use strict';
 
-    /** Canal de salida del campo: `ctx.set(id, {valor, cliente})` (y `get`). */
-    function contextoRaiz(estado) {
+    /**
+     * Canal de salida del campo: `ctx.set(id, {valor, cliente})` (y `get`).
+     * `ctx.id` es el id del propio campo, para que una plantilla pueda
+     * publicar sin saber el numero de antemano.
+     */
+    function contextoRaiz(estado, id) {
         return {
-            set: function (id, valor) {
-                id = parseInt(id, 10) || 0;
-                if (id < 1) { return; }
-                estado[id] = {
+            id: id,
+            set: function (campoId, valor) {
+                campoId = parseInt(campoId, 10) || 0;
+                if (campoId < 1) { campoId = id; }
+                if (campoId < 1) { return; }
+                estado[campoId] = {
                     valor: (valor && 'valor' in valor) ? valor.valor : null,
                     cliente: (valor && 'cliente' in valor) ? String(valor.cliente || '') : ''
                 };
             },
-            get: function (id) {
-                id = parseInt(id, 10) || 0;
-                return estado[id] || null;
+            get: function (campoId) {
+                campoId = parseInt(campoId, 10) || 0;
+                if (campoId < 1) { campoId = id; }
+                return estado[campoId] || null;
             }
         };
     }
@@ -71,7 +78,7 @@
         if (!codigo) { return false; }
         try {
             var fn = new Function('ctx', 'root', 'return (' + codigo + ')(ctx, root);');
-            fn(contextoRaiz(estado), cuerpo);
+            fn(contextoRaiz(estado, campo.id), cuerpo);
         } catch (e) {
             estado[campo.id] = { valor: null, cliente: '' };
         }

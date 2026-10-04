@@ -181,13 +181,11 @@ jQuery(function ($) {
                 // Alta: el servidor devuelve el HTML de la fila (fuente unica
                     // del markup, la misma que pinta campos.php). Sin recargar.
                     if (d && d.html) {
-                        var $vacia = $('.ec-campos-vacio');
-                        if ($vacia.length) {
-                            $vacia.replaceWith(d.html);
-                        } else {
-                            $('.ec-campos-cuerpo').append(d.html);
-                        }
-                        var $nuevas = $(d.html);
+                        // La tabla se imprime siempre (aunque este vacia), asi que
+                        // siempre hay tbody donde insertar.
+                        var $nuevas = parsearFilas(d.html);
+                        $('.ec-campos-cuerpo').append($nuevas); // mueve los nodos con sus handlers
+                        $('.ec-campos-vacio').remove();
                         enlazarBaja($nuevas.find('form.ec-form-campo-baja'));
                         enlazarFormularios($nuevas.find('form.ec-form-campo'));
                         $f[0].reset();
@@ -234,7 +232,18 @@ jQuery(function ($) {
                 window.setTimeout(function () { window.location.reload(); }, 700);
             });
         });
-    });
+
+        // Los bloques de F3/F4 y el preview (abajo) corren fuera de este ready:
+        // se publican aqui para que alcancen el nonce y los ayudantes del editor.
+        window.PMUCampos = {
+            nonce: (cfgGlobal.nonceAccion && cfgGlobal.nonceAccion.campo)
+                || (window.PMU_CAMPO && PMU_CAMPO.nonce) || '',
+            pintar: pintarFila,
+            alternar: alternarEditor,
+            enlazarBaja: enlazarBaja,
+            enlazarFormularios: enlazarFormularios
+        };
+        });
 
     window.PersonalizadorPDF = window.PersonalizadorPDF || {};
     window.PersonalizadorPDF.pmuPost = pmuPost;
@@ -657,6 +666,7 @@ jQuery(function ($) {
            (las filas ya traen data-cats/data-modificado/data-creado), sin
            peticiones: el orden de la tabla NO altera el panel del comprador
            (FR-014, eso lo manda config.json:campos_ids[]). */
+        var refrescarCampos = function () {}; // la reemplaza el bloque de filtros
         (function () {
             var $tabla = $('.ec-campos-tabla');
             if (!$tabla.length) { return; }
@@ -742,9 +752,108 @@ jQuery(function ($) {
                 aplicar();
             });
             aplicar();
+            refrescarCampos = aplicar; // la reutilizan duplicar/marcar/importar
         })();
 
-    /* ============ Preview del campo (spec 012, T011) ============
+    /** Parsea el HTML de filas del servidor. Ojo: `$(html)` DESCARTA los
+         `<tr>` (jQuery no los parsea fuera de una tabla), asi que se envuelve
+         en una tabla auxiliar. Se toman SOLO las filas de nivel superior:
+         `find('tr')` traeria tambien las del formulario y las moveria de sitio. */
+        function parsearFilas(html)
+        {
+            var $aux = $('<div>').append('<table><tbody>' + html + '</tbody></table>');
+            return $aux.children('table').children('tbody').children('tr');
+        }
+
+        // Importar: se intercepta (pmuForm devuelve JSON y NO navega).
+        // Exportar NO se intercepta: es una descarga, asi que el form se
+        // envia NATIVAMENTE y el navegador guarda el archivo (Content-Disposition).
+        // El nonce se LEE en cada llamada: al cargar este script PMUCampos todavia
+        // no existe (se asigna en el ready de arriba) y una variable congelada
+        // quedaria en '' para siempre.
+        function nonceC() {
+            return (window.PMUCampos && window.PMUCampos.nonce) || '';
+        }
+        $('form.ec-form-campo-importar').on('submit', function (ev) {
+            ev.preventDefault();
+            var $f = $(this);
+            var archivo = $f.find('input[type=file]')[0];
+            if (!archivo || !archivo.files || !archivo.files[0]) {
+                $f.find('.ec-campo-status').addClass('ec-error').text('Elegi un archivo .json.');
+                return;
+            }
+            if (!window.confirm('Importar agrega TODOS los campos del archivo. Si algun id ya existe, se rechaza el archivo completo. ¿Seguir?')) {
+                return;
+            }
+            var fd = new FormData();
+            fd.append('archivo', archivo.files[0]);
+            fd.append('action', $f.find('input[name=action]').val() || 'personalizador_pdf_campo_importar');
+            fd.append('_wpnonce', $f.find('input[name=_wpnonce]').val() || '');
+            $f.find('.ec-campo-status').removeClass('ec-ok ec-error').text('Importando…');
+            fetch(POST_URL, { method: 'POST', body: fd, credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (json) {
+                    var $s = $f.find('.ec-campo-status');
+                    if (!json || json.success !== true) {
+                        $s.addClass('ec-error').text((json && json.data) || 'No se pudo importar.');
+                        return;
+                    }
+                    $s.addClass('ec-ok').text('Importados ' + (json.data.creados || 0) + ' campo(s).');
+                    window.setTimeout(function () { window.location.reload(); }, 800);
+                })
+                .catch(function () {
+                    $f.find('.ec-campo-status').addClass('ec-error').text('Error de red al importar.');
+                });
+        });
+
+        // Marcar / desmarcar como plantilla reutilizable (T016).
+        $(document).on('click', '.ec-c-acciones .ec-marcar', function (ev) {
+            ev.preventDefault();
+            var $fila = $(this).closest('tr[data-id]');
+            var id = parseInt($fila.attr('data-id'), 10) || 0;
+            var actual = $fila.attr('data-plantilla') || '';
+            var nuevo = actual ? '' : 'texto';
+            pmuPost('personalizador_pdf_campo_plantilla', { id: id, plantilla: nuevo }, nonceC())
+                .then(function (res) {
+                    if (res.data && res.data.campo && window.PMUCampos) {
+                        window.PMUCampos.pintar(res.data.campo);
+                        $fila.attr('data-plantilla', res.data.campo.plantilla || '');
+                    }
+                    $fila.find('.ec-marcar').text(nuevo ? '★ Plantilla' : 'Plantilla');
+                    $fila.find('.ec-c-plantilla').text(nuevo ? res.data.campo.plantilla : '-');
+                    pmuAviso($fila.closest('.card, .wrap'),
+                        nuevo ? 'Campo ' + id + ' guardado como plantilla.' : 'Plantilla quitada.');
+                })
+                .catch(function (e) {
+                    pmuAviso($fila.closest('.card, .wrap'),
+                        (e && e.message) || 'No se pudo marcar.', true);
+                });
+        });
+
+        // Duplicar: crea un id NUEVO con el mismo contenido (T016).
+        $(document).on('click', '.ec-c-acciones .ec-duplicar', function (ev) {
+            ev.preventDefault();
+            var $fila = $(this).closest('tr[data-id]');
+            var id = parseInt($fila.attr('data-id'), 10) || 0;
+            pmuPost('personalizador_pdf_campo_duplicar', { id: id }, nonceC())
+                .then(function (res) {
+                    if (!res.data || !res.data.html) { return; }
+                    var $nuevo = parsearFilas(res.data.html);
+                    $('.ec-campos-cuerpo').append($nuevo);
+                    if (window.PMUCampos) {
+                        window.PMUCampos.enlazarBaja($nuevo.find('form.ec-form-campo-baja'));
+                        window.PMUCampos.enlazarFormularios($nuevo.find('form.ec-form-campo'));
+                    }
+                    refrescarCampos(); // re-evalua buscador/categorias con la fila nueva
+                    pmuAviso($fila.closest('.card, .wrap'), 'Duplicado como campo ' + res.data.id + '.');
+                })
+                .catch(function (e) {
+                    pmuAviso($fila.closest('.card, .wrap'),
+                        (e && e.message) || 'No se pudo duplicar.', true);
+                });
+        });
+
+        /* ============ Preview del campo (spec 012, T011) ============
            Un <iframe srcdoc> de 350px (el max-width real de .pmu-panel) que
            monta el campo con `PMUCampo.montar()`: el MISMO modulo que usa la
            ficha, asi que el admin ve exactamente lo que vera el comprador.
@@ -808,7 +917,7 @@ jQuery(function ($) {
             var $editor = $fila.next('.ec-campo-form-fila');
             if ($editor.prop('hidden')) {
                 // Abrimos el editor para que "Probar" use lo que hay escrito.
-                alternarEditor($fila, true);
+                if (window.PMUCampos) { window.PMUCampos.alternar($fila, true); }
             }
             var campo = leerCampoDeLaFila($fila);
             if (!campo || !campo.id) { return; }

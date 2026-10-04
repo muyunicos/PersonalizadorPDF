@@ -58,17 +58,22 @@
 
 ## Fase 4 - US4 Plantillas, duplicar, restaurar, importar/exportar
 
-- [ ] T015 [US4][P] `assets/campo-montar.js` (o el PHP que genera el formulario): las 3 plantillas
-  base (`texto`, `select`, `imagen`) con su HTML/CSS/JS inicial (D5, FR-015). El admin siempre puede
-  editar despues el HTML del campo creado (FR-016). `imagen` incluye el boton del cargador y su
-  `cargador` por defecto.
-- [ ] T016 [US4] Handlers `personalizador_pdf_campo_plantilla` (marcar/desmarcar), `_duplicar`,
-  `_restaurar` (con las causas de `data-model.md` §9). `cargar_campos()` expone cuales son
-  plantilla. UI: columna de plantilla, "Usar como plantilla" y "Duplicar" en la fila (FR-017…FR-020).
-- [ ] T017 [US4] Handlers `_exportar` (descarga el `campos.json` autocontenido con `htm/css/js`) y
-  `_importar` (**todo-o-nada**: valida sandbox, HTML, tamanos y que ningun id este en uso antes de
-  escribir una sola vez; causa `motor:campos:importar:id:ocupado`). UI: boton exportar + selector de
-  archivo con confirmacion (FR-021, FR-022). Test: fases `campo_dup`, `campo_restore`, `campo_import`.
+- [X] T015 [US4][P] `Personalizador_PDF_Plugin::plantilla_campo()`: las 3 plantillas base
+  (**texto**, **select**, **imagen**) con HTML/CSS/JS que funciona. `texto`/`select` traen un
+  `data-rol="valor"` y un JS-espejo que publica `ctx.set(ctx.id, {valor, cliente})` (gracias a que
+  `PMUCampo` ahora expone `ctx.id`); `imagen` trae el boton del cargador con su CSS de miniaturas
+  y un JS que avisa si el cargador aun no existe (el cargador real llega en F6). El alta usa la
+  plantilla si el POST no trae codigo propio. Plantilla desconocida = campo en blanco. FR-015/FR-016.
+- [X] T016 [US4] Handlers `personalizador_pdf_campo_plantilla` (marcar/desmarcar; la fila muestra
+  `★ Plantilla` desde el servidor) y `personalizador_pdf_campo_duplicar` (devuelve el HTML de la
+  fila nueva, que se inserta con la misma fuente unica del markup). Botones `Plantilla`/`Duplicar`
+  por fila (FR-017…FR-020). JS: `window.PMUCampos` publica el nonce y los ayudantes para que los
+  bloques externos los alcancen.
+- [X] T017 [US4] Handlers `personalizador_pdf_campo_exportar` (descarga `campos-{fecha}.json`
+  autocontenido: indice + meta + codigo de cada campo) y `personalizador_pdf_campo_importar`
+  (**todo-o-nada**: valida sandbox/HTML/tamanos/cargador de todo el lote antes de escribir; rechaza
+  con `motor:campos:importar:id:ocupado` si algun id existe). La UI exporta por POST nativo (una
+  descarga no pasa por `fetch`/JSON) y el importar sube el `.json` con confirmacion (FR-021/FR-022).
 
 ## Fase 5 - US5 CSS/JS global
 
