@@ -94,6 +94,9 @@ class Personalizador_PDF_Plugin
         // Spec 004 (T014): pool del comprador (PNG del render cliente).
         add_action('wp_ajax_personalizador_pdf_pool', [$this, 'handle_pool_png']);
         add_action('wp_ajax_nopriv_personalizador_pdf_pool', [$this, 'handle_pool_png']);
+        // Spec 012 (T022): la foto que sube el comprador al item (el cargador).
+        add_action('wp_ajax_personalizador_pdf_subida', [$this, 'handle_subida']);
+        add_action('wp_ajax_nopriv_personalizador_pdf_subida', [$this, 'handle_subida']);
 
         // Spec 004 (T015): ciclo del carrito (validar, promover el draft, etiquetas
         // cliente, cantidad fija 1 y borrado quirurgico al quitar la linea).
@@ -415,6 +418,12 @@ class Personalizador_PDF_Plugin
                 'css' => $estilo,
                 'js' => $guion,
                 'array' => !empty($d['array']),
+                // Spec 012 (T024): las ranuras del cargador. El shape ya esta
+                // validado por el servidor al guardar el campo, asi que viaja
+                // tal cual; `tienda.js` monta un CargadorPMU por campo.
+                'cargador' => !empty($d['cargador']['ranuras'])
+                    ? ['ranuras' => array_values((array) $d['cargador']['ranuras'])]
+                    : null,
             ];
         }
         return $out;
@@ -511,7 +520,11 @@ class Personalizador_PDF_Plugin
         if (!$analisis || empty($analisis['grupos'])) {
             return false;
         }
-        list($campos, ) = $this->campos_activos();
+        // Spec 012 (T024): se leen las filas **v2** (`datos` + codigo), no el
+        // adaptador de tupla v1, porque el `cargador` vive en `datos` y la tupla
+        // no lo transportaba: el comprador veia el campo sin sus ranuras.
+        // `campo_listar()` ya excluye los dados de baja.
+        $campos = $this->pmu_uploads()->campo_listar();
         $elegidos = [];
         foreach ((array)($config['campos_ids'] ?? []) as $cid) {
             if (isset($campos[(int)$cid])) {
@@ -669,10 +682,20 @@ class Personalizador_PDF_Plugin
             PERSONALIZADOR_PDF_VERSION,
             true
         );
+        // Spec 012 (T024): cargador de imagenes del comprador. Va antes que tienda.js,
+        // que lo usa al montar los campos que traen `cargador`.
+        wp_enqueue_script(
+            'personalizador-pdf-cargador',
+            PERSONALIZADOR_PDF_URL . 'assets/cargador-pmu.js',
+            [],
+            PERSONALIZADOR_PDF_VERSION,
+            true
+        );
         wp_enqueue_script(
             'personalizador-pdf-tienda',
             PERSONALIZADOR_PDF_URL . 'assets/tienda.js',
-            ['personalizador-pdf-mockup-render', 'personalizador-pdf-selector', 'personalizador-pdf-campo-montar'],
+            ['personalizador-pdf-mockup-render', 'personalizador-pdf-selector',
+                'personalizador-pdf-campo-montar', 'personalizador-pdf-cargador'],
             PERSONALIZADOR_PDF_VERSION,
             true
         );
@@ -1302,6 +1325,80 @@ class Personalizador_PDF_Plugin
     }
 
     /**
+     * Sube una foto del comprador al item de su sesion (spec 012, T022/US6,
+     * FR-031, D14/D15). Responde `['id','file','mime','bytes']`: el `id` lo
+     * elige el servidor y es lo unico que vuelve al cliente, que nunca compone
+     * una ruta.
+     *
+     * El archivo llega en `$_FILES['imagen']` (un File de un FormData, jamas en
+     * `$_POST`) o como dataURL en `imagen_data`. Techo alto por archivo
+     * (`motor:subida:tamano`): es defensa, no limite de producto (D15).
+     */
+    public function handle_subida()
+    {
+        // Primero la sesion: `sesion()` carga `class-pmu-sesion.php` de forma
+        // perezosa, y el tope de tamano vive en esa clase.
+        $sesion = $this->sesion();
+        if (!current_user_can('read')) {
+            wp_send_json_error('motor:capacidad:invalida');
+        }
+        $nonce = (string) ($_REQUEST['_wpnonce'] ?? '');
+        if (!wp_verify_nonce($nonce, 'personalizador_pdf_vista_previa')) {
+            wp_send_json_error('motor:nonce:invalido');
+        }
+        $sid = sanitize_text_field(wp_unslash((string) ($_POST['sid'] ?? '')));
+        $item = sanitize_text_field(wp_unslash((string) ($_POST['item_key'] ?? '')));
+        $bytes = '';
+        try {
+            if (isset($_FILES['imagen']['tmp_name']) && is_uploaded_file((string) $_FILES['imagen']['tmp_name'])) {
+                if ((int) ($_FILES['imagen']['size'] ?? 0) > PMU_Sesion::TOPE_SUBIDA_BYTES) {
+                    throw new \RuntimeException('motor:subida:tamano');
+                }
+                $bytes = (string) @file_get_contents((string) $_FILES['imagen']['tmp_name']);
+            } elseif (isset($_POST['imagen_data'])) {
+                $dataurl = (string) wp_unslash($_POST['imagen_data']);
+                $coma = strpos($dataurl, ',');
+                if ($coma === false) {
+                    throw new \RuntimeException('motor:subida:formato:invalido');
+                }
+                $b64 = base64_decode((string) substr($dataurl, $coma + 1), true);
+                if ($b64 === false) {
+                    throw new \RuntimeException('motor:subida:formato:invalido');
+                }
+                if (strlen($b64) > PMU_Sesion::TOPE_SUBIDA_BYTES) {
+                    throw new \RuntimeException('motor:subida:tamano');
+                }
+                $bytes = $b64;
+            }
+            if ($bytes === '') {
+                throw new \RuntimeException('motor:subida:falta:imagen');
+            }
+            $sesion = $this->sesion();
+            // D7: la subida ocurre ANTES de la vista previa, asi que el item
+            // puede no existir todavia. Si no llega, se crea un borrador para el
+            // PDF del panel y se devuelve su item_key: el cliente lo guarda y la
+            // vista previa lo REUSA (no abre un segundo item).
+            $creado = false;
+            if ($item === '') {
+                $pdf = $this->pmu_uploads()->nombre_seguro(
+                    sanitize_file_name(wp_unslash((string) ($_POST['pdf'] ?? ''))),
+                    'subida'
+                );
+                $item = $sesion->crear_draft($sesion->sid_actual(), [$pdf]);
+                $sid = $sesion->sid_actual();
+                $creado = true;
+            }
+            $fila = $sesion->guardar_subida($sid, $item, $bytes);
+            $fila['sid'] = $sid;
+            $fila['item_key'] = $item;
+            $fila['item_nuevo'] = $creado;
+        } catch (\Throwable $e) {
+            wp_send_json_error($e->getMessage());
+        }
+        wp_send_json_success($fila);
+    }
+
+    /**
      * T015: valida el add-to-cart de un producto vinculado: exige draft vigente
      * (pmu_sid + pmu_item_key con manifest del mismo PDF y previews ok/omisible).
      * Sin Woo o sin vinculacion no interviene (devuelve $valido sin tocar nada).
@@ -1824,6 +1921,21 @@ class Personalizador_PDF_Plugin
         $add('PHP >= 7.4', version_compare(PHP_VERSION, '7.4', '>='), PHP_VERSION);
         $add('Extension zlib', extension_loaded('zlib'), extension_loaded('zlib') ? 'presente' : 'falta');
         $add('Extension GD (opcional)', true, extension_loaded('gd') ? 'presente' : 'ausente: solo PNG de paleta');
+        // Spec 012 (T022b, D14): el cargador de imagenes del comprador depende de
+        // GD + WebP. Antes el check solo miraba que GD estuviera presente, asi
+        // que un hosting sin WebP se enteraba recien cuando fallaba un pedido.
+        $gd = extension_loaded('gd');
+        $leeWebp = $gd && function_exists('imagecreatefromwebp');
+        $escribeWebp = $gd && function_exists('imagewebp');
+        if (!$gd) {
+            $add('GD + WebP (cargador de imagenes)', false, 'falta GD: no se pueden leer fotos');
+        } elseif (!$leeWebp || !$escribeWebp) {
+            $add('GD + WebP (cargador de imagenes)', false,
+                'GD sin WebP: el cargador no puede leer ni guardar las fotos del comprador');
+        } else {
+            $add('GD + WebP (cargador de imagenes)', true,
+                'GD ' . (defined('GD_VERSION') ? GD_VERSION : '?') . ': lectura y escritura WebP');
+        }
         $motor = $this->pmu_uploads();
         foreach (['pdfs', 'img', 'tm-presets', 'tmp', 'orders'] as $ambito) {
             $dir = '';

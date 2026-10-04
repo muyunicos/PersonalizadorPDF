@@ -163,5 +163,61 @@ console.log('\n== CSS/JS global (spec 012, T020) ==');
     plugin.indexOf("public function css_global_prefijo($css, $prefijo = '[data-pmu-panel]')") !== -1);
 }
 
+console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
+{
+  const Carg = require(path.join(__dirname, '..', 'assets', 'cargador-pmu.js'));
+
+  // normalizarRanuras: descarta lo invalido y no inventa medidas (T023).
+  check('cargador: descarta la ranura sin w/h',
+    Carg.normalizarRanuras([{ w: 0, h: 10, min: 1, max: 1 }]).length === 0);
+  check('cargador: sin ranuras validas no monta nada',
+    new Carg.CargadorPMU(null, { ranuras: [{ h: 10 }] }).montar() === false);
+  check('cargador: normaliza min/max', (() => {
+    const r = Carg.normalizarRanuras([{ w: 10, h: 10, min: 3, max: 1 }])[0];
+    return r.min === 3 && r.max === 3;   // max nunca queda por debajo de min
+  })());
+  check('cargador: forma desconocida cae en rect',
+    Carg.normalizarRanuras([{ w: 10, h: 10, forma: 'triangulo' }])[0].forma === 'rect');
+  check('cargador: forma conocida se respeta',
+    Carg.normalizarRanuras([{ w: 10, h: 10, forma: 'circle' }])[0].forma === 'circle');
+
+  // D16/T023b: `min` es la validacion real.
+  const ranuras = Carg.normalizarRanuras([
+    { w: 100, h: 100, min: 2, max: 4 },
+    { w: 50, h: 50, min: 1, max: 1 }
+  ]);
+  const st = Carg.estadoInicial(ranuras);
+  check('cargador: nace incompleto (min=2 en la 1era ranura)',
+    Carg.completo(ranuras, st).listo === false && Carg.completo(ranuras, st).faltan === 3);
+  st[0].ids = ['a1'];
+  check('cargador: con 1 de 2 sigue incompleto y falta 2',
+    Carg.completo(ranuras, st).listo === false && Carg.completo(ranuras, st).faltan === 2);
+  st[0].ids = ['a1', 'a2']; st[1].ids = ['b1'];
+  check('cargador: con los minimos queda completo',
+    Carg.completo(ranuras, st).listo === true && Carg.completo(ranuras, st).faltan === 0);
+  st[0].ids = ['a1'];
+  check('cargador: quitar vuelve a bloquear', Carg.completo(ranuras, st).listo === false);
+
+  // FR-033/FR-034: ids aplanados y `array`.
+  check('cargador: publica los ids aplanados por ranura',
+    JSON.stringify(Carg.idsPlanos(st)) === JSON.stringify(['a1', 'b1']));
+  check('cargador: `array` si alguna ranura admite mas de una',
+    Carg.esArray(ranuras) === true);
+  check('cargador: `array` false si todas son de una sola',
+    Carg.esArray(Carg.normalizarRanuras([{ w: 10, h: 10, max: 1 }])) === false);
+
+  // Cableado: el cargador viaja a la ficha antes que tienda.js.
+  const plugin2 = fs.readFileSync(path.join(__dirname, '..', 'personalizador-pdf.php'), 'utf8');
+  const tienda2 = fs.readFileSync(path.join(__dirname, '..', 'assets', 'tienda.js'), 'utf8');
+  check('cargador-pmu.js se encola', plugin2.indexOf("assets/cargador-pmu.js") !== -1);
+  check('tienda.js depende del cargador', plugin2.indexOf("'personalizador-pdf-cargador'") !== -1);
+  check('tienda.js monta los cargadores al montar los campos',
+    tienda2.indexOf('montarCargadores(raizEl, campos, estado)') !== -1);
+  check('tienda.js sube al endpoint de subida',
+    tienda2.indexOf("'personalizador_pdf_subida'") !== -1);
+  check('el cargador NO pisa el valor del campo.js al montar',
+    /if \(mio \|\| est\.ids\.length > 0\)/.test(tienda2));
+}
+
 console.log('\n' + (fallos === 0 ? 'CAMPOS CONTRATO OK' : 'CAMPOS CONTRATO FALLA: ' + fallos));
 process.exit(fallos === 0 ? 0 : 1);

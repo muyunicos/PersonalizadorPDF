@@ -104,28 +104,41 @@
 
 ## Fase 6 - US6 Cargador de imagenes
 
-- [ ] T021 [US6][P] `inc/class-pmu-sesion.php` + `PMU_Uploads`: `dir_subidas()` y `guardar_subida()`
-  -> `tmp/sesion-{sid}/{item_key}/subidas/{id}.webp` con fila en `manifest.subidas[]` (id = uuid
-  corto del servidor, nunca del cliente). **Formato WebP** (D14: allowlist vigente en
-  `personalizador-pdf.php:321`; el Motor lo decodifica por GD). Causas de `data-model.md` §9. La
-  carpeta viaja con el item al promotion del pedido, sin trabajo extra (FR-035).
-- [ ] T022 [US6] `personalizador-pdf.php`: endpoint `personalizador_pdf_subida` (nonce + capability,
-  allowlist de formatos, **techo alto por archivo** `motor:subida:tamano` — defensa, no limite de
-  producto, D15) que sube una imagen al item del comprador. **Guardar con `congelar_webp()` si ya
-  existe** (misma validacion RIFF/WEBP del flujo de carrito, `personalizador-pdf.php:1874-1878`).
-- [ ] T022b [US6] `smoke_checks()`: agregar el check **"GD + WebP disponible"** (hoy solo verifica que
-  GD este presente, `personalizador-pdf.php:1646`), para que si un dia se muda a un hosting sin GD
-  el admin lo vea en la pestana Test **antes** de que falle un pedido (D14).
-- [ ] T023 [US6][P] `assets/cargador-pmu.js` (nuevo): `CargadorPMU` con N **ranuras** (`w`,`h`,
-  `forma`,`min`,`max`); usa `SelectorPMU` por dentro (una instancia por ranura). Acepta el archivo
-  **arrastrandolo** o con clic; al confirmar el recorte sube el blob al item (FR-028…FR-032).
-- [ ] T023b [US6] `assets/cargador-pmu.js`: **`min` es la validacion real** (D16) — "Aceptar" queda
-  `disabled` hasta que la ranura tenga `min` imagenes (el boton ya nace disabled en
-  `selector-pmu.js:97` y se habilita con el recorte, `:232`; solo falta exigir `min`). Sin isso el
-  comprador puede dejar el item incompleto.
-- [ ] T024 [US6] `assets/tienda.js`: el campo con `cargador` monta sus botones; publica
-  `valor = [ids]` (`array:true` si alguna ranura tiene `max > 1`). El componente NO manda nada al
-  Motor, solo al item (FR-033, FR-034). Test: fase `campo_subida` (servidor) + `campos-contrato.js`.
+- [X] T021 [US6][P] `PMU_Sesion::dir_subidas()`, `guardar_subida()` y `resolver_subidas()` ->
+  `tmp/sesion-{sid}/{item_key}/subidas/{id}.{ext}` con fila en `manifest.subidas[]` (id = uuid corto
+  del servidor, **nunca** del cliente). **Desviacion consciente de D14**: el formato sale de la
+  **firma de los bytes** (`firma_imagen()`: webp/png/jpg/gif) y no del nombre que manda el cliente.
+  Motivo: `SelectorPMU` genera **PNG** (`selector-pmu.js:244`), y si un navegador no codifica WebP
+  el `toBlob('image/webp')` cae a PNG en silencio; con rechazo estricto el comprador no podria
+  comprar. Nunca se inventa el formato: sale de `RIFF/WEBP`, la firma PNG, `FFD8FF` o `GIF8?a`.
+  WebP sigue siendo el esperado y la via natural. FR-035 sale **gratis**: `promover()`,
+  `staging_order()` y `promover_order()` mueven el arbol entero del item, no solo `img/`.
+- [X] T022 [US6] `personalizador-pdf.php`: endpoint `personalizador_pdf_subida` (nonce
+  `personalizador_pdf_vista_previa` + `current_user_can('read')`, allowlist por firma, techo alto de
+  20 MB = `PMU_Sesion::TOPE_SUBIDA_BYTES`, causa `motor:subida:tamano`; es defensa, no limite de
+  producto, D15). El archivo llega en `$_FILES['imagen']` (nunca en `$_POST`) o como dataURL. **Crea
+  el borrador si no hay item** (D7: la subida va antes de la vista previa) y devuelve
+  `sid`/`item_key` para que el cliente lo reuse en vez de abrir un segundo.
+- [X] T022b [US6] `smoke_checks()`: check **"GD + WebP (cargador de imagenes)"**, que ademas de GD
+  exige `imagecreatefromwebp` + `imagewebp`. Antes solo miraba que GD estuviera, asi que un hosting
+  sin WebP se enteraba recien al fallar un pedido (D14).
+- [X] T023 [US6][P] `assets/cargador-pmu.js` (nuevo): `CargadorPMU` con N **ranuras** (`w`,`h`,
+  `forma`,`min`,`max`); un `SelectorPMU` por ranura, usando solo su API publica
+  (`open`/`onSelect`/`obtenerBlob`) — el contrato de `selector-pmu.md` **no se toca**. Arrastre de
+  archivo por `DataTransfer` sobre la superficie publica del modal (si el navegador no lo tiene, el
+  modal sigue abierto y se elige a mano: degrada, no rompe). Se inyecta sus propios estilos, como
+  `selector-pmu.js`. Exporta en Node para testear la logica de ranuras.
+- [X] T023b [US6] `cargador-pmu.js`: **`min` es la validacion real** (D16) — "Listo" nace
+  `disabled` y sigue deshabilitado hasta que **todas** las ranuras tengan `min`; el texto dice
+  cuantos faltan. `max` apaga "Agregar" al llegar al tope. Sin esto el comprador deja el item a medias.
+- [X] T024 [US6] `assets/tienda.js`: `montarCampos()` llama a `montarCargadores()`; cada campo con
+  `cargador` monta su `CargadorPMU` y escribe `valor = [ids]` en el **mismo** estado que lee
+  `conciliarGrupo`, con `array:true` si alguna ranura tiene `max > 1`. El cargador **toma el control
+  del `valor` recien con la primera foto**: antes no lo pisa (si no, `valor = []` del montage
+  borraria lo que publico el `campo.js`). `campos_panel()` ahora viaja el `cargador`, y
+  `panel_ficha()` lee las filas **v2** (la tupla v1 no transportaba el `cargador`).
+  Puertas: fase `campo_subida` (12 checks) + 16 checks nuevos en `campos-contrato.test.js` +
+  12 checks en el lab con subida real de dos fotos (min=2).
 
 ## Fase 7 - US7 Campo de imagenes en el placeholder (nucleo; sola)
 

@@ -225,14 +225,85 @@
      preview de la consola: el admin ve exactamente lo que vera el comprador.
      Las reglas de salida estan en contracts/campos.md ("Reglas de salida"). */
     function montarCampos(raizEl, campos, inicial) {
+        var estado = {};
         if (typeof window.PMUCampo !== 'undefined' && window.PMUCampo.montar) {
-            return window.PMUCampo.montar(raizEl, campos, inicial);
+            estado = window.PMUCampo.montar(raizEl, campos, inicial);
+        } else {
+            // Sin el modulo compartido (no deberia pasar): aviso y no se monta nada.
+            if (typeof console !== 'undefined' && console.warn) {
+                console.warn('PMU: falta campo-montar.js; los campos no se montan.');
+            }
+            return estado;
         }
-        // Sin el modulo compartido (no deberia pasar): aviso y no se monta nada.
-        if (typeof console !== 'undefined' && console.warn) {
-            console.warn('PMU: falta campo-montar.js; los campos no se montan.');
-        }
-        return {};
+        // Spec 012 (T024): los campos con `cargador` publican ids de imagenes.
+        montarCargadores(raizEl, campos, estado);
+        return estado;
+    }
+
+    /**
+     * Sube una foto del comprador al item de su sesion (spec 012, T024/T022).
+     * El item puede no existir todavia (la subida va ANTES de la vista previa,
+     * D7): si no hay, el servidor crea un borrador y lo devuelve, y el cliente
+     * lo guarda para que la vista previa lo reusa en vez de abrir otro.
+     */
+    function subirFoto(blob, campo, onItem) {
+        var ses = (global.PMU_API && global.PMU_API.sesion) || {};
+        var fd = new FormData();
+        fd.append('action', 'personalizador_pdf_subida');
+        fd.append('_wpnonce', cfg.nonceVistaPrevia || '');
+        fd.append('sid', ses.sid || '');
+        fd.append('item_key', ses.item_key || '');
+        fd.append('pdf', (global.PMU_FICHA && global.PMU_FICHA.pdf) || '');
+        fd.append('imagen', blob, 'campo-' + campo + '.png');
+        return postAjax(fd).then(function (json) {
+            if (!json || !json.success) {
+                throw new Error((json && json.data) || 'motor:subida:falla');
+            }
+            if (json.data && json.data.item_key) {
+                global.PMU_API = global.PMU_API || {};
+                global.PMU_API.sesion = { sid: json.data.sid, item_key: json.data.item_key };
+                if (typeof onItem === 'function') { onItem(global.PMU_API.sesion); }
+            }
+            return json.data;
+        });
+    }
+
+    /**
+     * Monta un `CargadorPMU` por cada campo con `cargador` (spec 012, T024,
+     * FR-033/FR-034). El cargador escribe `valor = [ids]` en el MISMO estado
+     * que leyo `conciliarGrupo`, asi que el placeholder `[campoN]` lo ve sin
+     * que ningun modulo sepa del otro.
+     */
+    function montarCargadores(raizEl, campos, estado) {
+        if (typeof window.CargadorPMU === 'undefined' || !raizEl) { return {}; }
+        var mapa = {};
+        (campos || []).forEach(function (campo) {
+            if (!campo || !campo.cargador || !campo.cargador.ranuras) { return; }
+            var cont = raizEl.querySelector('.pmu-campo-' + campo.id + ' .pmu-campo-cuerpo');
+            if (!cont) { return; }
+            // `onChange` dispara tambien en el montaje, cuando aun no hay ids. Si
+            // escribieramos ahi, `valor = []` pisaria lo que publico el
+            // `campo.js` del campo. Se toma el control del `valor` recien cuando
+            // el comprador sube su primera foto, y a partir de ahi manda el
+            // cargador (incluido para dejarlo en cero).
+            var mio = false;
+            var cargador = new window.CargadorPMU(cont, {
+                ranuras: campo.cargador.ranuras,
+                subir: function (blob) { return subirFoto(blob, campo.id); },
+                onChange: function (est) {
+                    if (!estado[campo.id]) { estado[campo.id] = { valor: null, cliente: '' }; }
+                    if (mio || est.ids.length > 0) {
+                        mio = true;
+                        estado[campo.id].valor = est.ids;
+                    }
+                    // `array` si alguna ranura admite mas de una (FR-034).
+                    estado[campo.id].array = est.array;
+                    estado[campo.id].listo = est.listo;
+                }
+            });
+            if (cargador.montar()) { mapa[campo.id] = cargador; }
+        });
+        return mapa;
     }
 
     /** Carga perezosa del render-core (contrato AGENTS 2.1; igual que admin.js). */

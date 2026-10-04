@@ -253,6 +253,136 @@ class PMU_Sesion
         $this->guardar_manifest($sid, $item_key, $manifest);
     }
 
+    /* ==================== Subidas del comprador (spec 012, T021) ============ */
+
+    /**
+     * Carpeta de las fotos del comprador: {item}/subidas/ (D14). Viaja sola con
+     * el item cuando se promueve (draft -> carrito -> pedido), porque las tres
+     * mudanzas mueven el arbol entero del item, no el `img/` solamente (FR-035).
+     */
+    public function dir_subidas($sid, $item_key, $crear = false)
+    {
+        $dir = $this->dir_item($sid, $item_key) . DIRECTORY_SEPARATOR . 'subidas';
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        if ($crear && (!is_dir($dir) || !wp_is_writable($dir))) {
+            throw new Exception('motor:sesion:subidas:no_escribible');
+        }
+        return $dir;
+    }
+
+    /**
+     * Techo alto por archivo. Es **defensa**, no limite de producto (D15): el
+     * volumen real lo acota el diseno (`size`/`max` por ranura).
+     */
+    const TOPE_SUBIDA_BYTES = 20971520; // 20 MB
+
+    /**
+     * Formato real de unos bytes de imagen, por firma. WebP es el que espera el
+     * sistema (D14), pero PNG/JPEG/GIF tambien los decodifica GD, asi que se
+     * aceptan igual: si el navegador del comprador no sabe codificar WebP, el
+     * `canvas.toBlob('image/webp')` cae a PNG **en silencio** y con un rechazo
+     * estricto el comprador no podria comprar. Nunca se inventa el formato:
+     * sale de los bytes, no del nombre que manda el cliente.
+     * @return array{ext:string,mime:string}|null
+     */
+    public static function firma_imagen($bytes)
+    {
+        $b = (string)$bytes;
+        $n = strlen($b);
+        if ($n < 12) {
+            return null;
+        }
+        if (substr($b, 0, 4) === 'RIFF' && substr($b, 8, 4) === 'WEBP') {
+            return ['ext' => 'webp', 'mime' => 'image/webp'];
+        }
+        if (substr($b, 0, 8) === "\x89PNG\r\n\x1a\n") {
+            return ['ext' => 'png', 'mime' => 'image/png'];
+        }
+        if (substr($b, 0, 3) === "\xFF\xD8\xFF") {
+            return ['ext' => 'jpg', 'mime' => 'image/jpeg'];
+        }
+        if (substr($b, 0, 6) === 'GIF87a' || substr($b, 0, 6) === 'GIF89a') {
+            return ['ext' => 'gif', 'mime' => 'image/gif'];
+        }
+        return null;
+    }
+
+    /**
+     * Guarda una foto del comprador en `{item}/subidas/{id}.{ext}` y agrega su
+     * fila a `manifest.subidas[]` (spec 012, T021, D14).
+     *
+     * El `id` lo genera el **servidor** (uuid corto): el cliente jamas propone
+     * uno, asi que no puede elegir nombre ni salir de la carpeta. El formato sale
+     * de la firma de los bytes (webp es el esperado; png/jpg/gif tambien valen,
+     * ver `firma_imagen()`). Devuelve ['id','file','mime','bytes'].
+     */
+    public function guardar_subida($sid, $item_key, $bytes)
+    {
+        $bytes = (string)$bytes;
+        if ($bytes === '' || strlen($bytes) > self::TOPE_SUBIDA_BYTES) {
+            throw new Exception('motor:subida:vacia');
+        }
+        $firma = self::firma_imagen($bytes);
+        if ($firma === null) {
+            throw new Exception('motor:subida:formato:invalido');
+        }
+        $manifest = $this->leer_manifest($sid, $item_key);
+        if (!is_array($manifest) || (string)($manifest['item_key'] ?? '') !== (string)$item_key) {
+            throw new Exception('motor:sesion:item:ausente');
+        }
+        $dir = $this->dir_subidas($sid, $item_key, true);
+        $id = substr(str_replace('-', '', $this->uuid4()), 0, 12);
+        $file = 'subidas/' . $id . '.' . $firma['ext'];
+        if (@file_put_contents($dir . DIRECTORY_SEPARATOR . $id . '.' . $firma['ext'], $bytes) === false) {
+            throw new Exception('motor:sesion:subidas:no_escribible');
+        }
+        $filas = isset($manifest['subidas']) && is_array($manifest['subidas'])
+            ? array_values($manifest['subidas']) : [];
+        $filas[] = [
+            'id' => $id,
+            'file' => $file,
+            'mime' => $firma['mime'],
+            'bytes' => strlen($bytes),
+            'creado' => time(),
+        ];
+        $manifest['subidas'] = $filas;
+        $this->guardar_manifest($sid, $item_key, $manifest);
+        return ['id' => $id, 'file' => $file, 'mime' => $firma['mime'], 'bytes' => strlen($bytes)];
+    }
+
+    /**
+     * Resuelve ids de subida contra `manifest.subidas[]` (spec 012, T027).
+     * Un id que no este en el manifest NO se resuelve: devuelve null y el
+     * llamador avisa. Nunca se construye una ruta a partir del id del cliente.
+     * @return array<string,string> id => ruta absoluta
+     */
+    public function resolver_subidas($sid, $item_key, array $ids)
+    {
+        $manifest = $this->leer_manifest($sid, $item_key);
+        if (!is_array($manifest)) {
+            return [];
+        }
+        $porId = [];
+        foreach ((array)($manifest['subidas'] ?? []) as $fila) {
+            if (is_array($fila) && isset($fila['id'], $fila['file'])) {
+                $porId[(string)$fila['id']] = (string)$fila['file'];
+            }
+        }
+        $dir = $this->dir_item($sid, $item_key);
+        $out = [];
+        foreach ($ids as $id) {
+            $id = (string)$id;
+            if ($id !== '' && isset($porId[$id])) {
+                // El `file` del manifest lo escribio el servidor; aun asi se
+                // normaliza a nombre plano por si el manifest fuera editado.
+                $out[$id] = $dir . DIRECTORY_SEPARATOR . basename($porId[$id]);
+            }
+        }
+        return $out;
+    }
+
     /** Congela la vista aprobada: mockup-{id}.webp (300x300) en el item. */
     public function congelar_webp($sid, $item_key, $mockup_id, $bytes)
     {

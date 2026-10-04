@@ -21,7 +21,7 @@ if (PHP_SAPI !== 'cli') {
  *    validez | validez_admin | validez_admin_mal | ficha* | vista_previa* |
  *    carrito | pool* | sesion | conciliacion | completados | mockups* |
  *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
- *    reanalizar | borrado | campo_global`
+ *    reanalizar | borrado | campo_global | campo_subida`
  */
 
 $fase = isset($argv[1]) ? $argv[1] : 'setup';
@@ -974,6 +974,38 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 (string)($gl['prefijo_import'] ?? '') === '@import url(a.css);[data-pmu-panel] .a{ color: red }',
                 (string)($gl['prefijo_import'] ?? ''));
             check('prefijo: CSS vacio no inventa nada', (string)($gl['prefijo_vacio'] ?? '') === '');
+            break;
+        case 'campo_subida':
+            // 012/F6 (T021/T022, D14/D15/FR-035).
+            $su = isset($GLOBALS['test_campo_subida']) ? $GLOBALS['test_campo_subida'] : null;
+            check('subida: sin error', is_array($su) && (string)($su['error'] ?? '') === '');
+            check('subida: el webp queda como subidas/{id}.webp',
+                isset($su['a']) && $su['a']['file'] === 'subidas/' . $su['a']['id'] . '.webp'
+                && $su['a']['mime'] === 'image/webp',
+                isset($su['a']) ? (string)$su['a']['file'] : 'sin fila');
+            check('subida: el formato sale de la FIRMA, no del nombre (D14)',
+                isset($su['b']) && $su['b']['file'] === 'subidas/' . $su['b']['id'] . '.png'
+                && $su['b']['mime'] === 'image/png',
+                isset($su['b']) ? (string)$su['b']['mime'] : 'sin fila');
+            check('subida: el id lo genera el servidor (nunca el cliente)', !empty($su['ids_distintos']));
+            check('subida: los archivos fisicos existen', !empty($su['existe_fisico']));
+            check('subida: manifest.subidas[] trae 2 filas',
+                is_array($su['man_subidas']) && count($su['man_subidas']) === 2);
+            check('subida: la fila trae id/file/mime',
+                is_array($su['man_subidas']) && isset($su['man_subidas'][0]['id'],
+                    $su['man_subidas'][0]['file'], $su['man_subidas'][0]['mime']));
+            check('subida: formato invalido rechazado',
+                (string)($su['err_fmt'] ?? '') === 'motor:subida:formato:invalido',
+                (string)($su['err_fmt'] ?? ''));
+            check('subida: vacia rechazada',
+                (string)($su['err_vacia'] ?? '') === 'motor:subida:vacia',
+                (string)($su['err_vacia'] ?? ''));
+            check('subida: resolver SOLO acepta ids del manifest',
+                is_array($su['resueltas']) && count($su['resueltas']) === 1
+                && isset($su['a']) && isset($su['resueltas'][$su['a']['id']]));
+            check('FR-035: la subida viaja al item promovido', !empty($su['existe_destino']));
+            check('FR-035: el manifest promovido conserva subidas[]',
+                is_array($su['man_destino'] ?? null) && count((array)($su['man_destino']['subidas'] ?? [])) === 2);
             break;
         case 'config':
             // 004/Fase A: config.json por PDF (activo/productos/campos/placeholders).
@@ -2509,6 +2541,53 @@ switch ($fase) {
             $GLOBALS['test_campo_global'] = $g;
         } catch (\Throwable $e) {
             $GLOBALS['test_campo_global'] = ['error' => $e->getMessage()];
+        }
+        break;
+
+    case 'campo_subida':
+        // 012/F6 (T021/T022, D14/D15/FR-035): la foto del comprador al item.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $ses = new PMU_Sesion($p->motor_para_tests());
+        try {
+            $sid = 'test-sub1';
+            $draft = $ses->crear_draft($sid, ['muestra']);
+            // Mismo byteo sintetico que usa la fase `sesion` para el congelado.
+            $a = $ses->guardar_subida($sid, $draft, 'RIFF....WEBPVP8 ');
+            // Y un PNG de verdad, para probar que el formato sale de la FIRMA
+            // y no del nombre que manda el cliente (D14).
+            $b = $ses->guardar_subida($sid, $draft, \ExtractCorel\Engine\PngWriter::bytes(4, 4));
+            $dirDraft = $ses->dir_item($sid, $draft);
+            $man = $ses->leer_manifest($sid, $draft);
+
+            $errFmt = '';
+            try { $ses->guardar_subida($sid, $draft, 'esto no es una imagen'); }
+            catch (\Throwable $e) { $errFmt = $e->getMessage(); }
+            $errVacia = '';
+            try { $ses->guardar_subida($sid, $draft, ''); }
+            catch (\Throwable $e) { $errVacia = $e->getMessage(); }
+
+            $resueltas = $ses->resolver_subidas($sid, $draft, [$a['id'], 'id-inventado']);
+            $existeFisico = is_file($dirDraft . '/' . $a['file']) && is_file($dirDraft . '/' . $b['file']);
+
+            // FR-035: al promover el draft, `subidas/` viaja con el item.
+            $ses->promover($sid, $draft, 'cart-abc');
+            $destino = $ses->dir_item($sid, 'cart-abc');
+
+            $GLOBALS['test_campo_subida'] = [
+                'a' => $a, 'b' => $b,
+                'man_subidas' => isset($man['subidas']) ? $man['subidas'] : [],
+                'err_fmt' => $errFmt, 'err_vacia' => $errVacia,
+                'resueltas' => $resueltas,
+                'ids_distintos' => ((string) $a['id'] !== (string) $b['id']),
+                'existe_fisico' => $existeFisico,
+                'existe_destino' => is_file($destino . '/' . $a['file']),
+                'man_destino' => $ses->leer_manifest($sid, 'cart-abc'),
+            ];
+        } catch (\Throwable $e) {
+            $GLOBALS['test_campo_subida'] = ['error' => $e->getMessage()];
         }
         break;
 
