@@ -530,23 +530,23 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
             </div>
         </form>
 
-        <?php // Modal de alta rapida de campo (spec 004: reusa handle_campo_guardar via pmuPost). ?>
+        <?php // Modal de alta rapida de campo (spec 012, v2: sin `tipo`; reusa handle_campo_guardar). ?>
         <div class="ec-modal ec-modal-campo" hidden>
             <div class="ec-modal-caja">
                 <h3>Nuevo campo</h3>
-                <p><label>Titulo (visible para el cliente)<br>
+                <p><label>Nombre (para vos)<br>
+                    <input type="text" class="ec-campo-nombre" maxlength="200"></label></p>
+                <p><label>Plantilla<br>
+                    <select class="ec-campo-plantilla">
+                        <option value="texto">Texto</option>
+                        <option value="select">Opciones</option>
+                        <option value="imagen">Imagenes (cargador)</option>
+                    </select></label>
+                    <span class="description">Solo deja el formulario preparado; despues editas el HTML a tu medida.</span></p>
+                <p><label>Titulo para el comprador<br>
                     <input type="text" class="ec-campo-titulo" maxlength="200"></label></p>
-                <p><label>Tipo<br>
-                    <select class="ec-campo-tipo">
-                        <option value="text">text</option>
-                        <option value="textarea">textarea</option>
-                        <option value="select">select</option>
-                        <option value="img">img</option>
-                        <option value="override">override</option>
-                    </select></label></p>
-                <p><label>Etiquetas (separadas por coma, opcional)<br>
-                    <input type="text" class="ec-campo-etiquetas" maxlength="300"></label></p>
-                <p><label><input type="checkbox" class="ec-campo-visible" checked="checked"> Visible</label></p>
+                <p><label>Categorias (separadas por coma, opcional)<br>
+                    <input type="text" class="ec-campo-categorias" maxlength="300"></label></p>
                 <p>
                     <button type="button" class="button button-primary ec-campo-crear">Crear</button>
                     <button type="button" class="button button-link ec-campo-cancelar">Cancelar</button>

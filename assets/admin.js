@@ -586,11 +586,11 @@ jQuery(function ($) {
         }
     });
 
-    // --- Alta rapida de campos (modal; reusa handle_campo_guardar via pmuPost) ---
+    // --- Alta rapida de campos (modal v2: nombre + plantilla, sin `tipo`) ---
     $(document).on('click', '.ec-nuevo-campo', function () {
         $('.ec-modal-campo').removeAttr('hidden');
         $('.ec-modal-campo .ec-campo-status').removeClass('ec-error ec-ok').text('');
-        $('.ec-modal-campo .ec-campo-titulo').trigger('focus');
+        $('.ec-modal-campo .ec-campo-nombre').trigger('focus');
     });
 
     $(document).on('click', '.ec-modal-campo .ec-campo-cancelar', function () {
@@ -599,21 +599,23 @@ jQuery(function ($) {
 
     $(document).on('click', '.ec-modal-campo .ec-campo-crear', function () {
         var $status = $('.ec-modal-campo .ec-campo-status');
+        var nombre = ($('.ec-modal-campo .ec-campo-nombre').val() || '').trim();
         var titulo = ($('.ec-modal-campo .ec-campo-titulo').val() || '').trim();
-        var tipo = $('.ec-modal-campo .ec-campo-tipo').val() || 'text';
-        if (titulo === '') {
-            $status.addClass('ec-error').text('Escribi un titulo.');
+        var plantilla = $('.ec-modal-campo .ec-campo-plantilla').val() || 'texto';
+        if (nombre === '') {
+            $status.addClass('ec-error').text('Escribi un nombre.');
             return;
         }
         $status.removeClass('ec-error ec-ok').text('Creando...');
+        // Payload v2 (spec 012): nombre + plantilla + titulo_cliente + categorias.
         var nuevo = {
+            nombre: nombre,
+            plantilla: plantilla,
             titulo_cliente: titulo,
-            tipo: tipo,
-            etiquetas: ($('.ec-modal-campo .ec-campo-etiquetas').val() || '').trim(),
-            visible: $('.ec-modal-campo .ec-campo-visible').prop('checked') ? '1' : ''
+            categorias: ($('.ec-modal-campo .ec-campo-categorias').val() || '').trim()
         };
         pmuPost('personalizador_pdf_campo', nuevo, cfgGlobal.nonceCampo || '')
-            .then(function (res) { campoCreado(res.data, titulo, tipo, $status); })
+            .then(function (res) { campoCreado(res.data, nombre, $status); })
             .catch(function (e) {
                 var msg = (e instanceof Error && e.message) ? e.message : 'No se pudo crear el campo (red).';
                 $status.addClass('ec-error').text(msg);
@@ -621,10 +623,14 @@ jQuery(function ($) {
     });
 
     /** Alta de campo reutilizable: actualiza selects y cierra el modal. */
-    function campoCreado(data, titulo, tipo, $status) {
+    function campoCreado(data, nombre, $status) {
         var id = (data && data.id) || 0;
+        // El servidor devuelve la fila v2; el nombre visible es el que eligio el admin.
+        var guardado = (data && data.campo) ? data.campo : null;
+        var titulo = guardado && guardado.datos ? (guardado.datos.nombre || nombre) : nombre;
+        var plantilla = guardado ? (guardado.plantilla || '') : '';
         if (id > 0) {
-            var etiqueta = id + ' — ' + titulo + ' (' + tipo + ')';
+            var etiqueta = id + ' — ' + titulo + (plantilla ? ' (' + plantilla + ')' : '');
             var $sel = $('select[name="campos_ids[]"]').first();
             if ($sel.length && !$sel.find('option[value="' + id + '"]').length) {
                 $sel.append($('<option>', { value: id, text: etiqueta }).prop('selected', true));
@@ -637,8 +643,9 @@ jQuery(function ($) {
             });
         }
         $status.addClass('ec-ok').text('Campo ' + id + ' creado ✓');
+        $('.ec-modal-campo .ec-campo-nombre').val('');
         $('.ec-modal-campo .ec-campo-titulo').val('');
-        $('.ec-modal-campo .ec-campo-etiquetas').val('');
+        $('.ec-modal-campo .ec-campo-categorias').val('');
         setTimeout(function () {
             $('.ec-modal-campo').attr('hidden', true);
             $status.text('');
