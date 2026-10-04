@@ -341,9 +341,9 @@ check('T033: el cuerpo de miniaturaCapa resuelve el render de la capa',
 
 
 // Sin recurso, cae al swatch de color del grupo.
-check('T033: sin recurso cae al swatch de color del grupo',
-    ed.indexOf('ec-mk-capa-mini-swatch') !== -1
-        && ed.indexOf('ec-mk-capa-mini-img') !== -1);
+check('T033: el detalle de color va al lado del nombre, no en la miniatura',
+    ed.indexOf('detalleCapa(c)') !== -1
+        && ed.indexOf('ec-mk-capa-mini-vacia') !== -1);
 
 // El nucleo de geometria expone reordenar y el editor lo usa.
 check('T036: el nucleo expone reordenar(lista, desde, hasta)',

@@ -766,3 +766,20 @@
 .ec-mk-mockup[data-arrastre] { cursor: grab; touch-action: none; }
 .ec-mk-mockup-arrastre { opacity: .6; cursor: grabbing; }
 .ec-mk-soltar { outline: 2px solid #2271b1; outline-offset: -2px; }
+
+/* T033: el detalle de color va al lado del nombre, no dentro de la miniatura. */
+.ec-mk-capa-txt {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.ec-mk-detalle {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    flex: 0 0 10px;
+    border: 1px solid #8c8f94;
+    border-radius: 2px;
+}

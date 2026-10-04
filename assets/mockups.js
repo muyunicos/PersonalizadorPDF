@@ -644,21 +644,39 @@ jQuery(function ($) {
      * (foto del PDF, catalogo o el render del placeholder ya previsualizado) y
      * el swatch de color del grupo cuando todavia no hay recurso.
      */
+    /**
+     * Miniatura de una capa para la lista (T033): la imagen real de la capa
+     * cuando existe. La resuelve `resolverCapa()`, asi que sirve igual para
+     * una foto, una imagen del catalogo o el render del placeholder (texto de
+     * TextMuy o imagen): el editor no distingue el tipo, solo usa lo que haya.
+     */
     function miniaturaCapa(c) {
         var $m = $('<span class="ec-mk-capa-mini">');
         var r = resolverCapa(c);
         if (r && r.url) {
             $m.addClass('ec-mk-capa-mini-img');
             $m.append($('<img alt="">').attr('src', r.url));
-            return $m;
+        } else {
+            $m.addClass('ec-mk-capa-mini-vacia');
+            $m.attr('aria-hidden', 'true');
         }
-        if (c && c.tipo === 'placeholder') {
-            var id = String(c.ref || '').split('#')[0];
-            return $m.addClass('ec-mk-capa-mini-swatch')
-                .css('background', '#' + id);
-        }
-        return $m.addClass('ec-mk-capa-mini-vacia');
+        return $m;
     }
+
+    /**
+     * Detalle de color del grupo, al lado del nombre (T033). Es solo una
+     * pista visual del placeholder: la miniatura de al lado lleva la imagen.
+     */
+    function detalleCapa(c) {
+        if (!c || c.tipo !== 'placeholder') {
+            return $('<span class="ec-mk-detalle">');
+        }
+        var id = String(c.ref || '').split('#')[0];
+        return $('<span class="ec-mk-detalle swatch">')
+            .css('background', '#' + id)
+            .attr('title', 'Placeholder ' + etiquetaPlaceholder(c.ref));
+    }
+
     function pintarCapas() {
         var $ul = $ed.find('.ec-mk-capas').empty();
         var lista = capas();
@@ -679,7 +697,9 @@ jQuery(function ($) {
                     .attr('aria-label', nombreCapa(c) + (c.oculta ? ' (oculta)' : '')
                         + (c.bloqueada ? ' (bloqueada)' : ''));
                 $li.append(miniaturaCapa(c));
-                $li.append($('<span class="ec-mk-capa-nombre">').text(nombreCapa(c)));
+                $li.append($('<span class="ec-mk-capa-txt">')
+                    .append($('<span class="ec-mk-capa-nombre">').text(nombreCapa(c)))
+                    .append(detalleCapa(c)));
                 $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="arriba">')
                     .attr('aria-label', 'Subir la capa ' + nombreCapa(c)).text('▲'));
                 $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="abajo">')
