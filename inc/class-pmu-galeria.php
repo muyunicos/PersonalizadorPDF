@@ -57,12 +57,37 @@ class PMU_Galeria
             throw new Exception('motor:' . $op . ':archivo:formato');
         }
         $destino = $dir . DIRECTORY_SEPARATOR . 'thumbs.webp';
-        if (!@move_uploaded_file($file['tmp_name'], $destino)) {
-            throw new Exception('motor:' . $op . ':directorio:no_escribible');
-        }
+        $this->mover_a_destino($file['tmp_name'], $destino, $op);
         @unlink($dir . DIRECTORY_SEPARATOR . 'sprite.json'); // resto del formato anterior
         @unlink($dir . DIRECTORY_SEPARATOR . 'sprite.webp'); // resto del formato anterior
         return $destino;
+    }
+
+    /**
+     * Mueve un fichero subido a su destino.
+     *
+     * `move_uploaded_file()` solo acepta ficheros subidos por HTTP: en CLI (los
+     * tests de certificacion de hoja, spec 009 T006/T007) siempre falla y el
+     * `no_escribible` serian un falso negativo. Mismo criterio que ya usa
+     * `PMU_Uploads::guardar_subida()`: metodo nativo cuando viene de una subida
+     * real, `rename`/`copy` en el resto. Nunca relaja la validacion previa de
+     * formato/tamano, que ocurre antes de este punto.
+     */
+    private function mover_a_destino($origen, $destino, $op)
+    {
+        $movido = false;
+        if (is_uploaded_file($origen)) {
+            $movido = @move_uploaded_file($origen, $destino);
+        } else {
+            $movido = @rename($origen, $destino);
+            if (!$movido) {
+                $movido = @copy($origen, $destino);
+            }
+        }
+        if (!$movido) {
+            throw new Exception('motor:' . $op . ':directorio:no_escribible');
+        }
+        return true;
     }
 
     /**
@@ -87,9 +112,7 @@ class PMU_Galeria
             wp_mkdir_p($dir);
         }
         $destino = $dir . DIRECTORY_SEPARATOR . $nombre . '.webp';
-        if (!@move_uploaded_file($file['tmp_name'], $destino)) {
-            throw new Exception('motor:' . $op . ':directorio:no_escribible');
-        }
+        $this->mover_a_destino($file['tmp_name'], $destino, $op);
         return $nombre . '.webp';
     }
 }

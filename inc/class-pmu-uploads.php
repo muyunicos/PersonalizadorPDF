@@ -168,16 +168,92 @@ class PMU_Uploads
         return $this->dir_mockups($pdf) . DIRECTORY_SEPARATOR . $archivo;
     }
 
-    /** Carpeta contenedora del catalogo global de campos: uploads/pmu/ (spec 004, T004). */
-    public function dir_campos()
+    /**
+     * Carpeta del codigo de los campos: uploads/pmu/campos/ (spec 012, T002).
+     * OJO: el INDICE (campos.json) sigue en la RAIZ de uploads/pmu/; aqui
+     * viven las carpetas {id}/ de cada campo y los dos globales.
+     */
+    public function dir_campos($crear = false)
     {
-        return $this->dir_pmu();
+        $dir = $this->dir_pmu($crear) . DIRECTORY_SEPARATOR . 'campos';
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        if ($crear && (!is_dir($dir) || !wp_is_writable($dir))) {
+            throw new Exception('motor:dir_campos:directorio:no_escribible');
+        }
+        return $dir;
     }
 
-    /** Catalogo global de campos: uploads/pmu/campos.json (spec 004, sin thumbs). */
+    /**
+     * Indice del catalogo global de campos: uploads/pmu/campos.json
+     * (spec 004, sin thumbs; formato v2 en la spec 012, T002).
+     */
     public function ruta_campos()
     {
-        return $this->dir_campos() . DIRECTORY_SEPARATOR . 'campos.json';
+        return $this->dir_pmu() . DIRECTORY_SEPARATOR . 'campos.json';
+    }
+
+    /**
+     * Id de campo saneado: entero >= 1 (nunca 0; los dados de baja conservan
+     * el id, asi que no se reutiliza). Lanza motor:<op>:id:invalido.
+     */
+    public function campo_id_seguro($id, $op = 'campo')
+    {
+        $id = (int)$id;
+        if ($id < 1) {
+            throw new Exception('motor:' . $op . ':id:invalido');
+        }
+        return $id;
+    }
+
+    /** Carpeta de un campo: uploads/pmu/campos/{id}/ (spec 012, T002). */
+    public function dir_campo($id, $crear = false)
+    {
+        $id = $this->campo_id_seguro($id, 'dir_campo');
+        $dir = $this->dir_campos($crear) . DIRECTORY_SEPARATOR . $id;
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        return $dir;
+    }
+
+    /**
+     * Archivo de un campo (datos.json|campo.htm|campo.css|campo.js):
+     * uploads/pmu/campos/{id}/{archivo}. Sin subrutas (spec 012, T002).
+     */
+    public function ruta_campo($id, $archivo)
+    {
+        $archivo = basename((string)$archivo); // sin subrutas
+        if ($archivo === '' || $archivo === '.' || $archivo === '..') {
+            throw new Exception('motor:ruta_campo:archivo:invalido');
+        }
+        return $this->dir_campo($id) . DIRECTORY_SEPARATOR . $archivo;
+    }
+
+    /**
+     * Ruta de un archivo global del plugin: solo global.css|global.js
+     * (spec 012, T018; el global es UNO del plugin, D6).
+     */
+    public function ruta_campo_global($archivo)
+    {
+        $archivo = basename((string)$archivo);
+        if (!in_array($archivo, ['global.css', 'global.js'], true)) {
+            throw new Exception('motor:ruta_campo_global:archivo:invalido');
+        }
+        return $this->dir_campos() . DIRECTORY_SEPARATOR . $archivo;
+    }
+
+    /** CSS global del plugin: uploads/pmu/campos/global.css (spec 012, T018). */
+    public function ruta_global_css()
+    {
+        return $this->ruta_campo_global('global.css');
+    }
+
+    /** JS global del plugin: uploads/pmu/campos/global.js (spec 012, T018). */
+    public function ruta_global_js()
+    {
+        return $this->ruta_campo_global('global.js');
     }
 
     /** Config editable del admin: uploads/pmu/pdfs/{nombre}/config.json (plan 008). */
@@ -464,11 +540,25 @@ class PMU_Uploads
      * Escribe el catalogo de forma atomica (T004): vuelca a {catalogo}.tmp
      * en la misma carpeta y renombra sobre el destino. Ningun lector ve
      * un catalogo truncado. Devuelve true/false (no lanza).
+     *
+     * RC46 / spec 009 (T005): la certificacion de la hoja se invalida en
+     * TODOS los ambitos catalogados, no solo en `img`. Antes solo `img`
+     * borraba `thumbs.sprite_firma`, de modo que un alta/baja/editar en
+     * `fonts` o `tm-presets` dejaba la hoja con thumbs viejos en disco. La
+     * lectura canonica (TextMuyAPI.ensureSpriteCanonico) compara la firma
+     * contra el inventario vigente y al no coincidir rechaza la hoja, pero
+     * el motor la seguia marcando como vigente.
+     *
+     * Solo para ambitos CON catalogo ($CATALOGOS): los demas de
+     * AMBITOS_GALERIA (mockups) no manejan `thumbs.sprite_firma` y deben
+     * conservar su `thumbs` intacto (contrato motor-sprite.md: un ambito
+     * certifica solo si el cliente manda firma no vacia).
      */
     public function guardar_catalogo($ambito, $cat)
     {
         $ruta = $this->ruta_catalogo($ambito);
-        if ($ambito === 'img') {
+        if (isset(self::$CATALOGOS[$ambito]) && isset($cat['thumbs'])
+            && is_array($cat['thumbs'])) {
             unset($cat['thumbs']['sprite_firma']);
         }
         return $this->escribir_json($ruta, $cat);
@@ -546,6 +636,332 @@ class PMU_Uploads
         if (preg_match('/\\bid\\s*=\\s*["\']/', $script)) {
             throw new Exception('motor:campos:script:invalido');
         }
+    }
+
+    /* ============ Campos v2 (spec 012, T004): datos, cargador y archivos ============ */
+
+    /**
+     * Valida y normaliza el `cargador` de un campo (ranuras del cargador de
+     * imagenes). Acepta la forma estructurada (array de ranuras) y tambien el
+     * atajo de texto que ideo el admin: `size:2000 max:6`,
+     * `canvas:circle size:1000`, `1_size:1000 1_canvas:circle 2_size:1024x768 2_min:2 2_max:2`.
+     * Devuelve null si el campo no tiene cargador; o el array de ranuras
+     * normalizado. Lanza motor:campos:cargador:invalido si algo no cuadra.
+     */
+    public function validar_cargador($cargador)
+    {
+        if ($cargador === null || $cargador === '' || $cargador === []) {
+            return null;
+        }
+        // Atajo de texto -> estructura.
+        if (!is_array($cargador)) {
+            $cargador = $this->cargador_desde_texto((string)$cargador);
+        }
+        if (isset($cargador['ranuras']) && is_array($cargador['ranuras'])) {
+            $cargador = $cargador['ranuras'];
+        }
+        if (!is_array($cargador) || !$cargador) {
+            throw new Exception('motor:campos:cargador:invalido');
+        }
+        $formas = ['circle', 'square', 'rect', 'fit'];
+        $ranuras = [];
+        foreach ($cargador as $n => $r) {
+            if (!is_array($r)) {
+                throw new Exception('motor:campos:cargador:invalido');
+            }
+            $w = isset($r['w']) ? (int)$r['w'] : 0;
+            $h = isset($r['h']) ? (int)$r['h'] : 0;
+            $forma = isset($r['forma']) ? (string)$r['forma'] : 'rect';
+            $min = isset($r['min']) ? (int)$r['min'] : 1;
+            $max = isset($r['max']) ? (int)$r['max'] : 1;
+            if ($w < 1 || $h < 1 || !in_array($forma, $formas, true)) {
+                throw new Exception('motor:campos:cargador:invalido');
+            }
+            if ($min < 1) {
+                $min = 1;
+            }
+            if ($max < $min) {
+                $max = $min;
+            }
+            $ranuras[] = [
+                'etiqueta' => isset($r['etiqueta']) ? substr(strip_tags((string)$r['etiqueta']), 0, 100) : ('Foto ' . ((int)$n + 1)),
+                'w' => $w,
+                'h' => $h,
+                'forma' => $forma,
+                'min' => $min,
+                'max' => $max,
+            ];
+        }
+        return $ranuras;
+    }
+
+    /**
+     * Parsea el atajo de texto del cargador a la estructura de ranuras
+     * (spec 012, data-model.md §3). Sintaxis:
+     *   size:2000 max:6                                -> 1 ranura 2000x2000, max 6
+     *   canvas:circle size:1000                        -> 1 ranura circular 1000x1000
+     *   1_size:1000 1_canvas:circle 2_size:1024x768 2_min:2 2_max:2 -> 2 ranuras
+     * `W:H` (o `size:WxH`) define el alto; por defecto `size:N` es cuadrado.
+     */
+    private function cargador_desde_texto($texto)
+    {
+        $texto = strtolower(trim((string)$texto));
+        if ($texto === '') {
+            return null;
+        }
+        $formas = ['circle', 'square', 'rect', 'fit'];
+        $mapa = ['canvas' => 'forma', 'forma' => 'forma', 'size' => 'size',
+            'w' => 'w', 'h' => 'h', 'min' => 'min', 'max' => 'max'];
+        $out = [];
+        if (!preg_match_all('/(\d*)_?(canvas|forma|size|w|h|min|max)\s*[:=]\s*([a-z0-9x]+)/', $texto, $m, PREG_SET_ORDER)) {
+            throw new Exception('motor:campos:cargador:invalido');
+        }
+        foreach ($m as $tok) {
+            $idx = $tok[1] === '' ? 1 : (int)$tok[1];
+            $clave = $mapa[$tok[2]];
+            $valor = $tok[3];
+            if (!isset($out[$idx])) {
+                $out[$idx] = ['forma' => 'rect', 'min' => 1, 'max' => 1];
+            }
+            if ($clave === 'forma') {
+                if (!in_array($valor, $formas, true)) {
+                    throw new Exception('motor:campos:cargador:invalido');
+                }
+                $out[$idx]['forma'] = $valor;
+            } elseif ($clave === 'size') {
+                if (strpos($valor, 'x') !== false) {
+                    list($w, $h) = array_pad(explode('x', $valor, 2), 2, $valor);
+                    $out[$idx]['w'] = (int)$w;
+                    $out[$idx]['h'] = (int)$h;
+                } else {
+                    $out[$idx]['w'] = (int)$valor;
+                    $out[$idx]['h'] = (int)$valor;
+                }
+            } else {
+                $out[$idx][$clave] = (int)$valor;
+            }
+        }
+        ksort($out);
+        $ranuras = [];
+        foreach ($out as $r) {
+            if (!isset($r['w']) || !isset($r['h'])) {
+                throw new Exception('motor:campos:cargador:invalido');
+            }
+            $ranuras[] = $r;
+        }
+        return $ranuras;
+    }
+
+    /**
+     * Lee un campo v2 completo desde uploads/pmu/campos/{id}/ (spec 012, T002).
+     * Devuelve ['datos'=>[],'htm'=>'','css'=>'','js'=>''] o null si no existe
+     * la carpeta. Tolerante: un archivo ausente se lee como cadena vacia.
+     */
+    public function leer_campo($id)
+    {
+        $id = $this->campo_id_seguro($id, 'leer_campo');
+        if (!is_dir($this->dir_campo($id))) {
+            return null;
+        }
+        $leer = function ($archivo) use ($id) {
+            $ruta = $this->ruta_campo($id, $archivo);
+            return is_file($ruta) ? (string)@file_get_contents($ruta) : '';
+        };
+        $datos = $this->leer_json($this->ruta_campo($id, 'datos.json'));
+        return [
+            'id' => $id,
+            'datos' => is_array($datos) ? $datos : [],
+            'htm' => $leer('campo.htm'),
+            'css' => $leer('campo.css'),
+            'js' => $leer('campo.js'),
+        ];
+    }
+
+    /**
+     * Escribe un campo v2: valida y deja los 4 archivos en
+     * uploads/pmu/campos/{id}/ (spec 012, T002/T004). Cada archivo se escribe
+     * de forma atomica (.tmp + rename); el indice (campos.json) se actualiza
+     * aparte y es el punto de commit. Devuelve true/false (no lanza por E/S).
+     */
+    public function escribir_campo($id, array $datos, $htm = '', $css = '', $js = '')
+    {
+        $id = $this->campo_id_seguro($id, 'escribir_campo');
+        $this->dir_campo($id, true);
+
+        // Validacion del HTML (mismas reglas que campo_desde_post v1).
+        if (preg_match('/<\s*(script|iframe|object|embed|form)\b/i', $htm)) {
+            throw new Exception('motor:campos:contenido:prohibido');
+        }
+        if (preg_match('/\bid\s*=\s*["\']/', $htm)) {
+            throw new Exception('motor:campos:contenido:sin_id');
+        }
+        // Sandbox del JS (siempre en el servidor; el navegador no reemplaza esto).
+        $this->validar_script_campo($js);
+
+        // Limites por archivo (20 000 caracteres, como en la v1).
+        foreach (['campo.htm' => $htm, 'campo.css' => $css, 'campo.js' => $js] as $archivo => $contenido) {
+            if (strlen((string)$contenido) > 20000) {
+                throw new Exception('motor:campos:' . $archivo . ':tamano');
+            }
+        }
+        if (is_array($datos) && !empty($datos['cargador'])) {
+            $datos['cargador'] = ['ranuras' => $this->validar_cargador($datos['cargador'])];
+        }
+
+        $ok = true;
+        foreach ([
+            ['datos.json', wp_json_encode($datos, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)],
+            ['campo.htm', (string)$htm],
+            ['campo.css', (string)$css],
+            ['campo.js', (string)$js],
+        ] as $par) {
+            $ok = $this->escribir_texto($this->ruta_campo($id, $par[0]), $par[1]) && $ok;
+        }
+        return $ok;
+    }
+
+    /** Escribe un archivo de texto de forma atomica (.tmp + rename). */
+    private function escribir_texto($ruta, $contenido)
+    {
+        $dir = dirname($ruta);
+        if (!is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        $tmp = $ruta . '.tmp';
+        if (@file_put_contents($tmp, (string)$contenido) === false) {
+            @unlink($tmp);
+            return false;
+        }
+        if (!@rename($tmp, $ruta)) {
+            @unlink($tmp);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Migracion one-shot del catalogo de campos v1 -> v2 (spec 012, D10/T001).
+     *
+     * La v1 guarda tuplas de 10 slots en campos.json:
+     *   [id, titulo, tipo, etiquetas[], ayuda, visible, contenido, css, script, array]
+     * La v2 deja campos.json como indice (items + meta) y el codigo en
+     * uploads/pmu/campos/{id}/.
+     *
+     * MAPEO (el admin debe revisarlo tras migrar):
+     *   titulo     -> nombre AND titulo_cliente (se conserva en los dos para que
+     *                 ni la tabla del admin ni el carrito queden vacios)
+     *   tipo       -> se descarta (ya no existe; el tipo vive en el placeholder)
+     *   etiquetas  -> meta.{id}.categorias
+     *   ayuda      -> datos.json.texto_ayuda
+     *   visible    -> se pierde (ya no se inyecta titulo; el HTML lo trae el admin)
+     *   contenido  -> campo.htm ; css -> campo.css ; script -> campo.js
+     *   array      -> datos.json.array
+     *   [id,"",""] -> items[id].baja = true (tombstone; NO se crea carpeta y el
+     *                 id queda ocupado para siempre: nunca se reutiliza)
+     *
+     * `creado` no es recuperable (v1 no lo guardaba): se pone la fecha de la
+     * migracion. `modificado` es time() y es el `?v=` del campo.
+     *
+     * IDEMPOTENTE (si version==2 no hace nada) y REVERSIBLE a mano: guarda
+     * campos.json.bak antes de escribir y, si algo falla, lo restaura (las
+     * carpetas {id}/ que hubieran quedado son inertes: el indice manda).
+     *
+     * @return array ['hecho'=>bool,'campos'=>int,'bajas'=>int,'motivo'=>string]
+     */
+    public function migrar_campos_v2()
+    {
+        $ruta = $this->ruta_campos();
+        if (!is_file($ruta)) {
+            return ['hecho' => true, 'campos' => 0, 'bajas' => 0, 'motivo' => 'sin catalogo'];
+        }
+        $crudo = (string)@file_get_contents($ruta);
+        $datos = $crudo === '' ? null : json_decode($crudo, true);
+        if (!is_array($datos) || !isset($datos['items']) || !is_array($datos['items'])) {
+            return ['hecho' => false, 'campos' => 0, 'bajas' => 0, 'motivo' => 'catalogo ilegible'];
+        }
+        if (isset($datos['version']) && (int)$datos['version'] >= 2) {
+            return ['hecho' => true, 'campos' => 0, 'bajas' => 0, 'motivo' => 'ya migrado'];
+        }
+
+        // 1) Backup antes de escribir cualquier cosa.
+        if (!$this->escribir_texto($ruta . '.bak', $crudo)) {
+            return ['hecho' => false, 'campos' => 0, 'bajas' => 0, 'motivo' => 'backup fallido'];
+        }
+
+        $items = [];
+        $meta = [];
+        $nCampos = 0;
+        $nBajas = 0;
+        $ahora = time();
+        try {
+            foreach ($datos['items'] as $t) {
+                if (!is_array($t) || !isset($t[0]) || (int)$t[0] < 1) {
+                    continue;
+                }
+                $id = (int)$t[0];
+                $titulo = isset($t[1]) ? (string)$t[1] : '';
+                $tipo = isset($t[2]) ? (string)$t[2] : '';
+
+                // Tombstone v1: [id, "", ""]. Se marca dado de baja, NO se crea
+                // carpeta y el id queda ocupado para siempre (nunca se reutiliza).
+                if (trim($titulo) === '' || trim($tipo) === '') {
+                    $items[] = ['id' => $id, 'plantilla' => '', 'baja' => true];
+                    $meta[(string)$id] = $this->meta_campo_migrado($ahora, []);
+                    $nBajas++;
+                    continue;
+                }
+
+                $etiquetas = [];
+                if (isset($t[3]) && is_array($t[3])) {
+                    foreach ($t[3] as $e) {
+                        $e = strtolower(trim(preg_replace('/[^a-z0-9_\-]+/i', '-', (string)$e), '-'));
+                        if ($e !== '') {
+                            $etiquetas[] = substr($e, 0, 32);
+                        }
+                    }
+                }
+                $tituloLimpio = substr(strip_tags($titulo), 0, 200);
+                $this->escribir_campo(
+                    $id,
+                    [
+                        'nombre' => $tituloLimpio,
+                        'descripcion' => '',
+                        'titulo_cliente' => $tituloLimpio,
+                        'texto_ayuda' => substr(strip_tags(isset($t[4]) ? (string)$t[4] : ''), 0, 500),
+                        'array' => isset($t[9]) && !empty($t[9]),
+                        'protegido' => false,
+                        'cargador' => null,
+                    ],
+                    isset($t[6]) ? (string)$t[6] : '',
+                    isset($t[7]) ? (string)$t[7] : '',
+                    isset($t[8]) ? (string)$t[8] : ''
+                );
+                $items[] = ['id' => $id, 'plantilla' => '', 'baja' => false];
+                $meta[(string)$id] = $this->meta_campo_migrado($ahora, $etiquetas);
+                $nCampos++;
+            }
+        } catch (\Throwable $e) {
+            $this->escribir_texto($ruta, $crudo); // reversion: vuelve a la v1
+            return ['hecho' => false, 'campos' => 0, 'bajas' => 0,
+                'motivo' => 'migracion:fallo:' . $e->getMessage()];
+        }
+
+        $indice = ['version' => 2, 'items' => $items, 'meta' => $meta, 'v1_migrado' => $ahora];
+        if (!$this->escribir_json($ruta, $indice)) {
+            $this->escribir_texto($ruta, $crudo); // reversion
+            return ['hecho' => false, 'campos' => 0, 'bajas' => 0, 'motivo' => 'indice no escribible'];
+        }
+        return ['hecho' => true, 'campos' => $nCampos, 'bajas' => $nBajas, 'motivo' => ''];
+    }
+
+    /** Bloque meta de un campo migrado (creado/modificado/categorias). */
+    private function meta_campo_migrado($ahora, array $categorias)
+    {
+        return [
+            'creado' => gmdate('Y-m-d\TH:i:s\Z', $ahora),
+            'modificado' => (int)$ahora,
+            'categorias' => array_values(array_unique($categorias)),
+        ];
     }
 
     /** Guarda el catalogo global de campos (atomico). Devuelve true/false. */
@@ -1479,13 +1895,38 @@ return $destino;
         return $out;
     }
 
-    /** op=sprite: persiste thumbs.webp del ambito (delega fisica a PMU_Galeria). */
+    /**
+     * op=sprite: persiste thumbs.webp del ambito (delega fisica a PMU_Galeria).
+     *
+     * RC46 / spec 009 (T004): la validacion de firma y dimensiones y la
+     * escritura de `thumbs.sprite_firma` ya no son exclusivas de `img`. Antes
+     * solo `img` certificaba, por lo que las hojas de `fonts` y `tm-presets`
+     * se persistian SIN certificar y la lectura canonica del cliente
+     * (TextMuyAPI.ensureSpriteCanonico) las rechazaba siempre: las galerias de
+     * tipografias y de estilos guardados mostraban el nombre del elemento en
+     * cada recarga y la hoja generada se perdia.
+     *
+     * Alcance (contrato contracts/motor-sprite.md): un ambito CERTIFICA solo si
+     *   (a) tiene catalogo (self::$CATALOGOS), y
+     *   (b) el cliente mando una `firma` NO vacia.
+     * `mockups` no cumple (b): assets/mockups.js no usa ThumbEngine ni la ruta
+     * canonica, asi que sigue por la rama simple (persistir sin tocar el
+     * catalogo). Por eso la condicion NO es `AMBITOS_GALERIA` sino la de arriba
+     * (esa era la ambiguedad de T004 en el tasks.md original).
+     *
+     * Orden de validacion (se conserva): firma -> dimensiones -> formato/tamano
+     * (los dos ultimos dentro de PMU_Galeria). Un fallo nunca deja certificada
+     * una hoja vieja: la firma se borra antes de reemplazar el archivo y solo
+     * se escribe al final, con exito.
+     */
     public function sprite($ambito, $file, $firma = '')
     {
         $op = 'sprite';
         $this->exigir_galeria($ambito, $op);
         $dir = $this->dir_ambito($ambito, true);
-        if ($ambito === 'img') {
+        $certifica = isset(self::$CATALOGOS[$ambito]) && (string)$firma !== '';
+
+        if ($certifica) {
             $res = $this->catalogo($ambito, $op);
             $cat = $res['cat'];
             $dims = $cat['thumbs'];
@@ -1510,6 +1951,8 @@ return $destino;
                 throw new Exception('motor:sprite:catalogo:desactualizado');
             }
             $cat['thumbs']['sprite_firma'] = (string)$firma;
+            // escribir_json (NO guardar_catalogo): esta es la escritura que
+            // CERTIFICA, y guardar_catalogo borraria la firma recien validada.
             if (!$this->escribir_json($this->ruta_catalogo($ambito), $cat)) {
                 throw new Exception('motor:sprite:catalogo:no_escribible');
             }
