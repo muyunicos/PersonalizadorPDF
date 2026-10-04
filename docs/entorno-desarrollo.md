@@ -128,3 +128,37 @@ No cambiar perfiles, PATH ni versiones sin evidencia de los pasos 1–3.
 
 - `AGENTS.md` §8–§10 (canónico técnico) y `.specify/memory/constitution.md` (jerarquía).
 - VS Code — *Terminal Profiles*: https://code.visualstudio.com/docs/terminal/profiles
+
+## 8. Cómo editar código en este repo sin romperlo
+
+Añadido 2026-10-03 tras una sesión en la que se rompieron 8 ficheros. La causa **no
+fue el shell**: fue escribir ficheros con scripts de shell dentro de PowerShell.
+
+### Reglas
+
+- **Editar con la herramienta de edición** (diff exacto). Es lo único que no sufre
+  escapado de shell.
+- **Nunca** escribir ficheros del repo con heredocs de bash, `Set-Content` sobre un
+  fichero existente, ni scripts de Node/PowerShell que reescriban el fichero entero.
+- Cambios grandes: pasos pequeños, con `php -l` / `node --check` **después de cada
+  paso**.
+- La terminal sirve para **leer, buscar y verificar**, no para escribir código.
+- Si algo se rompe: `git checkout -- <fichero>` y rehacerlo con el editor.
+
+### Por qué bash no es una opción aquí
+
+`bash.exe` del equipo (Git Bash) **falla**: avisa `could not find /tmp`. La
+terminal de VS Code y de Cline está fijada a **PowerShell** (`.vscode/settings.json`)
+y los scripts de Spec Kit se generan para `ps`. Usar sintaxis de bash aquí produce
+scripts que fallan de formas distintas en cada intento.
+
+### Equivalencias (lo único que hace falta recordar)
+
+| En vez de | Usar |
+|---|---|
+| `grep -r` | `Select-String -Path <ficheros> -Pattern '<texto>'` |
+| `find . -name` | `Get-ChildItem -Recurse -Include <ext>` |
+| `ls` | `Get-ChildItem` |
+| `cat f` | `Get-Content f` |
+| `/tmp/x` | `$env:TEMP\x` |
+| `cmd1 && cmd2` | `cmd1; cmd2` (o `&&`, que sí funciona en pwsh 7) |

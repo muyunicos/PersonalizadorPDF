@@ -587,6 +587,42 @@ entonces): si el conteo no da 21, revisar si la 009 ya entró.
 - ❌ NO DEBES: leer `form.action` del DOM con el patrón admin-post: usar
   `form.getAttribute('action')` (ver tabla §11).
 
+## 10.ter Cómo editar código aquí sin romperlo (2026-10-03)
+
+**Contexto**: en una sesión el shell pasó de bash a pwsh y, por seguir usando scripts
+heredoc de bash dentro de PowerShell, se rompieron 8 ficheros (caracteres comidos:
+nuevas lineas, parentesis, signo de dolar, angulos y comillas). Los tres commits
+siguientes, hechos con la herramienta de edicion, no rompieron nada. **La causa no
+fue el shell: fue usar scripts que reescriben ficheros completos.**
+
+### Reglas
+
+1. **Editar SIEMPRE con la herramienta de edicion** (diff exacto del texto). Es lo
+   unico que no sufre escapado de shell. **Nunca** generar ficheros con
+   heredocs de bash, con `Set-Content` sobre un fichero existente, ni con scripts
+   de Node o PowerShell que reescriban el fichero entero.
+2. **Cambios grandes**: en pasos de editor, y `php -l` / `node --check` **despues
+   de cada paso**, no al final.
+3. **`run_commands` es para LEER, buscar y verificar** (`Select-String`, `php -l`,
+   `node tests/...`, `git`). Si un comando necesita escribir un fichero del repo,
+   es que hay que usar el editor.
+4. **Antes de la primera tarea de código**, confirmar el shell:
+   `$PSVersionTable.PSVersion` → 7.x. Es un comando barato (§8).
+5. **Si algo se rompe**: `git checkout -- <fichero>` (el árbol está limpio y
+   pusheado) y rehacerlo con el editor. No intentar "arreglarlo" con más scripts.
+
+### Sintaxis del shell activo (PowerShell 7)
+
+```powershell
+Select-String -Path admin/*.php -Pattern 'texto'   # buscar (NO grep)
+Get-ChildItem -Recurse -Include *.php               # listar (NO find)
+php tests/texto_puente.php <fase>                   # ejecutar
+foreach ($f in @('a.js','b.js')) { node --check $f }  # bucle
+```
+
+**No usar** (sintaxis de bash, no existe en pwsh): `cat <<EOF`, `ls`, `grep`,
+`sed -i`, `&&` para encadenar (usar `;`), `/tmp/` (usar `$env:TEMP`).
+
 ## 10.bis Fuente unica de la version (spec 011, 2026-10-01)
 
 La version del plugin esta en **un solo sitio**: la cabecera `* Version:` de `personalizador-pdf.php`.

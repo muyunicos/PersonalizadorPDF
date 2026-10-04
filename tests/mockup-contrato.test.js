@@ -253,32 +253,35 @@ check('el editor reestablece el transform antes de la capa de edicion',
 // Ojo: node --check NO lo detecta (el literal JS es valido; el defecto es
 // semantico: jQuery espera HTML y recibe un selector). Los literales
 // concatenados con + se saltan: su cierre puede venir en la siguiente parte.
-// Se hace con indexOf, sin regex: el patron de apertura dentro de una
-// expresion regular abriria un grupo sin cerrar.
+// Se hace con indexOf y no con una expresion regular: el patron de apertura
+// es `$(` y dentro de una regex el parentesis abriria un grupo sin cerrar.
 var modulosCliente = ['assets/mockups.js', 'assets/admin.js', 'assets/tienda.js'];
+var APERTURA = "$('" + '<';   // $('<
+var COMILLA = "'";
+var CIERRE = '>';            // > de cierre de la etiqueta
+var MAS = '+';               // + de concatenacion
+var DOS_PUNTOS = ':';
 var literalesSinCierre = [];
 var literalesVistos = 0;
 modulosCliente.forEach(function (rel) {
     var codigo = leer(rel);
-    var APD = String.fromCharCode(36, 40) + String.fromCharCode(39, 60);
-    var CIERRE = String.fromCharCode(62);
-    var i = codigo.indexOf(APD);
+    var i = codigo.indexOf(APERTURA);
     while (i !== -1) {
-        var finLiteral = codigo.indexOf(String.fromCharCode(39), i + APD.length);
+        var finLiteral = codigo.indexOf(COMILLA, i + APERTURA.length);
         if (finLiteral === -1) { break; }
-        var html = codigo.slice(i + APD.length, finLiteral);
+        var html = codigo.slice(i + APERTURA.length, finLiteral);
         var resto = codigo.slice(finLiteral + 1);
-        var concat = String(resto).trim().charAt(0) === String.fromCharCode(43);
+        var concat = String(resto).trim().charAt(0) === MAS;
         literalesVistos++;
         if (!concat && html.charAt(html.length - 1) !== CIERRE) {
-            literalesSinCierre.push(rel + String.fromCharCode(58) + html.slice(0, 60));
+            literalesSinCierre.push(rel + DOS_PUNTOS + ' ' + html.slice(0, 60));
         }
-        i = codigo.indexOf(APD, finLiteral + 1);
+        i = codigo.indexOf(APERTURA, finLiteral + 1);
     }
 });
 check('ningun literal jQuery sin > de cierre (tag sin cerrar = selector)',
     literalesSinCierre.length === 0,
-    literalesSinCierre.join(String.fromCharCode(32, 124, 32)));
+    literalesSinCierre.join(' | '));
 check('el detector de etiquetas realmente recorre literales',
     literalesVistos >= 20,
     'solo vio ' + literalesVistos + ': el check seria inerte');
@@ -400,12 +403,12 @@ check('T032: el editor crea capas con el namespace mock:',
 // window.confirm en otro sitio del editor no dice nada de este.
 // Se acota a la FUNCION borrarImagenCatalogo: el aviso, la confirmacion, el
 // splice y la llamada al motor tienen que estar DENTRO de ella, no en el editor.
-var CR = String.fromCharCode(13);
-var NL = String.fromCharCode(10);
 // El editor esta en CRLF: se normaliza antes de recortar. La funcion se acota
 // hasta el comentario que la sigue (marcador estable), no contando llaves:
 // los cierres internos se confunden con el final.
-var edLn = ed.split(String.fromCharCode(13, 10)).join(NL);
+var NL = '\n';
+var CRLF = '\r\n';
+var edLn = ed.split(CRLF).join(NL);
 var iBorrar = edLn.indexOf('function borrarImagenCatalogo');
 var iFin = edLn.indexOf('/* Vista de cliente', iBorrar);
 if (iFin < 0) { iFin = edLn.length; }
