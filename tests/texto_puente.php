@@ -286,7 +286,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             break;
         case 'mockup_capas':
             // Spec 011: contrato de capa ampliado. `ref` con namespace
-            // (pdf:/img:) con lectura tolerante del plano legado, ajustes
+            // (pdf:/mock:) con lectura tolerante del plano legado, ajustes
             // ampliados con clamp por clave, y campos nuevos opcionales.
             // El handler de guardado termina en exit (wp_send_json): aqui, en el
             // shutdown, se relee lo que quedo en disco (mismo patron que mockup_preview).
@@ -307,8 +307,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('mockups guardados (con el vacio)', is_array($mc) && count($mc['mockups']) === 2);
             check('ref plano legado se lee como pdf:', is_array($mc)
                 && ($capas[0]['ref'] ?? '') === 'pdf:fondo.png');
-            check('ref del catalogo con namespace img:', is_array($mc)
-                && ($capas[1]['ref'] ?? '') === 'img:7');
+            check('ref del catalogo con namespace mock:', is_array($mc)
+                && ($capas[1]['ref'] ?? '') === 'mock:7');
             check('ref con traversal rechazado y capa fuera', is_array($mc) && count($capas) === 4);
             check('ajustes ampliados persistidos', is_array($mc)
                 && count((array)($capas[2]['filtros'] ?? [])) === 4
@@ -344,7 +344,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
 
         case 'mockup_preview':
             // Spec 011 (T021): la ficha recibe la composicion con la clave
-            // `imagenes` del catalogo (capas `img:{id}`), y la marca de vista
+            // `imagenes` del catalogo (capas `mock:{id}`), y la marca de vista
             // previa omisible se guarda desde el estado vigente del editor sin
             // tocar el resto de la configuracion.
             $mp = isset($GLOBALS['test_mp']) ? $GLOBALS['test_mp'] : null;
@@ -359,7 +359,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && $mp['render']['pdf'] === 'muestra');
             check('capas con namespace sobreviven al viaje a la ficha', is_array($mp)
                 && isset($mp['cfg']['mockups'][0]['capas'][0]['ref'])
-                && $mp['cfg']['mockups'][0]['capas'][0]['ref'] === 'img:3'
+                && $mp['cfg']['mockups'][0]['capas'][0]['ref'] === 'mock:3'
                 && $mp['cfg']['mockups'][0]['capas'][1]['ref'] === '0000FF#1');
             check('ajustes de la capa persistidos para la ficha', is_array($mp)
                 && (array)($mp['cfg']['mockups'][0]['capas'][1]['filtros'] ?? []) === ['gama' => 0, 'opacidad' => 90]);
@@ -2132,7 +2132,7 @@ switch ($fase) {
 
     case 'mockup_preview':
         // Spec 011 (T021): datos de render con el catalogo (para que una capa
-        // `img:{id}` se vea igual en la ficha que en el editor) y guardado del
+        // `mock:{id}` se vea igual en la ficha que en el editor) y guardado del
         // editor con la marca de vista previa omisible tomada del estado vigente.
         preparar_entorno($testBase, $base);
         $motor_mp = $p->motor_para_tests();
@@ -2158,7 +2158,7 @@ switch ($fase) {
                     'id' => 'fiesta',
                     'titulo' => 'Fiesta',
                     'capas' => [
-                        ['tipo' => 'img', 'ref' => 'img:3', 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300],
+                        ['tipo' => 'img', 'ref' => 'mock:3', 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300],
                         ['tipo' => 'placeholder', 'ref' => '0000FF#1', 'x' => 90, 'y' => 60,
                             'w' => 110, 'h' => 180, 'filtros' => ['gama' => 0, 'opacidad' => 90]],
                     ],
@@ -2202,7 +2202,7 @@ switch ($fase) {
                     ['tipo' => 'img', 'ref' => 'fondo.png', 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300,
                         'filtros' => ['brillo' => 100]],
                     // 1: imagen del catalogo por id numerico.
-                    ['tipo' => 'img', 'ref' => 'img:7', 'x' => 10, 'y' => 10, 'w' => 50, 'h' => 50],
+                    ['tipo' => 'img', 'ref' => 'mock:7', 'x' => 10, 'y' => 10, 'w' => 50, 'h' => 50],
                     // 2: ajustes ampliados + campos nuevos.
                     ['tipo' => 'placeholder', 'ref' => '0000FF#1', 'x' => 5, 'y' => 5, 'w' => 40, 'h' => 60,
                         'rot' => 400, 'sesgo' => 9, 'nombre' => 'Marco', 'modo' => 'multiply',

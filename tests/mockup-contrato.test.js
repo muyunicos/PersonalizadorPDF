@@ -218,7 +218,7 @@ pruebas.push(function () {
     };
     check('urlDeImagen: ref plano legado = foto del PDF', R.urlDeImagen('a.png', ctx) === 'u1');
     check('urlDeImagen: namespace pdf:', R.urlDeImagen('pdf:a.png', ctx) === 'u1');
-    check('urlDeImagen: namespace img: por id', R.urlDeImagen('img:3', ctx) === 'u3');
+    check('urlDeImagen: namespace mock: por id', R.urlDeImagen('mock:3', ctx) === 'u3');
     check('urlDeImagen: id inexistente', R.urlDeImagen('img:9', ctx) === '');
     check('esValida: grupo existente', R.esValida({ tipo: 'placeholder', ref: '0000FF' }, ctx) === true);
     check('esValida: grupo inexistente', R.esValida({ tipo: 'placeholder', ref: 'ABCDEF' }, ctx) === false);
@@ -365,6 +365,78 @@ check('T036: umbral de arrastre (un clic no reordena)',
 check('T036: la vista seleccionada sigue a su nueva posicion',
     ed.indexOf('estado.actual = hasta') !== -1
         && ed.indexOf('estado.actual = estado.actual - 1') !== -1);
+/* ============ Catalogo exclusivo de mockups (T032) ============ */
+
+var up = leer('inc/class-pmu-uploads.php');
+
+// El motor declara el ambito con su catalogo y su grilla de 40x40.
+check('T032: el motor declara el ambito mockups',
+    up.indexOf("'mockups'") !== -1 && up.indexOf('mockups.json') !== -1);
+check('T032: la grilla del ambito es 40x40',
+    up.indexOf("'mockups' => ['w' => 40, 'h' => 40") !== -1);
+
+// El validador de capas (mockup_ref_capa) es lo que importa: `img:` en otras
+// ramas (sprite, extensiones, certificacion) pertenece a otros ambitos. Se
+// acota a la FUNCION (hasta la siguiente `private function`), no al resto del
+// fichero: mas alla siguen branches legitimas de `img`.
+var iVal = up.indexOf('private function mockup_ref_capa');
+var validador = up.slice(iVal, up.indexOf('private function', iVal + 10));
+check('T032: el motor valida el namespace mock: en las capas',
+    validador.indexOf("if ($ambito === 'mock')") !== -1
+        && validador.indexOf("? 'mock:' . $id : ''") !== -1,
+    'sin esto el motor descarta toda capa de imagen al guardar');
+check('T032: el validador ya no acepta img: como namespace de capa',
+    validador.indexOf("if ($ambito === 'img')") === -1
+        && validador.indexOf("'img:' . $id") === -1,
+    'img: en un comentario no cuenta; lo que importa es el if del validador');
+
+// El editor escribe mock: al agregar una imagen del catalogo.
+check('T032: el editor crea capas con el namespace mock:',
+    ed.indexOf("ref: 'mock:' + it.id") !== -1
+        && ed.indexOf("var ref = 'mock:' + it.id") !== -1);
+
+// El borrado avisa cuantas capas usan la imagen antes de borrarla.
+// Ojo: el aviso se mira DENTRO de borrarImagenCatalogo; que exista un
+// window.confirm en otro sitio del editor no dice nada de este.
+// Se acota a la FUNCION borrarImagenCatalogo: el aviso, la confirmacion, el
+// splice y la llamada al motor tienen que estar DENTRO de ella, no en el editor.
+var CR = String.fromCharCode(13);
+var NL = String.fromCharCode(10);
+// El editor esta en CRLF: se normaliza antes de recortar. La funcion se acota
+// hasta el comentario que la sigue (marcador estable), no contando llaves:
+// los cierres internos se confunden con el final.
+var edLn = ed.split(String.fromCharCode(13, 10)).join(NL);
+var iBorrar = edLn.indexOf('function borrarImagenCatalogo');
+var iFin = edLn.indexOf('/* Vista de cliente', iBorrar);
+if (iFin < 0) { iFin = edLn.length; }
+var cuerpoBorrado = edLn.slice(iBorrar, iFin);
+check('T032: aviso al borrar una imagen en uso',
+    ed.indexOf('function capasQueUsan') !== -1
+        && cuerpoBorrado.indexOf('capa(s) de tus vistas') !== -1,
+    'borrar sin avisar deja capas apuntando a un id inexistente');
+check('T032: el aviso ofrece quitar las capas o cancelar',
+    // OJO: se exige el confirm del RAMO EN USO (`quitar = window.confirm(msg)`),
+    // no cualquier confirm: el `else if` de la imagen libre tambien tiene uno y
+    // por si solo no prueba que exista la pregunta que importa (FR-016).
+    cuerpoBorrado.indexOf('quitar = window.confirm(msg)') !== -1
+        && ed.indexOf('.ec-mk-mini-x') !== -1);
+check('T032: el borrado quita las capas que la usaban',
+    cuerpoBorrado.indexOf('splice') !== -1);
+
+// El borrado va por el endpoint del motor, scope mockups (dentro de la funcion).
+check('T032: el borrado usa el endpoint pmu_uploads con scope mockups',
+    ed.indexOf('function apiMotor') !== -1
+        && ed.indexOf("scope: 'mockups'") !== -1
+        && ed.indexOf('cfg.motorNonce') !== -1
+        && cuerpoBorrado.indexOf('apiMotor') !== -1,
+    'el aviso sin la llamada al motor no borra nada');
+
+// El arrastre al lienzo sube al catalogo, no a pdfs/{nombre}/mockups/.
+check('T032: arrastrar una imagen la sube al catalogo',
+    ed.indexOf("fd.append('scope', 'mockups')") !== -1
+        && ed.indexOf('personalizador_pdf_mockup_subir') === -1,
+    'la subida por arrastre debe usar el catalogo, no el handler retirado');
+
 /* ============ Ejecucion ============ */
 var i = 0;
 function correr() {

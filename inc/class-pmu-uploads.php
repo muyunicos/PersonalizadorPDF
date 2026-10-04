@@ -20,13 +20,17 @@ if (!defined('ABSPATH')) {
  */
 class PMU_Uploads
 {
-    private static $AMBITOS = ['fonts', 'img', 'pdfs', 'orders', 'tmp', 'tm-presets'];
-    private static $AMBITOS_GALERIA = ['fonts', 'img', 'tm-presets'];
+    private static $AMBITOS = ['fonts', 'img', 'mockups', 'pdfs', 'orders', 'tmp', 'tm-presets'];
+    private static $AMBITOS_GALERIA = ['fonts', 'img', 'mockups', 'tm-presets'];
 
     /** Nombre explicito del catalogo por ambito: NUNCA derivado del directorio. */
     private static $CATALOGOS = [
         'fonts' => 'fonts.json',
         'img' => 'img.json',
+        // Spec 011 (T032): catalogo EXCLUSIVO del editor de mockups. Sustituye
+        // a 'img' en las capas (namespace 'mock:{id}'): imagenes que solo se
+        // usan como foto o fondo de un mockup, no como recurso de texto.
+        'mockups' => 'mockups.json',
         'tm-presets' => 'presets.json',
     ];
 
@@ -37,6 +41,7 @@ class PMU_Uploads
     private static $THUMBS = [
         'fonts' => ['w' => 180, 'h' => 30, 'c' => 4],
         'img' => ['w' => 100, 'h' => 100, 'c' => 8],
+        'mockups' => ['w' => 40, 'h' => 40, 'c' => 12],
         'tm-presets' => ['w' => 200, 'h' => 100, 'c' => 4],
     ];
 
@@ -810,9 +815,11 @@ class PMU_Uploads
             $valor = substr($ref, $corte + 1);
         }
         $ambito = strtolower(trim($ambito));
-        if ($ambito === 'img') {
+        // Spec 011 (T032): 'mock:' es el catalogo EXCLUSIVO de mockups.
+        // 'img:' ya no se usa en capas (no hay mockups previos que migrar).
+        if ($ambito === 'mock') {
             $id = (int)$valor;
-            return $id > 0 ? 'img:' . $id : '';
+            return $id > 0 ? 'mock:' . $id : '';
         }
         if ($ambito !== 'pdf') {
             return '';

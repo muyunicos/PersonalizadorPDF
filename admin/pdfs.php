@@ -499,24 +499,13 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                     <?php // Fuente unica de la marca "vista previa omisible" (spec 011, FR-037):
                           // el editor la refleja y la guarda; el servidor normaliza con la
                           // regla vigente (sin mockups queda false). ?>
-                    <div class="ec-mockup-fotos-admin" data-pdf="<?php echo esc_attr($seleccionado); ?>">
-                        <p class="ec-block-label">Fotos de referencia <span class="description">(van en pdfs/<?php echo esc_html($this->nombre_de($seleccionado)); ?>/mockups/ y sirven de capa "Foto"; tambien podes arrastrarlas sobre el lienzo del editor)</span></p>
-                        <input type="file" class="ec-mockup-foto-input" accept="image/png,image/jpeg,image/gif,image/webp">
-                        <button type="button" class="button button-small ec-mockup-subir">Subir foto</button>
-                        <span class="ec-mockup-status" aria-live="polite"></span>
-                        <ul class="ec-mockup-fotos">
-                            <?php foreach ($fotos_mockup as $f_nombre => $f_url) : ?>
-                                <li data-foto="<?php echo esc_attr($f_nombre); ?>">
-                                    <img src="<?php echo esc_url($f_url); ?>" alt="">
-                                    <span class="ec-mockup-foto-nombre"><?php echo esc_html($f_nombre); ?></span>
-                                    <button type="button" class="button button-small button-link-delete ec-mockup-borrar">Borrar</button>
-                                </li>
-                            <?php endforeach; ?>
-                        </ul>
-                        <?php if (!$fotos_mockup) : ?>
-                            <p class="description ec-mockup-fotos-vacio">Todavia no hay fotos. Sube una o arrastrala sobre el lienzo del editor.</p>
-                        <?php endif; ?>
-                    </div>
+                    <p class="description">
+                        Las imagenes que uses como capa van en el catalogo de mockups
+                        (<strong>Imagenes de mockup</strong>, en el panel derecho del editor): ese catalogo es
+                        exclusivo de los mockups y es el unico que puede borrar. Arrastrar una imagen
+                        sobre el lienzo la sube al catalogo y crea la capa.</p>
+                    <?php // Spec 011 T032: las "fotos de referencia" (pdfs/{nombre}/mockups/) se retiraron.
+                          // El catalogo `mockups` las reemplaza como unica fuente de imagenes de capa. ?>
                     <?php // El editor (assets/mockups.js) se inyecta al inicio de este
                           // acordeon y es el UNICO listado de mockups: el bloque PHP
                           // duplicado se elimino en la spec 011 (FR-031). ?>

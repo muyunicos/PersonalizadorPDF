@@ -620,61 +620,11 @@ jQuery(function ($) {
             });
     });
 
-    /* ============ 3b. Fotos de mockup (subir/borrar sin recarga) ============ */
-
-    /** Reconstruye la lista del acordeon y avisa al editor (lee datos.fotos). */
-    function refrescarFotosMockup(fotos) {
-        fotos = fotos || {};
-        var $ul = $('.ec-mockup-fotos').empty();
-        Object.keys(fotos).forEach(function (nombre) {
-            $('<li>').attr('data-foto', nombre)
-                .append($('<img alt="">').attr('src', fotos[nombre]))
-                .append($('<span class="ec-mockup-foto-nombre"></span>').text(nombre))
-                .append($('<button type="button" class="button button-small button-link-delete ec-mockup-borrar">Borrar</button>'))
-                .appendTo($ul);
-        });
-        $('.ec-mockup-fotos-vacio').toggle(!Object.keys(fotos).length);
-        if (cfgGlobal.mockups) { cfgGlobal.mockups.fotos = fotos; }
-    }
-
-    $(document).on('click', '.ec-mockup-subir', function () {
-        var $caja = $(this).closest('.ec-mockup-fotos-admin');
-        var $input = $caja.find('.ec-mockup-foto-input');
-        var $status = $caja.find('.ec-mockup-status').removeClass('ec-ok ec-error');
-        var file = $input[0] && $input[0].files ? $input[0].files[0] : null;
-        if (!file) { $status.addClass('ec-error').text('Elegi una imagen desde tu PC.'); return; }
-        $status.text('Subiendo...');
-        pmuPost('personalizador_pdf_mockup_subir', [
-            ['archivo', String($caja.data('pdf') || '')],
-            ['foto', file]
-        ], NONCES.mockup_subir || '')
-            .then(function (res) {
-                $status.addClass('ec-ok').text('Foto subida ✓');
-                $input.val('');
-                refrescarFotosMockup(res.data && res.data.fotos);
-            })
-            .catch(function (err) {
-                $status.addClass('ec-error').text((err && err.message) || 'No se pudo subir la foto.');
-            });
-    });
-
-    $(document).on('click', '.ec-mockup-borrar', function () {
-        var $caja = $(this).closest('.ec-mockup-fotos-admin');
-        var nombre = String($(this).closest('li').data('foto') || '');
-        if (!nombre || !window.confirm('¿Borrar la foto "' + nombre + '"?')) { return; }
-        var $status = $caja.find('.ec-mockup-status').removeClass('ec-ok ec-error').text('Borrando...');
-        pmuPost('personalizador_pdf_mockup_borrar', [
-            ['archivo', String($caja.data('pdf') || '')],
-            ['foto', nombre]
-        ], NONCES.mockup_borrar || '')
-            .then(function (res) {
-                $status.addClass('ec-ok').text('Foto borrada.');
-                refrescarFotosMockup(res.data && res.data.fotos);
-            })
-            .catch(function (err) {
-                $status.addClass('ec-error').text((err && err.message) || 'No se pudo borrar la foto.');
-            });
-    });
+    /* ============ 3b. Fotos de mockup ============ */
+    // Retirado en la spec 011 (T032): el catalogo `mockups` es ahora la unica
+    // fuente de imagenes de capa y lo gestiona el editor (assets/mockups.js),
+    // que conoce las capas y por eso puede avisar de cuantas usan una imagen.
+    // Ver `borrarImagenCatalogo()` en mockups.js.
 
     /* ============ 3c. Smoke test de la pestana Test ============ */
 

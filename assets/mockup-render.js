@@ -181,7 +181,7 @@
             valor = refCrudo.slice(corte + 1);
         }
         var ctx = contexto || {};
-        if (ambito === 'img') {
+        if (ambito === 'mock') {
             var id = parseInt(valor, 10);
             if (isNaN(id)) { return ''; }
             var encontrado = '';

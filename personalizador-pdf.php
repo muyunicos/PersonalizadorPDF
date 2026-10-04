@@ -826,7 +826,8 @@ class Personalizador_PDF_Plugin
     }
 
     /**
-     * Inventario del catalogo `img` para el editor de mockups y la ficha.
+     * Inventario del catalogo `mockups` (exclusivo del editor de mockups,
+     * spec 011 T032) para el editor y la ficha.
      * Devuelve `[{id, file, title, cats, url}]` con fisicos verificados
      * (cero 404) y **nunca lanza**: un catalogo ilegible deja la lista vacia y
      * el resto de la consola sigue operativa.
@@ -834,7 +835,7 @@ class Personalizador_PDF_Plugin
     private function mockup_catalogo_imagenes()
     {
         try {
-            $items = $this->pmu_uploads()->listar('img')['items'] ?? [];
+            $items = $this->pmu_uploads()->listar('mockups')['items'] ?? [];
         } catch (\Throwable $e) {
             return [];
         }

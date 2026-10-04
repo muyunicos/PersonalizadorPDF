@@ -76,6 +76,31 @@ jQuery(function ($) {
         return estado.seleccion >= 0 ? (c[estado.seleccion] || null) : null;
     }
     /** Contexto para el nucleo: fotos del PDF + catalogo + grupos. */
+    /**
+     * Cliente del endpoint `pmu_uploads` (scope=mockups) para el catalogo
+     * exclusivo del editor. Reusa el nonce y la URL que el admin ya pasa.
+     */
+    function apiMotor(op, params) {
+        if (!cfg.motorUrl || !cfg.motorNonce) {
+            return Promise.reject(new Error('El catalogo no esta disponible. Recarga la pagina.'));
+        }
+        var fd = new FormData();
+        fd.append('op', op);
+        Object.keys(params || {}).forEach(function (k) {
+            fd.append(k, params[k]);
+        });
+        fd.append('_wpnonce', cfg.motorNonce);
+        return fetch(cfg.motorUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                if (!j || j.success !== true) {
+                    var m = (j && typeof j.data === 'string' && j.data) || 'No se pudo completar.';
+                    throw new Error(m);
+                }
+                return j;
+            });
+    }
+
     function contexto() {
         return { fotos: datos.fotos || {}, imagenes: datos.imagenes || [], grupos: grupos };
     }
@@ -188,7 +213,7 @@ jQuery(function ($) {
             '        <p class="ec-mk-vacio">Arrastra un archivo de imagen sobre el lienzo para subirlo y usarlo.</p>' +
             '      </div>' +
             '      <div class="ec-mk-panel">' +
-            '        <h4>Catalogo de imagenes</h4>' +
+            '        <h4>Imagenes de mockup</h4>' +
             '        <input type="search" class="ec-mk-buscar ec-mk-buscar-catalogo" placeholder="Buscar imagenes...">' +
             '        <ul class="ec-mk-minis ec-mk-catalogo"></ul>' +
             '        <p class="ec-mk-vacio">Sin imagenes en el catalogo del proyecto.</p>' +
@@ -749,14 +774,16 @@ jQuery(function ($) {
         $ed.find('.ec-mk-catalogo').siblings('.ec-mk-vacio')
             .toggle(!(datos.imagenes || []).length);
         items.forEach(function (it) {
-            var ref = 'img:' + it.id;
+            var ref = 'mock:' + it.id;
             var $li = $('<li>').toggleClass('ec-mk-mini', true)
                 .toggleClass('ec-usada', !!usadas[ref])
                 .attr('tabindex', '0').attr('role', 'button')
                 .attr('data-img', it.id)
-                            .attr('aria-label', 'Agregar '
-                                + etiquetaInstancia(g.id, n) + ' de ' + g.w
-                                + ' por ' + g.h + ' pixeles')
+                .attr('aria-label', 'Agregar la imagen '
+                    + (it.title || it.file) + ' como capa')
+                    .append($('<button type="button" class="ec-mk-mini-x">')
+                        .attr('aria-label', 'Borrar la imagen ' + (it.title || it.file))
+                        .text('×'));
             $li.append($('<span>').text(it.title || it.file));
             $ul.append($li);
         });
@@ -897,7 +924,7 @@ jQuery(function ($) {
         var it = (datos.imagenes || []).filter(function (x) { return String(x.id) === String(id); })[0];
         if (!it) { return; }
         agregarCapa({
-            tipo: 'img', ref: 'img:' + it.id, x: 0, y: 0, w: LIENZO, h: LIENZO,
+            tipo: 'img', ref: 'mock:' + it.id, x: 0, y: 0, w: LIENZO, h: LIENZO,
             rot: 0, sesgo: 0, filtros: {}, modo: 'normal',
             nombre: it.title || it.file, oculta: false, bloqueada: false
         });
@@ -1275,6 +1302,66 @@ jQuery(function ($) {
         agregarPlaceholder($(this).attr('data-grupo'),
             parseInt($(this).attr('data-instancia'), 10) || 1);
     });
+    /* El boton de borrar vive dentro de la miniatura: sin stopPropagation el
+       clic llegaria tambien al manejador de la miniatura y crearia la capa. */
+    $ed.on('click', '.ec-mk-mini-x', function (ev) {
+        ev.stopPropagation();
+        borrarImagenCatalogo($(this).attr('data-borrar-img'));
+    });
+    /* Borrado de una imagen del catalogo de mockups (T032). Antes de borrar
+       pregunta cuantas capas la usan y ofrece quitarla de ellas o cancelar:
+       sin esto, un borrado dejaba capas apuntando a un id inexistente y el
+       lienzo mostraba la caja neutra sin explicar por que (FR-016). */
+    function capasQueUsan(id) {
+        var ref = 'mock:' + id;
+        var out = [];
+        estado.mockups.forEach(function (m, mi) {
+            (m.capas || []).forEach(function (c, ci) {
+                if (c.tipo === 'img' && String(c.ref) === ref) {
+                    out.push([mi, ci]);
+                }
+            });
+        });
+        return out;
+    }
+
+    function borrarImagenCatalogo(id) {
+        var it = (datos.imagenes || []).filter(function (x) {
+            return String(x.id) === String(id);
+        })[0];
+        if (!it) { return; }
+        var uso = capasQueUsan(id);
+        var quitar = false;
+        if (uso.length) {
+            var msg = 'La imagen ' + (it.title || it.file) + ' la usan '
+                + uso.length + ' capa(s) de tus vistas. Quitarla y borrar?'
+            quitar = window.confirm(msg);
+            if (!quitar) { return; }
+        } else if (!window.confirm('Borrar la imagen "'
+                + (it.title || it.file) + '"?')) {
+            return;
+        }
+        if (quitar) {
+            uso.forEach(function (par) {
+                var capasVista = estado.mockups[par[0]].capas;
+                capasVista.splice(par[1], 1);
+            });
+            estado.seleccion = -1;
+        }
+        apiMotor('baja', { scope: 'mockups', id: id })
+            .then(function () {
+                datos.imagenes = (datos.imagenes || []).filter(function (x) {
+                    return String(x.id) !== String(id);
+                });
+                marcarPaso();
+                sinGuardar();
+                refrescar();
+            })
+            ['catch'](function (e) {
+                if (aviso) { aviso($ed.closest('.card, .wrap'), (e && e.message) || 'No se pudo borrar.', true); }
+            });
+    }
+
     $ed.on('click', '.ec-mk-grupo', function () {
         agregarPlaceholder($(this).attr('data-grupo'), 0);
     });
@@ -1329,28 +1416,42 @@ jQuery(function ($) {
             avisar('Ese archivo no es una imagen admitida.');
             return;
         }
-        if (!api) {
-            avisar('pmu-core no cargado (admin.js). Recarga la pagina.');
+        if (!cfg.motorUrl || !cfg.motorNonce) {
+            avisar('El catalogo de mockups no esta disponible. Recarga la pagina.');
             return;
         }
         $ed.find('.ec-mk-estado').removeClass('ec-guardado ec-sin-guardar')
-            .addClass('ec-guardando').text('Subiendo foto...');
-        var pares = [
-            ['archivo', datos.pdf + '.pdf'],
-            ['foto', archivo]
-        ];
-        api('personalizador_pdf_mockup_subir', pares,
-            cfg.nonceAccion ? cfg.nonceAccion.mockup_subir : (cfg.nonceMockups || ''))
+            .addClass('ec-guardando').text('Subiendo imagen...');
+        // Spec 011 (T032): la imagen va al catalogo `mockups` (no a
+        // `pdfs/{nombre}/mockups/`), que es la unica fuente de imagenes de capa.
+        var fd = new FormData();
+        fd.append('op', 'alta');
+        fd.append('scope', 'mockups');
+        fd.append('title', String(archivo.name || 'Imagen'));
+        fd.append('file', archivo, String(archivo.name || 'imagen'));
+        fd.append('_wpnonce', cfg.motorNonce);
+        fetch(cfg.motorUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
             .then(function (j) {
-                var fotos = (j && j.data && j.data.fotos) ? j.data.fotos : {};
-                datos.fotos = fotos;
-                var nombres = Object.keys(fotos);
-                agregarFoto(nombres[nombres.length - 1] || String(archivo.name));
+                if (!j || j.success !== true) {
+                    throw new Error((j && typeof j.data === 'string' && j.data) || 'No se pudo subir.');
+                }
+                // `op=alta` responde `{id, nombre, url}` (PMU_Uploads::alta).
+                // Se relee el catalogo para no inventar el item: el servidor es
+                // la autoridad del id y de la url.
+                var id = j.data && j.data.id !== undefined ? j.data.id : null;
+                if (id === null) {
+                    throw new Error('La imagen se subio pero no volvio en el catalogo.');
+                }
+                return apiMotor('listar', { scope: 'mockups' }).then(function (lj) {
+                    datos.imagenes = (lj && lj.data && lj.data.items) ? lj.data.items : [];
+                    agregarCatalogo(id);
+                });
             })
-            .catch(function (e) {
+            ['catch'](function (e) {
                 estado.guardado = 'error';
                 $ed.find('.ec-mk-estado').text(
-                    (e instanceof Error && e.message) ? e.message : 'No se pudo subir la foto.');
+                    (e instanceof Error && e.message) ? e.message : 'No se pudo subir la imagen.');
             });
     }
 
