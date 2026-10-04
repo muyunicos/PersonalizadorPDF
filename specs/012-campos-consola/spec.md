@@ -269,6 +269,16 @@ plantilla con la que se creo y por su HTML. El enum viejo (`text|textarea|select
   campo, el contexto, contar, etc.). Con el global libre, cualquier regla es posible, y el sistema no
  opiniona sobre como mostrar las cosas: solo guarda y pinta.
 
+- **D22 - Exportar/importar el catalogo de campos queda FUERA de alcance.** El usuario lo decide el
+  2026-10-04 ("export/import no es necesario"). Consecuencias:
+  - **FR-021 y FR-022 no se implementan** y el codigo de `b146952` (los dos `admin_post`, sus dos
+    handlers, los dos forms de la consola y su JS) **se retira por completo**: queda cero rastro.
+  - `uploads/pmu/campos.json` + `campos/{id}/` sigue siendo la **unica** via de datos de los campos.
+  - El backup es una **copia de `uploads/pmu/`** (los campos son datos del administrador, igual que
+    los PDFs, las imagenes o los presets), no una funcion de la consola.
+  - **Sin cambios en el resto**: migracion v1→v2, CRUD, restaurar, duplicar, plantillas, preview y
+    el global siguen igual. La decision no toca el motor ni el ciclo del comprador.
+
 ## User Scenarios
 
 ### US1 - Editor en linea (P1)

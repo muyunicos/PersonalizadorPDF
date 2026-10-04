@@ -19,6 +19,20 @@ $aviso_campos = '';
 list(, $aviso_campos) = $this->campos_activos();
 $post_url = admin_url('admin-post.php');
 $plantillas = ['texto' => 'Texto', 'select' => 'Opciones', 'imagen' => 'Imagenes (cargador)'];
+
+// CSS/JS global del plugin (spec 012, T020). Se lee siempre: si el admin no
+// puede escribirlo, el aviso sale al ABRIR la pestana y no al guardar.
+$global_css = '';
+$global_js = '';
+$aviso_global = '';
+try {
+    $global = $this->pmu_uploads()->leer_global();
+    $global_css = $global['css'];
+    $global_js = $global['js'];
+} catch (\Throwable $e) {
+    $aviso_global = $e->getMessage();
+}
+$global_css_prefijo = $aviso_global === '' ? $this->css_global_prefijo($global_css) : '';
 ?>
 <noscript>
     <div class="notice notice-warning">
@@ -30,21 +44,43 @@ $plantillas = ['texto' => 'Texto', 'select' => 'Opciones', 'imagen' => 'Imagenes
     <div class="notice notice-warning"><p><strong>Aviso de recursos:</strong> <?php echo esc_html($aviso_campos); ?></p></div>
 <?php endif; ?>
 
+<?php if ($aviso_global !== '') : ?>
+    <div class="notice notice-error"><p><strong>No se pudo leer el CSS/JS global:</strong>
+        <?php echo esc_html($aviso_global); ?></p></div>
+<?php endif; ?>
+
+<?php /* Portador del CSS global YA prefijado: el preview (srcdoc) lo lee de
+        ahi para mostrar exactamente lo que vera el comprador (FR-006). Va como
+        script type="text/css" a proposito: el navegador NO lo aplica en la
+        consola, solo lo transporta. */ ?>
+<script type="text/css" id="pmu-campo-global-css"><?php
+    echo str_replace('</', '<\\/', $global_css_prefijo); // phpcs:ignore WordPress.Security.EscapeOutput
+?></script>
+
+<div class="card">
+    <h2>Estilos globales / Script global</h2>
+    <p class="description">Un solo par de archivos para <strong>todo</strong> el plugin
+        (<code>uploads/pmu/campos/global.css</code> y <code>global.js</code>). Se cargan solo en las
+        fichas que tienen al menos un campo. El CSS se inyecta <strong>prefijado</strong> con
+        <code>[data-pmu-panel]</code>, asi que no puede romper el tema. El <code>global.js</code> es
+        codigo libre tuyo y corre <strong>antes</strong> de montar los campos: ahi se resuelve el
+        <code>cliente</code> que el campo no publica (el sistema no traduce nada por si solo).</p>
+    <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo-global">
+        <input type="hidden" name="action" value="personalizador_pdf_campo_global">
+        <?php wp_nonce_field('personalizador_pdf_campo'); ?>
+        <p><label><strong>global.css</strong><br>
+            <textarea name="global_css" rows="6" class="large-text code ec-campo-global-css"
+                spellcheck="false" placeholder=".mi-clase { color: #333; }"><?php echo esc_textarea($global_css); ?></textarea></label></p>
+        <p><label><strong>global.js</strong><br>
+            <textarea name="global_js" rows="6" class="large-text code ec-campo-global-js"
+                spellcheck="false" placeholder="window.PMU_CAMPO = window.PMU_CAMPO || {};"><?php echo esc_textarea($global_js); ?></textarea></label></p>
+        <?php submit_button('Guardar estilos globales', 'secondary', 'submit', false); ?>
+        <span class="ec-campo-status" aria-live="polite"></span>
+    </form>
+</div>
+
 <div class="card">
     <h2>Nuevo campo</h2>
-    <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo-importar">
-        <input type="hidden" name="action" value="personalizador_pdf_campo_importar">
-        <?php wp_nonce_field('personalizador_pdf_campo'); ?>
-        <input type="file" name="archivo" accept=".json,application/json">
-        <button type="submit" class="button">Importar campos</button>
-        <span class="ec-campo-status" aria-live="polite"></span>
-    </form>
-    <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo-exportar">
-        <input type="hidden" name="action" value="personalizador_pdf_campo_exportar">
-        <?php wp_nonce_field('personalizador_pdf_campo'); ?>
-        <button type="submit" class="button">Exportar campos (.json)</button>
-        <span class="ec-campo-status" aria-live="polite"></span>
-    </form>
     <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo">
         <input type="hidden" name="action" value="personalizador_pdf_campo">
         <?php wp_nonce_field('personalizador_pdf_campo'); ?>

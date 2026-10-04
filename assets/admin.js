@@ -774,37 +774,17 @@ jQuery(function ($) {
         function nonceC() {
             return (window.PMUCampos && window.PMUCampos.nonce) || '';
         }
-        $('form.ec-form-campo-importar').on('submit', function (ev) {
-            ev.preventDefault();
-            var $f = $(this);
-            var archivo = $f.find('input[type=file]')[0];
-            if (!archivo || !archivo.files || !archivo.files[0]) {
-                $f.find('.ec-campo-status').addClass('ec-error').text('Elegi un archivo .json.');
-                return;
-            }
-            if (!window.confirm('Importar agrega TODOS los campos del archivo. Si algun id ya existe, se rechaza el archivo completo. ¿Seguir?')) {
-                return;
-            }
-            var fd = new FormData();
-            fd.append('archivo', archivo.files[0]);
-            fd.append('action', $f.find('input[name=action]').val() || 'personalizador_pdf_campo_importar');
-            fd.append('_wpnonce', $f.find('input[name=_wpnonce]').val() || '');
-            $f.find('.ec-campo-status').removeClass('ec-ok ec-error').text('Importando…');
-            fetch(POST_URL, { method: 'POST', body: fd, credentials: 'same-origin' })
-                .then(function (r) { return r.json(); })
-                .then(function (json) {
-                    var $s = $f.find('.ec-campo-status');
-                    if (!json || json.success !== true) {
-                        $s.addClass('ec-error').text((json && json.data) || 'No se pudo importar.');
-                        return;
-                    }
-                    $s.addClass('ec-ok').text('Importados ' + (json.data.creados || 0) + ' campo(s).');
-                    window.setTimeout(function () { window.location.reload(); }, 800);
-                })
-                .catch(function () {
-                    $f.find('.ec-campo-status').addClass('ec-error').text('Error de red al importar.');
-                });
-        });
+
+        /* ============ CSS/JS global del plugin (spec 012, T020) ============
+           El form del global usa su propia action, asi que no entra en
+           enlazarFormularios(). Se enlaza aqui (NO dentro de otro submit):
+           pmuForm REGISTRA el handler, y llamarlo desde un submit lo agrega
+           tarde, con lo que el POST nunca sale. Al guardar recarga: el
+           portador del preview lo imprime el servidor y debe quedar al dia. */
+        pmuForm($('form.ec-form-campo-global'), 'personalizador_pdf_campo_global',
+            nonceC(), function () {
+                window.setTimeout(function () { window.location.reload(); }, 600);
+            });
 
         // Marcar / desmarcar como plantilla reutilizable (T016).
         $(document).on('click', '.ec-c-acciones .ec-marcar', function (ev) {
@@ -888,17 +868,34 @@ jQuery(function ($) {
             };
         }
 
+        /**
+         * CSS global YA prefijado con [data-pmu-panel], que el servidor imprime
+         * en un <script type="text/css"> (spec 012, FR-006). El navegador no lo
+         * aplica en la consola: solo lo transportamos al iframe. `<\/` era el
+         * escape del portador; se deshace al leer.
+         */
+        function cssGlobalPortador() {
+            var el = document.getElementById('pmu-campo-global-css');
+            return el ? String(el.textContent || '').replace(/<\\\//g, '</') : '';
+        }
+
         function construirPreview(campo, $status) {
             var enlaces = hojasDelTema().map(function (h) {
                 return '<link rel="stylesheet" href="' + escapar(h) + '">';
             }).join('\n');
+            var globalCss = cssGlobalPortador();
             var doc = '<!DOCTYPE html><html><head><meta charset="utf-8">'
                 + enlaces
                 + '<style>body{margin:0;padding:12px;font:14px/1.4 system-ui,sans-serif;background:#fff}'
                 + '.pmu-campo{border:1px dashed #c3c4c7;padding:8px;margin:0 0 10px}'
                 + '.ec-pv-dato{font:11px/1.3 monospace;color:#50575e;margin-top:8px}'
-                + '</style></head><body>'
-                + '<div id="pmu-preview"></div>'
+                + '</style>'
+                // El global va DESPUES del CSS de la consola: si no, el borde
+                // punteado de .pmu-campo ganaria por orden de cascada.
+                + (globalCss ? '<style>' + globalCss + '</style>' : '')
+                + '</head><body>'
+                // data-pmu-panel: es el ancla que exige el CSS global prefijado.
+                + '<div id="pmu-preview" data-pmu-panel></div>'
                 + '<div class="ec-pv-dato" id="pmu-preview-dato">valor: - | cliente: -</div>'
                 + '<script>window.PMUCampo = ' + JSON.stringify(PMUCampo) + ';</script>'
                 + '</body></html>';

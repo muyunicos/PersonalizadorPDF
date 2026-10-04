@@ -49,7 +49,9 @@
 - [X] T010 [US2] `assets/tienda.js`: `montarCampos()` ahora **delega en `PMUCampo.montar()`** (se borro su copia de `contextoRaiz` y del montaje; sigue exportando `PURO`); avisa por consola si falta el modulo. `assets_ficha()` encola `campo-montar.js` **antes** de `tienda.js`. `campos_panel()` entrega los nombres v2 (`htm`/`js`), acepta la tupla v1 (arnes legacy) y **excluye los campos `protegido`** (FR-040).
 - [X] T011 [US2] Boton **"Probar"** por fila: `<iframe srcdoc>` de **350px** (el `max-width` real de `.pmu-panel`) que enlaza las hojas de estilo ya presentes en la pagina, monta el campo con `PMUCampo.montar()` y muestra en vivo el par `valor`/`cliente`. El iframe aisla un CSS runaway (FR-004, FR-005, FR-007, FR-008). Verificado en el lab: monta el HTML, ejecuta el JS y aplica el CSS **sin tocar la pagina**. `admin.css` gana el bloque `.ec-pv*`.
 - [X] T012 [US2] `tests/campos-contrato.test.js` (NUEVO): corre el modulo en un `vm` con DOM minimo; verifica las reglas de salida, que `tienda.js` delega en el, que NO se inyecta titulo, que NO se traduce y que acepta los nombres legacy. **CAMPOS CONTRATO OK.**
-- [ ] T011b [US2] FR-006 (el `global.css` con prefijo `[data-pmu-panel]`) y FR-009 (el "Probar" de un campo **con cargador** dibuja las ranuras sin subir nada) dependen de F5 (T018-T020) y F6 (T021-T023); quedan ahi.
+- [ ] T011b [US2] FR-009 (el "Probar" de un campo **con cargador** dibuja las ranuras sin subir nada)
+  depende de F6 (T021-T023) y queda ahi. FR-006 (el `global.css` con prefijo `[data-pmu-panel]`,
+  tambien en el preview) **ya se cerro en T019**.
 
 ## Fase 3 - US3 Buscar / filtrar / ordenar
 
@@ -69,22 +71,30 @@
   fila nueva, que se inserta con la misma fuente unica del markup). Botones `Plantilla`/`Duplicar`
   por fila (FR-017…FR-020). JS: `window.PMUCampos` publica el nonce y los ayudantes para que los
   bloques externos los alcancen.
-- [X] T017 [US4] Handlers `personalizador_pdf_campo_exportar` (descarga `campos-{fecha}.json`
-  autocontenido: indice + meta + codigo de cada campo) y `personalizador_pdf_campo_importar`
-  (**todo-o-nada**: valida sandbox/HTML/tamanos/cargador de todo el lote antes de escribir; rechaza
-  con `motor:campos:importar:id:ocupado` si algun id existe). La UI exporta por POST nativo (una
-  descarga no pasa por `fetch`/JSON) y el importar sube el `.json` con confirmacion (FR-021/FR-022).
+- [~] T017 [US4] **FUERA DE ALCANCE (decidido por el usuario, 2026-10-04): exportar/importar el
+  catalogo de campos no es necesario.** FR-021/FR-022 quedan sin implementar y el codigo hecho en
+  `b146952` se **retiro** por completo (2 `admin_post`, 2 handlers, 2 forms y su JS). Consecuencia:
+  `uploads/pmu/campos.json` + `campos/{id}/` sigue siendo la UNICA via de datos, y el backup es una
+  copia de `uploads/pmu/`.
 
 ## Fase 5 - US5 CSS/JS global
 
-- [ ] T018 [US5][P] `PMU_Uploads` + handler `_global`: leer/escribir `uploads/pmu/campos/global.css` y
-  `global.js` (crea vacios si no existen; causa `motor:campos:global:no_escribible`).
-- [ ] T019 [US5] `assets_ficha()`: si el panel tiene >=1 campo, inyecta `<style>` con el `global.css`
-  prefijado `[data-pmu-panel]` y encola el `global.js` **antes** de `campo-montar` (garantizado por
-  D21: el global es codigo libre del admin y solo se promete el orden, no una API). **Sin**
-  `traducir()` ni `tablas`: el sistema no traduce nada. Si no hay campos, no carga nada (FR-023…FR-027).
-- [ ] T020 [US5] `admin/campos.php`: tarjeta "Estilos globales / Script global" arriba, con guardado
-  por `pmuPost`. Test: fase `campo_global`. Puerta: `campos-contrato.test.js`.
+- [X] T018 [US5][P] `PMU_Uploads::leer_global()`/`guardar_global()`: `uploads/pmu/campos/global.css` y
+  `global.js` (crea vacios si no existen; causa `motor:campos:global:no_escribible`, tope de 20 000
+  caracteres como los campos). El global **no** pasa por el sandbox ni por la firma
+  `function(ctx, root)`: es codigo libre del admin (D21), no un `campo.js`.
+- [X] T019 [US5] `assets_ficha($n_campos)`: con >=1 campo inyecta el `global.css` como `<style>` con
+  cada selector prefijado por `[data-pmu-panel]` (`css_global_prefijo()`, que recursa en
+  `@media`/`@supports`/`@layer`/`@container` y deja verbatim `@import`/`@font-face`/`@keyframes`) y
+  engancha el `global.js` con `wp_add_inline_script(..., 'before')` sobre `campo-montar`: ese es el
+  **unico** orden prometido (D21). Sin `traducir()` ni tabla. `campos_de_la_consulta()` resuelve el
+  conteo en `wp_enqueue_scripts`, que corre antes de que el panel se pinte. FR-023…FR-027.
+- [X] T020 [US5] `admin/campos.php`: tarjeta "Estilos globales / Script global" **arriba** (FR-024),
+  guardada por `pmuPost` con su propia action `personalizador_pdf_campo_global`. Imprime ademas un
+  portador `<script type="text/css" id="pmu-campo-global-css">` con el CSS **ya prefijado**: el
+  navegador no lo aplica en la consola y "Probar" lo inyecta en el `srcdoc` (FR-006). El preview
+  monta en `#pmu-preview[data-pmu-panel]`. Puertas: fase `campo_global` (13 checks) +
+  `campos-contrato.test.js` + smoke del lab.
 
 ## Fase 6 - US6 Cargador de imagenes
 

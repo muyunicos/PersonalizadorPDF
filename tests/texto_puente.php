@@ -21,7 +21,7 @@ if (PHP_SAPI !== 'cli') {
  *    validez | validez_admin | validez_admin_mal | ficha* | vista_previa* |
  *    carrito | pool* | sesion | conciliacion | completados | mockups* |
  *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
- *    reanalizar | borrado`
+ *    reanalizar | borrado | campo_global`
  */
 
 $fase = isset($argv[1]) ? $argv[1] : 'setup';
@@ -944,6 +944,36 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && array_key_exists('htm', $ver['t1']));
             check('la baja CONSERVA los archivos del campo', is_array($ver) && !empty($ver['archivos_baja']));
             check('alta con script prohibido rechazada', (string)($ver['err_nueva'] ?? '') === '');
+            break;
+        case 'campo_global':
+            // 012/F5 (T018-T020): CSS/JS global del plugin.
+            $gl = isset($GLOBALS['test_campo_global']) ? $GLOBALS['test_campo_global'] : null;
+            check('global: sin error', is_array($gl) && (string)($gl['error'] ?? '') === '');
+            check('global: la primera lectura crea los 2 archivos', !empty($gl['creados']));
+            check('global: nacen vacios', !empty($gl['vacio']));
+            check('global: el CSS se guarda exacto', !empty($gl['css_exacto']));
+            check('global: el JS se guarda exacto', !empty($gl['js_exacto']));
+            check('global: el JS es libre (D21: sin sandbox ni firma)', !empty($gl['js_libre']));
+            check('global: limite de tamano en el CSS',
+                (string)($gl['err_tamano'] ?? '') === 'motor:campos:global.css:tamano',
+                (string)($gl['err_tamano'] ?? ''));
+            // FR-006: el prefijo [data-pmu-panel].
+            check('prefijo: selector simple',
+                (string)($gl['prefijo_simple'] ?? '') === '[data-pmu-panel] .a{ color: red }',
+                (string)($gl['prefijo_simple'] ?? ''));
+            check('prefijo: lista de selectores',
+                (string)($gl['prefijo_lista'] ?? '') === '[data-pmu-panel] .a,[data-pmu-panel] .b{ color: red }',
+                (string)($gl['prefijo_lista'] ?? ''));
+            check('prefijo: dentro de @media',
+                (string)($gl['prefijo_media'] ?? '') === '@media (max-width: 600px){[data-pmu-panel] .a{ color: red }}',
+                (string)($gl['prefijo_media'] ?? ''));
+            check('prefijo: @font-face queda verbatim',
+                (string)($gl['prefijo_fontface'] ?? '') === '@font-face{ font-family: X }',
+                (string)($gl['prefijo_fontface'] ?? ''));
+            check('prefijo: @import queda verbatim',
+                (string)($gl['prefijo_import'] ?? '') === '@import url(a.css);[data-pmu-panel] .a{ color: red }',
+                (string)($gl['prefijo_import'] ?? ''));
+            check('prefijo: CSS vacio no inventa nada', (string)($gl['prefijo_vacio'] ?? '') === '');
             break;
         case 'config':
             // 004/Fase A: config.json por PDF (activo/productos/campos/placeholders).
@@ -2436,6 +2466,49 @@ switch ($fase) {
             $GLOBALS['test_campos'] = ['id1' => $id1, 'id2' => $id2, 'ids' => $ids_c, 'tit1' => $tit1, 'aviso' => $res_c['aviso'], 't1' => $t1, 'archivos_baja' => (is_dir($motor_c->dir_campo($id2)) ? 1 : 0), 'err_nueva' => ($err_nueva === 'motor:campos:script:invalido' ? '' : ($err_nueva !== '' ? $err_nueva : 'no-rechazo'))];
         } catch (\Throwable $e) {
             $GLOBALS['test_campos_error'] = $e->getMessage();
+        }
+        break;
+
+    // 012/F5 (T018-T020): el CSS/JS global del plugin.
+    case 'campo_global':
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        $g = ['error' => ''];
+        try {
+            $motor_g = new PMU_Uploads();
+            // 1) Primera lectura: los archivos se crean vacios y son escribibles.
+            $vacio = $motor_g->leer_global();
+            $g['creados'] = is_file($motor_g->ruta_global_css()) && is_file($motor_g->ruta_global_js());
+            $g['vacio'] = ($vacio['css'] === '' && $vacio['js'] === '');
+            // 2) Guardar y releer: el contenido vuelve exacto (D21: el JS es libre,
+            //    no pasa por el sandbox ni por la firma function(ctx, root)).
+            $css = ".mi-clase { color: #333; }\n@media (max-width: 600px) { .mi-clase { color: #000; } }";
+            $js = "window.PMU_CAMPO = window.PMU_CAMPO || {};\nfunction Traducir(v) { return v; }";
+            $motor_g->guardar_global($css, $js);
+            $leido = $motor_g->leer_global();
+            $g['css_exacto'] = ($leido['css'] === $css);
+            $g['js_exacto'] = ($leido['js'] === $js);
+            $g['js_libre'] = (strpos($leido['js'], 'function Traducir') !== false);
+            // 3) Limite de tamano (mismo tope que los campos).
+            $err_g = '';
+            try {
+                $motor_g->guardar_global(str_repeat('a', 20001), '');
+            } catch (\Throwable $e) {
+                $err_g = $e->getMessage();
+            }
+            $g['err_tamano'] = $err_g;
+            // 4) El prefijo del CSS global (FR-006).
+            $g['prefijo_simple'] = $p->css_global_prefijo('.a { color: red }');
+            $g['prefijo_lista'] = $p->css_global_prefijo('.a, .b { color: red }');
+            $g['prefijo_media'] = $p->css_global_prefijo('@media (max-width: 600px) { .a { color: red } }');
+            $g['prefijo_fontface'] = $p->css_global_prefijo('@font-face { font-family: X }');
+            $g['prefijo_import'] = $p->css_global_prefijo('@import url(a.css); .a { color: red }');
+            $g['prefijo_vacio'] = $p->css_global_prefijo('   ');
+            $GLOBALS['test_campo_global'] = $g;
+        } catch (\Throwable $e) {
+            $GLOBALS['test_campo_global'] = ['error' => $e->getMessage()];
         }
         break;
 

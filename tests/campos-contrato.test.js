@@ -130,5 +130,38 @@ check('tienda.js delega en PMUCampo.montar', tienda.indexOf('PMUCampo.montar(rai
 check('tienda.js ya no define contextoRaiz', tienda.indexOf('function contextoRaiz') === -1);
 check('tienda.js avisa si falta el modulo', tienda.indexOf('falta campo-montar.js') !== -1);
 
+console.log('\n== CSS/JS global (spec 012, T020) ==');
+{
+  const adminJs = fs.readFileSync(path.join(__dirname, '..', 'assets', 'admin.js'), 'utf8');
+  const camposPhp = fs.readFileSync(path.join(__dirname, '..', 'admin', 'campos.php'), 'utf8');
+  const plugin = fs.readFileSync(path.join(__dirname, '..', 'personalizador-pdf.php'), 'utf8');
+  check('la consola imprime el portador del CSS global prefijado',
+    camposPhp.indexOf('id="pmu-campo-global-css"') !== -1);
+  check('el portador es type="text/css" (no se aplica en la consola)',
+    camposPhp.indexOf('<script type="text/css" id="pmu-campo-global-css">') !== -1);
+  check('la tarjeta del global esta siempre arriba (FR-024)',
+    camposPhp.indexOf('Estilos globales / Script global') !== -1
+    && camposPhp.indexOf('Estilos globales / Script global') < camposPhp.indexOf('<h2>Nuevo campo</h2>'));
+  check('el form del global usa su propia action',
+    camposPhp.indexOf('personalizador_pdf_campo_global') !== -1
+    && adminJs.indexOf("pmuForm($('form.ec-form-campo-global'), 'personalizador_pdf_campo_global'") !== -1);
+  // pmuForm REGISTRA el handler: si se llama desde dentro de otro submit, el
+  // POST nunca sale (bug real, 2026-10-04). El global no debe enlazarse asi.
+  check('el global NO se enlaza desde dentro de un submit',
+    !/ec-form-campo-global'?\)\.on\('submit'/.test(adminJs));
+  check('el preview lee el portador del global', adminJs.indexOf("getElementById('pmu-campo-global-css')") !== -1);
+  check('el preview inyecta el global en el srcdoc', adminJs.indexOf("'<style>' + globalCss + '</style>'") !== -1);
+  check('el preview marca el contenedor con data-pmu-panel (FR-006)',
+    adminJs.indexOf('<div id="pmu-preview" data-pmu-panel>') !== -1);
+  check('el global se carga solo si la pagina tiene >=1 campo (FR-025)',
+    plugin.indexOf('if ($n_campos !== null && (int) $n_campos >= 1)') !== -1);
+  check('el JS global se engancha ANTES de campo-montar (D21)',
+    plugin.indexOf("wp_add_inline_script('personalizador-pdf-campo-montar', $js, 'before')") !== -1);
+  check('el CSS global se inyecta con wp_add_inline_style',
+    plugin.indexOf("wp_add_inline_style('personalizador-pdf-panel-global', $css)") !== -1);
+  check('el prefijo del CSS global es [data-pmu-panel]',
+    plugin.indexOf("public function css_global_prefijo($css, $prefijo = '[data-pmu-panel]')") !== -1);
+}
+
 console.log('\n' + (fallos === 0 ? 'CAMPOS CONTRATO OK' : 'CAMPOS CONTRATO FALLA: ' + fallos));
 process.exit(fallos === 0 ? 0 : 1);

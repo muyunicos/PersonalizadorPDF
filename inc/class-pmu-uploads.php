@@ -259,6 +259,61 @@ class PMU_Uploads
         return $this->ruta_campo_global('global.js');
     }
 
+    /** Limite por archivo, igual que el de los campos (spec 012, data-model). */
+    const LIMITE_CAMPO_CARACTERES = 20000;
+
+    /**
+     * Lee el CSS/JS global del plugin (spec 012, T018, D6). Los dos archivos
+     * se crean vacios si no existen, para que (a) el admin siempre edite sobre
+     * algo real y (b) un problema de permisos aparezca al ABRIR la pestana y
+     * no al guardar. Causa `motor:campos:global:no_escribible` si
+     * uploads/pmu/campos/ no existe o no se puede escribir.
+     */
+    public function leer_global()
+    {
+        try {
+            $this->dir_campos(true);
+        } catch (\Throwable $e) {
+            throw new Exception('motor:campos:global:no_escribible');
+        }
+        $css = is_file($this->ruta_global_css())
+            ? (string) @file_get_contents($this->ruta_global_css()) : '';
+        $js = is_file($this->ruta_global_js())
+            ? (string) @file_get_contents($this->ruta_global_js()) : '';
+        $this->escribir_texto($this->ruta_global_css(), $css);
+        $this->escribir_texto($this->ruta_global_js(), $js);
+        return ['css' => $css, 'js' => $js];
+    }
+
+    /**
+     * Guarda el CSS/JS global (spec 012, T018). **No** valida el JS con el
+     * sandbox de `campo.js`: el global es codigo libre del admin (D21) que
+     * corre en la pagina del comprador, no una funcion `function(ctx, root)`.
+     * Solo se aplica el limite de tamano, como en el resto de los archivos.
+     */
+    public function guardar_global($css = '', $js = '')
+    {
+        $css = (string) $css;
+        $js = (string) $js;
+        if (strlen($css) > self::LIMITE_CAMPO_CARACTERES) {
+            throw new Exception('motor:campos:global.css:tamano');
+        }
+        if (strlen($js) > self::LIMITE_CAMPO_CARACTERES) {
+            throw new Exception('motor:campos:global.js:tamano');
+        }
+        try {
+            $this->dir_campos(true);
+        } catch (\Throwable $e) {
+            throw new Exception('motor:campos:global:no_escribible');
+        }
+        $ok = $this->escribir_texto($this->ruta_global_css(), $css);
+        $ok = $this->escribir_texto($this->ruta_global_js(), $js) && $ok;
+        if (!$ok) {
+            throw new Exception('motor:campos:global:no_escribible');
+        }
+        return true;
+    }
+
     /** Config editable del admin: uploads/pmu/pdfs/{nombre}/config.json (plan 008). */
     public function ruta_config($nombre)
     {
@@ -807,7 +862,7 @@ class PMU_Uploads
 
         // Limites por archivo (20 000 caracteres, como en la v1).
         foreach (['campo.htm' => $htm, 'campo.css' => $css, 'campo.js' => $js] as $archivo => $contenido) {
-            if (strlen((string)$contenido) > 20000) {
+            if (strlen((string)$contenido) > self::LIMITE_CAMPO_CARACTERES) {
                 throw new Exception('motor:campos:' . $archivo . ':tamano');
             }
         }

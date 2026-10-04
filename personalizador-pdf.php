@@ -67,8 +67,7 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_campo_restaurar', [$this, 'handle_campo_restaurar']);
         add_action('admin_post_personalizador_pdf_campo_plantilla', [$this, 'handle_campo_plantilla']);
         add_action('admin_post_personalizador_pdf_campo_duplicar', [$this, 'handle_campo_duplicar']);
-        add_action('admin_post_personalizador_pdf_campo_exportar', [$this, 'handle_campo_exportar']);
-        add_action('admin_post_personalizador_pdf_campo_importar', [$this, 'handle_campo_importar']);
+        add_action('admin_post_personalizador_pdf_campo_global', [$this, 'handle_campo_global']);
         add_action('admin_post_personalizador_pdf_config', [$this, 'handle_config_guardar']);
         add_action('admin_post_personalizador_pdf_descargar', [$this, 'handle_descargar']);
         add_action('admin_post_personalizador_pdf_ver', [$this, 'handle_ver']);
@@ -455,7 +454,7 @@ class Personalizador_PDF_Plugin
             return '';
         }
         $impreso = true;
-        $this->assets_ficha();
+        $this->assets_ficha(count($panel['campos']));
         $slugs = [];
         foreach ($panel['pdfs'] as $asoc) {
             $slugs[] = (string)$asoc['pdf'];
@@ -609,12 +608,36 @@ class Personalizador_PDF_Plugin
     public function assets_ficha_condicional()
     {
         if (function_exists('is_product') && is_product()) {
-            $this->assets_ficha();
+            $this->assets_ficha($this->campos_de_la_consulta());
         }
     }
 
-    /** Assets de la ficha (spec 004, T012): tienda.js + selector-pmu + puente. */
-    public function assets_ficha()
+    /**
+     * Cantos de campos que tiene el producto de la consulta actual (spec 012,
+     * FR-025). Se resuelve en `wp_enqueue_scripts`, que corre ANTES de que el
+     * panel se pinte: sin esto, el global se decidiria tarde y nunca se
+     * inyectaria en una ficha de producto. 0 = sin campos (no se carga nada).
+     */
+    private function campos_de_la_consulta()
+    {
+        if (!function_exists('get_queried_object_id')) {
+            return 0;
+        }
+        $panel = $this->panel_producto((int) get_queried_object_id());
+        return is_array($panel) && isset($panel['campos']) ? count($panel['campos']) : 0;
+    }
+
+    /**
+     * Assets de la ficha (spec 004, T012): tienda.js + selector-pmu + puente.
+     *
+     * `$n_campos` = cuantos campos tiene el panel de ESTA pagina. Es lo que
+     * decide si se carga el CSS/JS global (FR-025: con >=1 campo se carga, en
+     * una ficha sin campos no se carga nada). `null` = no se sabe todavia, y
+     * entonces el global no se carga. Se resuelve antes de pintar el panel:
+     * `panel_ficha_html()` lo pasa cuando conoce el panel, y
+     * `assets_ficha_condicional()` lo resuelve desde el producto consultado.
+     */
+    public function assets_ficha($n_campos = null)
     {
         static $listo = false;
         if ($listo) {
@@ -661,6 +684,136 @@ class Personalizador_PDF_Plugin
             'renderCoreUrl' => PERSONALIZADOR_PDF_URL . 'modules/textmuy/render-core.html',
             'puente' => $this->puente_textmuy()['puente'],
         ]);
+
+        // CSS/JS global del plugin (spec 012, T019, D6/FR-025): solo si esta
+        // pagina tiene al menos un campo.
+        if ($n_campos !== null && (int) $n_campos >= 1) {
+            $this->assets_campo_global();
+        }
+    }
+
+    /**
+     * Inyecta el `global.css`/`global.js` del plugin en la ficha (spec 012,
+     * T019, D6/FR-006/FR-027). Devuelve false si no hay global o no se puede
+     * leer; NUNCA es un error fatal: la ficha funciona igual sin estilos.
+     *
+     * - El CSS va como `<style>` con cada selector prefijado por
+     *   `[data-pmu-panel]`, para que el global no pueda romper la tienda.
+     * - El JS se engancha como script **antes** de `campo-montar`
+     *   (`wp_add_inline_script(..., 'before')`): ese es el UNICO orden que se
+     *   le promete al admin (D21). No hay `traducir()` ni tabla de traduccion.
+     */
+    private function assets_campo_global()
+    {
+        try {
+            $global = $this->pmu_uploads()->leer_global();
+        } catch (\Throwable $e) {
+            return false;
+        }
+        $css = $this->css_global_prefijo(isset($global['css']) ? $global['css'] : '');
+        $js = isset($global['js']) ? (string) $global['js'] : '';
+        if (trim($css) !== '') {
+            // Estilo "virtual": handle sin src, solo con el CSS inline.
+            wp_register_style('personalizador-pdf-panel-global', false, [], PERSONALIZADOR_PDF_VERSION);
+            wp_enqueue_style('personalizador-pdf-panel-global');
+            wp_add_inline_style('personalizador-pdf-panel-global', $css);
+        }
+        if (trim($js) !== '') {
+            wp_add_inline_script('personalizador-pdf-campo-montar', $js, 'before');
+        }
+        return true;
+    }
+
+    /**
+     * Prefija cada selector del CSS global con `[data-pmu-panel]` (spec 012,
+     * D6/FR-006) para que solo pueda aplicar DENTRO del panel de campos y no
+     * rompa el tema.
+     *
+     * Reglas: `sel, sel2` -> `[data-pmu-panel] sel, [data-pmu-panel] sel2`;
+     * dentro de `@media`/`@supports`/`@layer`/`@container` se recursea igual;
+     * los at-rules de sentencia (`@import`, `@charset`) y los de declaracion
+     * (`@font-face`, `@keyframes`) pasan tal cual porque NO llevan selectores.
+     * `:root` se reemplaza por el prefijo (`:root` es `<html>` y con el
+     * prefijo nunca casaria).
+     *
+     * Publica (y no privado) para poder probar el prefijo en el arnes.
+     */
+    public function css_global_prefijo($css, $prefijo = '[data-pmu-panel]')
+    {
+        $css = trim((string) $css);
+        if ($css === '') {
+            return '';
+        }
+        $pos = 0;
+        $n = strlen($css);
+        $preambulo = '';
+        $salida = '';
+        while ($pos < $n) {
+            $llave = strpos($css, '{', $pos);
+            if ($llave === false) {
+                $preambulo .= substr($css, $pos); // no hay mas reglas
+                break;
+            }
+            $punto = strpos($css, ';', $pos);
+            if ($punto !== false && $punto < $llave) {
+                // Statement at-rule (@import, @charset): se deja verbatim.
+                $preambulo .= substr($css, $pos, $punto - $pos + 1);
+                $pos = $punto + 1;
+                continue;
+            }
+            $cabecera = trim(substr($css, $pos, $llave - $pos));
+            $fin = $this->css_llave_de_cierre($css, $llave);
+            $cuerpo = substr($css, $llave + 1, $fin - $llave - 1);
+            if ($cabecera !== '' && $cabecera[0] === '@') {
+                // Sin el `@`: con el includedo, `[^\w-]` casaria en el propio
+                // arroba y el nombre saldria vacio (y @media no se prefijaria).
+                $nombre = strtolower((string) preg_replace('/[^\w-].*$/s', '', ltrim($cabecera, '@')));
+                // Sin el `@`: `$nombre` sale sin arroba, asi que la lista tampoco lo lleva.
+                $anidados = ['media', 'supports', 'layer', 'container', 'document'];
+                $salida .= $cabecera . '{'
+                    . (in_array($nombre, $anidados, true)
+                        ? $this->css_global_prefijo($cuerpo, $prefijo)
+                        : $cuerpo)
+                    . '}';
+            } elseif ($cabecera !== '') {
+                $salida .= $this->css_prefija_selectores($cabecera, $prefijo) . '{' . $cuerpo . '}';
+            }
+            $pos = $fin + 1;
+        }
+        return $preambulo . $salida;
+    }
+
+    /** Indice de la llave `}` que cierra la `{` de la posicion dada. */
+    private function css_llave_de_cierre($css, $apertura)
+    {
+        $n = strlen($css);
+        $nivel = 0;
+        for ($i = $apertura; $i < $n; $i++) {
+            $c = $css[$i];
+            if ($c === '{') {
+                $nivel++;
+            } elseif ($c === '}') {
+                $nivel--;
+                if ($nivel === 0) {
+                    return $i;
+                }
+            }
+        }
+        return $n - 1; // CSS sin cerrar: se toma el resto como cuerpo
+    }
+
+    /** Prefija una lista de selectores separados por coma. */
+    private function css_prefija_selectores($lista, $prefijo)
+    {
+        $out = [];
+        foreach (explode(',', $lista) as $sel) {
+            $sel = trim($sel);
+            if ($sel === '') {
+                continue;
+            }
+            $out[] = ($sel === ':root' || $sel === 'html') ? $prefijo : $prefijo . ' ' . $sel;
+        }
+        return implode(',', $out);
     }
 
     /**
@@ -2486,112 +2639,25 @@ JS;
     }
 
     /**
-     * Exporta el catalogo entero (T017): un `campos.json` autocontenido con el
-     * indice, las fechas y el codigo de cada campo, para poder restaurarlo en
-     * otra instalacion.
+     * Guarda el CSS/JS global del plugin (spec 012, T020, FR-023/FR-024). Un
+     * solo archivo para todo el plugin: lo edita el admin una vez desde la
+     * pestana Campos y lo carga toda ficha con >=1 campo.
      */
-    public function handle_campo_exportar()
+    public function handle_campo_global()
     {
         $this->seguridad('personalizador_pdf_campo');
         $motor = $this->pmu_uploads();
-        $indice = $motor->indice_campos();
-        $campos = [];
-        foreach ($indice['items'] as $fila) {
-            $id = (int) $fila['id'];
-            $c = $motor->leer_campo($id);
-            $meta = isset($indice['meta'][(string) $id]) ? $indice['meta'][(string) $id] : [];
-            $campos[(string) $id] = [
-                'datos' => $c !== null ? $c['datos'] : [],
-                'htm' => $c !== null ? $c['htm'] : '',
-                'css' => $c !== null ? $c['css'] : '',
-                'js' => $c !== null ? $c['js'] : '',
-                'creado' => isset($meta['creado']) ? $meta['creado'] : '',
-                'modificado' => isset($meta['modificado']) ? (int) $meta['modificado'] : 0,
-            ];
+        $css = isset($_POST['global_css']) ? (string) wp_unslash($_POST['global_css']) : '';
+        $js = isset($_POST['global_js']) ? (string) wp_unslash($_POST['global_js']) : '';
+        try {
+            $motor->guardar_global($css, $js);
+        } catch (\Throwable $e) {
+            $this->responder(false, [], $e->getMessage());
         }
-        $json = wp_json_encode([
-            'version' => 2,
-            'items' => $indice['items'],
-            'meta' => $indice['meta'],
-            'campos' => $campos,
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-        if ($json === false) {
-            $this->responder(false, [], 'motor:campos:exportar:fallo');
-        }
-        $nombre = 'campos-' . gmdate('Ymd-His') . '.json';
-        header('Content-Type: application/json; charset=utf-8');
-        header('Content-Disposition: attachment; filename="' . $nombre . '"');
-        header('Content-Length: ' . (string) strlen($json));
-        echo $json; // phpcs:ignore WordPress.Security.EscapeOutput
-        exit;
+        $this->responder(true, ['tab' => 'campos', 'global' => true]);
     }
 
     /**
-     * Importa un `campos.json` exportado (T017). **Todo-o-nada**: valida el
-     * lote entero antes de escribir; si algun id ya existe, rechaza todo
-     * (motor:campos:importar:id:ocupado) para no pisar campos que ya tenes.
-     */
-    public function handle_campo_importar()
-    {
-        $this->seguridad('personalizador_pdf_campo');
-        $crudo = '';
-        if (isset($_FILES['archivo']['tmp_name']) && is_uploaded_file($_FILES['archivo']['tmp_name'])) {
-            $crudo = (string) @file_get_contents($_FILES['archivo']['tmp_name']);
-        } elseif (isset($_POST['json'])) {
-            $crudo = (string) wp_unslash($_POST['json']);
-        }
-        $datos = $crudo === '' ? null : json_decode($crudo, true);
-        if (!is_array($datos) || !isset($datos['items']) || !is_array($datos['items'])) {
-            $this->responder(false, [], 'motor:campos:importar:invalido');
-        }
-        $motor = $this->pmu_uploads();
-        $indice = $motor->indice_campos();
-        $existentes = [];
-        foreach ($indice['items'] as $f) {
-            $existentes[(int) $f['id']] = true;
-        }
-        $previstos = [];
-        foreach ($datos['items'] as $fila) {
-            if (!is_array($fila) || !isset($fila['id'])) {
-                $this->responder(false, [], 'motor:campos:importar:invalido');
-            }
-            $id = (int) $fila['id'];
-            if ($id < 1 || isset($existentes[$id]) || isset($previstos[$id])) {
-                $this->responder(false, [], 'motor:campos:importar:id:ocupado');
-            }
-            $previstos[$id] = true;
-            $c = isset($datos['campos'][(string) $id]) ? $datos['campos'][(string) $id] : [];
-            try {
-                // Valida sandbox/HTML/tamanos/cargador antes de seguir.
-                $motor->escribir_campo(
-                    $id,
-                    isset($c['datos']) ? (array) $c['datos'] : [],
-                    isset($c['htm']) ? (string) $c['htm'] : '',
-                    isset($c['css']) ? (string) $c['css'] : '',
-                    isset($c['js']) ? (string) $c['js'] : ''
-                );
-            } catch (\Throwable $e) {
-                $this->responder(false, [], $e->getMessage());
-            }
-        }
-        foreach ($datos['items'] as $fila) {
-            $id = (int) $fila['id'];
-            $indice['items'][] = ['id' => $id,
-                'plantilla' => isset($fila['plantilla']) ? (string) $fila['plantilla'] : '',
-                'baja' => !empty($fila['baja'])];
-            $c = isset($datos['campos'][(string) $id]) ? $datos['campos'][(string) $id] : [];
-            $indice['meta'][(string) $id] = [
-                'creado' => !empty($c['creado']) ? (string) $c['creado'] : gmdate('Y-m-d\TH:i:s\Z'),
-                'modificado' => time(),
-                'categorias' => isset($c['datos']['categorias']) ? (array) $c['datos']['categorias'] : [],
-            ];
-        }
-        if (!$motor->guardar_indice_campos($indice)) {
-            $this->responder(false, [], 'motor:campos:importar:indice:no_escribible');
-        }
-        $this->responder(true, ['id' => 0, 'creados' => count($previstos), 'tab' => 'campos']);
-    }
-     /**
      * Fila v2 de un campo tal como la ve la consola (spec 012, FR-002): el
      * navegador repinta con lo que devuelve el servidor, no con lo del formulario.
      */

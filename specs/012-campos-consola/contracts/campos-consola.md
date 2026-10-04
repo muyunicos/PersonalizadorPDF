@@ -52,8 +52,6 @@ Todos con `seguridad('personalizador_pdf_campo')` (nonce + capability) y respues
 | `personalizador_pdf_campo_duplicar` | `id` | `{id}` (nuevo) |
 | `personalizador_pdf_campo_baja` | `id` | `{ok}` (queda `baja:true` en el indice) |
 | `personalizador_pdf_campo_restaurar` | `id` | `{ok}` (vuelve a `baja:false`, conserva archivos) |
-| `personalizador_pdf_campo_exportar` | — | descarga `campos.json` (indice + todas las carpetas) |
-| `personalizador_pdf_campo_importar` | archivo JSON en `$_FILES['archivo']` | `{ok, creados, omitidos}` (todo-o-nada) |
 | `personalizador_pdf_campo_global` | `global_css`, `global_js` | `{ok}` |
 | `personalizador_pdf_campo_uso` | — | `{usos: {id: [pdfs…]}}` (detalle de la columna) |
 
@@ -63,19 +61,12 @@ Todos con `seguridad('personalizador_pdf_campo')` (nonce + capability) y respues
 - El sandbox del `campo.js` se valida en el servidor (`validar_script_campo()`), siempre.
 - Ninguna operacion escribe si alguna validacion falla.
 
-## 5. Importar / exportar (FR-021, FR-022)
+## 5. ~~Importar / exportar~~ (FR-021, FR-022) — FUERA DE ALCANCE
 
-**Exportar** produce un unico `campos.json` con:
-```json
-{"version":2,"items":[…],"meta":{…},"campos":{"55":{"datos":{…},"htm":"…","css":"…","js":"…"}}}
-```
-para que sea autocontenido y portable.
-
-**Importar** es **todo-o-nada**:
-1. Se lee y parsea (causa `motor:campos:importar:invalido` si no es v2).
-2. Se valida **todo** el lote: sandbox, HTML prohibido, tamanos, ranuras.
-3. Si algun `id` ya existe en el indice -> se rechaza **todo** (`motor:campos:importar:id:ocupado`).
-4. Solo si todo pasa, se escriben las carpetas y se actualiza el indice en una unica operacion.
+**Seccion retirada** por D22 (2026-10-04, decision del usuario): exportar/importar el catalogo de
+campos no es necesario. No hay `admin_post` de export ni de import, ni forms, ni handlers: el
+codigo de `b146952` se removio. El unico backup es una **copia de `uploads/pmu/`**, igual que para
+los PDFs, las imagenes y los presets.
 
 ## 6. Panel de prueba (FR-004…FR-009)
 
