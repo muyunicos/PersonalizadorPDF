@@ -79,7 +79,7 @@ function hacer_webp($w, $h)
         $im = imagecreatetruecolor($w, $h);
         imagefilledrectangle($im, 0, 0, $w, $h, imagecolorallocate($im, 240, 240, 240));
         imagewebp($im, $ruta);
-        imagedestroy($im);
+        // sin imagedestroy(): deprecado en PHP 8.5 y ya no hace nada.
         return $ruta;
     }
     // VP8L: cabecera de 5 bytes con el bit de firma + ancho/alto de 14 bits.
@@ -108,6 +108,26 @@ function subir($ruta)
         'error' => UPLOAD_ERR_OK,
         'size' => (int)@filesize($ruta),
     ];
+}
+
+// ---------------------------------------------------------------------------
+// FIXTURE: los catalogos se escriben a mano.
+// RC47 `catalogo()` ya NO siembra al leer (para que una visita de bot no
+// resucite uploads/pmu), asi que este test NO puede apoyarse en esa siembra:
+// crea los inventarios explicitamente, como haria el administrador al subir
+// su primer recurso.
+// ---------------------------------------------------------------------------
+function archivo_de_catalogo($ambito)
+{
+    return ['fonts' => 'fonts.json', 'img' => 'img.json', 'tm-presets' => 'presets.json'][$ambito];
+}
+
+function sembrar_catalogo($motor, $ambito, $thumbs, $items)
+{
+    $dir = $motor->dir_ambito($ambito, true);
+    $ruta = $dir . DIRECTORY_SEPARATOR . archivo_de_catalogo($ambito);
+    file_put_contents($ruta, json_encode(['thumbs' => $thumbs, 'items' => $items], JSON_UNESCAPED_UNICODE));
+    return $ruta;
 }
 
 // Misma forma que catalog.js::firmaCatalogo: [w, h, c, items].
@@ -166,6 +186,21 @@ function escribir_png()
 //    canonica del cliente la rechazaba siempre).
 // ---------------------------------------------------------------------------
 $motor = new PMU_Uploads();
+
+// FIXTURE: RC47 `catalogo()` ya no siembra al leer, asi que el test crea los
+// inventarios explicitamente en vez de apoyarse en esa siembra.
+sembrar_catalogo($motor, 'fonts', ['w' => 180, 'h' => 30, 'c' => 4], [
+    [1, 'Fuente A', 'custom', 'a.ttf'],
+    [2, 'Fuente B', 'custom', 'b.ttf'],
+    [3, 'Fuente C', 'custom', 'c.ttf'],
+]);
+sembrar_catalogo($motor, 'tm-presets', ['w' => 200, 'h' => 100, 'c' => 4], [
+    [1, 'Estilo de prueba', 'custom', 'estilo.txm'],
+]);
+sembrar_catalogo($motor, 'img', ['w' => 100, 'h' => 100, 'c' => 8], [
+    [1, 'Imagen de prueba', 'fondos', 'a.svg'],
+]);
+
 [$wF, $hF] = dims_hoja($motor, 'fonts');
 $firmaF = firma_de($motor, 'fonts');
 $resA = error_de(function () use ($motor, $wF, $hF, $firmaF) {

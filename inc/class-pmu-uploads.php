@@ -80,8 +80,11 @@ class PMU_Uploads
     {
         $upload_dir = wp_upload_dir();
         $dir = trailingslashit($upload_dir['basedir']) . 'pmu';
-        if (!is_dir($dir)) {
+        if ($crear && !is_dir($dir)) {
             // Crear el arbol completo, no solo el ultimo nivel.
+            // RC47: solo si se pide. Antes era incondicional y cualquier
+            // lectura (el puente se arma en el FRENTE) dejaba uploads/pmu en
+            // disco aunque no hubiera ni un catalogo.
             wp_mkdir_p($dir);
         }
         return $dir;
@@ -518,12 +521,16 @@ class PMU_Uploads
         }
         $ruta = $this->ruta_catalogo($ambito);
         if (!is_file($ruta)) {
-            if (!is_dir(dirname($ruta))) {
-                wp_mkdir_p(dirname($ruta));
-            }
-            if (!$this->guardar_catalogo($ambito, $cat)) {
-                throw new Exception('motor:' . $op . ':directorio:no_escribible');
-            }
+            // RC47: LEER ya no escribe. Antes este camino sembraba el catalogo
+            // vacio en disco, y como `assets_ficha_condicional()` ->
+            // `puente_textmuy()` -> `listar_todo()` -> `catalogo()` corre en
+            // `wp_enqueue_scripts` del FRENTE (con solo `is_product()`), CADA
+            // visita a una pagina de producto -incluidas las de un bot-
+            // resucitaba uploads/pmu con 3 archivos vacios. Un `GET` no
+            // muta datos: la siembra queda en los caminos de escritura
+            // (alta/baja/editar), que crean el archivo cuando hace falta.
+            // Se sigue devolviendo el aviso para que la UI distinga
+            // "catalogo vacio" de "catalogo con contenido".
             return ['cat' => $cat, 'aviso' => 'motor:listar:catalogo:ausente:' . $ambito];
         }
         $crudo = (string)@file_get_contents($ruta);
@@ -1927,7 +1934,16 @@ return $destino;
         return $out;
     }
 
-    /** Listado agregado para el puente (presets, imagenes, fuentes). */
+    /** Listado agregado para el puente (presets, imagenes, fuentes).
+     *
+     *  Sin cache a proposito: se construye en el FRENTE (`wp_enqueue_scripts`,
+     *  con solo `is_product()`), asi que corre en cada visita a una pagina de
+     *  producto, bots incluidos. Cachearlo se considero y se descarto: releer 3
+     *  JSON de 5-8 KB y normalizar ~200 items cuesta fracciones de ms, mientras
+     *  que el transient anade un estado que puede quedar viejo si se escapa una
+     *  invalidacion (subir un recurso y no verse durante el TTL). El problema
+     *  real era la ESCRITURA en lectura, y se resuelve en `catalogo()`: ahora
+     *  listar no toca disco. */
     public function listar_todo()
     {
         $presets = [];
