@@ -176,9 +176,15 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
         // Configuracion tienda por PDF (plan 008: vista analisis+config fusionada).
         // Spec 004: incluye preview_omisible y mockups[] de la config editable.
         $cfg_pdf = $vista_pdf ? $vista_pdf['config'] : ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => [], 'tienda' => []];
-        list($todos_campos, $aviso_cfg_campos2) = $this->campos_activos();
-        if ($aviso_cfg_campos === '' && $aviso_cfg_campos2 !== null && $aviso_cfg_campos2 !== '') {
-            $aviso_cfg_campos = $aviso_cfg_campos2;
+        // Aviso del catalogo de campos (lectura tolerante). La causa se toma
+        // directo de `campos_activos()`: antes se comparaba contra una variable
+        // que nunca se inicializo (`$aviso_cfg_campos`), asi que en PHP 8 la
+        // comparacion con `null` nunca era cierta y el aviso NUNCA se pintaba
+        // (bug en vivo: `Undefined variable` en las lineas 180 y 191).
+        $aviso_cfg_campos = '';
+        list($todos_campos, $causa_campos) = $this->campos_activos();
+        if (is_string($causa_campos) && $causa_campos !== '') {
+            $aviso_cfg_campos = $causa_campos;
         }
         // Campos habilitados para este PDF (config) que siguen en el catalogo.
         $campos_pdf = [];
@@ -188,7 +194,7 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
             }
         }
         ?>
-        <?php if ($aviso_cfg_campos !== null && $aviso_cfg_campos !== '') : ?>
+        <?php if ($aviso_cfg_campos !== '') : ?>
             <div class="notice notice-warning"><p><strong>Aviso de recursos:</strong> <?php echo esc_html($aviso_cfg_campos); ?></p></div>
         <?php endif; ?>
 

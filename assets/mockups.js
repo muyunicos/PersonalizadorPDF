@@ -102,7 +102,9 @@ jQuery(function ($) {
     }
 
     function contexto() {
-        return { fotos: datos.fotos || {}, imagenes: datos.imagenes || [], grupos: grupos };
+        // Spec 011 (T032): el catalogo `mockups` es la unica fuente de
+        // imagenes; ya no hay `fotos` por PDF.
+        return { imagenes: datos.imagenes || [], grupos: grupos };
     }
     /** Nombre legible de una capa (usado en lista, etiqueta y aviso). */
     function nombreCapa(c) {
@@ -184,8 +186,7 @@ jQuery(function ($) {
             '        <h4>Capas</h4>' +
             '        <ul class="ec-mk-capas"></ul>' +
             '        <div class="ec-mk-acciones">' +
-            '          <button type="button" class="button button-small" data-mk="add-foto">+ Foto</button>' +
-            '          <button type="button" class="button button-small" data-mk="add-catalogo">+ Catalogo</button>' +
+            '          <button type="button" class="button button-small" data-mk="add-catalogo">+ Imagen</button>' +
             '          <button type="button" class="button button-small" data-mk="add-placeholder">+ Placeholder</button>' +
             '        </div>' +
             '        <div class="ec-mk-acciones">' +
@@ -206,11 +207,6 @@ jQuery(function ($) {
             '      <div class="ec-mk-panel ec-mk-panel-props" hidden>' +
             '        <h4>Capa seleccionada</h4>' +
             '        <div class="ec-mk-props"></div>' +
-            '      </div>' +
-            '      <div class="ec-mk-panel">' +
-            '        <h4>Fotos del PDF</h4>' +
-            '        <ul class="ec-mk-minis ec-mk-fotos"></ul>' +
-            '        <p class="ec-mk-vacio">Arrastra un archivo de imagen sobre el lienzo para subirlo y usarlo.</p>' +
             '      </div>' +
             '      <div class="ec-mk-panel">' +
             '        <h4>Imagenes de mockup</h4>' +
@@ -567,7 +563,6 @@ jQuery(function ($) {
         pintarMockups();
         pintarCapas();
         pintarProps();
-        pintarFotos();
         pintarCatalogo();
         pintarGrupos();
         pintarAlertas();
@@ -741,26 +736,6 @@ jQuery(function ($) {
     }
 
 
-    function pintarFotos() {
-        var $ul = $ed.find('.ec-mk-fotos').empty();
-        var usadas = {};
-        capas().forEach(function (c) { if (c.tipo === 'img') { usadas[c.ref] = true; } });
-        var fotos = datos.fotos || {};
-        var nombres = Object.keys(fotos);
-        $ed.find('.ec-mk-fotos').siblings('.ec-mk-vacio').toggle(!nombres.length);
-        nombres.forEach(function (nombre) {
-            var $li = $('<li>').toggleClass('ec-mk-mini', true)
-                .toggleClass('ec-usada', !!usadas['pdf:' + nombre] || !!usadas[nombre])
-                .attr('tabindex', '0').attr('role', 'button')
-                .attr('data-foto', nombre)
-                            .attr('aria-label', 'Agregar '
-                                + etiquetaInstancia(g.id, n) + ' de ' + g.w
-                                + ' por ' + g.h + ' pixeles')
-            $li.append($('<span>').text(nombre));
-            $ul.append($li);
-        });
-    }
-
     function pintarCatalogo() {
         var $ul = $ed.find('.ec-mk-catalogo').empty();
         var filtro = String($ed.find('.ec-mk-buscar-catalogo').val() || '').toLowerCase();
@@ -911,15 +886,11 @@ jQuery(function ($) {
         refrescar();
     }
 
-    /** Foto del PDF: cubre todo el lienzo (es el fondo de la escena). */
-    function agregarFoto(nombre) {
-        agregarCapa({
-            tipo: 'img', ref: 'pdf:' + nombre, x: 0, y: 0, w: LIENZO, h: LIENZO,
-            rot: 0, sesgo: 0, filtros: {}, modo: 'normal', nombre: '', oculta: false, bloqueada: false
-        });
-    }
-
-    /** Imagen del catalogo del proyecto: entra por su id numerico. */
+    /**
+     * Imagen del catalogo: cubre todo el lienzo (es el fondo de la escena).
+     * Spec 011 (T032): el catalogo `mockups` es la unica fuente de imagenes;
+     * las fotos por PDF se retiraron.
+     */
     function agregarCatalogo(id) {
         var it = (datos.imagenes || []).filter(function (x) { return String(x.id) === String(id); })[0];
         if (!it) { return; }
@@ -1097,18 +1068,9 @@ jQuery(function ($) {
         if (accion === 'nuevo') { nuevoMockup(null); return; }
         if (accion === 'duplicar') { if (mockup()) { nuevoMockup(mockup()); } return; }
         if (accion === 'eliminar-mockup') { eliminarMockup(); return; }
-        if (accion === 'add-foto') {
-            var nombres = Object.keys(datos.fotos || {});
-            if (!nombres.length) {
-                window.alert('Todavia no hay fotos: arrastra un archivo sobre el lienzo o subilo en la seccion.');
-                return;
-            }
-            agregarFoto(nombres[0]);
-            return;
-        }
         if (accion === 'add-catalogo') {
             if (!(datos.imagenes || []).length) {
-                window.alert('El catalogo de imagenes esta vacio.');
+                window.alert('Todavia no hay imagenes: arrastra un archivo sobre el lienzo o subilo en "Imagenes de mockup".');
                 return;
             }
             $ed.find('.ec-mk-buscar-catalogo').trigger('focus');
@@ -1283,10 +1245,8 @@ jQuery(function ($) {
         refrescar();
     });
 
-    /* Recursos: miniaturas de fotos, catalogo y placeholders (un clic = capa). */
+    /* Recursos: miniaturas del catalogo y placeholders (un clic = capa). */
     $ed.on('click', '.ec-mk-mini', function () {
-        var foto = $(this).attr('data-foto');
-        if (foto) { agregarFoto(foto); return; }
         var img = $(this).attr('data-img');
         if (img) { agregarCatalogo(img); }
     });

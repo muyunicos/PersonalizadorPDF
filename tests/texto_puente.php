@@ -27,6 +27,33 @@ if (PHP_SAPI !== 'cli') {
 $fase = isset($argv[1]) ? $argv[1] : 'setup';
 $plugin = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'personalizador-pdf.php';
 
+// ====== Los warnings de PHP son fallos ======
+// Sin esto, un `Undefined variable` pasaba los 45 tests en verde mientras el
+// aviso de recursos de la consola no se pintaba nunca (bug en vivo). Cualquier
+// E_WARNING/E_NOTICE/E_DEPRECATED se acumula y hace fallar la fase.
+$GLOBALS['test_avisos_php'] = [];
+set_error_handler(function ($errno, $errstr, $errfile = '', $errline = 0) {
+    // Avisos provocados a proposito con `@` (borrar una miniatura que no
+    // existe, por ejemplo): son casos normales del motor y no son fallos.
+    static $tolerados = [
+        'unlink(', 'rmdir(', 'mkdir(', 'copy(', 'file_get_contents(',
+        'fopen(', 'fwrite(', 'rename(', 'scandir(', 'opendir(', 'touch(',
+    ];
+    foreach ($tolerados as $prefijo) {
+        if (strpos($errstr, $prefijo) === 0) {
+            return true;
+        }
+    }
+    // Los stubs de WP y el arnés pueden avisar de cosas propias: aqui solo
+    // interesan los del codigo del plugin.
+    if (strpos((string)$errfile, 'tests' . DIRECTORY_SEPARATOR) === false) {
+        $GLOBALS['test_avisos_php'][] = $errstr
+            . ' (' . basename((string)$errfile) . ':' . (int)$errline . ')';
+    }
+    return true; // no alteramos el flujo: el aviso se comprueba al final
+});
+error_reporting(E_ALL);
+
 // ====== Entorno aislado en %TEMP% ======
 $testBase = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pd_puente_' . getmypid();
 if (is_dir($testBase)) {
@@ -989,6 +1016,13 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             break;
         default:
             check('fase desconocida', false);
+    }
+
+    // Los avisos de PHP del codigo del plugin cuentan como fallo (ver el
+    // set_error_handler de arriba): asi un `Undefined variable` no puede volver
+    // a colarse con la fase en verde.
+    foreach (array_unique((array)($GLOBALS['test_avisos_php'] ?? [])) as $aviso_php) {
+        check('sin avisos de PHP: ' . $aviso_php, false);
     }
 
     if ($fallos) {

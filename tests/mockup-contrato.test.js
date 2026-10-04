@@ -437,6 +437,26 @@ check('T032: arrastrar una imagen la sube al catalogo',
         && ed.indexOf('personalizador_pdf_mockup_subir') === -1,
     'la subida por arrastre debe usar el catalogo, no el handler retirado');
 
+// Spec 011 (T032): las fotos por PDF se retiraron del editor. Codigo muerto que
+// segun vivo no lo estaba: un panel siempre vacio y un "+ Foto" que moria con
+// "Todavia no hay fotos" cuando si las habia.
+check('T032: el editor ya no tiene codigo de fotos por PDF',
+    ed.indexOf('pintarFotos') === -1
+        && ed.indexOf('agregarFoto') === -1
+        && ed.indexOf('datos.fotos') === -1
+        && ed.indexOf('ec-mk-fotos') === -1
+        && ed.indexOf('data-mk="add-foto"') === -1,
+    'quedaria un panel vacio y un boton que miente sobre las fotos disponibles');
+check('T032: el boton de imagen usa el catalogo',
+    ed.indexOf('data-mk="add-catalogo">+ Imagen') !== -1);
+
+// El aviso de la consola (pdfs.php) depende de una variable inicializada:
+// sin ella, en PHP 8, `null === ''` nunca es cierto y el aviso no se pintaba.
+var pdfs = leer('admin/pdfs.php');
+check('T032: el aviso de campos de la consola se inicializa',
+    pdfs.indexOf("$aviso_cfg_campos = '';") !== -1,
+    'sin inicializar, el aviso de recursos del catalogo de campos nunca se pinta');
+
 /* ============ Ejecucion ============ */
 var i = 0;
 function correr() {

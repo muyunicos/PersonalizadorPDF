@@ -416,8 +416,9 @@
      *
      * Spec 011 (R1/R13): la composicion la hace `PMUMockup`, la MISMA funcion
      * que usa el editor del admin. Aqui solo se resuelve el recurso de cada
-     * capa: los huecos contra los PNG del pool del item y las fotos contra
-     * las del PDF. El encaje sin deformar y los ajustes viven en el nucleo.
+     * capa: los placeholders contra los PNG del pool del item y las imagenes
+     * contra el catalogo `mockups`. El encaje sin deformar y los ajustes viven
+     * en el nucleo.
      */
     function componerMockup(pdfDatos, mockup, pngsPorGrupo) {
         var canvas = document.createElement('canvas');
@@ -426,6 +427,8 @@
         canvas.className = 'pmu-gal-canvas';
         var ctx = canvas.getContext('2d');
         var datos = pdfDatos || {};
+        // Spec 011 (T032): el catalogo `mockups` es la unica fuente de
+        // imagenes; `fotos` por PDF se retiro y queda vacio por compatibilidad.
         var fotos = datos.fotos || {};
         var imagenes = datos.imagenes || [];
         var losPngs = pngsPorGrupo || {};
