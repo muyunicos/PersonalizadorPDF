@@ -457,6 +457,27 @@ check('T032: el aviso de campos de la consola se inicializa',
     pdfs.indexOf("$aviso_cfg_campos = '';") !== -1,
     'sin inicializar, el aviso de recursos del catalogo de campos nunca se pinta');
 
+// Spec 011 (T032): el alta de una imagen llega como FormData real, donde el
+// archivo viaja en `$_FILES` y NUNCA en `$_POST`. Leerlo con `param()` devolvia
+// la cadena vacia y toda subida fallaba con `motor:alta:falta:archivo` (bug en
+// vivo al arrastrar una imagen al lienzo).
+check('T032: el alta lee el archivo de $_FILES, no de $_POST',
+    up.indexOf('archivo_subido') !== -1
+        && up.indexOf("$this->archivo_subido(['file', 'archivo', 'imagen'])") !== -1,
+    'param() solo mira $_POST: un archivo de FormData nunca pasa por ahi');
+
+// Y el ambito tiene que aceptar imagenes: la lista de extensiones solo miraba
+// `img`, asi que un PNG al catalogo de mockups caia en la rama de fuentes.
+check('T032: el ambito mockups acepta imagenes',
+    up.indexOf("in_array($ambito, ['img', 'mockups'], true)") !== -1,
+    'sin esto, toda imagen del catalogo de mockups falla con tipo:invalido');
+
+// La firma PNG compara 8 bytes: leer 12 hacia que ningun PNG pasara nunca.
+check('T032: la firma PNG compara los 8 bytes de la cabecera',
+    up.indexOf('substr($firma, 0, 8)') !== -1
+        && up.indexOf('return $corta ===') !== -1,
+    'leer 12 bytes y comparar contra 8 nunca puede ser cierto');
+
 /* ============ Ejecucion ============ */
 var i = 0;
 function correr() {

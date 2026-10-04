@@ -1087,9 +1087,13 @@ class PMU_Uploads
     /** Verifica la firma (magic bytes) de una imagen segun su extension. */
     private function firma_imagen_valida($ruta, $ext)
     {
+        // 8 bytes bastan para la firma PNG; leer 12 y comparar contra 8
+        // hacia que NINGUN png pasara nunca la validacion (bug real:
+        // `motor:alta:<ambito>:tipo:invalido` al subir imagenes al catalogo).
         $firma = (string)@file_get_contents($ruta, false, null, 0, 12);
+        $corta = substr($firma, 0, 8);
         if ($ext === 'png') {
-            return $firma === "\x89PNG\r\n\x1a\n";
+            return $corta === "\x89PNG\r\n\x1a\n";
         }
         if ($ext === 'jpg' || $ext === 'jpeg') {
             return substr($firma, 0, 3) === "\xFF\xD8\xFF";
@@ -1099,6 +1103,12 @@ class PMU_Uploads
         }
         if ($ext === 'svg') {
             return strpos($firma, '<') !== false || substr($firma, 0, 5) === '<?xml';
+        }
+        // Spec 011 (T032): GIF. La lista de extensiones de los ambitos de imagen
+        // ya lo aceptaba, pero la firma no lo contemplaba y cualquier alta de
+        // un GIF fallaba con `motor:alta:<ambito>:tipo:invalido`.
+        if ($ext === 'gif') {
+            return strpos($firma, 'GIF') !== false;
         }
         return false;
     }
@@ -1158,10 +1168,23 @@ class PMU_Uploads
             $destino = $base . '-' . $i . '.' . $ext;
             $i++;
         }
-        if (!@move_uploaded_file($file['tmp_name'], $dir . DIRECTORY_SEPARATOR . $destino)) {
-            throw new Exception('motor:' . $op . ':directorio:no_escribible');
-        }
-        return $destino;
+        // `move_uploaded_file()` solo acepta ficheros subidos por HTTP: en CLI (los
+// tests) siempre falla, y el mensaje de "no_escribible" era falso. Se usa el
+// metodo nativo cuando viene de una subida real y `rename`/`copy` si no.
+$destinoFinal = $dir . DIRECTORY_SEPARATOR . $destino;
+$movido = false;
+if (is_uploaded_file($file['tmp_name'])) {
+    $movido = @move_uploaded_file($file['tmp_name'], $destinoFinal);
+} else {
+    $movido = @rename($file['tmp_name'], $destinoFinal);
+    if (!$movido) {
+        $movido = @copy($file['tmp_name'], $destinoFinal);
+    }
+}
+if (!$movido) {
+    throw new Exception('motor:' . $op . ':subida:fallo');
+}
+return $destino;
     }
 
     private function url_de($ambito, $archivo)
@@ -1338,7 +1361,9 @@ class PMU_Uploads
             if ($base === '') {
                 $base = $this->nombre_seguro(pathinfo((string)$file['name'], PATHINFO_FILENAME));
             }
-            $exts = ($ambito === 'img') ? ['png', 'jpg', 'jpeg', 'webp', 'svg'] : ['ttf', 'otf', 'woff', 'woff2'];
+            // Spec 011 (T032): 'img' y 'mockups' son ambitos de IMAGEN; el resto, de fuentes.
+            $esImagen = in_array($ambito, ['img', 'mockups'], true);
+            $exts = $esImagen ? ['png', 'jpg', 'jpeg', 'webp', 'svg', 'gif'] : ['ttf', 'otf', 'woff', 'woff2'];
             $file = $this->mover_upload($file, $dir, $exts, $op . ':' . $ambito, $base);
         }
 
@@ -1516,6 +1541,29 @@ class PMU_Uploads
         return $def;
     }
 
+    /**
+     * Archivo subido, leyendo `$_FILES` con los alias indicados. Un archivo de
+     * FormData NUNCA viaja en `$_POST` (va en `$_FILES`): leerlo con `param()`
+     * devolvia la cadena vacia y el alta del catalogo fallaba con
+     * `motor:alta:falta:archivo` (bug en vivo al arrastrar una imagen al
+     * lienzo). Acepta ademas un `$_POST` con la ruta de un archivo ya existente
+     * (lo usa `editar`/`baja` para renombrar sin volver a subir).
+     *
+     * @param array $nombres alias del campo (file/archivo/imagen).
+     * @return array|string Cadena vacia si no hay archivo.
+     */
+    private function archivo_subido($nombres)
+    {
+        foreach ((array)$nombres as $n) {
+            if (!empty($_FILES[$n]) && is_array($_FILES[$n])
+                && ($_FILES[$n]['error'] ?? 1) === UPLOAD_ERR_OK) {
+                return $_FILES[$n];
+            }
+        }
+        // Sin subida: puede venir la ruta/nombre de un archivo ya existente.
+        return $this->param($nombres, '');
+    }
+
     public function handle_request()
     {
         // Orden de rechazo: capacidad (en handle_pmu_uploads) -> nonce -> op -> ambito -> payload.
@@ -1543,7 +1591,7 @@ class PMU_Uploads
                     $scope = (string)$this->param(['scope', 'ambito'], '');
                     $title = (string)$this->param(['title', 'titulo'], '');
                     $cats = $this->param(['cats', 'categorias'], '');
-                    $file = $this->param(['file', 'archivo'], '');
+                    $file = $this->archivo_subido(['file', 'archivo', 'imagen']);
                     $contenido = (string)$this->param(['contenido'], '');
                     if ($scope === '' || $title === '') {
                         wp_send_json_error('motor:alta:falta:scope|title');
@@ -1585,17 +1633,19 @@ class PMU_Uploads
                     if ($scope === '') {
                         wp_send_json_error('motor:sprite:falta:scope');
                     }
-                    if (empty($_FILES['archivo']) || ($_FILES['archivo']['error'] ?? 1) !== UPLOAD_ERR_OK) {
+                    $subida = $this->archivo_subido(['archivo', 'file']);
+                    if (!is_array($subida)) {
                         wp_send_json_error('motor:sprite:falta:archivo');
                     }
-                    wp_send_json_success($this->sprite($scope, $_FILES['archivo'], wp_unslash((string)$this->param(['firma'], ''))));
+                    wp_send_json_success($this->sprite($scope, $subida, wp_unslash((string)$this->param(['firma'], ''))));
                     break;
                 case 'miniatura':
                     $nombre = (string)$this->param(['nombre'], '');
-                    if (empty($_FILES['archivo']) || ($_FILES['archivo']['error'] ?? 1) !== UPLOAD_ERR_OK) {
+                    $subida = $this->archivo_subido(['archivo', 'file']);
+                    if (!is_array($subida)) {
                         wp_send_json_error('motor:miniatura:falta:archivo');
                     }
-                    wp_send_json_success($this->miniatura($nombre, $_FILES['archivo']));
+                    wp_send_json_success($this->miniatura($nombre, $subida));
                     break;
             }
         } catch (Exception $e) {

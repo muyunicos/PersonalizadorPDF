@@ -205,10 +205,11 @@ require $plugin;
 $p = Personalizador_PDF_Plugin::instance();
 
 $fallos = [];
-function check($nombre, $cond)
+function check($nombre, $cond, $detalle = '')
 {
     global $fallos;
-    echo ($cond ? '  OK   ' : '  FAIL') . ' ' . $nombre . "\n";
+    echo ($cond ? '  OK   ' : '  FAIL') . ' ' . $nombre
+        . (($cond || $detalle === '') ? '' : '  [' . $detalle . ']') . "\n";
     if (!$cond) {
         $fallos[] = $nombre;
     }
@@ -999,6 +1000,22 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('promocion sin error', $err_o === '' && !empty($GLOBALS['test_pedido_ok']));
             check('nota.txt en orders/4242/', !empty($GLOBALS['test_pedido_ok']));
             check('doble promocion rechazada', strpos((string)($GLOBALS['test_pedido_doble'] ?? ''), '4242') !== false);
+            break;
+        case 'mockup_alta':
+            // Spec 011 (T032): el alta del catalogo de mockups recibe el archivo
+            // desde `$_FILES` (como un FormData real), no desde `$_POST`.
+            $ma = isset($GLOBALS['test_mockup_alta']) ? $GLOBALS['test_mockup_alta'] : null;
+            check('sin error al dar de alta la imagen',
+                (string)($GLOBALS['test_mockup_alta_error'] ?? '') === '' && is_array($ma),
+                (string)($GLOBALS['test_mockup_alta_error'] ?? ''));
+            check('alta devuelve id, nombre y url',
+                is_array($ma) && !empty($ma['id']) && !empty($ma['nombre']) && !empty($ma['url']));
+            check('el archivo quedo en el catalogo del ambito mockups',
+                count((array)($GLOBALS['test_mockup_alta_items'] ?? [])) >= 1
+                    && (string)(($GLOBALS['test_mockup_alta_items'][0]['file'] ?? '')) !== '');
+            check('el nombre del archivo se normaliza (sin espacios ni acentos raros)',
+                is_array($ma) && preg_match('/^[A-Za-z0-9_.-]+$/', (string)$ma['nombre']) === 1,
+                'un nombre con espacios romperia la resolucion por id');
             break;
         case 'migracion':
             // Fase eliminada: sin legado no hay migracion (plan 008 corte).
@@ -2342,6 +2359,43 @@ switch ($fase) {
             $GLOBALS['test_linea_leido'] = $p->manifest_cart_leer('linea-test-1');
         } catch (\Throwable $e) {
             $GLOBALS['test_linea_error'] = $e->getMessage();
+        }
+        break;
+
+    case 'mockup_alta':
+        // Spec 011 (T032): alta de una imagen en el catalogo `mockups` por el
+        // endpoint pmu_uploads. Reproduce la subida REAL de un FormData: el
+        // archivo viaja en `$_FILES`, nunca en `$_POST`. Leerlo con `param()`
+        // devolvia la cadena vacia y el alta fallaba con
+        // `motor:alta:falta:archivo` (bug en vivo al arrastrar al lienzo).
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        preparar_entorno($testBase, $base);
+        try {
+            $motor_ma = new PMU_Uploads();
+            // PNG minimo valido (4x4) en disco, como lo dejaria la subida.
+            $png = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pd_alta_' . getmypid() . '.png';
+            \ExtractCorel\Engine\PngWriter::write($png, 4, 4);
+            $_FILES['file'] = [
+                'name' => 'foto-de-prueba.png',
+                'type' => 'image/png',
+                'tmp_name' => $png,
+                'error' => UPLOAD_ERR_OK,
+                'size' => filesize($png),
+            ];
+            $GLOBALS['test_mockup_alta'] = $motor_ma->alta(
+                'mockups',
+                'Foto de prueba',
+                'varios',
+                $_FILES['file'],
+                ''
+            );
+            $GLOBALS['test_mockup_alta_items'] = $motor_ma->listar('mockups')['items'];
+            @unlink($png);
+        } catch (\Throwable $e) {
+            $GLOBALS['test_mockup_alta_error'] = $e->getMessage();
         }
         break;
 
