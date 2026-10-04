@@ -49,9 +49,11 @@ pool de grupos `img/`, que sigue siendo solo texto renderizado). Sin tablas.
 `php tests/parity.php`, `php tests/texto_puente.php` en todas sus fases (**fases nuevas**:
 `campos_v2`, `campo_dup`, `campo_restore`, `campo_import`, `campo_global`, `campo_subida`,
 `motor_multi`), `node --check` + `tests/conciliacion.js` (**cubre `PURO.conciliarGrupo`, que cambia
-en T027b**) + las 2 puertas de mockups (no se rompen) + `tests/campos-contrato.test.js` (nueva) y
-`smoke_checks()` en el sitio real. **No** se toca `modules/textmuy/` ni sus 21 suites Node (sin
-bump `?v=RCn`).
+en T027b**) + las 2 puertas de mockups (no se rompen) + **dos** puertas nuevas de campos:
+`tests/campos_migracion.php` (**ya en verde**: banco PHP de la migracion v1->v2, rutas, cargador y
+validaciones; corre en `%TEMP%`, no toca `uploads/pmu/`) y `tests/campos-contrato.test.js` (puerta
+**Node** del cableado cliente, se crea en T012). Ademas `smoke_checks()` en el sitio real.
+**No** se toca `modules/textmuy/` ni sus 21 suites Node (sin bump `?v=RCn`).
 
 **Target Platform**: navegador de escritorio (Chrome/Edge/Firefox actuales) en la consola de
 WordPress; raton + teclado. El **iframe del preview es de 350px** (el `max-width` real de
@@ -75,9 +77,9 @@ del `campo.js` lo valida **siempre** el servidor (`validar_script_campo()`), aun
 ejecute en el navegador.
 
 **Scale/Scope**: 3 ficheros cliente nuevos (`campo-montar.js`, `cargador-pmu.js`,
-`campos-contrato.test.js`), 1 test Node actualizado (`conciliacion.js`), 1 puerta Node nueva,
-~10 ficheros existentes modificados (lista exacta abajo). Sin ficheros PHP nuevos. Cambios en
-`engine/` (Motor + Overlay), los mas sensibles del repo.
+`campos-contrato.test.js`), 1 banco PHP nuevo (`campos_migracion.php`), 1 test Node actualizado
+(`conciliacion.js`), ~10 ficheros existentes modificados (lista exacta abajo). Sin ficheros PHP
+nuevos de plugin. Cambios en `engine/` (Motor + Overlay), los mas sensibles del repo.
 
 ## Constitution Check
 
@@ -152,7 +154,8 @@ node --check (los .js tocados)
 node tests/conciliacion.js         -> se actualiza en T027b
 node tests/mockup-geometria.test.js    -> no se rompen
 node tests/mockup-contrato.test.js     -> no se rompen
-node tests/campos-contrato.test.js     -> nueva, del cableado de campos
+php  tests/campos_migracion.php    -> CAMPOS V2 OK (49 checks, banco PHP en %TEMP%)
+node tests/campos-contrato.test.js     -> nueva (T012), del cableado cliente
 ```
 
 ## Riesgos
@@ -223,6 +226,7 @@ personalizador-pdf/
 ├── tests/
 │   ├── conciliacion.js          # ACTUALIZADO (T027b): asserts de PURO.conciliarGrupo
 │   ├── campos-contrato.test.js  # NUEVO: puerta Node del cableado de campos
+│   ├── campos_migracion.php     # NUEVO: banco PHP de la migracion v1->v2 (49 checks, %TEMP%)
 │   └── texto_puente.php         # + 7 fases (campos_v2, campo_dup, campo_restore,
 │                                 #   campo_import, campo_global, campo_subida, motor_multi)
 └── modules/textmuy/             # SIN CAMBIOS (no hay bump ?v=RCn)
