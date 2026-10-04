@@ -220,85 +220,19 @@
         return document.querySelector('[data-pmu-panel]') || null;
     }
 
-    /** Estado del panel: {campo_id: {valor, cliente}} (T012). */
-    function contextoRaiz(estado) {
-        return {
-            set: function (id, valor) {
-                id = parseInt(id, 10) || 0;
-                if (id < 1) { return; }
-                estado[id] = {
-                    valor: (valor && 'valor' in valor) ? valor.valor : null,
-                    cliente: (valor && 'cliente' in valor) ? String(valor.cliente || '') : ''
-                };
-            },
-            get: function (id) {
-                id = parseInt(id, 10) || 0;
-                return estado[id] || null;
-            }
-        };
-    }
-
-    /**
-     * Compila los campos: CSS con scope + contenido + script (T012). Con
-     * `inicial` (edicion, T016) los valores guardados quedan disponibles en
-     * `ctx.get()` y prellenan el input/textarea/select del campo.
-     */
+    /* ============ Montaje de campos (spec 012, T010) ============
+     `PMUCampo.montar()` vive en assets/campo-montar.js y lo comparte con el
+     preview de la consola: el admin ve exactamente lo que vera el comprador.
+     Las reglas de salida estan en contracts/campos.md ("Reglas de salida"). */
     function montarCampos(raizEl, campos, inicial) {
-        var estado = {};
-        (campos || []).forEach(function (campo) {
-            var previo = inicial && (inicial[String(campo.id)] || inicial[campo.id]);
-            if (previo) {
-                estado[campo.id] = {
-                    valor: previo.valor === undefined ? '' : previo.valor,
-                    cliente: previo.cliente === undefined ? '' : String(previo.cliente)
-                };
-            }
-            var envoltura = document.createElement('div');
-            envoltura.className = 'pmu-campo pmu-campo-' + campo.id;
-            envoltura.setAttribute('data-campo', campo.id);
-            var etiqueta = document.createElement('p');
-            etiqueta.className = 'pmu-campo-titulo';
-            etiqueta.textContent = campo.titulo_cliente || '';
-            if (campo.titulo_cliente) { envoltura.appendChild(etiqueta); }
-            var cuerpo = document.createElement('div');
-            cuerpo.className = 'pmu-campo-cuerpo';
-            cuerpo.innerHTML = campo.contenido || '';
-            envoltura.appendChild(cuerpo);
-            if (campo.texto_ayuda) {
-                var ayuda = document.createElement('p');
-                ayuda.className = 'pmu-campo-ayuda';
-                ayuda.textContent = campo.texto_ayuda;
-                envoltura.appendChild(ayuda);
-            }
-            raizEl.appendChild(envoltura);
-            if (campo.css) {
-                var estilo = document.createElement('style');
-                estilo.textContent = campo.css;
-                envoltura.appendChild(estilo);
-            }
-            if (campo.script) {
-                try {
-                    var fn = new Function('ctx', 'root', 'return (' + campo.script + ')(ctx, root);');
-                    fn(contextoRaiz(estado), cuerpo);
-                } catch (e) {
-                    estado[campo.id] = { valor: null, cliente: '' };
-                }
-            } else {
-                var entrada = cuerpo.querySelector('input,textarea,select');
-                if (entrada) {
-                    var recolectar = function () {
-                        estado[campo.id] = { valor: entrada.value, cliente: entrada.value };
-                    };
-                    if (previo) {
-                        // Edicion (T016): lo guardado manda si el campo es un input.
-                        entrada.value = previo.cliente !== '' ? previo.cliente : previo.valor;
-                    }
-                    entrada.addEventListener('input', recolectar);
-                    recolectar();
-                }
-            }
-        });
-        return estado;
+        if (typeof window.PMUCampo !== 'undefined' && window.PMUCampo.montar) {
+            return window.PMUCampo.montar(raizEl, campos, inicial);
+        }
+        // Sin el modulo compartido (no deberia pasar): aviso y no se monta nada.
+        if (typeof console !== 'undefined' && console.warn) {
+            console.warn('PMU: falta campo-montar.js; los campos no se montan.');
+        }
+        return {};
     }
 
     /** Carga perezosa del render-core (contrato AGENTS 2.1; igual que admin.js). */

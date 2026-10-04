@@ -40,26 +40,16 @@
 
 - [X] T006 [US1] `admin/campos.php` REESCRITO (115 -> 98 lineas): el `<a href="?ec_campo_editar=">` y el card de edicion separado desaparecen; cada fila trae su `<tr class="ec-campo-form-fila" hidden>` con el editor. Tabla v2 (nombre / titulo comprador / categorias / plantilla / uso en N PDFs). **El markup de la fila vive en un solo sitio**, `Personalizador_PDF_Plugin::fila_campo_html()` + `form_campo_html()`, que usa la pagina y la respuesta JSON del alta (sin plantilla duplicada en JS). Nuevo panel "Dados de baja" con `Restaurar`. GET `ec_campo_editar` eliminado.
 - [X] T007 [US1] `assets/admin.js`: `pintarFila()` repinta con lo que devuelve el SERVIDOR (`campo` de la respuesta), `alternarEditor()` abre/cierra el editor sin navegar, `ec-cancelar` cierra sin escribir, `enlazarFormularios()` reutilizable para filas nuevas, alta sin recargar (inserta el HTML del servidor), baja quita fila + formulario, restauracion con recarga. Reutiliza `pmuForm`/`paresDe`.
-- [X] T008 [US1] El alta y el editor ya usan el formato v2 (**sin `tipo`**, con `plantilla`); el modal de alta rapida de la pestana PDF (`admin/pdfs.php`) queda para su propia fase (ver nota).
-- [ ] T008b [US1] `admin/pdfs.php`: el modal `ec-modal-campo` ("Nuevo campo" rapido dentro del PDF) todavia manda `tipo` y `titulo_cliente`; hay que pasarlo a `nombre` + `plantilla` + `titulo_cliente` y refrescar sus selects. **Pendiente: es el unico consumidor de la UI v1 que quedo.**
+- [X] T008 [US1] El alta y el editor de la pestana Campos usan el formato v2 (**sin `tipo`**, con `plantilla`).
+- [X] T008b [US1] `admin/pdfs.php` + `admin.js`: el modal de alta rapida (`ec-modal-campo`) pasa a v2 — `nombre` + `plantilla` (texto|select|imagen) + `titulo_cliente` + `categorias`; fuera el `tipo` y el checkbox `visible`. El handler manda el payload v2 y arma la etiqueta del select con el nombre que devuelve el servidor (`campo.datos.nombre`). **Ultimo consumidor de la UI v1 eliminado.** Verificado en el lab: el boton abre el modal, crea el campo y agrega la opcion al select de `campos_ids[]`.
 
 ## Fase 2 - US2 Probar el campo
 
-- [ ] T009 [US2][P] `assets/campo-montar.js` (nuevo): `PMUCampo.montar(raiz, campos, inicial)` con las
-  reglas de salida de `cliente` (`campo.js` > `data-rol` > **vacio**, sin traduccion automatica,
-  D21). Expone `PMUCampo` en `window`. No ejecuta nada de la ficha (la ficha lo consumira en T010).
-- [ ] T010 [US2] `assets/tienda.js`: sustituir el montaje de `montarCampos()` por `PMUCampo.montar()`
-  **sin tocar el bloque `PURO`** (testeable en Node). Se elimina `<p class="pmu-campo-titulo">`.
-  Puerta: `node --check` + verificar que `PURO` sigue exportando.
-- [ ] T011 [US2] `admin/campos.php` + `admin.js`: panel de prueba en `<iframe srcdoc>` de 350px con
-  el HTML del campo, su CSS, el `global.css` prefijado con `[data-pmu-panel]`, `<link>` a los estilos
-  ya encolados en la pagina, y `campo.js` con un `PMU_CAMPO` simulado. Muestra `{valor, cliente}` en
-  vivo; un `script` que lanza excepcion se ve como error sin romper la consola (FR-004, FR-005,
-  FR-006, FR-007, FR-008). Para un campo con cargador, "Probar" dibuja las ranuras y **no sube
-  nada** (FR-009).
-- [ ] T012 [US2] `tests/campos-contrato.test.js` (nuevo): verifica que `campo-montar.js` monta con
-  las 4 reglas, que `tienda.js` lo consume, que existe el iframe con `srcdoc` y ancho 350, y que
-  ningun modulo cliente tiene un `$('<tag` sin `>` (atrapa el bug de la seccion 11 de AGENTS).
+- [X] T009 [US2][P] `assets/campo-montar.js` (NUEVO): `PMUCampo.montar/montarUno/contextoRaiz/valorDe` con las 4 reglas de salida (campo.js > `data-rol` > primer control > vacio). **NO inyecta titulo** (D20) y **NO traduce** (D21). Exporta `PMUCampo` tambien en Node para testearlo. Sin dependencias.
+- [X] T010 [US2] `assets/tienda.js`: `montarCampos()` ahora **delega en `PMUCampo.montar()`** (se borro su copia de `contextoRaiz` y del montaje; sigue exportando `PURO`); avisa por consola si falta el modulo. `assets_ficha()` encola `campo-montar.js` **antes** de `tienda.js`. `campos_panel()` entrega los nombres v2 (`htm`/`js`), acepta la tupla v1 (arnes legacy) y **excluye los campos `protegido`** (FR-040).
+- [X] T011 [US2] Boton **"Probar"** por fila: `<iframe srcdoc>` de **350px** (el `max-width` real de `.pmu-panel`) que enlaza las hojas de estilo ya presentes en la pagina, monta el campo con `PMUCampo.montar()` y muestra en vivo el par `valor`/`cliente`. El iframe aisla un CSS runaway (FR-004, FR-005, FR-007, FR-008). Verificado en el lab: monta el HTML, ejecuta el JS y aplica el CSS **sin tocar la pagina**. `admin.css` gana el bloque `.ec-pv*`.
+- [X] T012 [US2] `tests/campos-contrato.test.js` (NUEVO): corre el modulo en un `vm` con DOM minimo; verifica las reglas de salida, que `tienda.js` delega en el, que NO se inyecta titulo, que NO se traduce y que acepta los nombres legacy. **CAMPOS CONTRATO OK.**
+- [ ] T011b [US2] FR-006 (el `global.css` con prefijo `[data-pmu-panel]`) y FR-009 (el "Probar" de un campo **con cargador** dibuja las ranuras sin subir nada) dependen de F5 (T018-T020) y F6 (T021-T023); quedan ahi.
 
 ## Fase 3 - US3 Buscar / filtrar / ordenar
 

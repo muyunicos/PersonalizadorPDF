@@ -389,15 +389,29 @@ class Personalizador_PDF_Plugin
     {
         $out = [];
         foreach ($elegidos as $cid => $c) {
+            // Acepta la fila v2 de cargar_campos() y la tupla v1 (arnés legacy).
+            $v2 = isset($c['datos']) && is_array($c['datos']);
+            $d = $v2 ? $c['datos'] : [
+                'nombre' => isset($c[1]) ? (string) $c[1] : '',
+                'titulo_cliente' => isset($c[1]) ? (string) $c[1] : '',
+                'array' => !empty($c[9]),
+                'protegido' => false,
+            ];
+            $cuerpo = $v2 ? (string) $c['htm'] : (isset($c[6]) ? (string) $c[6] : '');
+            $estilo = $v2 ? (string) $c['css'] : (isset($c[7]) ? (string) $c[7] : '');
+            $guion = $v2 ? (string) $c['js'] : (isset($c[8]) ? (string) $c[8] : '');
+            // Un campo protegido NUNCA viaja al HTML de la ficha (FR-040).
+            if (!empty($d['protegido'])) {
+                continue;
+            }
             $out[] = [
                 'id' => (int)$cid,
-                'titulo_cliente' => (string)$c[1],
-                'tipo' => (string)$c[2],
-                'texto_ayuda' => (string)$c[4],
-                'contenido' => (string)$c[6],
-                'css' => (string)$c[7],
-                'script' => (string)$c[8],
-                'array' => !empty($c[9]),
+                'nombre' => (string)$d['nombre'],
+                'titulo_cliente' => (string)$d['titulo_cliente'],
+                'htm' => $cuerpo,
+                'css' => $estilo,
+                'js' => $guion,
+                'array' => !empty($d['array']),
             ];
         }
         return $out;
@@ -620,10 +634,18 @@ class Personalizador_PDF_Plugin
             PERSONALIZADOR_PDF_VERSION,
             true
         );
+        // Modulo de montaje de campos (spec 012, T009): lo consume la ficha y el preview.
+        wp_enqueue_script(
+            'personalizador-pdf-campo-montar',
+            PERSONALIZADOR_PDF_URL . 'assets/campo-montar.js',
+            [],
+            PERSONALIZADOR_PDF_VERSION,
+            true
+        );
         wp_enqueue_script(
             'personalizador-pdf-tienda',
             PERSONALIZADOR_PDF_URL . 'assets/tienda.js',
-            ['personalizador-pdf-mockup-render', 'personalizador-pdf-selector'],
+            ['personalizador-pdf-mockup-render', 'personalizador-pdf-selector', 'personalizador-pdf-campo-montar'],
             PERSONALIZADOR_PDF_VERSION,
             true
         );
@@ -2392,6 +2414,7 @@ class Personalizador_PDF_Plugin
                     <td class="ec-c-uso"><?php echo (int)$c['usado_pdf_n']; ?> PDF(s)</td>
                     <td class="ec-c-acciones">
                         <button type="button" class="button button-small ec-editar">Editar</button>
+                        <button type="button" class="button button-small ec-probar">Probar</button>
                         <form method="post" action="<?php echo $post; ?>" class="ec-form-campo-baja">
                             <input type="hidden" name="action" value="personalizador_pdf_campo_baja">
                             <input type="hidden" name="id" value="<?php echo (int)$cid; ?>">
@@ -2770,6 +2793,14 @@ class Personalizador_PDF_Plugin
             PERSONALIZADOR_PDF_VERSION
         );
         // El JS de la consola (modal, galeria wp.media) solo se usa en "PDFs";
+        // El preview del campo usa el MISMO modulo que la ficha (spec 012, T011).
+        wp_enqueue_script(
+            'personalizador-pdf-campo-montar',
+            PERSONALIZADOR_PDF_URL . 'assets/campo-montar.js',
+            [],
+            PERSONALIZADOR_PDF_VERSION,
+            true
+        );
         // pmu-core (admin.js: pmuPost/pmuAviso/pmuForm) tambien en "Campos",
         // "Pedidos" (solo el submit "Regenerar PDF") y "Test".
         if ($tab !== 'pdfs' && $tab !== 'campos' && $tab !== 'pedidos' && $tab !== 'test') {

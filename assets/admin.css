@@ -309,6 +309,15 @@
 .ec-subir-status.ec-ok, .ec-procesar-status.ec-ok, .ec-campo-status.ec-ok { color: #00a32a; }
 .ec-subir-status.ec-error, .ec-procesar-status.ec-error, .ec-campo-status.ec-error { color: #d63638; }
 .ec-procesar-status a { margin-left: 6px; }
+
+/* Preview del campo (spec 012, T011): iframe de 350px con el CSS del tema. */
+.ec-campo-preview > td { padding: 10px 12px; background: #f6f7f7; }
+.ec-pv-titulo { margin: 0 0 6px; font-weight: 600; color: #1d2327; }
+.ec-pv-frame { border: 1px solid #c3c4c7; background: #fff; display: block; max-width: 100%; }
+.ec-campos-tabla td.ec-c-acciones { white-space: nowrap; }
+.ec-campos-tabla td.ec-c-acciones .ec-form-campo-baja { display: inline-block; margin-left: 4px; }
+.ec-campos-tabla tr.ec-editando { background: #f0f6fc; }
+.ec-campo-form-fila > td { background: #fbfbfc; }
 /* Fotos del mockup: lista con miniatura (editor de capas "Foto"). */
 .ec-mockup-fotos-admin { margin-top: 8px; }
 .ec-mockup-status { font-size: 12px; margin-left: 6px; }

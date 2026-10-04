@@ -652,6 +652,106 @@ jQuery(function ($) {
         }, 1200);
     }
 
+    /* ============ Preview del campo (spec 012, T011) ============
+           Un <iframe srcdoc> de 350px (el max-width real de .pmu-panel) que
+           monta el campo con `PMUCampo.montar()`: el MISMO modulo que usa la
+           ficha, asi que el admin ve exactamente lo que vera el comprador.
+           Va en un iframe a proposito: un CSS runaway no rompe la consola. */
+        function hojasDelTema() {
+            var hrefs = [];
+            $('link[rel="stylesheet"]').each(function () {
+                var h = $(this).attr('href');
+                if (h) { hrefs.push(h); }
+            });
+            return hrefs;
+        }
+
+        function escapar(s) {
+            return String(s === undefined || s === null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        /** Trae el campo fresco del servidor (el formulario puede traer cambios sin guardar). */
+        function leerCampoDeLaFila($fila) {
+            var $form = $fila.next('.ec-campo-form-fila').find('form.ec-form-campo');
+            var $any = $form.length ? $form : $fila.closest('.card').find('form.ec-form-campo').filter(':visible').first();
+            if (!$any.length) { return null; }
+            var $campo = $fila.next('.ec-campo-form-fila').find('form.ec-form-campo');
+            if (!$campo.length) { return null; }
+            var val = function (sel) { return ($campo.find(sel).val() || ''); };
+            return {
+                id: parseInt($fila.attr('data-id'), 10) || 0,
+                htm: val('textarea[name=html]'),
+                css: val('textarea[name=css]'),
+                js: val('textarea[name=js]')
+            };
+        }
+
+        function construirPreview(campo, $status) {
+            var enlaces = hojasDelTema().map(function (h) {
+                return '<link rel="stylesheet" href="' + escapar(h) + '">';
+            }).join('\n');
+            var doc = '<!DOCTYPE html><html><head><meta charset="utf-8">'
+                + enlaces
+                + '<style>body{margin:0;padding:12px;font:14px/1.4 system-ui,sans-serif;background:#fff}'
+                + '.pmu-campo{border:1px dashed #c3c4c7;padding:8px;margin:0 0 10px}'
+                + '.ec-pv-dato{font:11px/1.3 monospace;color:#50575e;margin-top:8px}'
+                + '</style></head><body>'
+                + '<div id="pmu-preview"></div>'
+                + '<div class="ec-pv-dato" id="pmu-preview-dato">valor: - | cliente: -</div>'
+                + '<script>window.PMUCampo = ' + JSON.stringify(PMUCampo) + ';</script>'
+                + '</body></html>';
+            return doc;
+        }
+
+        /* "Probar" monta el campo en el iframe con el MISMO modulo que la ficha. */
+        $(document).on('click', '.ec-c-acciones .ec-probar', function (ev) {
+            ev.preventDefault();
+            var $fila = $(this).closest('tr[data-id]');
+            if (typeof PMUCampo === 'undefined') {
+                pmuAviso($fila.closest('.card, .wrap'),
+                    'Falta campo-montar.js: no se puede previsualizar.', true);
+                return;
+            }
+            var $editor = $fila.next('.ec-campo-form-fila');
+            if ($editor.prop('hidden')) {
+                // Abrimos el editor para que "Probar" use lo que hay escrito.
+                alternarEditor($fila, true);
+            }
+            var campo = leerCampoDeLaFila($fila);
+            if (!campo || !campo.id) { return; }
+            var $marco = $fila.next('.ec-campo-preview');
+            if (!$marco.length) {
+                $marco = $('<tr class="ec-campo-preview" hidden><td colspan="7"></td></tr>');
+                $editor.after($marco);
+            }
+            var $celda = $marco.children('td').empty();
+            var $wrap = $('<div class="ec-pv"></div>').appendTo($celda);
+            $wrap.append($('<p class="ec-pv-titulo"></p>').text('Así lo verá el comprador (' + campo.id + ')'));
+            var $iframe = $('<iframe class="ec-pv-frame" title="Vista previa del campo" width="350"></iframe>').appendTo($wrap);
+            $iframe.attr('srcdoc', construirPreview(campo));
+            $wrap.append($('<span class="ec-campo-status" aria-live="polite"></span>'));
+            $marco.prop('hidden', false);
+            // Al cargar el iframe, montamos el campo y pintamos el par valor/cliente.
+            $iframe.on('load', function () {
+                var doc = this.contentDocument;
+                if (!doc || !doc.getElementById('pmu-preview')) { return; }
+                var estado;
+                try {
+                    estado = PMUCampo.montar(doc.getElementById('pmu-preview'), [campo]);
+                } catch (e) {
+                    $wrap.find('.ec-campo-status').addClass('ec-error').text('El JS del campo fallo: ' + e.message);
+                    return;
+                }
+                var par = estado[campo.id] || {};
+                var dato = doc.getElementById('pmu-preview-dato');
+                if (dato) {
+                    dato.textContent = 'valor: ' + JSON.stringify(par.valor === undefined ? null : par.valor)
+                        + '  |  cliente: ' + JSON.stringify(par.cliente || '');
+                }
+            });
+        });
+
     /* ============ 3. Acciones sin recarga (re-analizar, borrar, regenerar) ============ */
 
     // Re-analizar: recarga solo en exito (grupos nuevos); error inline.
