@@ -89,6 +89,12 @@
   engancha el `global.js` con `wp_add_inline_script(..., 'before')` sobre `campo-montar`: ese es el
   **unico** orden prometido (D21). Sin `traducir()` ni tabla. `campos_de_la_consulta()` resuelve el
   conteo en `wp_enqueue_scripts`, que corre antes de que el panel se pinte. FR-023…FR-027.
+  **Verificado en navegador real** (lab, pagina con el shortcode
+  `[pmu_personalizar pdf="circulo6cm"]`): el CSS global aplica DENTRO del panel y **no** fuera
+  (`.pmu-panel-titulo` da `rgb(9,8,7)` dentro y otra cosa fuera), y el `global.js` corre antes de
+  `campo-montar`. La pagina gemela con un PDF sin campos **no** carga ni el CSS ni el JS global
+  (FR-025 negativo). Arnés del lab: `%TEMP%/pmu-e2e/sembrar-shortcode.php` + `smoke-ficha.js`
+  (13 checks, sin WooCommerce: el shortcode basta para ejercitar el panel del comprador).
 - [X] T020 [US5] `admin/campos.php`: tarjeta "Estilos globales / Script global" **arriba** (FR-024),
   guardada por `pmuPost` con su propia action `personalizador_pdf_campo_global`. Imprime ademas un
   portador `<script type="text/css" id="pmu-campo-global-css">` con el CSS **ya prefijado**: el

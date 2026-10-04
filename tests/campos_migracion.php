@@ -6,7 +6,11 @@
 define('ABSPATH', 'pmu-test');
 define('PERSONALIZADOR_PDF_PATH', dirname(__DIR__) . DIRECTORY_SEPARATOR);
 
-$TMP = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pmu-campos-' . getmypid();
+$TMP = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pmu-campos-' . getmypid()
+    // Sufijo unico: Windows reutiliza PIDs y este banco NO borra el directorio al
+    // empezar, asi que uno viejo con el mismo PID dejaba estado sucio y hacia
+    // fallar un check de conteo de forma intermitente.
+    . '-' . bin2hex(random_bytes(4));
 @mkdir($TMP . DIRECTORY_SEPARATOR . 'pmu', 0777, true);
 
 $GLOBALS['pmu_basedir'] = $TMP;
