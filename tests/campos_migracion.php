@@ -24,6 +24,16 @@ require_once PERSONALIZADOR_PDF_PATH . 'inc' . DIRECTORY_SEPARATOR . 'class-pmu-
 
 $fallos = 0;
 function check($n, $ok) { global $fallos; if (!$ok) { $fallos++; } echo ($ok ? '  OK   ' : '  FALLA ') . $n . "\n"; }
+// Posicion de un id dentro de items[] (los dados de baja siguen listados).
+function pos_indice($m, $id)
+{
+    foreach ($m->indice_campos()['items'] as $n => $f) {
+        if ((int) $f['id'] === (int) $id) {
+            return $n;
+        }
+    }
+    return -1;
+}
 function lanza($fn) {
     try { $fn(); return false; } catch (Exception $e) { return $e->getMessage(); }
 }
@@ -135,32 +145,10 @@ check('el campo 1 NO se toco con las escrituras rechazadas', trim(file_get_conte
 // Ver specs/012-campos-consola/tasks.md.
 
 // (referencia: posicion de un id dentro de items[])
-/* --- BLOQUE T003 COMENTADO (se reactiva al landing de T003+T005) ---
-Si usas esto como referencia, el helper era:
-function pos_indice($m, $id) {
-    foreach ($m->indice_campos()['items'] as $n => $f) {
-        if ((int)$f['id'] === (int)$id) {
-            return $n;
-        }
-    }
-    return -1;
-}
-function lanza($fn) {
-    try { $fn(); return false; } catch (Exception $e) { return $e->getMessage(); }
-}
---- cuerpo huerfano del bloque, comentado para no ejecutarlo: */
-/* --- CUERPO DEL BLOQUE T003 COMENTADO (se reactiva con T003+T005) ---
-{
-    foreach ($m->indice_campos()['items'] as $n => $f) {
-        if ((int)$f['id'] === (int)$id) {
-            return $n;
-        }
-    }
-    return -1;
-}
-
-// --- Alta ---
-$i1 = $m->campo_alta('texto', ['nombre' => 'Color', 'categorias' => ['pintura', 'navidad']], '<input data-rol="valor">', '.c{}', '');
+// --- BLOQUE T003 (referencia de helpers; reactivado con T003+T005) ---
+// --- INICIO DEL CUERPO (T003 reactivado) ---
+// (la llave de cierre del cuerpo v1 se elimino con el revert; el bloque arranca aqui)
+    $i1 = $m->campo_alta('texto', ['nombre' => 'Color', 'categorias' => ['pintura', 'navidad']], '<input data-rol="valor">', '.c{}', '');
 check('alta NO reutiliza el id 3 (dado de baja)', $i1 === 4);
 check('alta escribe datos.json', is_file($m->ruta_campo($i1, 'datos.json')));
 check('alta guarda categorias en meta', $m->indice_campos()['meta'][(string)$i1]['categorias'] === ['pintura', 'navidad']);
@@ -226,6 +214,6 @@ check('campo_listar trae el codigo', isset($lst[$i1]['htm'], $lst[$i1]['css'], $
 check('campo_listar trae creado y modificado', !empty($lst[$i1]['creado']) && $lst[$i1]['modificado'] > 0);
 check('campo_listar ordena por id', array_keys($lst) === array_values(array_unique(array_keys($lst))));
 
---- FIN DEL CUERPO COMENTADO (T003) --- */
+// --- FIN DEL CUERPO (T003) ---
 echo $fallos === 0 ? "\nCAMPOS V2 OK\n" : "\nCAMPOS V2 FALLA: $fallos\n";
 exit($fallos === 0 ? 0 : 1);

@@ -964,95 +964,330 @@ class PMU_Uploads
         ];
     }
 
-    /** Guarda el catalogo global de campos (atomico). Devuelve true/false. */
-    public function guardar_campos($items)
+    /* ============ CRUD de campos v2 (spec 012, T003) ============ */
+
+    /**
+     * Indice v2 completo: {version, items, meta}. Tolera la ausencia del
+     * archivo (devuelve vacio) y normaliza a la forma v2 para poder listar.
+     */
+    public function indice_campos()
     {
-        return $this->escribir_json(
-            $this->ruta_campos(),
-            ['items' => array_values($items)]
-        );
+        $ruta = $this->ruta_campos();
+        $vacio = ['version' => 2, 'items' => [], 'meta' => []];
+        if (!is_file($ruta)) {
+            return $vacio;
+        }
+        $crudo = (string) @file_get_contents($ruta);
+        $datos = $crudo === '' ? null : json_decode($crudo, true);
+        if (!is_array($datos) || !isset($datos['items']) || !is_array($datos['items'])) {
+            return $vacio;
+        }
+        if (isset($datos['version']) && (int) $datos['version'] >= 2) {
+            return [
+                'version' => (int) $datos['version'],
+                'items' => array_values($datos['items']),
+                'meta' => isset($datos['meta']) && is_array($datos['meta']) ? $datos['meta'] : [],
+            ];
+        }
+        return $vacio; // v1 sin migrar: lo convierte la migracion one-shot
     }
 
-    /** Alta de campo: id = hueco mas bajo o max+1. Devuelve el id. */
-    public function campo_alta(array $tupla)
+    /** Guarda el indice v2 (atomico). Devuelve true/false. */
+    public function guardar_indice_campos(array $indice)
     {
-        $res = $this->campos_catalogo('alta');
-        $items = $res['cat']['items'];
+        return $this->escribir_json($this->ruta_campos(), [
+            'version' => 2,
+            'items' => array_values($indice['items']),
+            'meta' => isset($indice['meta']) && is_array($indice['meta']) ? $indice['meta'] : [],
+        ]);
+    }
+
+    /** Fila del indice de un campo (null si no existe). */
+    private function fila_indice($indice, $id)
+    {
+        $id = (int)$id;
+        foreach ($indice['items'] as $f) {
+            if (isset($f['id']) && (int) $f['id'] === $id) {
+                return $f;
+            }
+        }
+        return null;
+    }
+
+    /** Actualiza meta.{id} (creado una vez; modificado = time(), el `?v=`). */
+    private function tocar_meta(array $indice, $id, ?array $categorias = null)
+    {
+        $k = (string)$id;
+        $indice['meta'][$k] = [
+            'creado' => isset($indice['meta'][$k]['creado'])
+                ? $indice['meta'][$k]['creado']
+                : gmdate('Y-m-d\TH:i:s\Z'),
+            'modificado' => time(),
+            'categorias' => $categorias !== null
+                ? array_values(array_unique($categorias))
+                : (isset($indice['meta'][$k]['categorias']) ? $indice['meta'][$k]['categorias'] : []),
+        ];
+        return $indice;
+    }
+
+    /** Plantilla valida: imagen|select|texto|'' (cualquier otra -> ''). */
+    private function plantilla_valida($plantilla)
+    {
+        $p = strtolower(trim((string)$plantilla));
+        return in_array($p, ['imagen', 'select', 'texto'], true) ? $p : '';
+    }
+
+    /** Categorias saneadas (minusculas, `-`, max 32) desde datos.json. */
+    private function categorias_de(array $datos)
+    {
+        $crudas = isset($datos['categorias'])
+            ? (is_array($datos['categorias']) ? $datos['categorias'] : explode(',', (string)$datos['categorias']))
+            : [];
+        $out = [];
+        foreach ($crudas as $c) {
+            $c = strtolower(trim(preg_replace('/[^a-z0-9_\-]+/i', '-', (string)$c), '-'));
+            if ($c !== '') {
+                $out[] = substr($c, 0, 32);
+            }
+        }
+        return array_values(array_unique($out));
+    }
+
+    /** Normaliza y acota los slots de `datos.json`. */
+    private function normalizar_datos_campo(array $datos, $plantilla = '')
+    {
+        $corta = function ($v, $n) {
+            $v = trim(strip_tags((string)$v));
+            return function_exists('mb_substr') ? mb_substr($v, 0, $n, 'UTF-8') : substr($v, 0, $n);
+        };
+        return [
+            'nombre' => $corta(isset($datos['nombre']) ? $datos['nombre'] : '', 200),
+            'descripcion' => $corta(isset($datos['descripcion']) ? $datos['descripcion'] : '', 500),
+            'titulo_cliente' => $corta(isset($datos['titulo_cliente']) ? $datos['titulo_cliente'] : '', 200),
+            'texto_ayuda' => $corta(isset($datos['texto_ayuda']) ? $datos['texto_ayuda'] : '', 500),
+            'array' => !empty($datos['array']),
+            'protegido' => !empty($datos['protegido']),
+            'plantilla' => $this->plantilla_valida($plantilla),
+            'categorias' => $this->categorias_de($datos),
+            'cargador' => !empty($datos['cargador']) ? $datos['cargador'] : null,
+        ];
+    }
+
+    /**
+     * Alta de campo v2. `$datos` son los slots de `datos.json` (opcionales):
+     * nombre, descripcion, titulo_cliente, texto_ayuda, array, protegido,
+     * categorias, cargador. `$plantilla` marca el origen (imagen|select|texto|'').
+     * El **id es el hueco mas bajo libre** y los ids dados de baja NUNCA se
+     * reutilizan (quedan en el indice con baja:true). Devuelve el id.
+     */
+    public function campo_alta($plantilla = '', array $datos = [], $htm = '', $css = '', $js = '')
+    {
+        // Puente v1 (spec 012, T005): los llamadores legacy pasan la tupla de 10
+        // slots como primer argumento. Se traduce aqui y se retira con el arnés
+        // en F1/F2. Firma v2 = ($plantilla, $datos, $htm, $css, $js).
+        if (is_array($plantilla)) {
+            $t = $plantilla;
+            $plantilla = '';
+            $datos = [
+                'nombre' => isset($t[1]) ? (string)$t[1] : '',
+                'titulo_cliente' => isset($t[1]) ? (string)$t[1] : '',
+                'texto_ayuda' => isset($t[4]) ? (string)$t[4] : '',
+                'categorias' => isset($t[3]) ? (array)$t[3] : [],
+                'array' => !empty($t[9]),
+            ];
+            $htm = isset($t[6]) ? (string)$t[6] : '';
+            $css = isset($t[7]) ? (string)$t[7] : '';
+            $js = isset($t[8]) ? (string)$t[8] : '';
+        }
+        $indice = $this->indice_campos();
         $usados = [];
-        foreach ($items as $t) {
-            $usados[(int)$t[0]] = true;
+        foreach ($indice['items'] as $f) {
+            if (isset($f['id'])) {
+                $usados[(int) $f['id']] = true;
+            }
         }
         $id = 1;
         while (isset($usados[$id])) {
             $id++;
         }
-        $tupla[0] = $id;
-        // Sandbox del script: se aplica al guardar (contract campos.md), sea
-        // via plugin (campo_desde_post) o via motor directo (tests/handlers).
-        if (isset($tupla[8])) {
-            $this->validar_script_campo($tupla[8]);
-        }
-        $items[] = array_values($tupla);
-        if (!$this->guardar_campos($items)) {
+        $datos = $this->normalizar_datos_campo($datos, $plantilla);
+        $indice['items'][] = ['id' => $id, 'plantilla' => $datos['plantilla'], 'baja' => false];
+        $indice = $this->tocar_meta($indice, $id, $datos['categorias']);
+        if (!$this->guardar_indice_campos($indice) || !$this->escribir_campo($id, $datos, $htm, $css, $js)) {
             throw new Exception('motor:alta:directorio:no_escribible');
         }
         return $id;
     }
 
-    /** Baja de campo: tombstone [id, "", ""]. */
+    /**
+     * Baja de campo v2: marca `baja:true` en el indice y **CONSERVA** los
+     * archivos (a diferencia de la v1, que los destruia con el tombstone), de
+     * modo que `campo_restaurar()` los recupere integros. El id queda ocupado
+     * para siempre.
+     */
     public function campo_baja($id)
     {
-        $id = (int)$id;
-        if ($id < 1) {
-            throw new Exception('motor:baja:campo:invalido');
-        }
-        $res = $this->campos_catalogo('baja');
-        $items = $res['cat']['items'];
+        $id = $this->campo_id_seguro($id, 'baja');
+        $indice = $this->indice_campos();
         $hubo = false;
-        foreach ($items as &$t) {
-            if ((int)$t[0] === $id) {
-                $t = [$id, '', ''];
+        foreach ($indice['items'] as &$f) {
+            if (isset($f['id']) && (int) $f['id'] === $id) {
+                $f['baja'] = true;
                 $hubo = true;
             }
         }
-        unset($t);
+        unset($f);
         if (!$hubo) {
-            $items[] = [$id, '', ''];
+            $indice['items'][] = ['id' => $id, 'plantilla' => '', 'baja' => true];
+            $indice = $this->tocar_meta($indice, $id, []);
         }
-        if (!$this->guardar_campos($items)) {
+        if (!$this->guardar_indice_campos($indice)) {
             throw new Exception('motor:baja:directorio:no_escribible');
         }
         return true;
     }
 
-    /** Edicion de campo por id. Lanza si el id no existe. */
-    public function campo_editar($id, array $tupla)
+    /**
+     * Edicion de campo v2: reescribe `datos.json` + los 3 archivos de codigo y
+     * refresca `meta.{id}.modificado` (el `?v=`). **No toca** el flag `baja`.
+     * Lanza motor:editar:campo:inexistente:N si el id no esta en el indice.
+     */
+    public function campo_editar($id, array $datos, $htm = '', $css = '', $js = '')
     {
-        $id = (int)$id;
-        if ($id < 1) {
-            throw new Exception('motor:editar:campo:invalido');
+        // Puente v1 (spec 012, T005): la tupla de 10 slots como 2do argumento.
+        if (isset($datos[1]) && !isset($datos['nombre']) && count($datos) > 3) {
+            $t = $datos;
+            $datos = [
+                'nombre' => isset($t[1]) ? (string)$t[1] : '',
+                'titulo_cliente' => isset($t[1]) ? (string)$t[1] : '',
+                'texto_ayuda' => isset($t[4]) ? (string)$t[4] : '',
+                'categorias' => isset($t[3]) ? (array)$t[3] : [],
+                'array' => !empty($t[9]),
+            ];
+            $htm = isset($t[6]) ? (string)$t[6] : '';
+            $css = isset($t[7]) ? (string)$t[7] : '';
+            $js = isset($t[8]) ? (string)$t[8] : '';
         }
-        $res = $this->campos_catalogo('editar');
-        $items = $res['cat']['items'];
-        $hubo = false;
-        foreach ($items as &$t) {
-            if ((int)$t[0] === $id) {
-                $tupla[0] = $id;
-                if (isset($tupla[8])) {
-                    $this->validar_script_campo($tupla[8]);
-                }
-                $t = array_values($tupla);
-                $hubo = true;
-            }
-        }
-        unset($t);
-        if (!$hubo) {
+        $id = $this->campo_id_seguro($id, 'editar');
+        $indice = $this->indice_campos();
+        $fila = $this->fila_indice($indice, $id);
+        if ($fila === null) {
             throw new Exception('motor:editar:campo:inexistente:' . $id);
         }
-        if (!$this->guardar_campos($items)) {
+        $datos = $this->normalizar_datos_campo($datos, isset($fila['plantilla']) ? $fila['plantilla'] : '');
+        $indice = $this->tocar_meta($indice, $id, $datos['categorias']);
+        if (!$this->guardar_indice_campos($indice) || !$this->escribir_campo($id, $datos, $htm, $css, $js)) {
             throw new Exception('motor:editar:directorio:no_escribible');
         }
         return true;
+    }
+
+    /**
+     * Restaura un campo dado de baja: vuelve a `baja:false` y conserva nombre,
+     * HTML, CSS y JS intactos. Lanza motor:restaurar:campo:inexistente:N si el
+     * id no existe o no estaba dado de baja.
+     */
+    public function campo_restaurar($id)
+    {
+        $id = $this->campo_id_seguro($id, 'restaurar');
+        $indice = $this->indice_campos();
+        $hubo = false;
+        foreach ($indice['items'] as &$f) {
+            if (isset($f['id']) && (int) $f['id'] === $id) {
+                if (empty($f['baja'])) {
+                    throw new Exception('motor:restaurar:campo:inexistente:' . $id);
+                }
+                $f['baja'] = false;
+                $hubo = true;
+            }
+        }
+        unset($f);
+        if (!$hubo) {
+            throw new Exception('motor:restaurar:campo:inexistente:' . $id);
+        }
+        $indice = $this->tocar_meta($indice, $id);
+        if (!$this->guardar_indice_campos($indice)) {
+            throw new Exception('motor:restaurar:directorio:no_escribible');
+        }
+        return true;
+    }
+
+    /** Duplica un campo: copia sus archivos a un id NUEVO. */
+    public function campo_duplicar($id)
+    {
+        $id = $this->campo_id_seguro($id, 'duplicar');
+        $origen = $this->leer_campo($id);
+        if ($origen === null) {
+            throw new Exception('motor:duplicar:campo:inexistente:' . $id);
+        }
+        $datos = $origen['datos'];
+        if (!empty($datos['nombre'])) {
+            $datos['nombre'] .= ' (copia)';
+        }
+        return $this->campo_alta(
+            isset($datos['plantilla']) ? $datos['plantilla'] : '',
+            $datos,
+            $origen['htm'],
+            $origen['css'],
+            $origen['js']
+        );
+    }
+
+    /** Marca (o desmarca con '') un campo como plantilla reutilizable. */
+    public function campo_plantilla($id, $plantilla)
+    {
+        $id = $this->campo_id_seguro($id, 'plantilla');
+        $indice = $this->indice_campos();
+        $hubo = false;
+        foreach ($indice['items'] as &$f) {
+            if (isset($f['id']) && (int) $f['id'] === $id) {
+                $f['plantilla'] = $this->plantilla_valida($plantilla);
+                $hubo = true;
+            }
+        }
+        unset($f);
+        if (!$hubo) {
+            throw new Exception('motor:plantilla:campo:inexistente:' . $id);
+        }
+        if (!$this->guardar_indice_campos($indice)) {
+            throw new Exception('motor:plantilla:directorio:no_escribible');
+        }
+        return true;
+    }
+
+    /**
+     * Lista los campos con su codigo. Por defecto solo los activos; con
+     * `$incluir_bajas = true` tambien los dados de baja (panel "Dados de baja"
+     * con su boton Restaurar).
+     */
+    public function campo_listar($incluir_bajas = false)
+    {
+        $indice = $this->indice_campos();
+        $salida = [];
+        foreach ($indice['items'] as $f) {
+            $id = (int) $f['id'];
+            $baja = !empty($f['baja']);
+            if ($baja && !$incluir_bajas) {
+                continue;
+            }
+            $campo = $this->leer_campo($id);
+            $datos = $campo !== null ? $campo['datos'] : [];
+            $meta = isset($indice['meta'][(string)$id]) ? $indice['meta'][(string)$id] : [];
+            $salida[$id] = [
+                'id' => $id,
+                'plantilla' => isset($f['plantilla']) ? $f['plantilla'] : '',
+                'baja' => $baja,
+                'datos' => $datos,
+                'htm' => $campo !== null ? $campo['htm'] : '',
+                'css' => $campo !== null ? $campo['css'] : '',
+                'js' => $campo !== null ? $campo['js'] : '',
+                'categorias' => isset($meta['categorias']) ? $meta['categorias'] : [],
+                'creado' => isset($meta['creado']) ? $meta['creado'] : '',
+                'modificado' => isset($meta['modificado']) ? (int) $meta['modificado'] : 0,
+            ];
+        }
+        ksort($salida);
+        return $salida;
     }
 
     /**

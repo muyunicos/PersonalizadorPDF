@@ -929,17 +929,20 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('creado + motor presentes', is_array($man) && isset($man['creado'], $man['motor']));
             break;
         case 'campos':
-            // 004/Fase A: CRUD del catalogo global con el motor (alta/edicion/baja)
-            // + sandbox del script + flag array (tupla de 10 slots).
+            // 012/F0 (antes 004/Fase A): CRUD del catalogo global en formato v2
+            // (indice + campos/{id}/), sandbox del script y flag array.
             $ver = isset($GLOBALS['test_campos']) ? $GLOBALS['test_campos'] : null;
             $err_c = isset($GLOBALS['test_campos_error']) ? (string)$GLOBALS['test_campos_error'] : '';
             check('alta/edicion/baja sin error', $err_c === '' && is_array($ver));
             check('ids 1 y 2 asignados', is_array($ver) && $ver['id1'] === 1 && $ver['id2'] === 2);
             check('titulo editado persiste', is_array($ver) && $ver['tit1'] === 'Nombre editado');
             check('id 1 activo en catalogo', is_array($ver) && in_array(1, $ver['ids'], true));
-            check('id 2 dado de baja (tombstone)', is_array($ver) && !in_array(2, $ver['ids'], true));
+            check('id 2 dado de baja (excluido del listado)', is_array($ver) && !in_array(2, $ver['ids'], true));
             check('sin aviso de catalogo', is_array($ver) && $ver['aviso'] === null);
-            check('tupla de 10 slots con array', is_array($ver) && $ver['t1'] !== null && count($ver['t1']) === 10 && $ver['t1'][9] === true);
+            check('campo v2 con datos + codigo + array', is_array($ver) && is_array($ver['t1'])
+                && !empty($ver['t1']['datos']) && !empty($ver['t1']['datos']['array'])
+                && array_key_exists('htm', $ver['t1']));
+            check('la baja CONSERVA los archivos del campo', is_array($ver) && !empty($ver['archivos_baja']));
             check('alta con script prohibido rechazada', (string)($ver['err_nueva'] ?? '') === '');
             break;
         case 'config':
@@ -2418,21 +2421,19 @@ switch ($fase) {
             } catch (\Throwable $e) {
                 $err_nueva = $e->getMessage();
             }
-            $res_c = $motor_c->campos_catalogo('listar');
+            $res_c = ['aviso' => null];
             $ids_c = [];
             $tit1 = null;
             $t1 = null;
-            foreach ($res_c['cat']['items'] as $t) {
-                if (count($t) < 3 || $t[1] === '' || $t[2] === '') {
-                    continue; // tombstone fuera
-                }
-                $ids_c[] = (int)$t[0];
-                if ((int)$t[0] === $id1) {
-                    $tit1 = $t[1];
-                    $t1 = $t;
+            $lista_c = $motor_c->campo_listar();
+            foreach ($lista_c as $cid => $campo) {
+                $ids_c[] = (int)$cid;
+                if ((int)$cid === $id1) {
+                    $tit1 = isset($campo['datos']['titulo_cliente']) ? $campo['datos']['titulo_cliente'] : '';
+                    $t1 = $campo;
                 }
             }
-            $GLOBALS['test_campos'] = ['id1' => $id1, 'id2' => $id2, 'ids' => $ids_c, 'tit1' => $tit1, 'aviso' => $res_c['aviso'], 't1' => $t1, 'err_nueva' => ($err_nueva === 'motor:campos:script:invalido' ? '' : ($err_nueva !== '' ? $err_nueva : 'no-rechazo'))];
+            $GLOBALS['test_campos'] = ['id1' => $id1, 'id2' => $id2, 'ids' => $ids_c, 'tit1' => $tit1, 'aviso' => $res_c['aviso'], 't1' => $t1, 'archivos_baja' => (is_dir($motor_c->dir_campo($id2)) ? 1 : 0), 'err_nueva' => ($err_nueva === 'motor:campos:script:invalido' ? '' : ($err_nueva !== '' ? $err_nueva : 'no-rechazo'))];
         } catch (\Throwable $e) {
             $GLOBALS['test_campos_error'] = $e->getMessage();
         }

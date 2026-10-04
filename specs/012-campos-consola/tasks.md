@@ -17,16 +17,7 @@
 
 - [X] T001 [P] Migracion v1 -> v2 one-shot en `PMU_Uploads::migrar_campos_v2()`: backup `campos.json.bak` antes de escribir; escribe `campos/{id}/datos.json` + `campo.htm|css|js` por campo activo; tombstones `[id,"",""]` -> `items[id].baja=true` (sin carpeta; el id queda ocupado para siempre); indice v2 con `version:2` + `meta.{id}.{creado,modificado,categorias}` + `v1_migrado`. **Todo-o-nada**: cualquier fallo restaura el `.bak` (las carpetas que queden son inertes: el indice manda); causa `migracion:fallo:<motivo>`. Idempotente (`version>=2` no hace nada). El mapeo v1->v2 quedo documentado en el docblock (el admin debe revisarlo tras migrar). **Probada con 49 checks en `%TEMP%` sobre un v1 sembrado** (`tests/campos_migracion.php`). NO ejecutada sobre datos reales: requiere aprobacion explicita del usuario.
 - [X] T002 [P] `PMU_Uploads`: rutas del formato nuevo. `dir_campos()` pasa a ser `uploads/pmu/campos/` (el indice `ruta_campos()` sigue en la RAIZ); nuevas `campo_id_seguro()`, `dir_campo($id,$crear)`, `ruta_campo($id,$archivo)` (basename, sin subrutas), `ruta_campo_global()` (allowlist `global.css|global.js`), `ruta_global_css|js()`, mas `leer_campo()`/`escribir_campo()` y `escribir_texto()` (atomica .tmp + rename). Verificado con `tests/campos_migracion.php`.
-- [~] T003 [P] `PMU_Uploads`: CRUD v2. **FUE IMPLEMENTADO Y VERIFICADO (31 checks en verde) pero se
-  REVERTIÓ**: al cambiar las firmas, los llamadores v1 del plugin y del arnes quedaron rotos, y
-  T005 (que los rewirea) no se pudo completar en la misma sesion. **Se relanda junto con T005,
-  en un solo bloque atomico.** Lo que se implemento: indices (`indice_campos()`,
-  `guardar_indice_campos()`, `fila_indice()`, `tocar_meta()`), `normalizar_datos_campo()`,
-  `plantilla_valida()`, `categorias_de()`; `campo_alta($plantilla,$datos,$htm,$css,$js)` (hueco mas
-  bajo, **el id dado de baja no se libera**), `campo_editar($id,…)` (no toca `baja`),
-  `campo_baja($id)` (**conserva los archivos**), `campo_restaurar($id)`, `campo_duplicar($id)`,
-  `campo_plantilla($id,$plantilla)` y `campo_listar($incluir_bajas)`. Nota: `campo_listar()` **si**
-  quedo (aditiva, no rompe a nadie); el resto quedo revertido.
+- [X] T003 [P] `PMU_Uploads`: CRUD v2 completo (aterrizó junto con T005). Indices (`indice_campos()`, `guardar_indice_campos()`, `fila_indice()`, `tocar_meta()` con `?array $categorias`), `normalizar_datos_campo()`, `plantilla_valida()`, `categorias_de()`. `campo_alta($plantilla,$datos,$htm,$css,$js)` (hueco mas bajo; **el id dado de baja NO se libera**), `campo_editar($id,…)` (no toca `baja`), `campo_baja($id)` (**conserva los archivos**), `campo_restaurar`, `campo_duplicar`, `campo_plantilla`, `campo_listar($incluir_bajas)`. **Puente v1**: `campo_alta()`/`campo_editar()` aceptan la tupla de 10 slots y la traducen, para que las 16 siembras legacy del arnes sigan funcionando; se retira en F1/F2. Cubierto por `tests/campos_migracion.php` (80 checks) + fase `campos` del arnes + smoke E2E del lab.
 - [X] T004 [P] Validacion del contenido del campo en el motor: `escribir_campo()` valida HTML prohibido (`<script>`/`id=""`), invoca `validar_script_campo()` (el sandbox del servidor manda siempre), tamanos 20 000 por archivo y normaliza `cargador` via `validar_cargador()` (acepta la estructura y los **3 atajos de texto** del admin: `canvas:circle size:1000`, `size:2000 max:6`, `1_size:1000 1_canvas:circle 2_size:1024x768 2_min:2 2_max:2`). Cubierto por `tests/campos_migracion.php`.
 - [X] T004b [P] **Banco de pruebas de la migracion** en `tests/campos_migracion.php` (motor PHP, corre
   en `%TEMP%`, **NUNCA** toca `uploads/pmu/`): siembra un catalogo v1 con 2 campos vivos + 1 tombstone y
@@ -34,18 +25,16 @@
   `campos/`), los 3 atajos de cargador del admin y los rechazos (script/iframe, `id=""`, JS prohibido,
   > 20 000). Puerta: `php tests/campos_migracion.php` -> `CAMPOS V2 OK`. **49 checks en verde.**
   (Distinto de T012, que es la puerta **Node** del cableado cliente: `tests/campos-contrato.test.js`.)
-- [ ] T005 `Personalizador_PDF_Plugin`: `cargar_campos()` (lista de campos con nombre, titulo,
-  categorias, plantilla, protegido, `usado_en` leido de cada `config.json:campos_ids` + conteo de
-  `[campoN]`), y `campos_activos()` pasa a leer v2 (excluye `baja:true` y los ids que esten dados de
-  baja). Test: fase `campos_v2` (indice v2, alta, baja+restaurar conserva HTML, migracion desde v1).
-  **OJO - dos cosas aprendidas al intentar hacerlo:**
-  1. **Debe aterrizar con T003 en el mismo commit**: hoy el plugin y `tests/texto_puente.php`
-     (19 siembras de tuplas v1 en las lineas 255, 1100, 1124, 1151, 1213, 1256, 1286, 1508, 1564-65,
-     1610, 1861-62, 2410-13, 2417, 2421) siguen llamando la API v1; con el CRUD v2 las rompen.
-  2. **La herramienta de edicion solo acepta `old_text` de UNA linea en
-     `personalizador-pdf.php`** (los bloques multilinea fallan con "text not found"; `new_text`
-     multilinea si funciona). Este rewire necesita ~50 ediciones de una linea, asi que conviene
-     hacerlo en una sesion dedicada o con un editor que no sufra ese limite.
+- [X] T005 `Personalizador_PDF_Plugin` (aterrizó con T003). `campo_desde_post()` devuelve el paquete v2
+  `['datos'=>[], 'htm', 'css', 'js']` (acepta `contenido`/`script` legacy y `html`/`js` nuevos);
+  `campos_activos()` lee v2 via `campo_listar()` y devuelve el **adaptador transitorio** de 10
+  slots para `campos_panel()`/`admin/campos.php` (slot 2 = plantilla), avisando
+  `motor:campos:migrar:pendiente` si el indice sigue en v1; `handle_campo_guardar()` llama al CRUD v2;
+  `cargar_campos($incluir_bajas)` agrega `usado_en` / `usado_pdf_n` / `usado_refs` leyendo de verdad
+  cada `config.json:campos_ids` + el conteo de `[campoN]`. Los cuerpos v1 quedaron en metodos
+  marcados `@deprecated` (`_pmu_campo_desde_post_v1`, `_pmu_campos_activos_v1`) que **se borran en F1**.
+  Verificado: fase `campos` del arnes migrada a v2, 16 siembras legacy resueltas por el puente del
+  motor, y smoke E2E del lab con 5 campos reales en v2 (0 errores JS, 0 avisos PHP).
 
 ## Fase 1 - US1 Editor en linea
 

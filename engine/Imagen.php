@@ -152,7 +152,11 @@ class Imagen
 
         list($fw, $fh, $ox, $oy) = self::encajado($iw, $ih, $W, $H);
         imagecopyresampled($lienzo, $img, $ox, $oy, 0, 0, $fw, $fh, $iw, $ih);
-        imagedestroy($img);
+        // imagedestroy() no tiene ningun efecto desde PHP 8.0 y esta deprecado en 8.5.
+// El plugin exige PHP 7.4+, donde si liberaba memoria: se llama solo ahi.
+if (PHP_VERSION_ID < 80000) {
+            imagedestroy($img);
+        }
 
         $rgb = str_repeat("\x00", $W * $H * 3);
         $alpha = str_repeat("\x00", $W * $H);
@@ -167,7 +171,10 @@ class Imagen
                 $alpha[$i] = chr(255 - (int)round($ga * 255 / 127));
             }
         }
-        imagedestroy($lienzo);
+        // Ver nota de la linea anterior: solo en PHP < 8.0.
+        if (PHP_VERSION_ID < 80000) {
+            imagedestroy($lienzo);
+        }
         return ['tipo' => 'raster', 'w' => $W, 'h' => $H, 'rgb' => $rgb, 'alpha' => $alpha];
     }
 

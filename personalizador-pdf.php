@@ -2132,7 +2132,57 @@ class Personalizador_PDF_Plugin
      * etiquetas[], texto_ayuda, visible, contenido, css, script].
      * Lanza motor:campos:... ante tipo o contenido invalidos.
      */
-    private function campo_desde_post(array $fuente, $id = 0)
+    private function campo_desde_post(array $fuente)
+    {
+        $leer = function ($k) use ($fuente) {
+            return isset($fuente[$k]) ? (string)$fuente[$k] : '';
+        };
+        $corta = function ($t, $n) {
+            $t = trim(strip_tags((string)$t));
+            return function_exists('mb_substr') ? mb_substr($t, 0, $n, 'UTF-8') : substr($t, 0, $n);
+        };
+        // Categorias (antes "etiquetas"): admiten lista o CSV.
+        $categorias = [];
+        $crudas = isset($fuente['categorias'])
+            ? (is_array($fuente['categorias']) ? $fuente['categorias'] : explode(',', (string)$fuente['categorias']))
+            : (isset($fuente['etiquetas'])
+                ? (is_array($fuente['etiquetas']) ? $fuente['etiquetas'] : explode(',', (string)$fuente['etiquetas']))
+                : []);
+        foreach ($crudas as $c) {
+            $c = strtolower(trim(preg_replace('/[^a-z0-9_\-]+/i', '-', (string)$c), '-'));
+            if ($c !== '') {
+                $categorias[] = substr($c, 0, 32);
+            }
+        }
+        // El cargador llega como JSON (UI) o como texto con los atajos del admin.
+        $cargador = null;
+        $crudoCargador = $leer('cargador');
+        if (trim($crudoCargador) !== '') {
+            $dec = json_decode($crudoCargador, true);
+            $cargador = is_array($dec) ? $dec : $crudoCargador;
+        }
+        // La validacion fuerte (HTML prohibido, sandbox del JS, tamanos y
+        // cargador) la hace PMU_Uploads::escribir_campo(), dueno de los datos.
+        return [
+            'datos' => [
+                'nombre' => $corta($leer('nombre'), 200),
+                'descripcion' => $corta($leer('descripcion'), 500),
+                'titulo_cliente' => $corta($leer('titulo_cliente'), 200),
+                'texto_ayuda' => $corta($leer('texto_ayuda'), 500),
+                'array' => !empty($fuente['array']),
+                'protegido' => !empty($fuente['protegido']),
+                'categorias' => array_values(array_unique($categorias)),
+                'cargador' => $cargador,
+            ],
+            // `html` es el nombre nuevo; `contenido` sigue aceptandose (UI v1).
+            'htm' => $leer('html') !== '' ? $leer('html') : $leer('contenido'),
+            'css' => $leer('css'),
+            'js' => $leer('js') !== '' ? $leer('js') : $leer('script'),
+        ];
+    }
+
+    /** @deprecated v1 (spec 004). Sustituida arriba; se borra en F1. */
+    private function _pmu_campo_desde_post_v1(array $fuente, $id = 0)
     {
         $tipos = ['text', 'textarea', 'select', 'img', 'override'];
         $tipo = isset($fuente['tipo']) ? (string)$fuente['tipo'] : '';
@@ -2189,7 +2239,86 @@ class Personalizador_PDF_Plugin
     }
 
     /** Lista de campos activos: id => tupla de 10 slots (tombstones fuera). */
+    public function cargar_campos($incluir_bajas = false)
+    {
+        $campos = $this->pmu_uploads()->campo_listar($incluir_bajas);
+        $uso = [];
+        foreach ($this->pdfs_subidos() as $archivo) {
+            $cfg = $this->config_de(preg_replace('/\.pdf$/i', '', $archivo));
+            $elegidos = isset($cfg['campos_ids']) && is_array($cfg['campos_ids']) ? $cfg['campos_ids'] : [];
+            $plano = '';
+            foreach ((array) (isset($cfg['placeholders']) ? $cfg['placeholders'] : []) as $m) {
+                if (is_array($m)) {
+                    $plano .= ' ' . (isset($m['value']) ? (string) $m['value'] : '')
+                        . ' ' . (isset($m['settings']) ? (string) $m['settings'] : '');
+                }
+            }
+            foreach ($elegidos as $cid) {
+                $cid = (int)$cid;
+                if ($cid < 1) {
+                    continue;
+                }
+                if (!isset($uso[$cid])) {
+                    $uso[$cid] = ['pdfs' => [], 'refs' => 0];
+                }
+                $uso[$cid]['pdfs'][$archivo] = true;
+                if (preg_match_all('/\[campo' . $cid . '\]/', $plano, $c2)) {
+                    $uso[$cid]['refs'] += count($c2[0]);
+                }
+            }
+        }
+        foreach ($campos as $id => &$c) {
+            $u = isset($uso[$id]) ? $uso[$id] : ['pdfs' => [], 'refs' => 0];
+            $c['usado_en'] = array_keys($u['pdfs']);
+            $c['usado_pdf_n'] = count($c['usado_en']);
+            $c['usado_refs'] = (int) $u['refs'];
+        }
+        unset($c);
+        return $campos;
+    }
+
+    /**
+     * Campos activos para la ficha y la consola actual: id => tupla de 10
+     * slots, **adaptador transitorio** del formato v2 (spec 012, T005). El
+     * almacenamiento ya es v2; la tupla se conserva para no romper
+     * `campos_panel()` ni `admin/campos.php`, que la adoptan en F1/F2.
+     * Slot 2 = plantilla de origen. Avisa si el catalogo sigue en v1.
+     * @return array [id => tupla, aviso|null]
+     */
     private function campos_activos()
+    {
+        $out = [];
+        $aviso = null;
+        $ruta = $this->pmu_uploads()->ruta_campos();
+        if (is_file($ruta)) {
+            $crudo = (string) @file_get_contents($ruta);
+            $leido = $crudo === '' ? null : json_decode($crudo, true);
+            if (!is_array($leido) || !isset($leido['items']) || !is_array($leido['items'])) {
+                $aviso = 'motor:listar:catalogo:invalido:campos';
+            } elseif (!isset($leido['version']) || (int) $leido['version'] < 2) {
+                $aviso = 'motor:campos:migrar:pendiente';
+            }
+        }
+        foreach ($this->pmu_uploads()->campo_listar() as $id => $c) {
+            $d = $c['datos'];
+            $out[(int)$id] = [
+                (int)$id,
+                isset($d['titulo_cliente']) ? (string) $d['titulo_cliente'] : '',
+                $c['plantilla'] !== '' ? $c['plantilla'] : 'texto',
+                $c['categorias'],
+                isset($d['texto_ayuda']) ? (string) $d['texto_ayuda'] : '',
+                true,
+                $c['htm'],
+                $c['css'],
+                $c['js'],
+                !empty($d['array']),
+            ];
+        }
+        return [$out, $aviso];
+    }
+
+    /** @deprecated v1 (spec 004). Sustituida arriba; se borra en F1. */
+    private function _pmu_campos_activos_v1()
     {
         $res = $this->pmu_uploads()->campos_catalogo('listar');
         $out = [];
@@ -2207,23 +2336,24 @@ class Personalizador_PDF_Plugin
     public function handle_campo_guardar()
     {
         $this->seguridad('personalizador_pdf_campo');
-        $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+        $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+        // La plantilla solo aplica al alta; en edicion manda la del indice.
+        $plantilla = isset($_POST['plantilla']) ? (string) $_POST['plantilla'] : '';
         try {
-            $tupla = $this->campo_desde_post($_POST, $id);
-        } catch (\Throwable $e) {
-            $this->responder(false, [], $e->getMessage());
-        }
-        try {
+            $c = $this->campo_desde_post($_POST);
             if ($id > 0) {
-                $this->pmu_uploads()->campo_editar($id, $tupla);
+                $this->pmu_uploads()->campo_editar($id, $c['datos'], $c['htm'], $c['css'], $c['js']);
             } else {
-                $id = $this->pmu_uploads()->campo_alta($tupla);
+                $id = $this->pmu_uploads()->campo_alta($plantilla, $c['datos'], $c['htm'], $c['css'], $c['js']);
             }
         } catch (\Throwable $e) {
             $this->responder(false, [], $e->getMessage());
         }
         $this->responder(true, ['id' => $id, 'ec_campo' => $id, 'tab' => 'campos']);
     }
+
+    /* @deprecated v1 (spec 004) */
+    /* v1 de handle_campo_guardar sustituido arriba (T005); se borra en F1. */
 
     /** Da de baja un campo (tombstone). Responde JSON o redirige. */
     public function handle_campo_baja()
