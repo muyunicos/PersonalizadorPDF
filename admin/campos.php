@@ -61,6 +61,44 @@ $plantillas = ['texto' => 'Texto', 'select' => 'Opciones', 'imagen' => 'Imagenes
     <?php if (!$campos) : ?>
         <p class="ec-campos-vacio">Todavia no hay campos. Crea el primero con el formulario de arriba.</p>
     <?php else : ?>
+        <div class="ec-c-filtros">
+            <p class="ec-buscador">
+                <input type="search" class="ec-c-buscar" placeholder="Buscar por nombre, descripcion, titulo o categoria"
+                       autocomplete="off">
+            </p>
+            <?php
+            // Chips de categoria: todas las que usan los campos activos.
+            $cats = [];
+            foreach ($campos as $c) {
+                foreach ($c['categorias'] as $cat) {
+                    $cats[$cat] = isset($cats[$cat]) ? $cats[$cat] + 1 : 1;
+                }
+            }
+            ksort($cats);
+            ?>
+            <?php if ($cats) : ?>
+                <p class="ec-chips">
+                    <span class="description">Categorias:</span>
+                    <?php foreach ($cats as $cat => $n) : ?>
+                        <button type="button" class="button button-small ec-chip-cat"
+                                data-cat="<?php echo esc_attr($cat); ?>"><?php echo esc_html($cat); ?>
+                            <span class="ec-chip-n"><?php echo (int)$n; ?></span></button>
+                    <?php endforeach; ?>
+                    <button type="button" class="button button-small ec-chip-cat ec-chip-todas"
+                            data-cat="" hidden>Quitar filtros</button>
+                </p>
+            <?php endif; ?>
+            <p class="ec-orden">
+                <label class="description" for="ec-c-orden">Orden:</label>
+                <select id="ec-c-orden" class="ec-c-orden-sel">
+                    <option value="id">Por id</option>
+                    <option value="modificado">Ultima modificacion</option>
+                    <option value="creado">Mas recientes (creado)</option>
+                    <option value="nombre">Por nombre</option>
+                </select>
+                <span class="ec-c-conteo" aria-live="polite"></span>
+            </p>
+        </div>
         <table class="widefat striped ec-campos-tabla">
             <thead><tr><th>id</th><th>Nombre</th><th>Titulo comprador</th><th>Categorias</th>
                 <th>Plantilla</th><th>Uso</th><th>Acciones</th></tr></thead>

@@ -318,6 +318,16 @@
 .ec-campos-tabla td.ec-c-acciones .ec-form-campo-baja { display: inline-block; margin-left: 4px; }
 .ec-campos-tabla tr.ec-editando { background: #f0f6fc; }
 .ec-campo-form-fila > td { background: #fbfbfc; }
+
+/* Filtros de la tabla de campos (spec 012, F3). */
+.ec-c-filtros { margin: 8px 0 12px; }
+.ec-c-filtros p { margin: 0 0 8px; }
+.ec-c-buscar { width: 100%; max-width: 420px; }
+.ec-chips .description { margin-right: 6px; }
+.ec-chip-cat.is-on { background: #2271b1; border-color: #2271b1; color: #fff; }
+.ec-chip-n { font-size: 10px; opacity: .8; margin-left: 4px; }
+.ec-c-orden-sel { margin-left: 6px; }
+.ec-c-conteo { margin-left: 10px; color: #646970; font-size: 12px; }
 /* Fotos del mockup: lista con miniatura (editor de capas "Foto"). */
 .ec-mockup-fotos-admin { margin-top: 8px; }
 .ec-mockup-status { font-size: 12px; margin-left: 6px; }

@@ -652,6 +652,98 @@ jQuery(function ($) {
         }, 1200);
     }
 
+    /* ============ Filtros de la tabla (spec 012, F3 / T013) ============
+           Buscador por texto + chips de categoria + orden. Todo en el DOM
+           (las filas ya traen data-cats/data-modificado/data-creado), sin
+           peticiones: el orden de la tabla NO altera el panel del comprador
+           (FR-014, eso lo manda config.json:campos_ids[]). */
+        (function () {
+            var $tabla = $('.ec-campos-tabla');
+            if (!$tabla.length) { return; }
+            var $cuerpo = $tabla.find('.ec-campos-cuerpo');
+
+            function filas() {
+                // Solo filas de campo (no las de formulario ni las de preview).
+                return $cuerpo.children('tr[data-id]');
+            }
+
+            function textoDe($fila) {
+                return [
+                    $fila.find('.ec-c-nombre').text(),
+                    $fila.find('.ec-c-titulo').text(),
+                    $fila.find('.ec-c-cats').text(),
+                    $fila.attr('data-plantilla') || ''
+                ].join(' ').toLowerCase();
+            }
+
+            function aplicar() {
+                var q = ($('.ec-c-buscar').val() || '').trim().toLowerCase();
+                var chips = [];
+                $('.ec-chip-cat.is-on').each(function () {
+                    var c = $(this).attr('data-cat');
+                    if (c) { chips.push(String(c).toLowerCase()); }
+                });
+                var visibles = 0;
+                filas().each(function () {
+                    var $f = $(this);
+                    var pasa = true;
+                    if (q && textoDe($f).indexOf(q) === -1) { pasa = false; }
+                    if (pasa && chips.length) {
+                        var cats = String($f.attr('data-cats') || '').split('|');
+                        pasa = chips.every(function (c) { return cats.indexOf(c) !== -1; });
+                    }
+                    $f.toggle(pasa);
+                    if (pasa) { visibles++; }
+                });
+                // Cada fila visible se lleva tambien su editor y su preview.
+                $cuerpo.children('tr').each(function () {
+                    var $f = $(this);
+                    if (!$f.is('tr[data-id]')) {
+                        $f.toggle($f.prev('tr[data-id]').is(':visible'));
+                    }
+                });
+                $('.ec-c-conteo').text(visibles + ' de ' + filas().length + ' campos');
+            }
+
+            function ordenar(clave) {
+                var $filas = filas().get();
+                $filas.sort(function (a, b) {
+                    var fa = $(a), fb = $(b);
+                    if (clave === 'modificado' || clave === 'creado') {
+                        return (parseInt(fb.attr('data-' + clave), 10) || 0)
+                            - (parseInt(fa.attr('data-' + clave), 10) || 0);
+                    }
+                    if (clave === 'nombre') {
+                        return fa.find('.ec-c-nombre').text().localeCompare(fb.find('.ec-c-nombre').text());
+                    }
+                    return (parseInt(fa.attr('data-id'), 10) || 0) - (parseInt(fb.attr('data-id'), 10) || 0);
+                });
+                $.each($filas, function (_, $fila) {
+                    // Movemos la fila Y sus trsatadas (editor/preview) juntas.
+                    var $f = $($fila);
+                    $cuerpo.append($f);
+                    $cuerpo.append($f.nextAll('tr').first());
+                });
+            }
+
+            $(document).on('input', '.ec-c-buscar', aplicar);
+            $(document).on('click', '.ec-chip-cat', function () {
+                var $chip = $(this);
+                if ($chip.attr('data-cat') === '') {
+                    $('.ec-chip-cat.is-on').removeClass('is-on');
+                } else {
+                    $chip.toggleClass('is-on');
+                }
+                $('.ec-chip-todas').prop('hidden', $('.ec-chip-cat.is-on[data-cat!=""]').length === 0);
+                aplicar();
+            });
+            $(document).on('change', '.ec-c-orden-sel', function () {
+                ordenar($(this).val());
+                aplicar();
+            });
+            aplicar();
+        })();
+
     /* ============ Preview del campo (spec 012, T011) ============
            Un <iframe srcdoc> de 350px (el max-width real de .pmu-panel) que
            monta el campo con `PMUCampo.montar()`: el MISMO modulo que usa la

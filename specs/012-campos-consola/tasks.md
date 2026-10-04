@@ -53,11 +53,8 @@
 
 ## Fase 3 - US3 Buscar / filtrar / ordenar
 
-- [ ] T013 [US3] `assets/admin.js`: buscador de texto (nombre, descripcion, titulo cliente,
-  categorias), chips de categoria, selector de orden (`mas recientes` / `por modificacion` / `por
-  id`). El orden de la tabla NO altera el panel del comprador (FR-010…FR-012, FR-014).
-- [ ] T014 [US3] Columna "usado en N PDF(s)" con el detalle de quais PDFs y cuantos `[campoN]`
-  (dato de `cargar_campos()`, F0); FR-013. Puerta: `php -l` + `campos-contrato.test.js`.
+- [X] T013 [US3] `assets/admin.js` + `admin/campos.php`: buscador por texto (nombre, descripcion, titulo cliente, categoria y plantilla), **chips de categoria** con contador y boton "quitar filtros", y selector de orden (por id / ultima modificacion / mas recientes / por nombre). Todo **en el DOM**, sin peticiones. Las filas llevan `data-cats`, `data-modificado` y `data-creado` para que el filtro y el orden no tengan que ir al servidor. Contador "N de M campos". El orden **NO altera** el panel del comprador (FR-014: eso lo manda `config.json:campos_ids[]`). CSS en `.ec-c-filtros`.
+- [X] T014 [US3] Columna **"Uso"** completada: muestra `N PDFs (M [campoN])` y lleva en el `title` el detalle que devuelve el servidor (`usado_en` = PDFs donde esta elegido, `usado_refs` = cuantos `[campoN]` lo consumen, fecha de modificacion). Los datos salen de `cargar_campos()`, que los lee de cada `config.json` de verdad (T005).
 
 ## Fase 4 - US4 Plantillas, duplicar, restaurar, importar/exportar
 

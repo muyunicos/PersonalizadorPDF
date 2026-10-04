@@ -2405,13 +2405,30 @@ class Personalizador_PDF_Plugin
         $cargador = !empty($d['cargador']) ? wp_json_encode($d['cargador']) : '';
         ob_start();
         ?>
-                <tr data-id="<?php echo (int)$cid; ?>" data-plantilla="<?php echo esc_attr($c['plantilla']); ?>">
+                <tr data-id="<?php echo (int)$cid; ?>" data-plantilla="<?php echo esc_attr($c['plantilla']); ?>"
+                    data-modificado="<?php echo (int)$c['modificado']; ?>"
+                    data-creado="<?php echo esc_attr($c['creado']); ?>"
+                    data-cats="<?php echo esc_attr(strtolower(implode('|', $c['categorias']))); ?>">
                     <td><strong><?php echo (int)$cid; ?></strong></td>
                     <td class="ec-c-nombre"><?php echo esc_html($d['nombre'] !== '' ? $d['nombre'] : '(sin nombre)'); ?></td>
                     <td class="ec-c-titulo"><?php echo esc_html($d['titulo_cliente'] !== '' ? $d['titulo_cliente'] : '(vacio)'); ?></td>
                     <td class="ec-c-cats"><?php echo esc_html($c['categorias'] ? implode(', ', $c['categorias']) : '-'); ?></td>
                     <td><code class="ec-c-plantilla"><?php echo esc_html($c['plantilla'] !== '' ? $c['plantilla'] : '-'); ?></code></td>
-                    <td class="ec-c-uso"><?php echo (int)$c['usado_pdf_n']; ?> PDF(s)</td>
+                    <td class="ec-c-uso" title="<?php
+                            $detalle = [];
+                            if (!empty($c['usado_en'])) {
+                                $detalle[] = 'PDF: ' . implode(', ', $c['usado_en']);
+                            }
+                            $detalle[] = 'mapeos [campoN]: ' . (int)$c['usado_refs'];
+                            $detalle[] = 'modificado: ' . ($c['modificado'] ? gmdate('Y-m-d H:i', (int)$c['modificado']) . ' UTC' : 'n/d');
+                            echo esc_attr(implode(' | ', $detalle));
+                        ?>"><?php
+                            echo (int)$c['usado_pdf_n'];
+                            echo (int)$c['usado_pdf_n'] === 1 ? ' PDF' : ' PDFs';
+                            if (!empty($c['usado_refs'])) {
+                                echo ' (' . (int)$c['usado_refs'] . ' [campoN])';
+                            }
+                        ?></td>
                     <td class="ec-c-acciones">
                         <button type="button" class="button button-small ec-editar">Editar</button>
                         <button type="button" class="button button-small ec-probar">Probar</button>
