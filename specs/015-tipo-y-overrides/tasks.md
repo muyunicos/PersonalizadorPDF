@@ -40,13 +40,13 @@
 
 ## Commit 2 — C: los overrides que funcionan
 
-- [ ] **T013** `PURO.resolverOverrides(settings, valores)` en `assets/tienda.js`: saca las referencias `[campoN]` de `settings`, en orden; `JSON.parse` de cada `valor`; `mergeDeep` entre ellos (el ultimo pisa). Texto literal en `settings` se descarta con aviso (FR-001, FR-003).
-- [ ] **T014** Los items de `renderBatch` llevan `overrides: <objeto fusionado>`. **Sin tocar `modules/textmuy/`** (D8).
-- [ ] **T015** `FR-004`: un `valor` que no parsea se descarta **solo ese**, con aviso, y el resto del render sigue. Nunca una excepcion.
-- [ ] **T016** `FR-005`: `hashRender` incluye los overrides resueltos. Sin esto dos compradores con estilos distintos chocan en la cache del pool y el segundo recibe el PDF del primero.
-- [ ] **T017** `FR-006`: `resolverPlantilla` **no** hace `String()` sobre un objeto. Si un `campo.js` devuelve un objeto, se avisa en vez de escribir `[object Object]`.
-- [ ] **T018** Fase `overrides` del arnes: fusion en orden, JSON invalido degrada sin romper, el hash cambia con el override, y `settings` con texto literal avisa.
-- [ ] **T019** Smoke del lab (navegador real): campo `opciones`, se elige opcion A y B, las dos vistas previas **se ven distintas**; el PDF descargado trae lo mismo que la vista previa (D6).
+- [X] **T013** `PURO.resolverOverrides(settings, valores)` en `assets/tienda.js`: saca las referencias `[campoN]` de `settings`, en orden; `JSON.parse` de cada `valor`; `mergeDeep` entre ellos (el ultimo pisa). Texto literal en `settings` se descarta con aviso (FR-001, FR-003). Devuelve `{overrides, clave, avisos}`; `mergeDeep` es copia propia del modulo (D8: sin tocar `modules/textmuy/`).
+- [X] **T014** Los items de `renderBatch` llevan `overrides: <objeto fusionado>`. **Sin tocar `modules/textmuy/`** (D8).
+- [X] **T015** `FR-004`: un `valor` que no parsea se descarta **solo ese**, con aviso, y el resto del render sigue. Nunca una excepcion (tambien array/string/null: no-objeto se descarta).
+- [X] **T016** `FR-005`: `hashRender` incluye los overrides resueltos (6to arg `ovClave`; SIN overrides la cadena es IDENTICA a la del contrato viejo, compat con pools existentes). Servidor: nuevo `Personalizador_PDF_Plugin::hash_pool()` con el mismo armado y `wp_unslash` del JSON (el cliente manda `overrides` en `subirPool`).
+- [X] **T017** `FR-006`: `resolverPlantilla` **no** hace `String()` sobre un objeto: lo omite del texto y avisa (canal `avisos` opcional; `conciliarGrupo` lo lleva a `nota`, que la ficha ya pinta).
+- [X] **T018** Fase `overrides` del arnes (6 checks: hash con overrides, cadena vieja intacta, hash distinto con/sin y entre overrides, manifest). Fusion en orden, JSON invalido, texto literal y `hashRender` cubiertos en `tests/conciliacion.js` (PURO es puro Node). Barrido completo: **50/50 fases OK**.
+- [X] **T019** Smoke del lab (navegador real) en `%TEMP%/pmu-e2e/`: `sembrar-overrides.php` (campo `opciones` + placeholder con settings `[campo2]` + mockup), `smoke-overrides.js` (opcion A vs B: **las dos vistas previas se ven distintas**, valor string JSON D4, 0 errores JS) y `pdf-desde-pool.php` (hash del manifest con overrides, PDF armado con `Motor::procesar_pedido` y **pixeles del PDF = pixeles del PNG de la vista previa**, tolerancia 0.5%; D6). **OVERRIDES OK + PDF DESDE POOL OK.**
 
 ## Cierre
 

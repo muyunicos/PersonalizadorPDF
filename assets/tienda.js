@@ -23,8 +23,11 @@
         /**
          * Sustituye [campoN] por el valor del campo. Con `idx`, los valores
          * array entregan su elemento i-esimo (loop por instancia, T014b).
+         *
+         * `avisos` (opcional, spec 015 T017/FR-006): un `valor` que sea objeto
+         * NUNCA se convierte en "[object Object]": se omite del texto y se avisa.
          */
-        resolverPlantilla: function (plantilla, valores, idx) {
+        resolverPlantilla: function (plantilla, valores, idx, avisos) {
             return String(plantilla || '').replace(/\[campo(\d+)\]/g, function (_, n) {
                 var id = parseInt(n, 10);
                 var par = (valores || {})[String(id)] || (valores || {})[id];
@@ -32,6 +35,16 @@
                 if (Object.prototype.toString.call(v) === '[object Array]') {
                     var i = parseInt(idx, 10);
                     v = isNaN(i) ? '' : (v[i] === undefined || v[i] === null ? '' : v[i]);
+                }
+                // FR-006 (spec 015, T017): el valor de un campo es SIEMPRE string.
+                // Un objeto (p.ej. un `opciones` mal cableado en `value`) se omite
+                // y se avisa; jamas se imprime "[object Object]" en el PDF.
+                if (v !== null && typeof v === 'object') {
+                    if (avisos) {
+                        avisos.push('El campo [campo' + id + '] devolvio un objeto y no texto'
+                            + '; se deja vacio (si es un estilo, va en Avanzado -> referencias).');
+                    }
+                    return '';
                 }
                 return String(v === null || v === undefined ? '' : v);
             });
@@ -72,33 +85,121 @@
                 if (Object.prototype.toString.call(v) === '[object Array]') { arrays.push(v); }
             });
             var i, idx, textos;
+            // Avisos de resolverPlantilla (spec 015 T017): viajan en `nota`,
+            // que el llamador ya pinta en la ficha sin bloquear nada.
+            var avisos = [];
             // Sin ningun campo que publique una lista: un solo valor, repetido.
             if (!arrays.length) {
-                var uno = this.resolverPlantilla(g.value, valores);
+                var uno = this.resolverPlantilla(g.value, valores, undefined, avisos);
                 textos = [];
                 for (i = 0; i < M; i++) { textos.push(uno); }
-                return { textos: textos, nota: '' };
+                return { textos: textos, nota: avisos.join(' ') };
             }
             var N = 1;
             arrays.forEach(function (a) { if (a.length > N) { N = a.length; } });
             textos = [];
             for (i = 0; i < M; i++) {
                 idx = g.repetir ? (i % N) : i;   // cicla / primera foto por instancia
-                textos.push(idx < N ? this.resolverPlantilla(g.value, valores, idx) : '');
+                textos.push(idx < N ? this.resolverPlantilla(g.value, valores, idx, avisos) : '');
             }
             // Informe (no error): cuantas instancias quedaron sin valor.
             var sinValor = 0;
             for (i = 0; i < textos.length; i++) { if (textos[i] === '' || textos[i] === null) { sinValor++; } }
             return {
                 textos: textos,
-                nota: sinValor > 0 ? 'Quedan ' + sinValor + ' espacio(s) sin completar.' : ''
+                nota: (avisos.length ? avisos.join(' ') + ' ' : '')
+                    + (sinValor > 0 ? 'Quedan ' + sinValor + ' espacio(s) sin completar.' : '')
             };
         },
 
-        /** Hash de regeneracion (contrato sesion-item.md): valor|preset|settings|WxH. */
-        hashRender: function (valor, preset, settings, w, h) {
-            return String(valor) + '|' + String(preset || '') + '|' + String(settings || '') + '|' +
+        /** Hash de regeneracion (contrato sesion-item.md): valor|preset|settings|WxH.
+         *  Con `ovClave` (overrides resueltos, spec 015 T016/FR-005) se agrega
+         *  `|{json}` al final: SIN overrides la cadena queda IDENTICA a la del
+         *  contrato viejo (compatibilidad con los pools ya generados). El
+         *  servidor arma la misma cadena en `hash_pool()`. */
+        hashRender: function (valor, preset, settings, w, h, ovClave) {
+            var base = String(valor) + '|' + String(preset || '') + '|' + String(settings || '') + '|' +
                 parseInt(w, 10) + 'x' + parseInt(h, 10);
+            var clave = ovClave === undefined || ovClave === null ? '' : String(ovClave);
+            return clave === '' ? base : base + '|' + clave;
+        },
+
+        /**
+         * Fusion profundo (mismo comportamiento que mergeDeep del modulo
+         * TextMuy, api.js; copia propia: D8 prohibe tocar modules/textmuy/).
+         */
+        mergeDeep: function (dest, fuente) {
+            if (!fuente || typeof fuente !== 'object') { return dest; }
+            Object.keys(fuente).forEach(function (k) {
+                var v = fuente[k];
+                if (v && typeof v === 'object' && Object.prototype.toString.call(v) !== '[object Array]') {
+                    if (!dest[k] || typeof dest[k] !== 'object'
+                        || Object.prototype.toString.call(dest[k]) === '[object Array]') {
+                        dest[k] = {};
+                    }
+                    PURO.mergeDeep(dest[k], v);
+                } else {
+                    dest[k] = v;
+                }
+            });
+            return dest;
+        },
+
+        /**
+         * Resuelve `settings` del grupo (spec 015, T013): D2 - es SOLO una
+         * lista de referencias `[campoN]`; cada referencia aporta el `valor`
+         * de su campo (un JSON.stringify de overrides, D4) y los objetos se
+         * fusionan EN ORDEN con mergeDeep, el ultimo pisa (D3/FR-002).
+         *
+         * Tolerancia:
+         * - FR-001: texto literal en `settings` se descarta, con aviso.
+         * - FR-004 (T015): un `valor` que no parsea se descarta SOLO ese,
+         *   con aviso; el resto sigue. NUNCA lanza excepcion.
+         *
+         * @returns {{overrides:?Object, clave:string, avisos:string[]}}
+         *   `clave` es el JSON del objeto fusionado (o '' si no hay): es lo
+         *   que entra al hash del pool (FR-005) y viaja al servidor.
+         */
+        resolverOverrides: function (settings, valores) {
+            var avisos = [];
+            var texto = String(settings || '');
+            var acumulado = {};
+            var hay = false;
+            // FR-001: lo que no es referencia no tiene nada que hacer aca.
+            var resto = texto.replace(/\[campo\d+\]/g, '');
+            if (resto.replace(/\s+/g, '') !== '') {
+                avisos.push('En Avanzado (settings) solo se admiten referencias [campoN]:'
+                    + ' el texto que sobra se ignora.');
+            }
+            this.camposDe(texto).forEach(function (id) {
+                var par = (valores || {})[String(id)] || (valores || {})[id];
+                if (!par) {
+                    avisos.push('La referencia [campo' + id + '] no tiene campo en el panel; se ignora.');
+                    return;
+                }
+                var v = Object.prototype.hasOwnProperty.call(par, 'valor') ? par.valor : '';
+                var obj = null;
+                try {
+                    obj = JSON.parse(String(v));
+                } catch (e) {
+                    obj = null;
+                }
+                // FR-004 (T015): JSON invalido o no-objeto -> se descarta SOLO
+                // ese override, con aviso. El preset del hueco hace el resto.
+                if (obj === null || typeof obj !== 'object'
+                    || Object.prototype.toString.call(obj) === '[object Array]') {
+                    avisos.push('El campo [campo' + id + '] no trae un JSON de overrides valido;'
+                        + ' se ignora (se usa el estilo del preset).');
+                    return;
+                }
+                this.mergeDeep(acumulado, obj);
+                hay = true;
+            }, this);
+            return {
+                overrides: hay ? acumulado : null,
+                clave: hay ? JSON.stringify(acumulado) : '',
+                avisos: avisos
+            };
         },
 
         /* ============ Spec 005: validez de asociacion PDFxproducto ============ */
@@ -417,6 +518,7 @@
         fd.append('valor', params.valor);
         fd.append('preset', params.preset || '');
         fd.append('settings', params.settings || '');
+        fd.append('overrides', params.ovClave || '');
         fd.append('w', String(params.w));
         fd.append('h', String(params.h));
         if (limpiar) { fd.append('limpiar', '1'); }
@@ -801,16 +903,23 @@
                 return;
             }
             if (g.tipo !== 'texto' || !g.preset) { return; }
+            // Spec 015 (T013/T015): settings es SOLO lista de referencias a
+            // campos `opciones`; se resuelven en orden y se fusionan. Los
+            // avisos (JSON invalido, texto literal) van al panel sin frenar.
+            var ov = PURO.resolverOverrides(g.settings, valores);
+            if (ov.avisos.length) { avisos.push(ov.avisos.join(' ')); }
             var c = PURO.conciliarGrupo(g, valores);
             // D17/D18/D19: `nota` es un INFORME, no un bloqueo. Los espacios sin
             // valor se omiten del pool y el hueco queda transparente.
             if (c.nota) { avisos.push(c.nota); }
             c.textos.forEach(function (texto, i) {
                 if (texto === '' || texto === null) { return; }  // instancia sin valor
-                var hash = PURO.hashRender(texto, g.preset, g.settings, g.w, g.h);
+                // FR-005 (T016): los overrides resueltos entran en la clave.
+                var hash = PURO.hashRender(texto, g.preset, g.settings, g.w, g.h, ov.clave);
                 pendientes.push({
                     gid: g.id, i: i, texto: texto, g: g, primero: i === 0,
-                    urlGuardada: previo.mapa[hash] || null
+                    urlGuardada: previo.mapa[hash] || null,
+                    overrides: ov.overrides, ovClave: ov.clave
                 });
             });
         });
@@ -829,7 +938,12 @@
         return renderCore().then(function (core) {
             if (!nuevos.length) { return []; }
             var items = nuevos.map(function (p) {
-                return { id: p.gid + '-' + (p.i + 1), text: p.texto, preset: p.g.preset, width: p.g.w, height: p.g.h };
+                var it = { id: p.gid + '-' + (p.i + 1), text: p.texto, preset: p.g.preset, width: p.g.w, height: p.g.h };
+                // FR-003 (spec 015, T014): el objeto fusionado viaja como
+                // `overrides`; TextMuy lo mergeDeep sobre el preset del hueco
+                // (api.js:271). Sin `settings` string (H4).
+                if (p.overrides) { it.overrides = p.overrides; }
+                return it;
             });
             return core.TextMuyAPI.renderBatch(items);
         }).then(function (out) {
@@ -839,7 +953,10 @@
                 var blob = porId[p.gid + '-' + (p.i + 1)];
                 if (!blob) { return Promise.resolve(null); }
                 return subirPool(sid, itemKey, pdfDatos.pdf, p.gid, blob, {
-                    valor: p.texto, preset: p.g.preset, settings: p.g.settings, w: p.g.w, h: p.g.h
+                    valor: p.texto, preset: p.g.preset, settings: p.g.settings, w: p.g.w, h: p.g.h,
+                    // FR-005 (T016): el MISMO string que entro al hash del
+                    // cliente; el servidor lo concatena igual en hash_pool().
+                    ovClave: p.ovClave
                 }, p.primero);
             });
             // Las fotos se esperan junto al texto: la composicion del mockup solo

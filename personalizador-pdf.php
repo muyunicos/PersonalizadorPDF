@@ -1320,6 +1320,25 @@ class Personalizador_PDF_Plugin
     }
 
     /**
+     * Clave de regeneracion del pool (contrato sesion-item.md):
+     * sha1(valor|preset|settings|WxH) y, si hay overrides resueltos,
+     * `|{json}` al final (spec 015, T016/FR-005). SIN overrides la cadena es
+     * IDENTICA a la del contrato viejo: los pools ya generados siguen validos.
+     * El cliente arma la MISMA cadena en `PURO.hashRender` (assets/tienda.js),
+     * enviando el JSON fusionado en el campo `overrides`.
+     */
+    public static function hash_pool($valor, $preset, $settings, $w, $h, $overrides = '')
+    {
+        $clave = (string)$valor . '|' . (string)$preset . '|' . (string)$settings . '|'
+            . (int)$w . 'x' . (int)$h;
+        $ov = (string)$overrides;
+        if ($ov !== '') {
+            $clave .= '|' . $ov;
+        }
+        return sha1($clave);
+    }
+
+    /**
      * T014: recibe los PNG del pool renderizados en el navegador (RenderCore)
      * y los guarda con PMU_Sesion::guardar_png() (pool dedicado del item).
      * Anonimo permitido; nonce de la vista previa. Con `limpiar=1` reemplaza
@@ -1376,7 +1395,18 @@ class Personalizador_PDF_Plugin
             if (!empty($_POST['limpiar'])) {
                 $sesion->limpiar_grupo($sid, $item, $pdf, $grupo);
             }
-            $hash = sha1((string)($_POST['valor'] ?? '') . '|' . (string)($_POST['preset'] ?? '') . '|' . (string)($_POST['settings'] ?? '') . '|' . (int)($_POST['w'] ?? 0) . 'x' . (int)($_POST['h'] ?? 0));
+            // wp_unslash: el JSON de overrides llega con comillas escapadas
+            // (add_magic_quotes, AGENTS XI); sin esto el hash del servidor no
+            // coincidiria con el del cliente y el render parcial no reusaria.
+            $ov = (string) wp_unslash($_POST['overrides'] ?? '');
+            $hash = self::hash_pool(
+                (string) wp_unslash($_POST['valor'] ?? ''),
+                (string) wp_unslash($_POST['preset'] ?? ''),
+                (string) wp_unslash($_POST['settings'] ?? ''),
+                (int) ($_POST['w'] ?? 0),
+                (int) ($_POST['h'] ?? 0),
+                $ov
+            );
             $fila = $sesion->guardar_png($sid, $item, $pdf, $grupo, $bytes, $hash);
         } catch (\Throwable $e) {
             wp_send_json_error($e->getMessage());

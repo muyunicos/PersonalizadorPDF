@@ -19,7 +19,7 @@ if (PHP_SAPI !== 'cli') {
  *    subir_conflicto | imagen_adjunto [mal] | placeholder | admin |
  *    linea | campos | config | tienda | pedido | migracion | nonce [cap] |
  *    validez | validez_admin | validez_admin_mal | ficha* | vista_previa* |
- *    carrito | pool* | sesion | conciliacion | completados | mockups* |
+ *    carrito | pool* | overrides | sesion | conciliacion | completados | mockups* |
  *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
  *    reanalizar | borrado | campo_global | campo_subida`
  */
@@ -757,6 +757,33 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             }
             check('PNG fisico con firma valida', isset($GLOBALS['test_pool_item']) && substr((string)@file_get_contents($dirSes_p . '/img/' . basename((string)($fila_p['file'] ?? 'x'))), 0, 8) === "\x89PNG\r\n\x1a\n");
             break;
+        case 'overrides':
+            // Spec 015 (T016/T018): el JSON de overrides resueltos entra en la
+            // clave del pool. Sin overrides la cadena vieja queda INTACTA
+            // (compatibilidad con los pools ya generados).
+            check('respuesta JSON success', is_array($json) && $json['success'] === true);
+            $fila_o = is_array($json) ? (array)$json['data'] : [];
+            $jsonOv_o = '{"shadow":{"outer":{"size":0.32}}}';
+            check('hash del pool INCLUYE los overrides (FR-005)',
+                ($fila_o['hash'] ?? '') === sha1('Ana|neon-glow||300x200|' . $jsonOv_o),
+                (string)($fila_o['hash'] ?? ''));
+            check('sin overrides la cadena del contrato viejo sigue intacta',
+                \Personalizador_PDF_Plugin::hash_pool('Ana', 'neon-glow', '', 300, 200) === sha1('Ana|neon-glow||300x200'));
+            check('hash distinto con overrides que sin ellos',
+                \Personalizador_PDF_Plugin::hash_pool('Ana', 'neon-glow', '', 300, 200, $jsonOv_o)
+                !== \Personalizador_PDF_Plugin::hash_pool('Ana', 'neon-glow', '', 300, 200));
+            check('dos overrides distintos => dos hashes distintos',
+                \Personalizador_PDF_Plugin::hash_pool('Ana', 'neon-glow', '', 300, 200, '{"a":1}')
+                !== \Personalizador_PDF_Plugin::hash_pool('Ana', 'neon-glow', '', 300, 200, '{"a":2}'));
+            $dirSes_o = $testBase . '/uploads/pmu/tmp/sesion-test-8f2a/' . $GLOBALS['test_pool_item'];
+            $man_o2 = isset($GLOBALS['test_pool_item']) ? json_decode((string)@file_get_contents($dirSes_o . '/manifest.json'), true) : null;
+            $filas_o = is_array($man_o2) ? (array)($man_o2['archivos'] ?? []) : [];
+            $hashManifest_o = '';
+            foreach ($filas_o as $fo) {
+                if (($fo['grupo_id'] ?? '') === '0000FF') { $hashManifest_o = (string)($fo['hash'] ?? ''); }
+            }
+            check('el manifest anota el hash con overrides', $hashManifest_o === sha1('Ana|neon-glow||300x200|' . $jsonOv_o));
+            break;
         case 'invitado':
             // Spec 014 (FR-001): sin cuenta, el flujo del comprador tiene que
             // funcionar igual. Antes `current_user_can('read')` lo frenaba.
@@ -1482,6 +1509,40 @@ switch ($fase) {
         ];
         $_REQUEST = $_POST;
         $GLOBALS['test_pool_item'] = $draft_p;
+        $p->handle_pool_png(); // exit en wp_send_json_*
+        break;
+
+    case 'overrides':
+        // Spec 015 (T016/T018): mismo ciclo que `pool`, con el JSON de
+        // overrides resueltos en el POST. Se simula add_magic_quotes de WP
+        // (el handler debe unslashear antes de armar la cadena del hash).
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $sesion_o = new PMU_Sesion($p->motor_para_tests());
+        $sid_o = 'test-8f2a';
+        $draft_o = $sesion_o->crear_draft($sid_o, ['muestra']);
+        $_COOKIE[PMU_Sesion::COOKIE] = $sid_o;
+        $pngO = sys_get_temp_dir() . '/pd_puente_png_' . getmypid() . '_ov.png';
+        \ExtractCorel\Engine\PngWriter::write($pngO, 300, 200);
+        $_POST = array_map('add_magic_quotes_simulado', [
+            'action' => 'personalizador_pdf_pool',
+            'sid' => $sid_o,
+            'item_key' => $draft_o,
+            'pdf' => 'muestra',
+            'grupo' => '0000FF',
+            'valor' => 'Ana',
+            'preset' => 'neon-glow',
+            'settings' => '',
+            'overrides' => '{"shadow":{"outer":{"size":0.32}}}',
+            'w' => '300',
+            'h' => '200',
+            'png_data' => 'data:image/png;base64,' . base64_encode((string)file_get_contents($pngO)),
+            '_wpnonce' => 'nonce',
+        ]);
+        $_REQUEST = $_POST;
+        $GLOBALS['test_pool_item'] = $draft_o;
         $p->handle_pool_png(); // exit en wp_send_json_*
         break;
 
