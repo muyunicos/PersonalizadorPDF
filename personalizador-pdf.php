@@ -97,6 +97,9 @@ class Personalizador_PDF_Plugin
         // Spec 012 (T022): la foto que sube el comprador al item (el cargador).
         add_action('wp_ajax_personalizador_pdf_subida', [$this, 'handle_subida']);
         add_action('wp_ajax_nopriv_personalizador_pdf_subida', [$this, 'handle_subida']);
+        // Spec 012 (T027, FR-036): resolver un id de subida a su URL.
+        add_action('wp_ajax_personalizador_pdf_subida_url', [$this, 'handle_subida_url']);
+        add_action('wp_ajax_nopriv_personalizador_pdf_subida_url', [$this, 'handle_subida_url']);
 
         // Spec 004 (T015): ciclo del carrito (validar, promover el draft, etiquetas
         // cliente, cantidad fija 1 y borrado quirurgico al quitar la linea).
@@ -1399,6 +1402,60 @@ class Personalizador_PDF_Plugin
     }
 
     /**
+     * Resuelve un id de subida a su URL publica (spec 012, T027, FR-036).
+     *
+     * El id NUNCA se usa para armar una ruta: se busca en `manifest.subidas[]`
+     * y, si no esta, se responde `ok:false` (el cliente omite esa instancia, no
+     * inventa nada). Es la foto original del comprador tal como la subio
+     * (el recorte al tamano del hueco lo hace el navegador).
+     */
+    public function handle_subida_url()
+    {
+        if (!current_user_can('read')) {
+            wp_send_json_error('motor:capacidad:invalida');
+        }
+        $nonce = (string) ($_REQUEST['_wpnonce'] ?? '');
+        if (!wp_verify_nonce($nonce, 'personalizador_pdf_vista_previa')) {
+            wp_send_json_error('motor:nonce:invalido');
+        }
+        $sid = sanitize_text_field(wp_unslash((string) ($_POST['sid'] ?? '')));
+        $item = sanitize_text_field(wp_unslash((string) ($_POST['item_key'] ?? '')));
+        $id = sanitize_text_field(wp_unslash((string) ($_POST['id'] ?? '')));
+        try {
+            $sesion = $this->sesion();
+            $rutas = $sesion->resolver_subidas($sid, $item, [$id]);
+            if (empty($rutas)) {
+                wp_send_json_error('motor:subida:id:ausente');
+            }
+            $ruta = reset($rutas);
+            if (!is_file($ruta)) {
+                wp_send_json_error('motor:subida:archivo:ausente');
+            }
+        } catch (\Throwable $e) {
+            wp_send_json_error($e->getMessage());
+        }
+        wp_send_json_success(['id' => $id, 'url' => $this->url_escudo_media($ruta)]);
+    }
+
+    /** URL publica de un archivo de `uploads/` (con cache-busting por mtime). */
+    private function url_escudo_media($rutaAbsoluto)
+    {
+        $base = wp_upload_dir();
+        $baseDir = rtrim(str_replace('\\', '/', (string) $base['basedir']), '/') . '/';
+        $rel = str_replace('\\', '/', (string) $rutaAbsoluto);
+        if (strpos($rel, $baseDir) !== 0) {
+            return '';
+        }
+        $rel = substr($rel, strlen($baseDir));
+        $url = trailingslashit((string) $base['baseurl']) . $rel;
+        $mtime = @filemtime($rutaAbsoluto);
+        if ($mtime) {
+            $url .= (strpos($url, '?') === false ? '?' : '&') . 'v=' . (int) $mtime;
+        }
+        return $url;
+    }
+
+    /**
      * T015: valida el add-to-cart de un producto vinculado: exige draft vigente
      * (pmu_sid + pmu_item_key con manifest del mismo PDF y previews ok/omisible).
      * Sin Woo o sin vinculacion no interviene (devuelve $valido sin tocar nada).
@@ -1734,16 +1791,32 @@ class Personalizador_PDF_Plugin
             $salida = $dir . DIRECTORY_SEPARATOR . $pdf . '_procesado.pdf';
             if (!is_file($salida)) {
                 $mapa = [];
-                foreach ((array)($manifest['archivos'] ?? []) as $fila) {
-                    if (!is_array($fila) || (string)($fila['pdf'] ?? '') !== $pdf || empty($fila['file'])) {
+                // Spec 012 (T027/T025): un grupo puede tener VARIAS filas (una por
+                // instancia). Antes se guardaba solo la primera (`isset($mapa[$gid])`
+                // saltaba el resto) y el Motor la replicaba. Ahora se juntean
+                // ordenadas por `indice` y se pasan como lista: si faltan filas,
+                // las instancias sobrantes quedan transparentes, sin bloquear
+                // (D17/D18/D19).
+                $porIdx = [];
+                foreach ((array) ($manifest['archivos'] ?? []) as $fila) {
+                    if (!is_array($fila) || (string) ($fila['pdf'] ?? '') !== $pdf || empty($fila['file'])) {
                         continue;
                     }
-                    $gid = strtoupper((string)($fila['grupo_id'] ?? ''));
-                    $ruta = $dir . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string)$fila['file']);
-                    if ($gid === '' || isset($mapa[$gid]) || !is_file($ruta)) {
+                    $gid = strtoupper((string) ($fila['grupo_id'] ?? ''));
+                    $ruta = $dir . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string) $fila['file']);
+                    if ($gid === '' || !is_file($ruta)) {
                         continue;
                     }
-                    $mapa[$gid] = $ruta;
+                    $porIdx[$gid][(int) ($fila['indice'] ?? 0)] = $ruta;
+                }
+                foreach ($porIdx as $gid => $rutasGrupo) {
+                    // OJO: la variable de salida se llama `$rutas`; este bucle
+                    // usa otro nombre a proposito (pisar `$rutas` devolvia
+                    // claves numericas en vez de los nombres de PDF).
+                    ksort($rutasGrupo);               // orden de instancia
+                    $mapa[$gid] = (count($rutasGrupo) === 1)
+                        ? reset($rutasGrupo)
+                        : array_values($rutasGrupo);
                 }
                 if (!$mapa) {
                     throw new \RuntimeException('motor:descarga:pool:vacio:' . $pdf);

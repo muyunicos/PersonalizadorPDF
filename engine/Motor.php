@@ -62,14 +62,51 @@ class Motor
 
         $especificaciones = [];
         $sinImagen = [];
+        $parciales = [];   // id => cuantas instancias quedaron sin foto (D17: informe, no error)
+        $cuantas = [];     // id => cuantas imagenes se dibujan (multi o `cont`)
         foreach ($grupos as $g) {
             $id = $g['id'];
             $ruta = isset($rutasImagenes[$id]) ? $rutasImagenes[$id] : null;
-            if (!$ruta || !is_file($ruta)) {
+            if (!$ruta) {
                 $sinImagen[] = $id;
                 continue;
             }
-            $especificaciones[$id] = Imagen::normalizar($ruta, (int)$g['w'], (int)$g['h']);
+            // Spec 012 (T025, FR-039): `$rutasImagenes[$id]` puede ser UNA ruta
+            // (comportamiento historico: la misma foto en todas las instancias) o
+            // una LISTA (una por instancia). Se toma como maximo `cont`: sobran
+            // no se dibujan y las instancias que quedan sin foto conservan su
+            // transparencia, sin aviso y sin bloqueo (D17/D18/D19). Con `string`
+            // el resultado es identico al de antes.
+            $cont = max(1, (int) $g['cont']);
+            // `string` = una foto replicada en todas las instancias (historico);
+            // `array` = una por instancia. Ojo: una spec YA es un array, asi que
+            // la distincion se lleva con la bandera `$multi` y nunca sniffando
+            // el resultado (eso rompe el caso de una sola imagen por grupo).
+            $multi = is_array($ruta);
+            $lista = $multi ? array_values($ruta) : [$ruta];
+            $specs = [];
+            $rotas = 0;   // por grupo: cuantas rutas vinieron rotas o faltantes
+            $quedan = $cont;
+            foreach ($lista as $una) {
+                if ($quedan <= 0) {
+                    break;
+                }
+                if (!$una || !is_file($una)) {
+                    $rotas++;
+                    continue; // esa instancia queda sin foto: hueco transparente
+                }
+                $specs[] = Imagen::normalizar($una, (int) $g['w'], (int) $g['h']);
+                $quedan--;
+            }
+            if (!$specs) {
+                    $sinImagen[] = $id;
+                    continue;
+                }
+            if ($rotas > 0 || ($multi && count($specs) < $cont)) {
+                $parciales[$id] = $cont - count($specs);
+            }
+            $especificaciones[$id] = $multi ? $specs : $specs[0];
+            $cuantas[$id] = $multi ? count($specs) : $cont;
         }
         if (!$especificaciones) {
             throw new \RuntimeException(
@@ -83,7 +120,9 @@ class Motor
         $insertadas = 0;
         foreach ($grupos as $g) {
             if (isset($especificaciones[$g['id']])) {
-                $insertadas += (int)$g['cont'];
+                // `$cuantas` ya lo calculo el bucle de specs: con lista, una por
+                // instancia servida; con scalar, todas (`cont`).
+                $insertadas += (int) $cuantas[$g['id']];
             }
         }
         return [
@@ -93,6 +132,10 @@ class Motor
                 'grupos_totales' => count($grupos),
                 'grupos_aplicados' => array_keys($especificaciones),
                 'grupos_sin_imagen' => $sinImagen,
+                // Spec 012 (D17/D18/D19): grupos con menos fotos que instancias.
+                // Es un INFORME, nunca un error: los huecos sobrantes salen
+                // transparentes y la compra no se bloquea.
+                'grupos_parciales' => $parciales,
                 'imagenes_insertadas' => $insertadas,
                 'bytes' => strlen($bytes),
             ],
@@ -132,6 +175,11 @@ class Motor
      * -> PDF editado. Sin dataset: no hay paridad que validar (los PNG ya
      * vienen renderizados por el cliente). Devuelve el resumen del Motor.
      */
+    /**
+     * Procesa el pedido desde el pool del item. `$mapaIdRuta` acepta UNA ruta
+     * por grupo (comportamiento historico: se replica en todas las instancias)
+     * o una LISTA (una por instancia, spec 012 T027).
+     */
     public static function procesar_pedido($rutaPdf, array $mapaIdRuta)
     {
         if (!$mapaIdRuta) {
@@ -143,10 +191,19 @@ class Motor
             if (!preg_match('/^[0-9A-F]{6}$/', $id)) {
                 throw new \RuntimeException('Id de grupo invalido en el pedido: ' . $id);
             }
-            if (!is_string($ruta) || !is_file($ruta)) {
+            $lista = is_array($ruta) ? array_values($ruta) : [$ruta];
+            $ok = [];
+            foreach ($lista as $una) {
+                if (!is_string($una) || !is_file($una)) {
+                    throw new \RuntimeException('Falta el PNG del grupo ' . $id . ' en el pedido.');
+                }
+                $ok[] = $una;
+            }
+            if (!$ok) {
                 throw new \RuntimeException('Falta el PNG del grupo ' . $id . ' en el pedido.');
             }
-            $canon[$id] = $ruta;
+            // Una sola ruta = replica (historico); varias = una por instancia.
+            $canon[$id] = count($ok) === 1 ? $ok[0] : $ok;
         }
         return self::procesar($rutaPdf, null, $canon);
     }

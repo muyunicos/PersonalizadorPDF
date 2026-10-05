@@ -1007,6 +1007,39 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('FR-035: el manifest promovido conserva subidas[]',
                 is_array($su['man_destino'] ?? null) && count((array)($su['man_destino']['subidas'] ?? [])) === 2);
             break;
+        case 'motor_multi':
+            // 012/F7 (T025/T026): N imagenes por grupo.
+            $mm = isset($GLOBALS['test_motor_multi']) ? $GLOBALS['test_motor_multi'] : null;
+            check('multi: sin error', is_array($mm) && (string)($mm['error'] ?? '') === '',
+                is_array($mm) ? (string) ($mm['error'] ?? '') : 'sin datos');
+            check('multi: el grupo tiene >=2 instancias para probar el caso', (int)($mm['cont'] ?? 0) >= 2,
+                'cont=' . (int)($mm['cont'] ?? 0));
+            // Una LISTA dibuja una imagen por instancia servida, NO `cont`.
+            check('multi: la lista dibuja N imagenes (una por instancia)',
+                (int)($mm['ins_lista'] ?? -1) === (int)($mm['n'] ?? -2),
+                'ins_lista=' . (int)($mm['ins_lista'] ?? -1) . ' n=' . (int)($mm['n'] ?? -2));
+            // Un STRING conserva el comportamiento historico: `cont` imagenes.
+            check('multi: el string replica en todas las instancias (retrocompat)',
+                (int)($mm['ins_scalar'] ?? -1) === (int)($mm['cont'] ?? -2),
+                'ins_scalar=' . (int)($mm['ins_scalar'] ?? -1) . ' cont=' . (int)($mm['cont'] ?? -2));
+            check('multi: con N == cont no hay parciales',
+                is_array($mm['parciales'] ?? null) && count($mm['parciales']) === 0,
+                json_encode($mm['parciales'] ?? null));
+            // D17/D18/D19: con MENOS fotos que instancias, informa y NO falla.
+            check('multi: con 1 foto de 3 dibuja solo 1 (no clona)',
+                (int) ($mm['ins_parcial'] ?? -1) === 1, 'ins_parcial=' . (int) ($mm['ins_parcial'] ?? -1));
+            check('multi: informa las 2 instancias sin foto, sin fallar',
+                (int) ($mm['parciales_cortas'][$mm['gid'] ?? ''] ?? -1) === ((int) ($mm['cont'] ?? 0) - 1),
+                json_encode($mm['parciales_cortas'] ?? null));
+            check('multi: con 1 foto igual genera PDF', (int) ($mm['bytes_parcial'] ?? 0) > 0);
+            check('multi: el PDF sale distinto al del caso string',
+                (int)($mm['bytes_lista'] ?? 0) > 0 && (int)($mm['bytes_lista'] ?? 0) !== (int)($mm['bytes_scalar'] ?? -1));
+            check('multi: la lista agrega mas XObjects que el string',
+                (int)($mm['imgs_lista'] ?? 0) > (int)($mm['imgs_scalar'] ?? 0),
+                'lista=' . (int)($mm['imgs_lista'] ?? 0) . ' scalar=' . (int)($mm['imgs_scalar'] ?? 0));
+            check('multi: un grupo con menos fotos igual genera PDF',
+                (int)($mm['bytes_vacio'] ?? 0) > 0);
+            break;
         case 'config':
             // 004/Fase A: config.json por PDF (activo/productos/campos/placeholders).
             $cfg = isset($GLOBALS['test_config']) ? $GLOBALS['test_config'] : null;
@@ -2588,6 +2621,66 @@ switch ($fase) {
             ];
         } catch (\Throwable $e) {
             $GLOBALS['test_campo_subida'] = ['error' => $e->getMessage()];
+        }
+        break;
+
+    case 'motor_multi':
+        // 012/F7 (T025/T026): N imagenes por grupo, una por instancia (FR-039).
+        preparar_entorno($testBase, $base);
+        try {
+            $pdfRuta = $testBase . '/uploads/pmu/pdfs/muestra/muestra.pdf';
+            $parser = new \ExtractCorel\Engine\Pdf((string) file_get_contents($pdfRuta));
+            $parser->load();
+            $grupos = (new \ExtractCorel\Engine\Detector($parser))->analizarPdf()['grupos'];
+            $g = $grupos[0];
+            $gid = (string) $g['id'];
+            $cont = (int) $g['cont'];
+            $w = (int) $g['w'];
+            $h = (int) $g['h'];
+            $n = min(3, $cont);
+            $rutas = [];
+            for ($i = 0; $i < $n; $i++) {
+                $f = sys_get_temp_dir() . '/pd_multi_' . $gid . '_' . $i . '_' . getmypid() . '.png';
+                \ExtractCorel\Engine\PngWriter::write($f, $w, $h);
+                $rutas[] = $f;
+            }
+            // (a) LISTA de N imagenes (< cont): una por instancia, las sobrantes vacias.
+            $GLOBALS['test_motor_multi'] = ['debug_g0' => $g, 'debug_rutas' => count($rutas),
+                'debug_existe' => $rutas ? (int) is_file($rutas[0]) : -1,
+                'debug_cont' => $cont, 'debug_n' => $n];
+            $lista = \ExtractCorel\Engine\Motor::procesar($pdfRuta, null, [$gid => $rutas]);
+            // (b) STRING: la misma foto en todas las instancias (retrocompat).
+            $scalar = \ExtractCorel\Engine\Motor::procesar($pdfRuta, null, [$gid => $rutas[0]]);
+            // (c) solo el SEGUNDO grupo: el primero queda sin imagen y NO es fatal.
+            $gid2 = isset($grupos[1]['id']) ? (string) $grupos[1]['id'] : $gid;
+            $vacio = \ExtractCorel\Engine\Motor::procesar($pdfRuta, null, [$gid2 => $rutas[0]]);
+            // (d) lista con MENOS fotos que instancias: informa las sobrantes y NO falla
+            // (D17/D18/D19: los huecos sobrantes salen transparentes).
+            $corta = [$rutas[0]];
+            $parcial = \ExtractCorel\Engine\Motor::procesar($pdfRuta, null, [$gid => $corta]);
+            $GLOBALS['test_motor_multi'] = [
+                'gid' => $gid, 'cont' => $cont, 'n' => $n,
+                'ins_lista' => (int) $lista['resumen']['imagenes_insertadas'],
+                'ins_scalar' => (int) $scalar['resumen']['imagenes_insertadas'],
+                'parciales' => isset($lista['resumen']['grupos_parciales']) ? $lista['resumen']['grupos_parciales'] : [],
+                'bytes_lista' => (int) $lista['resumen']['bytes'],
+                'bytes_scalar' => (int) $scalar['resumen']['bytes'],
+                'imgs_lista' => substr_count($lista['bytes'], '/Subtype /Image'),
+                'imgs_scalar' => substr_count($scalar['bytes'], '/Subtype /Image'),
+                'otro_grupo' => (int) $vacio['resumen']['imagenes_insertadas'],
+                'bytes_vacio' => (int) $vacio['resumen']['bytes'],
+                'ins_parcial' => (int) $parcial['resumen']['imagenes_insertadas'],
+                'parciales_cortas' => isset($parcial['resumen']['grupos_parciales'])
+                    ? $parcial['resumen']['grupos_parciales'] : [],
+                'bytes_parcial' => (int) $parcial['resumen']['bytes'],
+            ];
+        } catch (\Throwable $e) {
+            // Merge, no reemplazo: el banco puede haber dejado datos de debug
+            // antes del fallo y escribirlos arriba los perderia.
+            $prev = isset($GLOBALS['test_motor_multi']) && is_array($GLOBALS['test_motor_multi'])
+                ? $GLOBALS['test_motor_multi'] : [];
+            $prev['error'] = $e->getMessage();
+            $GLOBALS['test_motor_multi'] = $prev;
         }
         break;
 

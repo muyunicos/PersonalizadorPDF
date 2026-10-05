@@ -49,12 +49,21 @@
         },
 
         /**
-         * Concilia un grupo con los valores del comprador (T014b). Devuelve
-         * {textos: [1 por instancia], aviso: ''} o {textos: [], aviso: '...'}
-         * cuando N != M: el llamador BLOQUEA la generacion de ese PDF.
+         * Concilia un grupo con los valores del comprador (T014b).
+         *
+         * **NUNCA BLOQUEA** (D17/D18/D19; antes frenaba la compra):
+         * - con `repetir`, el indice CICLA modulo el largo del array: 4 valores en
+         *   8 instancias -> 1,2,3,4,1,2,3,4; y 1 solo valor -> el mismo en las 8.
+         * - sin `repetir`, los N valores van a las primeras N instancias y las
+         *   sobrantes quedan VACIAS (el hueco conserva su transparencia).
+         * En los dos casos sale un informe en `nota`, pero no es un error ni un
+         * aviso que frene la compra.
+         *
+         * @returns {{textos:string[], nota:string}}
          */
         conciliarGrupo: function (grupo, valores) {
             var g = grupo || {};
+            var M = parseInt(g.cont, 10) || 1;
             var ids = this.camposDe(g.value);
             var arrays = [];
             ids.forEach(function (id) {
@@ -62,24 +71,28 @@
                 var v = par && Object.prototype.hasOwnProperty.call(par, 'valor') ? par.valor : null;
                 if (Object.prototype.toString.call(v) === '[object Array]') { arrays.push(v); }
             });
-            var M = parseInt(g.cont, 10) || 1;
-            if (!g.repetir && !arrays.length) {
-                return { textos: [this.resolverPlantilla(g.value, valores)], aviso: '' };
+            var i, idx, textos;
+            // Sin ningun campo que publique una lista: un solo valor, repetido.
+            if (!arrays.length) {
+                var uno = this.resolverPlantilla(g.value, valores);
+                textos = [];
+                for (i = 0; i < M; i++) { textos.push(uno); }
+                return { textos: textos, nota: '' };
             }
             var N = 1;
             arrays.forEach(function (a) { if (a.length > N) { N = a.length; } });
-            if (arrays.length && N !== M) {
-                return {
-                    textos: [],
-                    aviso: 'La personalizacion tiene ' + N + ' valor(es) y el PDF espera ' + M +
-                        '. Iguala las cantidades antes de continuar.'
-                };
+            textos = [];
+            for (i = 0; i < M; i++) {
+                idx = g.repetir ? (i % N) : i;   // cicla / primera foto por instancia
+                textos.push(idx < N ? this.resolverPlantilla(g.value, valores, idx) : '');
             }
-            var textos = [];
-            for (var i = 0; i < M; i++) {
-                textos.push(this.resolverPlantilla(g.value, valores, i));
-            }
-            return { textos: textos, aviso: '' };
+            // Informe (no error): cuantas instancias quedaron sin valor.
+            var sinValor = 0;
+            for (i = 0; i < textos.length; i++) { if (textos[i] === '' || textos[i] === null) { sinValor++; } }
+            return {
+                textos: textos,
+                nota: sinValor > 0 ? 'Quedan ' + sinValor + ' espacio(s) sin completar.' : ''
+            };
         },
 
         /** Hash de regeneracion (contrato sesion-item.md): valor|preset|settings|WxH. */
@@ -705,19 +718,95 @@
      * `previo` (render parcial, T016) cada instancia cuyo hash ya existe en el
      * pool se RESUELVE con la URL del PNG guardado (sin re-render ni subida).
      */
+    /**
+     * Sube al pool las fotos del comprador, una por instancia del hueco
+     * (spec 012, T027, FR-036/FR-038). El `id` se resuelve contra
+     * `manifest.subidas[]`: si no existe, esa instancia NO se dibuja (nunca una
+     * ruta inventada). Cada foto se rasteriza al tamano EXACTO del hueco para que
+     * la vista previa y el PDF usen la misma imagen.
+     */
+    function subirFotos(fotos, sid, itemKey, pdfDatos) {
+        if (!fotos || !fotos.length) { return Promise.resolve([]); }
+        return Promise.all(fotos.map(function (f) {
+            return urlDeSubida(sid, itemKey, f.id).then(function (url) {
+                if (!url) { return null; }
+                return rasterizar(url, f.g.w, f.g.h).then(function (blob) {
+                    if (!blob) { return null; }
+                    return subirPool(sid, itemKey, pdfDatos.pdf, f.gid, blob, {
+                        valor: f.id, preset: '', settings: '', w: f.g.w, h: f.g.h
+                    }, f.primero);
+                });
+            }).catch(function () { return null; });   // una foto que falla no frena al resto
+        }));
+    }
+
+    /** URL de la foto subida `id` (null si no existe en el manifest). */
+    function urlDeSubida(sid, itemKey, id) {
+        if (!sid || !itemKey || !id) { return Promise.resolve(null); }
+        var fd = new FormData();
+        fd.append('action', 'personalizador_pdf_subida_url');
+        fd.append('_wpnonce', cfg.nonceVistaPrevia || '');
+        fd.append('sid', sid);
+        fd.append('item_key', itemKey);
+        fd.append('id', id);
+        return fetch(cfg.ajaxUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (json) {
+                if (!json || !json.success || !json.data || !json.data.url) { return null; }
+                return json.data.url;
+            })
+            .catch(function () { return null; });
+    }
+
+    /** Rasteriza una imagen a WxH exacto, en PNG, con "contain" y centrado. */
+    function rasterizar(url, w, h) {
+        return new Promise(function (resolve) {
+            var img = new Image();
+            img.onload = function () {
+                var c = document.createElement('canvas');
+                c.width = Math.max(1, parseInt(w, 10) || 1);
+                c.height = Math.max(1, parseInt(h, 10) || 1);
+                var ctx2 = c.getContext('2d');
+                // "contain": la imagen entra entera y centrada; los margenes
+                // sobrantes quedan transparentes (misma regla que el Motor).
+                var esc = Math.min(c.width / img.width, c.height / img.height);
+                var dw = Math.max(1, Math.round(img.width * esc));
+                var dh = Math.max(1, Math.round(img.height * esc));
+                ctx2.drawImage(img, Math.round((c.width - dw) / 2), Math.round((c.height - dh) / 2), dw, dh);
+                if (c.toBlob) { c.toBlob(function (b) { resolve(b); }, 'image/png'); }
+                else { resolve(null); }
+            };
+            img.onerror = function () { resolve(null); };
+            img.src = url;
+        });
+    }
+
     function generarPdf(pdfDatos, sid, itemKey, vista, previo) {
         previo = previo || { mapa: {} };
         var valores = (global.PMU_API && global.PMU_API.valores()) || {};
         var pendientes = [];
         var avisos = [];
+        var fotos = [];       // grupos `imagen`: un blob por instancia (spec 012, T027)
         (pdfDatos.grupos || []).forEach(function (g) {
-            if (g.tipo !== 'texto' || !g.preset) { return; }
-            var c = PURO.conciliarGrupo(g, valores);
-            if (c.aviso) {
-                avisos.push(c.aviso); // T014b: bloquea SOLO este PDF
+            if (g.tipo === 'imagen') {
+                // Foto del comprador: se resuelve el id contra manifest.subidas[]
+                // y se rasteriza al tamano del hueco. Si un id no existe, NO se
+                // inventa nada: esa instancia se omite (D17).
+                var cImg = PURO.conciliarGrupo(g, valores);
+                if (cImg.nota) { avisos.push(cImg.nota); }
+                cImg.textos.forEach(function (idSubida, i) {
+                    if (idSubida === '' || idSubida === null) { return; }
+                    fotos.push({ gid: g.id, i: i, id: idSubida, g: g, primero: i === 0 });
+                });
                 return;
             }
+            if (g.tipo !== 'texto' || !g.preset) { return; }
+            var c = PURO.conciliarGrupo(g, valores);
+            // D17/D18/D19: `nota` es un INFORME, no un bloqueo. Los espacios sin
+            // valor se omiten del pool y el hueco queda transparente.
+            if (c.nota) { avisos.push(c.nota); }
             c.textos.forEach(function (texto, i) {
+                if (texto === '' || texto === null) { return; }  // instancia sin valor
                 var hash = PURO.hashRender(texto, g.preset, g.settings, g.w, g.h);
                 pendientes.push({
                     gid: g.id, i: i, texto: texto, g: g, primero: i === 0,
@@ -725,8 +814,10 @@
                 });
             });
         });
+        // Las fotos van al pool por su cuenta y se esperan con el texto (T027).
+        var trabajoFotos = subirFotos(fotos, sid, itemKey, pdfDatos);
         if (avisos.length) { mostrarAviso(pdfDatos, avisos.join(' ')); }
-        if (!pendientes.length) {
+        if (!pendientes.length && !fotos.length) {
             var esperaBloq = vista.marco.querySelector('.pmu-gal-espera');
             if (esperaBloq) {
                 esperaBloq.textContent = avisos.length ? 'Sin vista previa disponible' : 'Generando vista previa';
@@ -751,6 +842,9 @@
                     valor: p.texto, preset: p.g.preset, settings: p.g.settings, w: p.g.w, h: p.g.h
                 }, p.primero);
             });
+            // Las fotos se esperan junto al texto: la composicion del mockup solo
+            // arranca cuando TODAS las imagenes estan en el pool (spec 012, T027).
+            subidas.push(trabajoFotos);
             return Promise.all(subidas).then(function () {
                 var pngsPorGrupo = {};
                 pendientes.forEach(function (p) {

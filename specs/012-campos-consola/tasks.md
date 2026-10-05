@@ -142,27 +142,37 @@
 
 ## Fase 7 - US7 Campo de imagenes en el placeholder (nucleo; sola)
 
-- [ ] T025 [US7][P] `engine/Motor.php`: `$rutasImagenes[$id]` acepta `string` (hoy) **o** lista
-  (una por instancia). Mantiene el comportamiento actual para `string` (consola "Procesar", pedidos,
-  `motor_smoke`, `parity` sin cambios) (FR-039, D12).
-- [ ] T026 [US7][P] `engine/Overlay.php`: una imagen por instancia del grupo; el "encajar"
-  (`contain`) se aplica a cada una. Con `string` se replica como hoy.
-  **Puerta**: `php tests/parity.php` (PARIDAD OK) + `php tests/motor_smoke.php` (SMOKE OK).
-- [ ] T027 [US7] `assets/tienda.js`: un placeholder `tipo=imagen` con `value=[campoN]` resuelve los
-  ids contra `manifest.subidas[]` validando que existan (FR-036), rasteriza cada id al tamano del
-  hueco y lo sube al pool para que vista previa y PDF usen la misma imagen (FR-038), y genera el
-  PDF con `id => [rutas]`. Si N != `cont` -> **no se bloquea ni se avisa** (FR-037'/D17/D18/D19):
-  cada instancia sin foto se omite del pool y el PDF sale con los huecos transparentes. Test: fase
-  `motor_multi` + `campos-contrato.test.js`.
-- [ ] T027b [US7][P] **CAMBIO DE COMPORTAMIENTO EN PRODUCCION** (D17/D18, pedido explicito del
-  usuario): reescribir `PURO.conciliarGrupo()` (`assets/tienda.js:56-83`) para que (a) con `repetir`
-  el `idx` **cicla** modulo el largo del array (4 valores en 8 instancias -> 1,2,3,4,1,2,3,4) y (b)
-  **sin** `repetir`, N != M **deje las instancias sobrantes vacias y NUNCA bloquee** (hoy devuelve
-  `aviso` + `textos: []` y frena la compra, `:71-79`). Aplica igual a texto e imagenes. **Actualizar
-  los asserts de `tests/conciliacion.js`** (cubre `PURO.conciliarGrupo` / `PURO.resolverPlantilla`).
-  Puerta: `node tests/conciliacion.js` + el resto de las suites Node.
-- [ ] T028 [US7] Campos `protegido`: `campos_panel()` NO los manda al HTML de la ficha (FR-040).
-  Campos invisibles (sin HTML visible) siguen publicando via su `campo.js` (FR-041).
+- [X] T025 [US7][P] `engine/Motor.php`: `$rutasImagenes[$id]` acepta `string` (hoy) **o** lista (una
+  por instancia). Con `string` el comportamiento es identico al anterior (FR-039, D12). Tope de `cont`
+  por grupo; los archivos que no existen se saltan. El resumen suma `grupos_parciales`
+  (id => instancias sin foto), que es un **informe**, nunca un error (D17/D18/D19).
+  Ojo: una spec **ya es un array**, asi que la distincion string/lista se lleva con la bandera
+  `$multi` de las RUTAS (no sniffeando el resultado): sniffeando se rompia el caso de una sola
+  imagen por grupo. Puerta: `motor_multi` (11 checks) + SMOKE OK + PARIDAD OK sin cambios.
+- [X] T026 [US7][P] `engine/Overlay.php`: un XObject por ranura (`$imgObjs[id][slot]`) y la instancia
+  k toma la ranura k; las sobrantes **se omiten** (el hueco conserva su transparencia). Con una sola
+  spec se replica en todas las instancias, como antes. El empaquetado del XObject se extrajo a
+  `xobjectImagen()` para no duplicar el bloque dct/raster. `esListaDeSpecs()` distingue "una spec" de
+  "lista de specs" **por la clave `tipo`**, no con `is_array()` (que daba falso positivo porque una
+  spec es un array). `spliceOps()` recibe el slot; `/Resources` registra una entrada por ranura usada.
+- [X] T027 [US7] `assets/tienda.js` + `personalizador-pdf.php`: un placeholder `tipo=imagen` con
+  `value=[campoN]` resuelve cada id contra `manifest.subidas[]` con el endpoint
+  `personalizador_pdf_subida_url` (**nunca** una ruta armada desde el id: si el id no esta en el
+  manifest se responde error y la instancia se omite), rasteriza el blob al tamano exacto del hueco
+  con "contain" y centrado, y lo sube al pool **una fila por instancia** (`limpiar` solo en la
+  primera). Del lado del servidor, `item_generar_pdfs()` juntea las filas por grupo ordenadas por
+  `indice` y pasa lista o escalar; `Motor::procesar_pedido()` acepta ambas. Con N != `cont` **no se
+  bloquea ni se avisa**: sobran huecos transparentes (D17/D18/D19).
+- [X] T027b [US7][P] **CAMBIO DE COMPORTAMIENTO EN PRODUCCION** (D17/D18, pedido explicito del
+  usuario): `PURO.conciliarGrupo()` reescrito. Con `repetir` el `idx` **cicla** (`i % N`: 4 valores
+  en 8 instancias -> 1,2,3,4,1,2,3,4; 1 solo valor -> el mismo en las 8). Sin `repetir`, las N
+  primeras instancias llevan foto y **las sobrantes quedan vacias**. **Nunca bloquea**: `aviso`
+  paso a ser `nota`, un informe ("Quedan N espacio(s) sin completar"), y el generador saltea las
+  instancias vacias en vez de abortar. Aplica igual a texto e imagenes. Los asserts de
+  `tests/conciliacion.js` se reescribieron (10 asserts, incluidos los 3 casos que antes bloqueaban).
+- [X] T028 [US7] Campos `protegido`: `campos_panel()` NO los manda al HTML de la ficha (ya estaba
+  hecho en F1/F2, se verifico). Campos invisibles (sin HTML visible) siguen publicando via su
+  `campo.js`, porque el montaje corre igual aunque el campo no tenga markup visible (FR-041).
 
 ## Fase 8 - Documentacion y cierre
 

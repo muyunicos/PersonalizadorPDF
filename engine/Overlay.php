@@ -30,8 +30,9 @@ class Overlay
     private $grupos = [];
     private $pageNums = [];   // pageIdx => objnum pagina
     private $heights = [];    // pageIdx => alto en pt
-    private $perPage = [];    // pageIdx => [{x,y,w,h,img}]
-    private $imgObj = [];     // id => objnum imagen
+    private $perPage = [];    // pageIdx => [{x,y,w,h,img,slot}]
+    private $imgObj = [];     // id => objnum imagen (ranura 0: atajo del caso simple)
+    private $imgObjs = [];    // id => [ranura => objnum] (spec 012, T026: N imagenes)
     private $newObjs = [];    // objnum => texto del objeto nuevo
     private $firstNew;
     private $activas = [];    // id => true (grupos con imagen a insertar)
@@ -54,6 +55,86 @@ class Overlay
      * transparentes para TODOS los grupos. Si se pasa, los grupos sin imagen
      * se omiten por completo (el PDF conserva sus rectangulos originales).
      */
+    /**
+     * Escribe el XObject de imagen de una ranura y devuelve su numero de objeto
+     * (spec 012, T026). `$spec` null = imagen totalmente transparente, que es
+     * el comportamiento original cuando no se paso ninguna imagen. Un JPEG
+     * (`dct`) va directo con DCTDecode y sin SMask; el resto usa FlateDecode
+     * con SMask propio. El "encajar" (contain) ya lo aplico `Imagen::normalizar`
+     * antes de llegar aca: aca solo se empaqueta.
+     */
+    private function xobjectImagen(array $g, $spec, $num)
+    {
+        $im = $num;
+        if (is_array($spec) && isset($spec['tipo']) && $spec['tipo'] === 'dct') {
+            $this->newObjs[$im] = $im . " 0 obj\r\n"
+                . "<< /Type /XObject /Subtype /Image /Width " . (int) $spec['w']
+                . " /Height " . (int) $spec['h']
+                . " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode "
+                . '/Length ' . strlen($spec['jpeg']) . " >>\r\n"
+                . "stream\r\n" . $spec['jpeg'] . "\r\nendstream\r\nendobj";
+            return $im;
+        }
+        $sm = $num + 1;
+        $wPx = max(1, (int) $g['w']);
+        $hPx = max(1, (int) $g['h']);
+        if (is_array($spec) && isset($spec['tipo']) && $spec['tipo'] === 'raster') {
+            $rgb = gzcompress($spec['rgb'], 6);
+            $alpha = gzcompress($spec['alpha'], 6);
+        } else {
+            // Comportamiento original: imagen totalmente transparente.
+            $rgb = gzcompress(str_repeat("\x00", $wPx * $hPx * 3), 6);
+            $alpha = gzcompress(str_repeat("\x00", $wPx * $hPx), 6);
+        }
+        $this->newObjs[$im] = $im . " 0 obj\r\n"
+            . "<< /Type /XObject /Subtype /Image /Width $wPx /Height $hPx "
+            . "/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode "
+            . '/Length ' . strlen($rgb) . " /SMask $sm 0 R >>\r\n"
+            . "stream\r\n" . $rgb . "\r\nendstream\r\nendobj";
+        $this->newObjs[$sm] = $sm . " 0 obj\r\n"
+            . "<< /Type /XObject /Subtype /Image /Width $wPx /Height $hPx "
+            . "/ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode "
+            . '/Length ' . strlen($alpha) . " >>\r\n"
+            . "stream\r\n" . $alpha . "\r\nendstream\r\nendobj";
+        return $im;
+    }
+
+    /**
+     * ¿El valor de `$imagenes[$gid]` es una LISTA de specs o UNA sola spec?
+     * Hace falta porque **una spec ya es un array** (con su clave `tipo`), asi
+     * que `is_array()` no alcanza: sin esta distincion, `array_values($spec)`
+     * devolvia los valores sueltos de la spec y el PDF salia roto.
+     */
+    private static function esListaDeSpecs($v)
+    {
+        if (!is_array($v) || $v === []) {
+            return false;
+        }
+        if (isset($v['tipo'])) {
+            return false; // es UNA spec, no una lista
+        }
+        $primero = reset($v);
+        return is_array($primero) && isset($primero['tipo']);
+    }
+
+    /** Numero de objeto de la ranura `$slot` del grupo `$gid` (spec 012, T026). */
+    private function objDe($gid, $slot = 0)
+    {
+        if (isset($this->imgObjs[$gid][$slot])) {
+            return $this->imgObjs[$gid][$slot];
+        }
+        // Ranura fuera de rango: la 0 (imagen del grupo). No deberia pasar porque
+        // agruparInstancias() omite las instancias sobrantes, pero si pasara el
+        // PDF igual tendria una imagen valida en vez de un /ECIm inexistente.
+        return isset($this->imgObj[$gid]) ? $this->imgObj[$gid] : 0;
+    }
+
+    /** Cuantos numeros de objeto consume una ranura: 1 (JPEG) o 2 (imagen + SMask). */
+    private function nextNumTrasImagen($nextNum, $spec)
+    {
+        return $nextNum + (is_array($spec) && isset($spec['tipo']) && $spec['tipo'] === 'dct' ? 1 : 2);
+    }
+
     public function build($grupos, $imagenes = null)
     {
         $this->grupos = $grupos;
@@ -78,50 +159,44 @@ class Overlay
         $nextNum = $this->firstNew;
 
         // 1) XObjects de imagen por grupo (reales si hay especificacion).
+        // Spec 012 (T026): `$imagenes[$gid]` puede ser UNA spec (comportamiento
+        // historico: la misma imagen en todas las instancias) o una LISTA (una
+        // por instancia). Con lista, la instancia k usa la ranura k y las que
+        // se sobren sobran quedan sin dibujar (el hueco conserva su
+        // transparencia): decide el llamador, no el Overlay.
         foreach ($grupos as $g) {
             $gid = $g['id'];
-            $spec = null;
+            $specs = [];
             if ($imagenes !== null) {
-                $spec = isset($imagenes[$gid]) ? $imagenes[$gid] : null;
-                if (!$spec) {
+                if (isset($imagenes[$gid])) {
+                    $bruto = $imagenes[$gid];
+                    if (self::esListaDeSpecs($bruto)) {
+                        $specs = [];
+                        foreach ($bruto as $una) {
+                            if (is_array($una) && isset($una['tipo'])) {
+                                $specs[] = $una;
+                            }
+                        }
+                    } else {
+                        $specs = [$bruto];
+                    }
+                }
+                if (!$specs) {
                     continue; // grupo sin imagen: no se toca
                 }
             }
-            $im = $nextNum++;
-            $wPx = max(1, (int)$g['w']);
-            $hPx = max(1, (int)$g['h']);
-            if ($spec && $spec['tipo'] === 'dct') {
-                // JPEG directo (DCTDecode), opaco, sin SMask.
-                $this->newObjs[$im] = $im . " 0 obj\r\n"
-                    . "<< /Type /XObject /Subtype /Image /Width " . (int)$spec['w']
-                    . " /Height " . (int)$spec['h']
-                    . " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode "
-                    . '/Length ' . strlen($spec['jpeg']) . " >>\r\n"
-                    . "stream\r\n" . $spec['jpeg'] . "\r\nendstream\r\nendobj";
-                $this->imgObj[$gid] = $im;
-                $this->activas[$gid] = true;
-                continue;
+            $this->imgObjs[$gid] = [];
+            foreach ($specs as $k => $spec) {
+                $this->imgObjs[$gid][$k] = $this->xobjectImagen($g, $spec, $nextNum);
+                $nextNum = $this->nextNumTrasImagen($nextNum, $spec);
             }
-            $sm = $nextNum++;
-            $this->imgObj[$gid] = $im;
-            if ($spec && $spec['tipo'] === 'raster') {
-                $rgb = gzcompress($spec['rgb'], 6);
-                $alpha = gzcompress($spec['alpha'], 6);
-            } else {
-                // Comportamiento original: imagen totalmente transparente.
-                $rgb = gzcompress(str_repeat("\x00", $wPx * $hPx * 3), 6);
-                $alpha = gzcompress(str_repeat("\x00", $wPx * $hPx), 6);
+            // Atajo del caso simple: la ranura 0 es "la imagen del grupo".
+            $this->imgObj[$gid] = isset($this->imgObjs[$gid][0])
+                ? $this->imgObjs[$gid][0]
+                : $this->xobjectImagen($g, null, $nextNum);
+            if (!$specs) {
+                $nextNum = $this->nextNumTrasImagen($nextNum, null);
             }
-            $this->newObjs[$im] = $im . " 0 obj\r\n"
-                . "<< /Type /XObject /Subtype /Image /Width $wPx /Height $hPx "
-                . "/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode "
-                . '/Length ' . strlen($rgb) . " /SMask $sm 0 R >>\r\n"
-                . "stream\r\n" . $rgb . "\r\nendstream\r\nendobj";
-            $this->newObjs[$sm] = $sm . " 0 obj\r\n"
-                . "<< /Type /XObject /Subtype /Image /Width $wPx /Height $hPx "
-                . "/ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode "
-                . '/Length ' . strlen($alpha) . " >>\r\n"
-                . "stream\r\n" . $alpha . "\r\nendstream\r\nendobj";
             $this->activas[$gid] = true;
         }
 
@@ -141,7 +216,7 @@ class Overlay
                 if (!empty($d['spliced'])) {
                     continue; // ya insertada en el stream original
                 }
-                $name = 'ECIm' . $this->imgObj[$d['img']];
+                $name = 'ECIm' . $this->objDe($d['img'], isset($d['slot']) ? $d['slot'] : 0);
                 if (isset($d['quad'])) {
                     // Rectangulo rotado: base ya orientada (sin espejo) guardada
                     // en agruparInstancias(). En este stream nuevo el CTM es
@@ -205,11 +280,22 @@ class Overlay
             if (empty($this->activas[$g['id']])) {
                 continue; // grupo sin imagen: sin dibujos
             }
+            $ranuras = isset($this->imgObjs[$g['id']]) ? count($this->imgObjs[$g['id']]) : 1;
+            $k = 0;
             foreach ($g['instancias'] as $inst) {
+                // Spec 012 (T026): con una sola imagen se replica en todas las
+                // instancias (comportamiento historico). Con varias, la instancia
+                // k toma la ranura k y las que se sobren se OMITEN: el hueco
+                // conserva su transparencia y nunca se avisa ni se bloquea
+                // (D17/D18/D19).
+                if ($ranuras > 1 && $k >= $ranuras) {
+                    break;
+                }
                 $p = (int)$inst['page'];
                 $H = $this->heights[$p];
                 $entry = [
                     'img' => $g['id'],
+                    'slot' => $ranuras > 1 ? $k : 0,
                     'spliced' => false,
                 ];
                 if (isset($inst['dev_quad']) && count($inst['dev_quad']) === 4) {
@@ -227,7 +313,7 @@ class Overlay
                     $entry['w'] = $bbox[2] - $bbox[0];
                     $entry['h'] = $bbox[3] - $bbox[1];
                 }
-                $ops = $this->spliceOps($inst, $g['id']);
+                $ops = $this->spliceOps($inst, $g['id'], $entry['slot']);
                 if ($ops !== null && isset($inst['stream'], $inst['offset'])) {
                     $stm = (int)$inst['stream'];
                     $this->splices[$p][$stm][] = [
@@ -237,6 +323,7 @@ class Overlay
                     $entry['spliced'] = true;
                 }
                 $this->perPage[$p][] = $entry;
+                $k++;
             }
         }
     }
@@ -344,7 +431,7 @@ class Overlay
      * en su propio q...Q y con /ECOp1 gs (ca=1) para no heredar la opacidad 0
      * del ExtGState del placeholder (regla de AGENTS.md seccion 4).
      */
-    private function spliceOps(array $inst, $gid)
+    private function spliceOps(array $inst, $gid, $slot = 0)
     {
         if (!isset($inst['ctm'])) {
             return null;
@@ -373,7 +460,7 @@ class Overlay
         $m3 = $bi * $vx + $di * $vy;
         $m4 = $ai * $dx + $ci * $dy + $ei;
         $m5 = $bi * $dx + $di * $dy + $fi;
-        $name = 'ECIm' . $this->imgObj[$gid];
+        $name = 'ECIm' . $this->objDe($gid, $slot);
         return "\r\nq /ECOp1 gs " . $this->fmt($m0) . ' ' . $this->fmt($m1) . ' ' . $this->fmt($m2) . ' '
             . $this->fmt($m3) . ' ' . $this->fmt($m4) . ' ' . $this->fmt($m5) . " cm /$name Do Q\r\n";
     }
@@ -517,9 +604,11 @@ class Overlay
         }
         $usedImgs = [];
         foreach ($this->perPage[$pageIdx] ?? [] as $d) {
-            $usedImgs[$d['img']] = $this->imgObj[$d['img']];
+            // Spec 012 (T026): una entrada por ranura usada en esta pagina (con
+            // varias imagenes, una XObject por instancia, no una por grupo).
+            $usedImgs[$this->objDe($d['img'], isset($d['slot']) ? $d['slot'] : 0)] = true;
         }
-        $resStr = $this->serResourceDict($base, $usedImgs);
+        $resStr = $this->serResourceDict($base, array_keys($usedImgs));
 
         $pairs = '';
         foreach ($page as $k => $v) {
