@@ -2050,7 +2050,9 @@ return $destino;
             $datos = json_decode(wp_unslash((string)$contenido), true);
             if (!is_array($datos)
                 || (isset($datos['format']) ? $datos['format'] : '') !== 'textmuy-project'
-                || (isset($datos['version']) ? (int)$datos['version'] : 0) !== 1) {
+                // RC58 del modulo: PROJECT_VERSION=2. Lista cerrada [1,2]: un modulo
+                // viejo en cache sigue pudiendo guardar v1; un v3 no se cuela.
+                || !in_array((int)($datos['version'] ?? 0), [1, 2], true)) {
                 throw new Exception('motor:' . $op . ':contenido:invalido');
             }
             $file = $nombre . '.txm';
