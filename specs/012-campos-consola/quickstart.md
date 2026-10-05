@@ -24,6 +24,10 @@ Referencia rapida. Para el detalle, `spec.md` (historias), `contracts/` (contrat
   Lo que el comprador ve arriba del campo es **HTML**, no un dato.
 - El `valor` decide el destino **a mano**: `[campoN]` en `value` (texto) o `settings`
   (overrides), o `Validez` (que PDF se entrega).
+  > **Ojo (spec 015, 2026-10-05)**: lo de `settings` **no funcionaba**. Los
+  > overrides nunca llegaban al render. Va implementado en la 015, y `settings`
+  > pasa a ser **solo** una lista de referencias `"[campo73] [campo33]"`, con cada
+  > `valor` del campo en JSON. Lo de `value` sí funciona como se describe.
 - **Global** = CSS/JS comun a todas las fichas; **propio** = CSS/JS de un campo excepcional.
 
 ## Crear un campo de texto (lo mas comun)

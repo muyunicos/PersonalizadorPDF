@@ -24,6 +24,11 @@ personalice. El mismo campo se usa en N PDFs y por lo tanto en N productos. El c
 
 El destino del valor lo elige **el admin a mano** en la consola del PDF (modo codigo con
 `[campoN]`, `settings` con overrides de TextMuy, o `Validez` para decidir que PDF se entrega).
+  > **Nota (spec 015, 2026-10-05): la parte de `settings` **no funcionaba** cuando se
+  > escribio esto.** Los overrides nunca llegaban al render. Se implementa en la 015,
+  > que ademas cambia el formato: `settings` pasa a ser **solo** una lista de
+  > referencias y cada `valor` de campo se parsea como JSON. `value` y `Validez`
+  > sí funcionan como se describe.
 El campo no sabe nada del PDF: es agnostico.
 
 ### Los tres textos de un campo (nombres corregidos por el usuario)

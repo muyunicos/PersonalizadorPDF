@@ -81,7 +81,7 @@ Grupo NO define comportamiento: el render del hueco lo deciden los campos mapead
 | tipo | enum | `texto` \| `imagen` | requerido si el grupo participa |
 | preset | string/null | slug de preset TextMuy (solo tipo texto) | debe existir en `tm-presets/` al renderizar |
 | value | string/null | plantilla (`[campoN]` referencia; literal sin corchetes; `\[` escapa) | saneado; vacio = hueco intacto |
-| settings | string/null | overrides del preset (mismo lenguaje de plantilla) | saneado |
+| settings | string/null | **solo** lista de referencias `[campoN]` (enmienda 015: ya NO es "mismo lenguaje de plantilla") | se descartan los `[campoN]` literales; ver 015 FR-001 |
 | repetir | bool | checkbox `[v] Repetir por placeholder` (por campo/codigo): si el resultado es array, un valor por instancia en loop; si no, el mismo valor en todas | default `true` para arrays |
 
 ### Campo (catalogo global reutilizable)
@@ -274,4 +274,4 @@ Vista de solo lectura sobre `orders/` + meta de los items:
 }
 ```
 
-| settings | string/null | overrides del preset (mismo lenguaje de plantilla) | saneado |
+| settings | string/null | **solo** lista de referencias `[campoN]`, fusionadas en orden hacia `overrides` (enmienda 015) | ver 015 FR-001/FR-003 |
