@@ -75,6 +75,21 @@ $global_css_prefijo = $aviso_global === '' ? $this->css_global_prefijo($global_c
         <div class="ec-c-drawer-cuerpo" id="ec-c-drawer-cuerpo"></div>
     </aside>
 </div>
+<?php /* Modal de vista previa (spec 013, T016). El panel del comprador va con el
+       ancho de una columna de producto de Woo (~324-538 px, 673 en movil), asi
+       que el preview NO va a ancho completo: se abre centrado y con ese ancho,
+       que es lo que el comprador ve de verdad. Se llama desde la fila (sin
+       abrir el editor) o desde el drawer mientras se edita. */ ?>
+<div class="ec-pv-modal" id="ec-pv-modal" hidden>
+    <div class="ec-pv-modal-fondo" data-cerrar-pv="1"></div>
+    <div class="ec-pv-modal-caja" role="dialog" aria-modal="true" aria-labelledby="ec-pv-modal-titulo">
+        <header class="ec-pv-modal-cab">
+            <h2 id="ec-pv-modal-titulo">Vista previa</h2>
+            <button type="button" class="ec-pv-modal-x" data-cerrar-pv="1" aria-label="Cerrar la vista previa">&times;</button>
+        </header>
+        <div class="ec-pv-modal-cuerpo" id="ec-pv-modal-cuerpo"></div>
+    </div>
+</div>
 <?php /* "DORMITORIO" de formularios (spec 013, T002). El <tbody> de la tabla de
        abajo contiene SOLO filas de campo: cada editor vive aca, oculto, y el
        drawer lo mueve dentro al abrirlo (y de vuelta al cerrarlo). Con el

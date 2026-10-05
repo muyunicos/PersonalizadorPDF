@@ -55,24 +55,33 @@ mas raro).
   permanentemente visible.
 - **FR-005** Los estilos globales DEBEN seguir editandose desde la pestana Campos
   (se conserva FR-024 de la 012: sin navegar), pero al **pie** y **plegados**.
-- **FR-006** "Probar" DEBE montar la vista previa dentro del drawer, con selector
-  de ancho (350 px = el ancho real del panel del comprador, 768 px, completo),
-  PARTIENDO de ancho completo en lugar de los 350 px fijos.
+- **FR-006** "Probar" DEBE abrir un **MODAL** centrado con la vista previa al ancho
+  del panel del comprador (una columna de producto de Woo: ~324-538 px, 673 en
+  movil), que es lo que el comprador ve de verdad. A ancho completo se ve el mismo
+  contenido flotando a la izquierda: no aporta nada. El modal se llama **desde la
+  fila, sin abrir el editor**, y tambien desde el boton "Probar" del drawer.
 - **FR-007** El drawer DEBE traer su propio boton "Probar": con el drawer abierto
   la fila queda tapada, asi que el "Probar" de la fila no sirve para reprobar lo
   recien escrito.
 - **FR-008** Cerrar el drawer DEBE devolver el formulario al dormitorio y pedir
-  confirmacion si hay cambios sin guardar. `Esc` cierra y `Ctrl+Enter` guarda.
+  confirmacion si hay cambios sin guardar. `Esc` cierra primero el modal de la
+  vista previa y, si ya no esta, el drawer. `Ctrl+Enter` guarda.
 - **FR-009** El servidor DEBE seguir siendo la fuente unica del markup: el alta y
   el duplicado devuelven la fila (clave `html`) y su formulario (clave `form`).
+- **FR-010** Las acciones de la fila DEBEN ser iconos del core (`dashicons`), no
+  cinco botones de texto que pesan mas que la fila. El estado de "Plantilla" va en
+  `aria-pressed` y en la estrella (rellena/vacia); el texto va a
+  `screen-reader-text` y el `title`/`aria-label` queda siempre.
+- **FR-011** El atributo `hidden` DEBE ocultar de verdad: WordPress fuerza
+  `display:inline-block` a `.button`, que le gana a la regla `[hidden]` del
+  navegador. Sin una regla que lo corrija, "Quitar filtros" se ve siempre.
 
 ## Fuera de alcance (aplazado, con el criterio de por que)
 
-- **Menu `...` en Acciones.** Hoy son 5 botones (Editar, Probar, Plantilla,
-  Duplicar, Baja). Colapsarlos da gain real, pero menu + foco + teclado es JS
-  nuevo con riesgo; se hace en una segunda pasada, con el drawer ya firme.
 - **Columna "Uso" enlazable** a los PDFs filtrados. Depende de como se elija saltar
   entre pestanas.
+- **Que la fila nueva quede a la vista** tras crearla. A 5 campos entra en pantalla;
+  con 40 no. Es un caso de escalado sin medir todavia.
 
 ## Verificacion
 

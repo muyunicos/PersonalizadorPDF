@@ -128,6 +128,8 @@ jQuery(function ($) {
             $fila.find('.ec-c-plantilla').text(campo.plantilla || '-');
             $fila.find('.ec-c-uso').text((campo.usado_pdf_n || 0) + ' PDF(s)');
             $fila.attr('data-plantilla', campo.plantilla || '');
+            $fila.find('.ec-marcar').length
+                && reflejarPlantilla($fila.find('.ec-marcar'), !!campo.plantilla);
             // Refleja los flags tambien en el formulario (checkbox/textarea).
             var $form = formDe(campo.id);
             if ($form.length) {
@@ -209,7 +211,9 @@ jQuery(function ($) {
             $('body').addClass('ec-c-drawer-abierto');
             drawerSucio = false;
             if (id) { accionesDrawer($form); }
-            if (opts.probar) { montarPreview(id); }
+            // `opts.probar` ya no se usa: el preview vive en su propio MODAL, y el
+            // boton de la fila lo abre sin pasar por el editor.
+            if (opts.probar) { abrirPreview(id); }
             var $foco = $form.find('input[name=nombre]');
             if ($foco.length) { $foco.trigger('focus'); }
         }
@@ -223,7 +227,6 @@ jQuery(function ($) {
                 return false;
             }
             devolverForm($form);
-            $('#ec-c-drawer-cuerpo .ec-pv').remove();   // la vista previa es del campo abierto
             $('.ec-campos-cuerpo tr.ec-editando').removeClass('ec-editando');
             $drawer.prop('hidden', true);
             $('body').removeClass('ec-c-drawer-abierto');
@@ -266,10 +269,15 @@ jQuery(function ($) {
             cerrarDrawer();
         });
         $(document).on('keydown', function (ev) {
-            if (!$drawer.length || $drawer.prop('hidden')) { return; }
+            // El modal de la vista previa va ENCIMA del drawer: Esc cierra primero
+            // el modal y, si ya no esta, el drawer.
             if (ev.key === 'Escape' || ev.key === 'Esc') {
+                if (cerrarPreview()) { ev.preventDefault(); return; }
+                if (!$drawer.length || $drawer.prop('hidden')) { return; }
                 ev.preventDefault();
                 cerrarDrawer();
+            } else if (!$drawer.length || $drawer.prop('hidden')) {
+                return;
             } else if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
                 ev.preventDefault();
                 $cuerpoDrawer.find('form.ec-form-campo').trigger('submit');
@@ -361,7 +369,7 @@ jQuery(function ($) {
             pintar: pintarFila,
             abrir: abrirDrawer,
             cerrar: cerrarDrawer,
-            probar: function () { montarPreview(drawerId); },
+            probar: function () { abrirPreview(drawerId); },
             enlazarBaja: enlazarBaja,
             enlazarFormularios: enlazarFormularios
         };
@@ -907,6 +915,19 @@ jQuery(function ($) {
                 window.setTimeout(function () { window.location.reload(); }, 600);
             });
 
+        /* El boton de plantilla es un icono: el estado va en `aria-pressed` y en la
+           estrella (rellena/vacia), no en el texto. `data-plantilla` de la fila
+           es la fuente; esta funcion solo la refleja. */
+        function reflejarPlantilla($boton, activo) {
+            var t = activo
+                ? 'Quitar la marca de plantilla' : 'Marcar como plantilla reutilizable';
+            $boton.attr('aria-pressed', activo ? 'true' : 'false')
+                .attr('title', t).attr('aria-label', t)
+                .find('.dashicons')
+                .removeClass('dashicons-star-filled dashicons-star-empty')
+                .addClass(activo ? 'dashicons-star-filled' : 'dashicons-star-empty');
+        }
+
         // Marcar / desmarcar como plantilla reutilizable (T016).
         $(document).on('click', '.ec-c-acciones .ec-marcar', function (ev) {
             ev.preventDefault();
@@ -920,7 +941,7 @@ jQuery(function ($) {
                         window.PMUCampos.pintar(res.data.campo);
                         $fila.attr('data-plantilla', res.data.campo.plantilla || '');
                     }
-                    $fila.find('.ec-marcar').text(nuevo ? '★ Plantilla' : 'Plantilla');
+                    $fila.find('.ec-marcar').length && reflejarPlantilla($fila.find('.ec-marcar'), nuevo !== '');
                     $fila.find('.ec-c-plantilla').text(nuevo ? res.data.campo.plantilla : '-');
                     pmuAviso($fila.closest('.card, .wrap'),
                         nuevo ? 'Campo ' + id + ' guardado como plantilla.' : 'Plantilla quitada.');
@@ -1037,54 +1058,37 @@ jQuery(function ($) {
             return doc;
         }
 
-        /* "Probar" abre el DRAWER con la vista previa debajo del formulario (spec 013):
-           asi el admin edita y ve el resultado en la misma superficie. Antes era
-           una fila `<tr>` pegada a la tabla, siempre a 350 px. Monta el campo en
-           el iframe con el MISMO modulo que la ficha. */
+        /* Vista previa (spec 013, T016): MODAL centrado con el ancho del panel del
+           comprador (una columna de producto de Woo, 324-538 px). Va aparte del
+           drawer porque el preview NO es el ancho del editor: a 680 px se ve el
+           mismo contenido flotando a la izquierda, que no es como lo ve el
+           comprador. Se llama desde la fila (sin abrir el editor) o desde el
+           drawer mientras se edita. Monta el campo en el iframe con el MISMO
+           modulo que la ficha. */
         function marcoPreview() {
-            var $cuerpo = $('#ec-c-drawer-cuerpo');
-            var $pv = $cuerpo.children('.ec-pv');
-            if (!$pv.length) { $pv = $('<div class="ec-pv"></div>').appendTo($cuerpo); }
-            return $pv;
+            return $('#ec-pv-modal-cuerpo');
         }
 
-        /** Ancho del preview: el del panel del comprador (350), uno de tablet
-         * (768) o el completo, que es lo que se gana con el drawer. */
-        function anchoPreview($iframe, ancho) {
-            if (ancho === 'full') { $iframe.removeAttr('width').css('width', '100%'); }
-            else { $iframe.css('width', '').attr('width', ancho); }
-            $('#ec-c-drawer-cuerpo .ec-pv-anchos button').each(function () {
-                $(this).toggleClass('is-on', String(ancho) === $(this).attr('data-ancho'));
-            });
-        }
-
-        function montarPreview(id) {
+        /** Abre el modal con el campo. `id` 0 = plantilla de alta (sin fila). */
+        function abrirPreview(id) {
             if (typeof PMUCampo === 'undefined') {
-                pmuAviso($('#ec-c-drawer').closest('.wrap'),
+                pmuAviso($('#ec-pv-modal').closest('.wrap'),
                     'Falta campo-montar.js: no se puede previsualizar.', true);
                 return;
             }
             var $fila = $('.ec-campos-cuerpo tr[data-id="' + id + '"]');
             var campo = leerCampoDeLaFila($fila);
             if (!campo || !campo.id) { return; }
-            var $pv = marcoPreview().empty();
-            var $wrap = $('<div></div>').appendTo($pv);
-            var $titulo = $('<p class="ec-pv-titulo"></p>')
-                .text('Así lo verá el comprador (campo ' + campo.id + ')').appendTo($wrap);
-            var $anchos = $('<span class="ec-pv-anchos"></span>').appendTo($titulo);
-            ['350', '768', 'full'].forEach(function (a) {
-                $('<button type="button" class="button button-small ec-pv-ancho"></button>')
-                    .attr('data-ancho', a)
-                    .text(a === 'full' ? 'Ancho completo' : a + ' px')
-                    .appendTo($anchos);
-            });
+            $('#ec-pv-modal').prop('hidden', false);
+            var $cuerpo = marcoPreview().empty();
+            var $filaTit = $('.ec-campos-cuerpo tr[data-id="' + id + '"] .ec-c-nombre').text();
+            $('#ec-pv-modal-titulo').text($filaTit ? $filaTit : 'Vista previa');
+            $('<p class="ec-pv-titulo"></p>')
+                .text('Así lo verá el comprador (campo ' + campo.id + ')').appendTo($cuerpo);
             var $iframe = $('<iframe class="ec-pv-frame" title="Vista previa del campo"></iframe>')
-                .appendTo($wrap);
+                .appendTo($cuerpo);
             $iframe.attr('srcdoc', construirPreview(campo));
-            var $status = $('<span class="ec-campo-status" aria-live="polite"></span>').appendTo($wrap);
-            anchoPreview($iframe, 'full');
-            if ($pv[0].scrollIntoView) { $pv[0].scrollIntoView({ block: 'nearest' }); }
-            // Al cargar el iframe, montamos el campo y pintamos el par valor/cliente.
+            var $status = $('<span class="ec-campo-status" aria-live="polite"></span>').appendTo($cuerpo);
             $iframe.on('load', function () {
                 var doc = this.contentDocument;
                 if (!doc || !doc.getElementById('pmu-preview')) { return; }
@@ -1117,17 +1121,26 @@ jQuery(function ($) {
             });
         }
 
-        /* El boton "Probar" de la fila abre el drawer con la vista previa lista. */
+        function cerrarPreview() {
+            if ($('#ec-pv-modal').prop('hidden')) { return false; }
+            marcoPreview().empty();
+            $('#ec-pv-modal').prop('hidden', true);
+            return true;
+        }
+
+        $(document).on('click', '#ec-pv-modal [data-cerrar-pv]', function (ev) {
+            ev.preventDefault();
+            cerrarPreview();
+        });
+
+        /* El boton "Probar" de la fila abre el MODAL, sin abrir el editor. */
         $(document).on('click', '.ec-c-acciones .ec-probar', function (ev) {
             ev.preventDefault();
             var id = parseInt($(this).closest('tr[data-id]').attr('data-id'), 10) || 0;
-            if (window.PMUCampos) { window.PMUCampos.abrir(id, { probar: true }); }
+            abrirPreview(id);
         });
 
-        $(document).on('click', '.ec-pv-ancho', function (ev) {
-            ev.preventDefault();
-            anchoPreview($('#ec-c-drawer-cuerpo .ec-pv-frame'), $(this).attr('data-ancho'));
-        });
+    /* ============ 3. Acciones sin recarga (re-analizar, borrar, regenerar) ============ */
 
     /* ============ 3. Acciones sin recarga (re-analizar, borrar, regenerar) ============ */
 

@@ -318,8 +318,16 @@
 /* Cabecera de la tabla: el alta pasa a ser un boton (spec 013, T005). */
 .ec-c-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .ec-c-cabecera h2 { margin: 0; }
-.ec-campos-tabla td.ec-c-acciones { white-space: nowrap; }
-.ec-campos-tabla td.ec-c-acciones .ec-form-campo-baja { display: inline-block; margin-left: 4px; }
+.ec-campos-tabla td.ec-c-acciones { white-space: nowrap; text-align: right; }
+.ec-campos-tabla td.ec-c-acciones .ec-form-campo-baja { display: inline-block; margin-left: 2px; }
+/* Acciones con iconos del core: cinco botones de texto ocupaban media fila. */
+.ec-campos-tabla td.ec-c-acciones .button { padding: 1px 6px; min-height: 30px; }
+.ec-campos-tabla td.ec-c-acciones .button .dashicons {
+    font-size: 19px; width: 19px; height: 19px; line-height: 1;
+}
+.ec-campos-tabla td.ec-c-acciones .button .screen-reader-text { position: absolute; }
+.ec-campos-tabla td.ec-c-acciones .button-link-delete .dashicons { color: #b32d2e; }
+.ec-campos-tabla td.ec-c-acciones .ec-marcar[aria-pressed="true"] .dashicons { color: #dba617; }
 .ec-campos-tabla tr.ec-editando { background: #f0f6fc; }
 
 /* Drawer del editor (spec 013, T003): la lista queda a pantalla completa y el
@@ -365,12 +373,38 @@ body.ec-c-drawer-abierto { overflow: hidden; }
 .ec-c-drawer-cuerpo .ec-campo-form .form-table th { width: 150px; }
 .ec-c-drawer-cuerpo textarea { font-family: Consolas, Monaco, monospace; }
 
-/* Vista previa dentro del drawer, con ancho elegible (antes fija a 350px). */
-.ec-pv { margin-top: 18px; padding-top: 14px; border-top: 1px solid #dcdcde; }
-.ec-pv-titulo { margin: 0 0 8px; font-weight: 600; color: #1d2327; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.ec-pv-anchos { display: inline-flex; gap: 4px; }
-.ec-pv-anchos .ec-pv-ancho.is-on { background: #2271b1; border-color: #2271b1; color: #fff; }
-.ec-pv-frame { border: 1px solid #c3c4c7; background: #fff; display: block; max-width: 100%; min-height: 220px; }
+/* Vista previa (spec 013, T016): MODAL, no un bloque mas de la pagina. El ancho
+   es el del panel del comprador (una columna de producto de Woo: 324-538 px),
+   no el del panel de edicion: a 680 px se ve el mismo contenido flotando a la
+   izquierda, que no es como lo ve el comprador. */
+.ec-pv-modal {
+    position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 170000;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 40px 16px; overflow: auto;
+}
+.ec-pv-modal[hidden] { display: none; }
+.ec-pv-modal-fondo { position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: rgba(0, 0, 0, .5); }
+.ec-pv-modal-caja {
+    position: relative; background: #fff; border-radius: 4px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, .3);
+    width: 100%; max-width: 560px;
+}
+.ec-pv-modal-cab {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 16px; border-bottom: 1px solid #dcdcde;
+}
+.ec-pv-modal-cab h2 { margin: 0; font-size: 15px; }
+.ec-pv-modal-x { border: 0; background: none; font-size: 24px; line-height: 1; cursor: pointer; color: #646970; padding: 0 4px; }
+.ec-pv-modal-x:hover { color: #d63638; }
+.ec-pv-modal-cuerpo { padding: 14px 16px 18px; }
+.ec-pv-titulo { margin: 0 0 10px; font-weight: 600; color: #1d2327; }
+.ec-pv-frame {
+    width: 480px; max-width: 100%; min-height: 220px;
+    border: 1px solid #c3c4c7; background: #fff; display: block;
+}
+@media (max-width: 673px) {
+    .ec-pv-frame { width: 100%; }
+}
 
 /* Globales al pie y plegado (spec 013, T006). */
 .ec-c-globales > summary { cursor: pointer; padding: 2px 0; }

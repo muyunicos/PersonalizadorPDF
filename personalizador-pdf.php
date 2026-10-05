@@ -2901,6 +2901,10 @@ JS;
     public function fila_campo_html($cid, array $c)
     {
         $d = $c['datos'];
+        // El form de BAJA vive en la fila, asi que `$post` sigue haciendo falta
+        // aca: sin esto el action queda vacio y el POST se va a la pagina actual
+        // en vez de a admin-post.php (la baja deja de funcionar).
+        $post = esc_url(admin_url('admin-post.php'));
         $cats = implode(',', $c['categorias']);
         $cargador = !empty($d['cargador']) ? wp_json_encode($d['cargador']) : '';
         ob_start();
@@ -2931,17 +2935,47 @@ JS;
                             }
                         ?></td>
                     <td class="ec-c-acciones">
-                        <button type="button" class="button button-small ec-editar">Editar</button>
-                        <button type="button" class="button button-small ec-probar">Probar</button>
-                        <button type="button" class="button button-small ec-marcar" <?php
-                            if ($c['plantilla'] !== '') { echo 'aria-pressed="true"'; }
-                        ?>><?php echo $c['plantilla'] !== '' ? '★ Plantilla' : 'Plantilla'; ?></button>
-                        <button type="button" class="button button-small ec-duplicar">Duplicar</button>
+                        <?php
+                        $esTpl = $c['plantilla'] !== '';
+                        $marca = $esTpl
+                            ? 'dashicons-star-filled' : 'dashicons-star-empty';
+                        $tMarca = $esTpl
+                            ? 'Quitar la marca de plantilla' : 'Marcar como plantilla reutilizable';
+                        ?>
+                        <?php /* Iconos del core (dashicons): cinco botones de texto
+                               pesan mas que toda la fila. El title/aria-label
+                               queda siempre, y el texto va a screen-reader. */ ?>
+                        <button type="button" class="button button-small ec-editar"
+                            title="Editar el campo" aria-label="Editar el campo">
+                            <span class="dashicons dashicons-edit" aria-hidden="true"></span>
+                            <span class="screen-reader-text">Editar</span>
+                        </button>
+                        <button type="button" class="button button-small ec-probar"
+                            title="Ver como lo vera el comprador" aria-label="Ver como lo vera el comprador">
+                            <span class="dashicons dashicons-visibility" aria-hidden="true"></span>
+                            <span class="screen-reader-text">Probar</span>
+                        </button>
+                        <button type="button" class="button button-small ec-marcar"
+                            aria-pressed="<?php echo $esTpl ? 'true' : 'false'; ?>"
+                            title="<?php echo esc_attr($tMarca); ?>" aria-label="<?php echo esc_attr($tMarca); ?>">
+                            <span class="dashicons <?php echo $marca; ?>" aria-hidden="true"></span>
+                            <span class="screen-reader-text">Plantilla</span>
+                        </button>
+                        <button type="button" class="button button-small ec-duplicar"
+                            title="Crear una copia con un id nuevo" aria-label="Duplicar el campo">
+                            <span class="dashicons dashicons-admin-page" aria-hidden="true"></span>
+                            <span class="screen-reader-text">Duplicar</span>
+                        </button>
                         <form method="post" action="<?php echo $post; ?>" class="ec-form-campo-baja">
                             <input type="hidden" name="action" value="personalizador_pdf_campo_baja">
                             <input type="hidden" name="id" value="<?php echo (int)$cid; ?>">
                             <?php wp_nonce_field('personalizador_pdf_campo'); ?>
-                            <button type="submit" class="button button-small button-link-delete">Baja</button>
+                            <button type="submit" class="button button-small button-link-delete"
+                                title="Dar de baja (despues se puede restaurar)"
+                                aria-label="Dar de baja el campo">
+                                <span class="dashicons dashicons-trash" aria-hidden="true"></span>
+                                <span class="screen-reader-text">Baja</span>
+                            </button>
                         </form>
                     </td>
                 </tr>
