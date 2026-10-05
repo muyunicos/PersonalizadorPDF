@@ -2872,7 +2872,8 @@ JS;
                 <tr data-id="<?php echo (int)$cid; ?>" data-plantilla="<?php echo esc_attr($c['plantilla']); ?>"
                     data-modificado="<?php echo (int)$c['modificado']; ?>"
                     data-creado="<?php echo esc_attr($c['creado']); ?>"
-                    data-cats="<?php echo esc_attr(strtolower(implode('|', $c['categorias']))); ?>">
+                    data-cats="<?php echo esc_attr(strtolower(implode('|', $c['categorias']))); ?>"
+                       data-cargador="<?php echo esc_attr($cargador); ?>">
                     <td><strong><?php echo (int)$cid; ?></strong></td>
                     <td class="ec-c-nombre"><?php echo esc_html($d['nombre'] !== '' ? $d['nombre'] : '(sin nombre)'); ?></td>
                     <td class="ec-c-titulo"><?php echo esc_html($d['titulo_cliente'] !== '' ? $d['titulo_cliente'] : '(vacio)'); ?></td>
@@ -3282,6 +3283,15 @@ JS;
         wp_enqueue_script(
             'personalizador-pdf-campo-montar',
             PERSONALIZADOR_PDF_URL . 'assets/campo-montar.js',
+            [],
+            PERSONALIZADOR_PDF_VERSION,
+            true
+        );
+        // El preview del campo usa el MISMO cargador que la ficha (T011b/FR-009), asi
+        // que el componente tambien viaja en la consola (pestana Campos).
+        wp_enqueue_script(
+            'personalizador-pdf-cargador',
+            PERSONALIZADOR_PDF_URL . 'assets/cargador-pmu.js',
             [],
             PERSONALIZADOR_PDF_VERSION,
             true

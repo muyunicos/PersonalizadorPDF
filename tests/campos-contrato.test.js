@@ -217,6 +217,20 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
     tienda2.indexOf("'personalizador_pdf_subida'") !== -1);
   check('el cargador NO pisa el valor del campo.js al montar',
     /if \(mio \|\| est\.ids\.length > 0\)/.test(tienda2));
+
+  // T011b/FR-009: "Probar" dibuja las ranuras sin subir nada.
+  const cargadorJs = fs.readFileSync(path.join(__dirname, '..', 'assets', 'cargador-pmu.js'), 'utf8');
+  const adm = fs.readFileSync(path.join(__dirname, '..', 'assets', 'admin.js'), 'utf8');
+  const plug = fs.readFileSync(path.join(__dirname, '..', 'personalizador-pdf.php'), 'utf8');
+  check('la fila emite data-cargador', plug.indexOf('data-cargador=') !== -1);
+  check('cargador-pmu.js se encola tambien en la consola',
+    (plug.match(/assets\/cargador-pmu\.js/g) || []).length >= 2);
+  check('admin.js lee el cargador de la fila',
+    adm.indexOf("attr('data-cargador')") !== -1);
+  check('el preview monta el cargador en modo preview',
+    adm.indexOf('preview: true') !== -1);
+  check('el preview no pinta un boton de agregar muerto',
+    /if \(!this\.config\.preview\) \{\s*zona\.appendChild\(boton\)/.test(cargadorJs));
 }
 
 console.log('\n' + (fallos === 0 ? 'CAMPOS CONTRATO OK' : 'CAMPOS CONTRATO FALLA: ' + fallos));

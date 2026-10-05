@@ -860,11 +860,19 @@ jQuery(function ($) {
             var $campo = $fila.next('.ec-campo-form-fila').find('form.ec-form-campo');
             if (!$campo.length) { return null; }
             var val = function (sel) { return ($campo.find(sel).val() || ''); };
+            // T011b/FR-009: el `cargador` viaja en la fila (lo emite el servidor),
+            // no en el formulario, porque vive en `datos.json`.
+            var crudoCarg = $fila.attr('data-cargador') || '';
+            var defCarg = null;
+            if (crudoCarg) {
+                try { defCarg = JSON.parse(crudoCarg); } catch (e) { defCarg = null; }
+            }
             return {
                 id: parseInt($fila.attr('data-id'), 10) || 0,
                 htm: val('textarea[name=html]'),
                 css: val('textarea[name=css]'),
-                js: val('textarea[name=js]')
+                js: val('textarea[name=js]'),
+                cargador: defCarg
             };
         }
 
@@ -937,6 +945,19 @@ jQuery(function ($) {
                 var estado;
                 try {
                     estado = PMUCampo.montar(doc.getElementById('pmu-preview'), [campo]);
+                // T011b/FR-009: si el campo tiene cargador, se DIBUJA en el preview
+                // (medida, forma, min/max) sin subir nada. Se monta desde el padre
+                // contra el DOM del iframe: asi el preview usa el MISMO componente
+                // que la ficha, sin duplicarlo ni copiar su fuente al srcdoc.
+                if (campo.cargador && campo.cargador.ranuras && window.CargadorPMU) {
+                    var cuerpo = doc.querySelector('.pmu-campo-' + campo.id + ' .pmu-campo-cuerpo');
+                    if (cuerpo) {
+                        new window.CargadorPMU(cuerpo, {
+                            ranuras: campo.cargador.ranuras,
+                            preview: true
+                        }).montar();
+                    }
+                }
                 } catch (e) {
                     $wrap.find('.ec-campo-status').addClass('ec-error').text('El JS del campo fallo: ' + e.message);
                     return;

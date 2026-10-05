@@ -125,7 +125,10 @@
             ranuras: normalizarRanuras(config.ranuras),
             subir: typeof config.subir === 'function' ? config.subir : null,
             onChange: typeof config.onChange === 'function' ? config.onChange : null,
-            onError: typeof config.onError === 'function' ? config.onError : null
+            onError: typeof config.onError === 'function' ? config.onError : null,
+            // Spec 012 (T011b/FR-009): en el preview de la consola se DIBUJAN las
+            // ranuras sin subir nada (ni boton, ni arrastre, ni endpoint).
+            preview: !!config.preview
         };
         this.estado = estadoInicial(this.config.ranuras);
         this.selectores = []; // un SelectorPMU por ranura
@@ -164,6 +167,9 @@
         this.raiz = raiz;
         this.btnListo = listo;
         this.txtEstado = estado;
+        if (this.config.preview) {
+            listo.style.display = 'none';   // en el preview no se "cierra" nada
+        }
         this._pintar();
         return true;
     }
@@ -187,14 +193,27 @@
 
         var zona = doc.createElement('div');
         zona.className = 'cpmu-zona';
-        zona.textContent = 'Suelta la imagen o hace clic';
+        if (this.config.preview) {
+            // T011b/FR-009: en el preview la ranura se DIBUJA (medida, forma y
+            // cuantos exige) pero no se puede subir nada.
+            zona.classList.add('cpmu-zona-preview');
+            zona.textContent = 'Vista previa: ' + r.min + ' imagen(es) de ' + r.max + '.';
+        } else {
+            zona.textContent = 'Suelta la imagen o hace clic';
+        }
         var boton = doc.createElement('button');
         boton.type = 'button';
         boton.className = 'button cpmu-agregar';
         boton.textContent = 'Agregar imagen';
-        zona.appendChild(boton);
+        if (!this.config.preview) {
+            zona.appendChild(boton);   // en el preview no queda un boton muerto
+        }
         div.appendChild(zona);
 
+        if (this.config.preview) {
+            this.selectores[i] = { boton: boton, tira: tira, zona: zona, sel: null };
+            return div;
+        }
         boton.addEventListener('click', function () { self._abrir(i, null); });
         ['dragenter', 'dragover'].forEach(function (ev) {
             zona.addEventListener(ev, function (e) {

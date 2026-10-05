@@ -49,9 +49,11 @@
 - [X] T010 [US2] `assets/tienda.js`: `montarCampos()` ahora **delega en `PMUCampo.montar()`** (se borro su copia de `contextoRaiz` y del montaje; sigue exportando `PURO`); avisa por consola si falta el modulo. `assets_ficha()` encola `campo-montar.js` **antes** de `tienda.js`. `campos_panel()` entrega los nombres v2 (`htm`/`js`), acepta la tupla v1 (arnes legacy) y **excluye los campos `protegido`** (FR-040).
 - [X] T011 [US2] Boton **"Probar"** por fila: `<iframe srcdoc>` de **350px** (el `max-width` real de `.pmu-panel`) que enlaza las hojas de estilo ya presentes en la pagina, monta el campo con `PMUCampo.montar()` y muestra en vivo el par `valor`/`cliente`. El iframe aisla un CSS runaway (FR-004, FR-005, FR-007, FR-008). Verificado en el lab: monta el HTML, ejecuta el JS y aplica el CSS **sin tocar la pagina**. `admin.css` gana el bloque `.ec-pv*`.
 - [X] T012 [US2] `tests/campos-contrato.test.js` (NUEVO): corre el modulo en un `vm` con DOM minimo; verifica las reglas de salida, que `tienda.js` delega en el, que NO se inyecta titulo, que NO se traduce y que acepta los nombres legacy. **CAMPOS CONTRATO OK.**
-- [ ] T011b [US2] FR-009 (el "Probar" de un campo **con cargador** dibuja las ranuras sin subir nada)
-  depende de F6 (T021-T023) y queda ahi. FR-006 (el `global.css` con prefijo `[data-pmu-panel]`,
-  tambien en el preview) **ya se cerro en T019**.
+- [X] T011b [US2] FR-009 cerrado. "Probar" de un campo **con cargador** **dibuja las ranuras sin subir
+  nada**: `fila_campo_html()` emite `data-cargador` (el `cargador` vive en `datos.json`, no en el
+  formulario), `admin.js` lo lee y monta el **mismo** `CargadorPMU` contra el DOM del iframe con
+  `preview: true` (sin boton, sin arrastre, sin endpoint, sin "Listo"), y el componente se encola
+  tambien en la consola. Verificado en navegador real: 9 checks con 0 errores JS.
 
 ## Fase 3 - US3 Buscar / filtrar / ordenar
 
