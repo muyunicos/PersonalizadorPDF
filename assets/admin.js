@@ -106,8 +106,9 @@ jQuery(function ($) {
         });
     }
 
-    /* Campos v2 (spec 012, F1): alta/edicion/baja sin recarga. El editor se abre
-       DENTRO de la fila (`ec-campo-form-fila`), sin navegar. */
+    /* Campos v2 (spec 012, F1): alta/edicion/baja sin recarga. Desde spec 013 el
+       editor se abre en el DRAWER, no dentro de la fila: los formularios viven
+       dormidos en `#ec-campo-forms` y se mueven al drawer. */
     $(function () {
         if (!$('form.ec-form-campo, form.ec-form-campo-baja, form.ec-form-campo-restaurar').length) { return; }
         var nonceCampo = (cfgGlobal.nonceAccion && cfgGlobal.nonceAccion.campo)
@@ -128,7 +129,7 @@ jQuery(function ($) {
             $fila.find('.ec-c-uso').text((campo.usado_pdf_n || 0) + ' PDF(s)');
             $fila.attr('data-plantilla', campo.plantilla || '');
             // Refleja los flags tambien en el formulario (checkbox/textarea).
-            var $form = $fila.next('.ec-campo-form-fila').find('form.ec-form-campo');
+            var $form = formDe(campo.id);
             if ($form.length) {
                 $form.find('input[name=nombre]').val(d.nombre || '');
                 $form.find('input[name=titulo_cliente]').val(d.titulo_cliente || '');
@@ -143,27 +144,129 @@ jQuery(function ($) {
             return $fila;
         }
 
-        /* Abrir/cerrar el editor de una fila (FR-001, FR-003). */
-        function alternarEditor($fila, abrir) {
-            var $formFila = $fila.next('.ec-campo-form-fila');
-            var $acciones = $fila.find('.ec-c-acciones');
-            if (!$formFila.length) { return; }
-            $formFila.prop('hidden', !abrir);
-            $acciones.find('.ec-editar').text(abrir ? 'Cerrar' : 'Editar');
-            $fila.toggleClass('ec-editando', !!abrir);
+        /* ============ Drawer del editor (spec 013, T003) ============
+           Una sola superficie para ALTA y EDICION (antes: un card de alta fijo
+           arriba + un editor pegado a cada fila de la tabla). El formulario NO
+           se copia: se MUEVE desde el dormitorio (#ec-campo-forms) al drawer y
+           de vuelta, asi conserva valores y handlers. Solo hay uno dentro. */
+        var $drawer = $('#ec-c-drawer'),
+            $cuerpoDrawer = $('#ec-c-drawer-cuerpo'),
+            $tituloDrawer = $('#ec-c-drawer-titulo'),
+            $dormitorio = $('#ec-campo-forms'),
+            drawerId = 0,
+            drawerSucio = false;
+
+        function formDe(id) {
+            return id ? $('.ec-campo-form[data-form="' + id + '"]') : $('.ec-campo-form-nuevo');
         }
+
+        /** Manda el formulario de vuelta al dormitorio, sin perder lo escrito. */
+        function devolverForm($form) {
+            if (!$form.length) { return; }
+            $form.prop('hidden', true).appendTo($dormitorio);
+        }
+
+        /** Barra de acciones del drawer: "Probar" sin salir del editor. Con el
+         * drawer abierto la fila queda tapada, asi que el Probar de la fila no
+         * sirve para reprobar lo recien escrito. */
+        function accionesDrawer($form) {
+            var $a = $('#ec-c-drawer-cuerpo .ec-drawer-acciones').remove();
+            $a = $('<div class="ec-drawer-acciones"></div>').appendTo($form);
+            $('<button type="button" class="button ec-probar-drawer"></button>')
+                .text('Probar').appendTo($a);
+            $('<span class="ec-drawer-atajo"></span>')
+                .text('Ctrl+Enter guarda · Esc cierra').appendTo($a);
+        }
+
+        function abrirDrawer(id, opts) {
+            opts = opts || {};
+            var $form = formDe(id);
+            if (!$form.length) { return; }
+            devolverForm($cuerpoDrawer.children('.ec-campo-form'));
+            $form.prop('hidden', false).appendTo($cuerpoDrawer);
+            drawerId = id;
+            var $fila = id ? $('.ec-campos-cuerpo tr[data-id="' + id + '"]') : $();
+            $('.ec-campos-cuerpo tr.ec-editando').removeClass('ec-editando');
+            $fila.toggleClass('ec-editando', !!id);
+            var nombre = id ? $fila.find('.ec-c-nombre').text() : '';
+            $tituloDrawer.text(id
+                ? ('Campo ' + id + ((nombre && nombre !== '(sin nombre)') ? ' — ' + nombre : ''))
+                : 'Nuevo campo');
+            // El boton de envio cambia de texto segun sea alta o edicion.
+            var $enviar = $form.find('input[type=submit], button[type=submit]');
+            if ($enviar.length) {
+                if ($enviar.is('input')) { $enviar.val(id ? 'Guardar cambios' : 'Crear campo'); }
+                else { $enviar.text(id ? 'Guardar cambios' : 'Crear campo'); }
+            }
+            $drawer.prop('hidden', false);
+            $('body').addClass('ec-c-drawer-abierto');
+            drawerSucio = false;
+            if (id) { accionesDrawer($form); }
+            if (opts.probar) { montarPreview(id); }
+            var $foco = $form.find('input[name=nombre]');
+            if ($foco.length) { $foco.trigger('focus'); }
+        }
+
+        /** Cierra el drawer. `forzar` saltea el aviso de cambios sin guardar. */
+        function cerrarDrawer(forzar) {
+            var $form = $cuerpoDrawer.children('.ec-campo-form');
+            if (!$form.length) { return false; }
+            if (drawerSucio && !forzar
+                && !window.confirm('Hay cambios sin guardar. ¿Cerrar igual?')) {
+                return false;
+            }
+            devolverForm($form);
+            $('#ec-c-drawer-cuerpo .ec-pv').remove();   // la vista previa es del campo abierto
+            $('.ec-campos-cuerpo tr.ec-editando').removeClass('ec-editando');
+            $drawer.prop('hidden', true);
+            $('body').removeClass('ec-c-drawer-abierto');
+            drawerId = 0;
+            drawerSucio = false;
+            return true;
+        }
+
+        /* Cualquier cambio dentro del drawer arma el aviso de salir. */
+        $cuerpoDrawer.on('input change', 'input, textarea, select', function () {
+            drawerSucio = true;
+        });
 
         $(document).on('click', '.ec-c-acciones .ec-editar', function (ev) {
             ev.preventDefault();
-            var $fila = $(this).closest('tr[data-id]');
-            alternarEditor($fila, $fila.next('.ec-campo-form-fila').prop('hidden'));
+            var id = parseInt($(this).closest('tr[data-id]').attr('data-id'), 10) || 0;
+            if (drawerId === id) { cerrarDrawer(); return; }
+            abrirDrawer(id);
+        });
+
+        $(document).on('click', '.ec-abrir-alta', function (ev) {
+            ev.preventDefault();
+            abrirDrawer(0);
         });
 
         $(document).on('click', '.ec-cancelar', function (ev) {
             ev.preventDefault();
-            var $formFila = $(this).closest('.ec-campo-form-fila');
-            var $fila = $formFila.prev('tr[data-id]');
-            alternarEditor($fila, false);   // cerrar sin escribir (FR-003)
+            cerrarDrawer();
+        });
+
+        // "Probar" desde adentro del drawer (sin cerrarlo ni perder lo escrito).
+        $(document).on('click', '.ec-probar-drawer', function (ev) {
+            ev.preventDefault();
+            if (window.PMUCampos) { window.PMUCampos.probar(); }
+        });
+
+        // Fondo y "x" cierran; Esc cierra; Ctrl+Enter guarda.
+        $(document).on('click', '#ec-c-drawer [data-cerrar]', function (ev) {
+            ev.preventDefault();
+            cerrarDrawer();
+        });
+        $(document).on('keydown', function (ev) {
+            if (!$drawer.length || $drawer.prop('hidden')) { return; }
+            if (ev.key === 'Escape' || ev.key === 'Esc') {
+                ev.preventDefault();
+                cerrarDrawer();
+            } else if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
+                ev.preventDefault();
+                $cuerpoDrawer.find('form.ec-form-campo').trigger('submit');
+            }
         });
 
         function enlazarFormularios($forms) {
@@ -173,26 +276,36 @@ jQuery(function ($) {
                 pmuForm($f, 'personalizador_pdf_campo', nonceCampo, function (d) {
                     var id = (d && d.id) || 0;
                     if (esEdicion && d && d.campo) {
-                        var $fila = pintarFila(d.campo);
-                        if ($fila) { alternarEditor($fila, false); }
+                        pintarFila(d.campo);
+                        cerrarDrawer(true);   // recien guardado: no preguntar
                         pmuAviso($f.closest('.card, .wrap'), 'Campo ' + id + ' guardado.');
                         return;
                     }
-                // Alta: el servidor devuelve el HTML de la fila (fuente unica
-                    // del markup, la misma que pinta campos.php). Sin recargar.
+                    // Alta: el servidor devuelve el HTML de la fila Y el de su
+                    // formulario, claves `html` y `form` (fuente unica del markup,
+                    // la misma que pinta campos.php). Sin recargar.
                     if (d && d.html) {
                         // La tabla se imprime siempre (aunque este vacia), asi que
                         // siempre hay tbody donde insertar.
                         var $nuevas = parsearFilas(d.html);
                         $('.ec-campos-cuerpo').append($nuevas); // mueve los nodos con sus handlers
+                        if (d.form) {
+                            // El formulario de ALTA vuelve al dormitorio vacio: es
+                            // el que se acaba de usar, no el del campo recien creado.
+                            $f[0].reset();
+                            var $nuevoForm = parsearForms(d.form);
+                            $dormitorio.append($nuevoForm);
+                            enlazarFormularios($nuevoForm.find('form.ec-form-campo'));
+                        }
                         $('.ec-campos-vacio').remove();
                         enlazarBaja($nuevas.find('form.ec-form-campo-baja'));
-                        enlazarFormularios($nuevas.find('form.ec-form-campo'));
-                        $f[0].reset();
+                        cerrarDrawer(true);
+                        if (window.PMUCampos && window.PMUCampos.refrescar) { window.PMUCampos.refrescar(); }
                         pmuAviso($f.closest('.card, .wrap'), 'Campo ' + id + ' creado.');
                         return;
                     }
                     $f[0].reset();
+                    cerrarDrawer(true);
                     pmuAviso($f.closest('.card, .wrap'), 'Campo ' + id + ' creado.');
                 });
             });
@@ -203,10 +316,10 @@ jQuery(function ($) {
                 var $f = $(this);
                 pmuForm($f, 'personalizador_pdf_campo_baja', nonceCampo, function (d) {
                     var id = (d && d.id) || $f.find('input[name=id]').val();
-                    // La fila se va con su formulario de edicion pegado debajo.
+                    // El formulario ya no cuelga de la fila: vive en el dormitorio.
                     var $fila = $f.closest('tr[data-id]');
-                    var $formFila = $fila.next('.ec-campo-form-fila');
-                    $formFila.fadeOut(200, function () { $formFila.remove(); });
+                    if (drawerId === (parseInt(id, 10) || 0)) { cerrarDrawer(true); }
+                    $('.ec-campo-form[data-form="' + id + '"]').remove();
                     $fila.fadeOut(300, function () { $fila.remove(); });
                     pmuAviso($f.closest('.card, .wrap'), 'Campo ' + id + ' dado de baja (podes restaurarlo abajo).');
                 });
@@ -239,7 +352,9 @@ jQuery(function ($) {
             nonce: (cfgGlobal.nonceAccion && cfgGlobal.nonceAccion.campo)
                 || (window.PMU_CAMPO && PMU_CAMPO.nonce) || '',
             pintar: pintarFila,
-            alternar: alternarEditor,
+            abrir: abrirDrawer,
+            cerrar: cerrarDrawer,
+            probar: function () { montarPreview(drawerId); },
             enlazarBaja: enlazarBaja,
             enlazarFormularios: enlazarFormularios
         };
@@ -705,13 +820,6 @@ jQuery(function ($) {
                     $f.toggle(pasa);
                     if (pasa) { visibles++; }
                 });
-                // Cada fila visible se lleva tambien su editor y su preview.
-                $cuerpo.children('tr').each(function () {
-                    var $f = $(this);
-                    if (!$f.is('tr[data-id]')) {
-                        $f.toggle($f.prev('tr[data-id]').is(':visible'));
-                    }
-                });
                 $('.ec-c-conteo').text(visibles + ' de ' + filas().length + ' campos');
             }
 
@@ -728,12 +836,9 @@ jQuery(function ($) {
                     }
                     return (parseInt(fa.attr('data-id'), 10) || 0) - (parseInt(fb.attr('data-id'), 10) || 0);
                 });
-                $.each($filas, function (_, $fila) {
-                    // Movemos la fila Y sus trsatadas (editor/preview) juntas.
-                    var $f = $($fila);
-                    $cuerpo.append($f);
-                    $cuerpo.append($f.nextAll('tr').first());
-                });
+                // El editor ya no cuelga de la fila (vive en el dormitorio), asi
+                // que alcanza con reordenar las filas.
+                $.each($filas, function (_, $fila) { $cuerpo.append($fila); });
             }
 
             $(document).on('input', '.ec-c-buscar', aplicar);
@@ -753,16 +858,25 @@ jQuery(function ($) {
             });
             aplicar();
             refrescarCampos = aplicar; // la reutilizan duplicar/marcar/importar
+            // El alta desde el drawer la necesita para contar la fila nueva.
+            if (window.PMUCampos) { window.PMUCampos.refrescar = aplicar; }
         })();
 
     /** Parsea el HTML de filas del servidor. Ojo: `$(html)` DESCARTA los
          `<tr>` (jQuery no los parsea fuera de una tabla), asi que se envuelve
-         en una tabla auxiliar. Se toman SOLO las filas de nivel superior:
-         `find('tr')` traeria tambien las del formulario y las moveria de sitio. */
+         en una tabla auxiliar. Desde spec 013 el editor no cuelga de la fila,
+         asi que aca hay SOLO filas de campo. */
         function parsearFilas(html)
         {
             var $aux = $('<div>').append('<table><tbody>' + html + '</tbody></table>');
             return $aux.children('table').children('tbody').children('tr');
+        }
+
+        /** Parsea el HTML de un formulario de campo (clave `form` del alta y del
+         duplicado). Es un `<div>`, asi que entra directo por `$(html)`. */
+        function parsearForms(html)
+        {
+            return $($.trim(html || ''));
         }
 
         // Importar: se intercepta (pmuForm devuelve JSON y NO navega).
@@ -822,7 +936,14 @@ jQuery(function ($) {
                     $('.ec-campos-cuerpo').append($nuevo);
                     if (window.PMUCampos) {
                         window.PMUCampos.enlazarBaja($nuevo.find('form.ec-form-campo-baja'));
-                        window.PMUCampos.enlazarFormularios($nuevo.find('form.ec-form-campo'));
+                    }
+                    // El duplicado tambien trae su formulario dormido (clave `form`).
+                    if (res.data.form) {
+                        var $formNuevo = parsearForms(res.data.form);
+                        $('#ec-campo-forms').append($formNuevo);
+                        if (window.PMUCampos) {
+                            window.PMUCampos.enlazarFormularios($formNuevo.find('form.ec-form-campo'));
+                        }
                     }
                     refrescarCampos(); // re-evalua buscador/categorias con la fila nueva
                     pmuAviso($fila.closest('.card, .wrap'), 'Duplicado como campo ' + res.data.id + '.');
@@ -852,23 +973,22 @@ jQuery(function ($) {
                 .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
-        /** Trae el campo fresco del servidor (el formulario puede traer cambios sin guardar). */
+        /** Lee el campo tal como esta ahora en su formulario (puede traer cambios sin
+         * guardar). T011b/FR-009: el `cargador` viaja en la fila (lo emite el
+         * servidor), no en el formulario, porque vive en `datos.json`. */
         function leerCampoDeLaFila($fila) {
-            var $form = $fila.next('.ec-campo-form-fila').find('form.ec-form-campo');
-            var $any = $form.length ? $form : $fila.closest('.card').find('form.ec-form-campo').filter(':visible').first();
-            if (!$any.length) { return null; }
-            var $campo = $fila.next('.ec-campo-form-fila').find('form.ec-form-campo');
+            var id = parseInt($fila.attr('data-id'), 10) || 0;
+            // El editor vive en el dormitorio (#ec-campo-forms), no pegado a la fila.
+            var $campo = $('.ec-campo-form[data-form="' + id + '"]');
             if (!$campo.length) { return null; }
             var val = function (sel) { return ($campo.find(sel).val() || ''); };
-            // T011b/FR-009: el `cargador` viaja en la fila (lo emite el servidor),
-            // no en el formulario, porque vive en `datos.json`.
             var crudoCarg = $fila.attr('data-cargador') || '';
             var defCarg = null;
             if (crudoCarg) {
                 try { defCarg = JSON.parse(crudoCarg); } catch (e) { defCarg = null; }
             }
             return {
-                id: parseInt($fila.attr('data-id'), 10) || 0,
+                id: id,
                 htm: val('textarea[name=html]'),
                 css: val('textarea[name=css]'),
                 js: val('textarea[name=js]'),
@@ -910,34 +1030,53 @@ jQuery(function ($) {
             return doc;
         }
 
-        /* "Probar" monta el campo en el iframe con el MISMO modulo que la ficha. */
-        $(document).on('click', '.ec-c-acciones .ec-probar', function (ev) {
-            ev.preventDefault();
-            var $fila = $(this).closest('tr[data-id]');
+        /* "Probar" abre el DRAWER con la vista previa debajo del formulario (spec 013):
+           asi el admin edita y ve el resultado en la misma superficie. Antes era
+           una fila `<tr>` pegada a la tabla, siempre a 350 px. Monta el campo en
+           el iframe con el MISMO modulo que la ficha. */
+        function marcoPreview() {
+            var $cuerpo = $('#ec-c-drawer-cuerpo');
+            var $pv = $cuerpo.children('.ec-pv');
+            if (!$pv.length) { $pv = $('<div class="ec-pv"></div>').appendTo($cuerpo); }
+            return $pv;
+        }
+
+        /** Ancho del preview: el del panel del comprador (350), uno de tablet
+         * (768) o el completo, que es lo que se gana con el drawer. */
+        function anchoPreview($iframe, ancho) {
+            if (ancho === 'full') { $iframe.removeAttr('width').css('width', '100%'); }
+            else { $iframe.css('width', '').attr('width', ancho); }
+            $('#ec-c-drawer-cuerpo .ec-pv-anchos button').each(function () {
+                $(this).toggleClass('is-on', String(ancho) === $(this).attr('data-ancho'));
+            });
+        }
+
+        function montarPreview(id) {
             if (typeof PMUCampo === 'undefined') {
-                pmuAviso($fila.closest('.card, .wrap'),
+                pmuAviso($('#ec-c-drawer').closest('.wrap'),
                     'Falta campo-montar.js: no se puede previsualizar.', true);
                 return;
             }
-            var $editor = $fila.next('.ec-campo-form-fila');
-            if ($editor.prop('hidden')) {
-                // Abrimos el editor para que "Probar" use lo que hay escrito.
-                if (window.PMUCampos) { window.PMUCampos.alternar($fila, true); }
-            }
+            var $fila = $('.ec-campos-cuerpo tr[data-id="' + id + '"]');
             var campo = leerCampoDeLaFila($fila);
             if (!campo || !campo.id) { return; }
-            var $marco = $fila.next('.ec-campo-preview');
-            if (!$marco.length) {
-                $marco = $('<tr class="ec-campo-preview" hidden><td colspan="7"></td></tr>');
-                $editor.after($marco);
-            }
-            var $celda = $marco.children('td').empty();
-            var $wrap = $('<div class="ec-pv"></div>').appendTo($celda);
-            $wrap.append($('<p class="ec-pv-titulo"></p>').text('Así lo verá el comprador (' + campo.id + ')'));
-            var $iframe = $('<iframe class="ec-pv-frame" title="Vista previa del campo" width="350"></iframe>').appendTo($wrap);
+            var $pv = marcoPreview().empty();
+            var $wrap = $('<div></div>').appendTo($pv);
+            var $titulo = $('<p class="ec-pv-titulo"></p>')
+                .text('Así lo verá el comprador (campo ' + campo.id + ')').appendTo($wrap);
+            var $anchos = $('<span class="ec-pv-anchos"></span>').appendTo($titulo);
+            ['350', '768', 'full'].forEach(function (a) {
+                $('<button type="button" class="button button-small ec-pv-ancho"></button>')
+                    .attr('data-ancho', a)
+                    .text(a === 'full' ? 'Ancho completo' : a + ' px')
+                    .appendTo($anchos);
+            });
+            var $iframe = $('<iframe class="ec-pv-frame" title="Vista previa del campo"></iframe>')
+                .appendTo($wrap);
             $iframe.attr('srcdoc', construirPreview(campo));
-            $wrap.append($('<span class="ec-campo-status" aria-live="polite"></span>'));
-            $marco.prop('hidden', false);
+            var $status = $('<span class="ec-campo-status" aria-live="polite"></span>').appendTo($wrap);
+            anchoPreview($iframe, 'full');
+            if ($pv[0].scrollIntoView) { $pv[0].scrollIntoView({ block: 'nearest' }); }
             // Al cargar el iframe, montamos el campo y pintamos el par valor/cliente.
             $iframe.on('load', function () {
                 var doc = this.contentDocument;
@@ -959,7 +1098,7 @@ jQuery(function ($) {
                     }
                 }
                 } catch (e) {
-                    $wrap.find('.ec-campo-status').addClass('ec-error').text('El JS del campo fallo: ' + e.message);
+                    $status.addClass('ec-error').text('El JS del campo fallo: ' + e.message);
                     return;
                 }
                 var par = estado[campo.id] || {};
@@ -969,6 +1108,18 @@ jQuery(function ($) {
                         + '  |  cliente: ' + JSON.stringify(par.cliente || '');
                 }
             });
+        }
+
+        /* El boton "Probar" de la fila abre el drawer con la vista previa lista. */
+        $(document).on('click', '.ec-c-acciones .ec-probar', function (ev) {
+            ev.preventDefault();
+            var id = parseInt($(this).closest('tr[data-id]').attr('data-id'), 10) || 0;
+            if (window.PMUCampos) { window.PMUCampos.abrir(id, { probar: true }); }
+        });
+
+        $(document).on('click', '.ec-pv-ancho', function (ev) {
+            ev.preventDefault();
+            anchoPreview($('#ec-c-drawer-cuerpo .ec-pv-frame'), $(this).attr('data-ancho'));
         });
 
     /* ============ 3. Acciones sin recarga (re-analizar, borrar, regenerar) ============ */

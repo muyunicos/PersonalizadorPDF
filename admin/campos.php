@@ -57,30 +57,31 @@ $global_css_prefijo = $aviso_global === '' ? $this->css_global_prefijo($global_c
     echo str_replace('</', '<\\/', $global_css_prefijo); // phpcs:ignore WordPress.Security.EscapeOutput
 ?></script>
 
-<div class="card">
-    <h2>Estilos globales / Script global</h2>
-    <p class="description">Un solo par de archivos para <strong>todo</strong> el plugin
-        (<code>uploads/pmu/campos/global.css</code> y <code>global.js</code>). Se cargan solo en las
-        fichas que tienen al menos un campo. El CSS se inyecta <strong>prefijado</strong> con
-        <code>[data-pmu-panel]</code>, asi que no puede romper el tema. El <code>global.js</code> es
-        codigo libre tuyo y corre <strong>antes</strong> de montar los campos: ahi se resuelve el
-        <code>cliente</code> que el campo no publica (el sistema no traduce nada por si solo).</p>
-    <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo-global">
-        <input type="hidden" name="action" value="personalizador_pdf_campo_global">
-        <?php wp_nonce_field('personalizador_pdf_campo'); ?>
-        <p><label><strong>global.css</strong><br>
-            <textarea name="global_css" rows="6" class="large-text code ec-campo-global-css"
-                spellcheck="false" placeholder=".mi-clase { color: #333; }"><?php echo esc_textarea($global_css); ?></textarea></label></p>
-        <p><label><strong>global.js</strong><br>
-            <textarea name="global_js" rows="6" class="large-text code ec-campo-global-js"
-                spellcheck="false" placeholder="window.PMU_CAMPO = window.PMU_CAMPO || {};"><?php echo esc_textarea($global_js); ?></textarea></label></p>
-        <?php submit_button('Guardar estilos globales', 'secondary', 'submit', false); ?>
-        <span class="ec-campo-status" aria-live="polite"></span>
-    </form>
-</div>
+<?php /* "Estilos globales / Script global" vive al FINAL de la pestana y plegado
+       (spec 013, T006): es lo mas tecnico y lo de uso mas raro, y antes ocupaba
+       la pantalla entera antes de que se vieran los campos. */ ?>
 
-<div class="card">
-    <h2>Nuevo campo</h2>
+<?php /* Drawer (spec 013, T003): una sola superficie para ALTA y EDICION, en vez de
+       un card de alta fijo arriba mas el editor pegado a cada fila. Este es el
+       formulario de ALTA (plantilla dormida); el de edicion lo aporta el
+       servidor en `forms_campos_html()` y el JS mueve dentro el que toque. */ ?>
+<div class="ec-c-drawer" id="ec-c-drawer" hidden>
+    <div class="ec-c-drawer-fondo" data-cerrar="1"></div>
+    <aside class="ec-c-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="ec-c-drawer-titulo">
+        <header class="ec-c-drawer-cab">
+            <h2 id="ec-c-drawer-titulo">Nuevo campo</h2>
+            <button type="button" class="ec-c-drawer-x" data-cerrar="1" aria-label="Cerrar el editor">&times;</button>
+        </header>
+        <div class="ec-c-drawer-cuerpo" id="ec-c-drawer-cuerpo"></div>
+    </aside>
+</div>
+<?php /* "DORMITORIO" de formularios (spec 013, T002). El <tbody> de la tabla de
+       abajo contiene SOLO filas de campo: cada editor vive aca, oculto, y el
+       drawer lo mueve dentro al abrirlo (y de vuelta al cerrarlo). Con el
+       editor fuera de la tabla, los filtros y el orden dejan de arrastrarlo.
+       Primero va la plantilla de ALTA; despues, un div por campo activo. */ ?>
+<div class="ec-campo-forms" id="ec-campo-forms" hidden>
+<div class="ec-campo-form ec-campo-form-nuevo">
     <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo">
         <input type="hidden" name="action" value="personalizador_pdf_campo">
         <?php wp_nonce_field('personalizador_pdf_campo'); ?>
@@ -102,9 +103,14 @@ $global_css_prefijo = $aviso_global === '' ? $this->css_global_prefijo($global_c
         <span class="ec-campo-status" aria-live="polite"></span>
     </form>
 </div>
+<?php echo $this->forms_campos_html($campos, $post_url); ?>
+</div>
 
-<div class="card">
-    <h2>Campos reutilizables (<?php echo count($campos); ?>)</h2>
+<div class="card ec-c-card-campos">
+    <div class="ec-c-cabecera">
+        <h2>Campos reutilizables (<?php echo count($campos); ?>)</h2>
+        <button type="button" class="button button-primary ec-abrir-alta">+ Nuevo campo</button>
+    </div>
     <p class="description">Mismo <code>id</code> usable en N PDFs. El <code>campo.js</code> corre solo en el
         navegador con firma <code>function(ctx, root)</code>; <code>V(N)</code> lee otros campos.</p>
     <?php if (!$campos) : ?>
@@ -182,3 +188,29 @@ $global_css_prefijo = $aviso_global === '' ? $this->css_global_prefijo($global_c
     </table>
 </div>
 <?php endif; ?>
+
+<?php /* Al PIE y plegado: es lo mas tecnico y lo de uso mas raro (spec 013, T006).
+       Antes ocupaba la pantalla entera arriba, antes de que se vieran los campos. */ ?>
+<div class="card">
+    <details class="ec-c-globales">
+        <summary><strong>Estilos globales / Script global</strong></summary>
+        <p class="description">Un solo par de archivos para <strong>todo</strong> el plugin
+            (<code>uploads/pmu/campos/global.css</code> y <code>global.js</code>). Se cargan solo en las
+            fichas que tienen al menos un campo. El CSS se inyecta <strong>prefijado</strong> con
+            <code>[data-pmu-panel]</code>, asi que no puede romper el tema. El <code>global.js</code> es
+            codigo libre tuyo y corre <strong>antes</strong> de montar los campos: ahi se resuelve el
+            <code>cliente</code> que el campo no publica (el sistema no traduce nada por si solo).</p>
+        <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo-global">
+            <input type="hidden" name="action" value="personalizador_pdf_campo_global">
+            <?php wp_nonce_field('personalizador_pdf_campo'); ?>
+            <p><label><strong>global.css</strong><br>
+                <textarea name="global_css" rows="6" class="large-text code ec-campo-global-css"
+                    spellcheck="false" placeholder=".mi-clase { color: #333; }"><?php echo esc_textarea($global_css); ?></textarea></label></p>
+            <p><label><strong>global.js</strong><br>
+                <textarea name="global_js" rows="6" class="large-text code ec-campo-global-js"
+                    spellcheck="false" placeholder="window.PMU_CAMPO = window.PMU_CAMPO || {};"><?php echo esc_textarea($global_js); ?></textarea></label></p>
+            <?php submit_button('Guardar estilos globales', 'secondary', 'submit', false); ?>
+            <span class="ec-campo-status" aria-live="polite"></span>
+        </form>
+    </details>
+</div>

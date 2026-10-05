@@ -92,7 +92,10 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 ├── admin/
 │   ├── page.php             ← Página admin con pestañas ("PDFs" | "Campos" | "Estilos de Texto" | "Pedidos" | "Test" | "Ayuda")
 │   ├── pdfs.php             ← Consola: subir PDF, grupos, mockups, imágenes, Procesar
-│   ├── campos.php           ← Catálogo global de campos reutilizables (campos.json)
+│   ├── campos.php           ← Campos reutilizables (spec 012) + UX de consola (spec 013:
+│                              lista primero, alta como boton, drawer para editar, estilos
+│                              globales al pie y plegados; el <tbody> tiene SOLO filas y
+│                              los formularios viven dormidos en #ec-campo-forms)
 │   ├── estilos-texto.php    ← Iframe del módulo TextMuy (aviso si no está integrado)
 │   ├── pedidos.php          ← Pestaña Pedidos: items entregados (orders/), Regenerar PDF / Descargar
 │   ├── test.php             ← Pestaña Test: botón del smoke test en vivo (tabla OK/FALLA)

@@ -139,9 +139,18 @@ console.log('\n== CSS/JS global (spec 012, T020) ==');
     camposPhp.indexOf('id="pmu-campo-global-css"') !== -1);
   check('el portador es type="text/css" (no se aplica en la consola)',
     camposPhp.indexOf('<script type="text/css" id="pmu-campo-global-css">') !== -1);
-  check('la tarjeta del global esta siempre arriba (FR-024)',
-    camposPhp.indexOf('Estilos globales / Script global') !== -1
-    && camposPhp.indexOf('Estilos globales / Script global') < camposPhp.indexOf('<h2>Nuevo campo</h2>'));
+  // FR-024 se conserva: el global se edita desde la pestana Campos, sin navegar.
+  // Spec 013 (T006) cambia WHERE, no el hecho: ahora va al pie y plegado, porque
+  // es lo mas tecnico y lo de uso mas raro, y antes tapaba la lista de campos.
+  const iGlobales = camposPhp.indexOf('Estilos globales / Script global');
+  const iFormGlobal = camposPhp.indexOf('ec-form-campo-global');
+  const iTabla = camposPhp.indexOf('ec-campos-tabla');
+  check('el global se edita desde la pestana Campos (FR-024)',
+    iFormGlobal !== -1 && iGlobales !== -1);
+  check('el global esta al pie, despues de la lista de campos (T006)',
+    iTabla !== -1 && iFormGlobal > iTabla);
+  check('el global viene plegado, no ocupa la pantalla',
+    camposPhp.indexOf('<details class="ec-c-globales">') !== -1);
   check('el form del global usa su propia action',
     camposPhp.indexOf('personalizador_pdf_campo_global') !== -1
     && adminJs.indexOf("pmuForm($('form.ec-form-campo-global'), 'personalizador_pdf_campo_global'") !== -1);

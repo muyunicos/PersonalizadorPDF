@@ -2758,7 +2758,10 @@ class Personalizador_PDF_Plugin
         $guardado = $this->campo_guardado($id);
         $this->responder(true, ['id' => $id, 'ec_campo' => $id, 'tab' => 'campos',
             'campo' => $guardado,
-            'html' => $guardado ? $this->fila_campo_html($id, $guardado) : '']);
+            'html' => $guardado ? $this->fila_campo_html($id, $guardado) : '',
+            'form' => $guardado ? $this->form_campo_html($id, $guardado, esc_url(admin_url('admin-post.php')),
+                implode(',', $guardado['categorias']),
+                !empty($guardado['datos']['cargador']) ? wp_json_encode($guardado['datos']['cargador']) : '') : '']);
     }
 
     /**
@@ -2850,7 +2853,10 @@ JS;
         }
         $guardado = $this->campo_guardado($nuevo);
         $this->responder(true, ['id' => $nuevo, 'campo' => $guardado,
-            'html' => $guardado ? $this->fila_campo_html($nuevo, $guardado) : '']);
+            'html' => $guardado ? $this->fila_campo_html($nuevo, $guardado) : '',
+            'form' => $guardado ? $this->form_campo_html($nuevo, $guardado, esc_url(admin_url('admin-post.php')),
+                implode(',', $guardado['categorias']),
+                !empty($guardado['datos']['cargador']) ? wp_json_encode($guardado['datos']['cargador']) : '') : '']);
     }
 
     /**
@@ -2883,10 +2889,11 @@ JS;
     }
 
     /**
-     * HTML de la fila de un campo (resumen + editor plegado). **Fuente unica del
+     * HTML de la fila (resumen) de un campo. **Fuente unica del
      * markup**: la usan `admin/campos.php` y la respuesta JSON del alta, para que
      * el navegador inserte exactamente lo mismo que el servidor (sin duplicar la
-     * plantilla en JS).
+     * plantilla en JS). El formulario NO va aqui: es `form_campo_html()` y vive
+     * dormido en `#ec-campo-forms` (spec 013, T002).
      *
      * @param int   $cid
      * @param array $c Fila v2 de cargar_campos().
@@ -2894,7 +2901,6 @@ JS;
     public function fila_campo_html($cid, array $c)
     {
         $d = $c['datos'];
-        $post = esc_url(admin_url('admin-post.php'));
         $cats = implode(',', $c['categorias']);
         $cargador = !empty($d['cargador']) ? wp_json_encode($d['cargador']) : '';
         ob_start();
@@ -2941,23 +2947,32 @@ JS;
                 </tr>
         <?php
         $resumen = (string) ob_get_clean();
-        $form = $this->form_campo_html($cid, $c, $post, $cats, $cargador);
-        return $resumen . $form;
+        return $resumen;
     }
 
-    /** Fila del editor plegado de un campo (se muestra al pulsar "Editar"). */
-    private function form_campo_html($cid, array $c, $post, $cats, $cargador)
+    /**
+     * Formulario de edicion de un campo. Vive FUERA de la tabla, en un
+     * `<div data-form="{id}">` dormido (spec 013, T002): al abrir el drawer el
+     * JS lo mueve dentro. Asi el `<tbody>` contiene SOLO filas de campo y el
+     * editor no queda pegado a la suya, que era lo que obligaba a los filtros y
+     * al orden a arrastrarlo.
+     *
+     * **Fuente unica del markup**, como `fila_campo_html()`: lo usan la pagina
+     * (`forms_campos_html()`) y la respuesta JSON del alta/duplicado (clave
+     * `form`), para que el navegador inserte exactamente lo mismo que el
+     * servidor.
+     */
+    public function form_campo_html($cid, array $c, $post, $cats, $cargador)
     {
         $d = $c['datos'];
         ob_start();
         ?>
-                <tr class="ec-campo-form-fila" data-form="<?php echo (int)$cid; ?>" hidden>
-                    <td colspan="7">
-                        <form method="post" action="<?php echo $post; ?>" class="ec-form-campo">
-                            <input type="hidden" name="action" value="personalizador_pdf_campo">
-                            <input type="hidden" name="id" value="<?php echo (int)$cid; ?>">
-                            <?php wp_nonce_field('personalizador_pdf_campo'); ?>
-                            <table class="form-table">
+                <div class="ec-campo-form" data-form="<?php echo (int)$cid; ?>" hidden>
+                    <form method="post" action="<?php echo $post; ?>" class="ec-form-campo">
+                        <input type="hidden" name="action" value="personalizador_pdf_campo">
+                        <input type="hidden" name="id" value="<?php echo (int)$cid; ?>">
+                        <?php wp_nonce_field('personalizador_pdf_campo'); ?>
+                        <table class="form-table">
                                 <tr><th><label>Nombre</label></th>
                                     <td><input name="nombre" class="regular-text" value="<?php echo esc_attr($d['nombre']); ?>">
                                         <p class="description">Como lo ves vos en esta consola.</p></td></tr>
@@ -2990,14 +3005,32 @@ JS;
                                             <code>size:2000 max:6</code> ·
                                             <code>1_size:1000 1_canvas:circle 2_size:1024x768 2_min:2 2_max:2</code>. Vacio = sin cargador.</p></td></tr>
                             </table>
-                            <button type="submit" class="button button-primary">Guardar cambios</button>
-                            <button type="button" class="button ec-cancelar">Cancelar</button>
-                            <span class="ec-campo-status" aria-live="polite"></span>
-                        </form>
-                    </td>
-                </tr>
+                        <button type="submit" class="button button-primary">Guardar cambios</button>
+                        <button type="button" class="button ec-cancelar">Cancelar</button>
+                        <span class="ec-campo-status" aria-live="polite"></span>
+                    </form>
+                </div>
         <?php
         return (string) ob_get_clean();
+    }
+
+    /**
+     * Formularios de edicion de TODOS los campos activos, uno por `<div>`
+     * dormido (spec 013, T002). La pagina los imprime una sola vez; el drawer
+     * mueve dentro el que corresponde. El alta y el duplicado agregan el suyo
+     * con la clave `form` de la respuesta JSON.
+     *
+     * @param array $campos Resultado de cargar_campos() (sin las bajas).
+     */
+    public function forms_campos_html($campos, $post)
+    {
+        $salida = '';
+        foreach ($campos as $cid => $c) {
+            $salida .= $this->form_campo_html($cid, $c, $post,
+                implode(',', $c['categorias']),
+                !empty($c['datos']['cargador']) ? wp_json_encode($c['datos']['cargador']) : '');
+        }
+        return $salida;
     }
 
     /** Restaura un campo dado de baja (conserva sus archivos). Responde JSON. */
