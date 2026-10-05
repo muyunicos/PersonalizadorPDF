@@ -2750,7 +2750,10 @@ class Personalizador_PDF_Plugin
         // marcha. Spec 015 D10.
         $tipo = isset($_POST['tipo']) ? (string) $_POST['tipo'] : '';
         try {
-            $c = $this->campo_desde_post($_POST);
+            // wp_unslash: WP aplica add_magic_quotes a $_POST (AGENTS §11). Sin
+            // esto el `cargador` llega con \" y el json_decode falla, asi que
+            // EDITAR un campo con cargador siempre tira motor:campos:cargador:invalido.
+            $c = $this->campo_desde_post(wp_unslash($_POST));
             if ($id > 0) {
                 $this->pmu_uploads()->campo_editar($id, $c['datos'], $c['htm'], $c['css'], $c['js']);
             } else {

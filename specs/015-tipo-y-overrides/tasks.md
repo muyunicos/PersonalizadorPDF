@@ -5,22 +5,38 @@
 
 ## Commit 1 — A + B: Tipo y limpieza
 
-- [ ] **T001 [P]** `migrar_campos_v3()` en `PMU_Uploads`: `plantilla` -> `tipo`,
+- [~] **T001 [P]** `migrar_campos_v3()` en `PMU_Uploads`: `plantilla` -> `tipo`,
   `select` -> `opciones`, `''` -> `texto`, fuera `categorias` de `datos.json` y de
-  `meta.{id}`. Backup `.bak`, todo-o-nada, idempotente, mapeo en el docblock
-  (**aprobacion del usuario pendiente**: si se arranca limpio, se descarta).
-- [ ] **T002 [P]** `tipo_valida()` reemplaza a `plantilla_valida()`; `normalizar_datos_campo()` y `tocar_meta()` dejan de llevar categorias; `campo_listar()` expone `tipo` y ya no `categorias`.
-- [ ] **T003** Fuera `campo_plantilla()` y el handler `handle_campo_plantilla` +
+  `meta.{id}`. Backup `.bak`, todo-o-nada, idempotente, mapeo en el docblock.
+  **DESCARTADO (decision del usuario 2026-10-05): se arranca limpio.** No se
+  implementa ni se testea.
+- [X] **T002 [P]** `tipo_valida()` reemplaza a `plantilla_valida()`; `normalizar_datos_campo()` y `tocar_meta()` dejan de llevar categorias; `campo_listar()` expone `tipo` y ya no `categorias`.
+- [X] **T003** Fuera `campo_plantilla()` y el handler `handle_campo_plantilla` +
   su `add_action` y su entrada en `seguridad()` (D10).
-- [ ] **T004** `plantilla_campo($tipo)`: `texto`, `imagen` y **`opciones`** (nueva, T011). Al elegir el tipo se rellena el formulario con su plantilla por defecto.
-- [ ] **T005** `campo_desde_post()`: `tipo` en vez de `plantilla`, sin `categorias`. El tipo **solo se elige al crear**; en edicion manda el del indice.
-- [ ] **T006** `fila_campo_html()`: columnas `id | Nombre (+ titulo y descripcion) | Tipo | Uso | Acciones`; fuera `data-cats`, fuera el boton de la estrella; `Uso` muestra el numero sin "PDFs".
-- [ ] **T007** `form_campo_html()`: el Tipo se **muestra** (solo lectura) en edicion; fuera el input de Categorias.
-- [ ] **T008** `admin/campos.php` + `assets/admin.js`: tabla nueva, **fuera los chips de categoria**, buscador sin categorias, fuera `.ec-marcar` y su logica (`reflejarPlantilla`, `data-plantilla`).
-- [ ] **T009** `admin/pdfs.php`: el modal de alta rapida pide `tipo` y **sin** categorias; el texto de `settings` pasa a "Solo referencias `[campoN]`, en orden".
-- [ ] **T010** Aviso de cableado (FR-008): si un campo `opciones` aparece en `value` de un placeholder de texto, o al reves, la consola avisa antes de procesar.
-- [ ] **T011** Plantilla `opciones`: `campo.htm` con un contenedor vacio y `campo.js` que dibuja los botones desde una lista `OPCIONES` y publica `valor: JSON.stringify(overrides)` + `cliente: <etiqueta>`. Con el `JSON.stringify` YA hecho y comentado (FR-010).
-- [ ] **T012** Puertas y smokes del commit 1: `campos_migracion.php` (v2 -> v3), fase `campos` del arnes, `campos-contrato.test.js`, y los 3 smokes del lab con sus checks de `ec-marcar` / categorias dados de baja.
+- [X] **T004** `plantilla_campo($tipo)`: `texto`, `imagen` y **`opciones`** (nueva, T011). Al elegir el tipo se rellena el formulario con su plantilla por defecto.
+- [X] **T005** `campo_desde_post()`: `tipo` en vez de `plantilla`, sin `categorias`. El tipo **solo se elige al crear**; en edicion manda el del indice.
+- [X] **T006** `fila_campo_html()`: columnas `id | Nombre (+ titulo y descripcion) | Tipo | Uso | Acciones`; fuera `data-cats`, fuera el boton de la estrella; `Uso` muestra el numero sin "PDFs".
+- [X] **T007** `form_campo_html()`: el Tipo se **muestra** (solo lectura) en edicion; fuera el input de Categorias.
+- [X] **T008** `admin/campos.php` + `assets/admin.js`: tabla nueva, **fuera los chips de categoria**, buscador sin categorias, fuera `.ec-marcar` y su logica (`reflejarPlantilla`, `data-plantilla`).
+- [X] **T009** `admin/pdfs.php`: el modal de alta rapida pide `tipo` y **sin** categorias; el texto de `settings` pasa a "Solo referencias `[campoN]`, en orden".
+- [X] **T010** Aviso de cableado (FR-008): si un campo `opciones` aparece en `value` de un placeholder de texto, o al reves, la consola avisa antes de procesar.
+- [X] **T011** Plantilla `opciones`: `campo.htm` con un contenedor vacio y `campo.js` que dibuja los botones desde una lista `OPCIONES` y publica `valor: JSON.stringify(overrides)` + `cliente: <etiqueta>`. Con el `JSON.stringify` YA hecho y comentado (FR-010).
+- [X] **T012** Puertas y smokes del commit 1: `campos_migracion.php` (v2 -> v3),
+  fase `campos` del arnes, `campos-contrato.test.js`, y los 3 smokes del lab
+  (`smoke-campos`, `smoke-ficha`, `preview-cargador`) con sus checks de
+  `ec-marcar` / categorias dados de baja. **Todo en verde.** Hallazgos de esta
+  pasada:
+  - **Bug real corregido**: `handle_campo_guardar()` pasaba `$_POST` crudo a
+    `campo_desde_post()` sin `wp_unslash()` (convencion AGENTS §11): el `cargador`
+    (JSON) llegaba con `\"`, `json_decode` fallaba y `validar_cargador` tiraba
+    `motor:campos:cargador:invalido`. **Editar cualquier campo con cargador
+    fallaba siempre** (el alta lo esquivaba porque el modal no manda cargador).
+  - `preview-cargador.js` seguia en `select[name=plantilla]` (v2) -> `tipo`.
+  - `smoke-campos.js`: "Restaurar conserva el nombre" comparaba contra
+    `.ec-c-nombre` (celda completa con "Cliente: ...") -> `.ec-c-nombre-txt`.
+  - `smoke-campos.js` F5: si el reseteo del global dispara el submit, el
+    `location.reload()` de `admin.js` vuelva a plegar el `<details>` y los fills
+    posteriores morian con "not visible" -> reabrir tras el reload.
 
 ## Commit 2 — C: los overrides que funcionan
 
