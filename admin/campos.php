@@ -18,7 +18,11 @@ $nuevos = array_diff_key($bajas, $campos); // dados de baja, para el panel de ab
 $aviso_campos = '';
 list(, $aviso_campos) = $this->campos_activos();
 $post_url = admin_url('admin-post.php');
-$plantillas = ['texto' => 'Texto', 'select' => 'Opciones', 'imagen' => 'Imagenes (cargador)'];
+$plantillas = [
+    'texto' => 'Texto',
+    'imagen' => 'Imagen (cargador)',
+    'opciones' => 'Opciones (Overrides)',
+];
 
 // CSS/JS global del plugin (spec 012, T020). Se lee siempre: si el admin no
 // puede escribirlo, el aviso sale al ABRIR la pestana y no al guardar.
@@ -105,8 +109,8 @@ $global_css_prefijo = $aviso_global === '' ? $this->css_global_prefijo($global_c
             puede usar en N PDFs.</p>
         <p><label>Nombre (para vos)<br>
             <input name="nombre" class="regular-text" placeholder="Fotos polaroid cuadradas x6"></label></p>
-        <p><label>Plantilla<br>
-            <select name="plantilla">
+        <p><label>Tipo<br>
+            <select name="tipo">
                 <?php foreach ($plantillas as $valor => $texto) : ?>
                     <option value="<?php echo esc_attr($valor); ?>"><?php echo esc_html($texto); ?></option>
                 <?php endforeach; ?>
@@ -129,35 +133,14 @@ $global_css_prefijo = $aviso_global === '' ? $this->css_global_prefijo($global_c
     <p class="description">Mismo <code>id</code> usable en N PDFs. El <code>campo.js</code> corre solo en el
         navegador con firma <code>function(ctx, root)</code>; <code>V(N)</code> lee otros campos.</p>
     <?php if (!$campos) : ?>
-        <p class="ec-campos-vacio">Todavia no hay campos. Crea el primero con el formulario de arriba.</p>
+        <p class="ec-campos-vacio">Todavia no hay campos. Crea el primero con el boton de arriba.</p>
     <?php endif; ?>
     <div class="ec-c-filtros">
             <p class="ec-buscador">
-                <input type="search" class="ec-c-buscar" placeholder="Buscar por nombre, descripcion, titulo o categoria"
+                <input type="search" class="ec-c-buscar" placeholder="Buscar por nombre, descripcion o titulo"
                        autocomplete="off">
             </p>
-            <?php
-            // Chips de categoria: todas las que usan los campos activos.
-            $cats = [];
-            foreach ($campos as $c) {
-                foreach ($c['categorias'] as $cat) {
-                    $cats[$cat] = isset($cats[$cat]) ? $cats[$cat] + 1 : 1;
-                }
-            }
-            ksort($cats);
-            ?>
-            <?php if ($cats) : ?>
-                <p class="ec-chips">
-                    <span class="description">Categorias:</span>
-                    <?php foreach ($cats as $cat => $n) : ?>
-                        <button type="button" class="button button-small ec-chip-cat"
-                                data-cat="<?php echo esc_attr($cat); ?>"><?php echo esc_html($cat); ?>
-                            <span class="ec-chip-n"><?php echo (int)$n; ?></span></button>
-                    <?php endforeach; ?>
-                    <button type="button" class="button button-small ec-chip-cat ec-chip-todas"
-                            data-cat="" hidden>Quitar filtros</button>
-                </p>
-            <?php endif; ?>
+            <?php // Spec 015 D9: los chips de categoria se van con las categorias. ?>
             <p class="ec-orden">
                 <label class="description" for="ec-c-orden">Orden:</label>
                 <select id="ec-c-orden" class="ec-c-orden-sel">
@@ -165,13 +148,13 @@ $global_css_prefijo = $aviso_global === '' ? $this->css_global_prefijo($global_c
                     <option value="modificado">Ultima modificacion</option>
                     <option value="creado">Mas recientes (creado)</option>
                     <option value="nombre">Por nombre</option>
+                    <option value="tipo">Por tipo</option>
                 </select>
                 <span class="ec-c-conteo" aria-live="polite"></span>
             </p>
         </div>
         <table class="widefat striped ec-campos-tabla">
-            <thead><tr><th>id</th><th>Nombre</th><th>Titulo comprador</th><th>Categorias</th>
-                <th>Plantilla</th><th>Uso</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>id</th><th>Nombre</th><th>Tipo</th><th>Uso</th><th>Acciones</th></tr></thead>
             <tbody class="ec-campos-cuerpo">
             <?php foreach ($campos as $cid => $c) : echo $this->fila_campo_html($cid, $c); endforeach; ?>
             </tbody>

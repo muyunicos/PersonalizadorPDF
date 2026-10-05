@@ -115,28 +115,31 @@ jQuery(function ($) {
             || (window.PMU_CAMPO && PMU_CAMPO.nonce) || '';
 
         /* Repinta una fila con los datos que devuelve el SERVIDOR (FR-002), no
-           con los del formulario. `campo` es la fila v2 de cargar_campos(). */
+           con los del formulario. `campo` es la fila v2 de cargar_campos().
+           Spec 015: el nombre lleva el titulo al comprador y la nota interna
+           debajo (`.ec-c-sub`), asi que se reconstruye el mismo HTML que emite
+           el servidor para que fila pintada y fila del alta sean iguales. */
         function pintarFila(campo) {
             if (!campo) { return null; }
             var $fila = $('.ec-campos-cuerpo tr[data-id="' + campo.id + '"]');
             if (!$fila.length) { return null; }
             var d = campo.datos || {};
-            var cats = (campo.categorias || []).join(', ');
-            $fila.find('.ec-c-nombre').text(d.nombre || '(sin nombre)');
-            $fila.find('.ec-c-titulo').text(d.titulo_cliente || '(vacio)');
-            $fila.find('.ec-c-cats').text(cats || '-');
-            $fila.find('.ec-c-plantilla').text(campo.plantilla || '-');
+            var pie = [];
+            if (d.titulo_cliente) { pie.push('Cliente: ' + d.titulo_cliente); }
+            if (d.descripcion) { pie.push(d.descripcion); }
+            var nombre = d.nombre || '(sin nombre)';
+            $fila.find('.ec-c-nombre').html(
+                $('<span class="ec-c-nombre-txt"></span>').text(nombre)[0].outerHTML
+                + (pie.length ? $('<span class="ec-c-sub"></span>').text(pie.join(' · '))[0].outerHTML : ''));
+            $fila.find('.ec-c-tipo').text(campo.tipo || '-');
             $fila.find('.ec-c-uso').text((campo.usado_pdf_n || 0) + ' PDF(s)');
-            $fila.attr('data-plantilla', campo.plantilla || '');
-            $fila.find('.ec-marcar').length
-                && reflejarPlantilla($fila.find('.ec-marcar'), !!campo.plantilla);
+            $fila.attr('data-tipo', campo.tipo || '');
             // Refleja los flags tambien en el formulario (checkbox/textarea).
             var $form = formDe(campo.id);
             if ($form.length) {
                 $form.find('input[name=nombre]').val(d.nombre || '');
                 $form.find('input[name=titulo_cliente]').val(d.titulo_cliente || '');
                 $form.find('input[name=descripcion]').val(d.descripcion || '');
-                $form.find('input[name=categorias]').val(cats);
                 $form.find('input[name=array]').prop('checked', !!d.array);
                 $form.find('input[name=protegido]').prop('checked', !!d.protegido);
                 $form.find('textarea[name=html]').val(campo.htm || '');
@@ -740,18 +743,17 @@ jQuery(function ($) {
         var $status = $('.ec-modal-campo .ec-campo-status');
         var nombre = ($('.ec-modal-campo .ec-campo-nombre').val() || '').trim();
         var titulo = ($('.ec-modal-campo .ec-campo-titulo').val() || '').trim();
-        var plantilla = $('.ec-modal-campo .ec-campo-plantilla').val() || 'texto';
+        var tipo = $('.ec-modal-campo .ec-campo-tipo').val() || 'texto';
         if (nombre === '') {
             $status.addClass('ec-error').text('Escribi un nombre.');
             return;
         }
         $status.removeClass('ec-error ec-ok').text('Creando...');
-        // Payload v2 (spec 012): nombre + plantilla + titulo_cliente + categorias.
+        // Payload v2 (spec 012) con `tipo` (spec 015 D10); sin categorias (D9).
         var nuevo = {
             nombre: nombre,
-            plantilla: plantilla,
-            titulo_cliente: titulo,
-            categorias: ($('.ec-modal-campo .ec-campo-categorias').val() || '').trim()
+            tipo: tipo,
+            titulo_cliente: titulo
         };
         pmuPost('personalizador_pdf_campo', nuevo, cfgGlobal.nonceCampo || '')
             .then(function (res) { campoCreado(res.data, nombre, $status); })
@@ -767,9 +769,9 @@ jQuery(function ($) {
         // El servidor devuelve la fila v2; el nombre visible es el que eligio el admin.
         var guardado = (data && data.campo) ? data.campo : null;
         var titulo = guardado && guardado.datos ? (guardado.datos.nombre || nombre) : nombre;
-        var plantilla = guardado ? (guardado.plantilla || '') : '';
+        var tipo = guardado ? (guardado.tipo || '') : '';
         if (id > 0) {
-            var etiqueta = id + ' — ' + titulo + (plantilla ? ' (' + plantilla + ')' : '');
+            var etiqueta = id + ' — ' + titulo + (tipo ? ' (' + tipo + ')' : '');
             var $sel = $('select[name="campos_ids[]"]').first();
             if ($sel.length && !$sel.find('option[value="' + id + '"]').length) {
                 $sel.append($('<option>', { value: id, text: etiqueta }).prop('selected', true));
@@ -784,7 +786,6 @@ jQuery(function ($) {
         $status.addClass('ec-ok').text('Campo ' + id + ' creado ✓');
         $('.ec-modal-campo .ec-campo-nombre').val('');
         $('.ec-modal-campo .ec-campo-titulo').val('');
-        $('.ec-modal-campo .ec-campo-categorias').val('');
         setTimeout(function () {
             $('.ec-modal-campo').attr('hidden', true);
             $status.text('');
@@ -810,28 +811,18 @@ jQuery(function ($) {
             function textoDe($fila) {
                 return [
                     $fila.find('.ec-c-nombre').text(),
-                    $fila.find('.ec-c-titulo').text(),
-                    $fila.find('.ec-c-cats').text(),
-                    $fila.attr('data-plantilla') || ''
+                    $fila.find('.ec-c-sub').text(),
+                    $fila.attr('data-tipo') || ''
                 ].join(' ').toLowerCase();
             }
 
             function aplicar() {
                 var q = ($('.ec-c-buscar').val() || '').trim().toLowerCase();
-                var chips = [];
-                $('.ec-chip-cat.is-on').each(function () {
-                    var c = $(this).attr('data-cat');
-                    if (c) { chips.push(String(c).toLowerCase()); }
-                });
                 var visibles = 0;
                 filas().each(function () {
                     var $f = $(this);
-                    var pasa = true;
-                    if (q && textoDe($f).indexOf(q) === -1) { pasa = false; }
-                    if (pasa && chips.length) {
-                        var cats = String($f.attr('data-cats') || '').split('|');
-                        pasa = chips.every(function (c) { return cats.indexOf(c) !== -1; });
-                    }
+                    // Spec 015 D9: sin chips de categoria; el buscador va por texto.
+                    var pasa = !q || textoDe($f).indexOf(q) !== -1;
                     $f.toggle(pasa);
                     if (pasa) { visibles++; }
                 });
@@ -849,6 +840,14 @@ jQuery(function ($) {
                     if (clave === 'nombre') {
                         return fa.find('.ec-c-nombre').text().localeCompare(fb.find('.ec-c-nombre').text());
                     }
+                    if (clave === 'tipo') {
+                        // Orden fijo (texto, imagen, opciones) y no alfabetico: asi
+                        // los campos del mismo tipo quedan juntos.
+                        var orden = ['texto', 'imagen', 'opciones'];
+                        var ta = orden.indexOf(fa.attr('data-tipo') || '');
+                        var tb = orden.indexOf(fb.attr('data-tipo') || '');
+                        if (ta !== tb) { return (ta < 0 ? 99 : ta) - (tb < 0 ? 99 : tb); }
+                    }
                     return (parseInt(fa.attr('data-id'), 10) || 0) - (parseInt(fb.attr('data-id'), 10) || 0);
                 });
                 // El editor ya no cuelga de la fila (vive en el dormitorio), asi
@@ -857,22 +856,12 @@ jQuery(function ($) {
             }
 
             $(document).on('input', '.ec-c-buscar', aplicar);
-            $(document).on('click', '.ec-chip-cat', function () {
-                var $chip = $(this);
-                if ($chip.attr('data-cat') === '') {
-                    $('.ec-chip-cat.is-on').removeClass('is-on');
-                } else {
-                    $chip.toggleClass('is-on');
-                }
-                $('.ec-chip-todas').prop('hidden', $('.ec-chip-cat.is-on[data-cat!=""]').length === 0);
-                aplicar();
-            });
             $(document).on('change', '.ec-c-orden-sel', function () {
                 ordenar($(this).val());
                 aplicar();
             });
             aplicar();
-            refrescarCampos = aplicar; // la reutilizan duplicar/marcar/importar
+            refrescarCampos = aplicar; // la reutilizan duplicar/importar
             // El alta desde el drawer la necesita para contar la fila nueva.
             if (window.PMUCampos) { window.PMUCampos.refrescar = aplicar; }
         })();
@@ -914,43 +903,6 @@ jQuery(function ($) {
             nonceC(), function () {
                 window.setTimeout(function () { window.location.reload(); }, 600);
             });
-
-        /* El boton de plantilla es un icono: el estado va en `aria-pressed` y en la
-           estrella (rellena/vacia), no en el texto. `data-plantilla` de la fila
-           es la fuente; esta funcion solo la refleja. */
-        function reflejarPlantilla($boton, activo) {
-            var t = activo
-                ? 'Quitar la marca de plantilla' : 'Marcar como plantilla reutilizable';
-            $boton.attr('aria-pressed', activo ? 'true' : 'false')
-                .attr('title', t).attr('aria-label', t)
-                .find('.dashicons')
-                .removeClass('dashicons-star-filled dashicons-star-empty')
-                .addClass(activo ? 'dashicons-star-filled' : 'dashicons-star-empty');
-        }
-
-        // Marcar / desmarcar como plantilla reutilizable (T016).
-        $(document).on('click', '.ec-c-acciones .ec-marcar', function (ev) {
-            ev.preventDefault();
-            var $fila = $(this).closest('tr[data-id]');
-            var id = parseInt($fila.attr('data-id'), 10) || 0;
-            var actual = $fila.attr('data-plantilla') || '';
-            var nuevo = actual ? '' : 'texto';
-            pmuPost('personalizador_pdf_campo_plantilla', { id: id, plantilla: nuevo }, nonceC())
-                .then(function (res) {
-                    if (res.data && res.data.campo && window.PMUCampos) {
-                        window.PMUCampos.pintar(res.data.campo);
-                        $fila.attr('data-plantilla', res.data.campo.plantilla || '');
-                    }
-                    $fila.find('.ec-marcar').length && reflejarPlantilla($fila.find('.ec-marcar'), nuevo !== '');
-                    $fila.find('.ec-c-plantilla').text(nuevo ? res.data.campo.plantilla : '-');
-                    pmuAviso($fila.closest('.card, .wrap'),
-                        nuevo ? 'Campo ' + id + ' guardado como plantilla.' : 'Plantilla quitada.');
-                })
-                .catch(function (e) {
-                    pmuAviso($fila.closest('.card, .wrap'),
-                        (e && e.message) || 'No se pudo marcar.', true);
-                });
-        });
 
         // Duplicar: crea un id NUEVO con el mismo contenido (T016).
         $(document).on('click', '.ec-c-acciones .ec-duplicar', function (ev) {
@@ -1463,7 +1415,16 @@ jQuery(function ($) {
         $status.removeClass('ec-ok ec-error').text('Guardando...');
         return pmuPost('personalizador_pdf_config', pares, cfgGlobal.nonceConfig || '')
             .then(function (j) {
-                $status.addClass('ec-ok').text('Guardado ✓');
+                var avisos = (j && j.data && j.data.avisos_cableado) || [];
+                if (avisos.length) {
+                    // FR-008: el tipo declara, el cableado decide. Si un
+                    // `opciones` cayo en `value` (o un `texto` en `settings`),
+                    // se muestra con causa, pero NO se bloquea.
+                    $status.removeClass('ec-ok ec-error').addClass('ec-error')
+                        .text('Guardado, pero revisá el cableado: ' + avisos.join(' '));
+                } else {
+                    $status.addClass('ec-ok').text('Guardado ✓');
+                }
                 actualizarBadge();
                 return j;
             })

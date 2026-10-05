@@ -464,10 +464,13 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                                     </label>
                                 </p>
                                 <details class="ec-avanzado">
-                                    <summary>Avanzado (settings)</summary>
+                                    <summary>Avanzado (settings / overrides)</summary>
                                     <input type="text" class="ec-input-settings" data-id="<?php echo esc_attr($gid); ?>" maxlength="4000"
                                            value="<?php echo esc_attr($settings_g); ?>">
-                                    <span class="description">Overrides del estilo; admite [campoN].</span>
+                                    <span class="description"><strong>Solo referencias</strong> a campos de tipo
+                                        <code>opciones</code>, separadas por espacio: <code>[campo73] [campo33]</code>.
+                                        Cada una aporta un objeto de overrides que se fusiona <strong>en orden</strong>
+                                        (el ultimo pisa al anterior). No admitas texto suelto.</span>
                                 </details>
                                 <p class="ec-linea">
                                     <button type="button" class="button button-small ec-probar" data-id="<?php echo esc_attr($gid); ?>">Probar</button>
@@ -536,17 +539,15 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                 <h3>Nuevo campo</h3>
                 <p><label>Nombre (para vos)<br>
                     <input type="text" class="ec-campo-nombre" maxlength="200"></label></p>
-                <p><label>Plantilla<br>
-                    <select class="ec-campo-plantilla">
+                <p><label>Tipo<br>
+                    <select class="ec-campo-tipo">
                         <option value="texto">Texto</option>
-                        <option value="select">Opciones</option>
-                        <option value="imagen">Imagenes (cargador)</option>
+                        <option value="imagen">Imagen (cargador)</option>
+                        <option value="opciones">Opciones (Overrides)</option>
                     </select></label>
                     <span class="description">Solo deja el formulario preparado; despues editas el HTML a tu medida.</span></p>
                 <p><label>Titulo para el comprador<br>
                     <input type="text" class="ec-campo-titulo" maxlength="200"></label></p>
-                <p><label>Categorias (separadas por coma, opcional)<br>
-                    <input type="text" class="ec-campo-categorias" maxlength="300"></label></p>
                 <p>
                     <button type="button" class="button button-primary ec-campo-crear">Crear</button>
                     <button type="button" class="button button-link ec-campo-cancelar">Cancelar</button>

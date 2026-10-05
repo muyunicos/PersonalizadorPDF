@@ -64,7 +64,7 @@ check('1 baja migrada', $r['bajas'] === 1);
 
 // --- Indice v2 ---
 $idx = json_decode(file_get_contents($ruta), true);
-check('version = 2', isset($idx['version']) && $idx['version'] === 2);
+check('version = 3 (spec 015 D9/D10)', isset($idx['version']) && (int)$idx['version'] === 3);
 check('3 items en el indice', count($idx['items']) === 3);
 check('campo 3 dado de baja', $idx['items'][2]['baja'] === true);
 check('categorias del campo 2', $idx['meta']['2']['categorias'] === ['navidad', 'foto']);
@@ -152,14 +152,22 @@ check('el campo 1 NO se toco con las escrituras rechazadas', trim(file_get_conte
 // --- BLOQUE T003 (referencia de helpers; reactivado con T003+T005) ---
 // --- INICIO DEL CUERPO (T003 reactivado) ---
 // (la llave de cierre del cuerpo v1 se elimino con el revert; el bloque arranca aqui)
-    $i1 = $m->campo_alta('texto', ['nombre' => 'Color', 'categorias' => ['pintura', 'navidad']], '<input data-rol="valor">', '.c{}', '');
+    $i1 = $m->campo_alta('texto', ['nombre' => 'Color', 'titulo_cliente' => 'Color'], '<input data-rol="valor">', '.c{}', '');
 check('alta NO reutiliza el id 3 (dado de baja)', $i1 === 4);
 check('alta escribe datos.json', is_file($m->ruta_campo($i1, 'datos.json')));
-check('alta guarda categorias en meta', $m->indice_campos()['meta'][(string)$i1]['categorias'] === ['pintura', 'navidad']);
-check('alta guarda plantilla', $m->indice_campos()['items'][pos_indice($m, $i1)]['plantilla'] === 'texto');
+check('alta guarda el tipo en el indice', $m->indice_campos()['items'][pos_indice($m, $i1)]['tipo'] === 'texto');
+check('meta NO lleva categorias (spec 015 D9)', !array_key_exists('categorias', $m->indice_campos()['meta'][(string)$i1]));
+check('datos.json NO lleva categorias', !array_key_exists('categorias', $m->leer_campo($i1)['datos']));
+check('el indice se escribe en version 3', (int)$m->indice_campos()['version'] === 3);
 check('alta marca baja=false', $m->indice_campos()['items'][pos_indice($m, $i1)]['baja'] === false);
 $inv = $m->campo_alta('inventada');
-check('alta con plantilla invalida -> ""', $m->indice_campos()['items'][pos_indice($m, $inv)]['plantilla'] === '');
+check('alta con tipo invalido -> ""', $m->indice_campos()['items'][pos_indice($m, $inv)]['tipo'] === '');
+// `select` era el nombre viejo de `opciones` (la plantilla v2). Con el tipo
+// nuevo ya NO es valido: se prueba en variable aparte porque `pos_indice()`
+// leeria el indice antes de que existiera la fila nueva.
+$sel = $m->campo_alta('select');
+check('`select` ya no es tipo valido (era la plantilla vieja)',
+    $m->indice_campos()['items'][pos_indice($m, $sel)]['tipo'] === '');
 
 // --- Editar ---
 $m->campo_editar($i1, ['nombre' => 'Color de fondo', 'titulo_cliente' => 'Color'], '<select data-rol="valor"></select>', '', '');
@@ -198,11 +206,11 @@ check('duplicar marca "(copia)"', strpos($dup['datos']['nombre'], '(copia)') !==
 check('duplicar NO toca el original', $m->leer_campo($i1)['datos']['nombre'] === 'Color de fondo');
 check('duplicar inexistente rechazado', lanza(function () use ($m) { $m->campo_duplicar(999); }) !== false);
 
-// --- Marcar plantilla ---
-$m->campo_plantilla($i1, 'select');
-check('marcar plantilla actualiza el indice', $m->indice_campos()['items'][pos_indice($m, $i1)]['plantilla'] === 'select');
-$m->campo_plantilla($i1, '');
-check('desmarcar plantilla la deja vacia', $m->indice_campos()['items'][pos_indice($m, $i1)]['plantilla'] === '');
+// --- Los tres tipos validos (spec 015 D10) ---
+foreach (['texto', 'imagen', 'opciones'] as $t) {
+    $nuevo = $m->campo_alta($t);
+    check("alta acepta el tipo '$t'", $m->indice_campos()['items'][pos_indice($m, $nuevo)]['tipo'] === $t);
+}
 
 // --- Id NUNCA se reutiliza tras una baja ---
 $antes = count($m->indice_campos()['items']);
@@ -213,7 +221,8 @@ check('el indice crece (el id dado de baja sigue listado)', count($m->indice_cam
 
 // --- Listar entrega el paquete completo ---
 $lst = $m->campo_listar();
-check('campo_listar trae id/plantilla/baja', isset($lst[$i1]['id'], $lst[$i1]['baja'], $lst[$i1]['plantilla']));
+check('campo_listar trae id/tipo/baja', isset($lst[$i1]['id'], $lst[$i1]['baja'], $lst[$i1]['tipo']));
+check('campo_listar NO trae categorias (spec 015 D9)', !array_key_exists('categorias', $lst[$i1]));
 check('campo_listar trae el codigo', isset($lst[$i1]['htm'], $lst[$i1]['css'], $lst[$i1]['js']));
 check('campo_listar trae creado y modificado', !empty($lst[$i1]['creado']) && $lst[$i1]['modificado'] > 0);
 check('campo_listar ordena por id', array_keys($lst) === array_values(array_unique(array_keys($lst))));

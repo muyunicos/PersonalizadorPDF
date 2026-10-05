@@ -930,6 +930,16 @@ class PMU_Uploads
      *
      * @return array ['hecho'=>bool,'campos'=>int,'bajas'=>int,'motivo'=>string]
      */
+    /**
+ * Migracion one-shot v1 -> v2 (spec 012 T001).
+ *
+ * ⚠️ **SIN LLAMADAS Y CON FORMATO VIEJO** (verificado 2026-10-05, spec 015): no la
+ * invoca nadie, nunca se ejecuto sobre datos reales, y escribe `items[].plantilla`
+ * y `meta.categorias`, que la v3 ya no usa. Si alguien la vuelve a llamar,
+ * deja el indice a medias. Su retiro (con las ~49 checks de
+ * `tests/campos_migracion.php`) queda para una spec propia: el arranque limpio
+ * de la 015 no lo arrastra.
+ */
     public function migrar_campos_v2()
     {
         $ruta = $this->ruta_campos();
@@ -1008,7 +1018,7 @@ class PMU_Uploads
                 'motivo' => 'migracion:fallo:' . $e->getMessage()];
         }
 
-        $indice = ['version' => 2, 'items' => $items, 'meta' => $meta, 'v1_migrado' => $ahora];
+        $indice = ['version' => 3, 'items' => $items, 'meta' => $meta, 'v1_migrado' => $ahora];
         if (!$this->escribir_json($ruta, $indice)) {
             $this->escribir_texto($ruta, $crudo); // reversion
             return ['hecho' => false, 'campos' => 0, 'bajas' => 0, 'motivo' => 'indice no escribible'];
@@ -1035,7 +1045,7 @@ class PMU_Uploads
     public function indice_campos()
     {
         $ruta = $this->ruta_campos();
-        $vacio = ['version' => 2, 'items' => [], 'meta' => []];
+        $vacio = ['version' => 3, 'items' => [], 'meta' => []];
         if (!is_file($ruta)) {
             return $vacio;
         }
@@ -1054,11 +1064,17 @@ class PMU_Uploads
         return $vacio; // v1 sin migrar: lo convierte la migracion one-shot
     }
 
-    /** Guarda el indice v2 (atomico). Devuelve true/false. */
+    /**
+     * Guarda el indice (atomico). Devuelve true/false.
+     * v3 (spec 015): `items[].tipo` en vez de `plantilla`, y `meta` sin
+     * categorias. El LECTOR sigue aceptando `>= 2` a proposito: un indice v2
+     * que quedara por ahi se lee normal y sus campos salen sin tipo (''), en vez
+     * de disparar la migracion de v1 sobre una estructura que ya no lo es.
+     */
     public function guardar_indice_campos(array $indice)
     {
         return $this->escribir_json($this->ruta_campos(), [
-            'version' => 2,
+            'version' => 3,
             'items' => array_values($indice['items']),
             'meta' => isset($indice['meta']) && is_array($indice['meta']) ? $indice['meta'] : [],
         ]);
@@ -1076,8 +1092,11 @@ class PMU_Uploads
         return null;
     }
 
-    /** Actualiza meta.{id} (creado una vez; modificado = time(), el `?v=`). */
-    private function tocar_meta(array $indice, $id, ?array $categorias = null)
+    /**
+     * Actualiza meta.{id} (creado una vez; modificado = time(), el `?v=`).
+     * Spec 015 D9: `meta` ya no lleva categorias (el filtro por chips desaparece).
+     */
+    private function tocar_meta(array $indice, $id)
     {
         $k = (string)$id;
         $indice['meta'][$k] = [
@@ -1085,38 +1104,25 @@ class PMU_Uploads
                 ? $indice['meta'][$k]['creado']
                 : gmdate('Y-m-d\TH:i:s\Z'),
             'modificado' => time(),
-            'categorias' => $categorias !== null
-                ? array_values(array_unique($categorias))
-                : (isset($indice['meta'][$k]['categorias']) ? $indice['meta'][$k]['categorias'] : []),
         ];
         return $indice;
     }
 
-    /** Plantilla valida: imagen|select|texto|'' (cualquier otra -> ''). */
-    private function plantilla_valida($plantilla)
+    /**
+     * Tipo valido (spec 015 D10): `texto|imagen|opciones` (cualquier otra -> '').
+     * Antes esta funcion se llamaba `plantilla_valida` y aceptaba `select`, que
+     * es el mismo concepto con otro nombre: describia de donde salio el campo, no
+     * que es. Los tres son estructuralmente iguales (HTML + JS/CSS opcional y las
+     * mismas opciones); el tipo solo DECLARA para que se usa el `valor`.
+     */
+    private function tipo_valida($tipo)
     {
-        $p = strtolower(trim((string)$plantilla));
-        return in_array($p, ['imagen', 'select', 'texto'], true) ? $p : '';
+        $t = strtolower(trim((string)$tipo));
+        return in_array($t, ['texto', 'imagen', 'opciones'], true) ? $t : '';
     }
 
-    /** Categorias saneadas (minusculas, `-`, max 32) desde datos.json. */
-    private function categorias_de(array $datos)
-    {
-        $crudas = isset($datos['categorias'])
-            ? (is_array($datos['categorias']) ? $datos['categorias'] : explode(',', (string)$datos['categorias']))
-            : [];
-        $out = [];
-        foreach ($crudas as $c) {
-            $c = strtolower(trim(preg_replace('/[^a-z0-9_\-]+/i', '-', (string)$c), '-'));
-            if ($c !== '') {
-                $out[] = substr($c, 0, 32);
-            }
-        }
-        return array_values(array_unique($out));
-    }
-
-    /** Normaliza y acota los slots de `datos.json`. */
-    private function normalizar_datos_campo(array $datos, $plantilla = '')
+    /** Normaliza y acota los slots de `datos.json` (spec 015 D9: sin categorias). */
+    private function normalizar_datos_campo(array $datos, $tipo = '')
     {
         $corta = function ($v, $n) {
             $v = trim(strip_tags((string)$v));
@@ -1129,8 +1135,7 @@ class PMU_Uploads
             'texto_ayuda' => $corta(isset($datos['texto_ayuda']) ? $datos['texto_ayuda'] : '', 500),
             'array' => !empty($datos['array']),
             'protegido' => !empty($datos['protegido']),
-            'plantilla' => $this->plantilla_valida($plantilla),
-            'categorias' => $this->categorias_de($datos),
+            'tipo' => $this->tipo_valida($tipo),
             'cargador' => !empty($datos['cargador']) ? $datos['cargador'] : null,
         ];
     }
@@ -1138,23 +1143,22 @@ class PMU_Uploads
     /**
      * Alta de campo v2. `$datos` son los slots de `datos.json` (opcionales):
      * nombre, descripcion, titulo_cliente, texto_ayuda, array, protegido,
-     * categorias, cargador. `$plantilla` marca el origen (imagen|select|texto|'').
+     * cargador. `$tipo` declara para que se usa el `valor` (texto|imagen|opciones).
      * El **id es el hueco mas bajo libre** y los ids dados de baja NUNCA se
      * reutilizan (quedan en el indice con baja:true). Devuelve el id.
      */
-    public function campo_alta($plantilla = '', array $datos = [], $htm = '', $css = '', $js = '')
+    public function campo_alta($tipo = '', array $datos = [], $htm = '', $css = '', $js = '')
     {
         // Puente v1 (spec 012, T005): los llamadores legacy pasan la tupla de 10
         // slots como primer argumento. Se traduce aqui y se retira con el arnés
-        // en F1/F2. Firma v2 = ($plantilla, $datos, $htm, $css, $js).
-        if (is_array($plantilla)) {
-            $t = $plantilla;
-            $plantilla = '';
+        // en F1/F2. Firma v2 = ($tipo, $datos, $htm, $css, $js).
+        if (is_array($tipo)) {
+            $t = $tipo;
+            $tipo = '';
             $datos = [
                 'nombre' => isset($t[1]) ? (string)$t[1] : '',
                 'titulo_cliente' => isset($t[1]) ? (string)$t[1] : '',
                 'texto_ayuda' => isset($t[4]) ? (string)$t[4] : '',
-                'categorias' => isset($t[3]) ? (array)$t[3] : [],
                 'array' => !empty($t[9]),
             ];
             $htm = isset($t[6]) ? (string)$t[6] : '';
@@ -1172,9 +1176,9 @@ class PMU_Uploads
         while (isset($usados[$id])) {
             $id++;
         }
-        $datos = $this->normalizar_datos_campo($datos, $plantilla);
-        $indice['items'][] = ['id' => $id, 'plantilla' => $datos['plantilla'], 'baja' => false];
-        $indice = $this->tocar_meta($indice, $id, $datos['categorias']);
+        $datos = $this->normalizar_datos_campo($datos, $tipo);
+        $indice['items'][] = ['id' => $id, 'tipo' => $datos['tipo'], 'baja' => false];
+        $indice = $this->tocar_meta($indice, $id);
         if (!$this->guardar_indice_campos($indice) || !$this->escribir_campo($id, $datos, $htm, $css, $js)) {
             throw new Exception('motor:alta:directorio:no_escribible');
         }
@@ -1200,8 +1204,8 @@ class PMU_Uploads
         }
         unset($f);
         if (!$hubo) {
-            $indice['items'][] = ['id' => $id, 'plantilla' => '', 'baja' => true];
-            $indice = $this->tocar_meta($indice, $id, []);
+            $indice['items'][] = ['id' => $id, 'tipo' => '', 'baja' => true];
+            $indice = $this->tocar_meta($indice, $id);
         }
         if (!$this->guardar_indice_campos($indice)) {
             throw new Exception('motor:baja:directorio:no_escribible');
@@ -1223,7 +1227,6 @@ class PMU_Uploads
                 'nombre' => isset($t[1]) ? (string)$t[1] : '',
                 'titulo_cliente' => isset($t[1]) ? (string)$t[1] : '',
                 'texto_ayuda' => isset($t[4]) ? (string)$t[4] : '',
-                'categorias' => isset($t[3]) ? (array)$t[3] : [],
                 'array' => !empty($t[9]),
             ];
             $htm = isset($t[6]) ? (string)$t[6] : '';
@@ -1236,8 +1239,8 @@ class PMU_Uploads
         if ($fila === null) {
             throw new Exception('motor:editar:campo:inexistente:' . $id);
         }
-        $datos = $this->normalizar_datos_campo($datos, isset($fila['plantilla']) ? $fila['plantilla'] : '');
-        $indice = $this->tocar_meta($indice, $id, $datos['categorias']);
+        $datos = $this->normalizar_datos_campo($datos, isset($fila['tipo']) ? $fila['tipo'] : '');
+        $indice = $this->tocar_meta($indice, $id);
         if (!$this->guardar_indice_campos($indice) || !$this->escribir_campo($id, $datos, $htm, $css, $js)) {
             throw new Exception('motor:editar:directorio:no_escribible');
         }
@@ -1287,34 +1290,12 @@ class PMU_Uploads
             $datos['nombre'] .= ' (copia)';
         }
         return $this->campo_alta(
-            isset($datos['plantilla']) ? $datos['plantilla'] : '',
+            isset($datos['tipo']) ? $datos['tipo'] : '',
             $datos,
             $origen['htm'],
             $origen['css'],
             $origen['js']
         );
-    }
-
-    /** Marca (o desmarca con '') un campo como plantilla reutilizable. */
-    public function campo_plantilla($id, $plantilla)
-    {
-        $id = $this->campo_id_seguro($id, 'plantilla');
-        $indice = $this->indice_campos();
-        $hubo = false;
-        foreach ($indice['items'] as &$f) {
-            if (isset($f['id']) && (int) $f['id'] === $id) {
-                $f['plantilla'] = $this->plantilla_valida($plantilla);
-                $hubo = true;
-            }
-        }
-        unset($f);
-        if (!$hubo) {
-            throw new Exception('motor:plantilla:campo:inexistente:' . $id);
-        }
-        if (!$this->guardar_indice_campos($indice)) {
-            throw new Exception('motor:plantilla:directorio:no_escribible');
-        }
-        return true;
     }
 
     /**
@@ -1337,13 +1318,14 @@ class PMU_Uploads
             $meta = isset($indice['meta'][(string)$id]) ? $indice['meta'][(string)$id] : [];
             $salida[$id] = [
                 'id' => $id,
-                'plantilla' => isset($f['plantilla']) ? $f['plantilla'] : '',
+                // Un indice v2Trayendo `plantilla` cae en '' (campo sin tipo), no
+                // rompe: se lee normal, solo queda sin declarar (arranque limpio).
+                'tipo' => isset($f['tipo']) ? $f['tipo'] : '',
                 'baja' => $baja,
                 'datos' => $datos,
                 'htm' => $campo !== null ? $campo['htm'] : '',
                 'css' => $campo !== null ? $campo['css'] : '',
                 'js' => $campo !== null ? $campo['js'] : '',
-                'categorias' => isset($meta['categorias']) ? $meta['categorias'] : [],
                 'creado' => isset($meta['creado']) ? $meta['creado'] : '',
                 'modificado' => isset($meta['modificado']) ? (int) $meta['modificado'] : 0,
             ];

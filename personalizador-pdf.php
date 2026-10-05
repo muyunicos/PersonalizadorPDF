@@ -65,7 +65,7 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_campo', [$this, 'handle_campo_guardar']);
         add_action('admin_post_personalizador_pdf_campo_baja', [$this, 'handle_campo_baja']);
         add_action('admin_post_personalizador_pdf_campo_restaurar', [$this, 'handle_campo_restaurar']);
-        add_action('admin_post_personalizador_pdf_campo_plantilla', [$this, 'handle_campo_plantilla']);
+        // `campo_plantilla` salio en la spec 015 (D10): la estrella dejo de existir.
         add_action('admin_post_personalizador_pdf_campo_duplicar', [$this, 'handle_campo_duplicar']);
         add_action('admin_post_personalizador_pdf_campo_global', [$this, 'handle_campo_global']);
         add_action('admin_post_personalizador_pdf_config', [$this, 'handle_config_guardar']);
@@ -2559,19 +2559,8 @@ class Personalizador_PDF_Plugin
             $t = trim(strip_tags((string)$t));
             return function_exists('mb_substr') ? mb_substr($t, 0, $n, 'UTF-8') : substr($t, 0, $n);
         };
-        // Categorias (antes "etiquetas"): admiten lista o CSV.
-        $categorias = [];
-        $crudas = isset($fuente['categorias'])
-            ? (is_array($fuente['categorias']) ? $fuente['categorias'] : explode(',', (string)$fuente['categorias']))
-            : (isset($fuente['etiquetas'])
-                ? (is_array($fuente['etiquetas']) ? $fuente['etiquetas'] : explode(',', (string)$fuente['etiquetas']))
-                : []);
-        foreach ($crudas as $c) {
-            $c = strtolower(trim(preg_replace('/[^a-z0-9_\-]+/i', '-', (string)$c), '-'));
-            if ($c !== '') {
-                $categorias[] = substr($c, 0, 32);
-            }
-        }
+        // Spec 015 D9: las categorias se fueron del formato (el filtro por chips
+        // desaparece con ellas). No hay nada que sanear aca.
         // El cargador llega como JSON (UI) o como texto con los atajos del admin.
         $cargador = null;
         $crudoCargador = $leer('cargador');
@@ -2589,7 +2578,6 @@ class Personalizador_PDF_Plugin
                 'texto_ayuda' => $corta($leer('texto_ayuda'), 500),
                 'array' => !empty($fuente['array']),
                 'protegido' => !empty($fuente['protegido']),
-                'categorias' => array_values(array_unique($categorias)),
                 'cargador' => $cargador,
             ],
             // `html` es el nombre nuevo; `contenido` sigue aceptandose (UI v1).
@@ -2700,7 +2688,9 @@ class Personalizador_PDF_Plugin
      * slots, **adaptador transitorio** del formato v2 (spec 012, T005). El
      * almacenamiento ya es v2; la tupla se conserva para no romper
      * `campos_panel()` ni `admin/campos.php`, que la adoptan en F1/F2.
-     * Slot 2 = plantilla de origen. Avisa si el catalogo sigue en v1.
+     * Slot 2 = tipo del campo (spec 015; antes era la plantilla de origen). El
+     * slot 3 (`etiquetas`) queda vacio: las categorias se fueron del formato (D9).
+     * Avisa si el catalogo sigue en v1.
      * @return array [id => tupla, aviso|null]
      */
     private function campos_activos()
@@ -2722,8 +2712,8 @@ class Personalizador_PDF_Plugin
             $out[(int)$id] = [
                 (int)$id,
                 isset($d['titulo_cliente']) ? (string) $d['titulo_cliente'] : '',
-                $c['plantilla'] !== '' ? $c['plantilla'] : 'texto',
-                $c['categorias'],
+                $c['tipo'] !== '' ? $c['tipo'] : 'texto',
+                [],
                 isset($d['texto_ayuda']) ? (string) $d['texto_ayuda'] : '',
                 true,
                 $c['htm'],
@@ -2755,16 +2745,18 @@ class Personalizador_PDF_Plugin
     {
         $this->seguridad('personalizador_pdf_campo');
         $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
-        // La plantilla solo aplica al alta; en edicion manda la del indice.
-        $plantilla = isset($_POST['plantilla']) ? (string) $_POST['plantilla'] : '';
+        // El tipo solo aplica al ALTA (llena el formulario con su plantilla por
+        // defecto); en edicion manda el del indice, asi que no se cambia sobre la
+        // marcha. Spec 015 D10.
+        $tipo = isset($_POST['tipo']) ? (string) $_POST['tipo'] : '';
         try {
             $c = $this->campo_desde_post($_POST);
             if ($id > 0) {
                 $this->pmu_uploads()->campo_editar($id, $c['datos'], $c['htm'], $c['css'], $c['js']);
             } else {
-                // Alta desde plantilla: si el POST no trae codigo propio, la
-                // plantilla deja el formulario preparado (T015/D5).
-                $base = $this->plantilla_campo($plantilla);
+                // Alta desde el tipo: si el POST no trae codigo propio, la plantilla
+                // de ese tipo deja el formulario preparado (T015/D5).
+                $base = $this->plantilla_campo($tipo);
                 if ($c['htm'] === '') {
                     $c['htm'] = $base['htm'];
                     $c['css'] = $base['css'];
@@ -2773,7 +2765,7 @@ class Personalizador_PDF_Plugin
                         $c['datos']['cargador'] = $base['cargador'];
                     }
                 }
-                $id = $this->pmu_uploads()->campo_alta($plantilla, $c['datos'], $c['htm'], $c['css'], $c['js']);
+                $id = $this->pmu_uploads()->campo_alta($tipo, $c['datos'], $c['htm'], $c['css'], $c['js']);
             }
         } catch (\Throwable $e) {
             $this->responder(false, [], $e->getMessage());
@@ -2783,7 +2775,6 @@ class Personalizador_PDF_Plugin
             'campo' => $guardado,
             'html' => $guardado ? $this->fila_campo_html($id, $guardado) : '',
             'form' => $guardado ? $this->form_campo_html($id, $guardado, esc_url(admin_url('admin-post.php')),
-                implode(',', $guardado['categorias']),
                 !empty($guardado['datos']['cargador']) ? wp_json_encode($guardado['datos']['cargador']) : '') : '']);
     }
 
@@ -2815,16 +2806,86 @@ JS;
                 'js' => $espejo,
                 'cargador' => null,
             ];
-        case 'select':
+        case 'opciones':
+            // Spec 015 T011 / FR-010. La diferencia con `texto` NO es el HTML:
+            // los tres tipos usan la misma estructura (HTML + JS/CSS opcional).
+            // Lo que cambia es QUE DEVUELVE el campo: aca el `valor` es el objeto
+            // de overrides de TextMuy serializado, que el render parsea y fusiona
+            // sobre el preset del hueco (`items[].overrides`).
+            $htmOpciones = <<<'HTML'
+<p class="pmu-et">Elegi el diseno:</p>
+<div class="pmu-opciones" data-pmu-opciones></div>
+HTML;
+            $cssOpciones = <<<'CSS'
+.pmu-opciones{display:flex;flex-wrap:wrap;gap:8px}
+.pmu-opciones-btn{padding:8px 12px;border:2px solid #999;border-radius:6px;
+    background:#fff;cursor:pointer}
+.pmu-opciones-btn[aria-pressed="true"]{border-color:#2271b1;background:#eaf3fb}
+CSS;
+            $jsOpciones = <<<'JS'
+function (ctx, root) {
+    /* PLANTILLA "Opciones (Overrides)" — solo edita la lista OPCIONES, que esta
+     * aca adentro porque el sandbox del servidor exige que el campo.js empiece
+     * con `function` (ver validar_script_campo).
+     *
+     * Que es este tipo: el `valor` que devuelve el campo NO es un texto para
+     * imprimir, es un OBJETO DE OVERRIDES de TextMuy serializado. El render lo
+     * parsea (JSON.parse) y lo fusiona sobre el preset del hueco, asi que lo que
+     * el cliente elige termina siendo el estilo del PDF.
+     *
+     * Las claves son las de TextMuy (fill / outline / shadow / icon / background /
+     * ...): copialas de la galeria de estilos. Los ids de imagen son los numeros
+     * de `uploads/pmu/img/img.json`.
+     *
+     * OJO: el `valor` es SIEMPRE un string. Si lo mandas como objeto, el PDF
+     * muestra literalmente "[object Object]" (ver AGENTS.md seccion 11). */
+    var OPCIONES = [
+        {
+            cliente: 'Diseno: Alegre',
+            overrides: {
+                shadow: { outer: { active: true, size: 0.18, strength: 0.75, angle: 90 } }
+            }
+        },
+        {
+            cliente: 'Diseno: Nocturno',
+            overrides: {
+                shadow: { outer: { active: true, size: 0.32, strength: 0.50, angle: 0 } }
+            }
+        }
+    ];
+
+    var caja = root.querySelector('[data-pmu-opciones]');
+    if (!caja) { return; }
+    var botones = [];
+
+    function publicar(i) {
+        var op = OPCIONES[i] || {};
+        ctx.set(ctx.id, {
+            valor: JSON.stringify(op.overrides || {}),
+            cliente: op.cliente || ''
+        });
+        botones.forEach(function (b, n) {
+            b.setAttribute('aria-pressed', n === i ? 'true' : 'false');
+        });
+    }
+
+    OPCIONES.forEach(function (op, i) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'pmu-opciones-btn';
+        b.textContent = op.cliente || ('Opcion ' + (i + 1));
+        b.addEventListener('click', function () { publicar(i); });
+        caja.appendChild(b);
+        botones.push(b);
+    });
+
+    publicar(0); // valor inicial: el campo nunca queda vacio
+}
+JS;
             return [
-                'htm' => "<label class=\"pmu-et\">Elegi una opcion</label>\n"
-                    . "<select data-rol=\"valor\">\n"
-                    . "    <option value=\"\">(elegi...)</option>\n"
-                    . "    <option value=\"opcion-1\">Opcion 1</option>\n"
-                    . "    <option value=\"opcion-2\">Opcion 2</option>\n"
-                    . "</select>",
-                'css' => '',
-                'js' => $espejo,
+                'htm' => $htmOpciones,
+                'css' => $cssOpciones,
+                'js' => $jsOpciones,
                 'cargador' => null,
             ];
         case 'imagen':
@@ -2850,20 +2911,6 @@ JS;
     return $vacío;
 }
 
-    /** Marca o desmarca un campo como plantilla reutilizable (T016). */
-    public function handle_campo_plantilla()
-    {
-        $this->seguridad('personalizador_pdf_campo');
-        $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
-        $plantilla = isset($_POST['plantilla']) ? (string) $_POST['plantilla'] : '';
-        try {
-            $this->pmu_uploads()->campo_plantilla($id, $plantilla);
-        } catch (\Throwable $e) {
-            $this->responder(false, [], $e->getMessage());
-        }
-        $this->responder(true, ['id' => $id, 'campo' => $this->campo_guardado($id)]);
-    }
-
     /** Duplica un campo a un id NUEVO (T016). */
     public function handle_campo_duplicar()
     {
@@ -2878,7 +2925,6 @@ JS;
         $this->responder(true, ['id' => $nuevo, 'campo' => $guardado,
             'html' => $guardado ? $this->fila_campo_html($nuevo, $guardado) : '',
             'form' => $guardado ? $this->form_campo_html($nuevo, $guardado, esc_url(admin_url('admin-post.php')),
-                implode(',', $guardado['categorias']),
                 !empty($guardado['datos']['cargador']) ? wp_json_encode($guardado['datos']['cargador']) : '') : '']);
     }
 
@@ -2928,20 +2974,35 @@ JS;
         // aca: sin esto el action queda vacio y el POST se va a la pagina actual
         // en vez de a admin-post.php (la baja deja de funcionar).
         $post = esc_url(admin_url('admin-post.php'));
-        $cats = implode(',', $c['categorias']);
         $cargador = !empty($d['cargador']) ? wp_json_encode($d['cargador']) : '';
+        $tipo = isset($c['tipo']) ? (string) $c['tipo'] : '';
         ob_start();
         ?>
-                <tr data-id="<?php echo (int)$cid; ?>" data-plantilla="<?php echo esc_attr($c['plantilla']); ?>"
+                <tr data-id="<?php echo (int)$cid; ?>" data-tipo="<?php echo esc_attr($tipo); ?>"
                     data-modificado="<?php echo (int)$c['modificado']; ?>"
                     data-creado="<?php echo esc_attr($c['creado']); ?>"
-                    data-cats="<?php echo esc_attr(strtolower(implode('|', $c['categorias']))); ?>"
-                       data-cargador="<?php echo esc_attr($cargador); ?>">
+                    data-cargador="<?php echo esc_attr($cargador); ?>">
                     <td><strong><?php echo (int)$cid; ?></strong></td>
-                    <td class="ec-c-nombre"><?php echo esc_html($d['nombre'] !== '' ? $d['nombre'] : '(sin nombre)'); ?></td>
-                    <td class="ec-c-titulo"><?php echo esc_html($d['titulo_cliente'] !== '' ? $d['titulo_cliente'] : '(vacio)'); ?></td>
-                    <td class="ec-c-cats"><?php echo esc_html($c['categorias'] ? implode(', ', $c['categorias']) : '-'); ?></td>
-                    <td><code class="ec-c-plantilla"><?php echo esc_html($c['plantilla'] !== '' ? $c['plantilla'] : '-'); ?></code></td>
+                    <td class="ec-c-nombre">
+                        <?php // Misma estructura que arma `pintarFila()` en el JS: si
+                              // divergieran, una fila pintada y una del alta se
+                              // verian distinto (y los tests no podrian leerlas
+                              // con el mismo selector). ?>
+                        <span class="ec-c-nombre-txt"><?php echo esc_html($d['nombre'] !== '' ? $d['nombre'] : '(sin nombre)'); ?></span>
+                        <?php // El titulo al comprador y la nota interna no ocupan columna
+                              // propia: van debajo del nombre (spec 015 T006), asi se
+                              // ve de un vistazo que ve el cliente y para que sirve. ?>
+                        <?php if ($d['titulo_cliente'] !== '' || $d['descripcion'] !== '') : ?>
+                            <span class="ec-c-sub">
+                                <?php $pie = array_filter([
+                                    $d['titulo_cliente'] !== '' ? 'Cliente: ' . $d['titulo_cliente'] : '',
+                                    $d['descripcion'] !== '' ? $d['descripcion'] : '',
+                                ]); ?>
+                                <?php echo esc_html(implode(' · ', $pie)); ?>
+                            </span>
+                        <?php endif; ?>
+                    </td>
+                    <td><code class="ec-c-tipo"><?php echo esc_html($tipo !== '' ? $tipo : '-'); ?></code></td>
                     <td class="ec-c-uso" title="<?php
                             $detalle = [];
                             if (!empty($c['usado_en'])) {
@@ -2958,16 +3019,10 @@ JS;
                             }
                         ?></td>
                     <td class="ec-c-acciones">
-                        <?php
-                        $esTpl = $c['plantilla'] !== '';
-                        $marca = $esTpl
-                            ? 'dashicons-star-filled' : 'dashicons-star-empty';
-                        $tMarca = $esTpl
-                            ? 'Quitar la marca de plantilla' : 'Marcar como plantilla reutilizable';
-                        ?>
-                        <?php /* Iconos del core (dashicons): cinco botones de texto
+                        <?php /* Iconos del core (dashicons): los botones de texto
                                pesan mas que toda la fila. El title/aria-label
-                               queda siempre, y el texto va a screen-reader. */ ?>
+                               queda siempre, y el texto va a screen-reader. La
+                               estrella salio en la spec 015 (D10). */ ?>
                         <button type="button" class="button button-small ec-editar"
                             title="Editar el campo" aria-label="Editar el campo">
                             <span class="dashicons dashicons-edit" aria-hidden="true"></span>
@@ -2977,12 +3032,6 @@ JS;
                             title="Ver como lo vera el comprador" aria-label="Ver como lo vera el comprador">
                             <span class="dashicons dashicons-visibility" aria-hidden="true"></span>
                             <span class="screen-reader-text">Probar</span>
-                        </button>
-                        <button type="button" class="button button-small ec-marcar"
-                            aria-pressed="<?php echo $esTpl ? 'true' : 'false'; ?>"
-                            title="<?php echo esc_attr($tMarca); ?>" aria-label="<?php echo esc_attr($tMarca); ?>">
-                            <span class="dashicons <?php echo $marca; ?>" aria-hidden="true"></span>
-                            <span class="screen-reader-text">Plantilla</span>
                         </button>
                         <button type="button" class="button button-small ec-duplicar"
                             title="Crear una copia con un id nuevo" aria-label="Duplicar el campo">
@@ -3019,9 +3068,11 @@ JS;
      * `form`), para que el navegador inserte exactamente lo mismo que el
      * servidor.
      */
-    public function form_campo_html($cid, array $c, $post, $cats, $cargador)
+    public function form_campo_html($cid, array $c, $post, $cargador)
     {
         $d = $c['datos'];
+        $tipo = isset($c['tipo']) ? (string) $c['tipo'] : '';
+        $etiquetas = ['texto' => 'Texto', 'imagen' => 'Imagen', 'opciones' => 'Opciones (Overrides)'];
         ob_start();
         ?>
                 <div class="ec-campo-form" data-form="<?php echo (int)$cid; ?>" hidden>
@@ -3030,6 +3081,28 @@ JS;
                         <input type="hidden" name="id" value="<?php echo (int)$cid; ?>">
                         <?php wp_nonce_field('personalizador_pdf_campo'); ?>
                         <table class="form-table">
+                                <tr><th><label>Tipo</label></th>
+                                    <td>
+                                        <?php // Solo lectura (spec 015 D10): el tipo se elige
+                                              // al crear y define la plantilla con la que se
+                                              // lleno el formulario. Cambiarlo despues dejaria
+                                              // el HTML y el cargador fuera de lo que el tipo
+                                              // dice. ?>
+                                        <strong><?php echo esc_html($tipo !== '' ? $tipo : 'sin tipo'); ?></strong>
+                                        <?php if ($tipo !== '') : ?>
+                                            <span class="description"><?php echo esc_html($etiquetas[$tipo] ?? $tipo); ?>.
+                                                <?php
+                                                echo $tipo === 'opciones'
+                                                    ? ' Su <code>valor</code> es un objeto de overrides de TextMuy en JSON, y va en <code>settings</code>, no en <code>value</code>.'
+                                                    : ($tipo === 'imagen'
+                                                        ? ' Su <code>valor</code> son los ids de las fotos que sube el comprador.'
+                                                        : ' Su <code>valor</code> es texto y va en <code>value</code>.');
+                                                ?>
+                                            </span>
+                                        <?php else : ?>
+                                            <span class="description">Este campo se creo sin tipo (indice anterior a la v3): elige uno al duplicarlo.</span>
+                                        <?php endif; ?>
+                                    </td></tr>
                                 <tr><th><label>Nombre</label></th>
                                     <td><input name="nombre" class="regular-text" value="<?php echo esc_attr($d['nombre']); ?>">
                                         <p class="description">Como lo ves vos en esta consola.</p></td></tr>
@@ -3039,9 +3112,6 @@ JS;
                                 <tr><th><label>Descripcion</label></th>
                                     <td><input name="descripcion" class="regular-text" value="<?php echo esc_attr($d['descripcion']); ?>">
                                         <p class="description">Nota interna; no la ve el comprador.</p></td></tr>
-                                <tr><th><label>Categorias</label></th>
-                                    <td><input name="categorias" class="regular-text" value="<?php echo esc_attr($cats); ?>">
-                                        <p class="description">Separadas por coma.</p></td></tr>
                                 <tr><th>Opciones</th>
                                     <td>
                                         <label><input type="checkbox" name="array" value="1" <?php checked(!empty($d['array']), true); ?>> Array (un valor por instancia)</label><br>
@@ -3086,7 +3156,6 @@ JS;
         $salida = '';
         foreach ($campos as $cid => $c) {
             $salida .= $this->form_campo_html($cid, $c, $post,
-                implode(',', $c['categorias']),
                 !empty($c['datos']['cargador']) ? wp_json_encode($c['datos']['cargador']) : '');
         }
         return $salida;
@@ -3226,6 +3295,63 @@ JS;
         $this->responder(true, ['mockups' => count($mockups)]);
     }
 
+    /**
+     * Aviso de cableado (spec 015 T010 / FR-008): el tipo del campo DECLARA para
+     * que se usa su `valor`, y el cableado (`value` vs `settings`) tiene que
+     * coincidir. Si un campo declarado `opciones` aparece en `value` de un
+     * placeholder `texto`, su JSON serializado terminaria impreso como texto en
+     * el PDF. Este aviso no bloquea (el PDF se guarda igual): solo deja constancia
+     * del desajuste antes de procesar.
+     *
+     * @param array $placeholders Mapeos ya saneados (gid => [tipo,value,settings]).
+     * @param array $tiposCampo   id => tipo (`campo_listar()` con bajas).
+     * @return string[] Avisos legibles, vacio si todo cuadra.
+     */
+    public function avisos_cableado(array $placeholders, array $tiposCampo)
+    {
+        $avisos = [];
+        foreach ($placeholders as $gid => $m) {
+            if (!is_array($m)) {
+                continue;
+            }
+            $tipoPh = isset($m['tipo']) ? (string) $m['tipo'] : 'texto';
+            $porDestino = ['value' => [], 'settings' => []];
+            foreach (['value', 'settings'] as $destino) {
+                $txt = isset($m[$destino]) ? (string) $m[$destino] : '';
+                if (!preg_match_all('/\[campo(\d+)\]/', $txt, $mm)) {
+                    continue;
+                }
+                foreach ($mm[1] as $crudo) {
+                    $cid = (int) $crudo;
+                    if ($cid > 0 && !in_array($cid, $porDestino[$destino], true)) {
+                        $porDestino[$destino][] = $cid;
+                    }
+                }
+            }
+            // `opciones` en `value` de un placeholder `texto`: su JSON
+            // serializado (p. ej. `{"shadow":...}`) se imprimiria como texto.
+            if ($tipoPh === 'texto') {
+                foreach ($porDestino['value'] as $cid) {
+                    $t = isset($tiposCampo[$cid]) ? (string) $tiposCampo[$cid] : '';
+                    if ($t === 'opciones') {
+                        $avisos[] = 'El campo ' . $cid . ' es tipo `opciones` pero aparece en '
+                            . '`value` del hueco ' . $gid . '; si buscabas su estilo, va en `settings`.';
+                    }
+                }
+            }
+            // `texto`/`imagen` en `settings`: `settings` solo admite referencias
+            // a campos `opciones` (FR-001). Cualquier otro tipo se ignora al fusionar.
+            foreach ($porDestino['settings'] as $cid) {
+                $t = isset($tiposCampo[$cid]) ? (string) $tiposCampo[$cid] : '';
+                if ($t !== '' && $t !== 'opciones') {
+                    $avisos[] = 'El campo ' . $cid . ' es tipo `' . $t . '` pero aparece en '
+                        . '`settings` del hueco ' . $gid . '; solo los campos `opciones` se fusionan.';
+                }
+            }
+        }
+        return array_values(array_unique($avisos));
+    }
+
     /** Guarda el config.json de un PDF (activo, productos, campos, mapeos). */
     public function handle_config_guardar()
     {
@@ -3311,7 +3437,21 @@ JS;
         if (!$ok) {
             $this->responder(false, [], 'No se pudo guardar la configuracion.');
         }
-        $this->responder(true);
+        // FR-008: el tipo DECLARA, el cableado decide. Si un `opciones` cayo en
+        // `value` o un `texto`/`imagen` en `settings`, se avisa con causa pero no
+        // se bloquea: el admin puede estar probando algo a proposito.
+        $avisosCable = [];
+        try {
+            $listaCampos = $this->pmu_uploads()->campo_listar(true);
+            $tiposCampo = [];
+            foreach ($listaCampos as $cid => $filaC) {
+                $tiposCampo[(int)$cid] = isset($filaC['tipo']) ? (string) $filaC['tipo'] : '';
+            }
+            $avisosCable = $this->avisos_cableado($placeholders, $tiposCampo);
+        } catch (\Throwable $e) {
+            $avisosCable = [];
+        }
+        $this->responder(true, ['avisos_cableado' => $avisosCable]);
     }
 
     /**

@@ -327,8 +327,10 @@
 }
 .ec-campos-tabla td.ec-c-acciones .button .screen-reader-text { position: absolute; }
 .ec-campos-tabla td.ec-c-acciones .button-link-delete .dashicons { color: #b32d2e; }
-.ec-campos-tabla td.ec-c-acciones .ec-marcar[aria-pressed="true"] .dashicons { color: #dba617; }
 .ec-campos-tabla tr.ec-editando { background: #f0f6fc; }
+/* El titulo al comprador y la nota interna van debajo del nombre (spec 015 T006). */
+.ec-campos-tabla .ec-c-nombre-txt { display: block; font-weight: 600; }
+.ec-campos-tabla .ec-c-sub { display: block; color: #646970; font-size: 12px; }
 
 /* Drawer del editor (spec 013, T003): la lista queda a pantalla completa y el
    formulario entra aparte, con ancho para el HTML/CSS/JS (antes iban dentro de
@@ -414,9 +416,6 @@ body.ec-c-drawer-abierto { overflow: hidden; }
 .ec-c-filtros { margin: 8px 0 12px; }
 .ec-c-filtros p { margin: 0 0 8px; }
 .ec-c-buscar { width: 100%; max-width: 420px; }
-.ec-chips .description { margin-right: 6px; }
-.ec-chip-cat.is-on { background: #2271b1; border-color: #2271b1; color: #fff; }
-.ec-chip-n { font-size: 10px; opacity: .8; margin-left: 4px; }
 .ec-c-orden-sel { margin-left: 6px; }
 .ec-c-conteo { margin-left: 10px; color: #646970; font-size: 12px; }
 /* Fotos del mockup: lista con miniatura (editor de capas "Foto"). */
