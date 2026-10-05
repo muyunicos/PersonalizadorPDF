@@ -757,6 +757,20 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             }
             check('PNG fisico con firma valida', isset($GLOBALS['test_pool_item']) && substr((string)@file_get_contents($dirSes_p . '/img/' . basename((string)($fila_p['file'] ?? 'x'))), 0, 8) === "\x89PNG\r\n\x1a\n");
             break;
+        case 'invitado':
+            // Spec 014 (FR-001): sin cuenta, el flujo del comprador tiene que
+            // funcionar igual. Antes `current_user_can('read')` lo frenaba.
+            $dInv = isset($GLOBALS['test_json']) ? $GLOBALS['test_json'] : [];
+            check('un INVITADO (sin cuenta) puede subir al pool',
+                !empty($dInv['success']), json_encode($dInv));
+            break;
+        case 'invitado_ajeno':
+            // Spec 014 (FR-003): el `sid` del POST no es la identidad.
+            $dAjeno = isset($GLOBALS['test_json']) ? $GLOBALS['test_json'] : [];
+            check('el item de OTRA sesion se rechaza',
+                empty($dAjeno['success']) && ($dAjeno['data'] ?? '') === 'motor:sesion:item:ajeno',
+                json_encode($dAjeno));
+            break;
         case 'validez':
             // Spec 005 (T001-T003/T005): multivinculo + tienda{} + saneado.
             $val = isset($GLOBALS['test_validez']) ? $GLOBALS['test_validez'] : null;
@@ -1437,6 +1451,10 @@ switch ($fase) {
         $sesion_p = new PMU_Sesion($p->motor_para_tests());
         $sid_p = 'test-8f2a';
         $draft_p = $sesion_p->crear_draft($sid_p, ['muestra']);
+        // Spec 014: la identidad del comprador es la COOKIE de sesion, no el
+        // `sid` del POST. Sin fijarla, `sid_actual()` emite otra y el item
+        // rightful se ve ajeno.
+        $_COOKIE[PMU_Sesion::COOKIE] = $sid_p;
         if ($fase === 'pool_reem') {
             // Estado previo: 2 PNG del grupo (regeneracion debe reemplazar, no acumular).
             $pngP = sys_get_temp_dir() . '/pd_puente_png_' . getmypid() . '_a.png';
@@ -1465,6 +1483,68 @@ switch ($fase) {
         $_REQUEST = $_POST;
         $GLOBALS['test_pool_item'] = $draft_p;
         $p->handle_pool_png(); // exit en wp_send_json_*
+        break;
+
+    case 'invitado':
+        // Spec 014 (FR-001/FR-002): el comprador puede ser un INVITADO. Con
+        // checkout sin cuenta (el default de WooCommerce) `current_user_can` es
+        // false y el flujo tiene que funcionar igual: la identidad es la cookie
+        // `pmu_sid`, no la cuenta de WordPress.
+        putenv('PD_PUENTE_SIN_CAP=1'); // sin cuenta
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $sesion_i = new PMU_Sesion($p->motor_para_tests());
+        $sid_i = 'test-invitado';
+        $draft_i = $sesion_i->crear_draft($sid_i, ['muestra']);
+        $_COOKIE[PMU_Sesion::COOKIE] = $sid_i;
+        $pngI = sys_get_temp_dir() . '/pd_puente_inv_' . getmypid() . '.png';
+        \ExtractCorel\Engine\PngWriter::write($pngI, 300, 200);
+        $_POST = [
+            'action' => 'personalizador_pdf_pool',
+            'sid' => $sid_i,
+            'item_key' => $draft_i,
+            'pdf' => 'muestra',
+            'grupo' => '0000FF',
+            'valor' => 'Ana',
+            'preset' => 'neon-glow',
+            'settings' => '',
+            'w' => '300',
+            'h' => '200',
+            'png_data' => 'data:image/png;base64,' . base64_encode((string)file_get_contents($pngI)),
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_pool_png(); // exit en wp_send_json_*
+        break;
+
+    case 'invitado_ajeno':
+        // Spec 014 (FR-003): el `sid` del POST NO es la identidad. Con la cookie
+        // en la sesion propia y un `item_key` de otra, se rechaza: sin esto,
+        // cualquier visitante (el nonce es publico) podria escribir en la sesion
+        // de otro con solo acertar el UUID y el item.
+        putenv('PD_PUENTE_SIN_CAP=1');
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $sesion_j = new PMU_Sesion($p->motor_para_tests());
+        $ajeno = $sesion_j->crear_draft('test-ajeno', ['muestra']); // OTRA sesion
+        $_COOKIE[PMU_Sesion::COOKIE] = 'test-invitado';            // la mia
+        $pngJ = sys_get_temp_dir() . '/pd_puente_ajeno_' . getmypid() . '.png';
+        \ExtractCorel\Engine\PngWriter::write($pngJ, 300, 200);
+        $_POST = [
+            'action' => 'personalizador_pdf_pool',
+            'sid' => 'test-ajeno',   // el del POST no manda
+            'item_key' => $ajeno,
+            'pdf' => 'muestra',
+            'grupo' => '0000FF',
+            'png_data' => 'data:image/png;base64,' . base64_encode((string)file_get_contents($pngJ)),
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_pool_png(); // exit en wp_send_json_error
         break;
 
     case 'validez':

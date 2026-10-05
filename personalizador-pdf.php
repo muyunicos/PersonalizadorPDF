@@ -1096,15 +1096,45 @@ class Personalizador_PDF_Plugin
      * {sid, item_key, pdfs, mockups[]} al navegador. Anonimo permitido (cookie
      * pmu_sid); el nonce frena CSRF y la capacidad se evalua explicitamente.
      */
+    /**
+     * Autoriza un request del COMPRADOR (spec 014, FR-001).
+     *
+     * NO exige `current_user_can('read')`: con checkout sin cuenta —el default
+     * de WooCommerce— el invitado tiene que poder armar el pedido entero. Ese
+     * `read` era el motivo por el que el flujo completo (vista previa, pool y
+     * fotos) no le funcionaba a nadie sin cuenta.
+     *
+     * La identidad es la COOKIE `pmu_sid` (httponly, SameSite=Lax, 30 dias; la
+     * emite `PMU_Sesion::sid_actual()`), **nunca** el `sid` que manda el
+     * navegador: aceptar el del POST dejaria escribir y leer en la sesion de otro
+     * comprador con solo el nonce (que es publico: va impreso en la ficha). Por
+     * eso el `sid` del POST se ignora y se usa siempre el de la cookie.
+     *
+     * Con `item_key` no vacio el item tiene que existir bajo ESE sid: si no,
+     * un `item_key` inventado crearia carpetas nuevas.
+     *
+     * @return string El sid verificado (el de la cookie).
+     */
+    private function sesion_del_comprador()
+    {
+        $sesion = $this->sesion();
+        $sid = $sesion->sid_actual();
+        $item = isset($_POST['item_key'])
+            ? sanitize_text_field(wp_unslash((string)$_POST['item_key'])) : '';
+        if ($item !== '' && !is_array($sesion->leer_manifest($sid, $item))) {
+            wp_send_json_error('motor:sesion:item:ajeno');
+        }
+        return $sid;
+    }
+
     public function handle_vista_previa()
     {
-        if (!current_user_can('read')) {
-            wp_send_json_error('motor:capacidad:invalida');
-        }
         $nonce = (string)($_REQUEST['_wpnonce'] ?? '');
         if (!wp_verify_nonce($nonce, 'personalizador_pdf_vista_previa')) {
             wp_send_json_error('motor:nonce:invalido');
         }
+        // El nonce va primero: no se toca la sesion de un request sin nonce valido.
+        $sid = $this->sesion_del_comprador();
         // Spec 005 (FR-1.3): la ficha resuelve la LISTA de PDFs del producto y el
         // navegador declara los elegibles; el servidor los sanea (T003) sin
         // evaluar la validez (Const. III).
@@ -1151,7 +1181,6 @@ class Personalizador_PDF_Plugin
         $edicion = false;
         try {
             $sesion = $this->sesion();
-            $sid = $sesion->sid_actual();
             // T016 (re-edicion): con `item_key` vigente se REUSA el item (mismo
             // item_key, mismos PNG del pool) y solo se refrescan los valores; sin
             // el, se crea el borrador habitual.
@@ -1298,9 +1327,6 @@ class Personalizador_PDF_Plugin
      */
     public function handle_pool_png()
     {
-        if (!current_user_can('read')) {
-            wp_send_json_error('motor:capacidad:invalida');
-        }
         $nonce = (string)($_REQUEST['_wpnonce'] ?? '');
         if (!wp_verify_nonce($nonce, 'personalizador_pdf_vista_previa')) {
             wp_send_json_error('motor:nonce:invalido');
@@ -1308,7 +1334,8 @@ class Personalizador_PDF_Plugin
         try {
             $sesion = $this->sesion();
             $motor = $this->pmu_uploads();
-            $sid = sanitize_text_field(wp_unslash((string)($_POST['sid'] ?? '')));
+            // Identidad por cookie (invitados incluidos); el `sid` del POST se ignora.
+            $sid = $this->sesion_del_comprador();
             $item = sanitize_text_field(wp_unslash((string)($_POST['item_key'] ?? '')));
             $pdf = sanitize_file_name(wp_unslash((string)($_POST['pdf'] ?? '')));
             $grupo = strtoupper(sanitize_text_field(wp_unslash((string)($_POST['grupo'] ?? ''))));
@@ -1372,14 +1399,13 @@ class Personalizador_PDF_Plugin
         // Primero la sesion: `sesion()` carga `class-pmu-sesion.php` de forma
         // perezosa, y el tope de tamano vive en esa clase.
         $sesion = $this->sesion();
-        if (!current_user_can('read')) {
-            wp_send_json_error('motor:capacidad:invalida');
-        }
         $nonce = (string) ($_REQUEST['_wpnonce'] ?? '');
         if (!wp_verify_nonce($nonce, 'personalizador_pdf_vista_previa')) {
             wp_send_json_error('motor:nonce:invalido');
         }
-        $sid = sanitize_text_field(wp_unslash((string) ($_POST['sid'] ?? '')));
+        // Identidad por cookie: un invitado puede subir su foto, pero solo a SU
+        // item (el `sid` del POST se ignora y el item se valida contra la cookie).
+        $sid = $this->sesion_del_comprador();
         $item = sanitize_text_field(wp_unslash((string) ($_POST['item_key'] ?? '')));
         $bytes = '';
         try {
@@ -1417,8 +1443,7 @@ class Personalizador_PDF_Plugin
                     sanitize_file_name(wp_unslash((string) ($_POST['pdf'] ?? ''))),
                     'subida'
                 );
-                $item = $sesion->crear_draft($sesion->sid_actual(), [$pdf]);
-                $sid = $sesion->sid_actual();
+                $item = $sesion->crear_draft($sid, [$pdf]);
                 $creado = true;
             }
             $fila = $sesion->guardar_subida($sid, $item, $bytes);
@@ -1441,14 +1466,12 @@ class Personalizador_PDF_Plugin
      */
     public function handle_subida_url()
     {
-        if (!current_user_can('read')) {
-            wp_send_json_error('motor:capacidad:invalida');
-        }
         $nonce = (string) ($_REQUEST['_wpnonce'] ?? '');
         if (!wp_verify_nonce($nonce, 'personalizador_pdf_vista_previa')) {
             wp_send_json_error('motor:nonce:invalido');
         }
-        $sid = sanitize_text_field(wp_unslash((string) ($_POST['sid'] ?? '')));
+        // Identidad por cookie: el `sid` del POST se ignora (spec 014).
+        $sid = $this->sesion_del_comprador();
         $item = sanitize_text_field(wp_unslash((string) ($_POST['item_key'] ?? '')));
         $id = sanitize_text_field(wp_unslash((string) ($_POST['id'] ?? '')));
         try {
