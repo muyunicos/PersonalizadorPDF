@@ -50,9 +50,9 @@
 
 ## Cierre
 
-- [ ] **T020** Documentacion: `contracts/campos.md` (enmienda v2 -> v3), `AGENTS.md` §5 (el formato y el `tipo`), el changelog de `readme.txt`, y el bump de version.
-- [ ] **T021** Enmienda de las specs que afirman que los overrides funcionan: `004/spec.md` FR-5.2 y `004/data-model.md`, con una nota que apunte a la 015.
-- [ ] **T022** Revisar que la UI ya **no** prometa "Overrides del estilo; admite [campoN]" en un formato que no existe (FR-001).
+- [X] **T020** Documentacion: `contracts/campos.md` (enmienda v2 -> v3), `AGENTS.md` §5 (el formato y el `tipo`), el changelog de `readme.txt`, y el bump de version. **Hecho**: contrato 012 `campos.md` v3 (seccion "El `tipo`"), `AGENTS.md` §5 en formato v3 + §11 con las 2 filas nuevas (hash con overrides; `wp_unslash` del cargador), changelog `= 4.5.0 =` y bump 4.4.0 -> **4.5.0** (cabecera `* Version:` + `Stable tag`), `INDICE.md` y cabecera de la 015 marcadas implementadas, nota v3 en el `data-model.md` de la 012.
+- [X] **T021** Enmienda de las specs que afirman que los overrides funcionan: `004/spec.md` FR-5.2 y `004/data-model.md`, con una nota que apunte a la 015. **Hecho**: FR-5.2 con la nota completa (H1-H6 + D2-D6 + "ya esta implementada") y el hash del pool del `data-model.md` con `[+ overrides]` (enmienda FR-005); el `settings` del `data-model.md` ya venia enmendado.
+- [X] **T022** Revisar que la UI ya **no** prometa "Overrides del estilo; admite [campoN]" en un formato que no existe (FR-001). **Verificado**: ese texto no existe en el codigo (solo en el hallazgo historico de la 015); el `Avanzado (settings / overrides)` de `admin/pdfs.php` ya describe el formato real (solo referencias, fusion en orden). Se limpiaron los ultimos vestigios: `admin/ayuda.php` ("Plantillas" -> "Tipo", sin estrella) y 3 comentarios de `admin.js` que todavia hablaban de chips/`data-cats`/modal sin `tipo`.
 
 ## Fuera de alcance
 

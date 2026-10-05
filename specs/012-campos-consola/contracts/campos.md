@@ -1,10 +1,17 @@
 # Contract: Campos (montaje en la ficha del comprador)
 
-**Feature**: 012-campos-consola | **Version**: 2 (enmienda la v1 de la norma 2026-09-17)
+**Feature**: 012-campos-consola | **Version**: 3 (enmienda la v2; la v1 fue la norma 2026-09-17 de la 004)
 
-> **Enmenda**: la v1 (004) definiia el catalogo y su montaje. Esta v2 cambia **quien** decide el
-> tipo de salida (lo decide el placeholder, no el campo), separa **nombre de admin** de
-> **titulo cliente**, y agrega el cargador de imagenes. El formato de datos nuevo esta en
+> **Enmenda v3 (spec 015, 2026-10-05)**: la v2 decia que el campo **no tenia `tipo`**. La 015 lo
+> agrega de vuelta con otro significado: `tipo` = `texto|imagen|opciones`, **se elige solo al crear**
+> (en edicion manda el del indice) y **declara la intencion, no enruta** (D10/D11): la salida la
+> sigue decidiendo el placeholder; el tipo sirve para **avisar** cuando el cableado no coincide
+> (FR-008). Ademas **Categorias fuera** completo del formato y de la UI (D9) y la estrella de
+> "plantilla reutilizable" desaparece (D10).
+>
+> **Enmenda v2**: la v1 (004) definiia el catalogo y su montaje. La v2 cambio **quien** decide el
+> tipo de salida (lo decide el placeholder, no el campo), separo **nombre de admin** de
+> **titulo cliente**, y agrego el cargador de imagenes. El formato de datos nuevo esta en
 > `data-model.md`; la UI del admin, en `contracts/campos-consola.md`.
 
 Un campo es una pieza reutilizable que el sistema muestra al comprador. Publica el **valor dual**
@@ -23,13 +30,19 @@ donde va el `valor` (placeholder, settings, Validez).
 escribe en `campo.htm`. El sistema **ya no inyecta** ningun titulo por encima del campo (se
 elimina `.pmu-campo-titulo`, `tienda.js:259-262`).
 
-## Sin `tipo`
+## El `tipo`
 
-El campo **no tiene `tipo`**. La salida la define:
-- el placeholder (`Placeholders -> Tipo`: texto / codigo / foto), y
-- la plantilla con la que se creo el campo.
+El campo declara un **`tipo`**: `texto` | `imagen` | `opciones` (spec 015 D10).
 
-El enum viejo (`text|textarea|select|img|override`) y el campo `visible` **se eliminan**.
+- **Se elige solo al crear** (como antes la plantilla): en edicion manda el del indice y no cambia.
+- **Declara la intencion, no enruta** (D11): la salida la define el placeholder
+  (`Placeholders -> Tipo`: texto / codigo / foto). El tipo sirve para **validar el cableado**:
+  si un `opciones` aparece en `value`, o un `texto`/`imagen` en `settings`, la consola avisa
+  antes de procesar (FR-008).
+- Los tres tipos son estructuralmente iguales (HTML + JS/CSS opcional): la diferencia es **que
+  declara el `valor`** (texto plano, lista de ids de fotos, o JSON.stringify de overrides).
+- El enum viejo (`text|textarea|select|img|override`), el campo `visible` y las **categorias**
+  **se eliminan** (D9).
 
 ## Montaje (`assets/campo-montar.js`)
 

@@ -43,9 +43,9 @@ baja**, igual que hoy en `campo_alta()`).
 
 | Clave | Tipo | Regla |
 |-------|------|-------|
-| `version` | int | `2` en el formato nuevo; ausente = formato v1 (aun sin migrar) |
+| `version` | int | `2` en el formato v2; `3` desde la spec 015 (indice con `items[].tipo`, sin categorias); ausente = formato v1 (aun sin migrar) |
 | `items[].id` | int | >= 1, unico, nunca reutilizado |
-| `items[].plantilla` | string | `""` \| `imagen` \| `select` \| `texto` (de donde nacio) |
+| `items[].plantilla` | string | `""` \| `imagen` \| `select` \| `texto` (de donde nacio). **Obsoleto desde la v3**: ahora es `items[].tipo` (`texto`\|`imagen`\|`opciones`); ver `AGENTS.md` §5 y `specs/012.../contracts/campos.md` (v3) |
 | `items[].baja` | bool | `true` = dado de baja **con datos conservados** (reemplaza al tombstone `[id,"",""]`) |
 | `meta.{id}.creado` | ISO-8601 | se escribe una vez, no cambia |
 | `meta.{id}.modificado` | int (epoch) | cambia en cada escritura del campo; es el `?v=` |

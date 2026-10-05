@@ -352,13 +352,16 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   (norma ex-008 + decision preview 2026-09-17; la migración `.migrado-007` ya no se ejecuta).
 - Fotos de mockups del admin: `pdfs/{nombre}/mockups/` (datos de usuario, sin catálogo);
   las reutilizables viven en el catálogo `img/`.
-- **Campos reutilizables (spec 012, formato v2)**: `uploads/pmu/campos.json` es **solo el indice**
-  (`{version:2, items:[{id,plantilla,baja}], meta:{}}`) y cada campo es una carpeta
+- **Campos reutilizables (specs 012 + 015, formato v3)**: `uploads/pmu/campos.json` es **solo el indice**
+  (`{version:3, items:[{id,tipo,baja}], meta:{id:{creado,modificado}}}`) y cada campo es una carpeta
   `uploads/pmu/campos/{id}/` con `datos.json` + `campo.htm` + `campo.css` + `campo.js`. El `id` se
   reutiliza en N PDFs y **nunca se recicla**: una baja deja `baja:true` (tombstone) y conserva los
-  archivos. `datos.json` lleva `nombre`, `titulo_cliente` (etiqueta del comprador), `array`,
-  `protegido`, `categorias` y `cargador:{ranuras:[{w,h,forma,min,max}]}`. **No hay `tipo` en el
-  campo**: el tipo de salida es del placeholder. La pareja `valor`/`cliente` la publica el `campo.js`
+  archivos. `datos.json` lleva `nombre`, `descripcion`, `titulo_cliente` (etiqueta del comprador),
+  `texto_ayuda`, `array`, `protegido` y `cargador:{ranuras:[{w,h,forma,min,max}]}`. El **`tipo`**
+  (`texto|imagen|opciones`) se elige **solo al crear** (en edicion manda el del indice) y
+  **declara la intencion, no enruta** (spec 015 D10/D11): la salida la decide el placeholder y el
+  tipo sirve para avisar cuando el cableado no coincide. **Categorias fuera** del formato y de la
+  UI (D9). La pareja `valor`/`cliente` la publica el `campo.js`
   (`function(ctx, root)`) y, si no hay JS, se lee de los `[data-rol]` del HTML; `cliente` **nunca**
   cae a `valor` (el sistema no traduce nada). Contratos: `specs/012.../contracts/campos.md`.
 - **CSS/JS global del plugin (spec 012)**: `uploads/pmu/campos/global.css` y `global.js`, **uno solo
@@ -370,7 +373,7 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `manifest.subidas[]` (`id`, `file`, `mime`, `bytes`). El `{id}` lo genera el **servidor** y el
   formato sale de la **firma de los bytes** (webp/png/jpg/gif), nunca del nombre que manda el
   cliente. La carpeta viaja sola al pedido porque las tres mudanzas mueven el arbol entero del item.
-- Catálogo global de campos (formato v1, ya migrado a v2): ver la entrada de arriba.
+- Catálogo global de campos (formato v1, ya migrado a v3): ver la entrada de arriba.
   `id` auto no reutilizable, `titulo_cliente`, `tipo`, `array`, valor dual
   `valor`(sistema)/`cliente`(etiqueta); detalle en `specs/004.../contracts/campos.md`).
 - Imágenes aplicadas (muestras del panel): `tmp/muestras/{nombre}/{id}.{ext}` (un archivo
@@ -708,5 +711,6 @@ el numero a mano. El stub `get_file_data` del arnes esta en `tests/texto_puente.
 | El `sid` del POST no es la identidad del comprador | Los handlers lo leiaban del request; con el nonce impreso en la ficha (**publico**) eso permite tocar la sesion de otro, **tambien estando logueado** | Ignorar el `sid` del POST y usar siempre `PMU_Sesion::sid_actual()` (la cookie); con `item_key` exigir el manifest bajo ese sid |
 | Un override no cambia el estilo del PDF | `renderBatch` se arma **sin** `settings` (`tienda.js:831`), y TextMUy no los espera en `settings` sino en **`overrides`**, como **objeto** (`api.js:296, 271`) | Pasar el objeto ya fusionado en `items[].overrides`. `mergeDeep` del modulo lo aplica sobre el preset: **no hace falta tocar `modules/textmuy/`** |
 | El PDF sale con `[object Object]` | `resolverPlantilla` hace `String(v)` y un objeto se convierte en eso, en silencio | El `valor` de un campo es **siempre string**; el tipo `opciones` publica `JSON.stringify(overrides)` y lo parsea el render |
-| El cliente ve un estilo y el PDF trae otro | El hash del pool (`valor\|preset\|settings\|WxH`) **no incluia** los overrides: el primero que renderiza llena la cache y el resto recibe su PNG | Meter los overrides resueltos en el hash **en el mismo commit** que los activa: el fallo no es excepcion, es el PDF equivocado |
+| El cliente ve un estilo y el PDF trae otro | El hash del pool (`valor\|preset\|settings\|WxH`) **no incluia** los overrides: el primero que renderiza llena la cache y el resto recibe su PNG | Meter los overrides resueltos en el hash **en el mismo commit** que los activa: el fallo no es excepcion, es el PDF equivocado (hecho en 4.5.0: `hashRender` + `hash_pool()` con `\|{json}`) |
+| Editar un campo con cargador falla siempre | `handle_campo_guardar()` pasaba `$_POST` crudo: el JSON del cargador llegaba con `\"` (add_magic_quotes), `json_decode` fallaba y `validar_cargador` tiraba `motor:campos:cargador:invalido` | `wp_unslash($_POST)` antes de `campo_desde_post()` (convencion de mas abajo); el alta lo esquivaba porque el modal no manda cargador |
 | Un placeholder con texto fijo y estilo no aparece en el PDF | El Motor **no renderiza texto**: `procesar_pedido($ruta, $mapaIdRuta)` solo pega PNGs | El navegador tiene que renderizar el grupo entero, aunque el `value` sea literal (sin ningun `[campoN]`). Por eso **la vista previa ES el PDF final** |

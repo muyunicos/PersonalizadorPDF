@@ -728,7 +728,7 @@ jQuery(function ($) {
         }
     });
 
-    // --- Alta rapida de campos (modal v2: nombre + plantilla, sin `tipo`) ---
+    // --- Alta rapida de campos (modal: nombre + tipo, spec 015 D10) ---
     $(document).on('click', '.ec-nuevo-campo', function () {
         $('.ec-modal-campo').removeAttr('hidden');
         $('.ec-modal-campo .ec-campo-status').removeClass('ec-error ec-ok').text('');
@@ -792,11 +792,12 @@ jQuery(function ($) {
         }, 1200);
     }
 
-    /* ============ Filtros de la tabla (spec 012, F3 / T013) ============
-           Buscador por texto + chips de categoria + orden. Todo en el DOM
-           (las filas ya traen data-cats/data-modificado/data-creado), sin
+    /* ============ Filtros de la tabla (spec 012 F3 / 015 D9) ============
+           Buscador por texto (nombre, subtitulo y tipo) + orden. Todo en el DOM
+           (las filas ya traen data-tipo/data-modificado/data-creado), sin
            peticiones: el orden de la tabla NO altera el panel del comprador
-           (FR-014, eso lo manda config.json:campos_ids[]). */
+           (FR-014, eso lo manda config.json:campos_ids[]). Sin chips de
+           categoria: se fueron con las categorias (spec 015 D9). */
         var refrescarCampos = function () {}; // la reemplaza el bloque de filtros
         (function () {
             var $tabla = $('.ec-campos-tabla');
@@ -925,7 +926,7 @@ jQuery(function ($) {
                             window.PMUCampos.enlazarFormularios($formNuevo.find('form.ec-form-campo'));
                         }
                     }
-                    refrescarCampos(); // re-evalua buscador/categorias con la fila nueva
+                    refrescarCampos(); // re-evalua el buscador con la fila nueva
                     pmuAviso($fila.closest('.card, .wrap'), 'Duplicado como campo ' + res.data.id + '.');
                 })
                 .catch(function (e) {

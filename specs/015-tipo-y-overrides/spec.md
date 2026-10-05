@@ -1,8 +1,9 @@
 # 015 — Tipo del campo y overrides que funcionan
 
-> Estado: **especificada, sin implementar**. Cierra el diseño acordado con el
-> usuario el 2026-10-05. Enmienda la FR-5.2 de la 004, que hasta hoy esta escrita
-> como si funcionara y no es cierto.
+> Estado: **implementada (2026-10-05)**. Commits `5f7c012` (tipo y limpieza) +
+> `7187328` (overrides de punta a punta) + cierre T020-T022. Cierra el diseño
+> acordado con el usuario el 2026-10-05. Enmienda la FR-5.2 de la 004, que hasta
+> hoy estaba escrita como si funcionara y no era cierto.
 
 ## Por que esta spec
 

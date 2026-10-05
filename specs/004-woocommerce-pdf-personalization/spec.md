@@ -244,11 +244,14 @@ script (opcional): (vacio)
 ### FR-5: Integración TextMuy
 - FR-5.1: Administrador puede asignar un preset de TextMuy a un placeholder de tipo texto
 - FR-5.2: Administrador puede definir campos y/o expresiones para los overrides de un preset asignado a un placeholder (fuente, color, etc.)
-  > **ENMIENDA (spec 015, 2026-10-05): implementada ahi. Hasta entonces NO funciona.**
-  > Verificado: los overrides nunca llegan al render (`tienda.js:831` arma los items
-  > sin `settings`), `[campoN]` nunca se sustituye dentro de `settings`, y TextMUy
-  > los espera en `overrides` como objeto (`api.js:296`), no como el string que
-  > guardaba el plugin. La UI lo anuncia y no hacia nada.
+  > **ENMIENDA (spec 015, 2026-10-05): NO funcionaba hasta esta spec; ya esta implementada.**
+  > Verificado entonces: los overrides nunca llegaban al render (`tienda.js:831` armaba los items
+  > sin `settings`), `[campoN]` nunca se sustituia dentro de `settings`, y TextMuy los espera en
+  > `overrides` como objeto (`api.js:296`), no como el string que guardaba el plugin. La UI lo
+  > anunciaba y no hacia nada. La 015 lo cerro: `settings` es **solo lista de referencias**
+  > `[campoN]` a campos tipo `opciones`, `PURO.resolverOverrides()` las fusiona en orden y viajan
+  > a `renderBatch` como `items[].overrides`; el hash del pool las incluye (FR-005). Ver
+  > `specs/015-tipo-y-overrides/` (hallazgos H1-H6, decisiones D2-D6).
 - FR-5.3: Los presets están disponibles desde la galería de TextMuy
 
 ### FR-6: Vista Previa del Mockup

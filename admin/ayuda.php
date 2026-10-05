@@ -67,9 +67,11 @@ if (!defined('ABSPATH')) {
         <li><strong>Probar:</strong> el boton "Probar" muestra el campo tal cual lo vera el comprador,
             con el CSS del tema y los estilos globales. Si tiene cargador, dibuja las ranuras sin subir
             nada.</li>
-        <li><strong>Plantillas:</strong> al crear un campo elegis una plantilla base (Texto, Opciones o
-            Imagenes) que solo deja el formulario preparado; despues lo editas. Un campo existente
-            tambien se puede marcar como plantilla reutilizable, o duplicar.</li>
+        <li><strong>Tipo:</strong> al crear un campo elegis un tipo (Texto, Opciones o
+            Imagenes) que solo deja el formulario preparado y declara para que sirve el
+            <code>valor</code>; despues editas el HTML a tu medida. El tipo se muestra en la fila y
+            en el editor (solo lectura: no se cambia despues de crear). Un campo existente se
+            puede duplicar.</li>
         <li><strong>Estilos globales / Script global:</strong> un unico par de archivos para todo el
             plugin (<code>uploads/pmu/campos/global.css</code> y <code>global.js</code>). Se cargan solo
             en las fichas que tienen al menos un campo. El CSS se inyecta limitado al panel, asi que

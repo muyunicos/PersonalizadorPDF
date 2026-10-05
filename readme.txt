@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.4.0
+Stable tag: 4.5.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,12 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.5.0 =
+* **Tipo de campo (spec 015)**: cada campo del catalogo declara ahora un **tipo** (`texto`, `imagen` u `opciones`) que se elige solo al crear y se muestra en la fila y en el editor (solo lectura; en edicion manda el del indice). La columna **Categorias** y la estrella de "plantilla reutilizable" desaparecen: la tabla queda en 6 columnas (id, nombre, tipo, uso, acciones) y el buscador va por texto. El tipo declara la intencion, no enruta: si un campo `opciones` esta colgado en `value` (o al reves), la consola avisa antes de procesar.
+* **Overrides del estilo que llegan al PDF**: el campo "Avanzado (settings / overrides)" de cada grupo pasa a ser **solo una lista de referencias** `[campoN]` a campos tipo `opciones`. Cada referencia aporta su JSON de overrides y se fusionan **en orden** (el ultimo pisa) hacia `items[].overrides` del render de TextMuy. Un JSON invalido o un texto literal se descartan **con aviso** sin frenar la compra, y el hash del pool ahora incluye los overrides resueltos: cada comprador recibe su propio estilo en la regeneracion parcial. Verificado con pixeles en el lab: el PDF final lleva exactamente el PNG renderizado en la vista previa.
+* **Correccion**: editar un campo con cargador de imagenes fallaba siempre (`motor:campos:cargador:invalido`) porque el JSON del cargador llegaba escapado de WordPress; ahora se sanea con `wp_unslash` (afectaba solo a la edicion, no al alta).
+* Sin migracion: se arranca limpio con el formato v3 (`version:3`, `items[].tipo`); un indice v2 legado se lee tolerante y sus campos quedan sin tipo declarado.
 
 = 4.4.0 =
 * **Campos reutilizables (pestana "Campos")**: los formularios que se repiten en varios PDFs dejan de ser un "tipo" del hueco y pasan a ser entidades con identidad propia. Cada campo es una carpeta `uploads/pmu/campos/{id}/` (`datos.json` + `campo.htm|css|js`) y `campos.json` es solo el indice; el mismo `id` se usa en cuantos PDFs quieras. La migracion desde el formato anterior es automatica, conserva los ids y deja copia de seguridad.

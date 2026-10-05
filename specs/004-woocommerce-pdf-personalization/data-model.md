@@ -170,7 +170,11 @@ Prueba del visto bueno para el admin; viven con el pedido.
 | pdfs | string[] | PDFs del producto |
 
 Regeneracion parcial: el cliente re-renderiza solo los campos cuyo hash
-(`sha1(valor + preset + settings + WxH)`) cambio; el resto reusa el pool existente.
+(`sha1(valor + preset + settings + WxH [+ overrides])`) cambio; el resto reusa
+el pool existente. **Enmienda 015 (FR-005)**: cuando `settings` resuelve
+overrides, la clave lleva `|{json fusionado}` al final (igual cliente y
+servidor: `PURO.hashRender` / `hash_pool()`); sin overrides la cadena es
+identica a la del contrato viejo.
 
 ### Pedido (order WooCommerce)
 
