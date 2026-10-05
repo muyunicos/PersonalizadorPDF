@@ -974,6 +974,16 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 (string)($gl['prefijo_import'] ?? '') === '@import url(a.css);[data-pmu-panel] .a{ color: red }',
                 (string)($gl['prefijo_import'] ?? ''));
             check('prefijo: CSS vacio no inventa nada', (string)($gl['prefijo_vacio'] ?? '') === '');
+            // Una coma dentro de :is()/`:not()` NO separa selectores.
+            check('prefijo: no parte comas dentro de :is()',
+                (string)($gl['prefijo_is'] ?? '') === '[data-pmu-panel] .a:is(.b,.c){x:1}',
+                (string)($gl['prefijo_is'] ?? ''));
+            check('prefijo: :not() sigue entero',
+                (string)($gl['prefijo_not'] ?? '') === '[data-pmu-panel] .a:not(.b,.c){x:1}',
+                (string)($gl['prefijo_not'] ?? ''));
+            check('prefijo: :root se reemplaza, no se encadena',
+                (string)($gl['prefijo_root'] ?? '') === '[data-pmu-panel]{--a:1}',
+                (string)($gl['prefijo_root'] ?? ''));
             break;
         case 'campo_subida':
             // 012/F6 (T021/T022, D14/D15/FR-035).
@@ -2571,6 +2581,9 @@ switch ($fase) {
             $g['prefijo_fontface'] = $p->css_global_prefijo('@font-face { font-family: X }');
             $g['prefijo_import'] = $p->css_global_prefijo('@import url(a.css); .a { color: red }');
             $g['prefijo_vacio'] = $p->css_global_prefijo('   ');
+            $g['prefijo_is'] = $p->css_global_prefijo('.a:is(.b,.c){x:1}');
+            $g['prefijo_not'] = $p->css_global_prefijo('.a:not(.b,.c){x:1}');
+            $g['prefijo_root'] = $p->css_global_prefijo(':root{--a:1}');
             $GLOBALS['test_campo_global'] = $g;
         } catch (\Throwable $e) {
             $GLOBALS['test_campo_global'] = ['error' => $e->getMessage()];

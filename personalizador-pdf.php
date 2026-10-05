@@ -828,11 +828,41 @@ class Personalizador_PDF_Plugin
         return $n - 1; // CSS sin cerrar: se toma el resto como cuerpo
     }
 
+    /**
+     * Parte una lista de selectores por las comas de NIVEL 0. Una coma dentro
+     * de `:is()`/`:where()`/`:not()` NO separa selectores: si se partiera ahi,
+     * `.a:is(.b,.c)` salia `[data-pmu-panel] .a:is(.b,[data-pmu-panel] .c)`,
+     * que cambia el significado de la regla (probado).
+     */
+    private function css_partir_selectores($lista)
+    {
+        $partes = [];
+        $buf = '';
+        $niv = 0;
+        $len = strlen((string) $lista);
+        for ($i = 0; $i < $len; $i++) {
+            $c = $lista[$i];
+            if ($c === '(') {
+                $niv++;
+            } elseif ($c === ')') {
+                $niv = max(0, $niv - 1);
+            }
+            if ($c === ',' && $niv === 0) {
+                $partes[] = $buf;
+                $buf = '';
+                continue;
+            }
+            $buf .= $c;
+        }
+        $partes[] = $buf;
+        return $partes;
+    }
+
     /** Prefija una lista de selectores separados por coma. */
     private function css_prefija_selectores($lista, $prefijo)
     {
         $out = [];
-        foreach (explode(',', $lista) as $sel) {
+        foreach ($this->css_partir_selectores($lista) as $sel) {
             $sel = trim($sel);
             if ($sel === '') {
                 continue;
