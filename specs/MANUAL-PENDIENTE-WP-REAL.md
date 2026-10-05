@@ -1,6 +1,6 @@
 # Recorrido manual pendiente en WP real (sesion unica)
 
-> Cubre en UNA sesion: T030 (004) + T012-recorrido (005) + T017/T029 (006).
+> Cubre en UNA sesion: T030 (004) + T012-recorrido (005) + T017/T029 (006) + T031 (012).
 > Requiere: panel WP del administrador con plugin activo + Woo + modulo integrado
 > (`modules/textmuy/`) + `uploads/pmu/pdfs/muestra.pdf` (dato de usuario, no versionado).
 > Las puertas automaticas ya estan en verde (ver §0); esto es solo verificacion con datos reales.
@@ -115,6 +115,35 @@ Detalle completo por spec: [004/quickstart.md §1](./004-woocommerce-pdf-persona
    sin carpetas extra. Borrar datos de prueba del recorrido (§limpieza arriba).
    (Origen: [006/quickstart.md §5+§6](./006-align-textmuy-motor/quickstart.md).)
 
+## 6b. Campos reutilizables (012 T031)
+
+> Se puede hacer **sin WooCommerce**: alcanza con una pagina que tenga el shortcode
+> `[pmu_personalizar pdf="muestra"]` (o el producto real si hay Woo).
+
+1. Pestana **Campos**: la tarjeta "Estilos globales / Script global" esta **arriba**.
+   Guardar un CSS de prueba y un JS que defina `window.__PRUEBA__ = 1`; recargar: persiste.
+2. Crear un campo desde la plantilla **Texto**; el editor se abre **dentro de la fila**
+   (sin cambiar de pagina) y el boton **Probar** muestra un iframe con el campo.
+3. Editar `campo.js` para publicar `ctx.set(ctx.id, {valor:'Z', cliente:'Cliente'})`;
+   "Probar" muestra los **dos** valores. Borrar el `data-rol` del HTML y comprobar que
+   `cliente` queda **vacio** (nunca cae a `valor`).
+4. Comprobar el prefijo: en el CSS global poner `.pmu-panel-titulo { color: rgb(9,8,7) }`.
+   En la ficha se ve; en una pagina **sin** `[data-pmu-panel]` **no** se ve.
+5. Filtrar: buscador, chip de categoria, orden por id/fecha/nombre y la columna **Uso**
+   (PDFs + `[campoN]` + detalle al pasar el mouse).
+6. **Marcar plantilla** (toggle), **Duplicar** (aparece "(copia)"), **Dar de baja** y
+   **Restaurar**: los archivos se conservan (`uploads/pmu/campos/{id}/` sigue ahi).
+7. Campo **con cargador** (plantilla Imagenes, ranura con `min=2`): en la ficha, "Listo"
+   nace **deshabilitado**; subir 1 foto sigue deshabilitado, la 2da lo habilita.
+   En disco: `tmp/sesion-{sid}/{item_key}/subidas/{id}.{ext}` + fila en `manifest.subidas[]`
+   (el `id` lo puso el servidor). (Cubre tambien **T011b/FR-009**: "Probar" dibuja la ranura
+   sin subir nada.)
+8. **Nunca bloquea** (D17-D19): subir **menos** fotos que huecos y pulsar "Vista previa":
+   genera PDF igual, con los huecos sobrantes transparentes y una nota informativa
+   (antes frenaba la compra). Con `repetir` activado, las fotos ciclan entre huecos.
+9. Verificar en el PDF descargable: cada hueco lleva **su** foto (no la misma repetida).
+   (Origen: [012/quickstart.md](./012-campos-consola/quickstart.md).)
+
 ## 7. Cierre
 
 - [ ] §1 raiz unica OK (T017-parcial + T029-parcial)
@@ -123,6 +152,7 @@ Detalle completo por spec: [004/quickstart.md §1](./004-woocommerce-pdf-persona
 - [ ] §4 comprador OK (T030 §3-§6: SC-1..SC-6)
 - [ ] §5 snapshot/auditoria OK (T012-parcial: SC-5/SC-6)
 - [ ] §6 fallos + respaldo OK (T029-resto)
+- [ ] §6b campos reutilizables OK (012 T031: editor, global, cargador, nunca bloquea)
 - [ ] Datos de prueba limpiados (solo `tmp/sesion-*`, `tmp/muestras/*`, `tmp/orders/*`)
 - [ ] Al cerrar todo: marcar T030/T012/T017/T029 `[X]` en sus `tasks.md` y archivar
       este archivo a `_archivo/` con fecha.

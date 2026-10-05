@@ -176,16 +176,21 @@
 
 ## Fase 8 - Documentacion y cierre
 
-- [ ] T029 [P] Actualizar `constitution.md` (Sync Impact Report; bump 2.1.0) y `AGENTS.md` (§2 mapa,
-  §3 flujo, §5 datos: `campos/{id}/`, global, `subidas/`; §11 si hay un error comun nuevo).
-- [ ] T030 [P] `specs/INDICE.md`: registrar la 012 en "Activos". `admin/ayuda.php`: seccion de
-  campos (nombre vs titulo cliente, plantillas, global, cargador).
-- [ ] T031 [P] `specs/MANUAL-PENDIENTE-WP-REAL.md`: recorrido manual unico de la 012 (crear desde
-  plantilla -> probar -> duplicar -> filtrar -> dar de baja -> restaurar -> exportar -> importar ->
-  campo de imagenes end-to-end en la ficha + generacion del PDF con 6 fotos).
-- [ ] T032 Verificacion final: TODAS las puertas verdes (`php -l`, SMOKE OK, PARIDAD OK, las fases del
-  arnes, `node --check` + las 3 puertas Node) y recorrido manual en el sitio real. Version en la
-  cabecera de `personalizador-pdf.php` (segun seccion 10.bis) + `readme.txt`.
+- [X] T029 [P] Actualizar `constitution.md` (Sync Impact Report; bump 2.0.1 -> **2.1.0**) y `AGENTS.md` (§2 mapa
+  con `campo-montar.js`/`cargador-pmu.js` y el `tests/`, §5 datos: `campos/{id}/` + `global.css|js` +
+  `subidas/`, §9 las 4 puertas y las fases nuevas, §11 los 8 errores reales encontrados). Nota: la
+  constitucion vive en `.specify/` (gitignored) y su Sync Impact Report queda en el equipo, no en el
+  repo; lo que viaja es `AGENTS.md`.
+- [X] T030 [P] `specs/INDICE.md`: la 012 pasa de "En especificacion" a **Activos** (36/38 `[X]` + 1 `[~]`,
+  verificada en navegador). `admin/ayuda.php`: seccion **Campos reutilizables** (nombre vs titulo del
+  comprador, los dos valores, Probar, plantillas, el global, baja/restaurar).
+- [X] T031 [P] `specs/MANUAL-PENDIENTE-WP-REAL.md`: nueva seccion **§6b** (9 pasos) que cubre editor
+  en linea, par `valor`/`cliente`, prefijo del CSS global, filtros, plantilla/duplicar/restaurar,
+  cargador con `min=2` de punta a punta, **nunca bloquea** y el PDF con una foto por hueco. Se puede
+  hacer **sin WooCommerce** con el shortcode `[pmu_personalizar]`.
+- [X] T032 Verificacion final: TODAS las puertas verdes y version subida a **4.4.0** en la cabecera
+  (§10.bis) + `Stable tag` de `readme.txt`. Queda el recorrido manual §6b en el sitio real, que es lo
+  unico que no se puede automatizar.
 
 ## Dependencias
 

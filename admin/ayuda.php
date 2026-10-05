@@ -53,6 +53,33 @@ if (!defined('ABSPATH')) {
 </div>
 
 <div class="card">
+    <h2>Campos reutilizables</h2>
+    <p>La pestana <strong>Campos</strong> guarda los formularios que se repiten en varios PDFs. El mismo
+        <code>id</code> se usa en cuantos PDFs quieras: lo editas una vez y cambia en todos. Cada campo
+        trae su propio HTML, CSS y JavaScript.</p>
+    <ul>
+        <li><strong>Nombre vs titulo para el comprador:</strong> el <em>nombre</em> es para vos (por
+            ejemplo "Fotos polaroid x6"); el <em>titulo para el comprador</em> es la etiqueta que se ve en
+            la ficha y en el pedido.</li>
+        <li><strong>Dos valores:</strong> <code>valor</code> es lo que se imprime en el PDF y
+            <code>cliente</code> es lo que lee el comprador. El sistema <strong>no traduce nada</strong>
+            por si solo: si querés convertir un codigo en texto, lo escribis en el <em>Script global</em>.</li>
+        <li><strong>Probar:</strong> el boton "Probar" muestra el campo tal cual lo vera el comprador,
+            con el CSS del tema y los estilos globales. Si tiene cargador, dibuja las ranuras sin subir
+            nada.</li>
+        <li><strong>Plantillas:</strong> al crear un campo elegis una plantilla base (Texto, Opciones o
+            Imagenes) que solo deja el formulario preparado; despues lo editas. Un campo existente
+            tambien se puede marcar como plantilla reutilizable, o duplicar.</li>
+        <li><strong>Estilos globales / Script global:</strong> un unico par de archivos para todo el
+            plugin (<code>uploads/pmu/campos/global.css</code> y <code>global.js</code>). Se cargan solo
+            en las fichas que tienen al menos un campo. El CSS se inyecta limitado al panel, asi que
+            no puede romper el tema; el script corre antes de montar los campos.</li>
+        <li><strong>Bajar de baja y restaurar:</strong> la baja no borra los archivos: el campo queda
+            dado de baja y se puede restaurar desde el panel de abajo.</li>
+    </ul>
+</div>
+
+<div class="card">
     <h2>Texto estilizado por grupo (modulo TextMuy)</h2>
     <p>Ademas de una imagen, cada grupo puede llevar un <strong>texto estilizado</strong>. En la consola
         de cada PDF, en la tarjeta del grupo, activa <em>Usar texto</em>, escribe el contenido y elige el

@@ -113,6 +113,10 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   │                             rotacion, acertar, alinear, distribuir). Sin DOM;
 │   │                             testeada con `node tests/mockup-geometria.test.js`
 │   │                             y `node tests/mockup-contrato.test.js` (cableado)
+│   ├── campo-montar.js      ← Montaje COMPARTIDO de campos (spec 012): lo usan la ficha del
+│   │                          comprador y el preview del admin (una sola lógica, DRY)
+│   ├── cargador-pmu.js      ← Cargador de imágenes del comprador (spec 012): N ranuras
+│   │                          sobre SelectorPMU; valida `min` y sube la foto al item
 │   ├── selector-pmu.js      ← Cliente de subida/recorte de imágenes de campos (spec 004,
 │   │                          contrato `specs/004.../contracts/selector-pmu.md`)
 │   └── miniaturas.js        ← ThumbEngine: miniaturas `.webp` y sprites por ámbito; único
@@ -138,6 +142,10 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   ├── motor_smoke.php      ← Test crítico del motor (CORRER SIEMPRE TRAS CAMBIOS)
 │   ├── parity.php           ← Oráculo de detección (vs expected_muestra.json)
 │   ├── texto_puente.php     ← Puente TextMuy con stubs WP (fases separadas)
+│   ├── campos_migracion.php ← Banco v1→v2 + CRUD de campos (spec 012, corre en %TEMP%)
+│   ├── certificacion_hoja.php ← Certificación de `thumbs.sprite_firma` (ThumbEngine)
+│   ├── campos-contrato.test.js ← Contrato del montaje de campos + cargador (spec 012)
+│   ├── conciliacion.js      ← `PURO.conciliarGrupo` (spec 012, D17-D19)
 │   ├── expected_muestra.json
 │   └── fixtures/            ← Imágenes de prueba
 ├── .vscode/
@@ -341,7 +349,25 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   (norma ex-008 + decision preview 2026-09-17; la migración `.migrado-007` ya no se ejecuta).
 - Fotos de mockups del admin: `pdfs/{nombre}/mockups/` (datos de usuario, sin catálogo);
   las reutilizables viven en el catálogo `img/`.
-- Catálogo global de campos: `campos.json` en la raíz de `uploads/pmu/` (items con
+- **Campos reutilizables (spec 012, formato v2)**: `uploads/pmu/campos.json` es **solo el indice**
+  (`{version:2, items:[{id,plantilla,baja}], meta:{}}`) y cada campo es una carpeta
+  `uploads/pmu/campos/{id}/` con `datos.json` + `campo.htm` + `campo.css` + `campo.js`. El `id` se
+  reutiliza en N PDFs y **nunca se recicla**: una baja deja `baja:true` (tombstone) y conserva los
+  archivos. `datos.json` lleva `nombre`, `titulo_cliente` (etiqueta del comprador), `array`,
+  `protegido`, `categorias` y `cargador:{ranuras:[{w,h,forma,min,max}]}`. **No hay `tipo` en el
+  campo**: el tipo de salida es del placeholder. La pareja `valor`/`cliente` la publica el `campo.js`
+  (`function(ctx, root)`) y, si no hay JS, se lee de los `[data-rol]` del HTML; `cliente` **nunca**
+  cae a `valor` (el sistema no traduce nada). Contratos: `specs/012.../contracts/campos.md`.
+- **CSS/JS global del plugin (spec 012)**: `uploads/pmu/campos/global.css` y `global.js`, **uno solo
+  para todo el plugin**, editables desde la tarjeta de arriba de la pestana Campos. Se cargan **solo
+  en fichas con >=1 campo**; el CSS se inyecta prefijado con `[data-pmu-panel]` y el JS con
+  `wp_add_inline_script(..., 'before')` sobre `campo-montar` (unico orden prometido). En el preview de
+  la consola viaja como portador `<script type="text/css" id="pmu-campo-global-css">`.
+- **Fotos del comprador (spec 012)**: `tmp/sesion-{sid}/{item_key}/subidas/{id}.{ext}` con fila en
+  `manifest.subidas[]` (`id`, `file`, `mime`, `bytes`). El `{id}` lo genera el **servidor** y el
+  formato sale de la **firma de los bytes** (webp/png/jpg/gif), nunca del nombre que manda el
+  cliente. La carpeta viaja sola al pedido porque las tres mudanzas mueven el arbol entero del item.
+- Catálogo global de campos (formato v1, ya migrado a v2): ver la entrada de arriba.
   `id` auto no reutilizable, `titulo_cliente`, `tipo`, `array`, valor dual
   `valor`(sistema)/`cliente`(etiqueta); detalle en `specs/004.../contracts/campos.md`).
 - Imágenes aplicadas (muestras del panel): `tmp/muestras/{nombre}/{id}.{ext}` (un archivo
@@ -506,6 +532,10 @@ specify integration upgrade cline --script ps   # diff-aware; --force solo si es
 ```powershell
 php -l personalizador-pdf.php
 Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.FullName }
+php tests/campos_migracion.php   # Campos v2: migracion + CRUD (debe decir "CAMPOS V2 OK")
+php tests/certificacion_hoja.php  # Certificacion del sprite (debe decir "CERTIFICACION HOJA OK")
+node tests/campos-contrato.test.js  # Montaje de campos + cargador (spec 012): "CAMPOS CONTRATO OK"
+node tests/conciliacion.js    # `PURO.conciliarGrupo` (spec 012, D17-D19): "CONCILIACION OK"
 php tests/motor_smoke.php     # Smoke del motor (debe decir "SMOKE OK")
 php tests/parity.php          # Oráculo del detector (debe decir "PARIDAD OK")
 node tests/mockup-geometria.test.js   # Geometria pura del editor de mockups (spec 011):
@@ -658,3 +688,11 @@ el numero a mano. El stub `get_file_data` del arnes esta en `tests/texto_puente.
 | Un preset guardado no aparece en otro navegador | — | Resuelto: presets `.txm` en `uploads/pmu/tm-presets/` |
 | Un preset recién guardado no aparece en el selector de un grupo | Página "PDFs" abierta antes de guardar | Recargar: el listado se genera con glob en cada carga |
 | Error del puente tras tener el admin mucho tiempo abierto | Nonce expirado (~12-24 h) | Recargar la página y reintentar |
+| **SMOKE CON 11 FALLOS** tras tocar `Overlay`/`Motor` | Una spec de imagen **ya es un array** (con su clave `tipo`), así que `is_array($x)` no distingue "una spec" de "lista de specs": `array_values($spec)` devuelve los valores sueltos y el PDF sale roto | Distinguir por la clave `tipo` (`Overlay::esListaDeSpecs()`) y llevar la bandera `$multi` sobre las **rutas** en `Motor` (que no tienen ambigüedad). Nunca sniffear el resultado |
+| El PDF del pedido sale con claves numéricas (`[0, "otro"]`) en vez de nombres de PDF | Un `foreach ($porIdx as $gid => $rutas)` **pisa** la variable de salida `$rutas` en `item_generar_pdfs()` | Nombre distinto en el bucle interno (`$rutasGrupo`). Lo caza la fase `completados` |
+| El guardado de un form con `pmuForm` no sale y no da error | `pmuForm` **registra** el handler: llamarlo desde dentro de otro `submit` lo agrega tarde y el POST nunca se envía | Enlazar con `pmuForm($form, action, nonce, cb)` en **tiempo de enlace**, nunca desde un handler `submit` |
+| `Class "PMU_Sesion" not found` en un endpoint nuevo | `PMU_Sesion` se carga **lazy** dentro de `sesion()`; usar su constante antes de llamar `sesion()` la busca sin cargar | Llamar `$this->sesion()` **primero** si el handler usa `PMU_Sesion::` |
+| El comprador ve el campo de imagen pero sin sus ranuras | `panel_ficha()` leía el **adaptador de tupla v1**, que no transporta `cargador` | Leer las filas **v2** (`campo_listar()`): el cargador vive en `datos` |
+| Un banco de tests falla de forma intermitente | El directorio temporal se nombra por PID y **no se borra al empezar**; Windows reutiliza PIDs y queda estado sucio | Sufijo aleatorio (`bin2hex(random_bytes(4))`) en el nombre |
+| El CSS global no se aplica dentro de `@media` | `preg_replace('/[^\w-].*$/s','')` casaba en el **propio arroba** y el nombre del at-rule salía vacío | `ltrim($cabecera,'@')` antes, y que la lista de at-rules anidados **tampoco** lleve `@` |
+| El campo de imagen aparece pero `valor` sale vacío | `onChange` del cargador dispara también en el **montaje**: escribir ahí ponía `valor = []` y pisaba lo publicado por `campo.js` | El cargador toma el control del `valor` recién con la primera foto (bandera en el closure) |
