@@ -168,14 +168,21 @@ jQuery(function ($) {
 
         /** Barra de acciones del drawer: "Probar" sin salir del editor. Con el
          * drawer abierto la fila queda tapada, asi que el Probar de la fila no
-         * sirve para reprobar lo recien escrito. */
+         * sirve para reprobar lo recien escrito. Va EN LINEA con Guardar y
+         * Cancelar: antes caia en una barra aparte, debajo, y se leia como dos
+         * grupos de acciones distintos. */
         function accionesDrawer($form) {
-            var $a = $('#ec-c-drawer-cuerpo .ec-drawer-acciones').remove();
-            $a = $('<div class="ec-drawer-acciones"></div>').appendTo($form);
+            $('#ec-c-drawer-cuerpo .ec-drawer-acciones').remove();
+            var $a = $('<span class="ec-drawer-acciones"></span>');
             $('<button type="button" class="button ec-probar-drawer"></button>')
                 .text('Probar').appendTo($a);
             $('<span class="ec-drawer-atajo"></span>')
                 .text('Ctrl+Enter guarda · Esc cierra').appendTo($a);
+            var $ancla = $form.find('.ec-cancelar');
+            if (!$ancla.length) {
+                $ancla = $form.find('input[type=submit], button[type=submit]').last();
+            }
+            if ($ancla.length) { $ancla.after($a); } else { $form.append($a); }
         }
 
         function abrirDrawer(id, opts) {

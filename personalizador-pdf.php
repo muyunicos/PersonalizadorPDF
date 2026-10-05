@@ -3005,9 +3005,11 @@ JS;
                                             <code>size:2000 max:6</code> ·
                                             <code>1_size:1000 1_canvas:circle 2_size:1024x768 2_min:2 2_max:2</code>. Vacio = sin cargador.</p></td></tr>
                             </table>
-                        <button type="submit" class="button button-primary">Guardar cambios</button>
-                        <button type="button" class="button ec-cancelar">Cancelar</button>
-                        <span class="ec-campo-status" aria-live="polite"></span>
+                        <div class="ec-form-acciones">
+                            <button type="submit" class="button button-primary">Guardar cambios</button>
+                            <button type="button" class="button ec-cancelar">Cancelar</button>
+                            <span class="ec-campo-status" aria-live="polite"></span>
+                        </div>
                     </form>
                 </div>
         <?php

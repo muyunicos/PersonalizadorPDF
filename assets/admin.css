@@ -310,6 +310,11 @@
 .ec-subir-status.ec-error, .ec-procesar-status.ec-error, .ec-campo-status.ec-error { color: #d63638; }
 .ec-procesar-status a { margin-left: 6px; }
 
+/* WordPress fuerza `display:inline-block` a `.button`, que gana sobre el
+   `[hidden]{display:none}` del navegador: el atributo hidden no ocultaba nada y
+   "Quitar filtros" se veia siempre. Se acota al wrap del plugin. */
+.personalizador-pdf .button[hidden] { display: none; }
+
 /* Cabecera de la tabla: el alta pasa a ser un boton (spec 013, T005). */
 .ec-c-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .ec-c-cabecera h2 { margin: 0; }
@@ -330,6 +335,11 @@
     box-shadow: -4px 0 24px rgba(0, 0, 0, .18);
     display: flex; flex-direction: column;
 }
+/* En pantallas chicas no tiene sentido dejar la lista a la vista: el panel se
+   lleva casi todo el ancho (a 1024 px, 680 eran dos tercios). */
+@media (max-width: 1100px) {
+    .ec-c-drawer-panel { width: 94vw; }
+}
 .ec-c-drawer-cab {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     padding: 12px 16px; border-bottom: 1px solid #dcdcde; background: #f6f7f7;
@@ -340,13 +350,17 @@
 .ec-c-drawer-cuerpo { flex: 1; overflow-y: auto; padding: 8px 16px 24px; }
 body.ec-c-drawer-abierto { overflow: hidden; }
 
-/* Botones del formulario pegados al pie del drawer. */
-.ec-c-drawer-cuerpo .ec-campo-form form .submit {
-    position: sticky; bottom: 0; background: #fff;
-    padding: 10px 0 0; margin: 16px 0 0; border-top: 1px solid #dcdcde;
+/* Una sola barra de acciones, pegada al pie del drawer: Guardar / Cancelar /
+   Probar. Antes "Probar" caia en una barra aparte, debajo de la de guardar. */
+.ec-c-drawer-cuerpo .ec-form-acciones,
+.ec-c-drawer-cuerpo form .submit {
+    position: sticky; bottom: 0; z-index: 2;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    background: #fff; margin: 16px 0 0; padding: 12px 0;
+    border-top: 1px solid #dcdcde;
+    box-shadow: 0 -6px 12px -8px rgba(0, 0, 0, .3);
 }
-.ec-c-drawer-cuerpo .ec-campo-form form .ec-cancelar { margin-left: 8px; }
-.ec-drawer-acciones { display: flex; align-items: center; gap: 12px; margin: 14px 0 0; padding-top: 12px; border-top: 1px dashed #dcdcde; }
+.ec-drawer-acciones { display: inline-flex; align-items: center; gap: 8px; }
 .ec-drawer-atajo { color: #646970; font-size: 12px; }
 .ec-c-drawer-cuerpo .ec-campo-form .form-table th { width: 150px; }
 .ec-c-drawer-cuerpo textarea { font-family: Consolas, Monaco, monospace; }
