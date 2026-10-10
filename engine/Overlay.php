@@ -543,7 +543,7 @@ class Overlay
     }
 
     /** Compara tuplas de desempate: menor primero. null se trata como infinito. */
-    private function cmpScore(array $a, array $b)
+    private function cmpScore(array $a, ?array $b)
     {
         if ($b === null) {
             return -1;

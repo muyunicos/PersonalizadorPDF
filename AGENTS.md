@@ -147,6 +147,7 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   ├── texto_puente.php     ← Puente TextMuy con stubs WP (fases separadas)
 │   ├── campos_migracion.php ← Banco v1→v2 + CRUD de campos (spec 012, corre en %TEMP%)
 │   ├── certificacion_hoja.php ← Certificación de `thumbs.sprite_firma` (ThumbEngine)
+│   ├── inventario_repo.php  ← Inventario de CODIGO del repo (genera docs/inventario-repo.md)
 │   ├── campos-contrato.test.js ← Contrato del montaje de campos + cargador (spec 012)
 │   ├── conciliacion.js      ← `PURO.conciliarGrupo` (spec 012, D17-D19)
 │   ├── expected_muestra.json
@@ -544,6 +545,7 @@ node tests/campos-contrato.test.js  # Montaje de campos + cargador (spec 012): "
 node tests/conciliacion.js    # `PURO.conciliarGrupo` (spec 012, D17-D19): "CONCILIACION OK"
 php tests/motor_smoke.php     # Smoke del motor (debe decir "SMOKE OK")
 php tests/parity.php          # Oráculo del detector (debe decir "PARIDAD OK")
+php tests/inventario_repo.php  # Inventario de CODIGO del repo (genera docs/inventario-repo.md)
 node tests/mockup-geometria.test.js   # Geometria pura del editor de mockups (spec 011):
                               # debe decir "GEOMETRIA OK (N checks)"
 node tests/mockup-contrato.test.js    # Cableado nucleo-consumidores + comportamiento del
@@ -565,6 +567,21 @@ php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
 ```
 Los 3 arneses CLI salen de inmediato si no corren por CLI (`PHP_SAPI !== 'cli'`):
 la carpeta `tests/` viaja con el plugin al hosting y no debe ser ejecutable por HTTP.
+
+### Auditoría de código (solo desarrollo; NO corre en hosting)
+```powershell
+php composer.phar run analisis              # PHPStan nivel 4 (phpstan.neon): codigo muerto,
+                                            # ramas muertas y condiciones imposibles
+npx --yes jscpd@4 --config .jscpd.json .    # Bloques clonados PHP/JS -> docs/jscpd-report.md
+php tests/inventario_repo.php               # Archivos/pesos/dependencias -> docs/inventario-repo.md
+```
+- `vendor/` y `composer.phar` estan en `.gitignore` (jamas se despliegan); `composer.json`,
+  `composer.lock`, `phpstan.neon` y `.jscpd.json` si se versionan.
+- Los FP estructurales estan ignorados **con comentario** en `phpstan.neon` (includes de
+  `admin/*.php` dentro de metodos de la clase, constantes del plugin, funciones `wc_*`) y
+  los simbolos que PHPStan no descubre viven en `tests/phpstan/simbolos.php`.
+- Los hallazgos que queden en rojo son trabajo pendiente: NO borrar ni "arreglar" nada
+  sin aprobacion explicita.
 
 ### Verificación en el sitio real (WordPress + Woo)
 Consola → pestaña **Test** → botón **Ejecutar smoke test**. Corre con WordPress/Woo

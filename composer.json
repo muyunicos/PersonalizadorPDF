@@ -1,0 +1,16 @@
+{
+    "name": "muyunicos/personalizador-pdf",
+    "description": "Herramientas de desarrollo del plugin Personalizador PDF (PHPStan). Solo require-dev: NO se despliega al hosting (vendor/ esta en .gitignore).",
+    "license": "proprietary",
+    "require": {
+        "php": ">=7.4"
+    },
+    "require-dev": {
+        "phpstan/phpstan": "^2.3",
+        "php-stubs/wordpress-stubs": "^7.1"
+    },
+    "scripts": {
+        "analisis": "phpstan analyse --memory-limit=1G",
+        "inventario": "@php tests/inventario_repo.php"
+    }
+}

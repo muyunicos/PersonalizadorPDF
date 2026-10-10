@@ -1313,12 +1313,6 @@ class Personalizador_PDF_Plugin
         return ['pdfs' => $pdfs, 'descartados' => $descartados];
     }
 
-    /** El PDF admite compra sin vistas (`preview_omisible`, US3). */
-    private static function omisible_ok($config)
-    {
-        return !empty($config['preview_omisible']);
-    }
-
     /**
      * Clave de regeneracion del pool (contrato sesion-item.md):
      * sha1(valor|preset|settings|WxH) y, si hay overrides resueltos,
@@ -2617,63 +2611,6 @@ class Personalizador_PDF_Plugin
         ];
     }
 
-    /** @deprecated v1 (spec 004). Sustituida arriba; se borra en F1. */
-    private function _pmu_campo_desde_post_v1(array $fuente, $id = 0)
-    {
-        $tipos = ['text', 'textarea', 'select', 'img', 'override'];
-        $tipo = isset($fuente['tipo']) ? (string)$fuente['tipo'] : '';
-        if (!in_array($tipo, $tipos, true)) {
-            throw new \RuntimeException('motor:campos:tipo:invalido');
-        }
-        $titulo = isset($fuente['titulo_cliente']) ? trim(strip_tags((string)$fuente['titulo_cliente'])) : '';
-        $ayuda = isset($fuente['texto_ayuda']) ? trim(strip_tags((string)$fuente['texto_ayuda'])) : '';
-        $etiquetas = [];
-        $crudas = isset($fuente['etiquetas'])
-            ? (is_array($fuente['etiquetas']) ? $fuente['etiquetas'] : explode(',', (string)$fuente['etiquetas']))
-            : [];
-        foreach ($crudas as $e) {
-            $e = strtolower(trim(preg_replace('/[^a-z0-9_\-]+/i', '-', (string)$e), '-'));
-            if ($e !== '') {
-                $etiquetas[] = substr($e, 0, 32);
-            }
-        }
-        $contenido = isset($fuente['contenido']) ? (string)$fuente['contenido'] : '';
-        if (preg_match('/<\s*(script|iframe|object|embed|form)\b/i', $contenido)) {
-            throw new \RuntimeException('motor:campos:contenido:prohibido');
-        }
-        if (preg_match('/\bid\s*=\s*["\']/', $contenido)) {
-            throw new \RuntimeException('motor:campos:contenido:sin_id');
-        }
-        foreach (['contenido' => $contenido,
-            'css' => isset($fuente['css']) ? (string)$fuente['css'] : '',
-            'script' => isset($fuente['script']) ? (string)$fuente['script'] : ''] as $k => $v) {
-            if (strlen($v) > 20000) {
-                throw new \RuntimeException('motor:campos:' . $k . ':tamano');
-            }
-        }
-        $corta = function ($t, $n) {
-            return function_exists('mb_substr') ? mb_substr($t, 0, $n, 'UTF-8') : substr($t, 0, $n);
-        };
-        $script = isset($fuente['script']) ? (string)$fuente['script'] : '';
-        // Sandbox del script (contract campos.md): funcion pura con ctx/root;
-        // prohibidos document.getElementById/querySelector, DOMContentLoaded e id=.
-        $this->pmu_uploads()->validar_script_campo($script);
-        // Tupla de 10 slots: [id, titulo_cliente, tipo, etiquetas[], texto_ayuda,
-        // visible, contenido, css, script, array] (spec 004 contract campos.md).
-        return [
-            (int)$id,
-            $corta($titulo, 200),
-            $tipo,
-            array_values(array_unique($etiquetas)),
-            $corta($ayuda, 500),
-            empty($fuente['visible']) ? false : true,
-            $contenido,
-            isset($fuente['css']) ? (string)$fuente['css'] : '',
-            $script,
-            !empty($fuente['array']) ? true : false,
-        ];
-    }
-
     /** Lista de campos activos: id => tupla de 10 slots (tombstones fuera). */
     public function cargar_campos($incluir_bajas = false)
     {
@@ -2753,21 +2690,6 @@ class Personalizador_PDF_Plugin
             ];
         }
         return [$out, $aviso];
-    }
-
-    /** @deprecated v1 (spec 004). Sustituida arriba; se borra en F1. */
-    private function _pmu_campos_activos_v1()
-    {
-        $res = $this->pmu_uploads()->campos_catalogo('listar');
-        $out = [];
-        foreach ($res['cat']['items'] as $t) {
-            if (count($t) < 10 || $t[1] === '' || $t[2] === '') {
-                continue;
-            }
-            $out[(int)$t[0]] = $t;
-        }
-        ksort($out);
-        return [$out, $res['aviso']];
     }
 
     /** Guarda un campo (alta o edicion). Responde JSON o redirige. */
@@ -3810,7 +3732,11 @@ JS;
         $this->fallar_seguridad();
     }
 
-    /** Fallo de seguridad: siempre JSON accionable (nunca pagina en blanco). */
+    /**
+     * Fallo de seguridad: siempre JSON accionable (nunca pagina en blanco).
+     *
+     * @return never wp_send_json_error() termina la peticion.
+     */
     private function fallar_seguridad()
     {
         wp_send_json_error('Permiso denegado o sesion vencida. Recarga la pagina y reintenta.');
@@ -3819,6 +3745,10 @@ JS;
     /**
      * Respuesta unica de los handlers admin: JSON (via pmuPost del JS).
      * Unica via de respuesta de la consola: no hay fallback por redirect.
+     *
+     * @return never wp_send_json_success/error() terminan la peticion; por eso
+     *               el codigo posterior a un catch que llama a responder()
+     *               siempre ve las variables del try ya asignadas.
      */
     private function responder($ok, array $args = [], $mensaje_error = '')
     {

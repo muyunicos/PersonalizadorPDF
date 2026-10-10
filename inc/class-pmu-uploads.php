@@ -1767,18 +1767,6 @@ class PMU_Uploads
 
     /* ==================== Utilidades ==================== */
 
-    /**
-     * Sanea un nombre de archivo de recurso del editor (fuentes/imagenes).
-     * Minusculas [a-z0-9_-], max 64. Devuelve '' si no queda nada.
-     */
-    private function nombre_recurso_seguro($nombre)
-    {
-        $limpio = strtolower((string)$nombre);
-        $limpio = preg_replace('/[^a-z0-9_-]+/', '-', $limpio);
-        $limpio = preg_replace('/^-+|-+$/', '', (string)$limpio);
-        return substr($limpio, 0, 64);
-    }
-
     /** Verifica la firma (magic bytes) de una imagen segun su extension. */
     private function firma_imagen_valida($ruta, $ext)
     {

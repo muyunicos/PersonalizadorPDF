@@ -635,15 +635,6 @@ class Pdf
         return $v;
     }
 
-    /** Devuelve el stream decodificado (contenedor stream de deref()). */
-    public function streamData($container)
-    {
-        if (!is_array($container) || !isset($container['stream'])) {
-            return null;
-        }
-        return $this->decodeStreamData($container['dict'], $container['data']);
-    }
-
     /** Aplica filtros de stream (/FlateDecode, ASCIIHexDecode, ...) y predictor. */
     public function decodeStreamData($dict, $raw)
     {
@@ -779,13 +770,6 @@ class Pdf
     public function objectNumbers()
     {
         return array_keys($this->objmap);
-    }
-
-    /** Offset en bytes del objeto (para depuracion). */
-    public function offsetOf($num)
-    {
-        $info = $this->objmap[$num] ?? null;
-        return $info && isset($info['off']) ? $info['off'] : -1;
     }
 
     /** Numeros de pagina (objetos) en orden de documento. */

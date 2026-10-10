@@ -5,6 +5,10 @@ output_*.pdf
 tests/salida_*.pdf
 tests/*.tmp
 
+# Herramientas de desarrollo (composer): jamas se suben al hosting.
+vendor/
+composer.phar
+
 # El modulo modules/textmuy/ SE versiona en este repositorio (v4.2).
 
 # Configuraciones de AI Assistant (Speckit recomendaciones).

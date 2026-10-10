@@ -1,0 +1,18 @@
+{
+    "pattern": "**/*.{php,js}",
+    "ignore": [
+        "**/node_modules/**",
+        "**/vendor/**",
+        "**/*.min.js",
+        "**/uploads/**",
+        "**/.specify/**",
+        "**/.clinerules/**",
+        "**/tests/fixtures/**",
+        "**/modules/textmuy/js/utils/**"
+    ],
+    "minLines": 15,
+    "minTokens": 80,
+    "reporters": ["console", "markdown"],
+    "output": "./docs",
+    "maxSize": "400kb"
+}

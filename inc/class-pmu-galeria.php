@@ -16,22 +16,6 @@ class PMU_Galeria
     const SPRITE_MAX_BYTES = 4194304;   // 4 MB
     const MINIATURA_MAX_BYTES = 512000; // 500 KB
 
-    /** Celda del recurso id dentro del sprite: x/y/w/h en pixeles.
-     *  Disposicion: col=(id-1)%c, fila=floor((id-1)/c). */
-    public function celda($id, $dims)
-    {
-        $w = max(1, (int)($dims['w'] ?? 100));
-        $h = max(1, (int)($dims['h'] ?? 100));
-        $c = max(1, (int)($dims['c'] ?? 8));
-        $i = max(0, (int)$id - 1);
-        return [
-            'x' => ($i % $c) * $w,
-            'y' => (int)floor($i / $c) * $h,
-            'w' => $w,
-            'h' => $h,
-        ];
-    }
-
     /** Firma binaria WEBP (RIFF....WEBP). */
     public function es_webp($ruta)
     {

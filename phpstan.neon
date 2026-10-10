@@ -1,0 +1,22 @@
+parameters:
+    level: 4
+    paths:
+        - personalizador-pdf.php
+        - admin
+        - engine
+        - inc
+    scanFiles:
+        - vendor/php-stubs/wordpress-stubs/wordpress-stubs.php
+        - tests/phpstan/simbolos.php
+    reportUnmatchedIgnoredErrors: false
+    ignoreErrors:
+        # Funciones de WooCommerce (plugin externo, sin stubs): no frenan el
+        # analisis de codigo muerto que nos interesa.
+        - '#^Function (wc_|WooCommerce)#'
+        # Arquitectura por include: admin/*.php se incluye DENTRO de metodos
+        # de Personalizador_PDF_Plugin, donde $this y los privados son legales.
+        # PHPStan analiza cada archivo como suelto y acusa el acceso privado.
+        - '#Call to private method .* of class Personalizador_PDF_Plugin#'
+        # Presets_base SI se usa: se llama desde admin/pdfs.php:28 (include en
+        # ambito de clase). PHPStan no lo cuenta como uso por el FP de arriba.
+        - '#^Method Personalizador_PDF_Plugin::presets_base\(\) is unused\.$#'
