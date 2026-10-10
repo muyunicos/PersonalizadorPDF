@@ -20,3 +20,57 @@ parameters:
         # Presets_base SI se usa: se llama desde admin/pdfs.php:28 (include en
         # ambito de clase). PHPStan no lo cuenta como uso por el FP de arriba.
         - '#^Method Personalizador_PDF_Plugin::presets_base\(\) is unused\.$#'
+
+        # --- FP estructurales del analisis nivel 4 (2026-10-09) ---
+        # No son bugs. PHPStan analiza cada archivo como suelto (la arquitectura
+        # es por include dentro de metodos de la clase), no sigue cuando una
+        # propiedad se llena en OTRO metodo, y no tiene stubs de WooCommerce.
+        # Se ignoran POR ARCHIVO para no tapar errores reales nuevos.
+
+        # engine/Overlay.php: $perPage se llena en agruparInstancias()/splicearStreams()
+        # (no en el flujo que PHPStan ve aca), y 'slot'/'quad' son claves opcionales
+        # por diseno (ranuras y rectangulos rotados).
+        - identifier: foreach.emptyArray
+          path: engine/Overlay.php
+        - identifier: nullCoalesce.offset
+          path: engine/Overlay.php
+        - identifier: isset.offset
+          path: engine/Overlay.php
+
+        # engine/Pdf.php: analisis de flujo del parser. $depth se decrementa DENTRO
+        # del bucle de readLiteralString (PHPStan no lo ve) y el && del 513 es una
+        # rama defensiva del lexer de diccionarios.
+        - identifier: greater.alwaysTrue
+          path: engine/Pdf.php
+        - identifier: booleanAnd.alwaysFalse
+          path: engine/Pdf.php
+        - identifier: identical.alwaysFalse
+          path: engine/Pdf.php
+
+        # inc/class-pmu-uploads.php
+        # - 1227/1228: isset defensivo sobre el puente de tupla v1 (count>3 ya lo
+        #   garantiza; se conserva por compatibilidad).
+        # - 2310..2370: break inalcanzable tras wp_send_json_* (hace wp_die/exit);
+        #   se deja por claridad del switch.
+        - identifier: isset.offset
+          path: inc/class-pmu-uploads.php
+        - identifier: deadCode.unreachable
+          path: inc/class-pmu-uploads.php
+
+        # admin/pdfs.php: ternario defensivo; el archivo se incluye dentro de un
+        # metodo, asi que PHPStan (suello) infiere $vista_pdf siempre truthy.
+        - identifier: ternary.alwaysTrue
+          path: admin/pdfs.php
+
+        # personalizador-pdf.php
+        # - 1672/1674/1715: metodos de WC_Order (wc_get_order) sin stubs; el codigo
+        #   ya se protege con method_exists antes de llamar.
+        # - 2195: is_array sobre un valor ya casteado (check de smoke intencional).
+        # - 3557: if ($tab === 'pdfs') siempre true tras los return de la whitelist;
+        #   se deja por claridad.
+        - identifier: method.nonObject
+          path: personalizador-pdf.php
+        - identifier: function.alreadyNarrowedType
+          path: personalizador-pdf.php
+        - identifier: identical.alwaysTrue
+          path: personalizador-pdf.php

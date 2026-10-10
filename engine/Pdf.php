@@ -41,6 +41,7 @@ class Lexer
         $this->p = (int)$p;
     }
 
+    /** @phpstan-impure */
     public function eof()
     {
         return $this->p >= strlen($this->s);

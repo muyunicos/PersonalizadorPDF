@@ -656,27 +656,6 @@ class PMU_Uploads
         return is_array($datos) ? $datos : null;
     }
 
-    /** Lee el catalogo global de campos (uploads/pmu/campos.json, sin thumbs). */
-    public function campos_catalogo($op = 'campos')
-    {
-        $ruta = $this->ruta_campos();
-        if (!is_file($ruta)) {
-            return ['cat' => ['items' => []], 'aviso' => null];
-        }
-        $crudo = (string)@file_get_contents($ruta);
-        $datos = $crudo === '' ? null : json_decode($crudo, true);
-        if (!is_array($datos) || !isset($datos['items']) || !is_array($datos['items'])) {
-            return ['cat' => ['items' => []], 'aviso' => 'motor:listar:catalogo:invalido:campos'];
-        }
-        $items = [];
-        foreach ($datos['items'] as $t) {
-            if (is_array($t) && isset($t[0]) && (int)$t[0] >= 1) {
-                $items[] = $t;
-            }
-        }
-        return ['cat' => ['items' => $items], 'aviso' => null];
-    }
-
     /**
      * Reglas de sandbox del `script` de un campo (contract campos.md):
      * `function(ctx, root)` con salida unica via ctx.set. Prohibidos
@@ -866,7 +845,7 @@ class PMU_Uploads
                 throw new Exception('motor:campos:' . $archivo . ':tamano');
             }
         }
-        if (is_array($datos) && !empty($datos['cargador'])) {
+        if (!empty($datos['cargador'])) {
             $datos['cargador'] = ['ranuras' => $this->validar_cargador($datos['cargador'])];
         }
 
@@ -1500,7 +1479,7 @@ class PMU_Uploads
             if (!preg_match('/^([0-9A-F]{6})(?:#([0-9]{1,3}))?$/', $ref, $mm)) {
                 return '';
             }
-            return isset($mm[2]) && $mm[2] !== '' ? $mm[1] . '#' . $mm[2] : $mm[1];
+            return isset($mm[2]) ? $mm[1] . '#' . $mm[2] : $mm[1];
         }
         $ambito = 'pdf';
         $valor = $ref;

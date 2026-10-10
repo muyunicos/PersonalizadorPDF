@@ -2516,7 +2516,7 @@ class Personalizador_PDF_Plugin
         if (!is_array($datos) || !isset($datos['grupos']) || !is_array($datos['grupos'])) {
             return null;
         }
-        foreach ((array)($datos['grupos'] ?? []) as $g) {
+        foreach ((array)$datos['grupos'] as $g) {
             if (!is_array($g) || !Metadata::idValido(isset($g['id']) ? $g['id'] : null)) {
                 return null;
             }
