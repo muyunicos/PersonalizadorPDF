@@ -121,7 +121,11 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   ├── cargador-pmu.js      ← Cargador de imágenes del comprador (spec 012): N ranuras
 │   │                          sobre SelectorPMU; valida `min` y sube la foto al item
 │   ├── selector-pmu.js      ← Cliente de subida/recorte de imágenes de campos (spec 004,
-│   │                          contrato `specs/004.../contracts/selector-pmu.md`)
+│   │                          contrato `specs/004.../contracts/selector-pmu.md`; editor visual
+│   │                          spec 016: Cropper.js en `crop`, canvas en `fit`)
+│   ├── vendor/cropper/      ← Cropper.js 1.6.2 vendoreado (min.js + min.css + LICENSE +
+│   │                          ORIGEN.md con hash; handle `personalizador-pdf-cropper`;
+│   │                          nunca CDN, nunca editar el minificado)
 │   └── miniaturas.js        ← ThumbEngine: miniaturas `.webp` y sprites por ámbito; único
 │                              cliente de `op=sprite`/`op=miniatura` (envía `firma`; nunca
 │                              escribe catálogos). Se encola en admin y su URL viaja al iframe
@@ -542,6 +546,7 @@ Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.Full
 php tests/campos_migracion.php   # Campos v2: migracion + CRUD (debe decir "CAMPOS V2 OK")
 php tests/certificacion_hoja.php  # Certificacion del sprite (debe decir "CERTIFICACION HOJA OK")
 node tests/campos-contrato.test.js  # Montaje de campos + cargador (spec 012): "CAMPOS CONTRATO OK"
+node tests/selector-contrato.test.js  # Contrato del selector visual (spec 016): "SELECTOR CONTRATO OK"
 node tests/conciliacion.js    # `PURO.conciliarGrupo` (spec 012, D17-D19): "CONCILIACION OK"
 php tests/motor_smoke.php     # Smoke del motor (debe decir "SMOKE OK")
 php tests/parity.php          # Oráculo del detector (debe decir "PARIDAD OK")
@@ -575,7 +580,9 @@ php composer.phar run analisis              # PHPStan nivel 4 (phpstan.neon): co
 npx --yes jscpd@4 --config .jscpd.json .    # Bloques clonados PHP/JS -> docs/jscpd-report.md
 php tests/inventario_repo.php               # Archivos/pesos/dependencias -> docs/inventario-repo.md
 ```
-- `vendor/` y `composer.phar` estan en `.gitignore` (jamas se despliegan); `composer.json`,
+- `/vendor/` (composer, anclado a la raiz) y `composer.phar` estan en `.gitignore`
+  (jamas se despliegan); `assets/vendor/cropper/` (Cropper.js 1.6.2, spec 016) SI
+  se versiona. `composer.json`,
   `composer.lock`, `phpstan.neon` y `.jscpd.json` si se versionan.
 - Los FP estructurales estan ignorados **con comentario** en `phpstan.neon` (includes de
   `admin/*.php` dentro de metodos de la clase, constantes del plugin, funciones `wc_*`) y

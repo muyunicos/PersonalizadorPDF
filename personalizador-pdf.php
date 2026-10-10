@@ -670,10 +670,27 @@ class Personalizador_PDF_Plugin
             PERSONALIZADOR_PDF_VERSION,
             true
         );
+        // Spec 016 (F0): Cropper.js 1.6.2 vendoreado (assets/vendor/cropper/).
+        // Es el motor de recorte del editor visual de selector-pmu. UMD sin
+        // dependencias, servido desde el plugin (nunca CDN). La hoja del marco
+        // viaja con el script y ambos se encolan ANTES que selector-pmu.
+        wp_enqueue_style(
+            'personalizador-pdf-cropper',
+            PERSONALIZADOR_PDF_URL . 'assets/vendor/cropper/cropper.min.css',
+            [],
+            PERSONALIZADOR_PDF_VERSION
+        );
+        wp_enqueue_script(
+            'personalizador-pdf-cropper',
+            PERSONALIZADOR_PDF_URL . 'assets/vendor/cropper/cropper.min.js',
+            [],
+            PERSONALIZADOR_PDF_VERSION,
+            true
+        );
         wp_enqueue_script(
             'personalizador-pdf-selector',
             PERSONALIZADOR_PDF_URL . 'assets/selector-pmu.js',
-            [],
+            ['personalizador-pdf-cropper'],
             PERSONALIZADOR_PDF_VERSION,
             true
         );

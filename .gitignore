@@ -6,7 +6,9 @@ tests/salida_*.pdf
 tests/*.tmp
 
 # Herramientas de desarrollo (composer): jamas se suben al hosting.
-vendor/
+# Anclado a la RAIZ: el `assets/vendor/cropper/` del plugin SI se versiona
+# (Cropper.js 1.6.2 vendoreado, spec 016; el deploy es push a git).
+/vendor/
 composer.phar
 
 # El modulo modules/textmuy/ SE versiona en este repositorio (v4.2).

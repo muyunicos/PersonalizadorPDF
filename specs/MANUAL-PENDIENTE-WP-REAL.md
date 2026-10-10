@@ -1,6 +1,7 @@
 # Recorrido manual pendiente en WP real (sesion unica)
 
-> Cubre en UNA sesion: T030 (004) + T012-recorrido (005) + T017/T029 (006) + T031 (012).
+> Cubre en UNA sesion: T030 (004) + T012-recorrido (005) + T017/T029 (006) + T031 (012)
+> + T022 (016, cuando F1-F5 esten implementadas).
 > Requiere: panel WP del administrador con plugin activo + Woo + modulo integrado
 > (`modules/textmuy/`) + `uploads/pmu/pdfs/muestra.pdf` (dato de usuario, no versionado).
 > Las puertas automaticas ya estan en verde (ver §0); esto es solo verificacion con datos reales.
@@ -144,6 +145,27 @@ Detalle completo por spec: [004/quickstart.md §1](./004-woocommerce-pdf-persona
 9. Verificar en el PDF descargable: cada hueco lleva **su** foto (no la misma repetida).
    (Origen: [012/quickstart.md](./012-campos-consola/quickstart.md).)
 
+## 6c. Editor visual de fotos (016 T022)
+
+> Se activa cuando F1-F5 esten implementadas (hoy F0: vendor + encolado + puerta).
+> Probar con DevTools en modo movil emulado y en escritorio.
+
+1. **Ficha con un campo de imagen** (plantilla "Imagen (cargador)", ranura con `min=1`):
+   tocar una ranura -> modal full-screen en movil / dialogo amplio en escritorio.
+2. Cargar una foto por **camara** (movil), por **soltar** sobre el modal y por clic.
+   El badge muestra "Origen WxH px".
+3. Ajustar con **dedos**: pan (1 dedo), pinch (2 dedos, 1x-8x), doble tap (alterna
+   encajar/100%), rotar 90° por boton y gesto. El badge muestra "Salida WxH px · zoom xN"
+   en vivo. Repetir el mismo ajuste con **mouse**: el PNG final debe ser identico en tamaño.
+4. **Tira**: la miniatura es la foto (mascara de la forma de la ranura); tocarla ->
+   quitar / **cambiar** (reemplaza sin sumar). `min`/`max` y "Listo" intactos.
+5. Agregar al carrito y **"Editar"**: las fotos ya cargadas aparecen en las ranuras
+   (restauracion por `personalizador_pdf_subida_url`).
+6. **Degradacion** (FR-006): bloquear `cropper.min.js` en DevTools -> el modal vuelve al
+   comportamiento viejo (canvas + slider) y avisa; la ficha no se rompe.
+7. Vista previa + PDF final: la foto ajustada llega al hueco correcto (flujo 012 intacto).
+   (Origen: [016/quickstart.md](./016-editor-visual-fotos/quickstart.md).)
+
 ## 7. Cierre
 
 - [ ] §1 raiz unica OK (T017-parcial + T029-parcial)
@@ -153,6 +175,7 @@ Detalle completo por spec: [004/quickstart.md §1](./004-woocommerce-pdf-persona
 - [ ] §5 snapshot/auditoria OK (T012-parcial: SC-5/SC-6)
 - [ ] §6 fallos + respaldo OK (T029-resto)
 - [ ] §6b campos reutilizables OK (012 T031: editor, global, cargador, nunca bloquea)
+- [ ] §6c editor visual de fotos OK (016 T022: dedos/mouse, cambio de foto, restauracion)
 - [ ] Datos de prueba limpiados (solo `tmp/sesion-*`, `tmp/muestras/*`, `tmp/orders/*`)
 - [ ] Al cerrar todo: marcar T030/T012/T017/T029 `[X]` en sus `tasks.md` y archivar
       este archivo a `_archivo/` con fecha.
