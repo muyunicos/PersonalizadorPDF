@@ -214,7 +214,7 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
    `op=` de presets/imágenes/fuentes). Sin puente el editor NO opera: muestra un
    error accionable y hace cero peticiones locales (no hay modo standalone).
 5. **Versionado de estáticos (cache-bust)**: `render-core.html` e `index.html` referencian
-   sus scripts internos con `?v=RCn` (**RC40 hoy**): al cambiar cualquier JS del módulo,
+   sus scripts internos con `?v=RCn` (**RC59 hoy**): al cambiar cualquier JS del módulo,
    subir el número en ambos HTML.
 6. **Galería**: manejada internamente por el módulo (`js/galeria.js`), con preview en vivo.
    La lectura es **canónica y certificada**: `ensureSpriteCanonico(ambito)` +
@@ -605,16 +605,16 @@ node tests/sprite-canonico.test.js && node tests/fuente-compuesta.test.js && nod
 node tests/fuente-selector.test.js && node tests/integridad-archivos.test.js && node tests/rc-bump.test.js
 Set-Location ..\..
 ```
-(21 suites `*.test.js` + `tests/galerias.browser.js`; Node NO corre en el servidor productivo
+(38 suites `*.test.js` + `tests/galerias.browser.js`; Node NO corre en el servidor productivo
 de WP: es solo testing del módulo. Las ultimas 5 en entrar: `preset-roundtrip`,
 `fuente-compuesta`, `fuente-carga-estados`, `fuente-selector` e `integridad-archivos`;
-`?v=RC40` hoy en ambos HTML.)
+`?v=RC59` hoy en ambos HTML.)
 
 `tests/galerias.browser.js` es la única prueba con **navegador real** (Playwright + Chrome vía
 la variable de entorno `TEXTMUY_CHROME`): valida el DOM de las galerías (celdas, descargas,
 geometría). No corre en el hosting; es la puerta que consume la spec 009 (SC-006, T027/T031).
-Esa spec suma además `tests/hoja-generacion.test.js` al llegar la implementación (22 suites
-entonces): si el conteo no da 21, revisar si la 009 ya entró.
+Nota: `hoja-generacion.test.js` ya entró con la spec 009; el conteo vigente es 38 suites.
+Si al regenerar el módulo el total no cuadra, revisar si entraron o salieron suites.
 
 ## 10. Reglas para la IA al editar
 
@@ -633,7 +633,7 @@ entonces): si el conteo no da 21, revisar si la 009 ya entró.
   gitignored): actualizá con `specify integration upgrade cline --script ps` (§8).
 - ✅ El módulo `modules/textmuy/` es un repositorio git propio (`muyunicos/textmuy`, el
   original) que vive dentro de este checkout: se edita directamente y se corren sus tests
-  Node (`node --check` + 21 suites), pero sus commits y push van EN ESE repo; se hace bump
+  Node (`node --check` + 38 suites), pero sus commits y push van EN ESE repo; se hace bump
   `?v=RCn` en ambos HTML al tocar su JS.
 - ❌ NO DEBES: guardar datos generados por el admin dentro de la carpeta del plugin
   (siempre usar `uploads/` según §5).
