@@ -806,6 +806,10 @@ jQuery(function ($) {
                 }
                 $li.append($inst);
             }
+            // El <li> se construia pero NUNCA se insertaba: el panel "Placeholders"
+            // quedaba vacio aunque hubiera grupos (bug: "no me aparecen los
+            // placeholders"). Sin este append el forEach descartaba cada nodo.
+            $ul.append($li);
         });
     }
     /* ============ Propiedades y ajustes (T020, T035) ============ */

@@ -316,6 +316,14 @@ check('el grupo con varias instancias ofrece elegir la instancia',
         && ed.indexOf('data-instancia') !== -1
         && ed.indexOf('etiquetaInstancia') !== -1);
 
+// REGRESION: en pintarGrupos() se construia el <li> del placeholder pero NUNCA se
+// insertaba en el <ul>: el panel "Placeholders" salia vacio con .ec-mk-vacio oculto
+// (porque grupos.length > 0). Construir el nodo no alcanza; hay que agregarlo al <ul>.
+// Se verifica que el append al <ul> ocurra DENTRO del forEach de pintarGrupos.
+check('pintarGrupos inserta cada <li> en el <ul> (no solo lo construye)',
+    /function pintarGrupos\(\)[\s\S]*?forEach\([\s\S]*?\$ul\.append\(\$li\)/.test(ed),
+    'el <li> del placeholder se creaba pero no se insertaba: panel vacio');
+
 // El indice del ref es 1-based: la #01 es el ref plano (legado).
 check('el ref de la instancia es 1-based (#01 = ref plano)',
     ed.indexOf('n > 1 ? String(g.id)') !== -1,

@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.6.4
+Stable tag: 4.6.5
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.6.5 =
+* **Fix: los placeholders no aparecian en el editor de mockups**. En `pintarGrupos()` (`assets/mockups.js`) se construia el `<li>` de cada placeholder (grupo, instancias, etiqueta PH-...) pero **nunca se insertaba en el `<ul>`**, asi que el panel "Placeholders" quedaba vacio con el aviso "Este PDF no tiene grupos" oculto (porque `grupos.length > 0`). Una linea: `$ul.append($li)` dentro del `forEach`. Test: assert nuevo en `mockup-contrato.test.js` que exige el append (70 checks).
 
 = 4.6.4 =
 * **Fix: el panel de personalizacion no aparecia en la ficha del producto** (bug en produccion, reportado en `muyunicos.com`). La ficha resuelve el PDF por el **postmeta canonico** `_pmu_pdf_slugs` del producto (constitution §I), NO por el espejo `config.json:productos[]`; pero la consola solo escribia el espejo, asi que asociar un producto nunca encendia el panel aunque `config.json` se veia correcto. `handle_config_guardar()` ahora sincroniza el postmeta canonico de cada producto (reutiliza `producto_pdf_vincular/desvincular`, idempotente) al guardar; un vinculo que falla es un **aviso visible**, no un error que tumbe el guardado. Repara los PDFs ya asociados con solo volver a pulsar "Guardar". Arnés: 2 asserts nuevos en la fase `tienda`.
