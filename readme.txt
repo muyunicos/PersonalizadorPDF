@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.6.2
+Stable tag: 4.6.3
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,10 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.6.3 =
+* **Retiro de la migracion v1 de campos**: el formato v1 del catalogo (`campos.json` sin `version`, con tuplas de 10 slots) nunca se publico en una version distribuida, asi que no hay datos v1 que migrar en ningun sitio real. Se retira `PMU_Uploads::migrar_campos()`, el aviso `motor:campos:migrar:pendiente`, el boton "Migrar ahora" y la fase `campo_migrar` del arnes. El aviso de la pestana Campos queda reservado a los catalogos ilegibles (que si son un problema real de datos). Un indice sin `version` con items vacios se lee como catalogo vacio: sin aviso.
+* **Mockups: distribuir (cierra T034 de la spec 011)**: junto a los 6 botones de alinear hay ahora "Distribuir H" y "Distribuir V", que reparten las capas seleccionadas con el mismo hueco de borde a borde del lienzo via `PMUGeometria.distribuir` (con menos de 3 seleccionadas no hace nada), con el mismo ciclo de autoguardado y deshacer que el resto de la edicion.
 
 = 4.6.2 =
 * **Migracion de campos v1 con boton**: la pestana Campos muestra "Migrar ahora" cuando el catalogo sigue en el formato v1 (aviso `motor:campos:migrar:pendiente`). El boton dispara la migracion one-shot al formato vigente (indice v3 + carpeta por campo), con copia `campos.json.bak` previa, idempotente y reversible. Mapeo de tipos v1: `select` -> `opciones`, `img` -> `imagen`, el resto -> `texto`; las categorias v1 no se migran (fuera del formato). El metodo viejo `migrar_campos_v2` (que dejaba el indice a medias) se retira.

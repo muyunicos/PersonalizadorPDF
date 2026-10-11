@@ -110,7 +110,7 @@ jQuery(function ($) {
        editor se abre en el DRAWER, no dentro de la fila: los formularios viven
        dormidos en `#ec-campo-forms` y se mueven al drawer. */
     $(function () {
-        if (!$('form.ec-form-campo, form.ec-form-campo-baja, form.ec-form-campo-restaurar, form.ec-form-campo-migrar').length) { return; }
+        if (!$('form.ec-form-campo, form.ec-form-campo-baja, form.ec-form-campo-restaurar').length) { return; }
         var nonceCampo = (cfgGlobal.nonceAccion && cfgGlobal.nonceAccion.campo)
             || (window.PMU_CAMPO && PMU_CAMPO.nonce) || '';
 
@@ -364,14 +364,6 @@ jQuery(function ($) {
             });
         });
 
-        // Migrar el indice v1: al exito recarga (el aviso y el boton desaparecen).
-        $('form.ec-form-campo-migrar').each(function () {
-            var $f = $(this);
-            pmuForm($f, 'personalizador_pdf_campo_migrar', nonceCampo, function (d) {
-                pmuAviso($f.closest('.wrap'), 'Catalogo migrado (' + ((d && d.campos) || 0) + ' campo(s)). Recargando…');
-                window.setTimeout(function () { window.location.reload(); }, 500);
-            });
-        });
         // Los bloques de F3/F4 y el preview (abajo) corren fuera de este ready:
         // se publican aqui para que alcancen el nonce y los ayudantes del editor.
         window.PMUCampos = {

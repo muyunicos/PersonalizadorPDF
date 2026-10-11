@@ -21,7 +21,7 @@ if (PHP_SAPI !== 'cli') {
  *    validez | validez_admin | validez_admin_mal | ficha* | vista_previa* |
  *    carrito | pool* | overrides | sesion | conciliacion | completados | mockups* |
  *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
- *    reanalizar | borrado | campo_global | campo_subida | campo_migrar`
+ *    reanalizar | borrado | campo_global | campo_subida`
  */
 
 $fase = isset($argv[1]) ? $argv[1] : 'setup';
@@ -986,20 +986,6 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('la baja CONSERVA los archivos del campo', is_array($ver) && !empty($ver['archivos_baja']));
             check('alta con script prohibido rechazada', (string)($ver['err_nueva'] ?? '') === '');
             break;
-        case 'campo_migrar':
-            // 016/4.6.2: migracion one-shot v1 -> v3 + handler del boton.
-            $cm = isset($GLOBALS['test_cm']) ? $GLOBALS['test_cm'] : null;
-            check('migracion motor: hecha (1 campo + 1 baja)', is_array($cm) && ($cm['r1']['hecho'] ?? false) === true
-                && (int)($cm['r1']['campos'] ?? 0) === 1 && (int)($cm['r1']['bajas'] ?? 0) === 1);
-            check('migracion motor: idempotente', is_array($cm) && ($cm['r2']['motivo'] ?? '') === 'ya migrado');
-            check('indice version 3', is_array($cm) && (int)($cm['version'] ?? 0) === 3);
-            check('backup .bak existe', is_array($cm) && !empty($cm['bak']));
-            check('tipo v1 text -> texto', is_array($cm) && ($cm['tipo1'] ?? '') === 'texto');
-            check('tombstone migrado como baja', is_array($cm) && ($cm['baja2'] ?? false) === true);
-            check('meta sin categorias (spec 015 D9)', is_array($cm) && is_array($cm['meta1'])
-                && !array_key_exists('categorias', $cm['meta1']) && !empty($cm['meta1']['creado']));
-            check('archivos del campo migrado', is_array($cm) && is_array($cm['datos1'])
-                && ($cm['datos1']['datos']['nombre'] ?? '') === 'Nombre');
             check('handler responde JSON success (ya migrado)', is_array($json) && $json['success'] === true
                 && ($json['data']['motivo'] ?? '') === 'ya migrado');
             break;
@@ -2702,43 +2688,6 @@ switch ($fase) {
         }
         break;
 
-    case 'campo_migrar':
-        // 016/4.6.2: migracion v1 -> v3 con el MOTOR (idempotencia) y el
-        // HANDLER del boton sobre el entorno ya migrado.
-        preparar_entorno($testBase, $base);
-        if (!class_exists('PMU_Uploads')) {
-            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
-            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
-        }
-        try {
-            $motor_cm = new PMU_Uploads();
-            $ruta_cm = $motor_cm->ruta_campos();
-            file_put_contents($ruta_cm, json_encode([
-                'items' => [
-                    [1, 'Nombre', 'text', [], 'Escribi tu nombre', 1, '<input data-rol="valor">', '', '', false],
-                    [2, '', '', [], '', 0, '', '', '', false],
-                ],
-            ]));
-            $r1 = $motor_cm->migrar_campos();
-            $r2 = $motor_cm->migrar_campos();
-            $idx = $motor_cm->indice_campos();
-            $GLOBALS['test_cm'] = [
-                'r1' => $r1, 'r2' => $r2,
-                'version' => (int)$idx['version'],
-                'bak' => is_file($ruta_cm . '.bak'),
-                'tipo1' => isset($idx['items'][0]['tipo']) ? $idx['items'][0]['tipo'] : '',
-                'baja2' => isset($idx['items'][1]['baja']) ? $idx['items'][1]['baja'] : null,
-                'meta1' => isset($idx['meta']['1']) ? $idx['meta']['1'] : null,
-                'datos1' => $motor_cm->leer_campo(1),
-            ];
-        } catch (Throwable $e) {
-            $GLOBALS['test_cm'] = ['error' => $e->getMessage()];
-        }
-        // El HANDLER sobre el indice ya migrado: responde ya migrado (JSON).
-        $_POST = ['action' => 'personalizador_pdf_campo_migrar', '_wpnonce' => 'nonce'];
-        $_REQUEST = $_POST;
-        $p->handle_campo_migrar(); // exit en responder (JSON success)
-        break;
     // 012/F5 (T018-T020): el CSS/JS global del plugin.
     case 'campo_global':
         if (!class_exists('PMU_Uploads')) {

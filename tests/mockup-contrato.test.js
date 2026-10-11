@@ -79,6 +79,16 @@ consumidores.forEach(function (fichero) {
 
 check('el alias composicion sigue disponible (compatibilidad)', R.composicion === R.componer);
 
+/* ==== T034 (spec 011, FR-027): distribuir expuesto en el editor ==== */
+var geometria = require(path.join(RAIZ, 'assets/mockup-geometria.js'));
+var editor = leer('assets/mockups.js');
+check('PMUGeometria.distribuir sigue exportado', typeof geometria.distribuir === 'function');
+check('el editor llama a PMUGeometria.distribuir', /\bG\.distribuir\s*\(/.test(editor));
+check('el editor expone los botones de distribuir', editor.indexOf('ec-mk-dist') !== -1
+    && editor.indexOf('Distribuir H') !== -1 && editor.indexOf('Distribuir V') !== -1);
+check('el editor lleva el estado de seleccion multiple', editor.indexOf('seleccionados: []') !== -1
+    && editor.indexOf('ec-mk-sel') !== -1);
+
 /* ============ 2. Comportamiento del nucleo con contexto falso ============ */
 
 /** Contexto 2D falso que registra lo que se dibuja y en que orden. */

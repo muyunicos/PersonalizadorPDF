@@ -43,6 +43,7 @@ jQuery(function ($) {
         mockups: (datos.mockups || []).map(function (m) { return normalizarMockup(m); }),
         actual: 0,
         seleccion: -1,
+        seleccionados: [],
         zoom: 2,
         verTexto: true,
         guardado: 'guardado',
@@ -202,6 +203,11 @@ jQuery(function ($) {
             '          <button type="button" class="button button-small ec-mk-alin" data-pos="arriba">Arriba</button>' +
             '          <button type="button" class="button button-small ec-mk-alin" data-pos="centro_v">Centro V</button>' +
             '          <button type="button" class="button button-small ec-mk-alin" data-pos="abajo">Abajo</button>' +
+            '        </div>' +
+            '        <div class="ec-mk-acciones">' +
+            '          <span class="description" style="margin-right:4px">Distribuir (Ctrl+clic marca varias):</span>' +
+            '          <button type="button" class="button button-small ec-mk-dist" data-eje="x">Distribuir H</button>' +
+            '          <button type="button" class="button button-small ec-mk-dist" data-eje="y">Distribuir V</button>' +
             '        </div>' +
             '      </div>' +
             '      <div class="ec-mk-panel ec-mk-panel-props" hidden>' +
@@ -491,6 +497,7 @@ jQuery(function ($) {
         } else {
             var i = G.acertarCapa(capas(), p.x, p.y);
             estado.seleccion = i;
+            estado.seleccionados = [];
             if (i >= 0) {
                 estado.arrastre = { tipo: 'mover', inicio: p, original: Object.assign({}, capas()[i]) };
             }
@@ -710,6 +717,7 @@ jQuery(function ($) {
                 var invalida = (estado.avisoCapa || []).indexOf(indice) !== -1;
                 var $li = $('<li>').toggleClass('ec-mk-capa', true)
                     .toggleClass('ec-sel', indice === estado.seleccion)
+                    .toggleClass('ec-mk-sel', (estado.seleccionados || []).indexOf(indice) !== -1)
                     .toggleClass('ec-invalida', invalida)
                     .toggleClass('ec-oculta', !!c.oculta)
                     .attr('data-i', indice).attr('tabindex', '0')
@@ -870,6 +878,7 @@ jQuery(function ($) {
         estado.mockups.push(nuevo);
         estado.actual = estado.mockups.length - 1;
         estado.seleccion = -1;
+        estado.seleccionados = [];
         marcarPaso();
         sinGuardar();
         refrescar();
@@ -935,13 +944,53 @@ jQuery(function ($) {
         refrescar();
     }
 
-    function alinearSeleccion(posición) {
+    function alinearSeleccion(posicion) {
         var m = mockup();
         if (!m || estado.seleccion < 0) { return; }
         m.capas = G.alinear(m.capas, [estado.seleccion], posicion, { x: 0, y: 0, w: LIENZO, h: LIENZO });
         marcarPaso();
         sinGuardar();
         refrescar();
+    }
+
+    /**
+     * T034 (spec 011, FR-027): reparte con el MISMO hueco las capas marcadas
+     * con Ctrl/Cmd en la lista. Sin marcas, reparte TODAS las capas de la
+     * vista (y avisa): asi el boton nunca es una sorpresa vacia. Con menos de
+     * 3 capas no hay hueco que repartir y la funcion pura no hace nada.
+     */
+    function indicesADistribuir(m) {
+        var sel = (estado.seleccionados || []).filter(function (i) { return m.capas[i]; });
+        if (estado.seleccion >= 0 && m.capas[estado.seleccion] && sel.indexOf(estado.seleccion) === -1) {
+            sel.push(estado.seleccion);
+        }
+        return sel;
+    }
+
+    function distribuirSeleccion(eje) {
+        var m = mockup();
+        if (!m) { return; }
+        var sel = indicesADistribuir(m);
+        var aviso = '';
+        if (!sel.length) {
+            if (m.capas.length < 3) {
+                aviso = 'Distribuir necesita al menos 3 capas en la vista.';
+            } else {
+                sel = m.capas.map(function (c, i) { return i; });
+                aviso = 'Sin capas marcadas: se repartieron las ' + sel.length + ' de la vista.';
+            }
+        } else if (sel.length < 3) {
+            aviso = 'Marca al menos 3 capas (Ctrl+clic) para repartir.';
+        }
+        if (sel.length < 3) {
+            if (aviso) { $ed.find('.ec-mk-alertas').text(aviso); }
+            return;
+        }
+        m.capas = G.distribuir(m.capas, sel, eje, { x: 0, y: 0, w: LIENZO, h: LIENZO });
+        marcarPaso();
+        sinGuardar();
+        refrescar();
+        if (aviso) { $ed.find('.ec-mk-alertas').text(aviso); }
     }
 
     function eliminarMockup() {
@@ -1175,6 +1224,17 @@ jQuery(function ($) {
         var i = parseInt($(this).attr('data-i'), 10);
         var acc = String($(ev.target).attr('data-acc') || '');
         if (!acc) {
+            // Sin Ctrl/Cmd: seleccion simple (todo lo anterior se pierde).
+            // Con Ctrl/Cmd: alterna la capa en la seleccion multiple (T034:
+            // las capas a repartir). Si no hay ninguna marcada y se pulsa
+            // Ctrl/Cmd, se abre la seleccion con esa capa.
+            if (ev.ctrlKey || ev.metaKey) {
+                var k = estado.seleccionados.indexOf(i);
+                if (k === -1) { estado.seleccionados.push(i); }
+                else { estado.seleccionados.splice(k, 1); }
+            } else {
+                estado.seleccionados = [];
+            }
             estado.seleccion = i;
             refrescar();
             return;
@@ -1451,7 +1511,7 @@ jQuery(function ($) {
             duplicarCapa();
             return;
         }
-        if (ev.key === 'Escape') { estado.seleccion = -1; refrescar(); return; }
+        if (ev.key === 'Escape') { estado.seleccion = -1; estado.seleccionados = []; refrescar(); return; }
         if (ev.key === 'Delete' || ev.key === 'Backspace') {
             if (estado.seleccion >= 0) { ev.preventDefault(); borrarCapa(); }
             return;
@@ -1494,6 +1554,11 @@ jQuery(function ($) {
     /* Alineacion rapida: botones con data-pos. */
     $ed.on('click', '.ec-mk-alin', function () {
         alinearSeleccion(String($(this).attr('data-pos')));
+    });
+
+    /* Distribuir (T034, FR-027): data-eje="x"|"y". */
+    $ed.on('click', '.ec-mk-dist', function () {
+        distribuirSeleccion(String($(this).attr('data-eje')) === 'y' ? 'y' : 'x');
     });
 
     /* Arranque. */

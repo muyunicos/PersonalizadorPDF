@@ -45,30 +45,23 @@ function lanza($fn) {
 $m = new PMU_Uploads();
 $ruta = $m->ruta_campos();
 
-// --- Sin catalogo: no hace nada ---
-$r = $m->migrar_campos();
-check('sin catalogo -> hecho sin cambios', $r['hecho'] === true && $r['motivo'] === 'sin catalogo');
+// --- Indice vacio: se lee como vacio y ya declara version 3 ---
+$vacio = $m->indice_campos();
+check('indice vacio declara version 3', (int) $vacio['version'] === 3 && $vacio['items'] === []);
 
-// --- Siembra v1: 2 campos vivos + 1 tombstone ---
-$v1 = ['items' => [
-    [1, 'Nombre', 'text', ['datos'], 'Escribi tu nombre', 1, '<input data-rol="valor">', '.a{color:red}', 'function(ctx,root){ctx.set(1,{valor:"x",cliente:"X"});}', false],
-    [2, 'Fotos', 'img', ['navidad', 'foto'], 'Subi tus fotos', 1, '<button>Fotos</button>', '', '', true],
-    [3, '', '', [], '', 0, '', '', '', false],
-]];
-file_put_contents($ruta, json_encode($v1, JSON_PRETTY_PRINT));
+// --- Siembra v3 por la API vigente: 3 campos (uno con array) ---
+$m->campo_alta('texto', ['nombre' => 'Nombre', 'titulo_cliente' => 'Nombre', 'texto_ayuda' => 'Escribi tu nombre', 'array' => false], '<input data-rol="valor">', '.a{color:red}', 'function(ctx,root){ctx.set(1,{valor:"x",cliente:"X"});}');
+$m->campo_alta('imagen', ['nombre' => 'Fotos', 'titulo_cliente' => 'Fotos', 'texto_ayuda' => 'Subi tus fotos', 'array' => true], '<button>Fotos</button>', '', '');
+$m->campo_alta('texto', ['nombre' => 'Baja', 'titulo_cliente' => 'Baja'], '', '', '');
+$m->campo_baja(3);
 
-$r = $m->migrar_campos();
-check('migracion hecha', $r['hecho'] === true);
-check('2 campos migrados', $r['campos'] === 2);
-check('1 baja migrada', $r['bajas'] === 1);
-
-// --- Indice v2 ---
+// --- El indice que escribio el CRUD ---
 $idx = json_decode(file_get_contents($ruta), true);
 check('version = 3 (spec 015 D9/D10)', isset($idx['version']) && (int)$idx['version'] === 3);
-check('3 items en el indice', count($idx['items']) === 3);
+check('3 items en el indice (la baja sigue listada)', count($idx['items']) === 3);
 check('campo 3 dado de baja', $idx['items'][2]['baja'] === true);
-check('tipo v1 text -> texto', $idx['items'][0]['tipo'] === 'texto');
-check('tipo v1 img -> imagen', $idx['items'][1]['tipo'] === 'imagen');
+check('tipo texto en items[0]', $idx['items'][0]['tipo'] === 'texto');
+check('tipo imagen en items[1]', $idx['items'][1]['tipo'] === 'imagen');
 check('items sin plantilla (v3)', !array_key_exists('plantilla', $idx['items'][0]));
 check('meta sin categorias (spec 015 D9)', !array_key_exists('categorias', $idx['meta']['2']));
 check('meta con creado+modificado', !empty($idx['meta']['1']['creado']) && !empty($idx['meta']['1']['modificado']));
@@ -78,7 +71,7 @@ check('carpeta del campo 1 existe', is_dir($m->dir_campo(1)));
 check('campo.htm del campo 1', trim(file_get_contents($m->ruta_campo(1, 'campo.htm'))) === '<input data-rol="valor">');
 check('campo.css del campo 1', trim(file_get_contents($m->ruta_campo(1, 'campo.css'))) === '.a{color:red}');
 check('campo.js del campo 1', strpos(file_get_contents($m->ruta_campo(1, 'campo.js')), 'function(ctx,root)') === 0);
-check('NO hay carpeta para el tombstone', !is_dir($m->dir_campo(3)));
+check('la baja CONSERVA la carpeta (v3, a diferencia de la v1)', is_dir($m->dir_campo(3)));
 
 $d = json_decode(file_get_contents($m->ruta_campo(1, 'datos.json')), true);
 check('datos.json: nombre', $d['nombre'] === 'Nombre');
@@ -89,22 +82,8 @@ check('datos.json: protegido=false', $d['protegido'] === false);
 $d2 = json_decode(file_get_contents($m->ruta_campo(2, 'datos.json')), true);
 check('datos.json: array=true (campo 2)', $d2['array'] === true);
 
-// --- Backup existe ---
-check('campos.json.bak guardado', is_file($ruta . '.bak'));
-check('el .bak es la v1', strpos(file_get_contents($ruta . '.bak'), '"Nombre"') !== false);
-
-// --- Idempotente ---
-$r2 = $m->migrar_campos();
-check('segunda pasada = ya migrado', $r2['hecho'] === true && $r2['motivo'] === 'ya migrado');
-
-// --- Lectura completa ---
-// --- Backup + idempotencia (antes de leer: la migracion ya corrio una vez) ---
-check('campos.json.bak guardado', is_file($ruta . '.bak'));
-check('el .bak conserva la v1', strpos(file_get_contents($ruta . '.bak'), '"Nombre"') !== false);
-$r2 = $m->migrar_campos();
-check('segunda pasada = ya migrado', $r2['hecho'] === true && $r2['motivo'] === 'ya migrado');
-
-// --- Lectura completa ---
+// --- Sin migracion v1: el metodo ya no existe (retirado en 4.6.3) ---
+check('migrar_campos() retirado', !method_exists($m, 'migrar_campos'));
 $c = $m->leer_campo(1);
 check('leer_campo devuelve datos+codigo', $c['id'] === 1 && strpos($c['htm'], 'data-rol') !== false && $c['datos']['nombre'] === 'Nombre');
 check('leer_campo de id inexistente = null', $m->leer_campo(99) === null);

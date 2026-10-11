@@ -705,6 +705,9 @@ body.ec-c-drawer-abierto { overflow: hidden; }
 }
 .ec-mk-capa:hover { border-color: #2271b1; }
 .ec-mk-capa.ec-sel { border-color: #2271b1; background: #f0f6fc; }
+/* Seleccion multiple (T034): marca ademas de la principal, para repartir. */
+.ec-mk-capa.ec-mk-sel { box-shadow: inset 3px 0 0 #2271b1; }
+.ec-mk-capa.ec-mk-sel.ec-sel { box-shadow: inset 3px 0 0 #2271b1, 0 0 0 1px #2271b1; }
 .ec-mk-capa.ec-invalida { border-color: #d63638; }
 .ec-mk-capa.ec-oculta { opacity: .55; }
 .ec-mk-capa:focus-visible { outline: 2px solid #2271b1; outline-offset: 1px; }

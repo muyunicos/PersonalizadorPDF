@@ -247,19 +247,15 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
   check('la consola encola cropper y selector (preview del cargador)',
     (plug.match(/assets\/vendor\/cropper\/cropper\.min\.js/g) || []).length >= 2
     && (plug.match(/assets\/selector-pmu\.js/g) || []).length >= 2);
-  check('sin aviso de migracion con catalogo vacio',
-    plug.indexOf('!empty($leido["items"])') !== -1);
-  // Spec 016 (v4.6.2): el aviso de migracion trae el boton "Migrar ahora".
+  check('el plugin ya no emite el aviso de migracion v1',
+    plug.indexOf('motor:campos:migrar:pendiente') === -1);
+  // Spec 016 (4.6.3): la v1 se retiro; el aviso de migracion NO debe volver.
   const camposPhp = fs.readFileSync(path.join(__dirname, '..', 'admin', 'campos.php'), 'utf8');
   const uploadsJs = fs.readFileSync(path.join(__dirname, '..', 'inc', 'class-pmu-uploads.php'), 'utf8');
-  check('el aviso de migracion trae el boton Migrar ahora',
-    camposPhp.indexOf('personalizador_pdf_campo_migrar') !== -1
-    && camposPhp.indexOf('Migrar ahora') !== -1);
-  check('admin.js enlaza el form de migracion con pmuForm',
-    adm.indexOf("pmuForm($f, 'personalizador_pdf_campo_migrar'") !== -1);
-  check('el motor expone migrar_campos() y retiro el v2',
-    uploadsJs.indexOf('migrar_campos_v2') === -1
-    && uploadsJs.indexOf('public function migrar_campos()') !== -1);
+  check('sin migracion v1 en la consola (retirada en 4.6.3)',
+    camposPhp.indexOf('personalizador_pdf_campo_migrar') === -1
+    && adm.indexOf('personalizador_pdf_campo_migrar') === -1
+    && uploadsJs.indexOf('migrar_campos') === -1);
   check('la fila emite data-cargador', plug.indexOf('data-cargador=') !== -1);
   check('cargador-pmu.js se encola tambien en la consola',
     (plug.match(/assets\/cargador-pmu\.js/g) || []).length >= 2);

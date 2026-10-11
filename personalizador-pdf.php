@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.6.2
+ * Version: 4.6.3
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -65,8 +65,6 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_campo', [$this, 'handle_campo_guardar']);
         add_action('admin_post_personalizador_pdf_campo_baja', [$this, 'handle_campo_baja']);
         add_action('admin_post_personalizador_pdf_campo_restaurar', [$this, 'handle_campo_restaurar']);
-        // Spec 016 (v4.6.2): migracion one-shot v1 -> v3 del indice de campos.
-        add_action('admin_post_personalizador_pdf_campo_migrar', [$this, 'handle_campo_migrar']);
         // `campo_plantilla` salio en la spec 015 (D10): la estrella dejo de existir.
         add_action('admin_post_personalizador_pdf_campo_duplicar', [$this, 'handle_campo_duplicar']);
         add_action('admin_post_personalizador_pdf_campo_global', [$this, 'handle_campo_global']);
@@ -2676,7 +2674,8 @@ class Personalizador_PDF_Plugin
      * `campos_panel()` ni `admin/campos.php`, que la adoptan en F1/F2.
      * Slot 2 = tipo del campo (spec 015; antes era la plantilla de origen). El
      * slot 3 (`etiquetas`) queda vacio: las categorias se fueron del formato (D9).
-     * Avisa si el catalogo sigue en v1.
+     * Avisa solo si el catalogo es ilegible (la v1 se retiro en 4.6.3: nunca se
+     * publico, asi que no hay nada que migrar).
      * @return array [id => tupla, aviso|null]
      */
     private function campos_activos()
@@ -2689,11 +2688,6 @@ class Personalizador_PDF_Plugin
             $leido = $crudo === '' ? null : json_decode($crudo, true);
             if (!is_array($leido) || !isset($leido['items']) || !is_array($leido['items'])) {
                 $aviso = 'motor:listar:catalogo:invalido:campos';
-            } elseif ((!isset($leido["version"]) || (int) $leido["version"] < 2)
-                && !empty($leido["items"])) {
-                // Un indice v1 VACIO no tiene nada que migrar: sin aviso (es
-                // el estado normal de un sitio en desarrollo o recien estrenado).
-                $aviso = 'motor:campos:migrar:pendiente';
             }
         }
         foreach ($this->pmu_uploads()->campo_listar() as $id => $c) {
@@ -3147,21 +3141,6 @@ JS;
     }
 
     /**
-     * Migra el indice de campos v1 -> v3 (boton "Migrar ahora" de la pestana
-     * Campos, spec 016 v4.6.2). One-shot, idempotente y con backup .bak (spec
-     * 012 T001: la migracion exigia aprobacion explicita; el disparador es
-     * este boton). Responde JSON con el resumen.
-     */
-    public function handle_campo_migrar()
-    {
-        $this->seguridad('personalizador_pdf_campo');
-        try {
-            $res = $this->pmu_uploads()->migrar_campos();
-        } catch (Throwable $e) {
-            $this->responder(false, [], $e->getMessage());
-        }
-        if (empty($res['hecho'])) {
-            $this->responder(false, [], (string)($res['motivo'] ?? 'migracion:fallo'));
         }
         $this->responder(true, [
             "hecho" => true,
@@ -3554,7 +3533,7 @@ JS;
             PERSONALIZADOR_PDF_VERSION,
             true
         );
-        // Spec 016 (v4.6.2): el preview del admin monta el cargador TAL CUAL lo
+        // Spec 016 (4.6.3): el preview del admin monta el cargador TAL CUAL lo
         // ve el comprador (boton Agregar imagen + selector real). Cropper y
         // selector-pmu viajan tambien a la consola por eso (mismos handles
         // que la ficha; nunca CDN).
