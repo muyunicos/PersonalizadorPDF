@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.6.3
+Stable tag: 4.6.4
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.6.4 =
+* **Fix: el panel de personalizacion no aparecia en la ficha del producto** (bug en produccion, reportado en `muyunicos.com`). La ficha resuelve el PDF por el **postmeta canonico** `_pmu_pdf_slugs` del producto (constitution §I), NO por el espejo `config.json:productos[]`; pero la consola solo escribia el espejo, asi que asociar un producto nunca encendia el panel aunque `config.json` se veia correcto. `handle_config_guardar()` ahora sincroniza el postmeta canonico de cada producto (reutiliza `producto_pdf_vincular/desvincular`, idempotente) al guardar; un vinculo que falla es un **aviso visible**, no un error que tumbe el guardado. Repara los PDFs ya asociados con solo volver a pulsar "Guardar". Arnés: 2 asserts nuevos en la fase `tienda`.
 
 = 4.6.3 =
 * **Retiro de la migracion v1 de campos**: el formato v1 del catalogo (`campos.json` sin `version`, con tuplas de 10 slots) nunca se publico en una version distribuida, asi que no hay datos v1 que migrar en ningun sitio real. Se retira `PMU_Uploads::migrar_campos()`, el aviso `motor:campos:migrar:pendiente`, el boton "Migrar ahora" y la fase `campo_migrar` del arnes. El aviso de la pestana Campos queda reservado a los catalogos ilegibles (que si son un problema real de datos). Un indice sin `version` con items vacios se lee como catalogo vacio: sin aviso.

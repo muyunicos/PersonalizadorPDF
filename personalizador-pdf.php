@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.6.3
+ * Version: 4.6.4
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -990,6 +990,36 @@ class Personalizador_PDF_Plugin
             }
         }
         $motor->guardar_config($nombre, ['productos' => $productos]);
+    }
+
+    /**
+     * Sincroniza el vinculo CANONICO (postmeta `_pmu_pdf_slugs` de cada producto)
+     * con lo que indico el admin en la consola. La ficha resuelve por ese postmeta,
+     * no por el espejo `config.json:productos[]` (constitution I); la consola antes
+     * solo escribia el espejo, por lo que el panel nunca aparecia (bug "no veo los
+     * campos"). Reutiliza `producto_pdf_vincular/desvincular` (regla de oro: sin
+     * duplicados) y es idempotente.
+     *
+     * Vincula SIEMPRE los productos actuales (no solo los nuevos): repara el
+     * postmeta aunque el espejo ya los tuviera, que es justo el caso de los PDFs
+     * asociados antes de este arreglo. Desvincula unicamente los que ya no estan.
+     */
+    private function sincronizar_vinculo_canonico($nombre, array $actuales, array $previos)
+    {
+        $motor = $this->pmu_uploads();
+        $nombre = $motor->nombre_seguro($nombre, 'vinculo');
+        $actuales = array_values(array_unique(array_map('intval', $actuales)));
+        foreach ($actuales as $pid) {
+            if ($pid > 0) {
+                $this->producto_pdf_vincular($pid, $nombre);
+            }
+        }
+        foreach ($previos as $pid) {
+            $pid = (int)$pid;
+            if ($pid > 0 && !in_array($pid, $actuales, true)) {
+                $this->producto_pdf_desvincular($pid, $nombre);
+            }
+        }
     }
 
     /* ==================== Comprador: vista previa y carrito (spec 004, T013/T015) ==================== */
@@ -3400,6 +3430,17 @@ JS;
         if (!empty($_POST['tienda_presente'])) {
             $config['tienda'] = $this->tienda_desde_post($productos);
         }
+        // Vinculo canonico (constitution I): la ficha resuelve por el postmeta
+        // `_pmu_pdf_slugs` del producto, NO por el espejo `config.json:productos[]`.
+        // La consola solo escribia el espejo, asi que asociar un producto nunca
+        // llegaba al panel (bug: "no veo los campos"). Se captura el espejo previo
+        // ANTES de sobrescribirlo para saber a que productos quitarles este PDF.
+        $previos = [];
+        try {
+            $previos = array_map('intval', (array)($this->pmu_uploads()->leer_config($nombre)['productos'] ?? []));
+        } catch (\Throwable $e) {
+            $previos = [];
+        }
         $ok = false;
         try {
             $ok = $this->pmu_uploads()->guardar_config($nombre, $config);
@@ -3411,6 +3452,15 @@ JS;
         }
         if (!$ok) {
             $this->responder(false, [], 'No se pudo guardar la configuracion.');
+        }
+        // Sincroniza el postmeta canonico con lo que indico el admin. Nunca tumba
+        // el guardado: un vinculo que no se pudo escribir es un aviso, no un error
+        // (asi un producto Woo inexistente no rompe el resto de la configuracion).
+        $avisosVinculo = [];
+        try {
+            $this->sincronizar_vinculo_canonico($nombre, $productos, $previos);
+        } catch (\Throwable $e) {
+            $avisosVinculo[] = 'No se pudo vincular el PDF con los productos: ' . $e->getMessage();
         }
         // FR-008: el tipo DECLARA, el cableado decide. Si un `opciones` cayo en
         // `value` o un `texto`/`imagen` en `settings`, se avisa con causa pero no
@@ -3426,7 +3476,7 @@ JS;
         } catch (\Throwable $e) {
             $avisosCable = [];
         }
-        $this->responder(true, ['avisos_cableado' => $avisosCable]);
+        $this->responder(true, ['avisos_cableado' => $avisosCable, 'avisos_vinculo' => $avisosVinculo]);
     }
 
     /**

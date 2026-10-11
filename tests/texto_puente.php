@@ -1114,6 +1114,15 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             // T016: el arnes trae stub de wc_get_product, asi que el filtro de
             // productos Woo ya filtra de verdad (antes los descartaba sin Woo).
             check('productos validados por Woo (stub)', $cfg_t['productos'] === [123, 456]);
+            // Bug "no veo los campos": la ficha resuelve por el postmeta canonico
+            // _pmu_pdf_slugs, no por el espejo config.json:productos[]. handle_config
+            // debe sincronizarlo; si no, asociar productos no enciende el panel.
+            $slugs123 = isset($GLOBALS['test_postmeta'][123]['_pmu_pdf_slugs'])
+                ? $GLOBALS['test_postmeta'][123]['_pmu_pdf_slugs'] : null;
+            $slugs456 = isset($GLOBALS['test_postmeta'][456]['_pmu_pdf_slugs'])
+                ? $GLOBALS['test_postmeta'][456]['_pmu_pdf_slugs'] : null;
+            check('vinculo canonico escrito en producto 123', $slugs123 === ['muestra'], json_encode($slugs123));
+            check('vinculo canonico escrito en producto 456', $slugs456 === ['muestra'], json_encode($slugs456));
             check('campos 2,1 (999 descartado)', $cfg_t['campos_ids'] === [2, 1]);
             check('mapeo 0000FF persiste', isset($cfg_t['placeholders']['0000FF']) && $cfg_t['placeholders']['0000FF']['value'] === '[campo2]' && $cfg_t['placeholders']['0000FF']['settings'] === '[campo1]');
             check('FFFFFF ausente del dataset', !isset($cfg_t['placeholders']['FFFFFF']));

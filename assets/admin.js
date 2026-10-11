@@ -1430,12 +1430,15 @@ jQuery(function ($) {
         return pmuPost('personalizador_pdf_config', pares, cfgGlobal.nonceConfig || '')
             .then(function (j) {
                 var avisos = (j && j.data && j.data.avisos_cableado) || [];
-                if (avisos.length) {
+                var vinculo = (j && j.data && j.data.avisos_vinculo) || [];
+                var todos = avisos.concat(vinculo);
+                if (todos.length) {
                     // FR-008: el tipo declara, el cableado decide. Si un
                     // `opciones` cayo en `value` (o un `texto` en `settings`),
-                    // se muestra con causa, pero NO se bloquea.
+                    // se muestra con causa, pero NO se bloquea. El aviso de
+                    // vinculo cubre un producto Woo que no se pudo asociar.
                     $status.removeClass('ec-ok ec-error').addClass('ec-error')
-                        .text('Guardado, pero revisá el cableado: ' + avisos.join(' '));
+                        .text('Guardado, pero revisá: ' + todos.join(' '));
                 } else {
                     $status.addClass('ec-ok').text('Guardado ✓');
                 }
