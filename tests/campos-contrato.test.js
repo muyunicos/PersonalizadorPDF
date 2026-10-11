@@ -241,6 +241,14 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
   const cargadorJs = fs.readFileSync(path.join(__dirname, '..', 'assets', 'cargador-pmu.js'), 'utf8');
   const adm = fs.readFileSync(path.join(__dirname, '..', 'assets', 'admin.js'), 'utf8');
   const plug = fs.readFileSync(path.join(__dirname, '..', 'personalizador-pdf.php'), 'utf8');
+  // Spec 016 (v4.6.2): la consola encola cropper + selector para el preview,
+  // y el aviso de migracion SOLO aparece con items v1 reales (indice vacio
+  // de desarrollo = silencio).
+  check('la consola encola cropper y selector (preview del cargador)',
+    (plug.match(/assets\/vendor\/cropper\/cropper\.min\.js/g) || []).length >= 2
+    && (plug.match(/assets\/selector-pmu\.js/g) || []).length >= 2);
+  check('sin aviso de migracion con catalogo vacio',
+    plug.indexOf('!empty($leido["items"])') !== -1);
   // Spec 016 (v4.6.2): el aviso de migracion trae el boton "Migrar ahora".
   const camposPhp = fs.readFileSync(path.join(__dirname, '..', 'admin', 'campos.php'), 'utf8');
   const uploadsJs = fs.readFileSync(path.join(__dirname, '..', 'inc', 'class-pmu-uploads.php'), 'utf8');
@@ -257,8 +265,10 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
     (plug.match(/assets\/cargador-pmu\.js/g) || []).length >= 2);
   check('admin.js lee el cargador de la fila',
     adm.indexOf("attr('data-cargador')") !== -1);
-  check('el preview monta el cargador en modo preview',
-    adm.indexOf('preview: true') !== -1);
+  check('el preview monta el cargador como el comprador (subida simulada)',
+    adm.indexOf('subir: function (blob)') !== -1
+    && adm.indexOf('URL.createObjectURL(blob)') !== -1
+    && adm.indexOf('urlDe: function (id)') !== -1);
   check('el preview no pinta un boton de agregar muerto',
     /if \(!this\.config\.preview\) \{\s*zona\.appendChild\(boton\)/.test(cargadorJs));
 }

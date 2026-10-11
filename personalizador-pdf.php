@@ -2689,7 +2689,10 @@ class Personalizador_PDF_Plugin
             $leido = $crudo === '' ? null : json_decode($crudo, true);
             if (!is_array($leido) || !isset($leido['items']) || !is_array($leido['items'])) {
                 $aviso = 'motor:listar:catalogo:invalido:campos';
-            } elseif (!isset($leido['version']) || (int) $leido['version'] < 2) {
+            } elseif ((!isset($leido["version"]) || (int) $leido["version"] < 2)
+                && !empty($leido["items"])) {
+                // Un indice v1 VACIO no tiene nada que migrar: sin aviso (es
+                // el estado normal de un sitio en desarrollo o recien estrenado).
                 $aviso = 'motor:campos:migrar:pendiente';
             }
         }
@@ -3548,6 +3551,30 @@ JS;
             'personalizador-pdf-cargador',
             PERSONALIZADOR_PDF_URL . 'assets/cargador-pmu.js',
             [],
+            PERSONALIZADOR_PDF_VERSION,
+            true
+        );
+        // Spec 016 (v4.6.2): el preview del admin monta el cargador TAL CUAL lo
+        // ve el comprador (boton Agregar imagen + selector real). Cropper y
+        // selector-pmu viajan tambien a la consola por eso (mismos handles
+        // que la ficha; nunca CDN).
+        wp_enqueue_style(
+            'personalizador-pdf-cropper',
+            PERSONALIZADOR_PDF_URL . 'assets/vendor/cropper/cropper.min.css',
+            [],
+            PERSONALIZADOR_PDF_VERSION
+        );
+        wp_enqueue_script(
+            'personalizador-pdf-cropper',
+            PERSONALIZADOR_PDF_URL . 'assets/vendor/cropper/cropper.min.js',
+            [],
+            PERSONALIZADOR_PDF_VERSION,
+            true
+        );
+        wp_enqueue_script(
+            'personalizador-pdf-selector',
+            PERSONALIZADOR_PDF_URL . 'assets/selector-pmu.js',
+            ['personalizador-pdf-cropper'],
             PERSONALIZADOR_PDF_VERSION,
             true
         );

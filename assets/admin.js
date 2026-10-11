@@ -1063,9 +1063,22 @@ jQuery(function ($) {
                 if (campo.cargador && campo.cargador.ranuras && window.CargadorPMU) {
                     var cuerpo = doc.querySelector('.pmu-campo-' + campo.id + ' .pmu-campo-cuerpo');
                     if (cuerpo) {
+                        // Spec 016 (v4.6.2): el preview monta el cargador TAL CUAL
+                        // lo ve el comprador (boton Agregar imagen + drop zone +
+                        // Listo). La subida es SIMULADA en memoria (objectURL por
+                        // id): sin endpoint, sin item, y el selector real se
+                        // encola en la consola para poder recortar y ver la mini
+                        // al instante.
+                        var blobsPv = {};
+                        var nPv = 0;
                         new window.CargadorPMU(cuerpo, {
                             ranuras: campo.cargador.ranuras,
-                            preview: true
+                            subir: function (blob) {
+                                nPv++;
+                                blobsPv['pv-' + nPv] = URL.createObjectURL(blob);
+                                return Promise.resolve({ id: 'pv-' + nPv });
+                            },
+                            urlDe: function (id) { return Promise.resolve(blobsPv[id] || null); }
                         }).montar();
                     }
                 }

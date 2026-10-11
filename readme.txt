@@ -67,6 +67,7 @@ Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}
 
 = 4.6.2 =
 * **Migracion de campos v1 con boton**: la pestana Campos muestra "Migrar ahora" cuando el catalogo sigue en el formato v1 (aviso `motor:campos:migrar:pendiente`). El boton dispara la migracion one-shot al formato vigente (indice v3 + carpeta por campo), con copia `campos.json.bak` previa, idempotente y reversible. Mapeo de tipos v1: `select` -> `opciones`, `img` -> `imagen`, el resto -> `texto`; las categorias v1 no se migran (fuera del formato). El metodo viejo `migrar_campos_v2` (que dejaba el indice a medias) se retira.
+* **Preview fiel del cargador**: "Ver como lo vera el comprador" monta el cargador TAL CUAL lo ve el comprador (boton "Agregar imagen", drop zone, Listo), con subida SIMULADA en memoria: abre el selector real, recorta y ve la miniatura al instante, sin endpoint ni item. Ademas el aviso de migracion solo aparece cuando el catalogo v1 tiene campos reales (un indice vacio de desarrollo ya no avisa).
 
 = 4.6.1 =
 * **Correccion (plantilla "Imagen (cargador)")**: la plantilla traia un boton placeholder que decia "El cargador todavia no esta disponible" al tocarlo (referenciaba un PMUCargador que nunca existio; el cargador real lo monta el sistema). La plantilla queda limpia y el comprador ve directamente las ranuras del cargador. Los campos creados antes con esa plantilla se corrigen vaciando su HTML/script desde la pestana Campos (o recreandolos).
