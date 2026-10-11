@@ -9,7 +9,7 @@ Referencia rapida. Para el detalle, `spec.md` (historias), `contracts/` (contrat
 
 | Que | Donde |
 |-----|-------|
-| Indice de campos + metadatos | `uploads/pmu/campos.json` |
+| Indice de campos + metadatos | `uploads/pmu/campos/campos.json` (RC4.6.11: dentro de `campos/`; migracion one-shot desde el layout anterior en la raiz de `pmu/`) |
 | Un campo | `uploads/pmu/campos/{id}/` (`datos.json`, `campo.htm`, `campo.css`, `campo.js`) |
 | CSS/JS global | `uploads/pmu/campos/global.css`, `global.js` |
 | Imagenes del comprador | `tmp/sesion-{sid}/{item_key}/subidas/{id}.webp` |

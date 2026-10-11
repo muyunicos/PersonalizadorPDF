@@ -145,6 +145,40 @@ pruebas.push(function () {
 pruebas.push(function () {
     var ctx = ctxFalso();
     return R.componer(ctx, [capa('img', 'pdf:a.png')], {
+        resolver: function () { return null; },
+        contexto: {},
+        lienzo: 300,
+        huecosTransparentes: true
+    }).then(function () {
+        // RC4.6.11: la vista del cliente NUNCA muestra el marco gris con el ref
+        // de un hueco sin recurso: se dibuja NADA (transparente).
+        check('huecosTransparentes: sin recurso NO dibuja caja gris',
+            ctx.ops.indexOf('fillRect') === -1 && ctx.ops.indexOf('strokeRect') === -1);
+        check('huecosTransparentes: sin recurso NO dibuja la etiqueta del ref',
+            !ctx.ops.some(function (o) { return o.indexOf('fillText') === 0; }));
+        check('huecosTransparentes: tampoco dibuja imagen',
+            !ctx.ops.some(function (o) { return o.indexOf('drawImage') === 0; }));
+    });
+});
+
+pruebas.push(function () {
+    var ctx = ctxFalso();
+    return R.componer(ctx, [capa('img', 'pdf:a.png')], {
+        resolver: function () { return { url: 'x' }; },
+        contexto: {},
+        lienzo: 300,
+        huecosTransparentes: true
+    }).then(function () {
+        // huecosTransparentes SOLO afecta a los huecos: un recurso resuelto
+        // se dibuja igual (la foto subida SI se muestra al cliente).
+        check('huecosTransparentes: un recurso resuelto SI se dibuja',
+            ctx.ops.some(function (o) { return o.indexOf('drawImage:x') === 0; }));
+    });
+});
+
+pruebas.push(function () {
+    var ctx = ctxFalso();
+    return R.componer(ctx, [capa('img', 'pdf:a.png')], {
         resolver: function () { return { url: 'x' }; },
         contexto: {},
         lienzo: 300,

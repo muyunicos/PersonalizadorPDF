@@ -10,11 +10,12 @@ separado.
 
 ```
 uploads/pmu/
-├── campos.json                      INDICE + metadatos (sin HTML/CSS/JS)
-└── campos/
-    ├── global.css                   CSS global del plugin (UNO)
-    ├── global.js                    JS global del plugin (UNO)
-    └── {id}/                        una carpeta por campo (id numerico auto)
+├── campos/
+│   ├── campos.json                INDICE + metadatos (sin HTML/CSS/JS)
+│   │                              (RC4.6.11: dentro de campos/; antes en la raiz de pmu/)
+│   ├── global.css                   CSS global del plugin (UNO)
+│   ├── global.js                    JS global del plugin (UNO)
+│   └── {id}/                        una carpeta por campo (id numerico auto)
         ├── datos.json               definicion (nombre, descripcion, flags)
         ├── campo.htm                HTML que ve el cliente
         ├── campo.css                CSS propio (opcional)

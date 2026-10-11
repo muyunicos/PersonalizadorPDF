@@ -7,7 +7,7 @@ if (!defined('ABSPATH')) {
 /**
  * Campos reutilizables (spec 012, F1). El formato es v2: cada campo es una
  * carpeta uploads/pmu/campos/{id}/ con datos.json + campo.htm|css|js, y el
- * catalogo `campos.json` es solo el indice con los metadatos.
+ * catalogo `uploads/pmu/campos/campos.json` es solo el indice con los metadatos.
  *
  * El editor se abre DENTRO de la fila (`data-editando`), sin navegar: por eso
  * ya no existe el GET `ec_campo_editar` (FR-001).

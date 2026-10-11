@@ -359,7 +359,10 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   (norma ex-008 + decision preview 2026-09-17; la migración `.migrado-007` ya no se ejecuta).
 - Fotos de mockups del admin: `pdfs/{nombre}/mockups/` (datos de usuario, sin catálogo);
   las reutilizables viven en el catálogo `img/`.
-- **Campos reutilizables (specs 012 + 015, formato v3)**: `uploads/pmu/campos.json` es **solo el indice**
+- **Campos reutilizables (specs 012 + 015, formato v3)**: `uploads/pmu/campos/campos.json` es
+  **solo el indice** (RC4.6.11: vive junto al codigo de los campos, dentro de
+  `uploads/pmu/campos/`; con migracion one-shot automatica desde el layout
+  anterior en la raiz de `pmu/`)
   (`{version:3, items:[{id,tipo,baja}], meta:{id:{creado,modificado}}}`) y cada campo es una carpeta
   `uploads/pmu/campos/{id}/` con `datos.json` + `campo.htm` + `campo.css` + `campo.js`. El `id` se
   reutiliza en N PDFs y **nunca se recicla**: una baja deja `baja:true` (tombstone) y conserva los
@@ -465,6 +468,24 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   (`analisis.json`+`config.json`, `tmp/sesion-{sid}/{item_key}/`, preview obligatoria
   `draft-{uuid}` → `cart_item_key`). Fue eliminado tras preservarse su §0+§6 en la
   constitucion; lo nuevo se alinea a esa norma.
+- ✅ **Pool del item con cola por grupo (RC4.6.11)**: las subidas del pool (`personalizador_pdf_pool`)
+  de un mismo grupo van **serializadas** (clave `pdf|gid`): el `limpiar` (regeneracion
+  idempotente) va PRIMERO y se espera, luego las instancias suben en paralelo. Antes el
+  limpiar viajaba en una subida mas de la rafaga y podia ejecutarse DESPUES de subidas
+  del mismo grupo, borrandolas: el pool quedaba sin filas (8 textos -> 5, 7 fotos -> 0)
+  y la capa del mockup salia gris. La cola serializa tambien entre vistas (dos mockups
+  generan en paralelo) y sobrevive a fallos. El `limpiar` se manda solo cuando la corrida
+  regenera el grupo COMPLETO (sin render parcial T016), para no borrar las filas
+  reusadas. Logica testeable: `PURO.enCola` (`tests/conciliacion.js`).
+- ✅ **Vista del cliente sin cajas neutras (RC4.6.11)**: `PMUMockup.componer` acepta
+  `huecosTransparentes: true`; con ella un placeholder sin recurso NO dibuja la caja
+  gris con el ref (queda transparente). La usa **solo** la ficha (`tienda.js`): al
+  cliente nunca se le muestra el marco gris ("FF0000"); la imagen que subio se dibuja
+  igual. El editor de mockups del admin conserva el marco (es su pista de diseno).
+- ✅ **"Repetir por placeholder" en la vista fusionada (RC4.6.11)**: `vista_grupos()` fusiona
+  `repetir` en cada grupo (igual que `datos_pdf_render`); `admin/pdfs.php` pinta el
+  checkbox desde `$gm['repetir']`. Antes leia `$m` (variable sin definir) y el checkbox
+  SIEMPRE salia desmarcado al recargar (el guardado funcionaba).
 - ✅ **Specs historicos**: 003 archivado (`specs/_archivo/003-galeria-engine/`, superado
   por 006); 004/005/006 con codigo completo 2026-09-28 (004: 33/34, 005: T001–T011,
   006: 27/29; puertas automaticas en verde) y pendiente solo el recorrido manual

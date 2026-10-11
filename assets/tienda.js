@@ -125,6 +125,27 @@
         },
 
         /**
+         * Cola de promesas por clave (logica pura, testeable en Node).
+         * Serializa tareas de la MISMA clave: la tarea N+1 espera a la N. Un
+         * fallo no mata la cola (la cadena sigue viva). RC4.6.11: la usan las
+         * subidas del pool por grupo — antes el `limpiar` de una corrida podia
+         * ejecutarse DESPUES de subidas del mismo grupo (rafaga en paralelo) y
+         * borrarlas, dejando el pool sin filas y la capa del mockup gris.
+         *
+         * @param {Object} colas Mapa clave -> Promise (estado de la cola).
+         * @param {string} clave Identidad de la cola (p. ej. pdf|gid).
+         * @param {Function} fn Tarea que devuelve una promesa.
+         * @returns {Promise} La tarea encolada (rechaza igual que fn).
+         */
+        enCola: function (colas, clave, fn) {
+            var mapa = colas || {};
+            var anterior = mapa[clave] || Promise.resolve();
+            var tarea = anterior.then(fn);
+            mapa[clave] = tarea.catch(function () { return null; });
+            return tarea;
+        },
+
+        /**
          * Fusion profundo (mismo comportamiento que mergeDeep del modulo
          * TextMuy, api.js; copia propia: D8 prohibe tocar modules/textmuy/).
          */
@@ -329,6 +350,10 @@
     var galeriaActual = null;
     var filtroActual = null;
     var bloqueos = { vistas: false, validez: false };
+    // Cola del pool por grupo (clave pdf|gid): serializa limpiar+subidas de un
+    // mismo grupo entre instancias Y entre vistas (RC4.6.11). La carrera
+    // anterior dejaba el pool sin filas y la capa del mockup gris.
+    var colasPool = {};
 
     function raiz() {
         return document.querySelector('[data-pmu-panel]') || null;
@@ -612,6 +637,11 @@
         return window.PMUMockup.componer(ctx, (mockup && mockup.capas) || [], {
             resolver: resolver,
             contexto: { fotos: fotos, imagenes: imagenes, grupos: datos.grupos || [] },
+            // RC4.6.11: la vista del CLIENTE nunca muestra la caja neutra gris
+            // de un hueco sin recurso: la imagen que subio se dibuja y, si no
+            // hay (o fallo), el hueco queda transparente. La caja neutra sigue
+            // disponible para el editor del admin.
+            huecosTransparentes: true,
             lienzo: 300
         }).then(function () {
             return canvas;
@@ -861,7 +891,15 @@
      */
     function subirFotos(fotos, sid, itemKey, pdfDatos) {
         if (!fotos || !fotos.length) { return Promise.resolve([]); }
-        return Promise.all(fotos.map(function (f) {
+        // Una foto por instancia; las de un MISMO grupo comparten cola y
+        // limpiar (RC4.6.11): el limpiar va PRIMERO en la cola del grupo y se
+        // espera, y las instancias suben despues en paralelo. Asi el borrado
+        // jamas pisa subidas del propio grupo ni de otra vista.
+        var porGrupo = {};
+        fotos.forEach(function (f) {
+            (porGrupo[f.gid] = porGrupo[f.gid] || []).push(f);
+        });
+        var subirUna = function (f, limpiar) {
             return urlDeSubida(sid, itemKey, f.id).then(function (url) {
                 if (!url) { return null; }
                 return rasterizar(url, f.g.w, f.g.h).then(function (blob) {
@@ -871,12 +909,31 @@
                     // pool pero nunca entraban a pngsPorGrupo -> caja neutra).
                     return subirPool(sid, itemKey, pdfDatos.pdf, f.gid, blob, {
                         valor: f.id, preset: '', settings: '', w: f.g.w, h: f.g.h
-                    }, f.primero).then(function () {
+                    }, limpiar).then(function () {
                         return { gid: f.gid, i: f.i, blob: blob };
                     });
                 });
             }).catch(function () { return null; });   // una foto que falla no frena al resto
-        }));
+        };
+        return Promise.all(Object.keys(porGrupo).map(function (gid) {
+            var lista = porGrupo[gid];
+            return PURO.enCola(colasPool, String(pdfDatos.pdf) + '|' + String(gid), function () {
+                var primera = lista[0];
+                return subirUna(primera, true).then(function (prim) {
+                    return Promise.all(lista.slice(1).map(function (f) {
+                        return subirUna(f, false);
+                    })).then(function (resto) {
+                        return [prim].concat(resto);
+                    });
+                });
+            });
+        })).then(function (porGrupoResultados) {
+            var plano = [];
+            (porGrupoResultados || []).forEach(function (g) {
+                plano = plano.concat(g || []);
+            });
+            return plano;
+        });
     }
 
     /** URL de la foto subida `id` (null si no existe en el manifest). */
@@ -991,15 +1048,40 @@
         return promesaRender.then(function (out) {
             var porId = {};
             (out || []).forEach(function (r) { porId[r.id] = r.blob; });
-            var subidas = nuevos.map(function (p) {
+            // RC4.6.11: las subidas del pool van EN COLA por grupo. El limpiar
+            // (regeneracion idempotente) va PRIMERO en la cola del grupo y se
+            // espera; despues las instancias suben en paralelo. Antes el
+            // limpiar viajaba en una subida mas de la rafaga y podia borrar
+            // subidas del mismo grupo que llegaron antes (pool sin filas ->
+            // capa gris en el mockup).
+            var porGrupo = {};
+            nuevos.forEach(function (p) {
                 var blob = porId[p.gid + '-' + (p.i + 1)];
-                if (!blob) { return Promise.resolve(null); }
-                return subirPool(sid, itemKey, pdfDatos.pdf, p.gid, blob, {
-                    valor: p.texto, preset: p.g.preset, settings: p.g.settings, w: p.g.w, h: p.g.h,
+                if (!blob) { return; }
+                (porGrupo[p.gid] = porGrupo[p.gid] || []).push({ p: p, blob: blob });
+            });
+            // El limpiar solo se manda cuando la corrida regenera el grupo
+            // COMPLETO (sin render parcial): asi una re-edicion con hashes
+            // reusados no borra las filas que conserva del pool.
+            var regeneraCompleto = nuevos.length === pendientes.length;
+            var subirUna = function (item, limpiar) {
+                return subirPool(sid, itemKey, pdfDatos.pdf, item.p.gid, item.blob, {
+                    valor: item.p.texto, preset: item.p.g.preset, settings: item.p.g.settings, w: item.p.g.w, h: item.p.g.h,
                     // FR-005 (T016): el MISMO string que entro al hash del
                     // cliente; el servidor lo concatena igual en hash_pool().
-                    ovClave: p.ovClave
-                }, p.primero);
+                    ovClave: item.p.ovClave
+                }, limpiar);
+            };
+            var subidas = Object.keys(porGrupo).map(function (gid) {
+                var lista = porGrupo[gid];
+                return PURO.enCola(colasPool, String(pdfDatos.pdf) + '|' + String(gid), function () {
+                    var primera = lista[0];
+                    return subirUna(primera, regeneraCompleto).then(function () {
+                        return Promise.all(lista.slice(1).map(function (item) {
+                            return subirUna(item, false);
+                        }));
+                    });
+                });
             });
             // Las fotos se esperan junto al texto: la composicion del mockup solo
             // arranca cuando TODAS las imagenes estan en el pool (spec 012, T027).

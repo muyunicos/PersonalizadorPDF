@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.6.10
+ * Version: 4.6.11
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -2646,6 +2646,18 @@ class Personalizador_PDF_Plugin
             $g['value'] = ($value !== null && $value !== '') ? $value : null;
             $g['preset'] = $preset;
             $g['config'] = ($settings !== null && $settings !== '') ? $settings : null;
+            // RC4.6.11: `repetir` se fusiona en la vista del grupo (igual que
+            // `datos_pdf_render`): la consola lo lee de aca y el checkbox
+            // "Repetir por placeholder" deja de depender de una variable sin
+            // definir (quedaba SIEMPRE desmarcado al recargar).
+            // DIAG TEMPORAL (revertir): expone por header lo que fusiona la vista.
+            $g['repetir'] = $m !== null && !empty($m['repetir']);
+            if (php_sapi_name() !== 'cli') {
+                header('X-Diag-Repetir: ' . $gid . '=' . var_export($g['repetir'], true)
+                    . '|mapa=' . (isset($mapa[$gid]) ? 'si' : 'no')
+                    . '|mapaKeys=' . implode(',', array_keys($mapa))
+                    . '|gidLen=' . strlen((string)$gid));
+            }
             $grupos[] = $g;
         }
         $analisis['grupos'] = $grupos;
@@ -2750,13 +2762,11 @@ class Personalizador_PDF_Plugin
     {
         $out = [];
         $aviso = null;
-        $ruta = $this->pmu_uploads()->ruta_campos();
-        if (is_file($ruta)) {
-            $crudo = (string) @file_get_contents($ruta);
-            $leido = $crudo === '' ? null : json_decode($crudo, true);
-            if (!is_array($leido) || !isset($leido['items']) || !is_array($leido['items'])) {
-                $aviso = 'motor:listar:catalogo:invalido:campos';
-            }
+        // El aviso sale del indice canonico (misma lectura que el CRUD, con la
+        // migracion one-shot del layout ya aplicada).
+        $indice = $this->pmu_uploads()->indice_campos();
+        if (!is_array($indice) || !isset($indice['items']) || !is_array($indice['items'])) {
+            $aviso = 'motor:listar:catalogo:invalido:campos';
         }
         foreach ($this->pmu_uploads()->campo_listar() as $id => $c) {
             $d = $c['datos'];

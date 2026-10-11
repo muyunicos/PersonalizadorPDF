@@ -143,4 +143,45 @@ var avisosDirectos = [];
 PURO.resolverPlantilla('[campo1]', { 1: { valor: { a: 1 } } }, undefined, avisosDirectos);
 assert.strictEqual(avisosDirectos.length, 1);
 
-console.log('CONCILIACION OK');
+// ===== RC4.6.11: cola de subidas del pool (limpiar primero, nunca en paralelo) =====
+
+// enCola serializa las tareas de la MISMA clave: la N+1 espera a la N.
+var colaA = {};
+var orden = [];
+var t1 = PURO.enCola(colaA, 'pdf|FF0000', function () {
+    return new Promise(function (r) { setTimeout(function () { orden.push('limpiar'); r('a'); }, 30); });
+});
+var t2 = PURO.enCola(colaA, 'pdf|FF0000', function () {
+    orden.push('subida-1'); return Promise.resolve('b');
+});
+var t3 = PURO.enCola(colaA, 'pdf|FF0000', function () {
+    orden.push('subida-2'); return Promise.resolve('c');
+});
+// Claves distintas NO comparten cola: corren en paralelo (grupos distintos).
+var tOtro = PURO.enCola(colaA, 'pdf|0000FF', function () {
+    orden.push('otro-grupo'); return Promise.resolve('d');
+});
+
+// Un fallo NO mata la cola: la tarea siguiente igual se ejecuta.
+var tFalla = PURO.enCola(colaA, 'pdf|0000FF', function () { return Promise.reject(new Error('x')); });
+
+Promise.all([t1, t2, t3, tOtro]).then(function (vals) {
+    assert.deepStrictEqual(vals, ['a', 'b', 'c', 'd']);
+    var ordenGrupo = orden.filter(function (x) { return x === 'limpiar' || x.indexOf('subida-') === 0; });
+    assert.deepStrictEqual(ordenGrupo, ['limpiar', 'subida-1', 'subida-2'],
+        'el limpiar debe ejecutarse ANTES que las subidas de su propio grupo');
+    assert.strictEqual(orden.indexOf('otro-grupo') > -1, true, 'el otro grupo corre en paralelo');
+    // La cola sobrevive a un rechazo.
+    var despuesDeFallo = PURO.enCola(colaA, 'pdf|0000FF', function () {
+        orden.push('tras-fallo'); return Promise.resolve('ok');
+    });
+    return despuesDeFallo.then(function (v) {
+        assert.strictEqual(v, 'ok');
+        assert.notStrictEqual(orden.indexOf('tras-fallo'), -1,
+            'la cola sigue viva tras un fallo (el limpiar puede fallar sin romper la vista)');
+        console.log('CONCILIACION OK');
+    });
+}).catch(function (e) {
+    console.error('FALLO: ' + (e && e.message));
+    process.exit(1);
+});

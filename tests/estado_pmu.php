@@ -10,7 +10,7 @@ if ($fase === 'estado') {
         'catálogo de imágenes' => 'img/img.json',
         'catálogo de mockups' => 'mockups/mockups.json',
         'catálogo de estilos'  => 'tm-presets/presets.json',
-        'catálogo de campos'  => 'campos.json',
+        'catálogo de campos'  => 'campos/campos.json',
     ];
     $fallos = 0;
     echo "== Archivos iniciales obligatorios ==\n";

@@ -490,7 +490,7 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                         <input type="hidden" name="placeholders[<?php echo esc_attr($gid); ?>][preset]" class="ec-h-preset" value="<?php echo esc_attr($preset_g); ?>">
                         <input type="hidden" name="placeholders[<?php echo esc_attr($gid); ?>][value]" class="ec-h-value" value="<?php echo esc_attr($valor); ?>">
                         <input type="hidden" name="placeholders[<?php echo esc_attr($gid); ?>][settings]" class="ec-h-settings" value="<?php echo esc_attr($settings_g); ?>">
-                        <label class="ec-block-label ec-repetir"><input type="checkbox" name="placeholders[<?php echo esc_attr($gid); ?>][repetir]" value="1" <?php checked(!empty($m['repetir']), true); ?>> Repetir por placeholder</label>
+                        <label class="ec-block-label ec-repetir"><input type="checkbox" name="placeholders[<?php echo esc_attr($gid); ?>][repetir]" value="1" <?php checked(!empty($gm['repetir']), true); ?>> Repetir por placeholder</label>
                         <span class="description">Si el valor resulta array, un valor por instancia; si no, el mismo valor en todas.</span>
                     </div>
                     <?php endforeach; ?>

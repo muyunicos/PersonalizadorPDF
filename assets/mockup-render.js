@@ -218,6 +218,11 @@
      * opciones: { resolver(ref) -> {url, w, h} | Promise | null,
      *             contexto: {fotos, imagenes, grupos},
      *             limpiar: true (por defecto),
+     *             huecosTransparentes: false (por defecto) — con true, una capa
+     *               sin recurso NO dibuja la caja neutra (queda transparente).
+     *               Es el modo de la VISTA DEL CLIENTE (tienda.js): nunca se le
+     *               muestra el marco gris con el ref; el editor del admin lo
+     *               conserva porque es su pista de diseno,
      *             lienzo: 300 }
      *
      * Resuelve `{compuestas, invalidas, discrepancias}`:
@@ -294,8 +299,10 @@
                     var encaje = contener({ x: -caja.w / 2, y: -caja.h / 2, w: caja.w, h: caja.h }, medidas);
                     if (encaje.discrepancia) { discrepancias.push({ indice: item.indice, ref: c.ref }); }
                     ctx.drawImage(item.img.img, encaje.x, encaje.y, encaje.w, encaje.h);
-                } else {
-                    // Sin recurso: caja neutra de encuadre (nunca falla).
+                } else if (!op.huecosTransparentes) {
+                    // Sin recurso: caja neutra de encuadre (nunca falla). En el
+                    // modo cliente (huecosTransparentes) NO se dibuja nada: un
+                    // hueco sin imagen queda transparente, nunca gris.
                     cajaNeutra(ctx, c.ref, { x: -caja.w / 2, y: -caja.h / 2, w: caja.w, h: caja.h });
                 }
                 ctx.restore();

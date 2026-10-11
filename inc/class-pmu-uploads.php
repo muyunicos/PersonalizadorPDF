@@ -173,8 +173,8 @@ class PMU_Uploads
 
     /**
      * Carpeta del codigo de los campos: uploads/pmu/campos/ (spec 012, T002).
-     * OJO: el INDICE (campos.json) sigue en la RAIZ de uploads/pmu/; aqui
-     * viven las carpetas {id}/ de cada campo y los dos globales.
+     * Aqui viven las carpetas {id}/ de cada campo, los dos globales y, desde
+     * RC4.6.11, tambien el INDICE (campos.json) del catalogo de campos.
      */
     public function dir_campos($crear = false)
     {
@@ -189,12 +189,51 @@ class PMU_Uploads
     }
 
     /**
-     * Indice del catalogo global de campos: uploads/pmu/campos.json
-     * (spec 004, sin thumbs; formato v2 en la spec 012, T002).
+     * Indice del catalogo global de campos: uploads/pmu/campos/campos.json
+     * (spec 012; desde RC4.6.11 vive junto al codigo de los campos, no en la
+     * raiz de pmu/).
      */
     public function ruta_campos()
     {
+        return $this->dir_campos() . DIRECTORY_SEPARATOR . 'campos.json';
+    }
+
+    /**
+     * Ruta LEGADO del indice de campos: uploads/pmu/campos.json (hasta 4.6.10).
+     * Solo existe para la migracion one-shot de `migrar_indice_campos()`.
+     */
+    public function ruta_campos_legado()
+    {
         return $this->dir_pmu() . DIRECTORY_SEPARATOR . 'campos.json';
+    }
+
+    /**
+     * Migracion one-shot del indice de campos: si el archivo sigue en la raiz
+     * de pmu/ (layout anterior a RC4.6.11) y la ruta nueva no existe, se mueve
+     * con rename(). Idempotente y tolerante: si el rename falla, la lectura
+     * sigue funcionando sobre la ruta legado (ningun dato se pierde) y la
+     * proxima llamada reintenta. La escritura SIEMPRE va a la ruta nueva.
+     *
+     * @return string Ruta efectiva del indice (nueva, o legado si no se pudo mover).
+     */
+    public function migrar_indice_campos()
+    {
+        $nueva = $this->ruta_campos();
+        if (is_file($nueva)) {
+            return $nueva;
+        }
+        $legado = $this->ruta_campos_legado();
+        if (!is_file($legado)) {
+            return $nueva; // nada que migrar; los lectores devuelven vacio
+        }
+        $dir = $this->dir_campos(true);
+        if (!is_dir($dir) || !wp_is_writable($dir)) {
+            return $legado; // sin permisos: se sigue leyendo el legado
+        }
+        if (!@rename($legado, $nueva)) {
+            return $legado; // rename fallo: lectura tolerante sobre el legado
+        }
+        return $nueva;
     }
 
     /**
@@ -889,7 +928,7 @@ class PMU_Uploads
      */
     public function indice_campos()
     {
-        $ruta = $this->ruta_campos();
+        $ruta = $this->migrar_indice_campos();
         $vacio = ['version' => 3, 'items' => [], 'meta' => []];
         if (!is_file($ruta)) {
             return $vacio;
@@ -918,6 +957,7 @@ class PMU_Uploads
      */
     public function guardar_indice_campos(array $indice)
     {
+        $this->migrar_indice_campos(); // asegura el layout nuevo antes de escribir
         return $this->escribir_json($this->ruta_campos(), [
             'version' => 3,
             'items' => array_values($indice['items']),

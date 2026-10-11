@@ -514,6 +514,14 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && strpos($pedidos_html, 'Ana') !== false);
             check('pestana Pedidos: regenerar y descargar', strpos($pedidos_html, 'personalizador_pdf_item_regenerar') !== false
                 && strpos($pedidos_html, 'personalizador_pdf_item_descargar') !== false);
+            // RC4.6.11: el checkbox "Repetir por placeholder" se pinta desde la
+            // vista fusionada del grupo (antes leia una variable sin definir y
+            // SIEMPRE salia desmarcado al recargar). Se verifica en el render
+            // real de admin/pdfs.php (linea 493).
+            check('repetir: el checkbox viaja en el formulario', substr_count($admin_html, 'name="placeholders[') >= 2
+                && strpos($admin_html, 'Repetir por placeholder') !== false);
+            check('repetir: sin repetir guardado no hay checked extra', substr_count($admin_html, 'name="placeholders[0000FF][repetir]"') === 1
+                && strpos($admin_html, 'name="placeholders[0000FF][repetir]" value="1" checked="checked"') === false);
             // Spec 005 (T004): "Configuracion tienda" por asociacion (render real).
             check('tienda: bloque por producto asociado', strpos($admin_html, 'class="ec-tienda-producto" data-id="4242"') !== false
                 && strpos($admin_html, 'class="ec-tienda-producto" data-id="4243"') !== false
