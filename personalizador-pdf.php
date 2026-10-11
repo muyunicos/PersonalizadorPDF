@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.6.1
+ * Version: 4.6.2
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -65,6 +65,8 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_campo', [$this, 'handle_campo_guardar']);
         add_action('admin_post_personalizador_pdf_campo_baja', [$this, 'handle_campo_baja']);
         add_action('admin_post_personalizador_pdf_campo_restaurar', [$this, 'handle_campo_restaurar']);
+        // Spec 016 (v4.6.2): migracion one-shot v1 -> v3 del indice de campos.
+        add_action('admin_post_personalizador_pdf_campo_migrar', [$this, 'handle_campo_migrar']);
         // `campo_plantilla` salio en la spec 015 (D10): la estrella dejo de existir.
         add_action('admin_post_personalizador_pdf_campo_duplicar', [$this, 'handle_campo_duplicar']);
         add_action('admin_post_personalizador_pdf_campo_global', [$this, 'handle_campo_global']);
@@ -3141,7 +3143,31 @@ JS;
         $this->responder(true, ['id' => $id, 'ec_campo' => $id, 'tab' => 'campos']);
     }
 
-    /* @deprecated v1 (spec 004) */
+    /**
+     * Migra el indice de campos v1 -> v3 (boton "Migrar ahora" de la pestana
+     * Campos, spec 016 v4.6.2). One-shot, idempotente y con backup .bak (spec
+     * 012 T001: la migracion exigia aprobacion explicita; el disparador es
+     * este boton). Responde JSON con el resumen.
+     */
+    public function handle_campo_migrar()
+    {
+        $this->seguridad('personalizador_pdf_campo');
+        try {
+            $res = $this->pmu_uploads()->migrar_campos();
+        } catch (Throwable $e) {
+            $this->responder(false, [], $e->getMessage());
+        }
+        if (empty($res['hecho'])) {
+            $this->responder(false, [], (string)($res['motivo'] ?? 'migracion:fallo'));
+        }
+        $this->responder(true, [
+            "hecho" => true,
+            'campos' => (int)($res['campos'] ?? 0),
+            'bajas' => (int)($res['bajas'] ?? 0),
+            'motivo' => (string)($res['motivo'] ?? ''),
+        ]);
+    }
+        /* @deprecated v1 (spec 004) */
     /* v1 de handle_campo_guardar sustituido arriba (T005); se borra en F1. */
 
     /** Da de baja un campo (tombstone). Responde JSON o redirige. */

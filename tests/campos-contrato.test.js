@@ -241,6 +241,17 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
   const cargadorJs = fs.readFileSync(path.join(__dirname, '..', 'assets', 'cargador-pmu.js'), 'utf8');
   const adm = fs.readFileSync(path.join(__dirname, '..', 'assets', 'admin.js'), 'utf8');
   const plug = fs.readFileSync(path.join(__dirname, '..', 'personalizador-pdf.php'), 'utf8');
+  // Spec 016 (v4.6.2): el aviso de migracion trae el boton "Migrar ahora".
+  const camposPhp = fs.readFileSync(path.join(__dirname, '..', 'admin', 'campos.php'), 'utf8');
+  const uploadsJs = fs.readFileSync(path.join(__dirname, '..', 'inc', 'class-pmu-uploads.php'), 'utf8');
+  check('el aviso de migracion trae el boton Migrar ahora',
+    camposPhp.indexOf('personalizador_pdf_campo_migrar') !== -1
+    && camposPhp.indexOf('Migrar ahora') !== -1);
+  check('admin.js enlaza el form de migracion con pmuForm',
+    adm.indexOf("pmuForm($f, 'personalizador_pdf_campo_migrar'") !== -1);
+  check('el motor expone migrar_campos() y retiro el v2',
+    uploadsJs.indexOf('migrar_campos_v2') === -1
+    && uploadsJs.indexOf('public function migrar_campos()') !== -1);
   check('la fila emite data-cargador', plug.indexOf('data-cargador=') !== -1);
   check('cargador-pmu.js se encola tambien en la consola',
     (plug.match(/assets\/cargador-pmu\.js/g) || []).length >= 2);

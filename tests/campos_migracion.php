@@ -1,6 +1,6 @@
 <?php
 /**
- * Banco de pruebas aislado de la migracion v1 -> v2 de campos (spec 012, T001).
+ * Banco de pruebas aislado de la migracion v1 -> v3 de campos (spec 012, T001; disparador spec 016, v4.6.2).
  * Corre en %TEMP%; NUNCA toca uploads/pmu/ real.
  */
 define('ABSPATH', 'pmu-test');
@@ -46,7 +46,7 @@ $m = new PMU_Uploads();
 $ruta = $m->ruta_campos();
 
 // --- Sin catalogo: no hace nada ---
-$r = $m->migrar_campos_v2();
+$r = $m->migrar_campos();
 check('sin catalogo -> hecho sin cambios', $r['hecho'] === true && $r['motivo'] === 'sin catalogo');
 
 // --- Siembra v1: 2 campos vivos + 1 tombstone ---
@@ -57,7 +57,7 @@ $v1 = ['items' => [
 ]];
 file_put_contents($ruta, json_encode($v1, JSON_PRETTY_PRINT));
 
-$r = $m->migrar_campos_v2();
+$r = $m->migrar_campos();
 check('migracion hecha', $r['hecho'] === true);
 check('2 campos migrados', $r['campos'] === 2);
 check('1 baja migrada', $r['bajas'] === 1);
@@ -67,7 +67,10 @@ $idx = json_decode(file_get_contents($ruta), true);
 check('version = 3 (spec 015 D9/D10)', isset($idx['version']) && (int)$idx['version'] === 3);
 check('3 items en el indice', count($idx['items']) === 3);
 check('campo 3 dado de baja', $idx['items'][2]['baja'] === true);
-check('categorias del campo 2', $idx['meta']['2']['categorias'] === ['navidad', 'foto']);
+check('tipo v1 text -> texto', $idx['items'][0]['tipo'] === 'texto');
+check('tipo v1 img -> imagen', $idx['items'][1]['tipo'] === 'imagen');
+check('items sin plantilla (v3)', !array_key_exists('plantilla', $idx['items'][0]));
+check('meta sin categorias (spec 015 D9)', !array_key_exists('categorias', $idx['meta']['2']));
 check('meta con creado+modificado', !empty($idx['meta']['1']['creado']) && !empty($idx['meta']['1']['modificado']));
 
 // --- Archivos por campo ---
@@ -91,14 +94,14 @@ check('campos.json.bak guardado', is_file($ruta . '.bak'));
 check('el .bak es la v1', strpos(file_get_contents($ruta . '.bak'), '"Nombre"') !== false);
 
 // --- Idempotente ---
-$r2 = $m->migrar_campos_v2();
+$r2 = $m->migrar_campos();
 check('segunda pasada = ya migrado', $r2['hecho'] === true && $r2['motivo'] === 'ya migrado');
 
 // --- Lectura completa ---
 // --- Backup + idempotencia (antes de leer: la migracion ya corrio una vez) ---
 check('campos.json.bak guardado', is_file($ruta . '.bak'));
 check('el .bak conserva la v1', strpos(file_get_contents($ruta . '.bak'), '"Nombre"') !== false);
-$r2 = $m->migrar_campos_v2();
+$r2 = $m->migrar_campos();
 check('segunda pasada = ya migrado', $r2['hecho'] === true && $r2['motivo'] === 'ya migrado');
 
 // --- Lectura completa ---
@@ -228,5 +231,5 @@ check('campo_listar trae creado y modificado', !empty($lst[$i1]['creado']) && $l
 check('campo_listar ordena por id', array_keys($lst) === array_values(array_unique(array_keys($lst))));
 
 // --- FIN DEL CUERPO (T003) ---
-echo $fallos === 0 ? "\nCAMPOS V2 OK\n" : "\nCAMPOS V2 FALLA: $fallos\n";
+echo $fallos === 0 ? "\nCAMPOS V3 OK\n" : "\nCAMPOS V3 FALLA: $fallos\n";
 exit($fallos === 0 ? 0 : 1);

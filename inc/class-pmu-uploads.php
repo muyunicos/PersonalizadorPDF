@@ -881,141 +881,103 @@ class PMU_Uploads
     }
 
     /**
-     * Migracion one-shot del catalogo de campos v1 -> v2 (spec 012, D10/T001).
+     * Migracion one-shot v1 -> v3 del indice de campos (spec 012 T001; el
+     * disparador llega con la spec 016: boton "Migrar ahora" de la pestana
+     * Campos, v4.6.2).
      *
-     * La v1 guarda tuplas de 10 slots en campos.json:
-     *   [id, titulo, tipo, etiquetas[], ayuda, visible, contenido, css, script, array]
-     * La v2 deja campos.json como indice (items + meta) y el codigo en
-     * uploads/pmu/campos/{id}/.
+     * La v1 guardaba cada campo como tupla de 10 slots dentro de campos.json
+     * ([id, titulo, tipo, etiquetas[], ayuda, visible, htm, css, js, array]).
+     * La v3 vigente es: indice {version:3, items[{id,tipo,baja}],
+     * meta{id:{creado,modificado}}} + carpeta campos/{id}/ por campo.
      *
      * MAPEO (el admin debe revisarlo tras migrar):
-     *   titulo     -> nombre AND titulo_cliente (se conserva en los dos para que
-     *                 ni la tabla del admin ni el carrito queden vacios)
-     *   tipo       -> se descarta (ya no existe; el tipo vive en el placeholder)
-     *   etiquetas  -> meta.{id}.categorias
-     *   ayuda      -> datos.json.texto_ayuda
-     *   visible    -> se pierde (ya no se inyecta titulo; el HTML lo trae el admin)
-     *   contenido  -> campo.htm ; css -> campo.css ; script -> campo.js
-     *   array      -> datos.json.array
+     *   titulo  -> nombre AND titulo_cliente (la tabla y el carrito no quedan
+     *              vacios); ayuda -> datos.json.texto_ayuda; htm/css/js -> los
+     *              archivos; array -> datos.json.array.
+     *   tipo    -> v3: select -> opciones, img -> imagen, el resto -> texto
+     *              (spec 015 D10). visible se pierde (ya no se inyecta titulo).
+     *   etiquetas -> NO se migran (las categorias estan fuera del formato, D9).
      *   [id,"",""] -> items[id].baja = true (tombstone; NO se crea carpeta y el
-     *                 id queda ocupado para siempre: nunca se reutiliza)
+     *              id queda ocupado para siempre: nunca se reutiliza).
      *
-     * `creado` no es recuperable (v1 no lo guardaba): se pone la fecha de la
-     * migracion. `modificado` es time() y es el `?v=` del campo.
+     * IDEMPOTENTE (version >= 2 no hace nada) y REVERSIBLE a mano: guarda
+     * campos.json.bak antes de escribir y, si algo falla, restaura el indice
+     * (las carpetas {id}/ que hubieran quedado son inertes: el indice manda).
      *
-     * IDEMPOTENTE (si version==2 no hace nada) y REVERSIBLE a mano: guarda
-     * campos.json.bak antes de escribir y, si algo falla, lo restaura (las
-     * carpetas {id}/ que hubieran quedado son inertes: el indice manda).
-     *
-     * @return array ['hecho'=>bool,'campos'=>int,'bajas'=>int,'motivo'=>string]
+     * @return array ["hecho"=>bool,"campos"=>int,"bajas"=>int,"motivo"=>string]
      */
-    /**
- * Migracion one-shot v1 -> v2 (spec 012 T001).
- *
- * ⚠️ **SIN LLAMADAS Y CON FORMATO VIEJO** (verificado 2026-10-05, spec 015): no la
- * invoca nadie, nunca se ejecuto sobre datos reales, y escribe `items[].plantilla`
- * y `meta.categorias`, que la v3 ya no usa. Si alguien la vuelve a llamar,
- * deja el indice a medias. Su retiro (con las ~49 checks de
- * `tests/campos_migracion.php`) queda para una spec propia: el arranque limpio
- * de la 015 no lo arrastra.
- */
-    public function migrar_campos_v2()
+    public function migrar_campos()
     {
         $ruta = $this->ruta_campos();
         if (!is_file($ruta)) {
-            return ['hecho' => true, 'campos' => 0, 'bajas' => 0, 'motivo' => 'sin catalogo'];
+            return ["hecho" => true, "campos" => 0, "bajas" => 0, "motivo" => "sin catalogo"];
         }
         $crudo = (string)@file_get_contents($ruta);
-        $datos = $crudo === '' ? null : json_decode($crudo, true);
-        if (!is_array($datos) || !isset($datos['items']) || !is_array($datos['items'])) {
-            return ['hecho' => false, 'campos' => 0, 'bajas' => 0, 'motivo' => 'catalogo ilegible'];
+        $datos = $crudo === "" ? null : json_decode($crudo, true);
+        if (!is_array($datos) || !isset($datos["items"]) || !is_array($datos["items"])) {
+            return ["hecho" => false, "campos" => 0, "bajas" => 0, "motivo" => "catalogo ilegible"];
         }
-        if (isset($datos['version']) && (int)$datos['version'] >= 2) {
-            return ['hecho' => true, 'campos' => 0, 'bajas' => 0, 'motivo' => 'ya migrado'];
+        if (isset($datos["version"]) && (int)$datos["version"] >= 2) {
+            return ["hecho" => true, "campos" => 0, "bajas" => 0, "motivo" => "ya migrado"];
         }
-
         // 1) Backup antes de escribir cualquier cosa.
-        if (!$this->escribir_texto($ruta . '.bak', $crudo)) {
-            return ['hecho' => false, 'campos' => 0, 'bajas' => 0, 'motivo' => 'backup fallido'];
+        if (!$this->escribir_texto($ruta . ".bak", $crudo)) {
+            return ["hecho" => false, "campos" => 0, "bajas" => 0, "motivo" => "backup fallido"];
         }
-
+        $tipos = ["select" => "opciones", "img" => "imagen"];
         $items = [];
         $meta = [];
         $nCampos = 0;
         $nBajas = 0;
         $ahora = time();
         try {
-            foreach ($datos['items'] as $t) {
+            foreach ($datos["items"] as $t) {
                 if (!is_array($t) || !isset($t[0]) || (int)$t[0] < 1) {
                     continue;
                 }
                 $id = (int)$t[0];
-                $titulo = isset($t[1]) ? (string)$t[1] : '';
-                $tipo = isset($t[2]) ? (string)$t[2] : '';
-
-                // Tombstone v1: [id, "", ""]. Se marca dado de baja, NO se crea
-                // carpeta y el id queda ocupado para siempre (nunca se reutiliza).
-                if (trim($titulo) === '' || trim($tipo) === '') {
-                    $items[] = ['id' => $id, 'plantilla' => '', 'baja' => true];
-                    $meta[(string)$id] = $this->meta_campo_migrado($ahora, []);
+                $titulo = isset($t[1]) ? (string)$t[1] : "";
+                $tipoV1 = strtolower(trim(isset($t[2]) ? (string)$t[2] : ""));
+                // Tombstone v1: [id, "", ""]. Baja, sin carpeta, id ocupado.
+                if (trim($titulo) === "" || $tipoV1 === "") {
+                    $items[] = ["id" => $id, "tipo" => "", "baja" => true];
+                    $meta[(string)$id] = ["creado" => $ahora, "modificado" => $ahora];
                     $nBajas++;
                     continue;
-                }
-
-                $etiquetas = [];
-                if (isset($t[3]) && is_array($t[3])) {
-                    foreach ($t[3] as $e) {
-                        $e = strtolower(trim(preg_replace('/[^a-z0-9_\-]+/i', '-', (string)$e), '-'));
-                        if ($e !== '') {
-                            $etiquetas[] = substr($e, 0, 32);
-                        }
-                    }
                 }
                 $tituloLimpio = substr(strip_tags($titulo), 0, 200);
                 $this->escribir_campo(
                     $id,
                     [
-                        'nombre' => $tituloLimpio,
-                        'descripcion' => '',
-                        'titulo_cliente' => $tituloLimpio,
-                        'texto_ayuda' => substr(strip_tags(isset($t[4]) ? (string)$t[4] : ''), 0, 500),
-                        'array' => isset($t[9]) && !empty($t[9]),
-                        'protegido' => false,
-                        'cargador' => null,
+                        "nombre" => $tituloLimpio,
+                        "descripcion" => "",
+                        "titulo_cliente" => $tituloLimpio,
+                        "texto_ayuda" => substr(strip_tags(isset($t[4]) ? (string)$t[4] : ""), 0, 500),
+                        "array" => isset($t[9]) && !empty($t[9]),
+                        "protegido" => false,
+                        "cargador" => null,
                     ],
-                    isset($t[6]) ? (string)$t[6] : '',
-                    isset($t[7]) ? (string)$t[7] : '',
-                    isset($t[8]) ? (string)$t[8] : ''
+                    isset($t[6]) ? (string)$t[6] : "",
+                    isset($t[7]) ? (string)$t[7] : "",
+                    isset($t[8]) ? (string)$t[8] : ""
                 );
-                $items[] = ['id' => $id, 'plantilla' => '', 'baja' => false];
-                $meta[(string)$id] = $this->meta_campo_migrado($ahora, $etiquetas);
+                $items[] = ["id" => $id, "tipo" => isset($tipos[$tipoV1]) ? $tipos[$tipoV1] : "texto", "baja" => false];
+                $meta[(string)$id] = ["creado" => $ahora, "modificado" => $ahora];
                 $nCampos++;
             }
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $this->escribir_texto($ruta, $crudo); // reversion: vuelve a la v1
-            return ['hecho' => false, 'campos' => 0, 'bajas' => 0,
-                'motivo' => 'migracion:fallo:' . $e->getMessage()];
+            return ["hecho" => false, "campos" => 0, "bajas" => 0,
+                "motivo" => "migracion:fallo:" . $e->getMessage()];
         }
-
-        $indice = ['version' => 3, 'items' => $items, 'meta' => $meta, 'v1_migrado' => $ahora];
+        $indice = ["version" => 3, "items" => $items, "meta" => $meta, "v1_migrado" => $ahora];
         if (!$this->escribir_json($ruta, $indice)) {
             $this->escribir_texto($ruta, $crudo); // reversion
-            return ['hecho' => false, 'campos' => 0, 'bajas' => 0, 'motivo' => 'indice no escribible'];
+            return ["hecho" => false, "campos" => 0, "bajas" => 0, "motivo" => "indice no escribible"];
         }
-        return ['hecho' => true, 'campos' => $nCampos, 'bajas' => $nBajas, 'motivo' => ''];
+        return ["hecho" => true, "campos" => $nCampos, "bajas" => $nBajas, "motivo" => ""];
     }
-
-    /** Bloque meta de un campo migrado (creado/modificado/categorias). */
-    private function meta_campo_migrado($ahora, array $categorias)
-    {
-        return [
-            'creado' => gmdate('Y-m-d\TH:i:s\Z', $ahora),
-            'modificado' => (int)$ahora,
-            'categorias' => array_values(array_unique($categorias)),
-        ];
-    }
-
-    /* ============ CRUD de campos v2 (spec 012, T003) ============ */
+        /* ============ CRUD de campos v2 (spec 012, T003) ============ */
 
     /**
      * Indice v2 completo: {version, items, meta}. Tolera la ausencia del

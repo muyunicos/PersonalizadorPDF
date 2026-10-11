@@ -44,7 +44,15 @@ $global_css_prefijo = $aviso_global === '' ? $this->css_global_prefijo($global_c
         El alta, la edicion y la baja de campos se envian por AJAX.</p>
     </div>
 </noscript>
-<?php if ($aviso_campos !== null && $aviso_campos !== '') : ?>
+<?php if ($aviso_campos === 'motor:campos:migrar:pendiente') : ?>
+    <div class="notice notice-warning"><p><strong>Aviso de recursos:</strong> el catalogo de campos esta en el formato v1.
+        <form method="post" action="<?php echo esc_url($post_url); ?>" class="ec-form-campo-migrar" style="display:inline-block;margin:2px 0 2px 8px">
+            <input type="hidden" name="action" value="personalizador_pdf_campo_migrar">
+            <?php wp_nonce_field('personalizador_pdf_campo'); ?>
+            <button type="submit" class="button button-primary">Migrar ahora</button>
+        </form>
+        <span class="description">(guarda una copia campos.json.bak antes de escribir)</span></p></div>
+<?php elseif ($aviso_campos !== null && $aviso_campos !== '') : ?>
     <div class="notice notice-warning"><p><strong>Aviso de recursos:</strong> <?php echo esc_html($aviso_campos); ?></p></div>
 <?php endif; ?>
 

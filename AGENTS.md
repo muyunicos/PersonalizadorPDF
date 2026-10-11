@@ -543,7 +543,7 @@ specify integration upgrade cline --script ps   # diff-aware; --force solo si es
 ```powershell
 php -l personalizador-pdf.php
 Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.FullName }
-php tests/campos_migracion.php   # Campos v2: migracion + CRUD (debe decir "CAMPOS V2 OK")
+php tests/campos_migracion.php   # Campos v3: migracion + CRUD (debe decir "CAMPOS V3 OK")
 php tests/certificacion_hoja.php  # Certificacion del sprite (debe decir "CERTIFICACION HOJA OK")
 node tests/campos-contrato.test.js  # Montaje de campos + cargador (spec 012): "CAMPOS CONTRATO OK"
 node tests/selector-contrato.test.js  # Contrato del selector visual (spec 016): "SELECTOR CONTRATO OK"
@@ -568,7 +568,7 @@ php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
                               # completados | mockups* | mockup_capas |
                              # mockup_preview | mockup_foto |
                               # mockup_foto_baja | mockup_foto_ajax |
-                              # desactivar | reanalizar | borrado | smoke
+                              # desactivar | reanalizar | borrado | campo_migrar | smoke
 ```
 Los 3 arneses CLI salen de inmediato si no corren por CLI (`PHP_SAPI !== 'cli'`):
 la carpeta `tests/` viaja con el plugin al hosting y no debe ser ejecutable por HTTP.
