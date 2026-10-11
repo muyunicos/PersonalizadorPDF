@@ -65,9 +65,73 @@ check('cargador-pmu sigue instanciando por la superficie publica (sin tocar el c
   && /new global\.SelectorPMU\(null, \{/.test(cargador)
   && /finalW: r\.w/.test(cargador));
 
+console.log('\n== F1: shell del modal (US1) ==');
+check('drop zone (soltar el archivo sobre el modal)',
+  /dragover/.test(selector) && /dataTransfer\s*&&\s*e\.dataTransfer\.files/.test(selector));
+check('camara en movil (input con capture)', /spmu-camara-file/.test(selector)
+  && /capture="environment"/.test(selector));
+check('full-screen movil con safe-area', /max-width:767px/.test(selector)
+  && /env\(safe-area-inset-top\)/.test(selector) && /100dvh/.test(selector));
+check('scroll de fondo bloqueado mientras esta abierto', /spmu-bloqueado/.test(selector)
+  && /classList\.add\('spmu-bloqueado'\)/.test(selector)
+  && /classList\.remove\('spmu-bloqueado'\)/.test(selector));
+check('estado de carga con spinner y error con reintento',
+  /spmu-cargando/.test(selector) && /spmu-reintentar/.test(selector)
+  && /Cargando imagen/.test(selector));
+check('focus trap con Tab/Shift+Tab y restauracion del foco',
+  /_trampaFoco/.test(selector) && /e\.key === 'Tab'/.test(selector)
+  && /_focoPrevio/.test(selector));
+check('FR-006: degrada sin window.Cropper (canvas + slider intactos)',
+  /typeof global\.Cropper === 'function'/.test(selector)
+  && /spmu-zoom/.test(selector) && /spmu-modo/.test(selector));
+
+console.log('\n== F2: Cropper en el modo crop (US2) ==');
+check('config de Cropper: viewMode, aspectRatio, tercios, doble tap, rotable',
+  /viewMode: 1/.test(selector) && /aspectRatio: this\.config\.aspectRatio \|\| NaN/.test(selector)
+  && /guides: true/.test(selector) && /dblclick: true/.test(selector) && /rotatable: true/.test(selector));
+check('la salida sale de getCroppedCanvas(finalW, finalH)',
+  /getCroppedCanvas\(\{/.test(selector) && /width: this\.config\.finalW/.test(selector)
+  && /height: this\.config\.finalH/.test(selector) && /imageSmoothingQuality: 'high'/.test(selector));
+check('rotar 90 por boton (FR-010)', /cropper\.rotate\(90\)/.test(selector));
+check('rotacion por gesto de 2 dedos (FR-010)', /rotateTo\(/.test(selector)
+  && /atan2\(/.test(selector) && /originalEvent\.touches/.test(selector));
+check('T012: cropper.destroy() al cerrar (sin fugas)', /cropper\.destroy\(\)/.test(selector)
+  && /_destruirCropper/.test(selector));
+check('el modo fit conserva el canvas original (D9)',
+  /mode === 'fit'/.test(selector) && /Math\.min\(w \/ iw, h \/ ih\)/.test(selector)
+  && /spmu-canvas/.test(selector));
+
+console.log('\n== F3: badge en vivo y guias (US3) ==');
+check('badge Origen + Salida con zoom en vivo', /spmu-badge/.test(selector)
+  && /Origen /.test(selector) && /Salida /.test(selector) && /toFixed\(1\)/.test(selector));
+check('el zoom del badge sale de Cropper (getImageData)', /getImageData\(\)/.test(selector)
+  && /scaleX/.test(selector));
+
+console.log('\n== F4: tira visual del cargador (US4) ==');
+const cargador16 = fs.readFileSync(path.join(RAIZ, 'assets', 'cargador-pmu.js'), 'utf8');
+const tienda16 = fs.readFileSync(path.join(RAIZ, 'assets', 'tienda.js'), 'utf8');
+check('miniaturas reales: la mini pinta un <img> con la URL resuelta',
+  /_pintarMini/.test(cargador16) && /createElement\('img'\)/.test(cargador16)
+  && /object-fit:cover/.test(cargador16));
+check('el cargador NO conoce el endpoint (urlDe lo resuelve el llamador)',
+  /urlDe: typeof config\.urlDe/.test(cargador16) && /config\.urlDe\(id\)/.test(cargador16));
+check('FR-016: tocar marca para confirmar y la 2da tocada quita',
+  /cpmu-mini-alto/.test(cargador16) && /_miniTocar/.test(cargador16)
+  && /this\._quitar\(indice, posicion\)/.test(cargador16));
+check('FR-016: "Cambiar" reabre el editor y reemplaza sin sumar',
+  /_cambiar/.test(cargador16) && /_reemplazo = \{ indice: indice, posicion: posicion \}/.test(cargador16)
+  && /ids\[posicion\] = String\(id\)/.test(cargador16));
+check('FR-017: restauracion de ids al montar (acotada por max)',
+  /idsIniciales/.test(cargador16) && /slice\(0, this\.config\.ranuras\[i\]\.max\)/.test(cargador16));
+check('tienda.js pasa idsIniciales y urlDe (endpoint de la 012)',
+  /idsIniciales: idsDe\(estado\[campo\.id\]/.test(tienda16)
+  && /urlDeSubida\(ses\.sid, ses\.item_key, id\)/.test(tienda16));
+check('idsDe normaliza array, string unico y JSON de ids', /function idsDe\(v\)/.test(tienda16)
+  && /JSON\.parse\(s\)/.test(tienda16));
+
 console.log('');
 if (fallos) {
   console.log('SELECTOR CONTRATO FALLA (' + fallos + ' checks en rojo)');
   process.exit(1);
 }
-console.log('SELECTOR CONTRATO OK (F0)');
+console.log('SELECTOR CONTRATO OK (' + 'F0-F4' + ')');

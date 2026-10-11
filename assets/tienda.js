@@ -383,6 +383,26 @@
     }
 
     /**
+     * Spec 016 (FR-017): normaliza el valor guardado de un campo con cargador
+     * a una lista de ids (array plano, string unico o JSON de ids).
+     */
+    function idsDe(v) {
+        var lista = null;
+        if (Array.isArray(v)) {
+            lista = v;
+        } else if (typeof v === 'string' && v.trim() !== '') {
+            var s = v.trim();
+            if (s.charAt(0) === '[') {
+                try { lista = JSON.parse(s); } catch (e) { lista = null; }
+            } else {
+                lista = [s];
+            }
+        }
+        if (!Array.isArray(lista)) { return null; }
+        return lista.map(function (x) { return String(x); }).filter(Boolean);
+    }
+
+    /**
      * Monta un `CargadorPMU` por cada campo con `cargador` (spec 012, T024,
      * FR-033/FR-034). El cargador escribe `valor = [ids]` en el MISMO estado
      * que leyo `conciliarGrupo`, asi que el placeholder `[campoN]` lo ve sin
@@ -403,6 +423,14 @@
             var mio = false;
             var cargador = new window.CargadorPMU(cont, {
                 ranuras: campo.cargador.ranuras,
+                // Spec 016 (FR-015/FR-017): la tira pinta las fotos reales y,
+                // al re-editar, restaura los ids ya guardados resolviendolos
+                // contra el manifest (endpoint de la 012; nunca una ruta).
+                idsIniciales: idsDe(estado[campo.id] && estado[campo.id].valor),
+                urlDe: function (id) {
+                    var ses = (global.PMU_API && global.PMU_API.sesion) || {};
+                    return urlDeSubida(ses.sid, ses.item_key, id);
+                },
                 subir: function (blob) { return subirFoto(blob, campo.id); },
                 onChange: function (est) {
                     if (!estado[campo.id]) { estado[campo.id] = { valor: null, cliente: '' }; }

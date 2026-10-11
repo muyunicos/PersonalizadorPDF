@@ -2,6 +2,17 @@
 
 **Date**: 2026-09-13 | **Component**: Image selector/crop utility
 
+> **Enmienda 2026-10-10 (spec 016, `specs/016-editor-visual-fotos/contracts/selector-visual.md`)**:
+> la interfaz publica NO cambia; el interior del modal evoluciona al **editor
+> visual de fotos**: en modo `crop` usa **Cropper.js 1.6.2 vendoreado**
+> (`assets/vendor/cropper/`, handle `personalizador-pdf-cropper`; nunca CDN) con
+> pan, pinch-zoom 1x-8x, doble tap, rotar 90° (boton y gesto de 2 dedos), guia
+> de tercios, badge en vivo y salida por `getCroppedCanvas(finalW, finalH)`.
+> Sin `window.Cropper` degrada al editor de esta pagina (canvas + slider). El
+> modo `fit` conserva SIEMPRE el canvas original (Cropper no tiene contain).
+> Detalle y FR: spec 016. La tira del cargador (012) ahora pinta miniaturas
+> reales con quitar/cambiar y restaura las fotos al re-editar.
+
 ## Overview
 
 `selector-pmu` es un componente frontend que gestiona la subida, recorte y guardado de imágenes para campos de personalización.

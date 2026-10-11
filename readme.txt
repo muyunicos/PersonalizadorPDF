@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.5.0
+Stable tag: 4.6.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,12 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.6.0 =
+* **Editor visual de fotos (spec 016)**: el modal de ajuste del comprador pasa de un canvas con slider a un editor visual completo. En modo recorte usa **Cropper.js 1.6.2 vendoreado** (sin CDN, hash de integridad documentado en `assets/vendor/cropper/ORIGEN.md`): pan, pinch-zoom 1x-8x, doble tap para alternar encuadre, rotacion de 90 grados por boton y por gesto de dos dedos, guia de tercios, zona fuera atenuada y un badge en vivo con el tamano de salida y el zoom. En movil el modal es full-screen (camara, soltar el archivo sobre el modal, botones grandes, safe-area); en escritorio un dialogo amplio. Sin Cropper cargado (o navegador viejo) degrada al editor anterior sin romper la ficha.
+* **Salida exacta**: el recorte se genera con `getCroppedCanvas` al tamano exacto del hueco y con la rotacion aplicada; el modo "encajar completo" conserva el canvas original (contain, sin deformar).
+* **Tira visual del cargador**: las miniaturas muestran la foto real (con la mascara de la forma de la ranura) en vez de un numero; tocar una foto la marca para quitar (segunda tocada) o **cambiar** (reabre el editor y reemplaza sin sumar). Al re-editar desde el carrito, las fotos ya cargadas se restauran resolviendo los ids contra el manifest.
+* Interno: `assets/vendor/cropper/` (Cropper.js 1.6.2 + LICENSE + ORIGEN.md), encolado `personalizador-pdf-cropper` como dependencia del selector, puerta `tests/selector-contrato.test.js` y spec completa en `specs/016-editor-visual-fotos/`. Sin cambios de servidor, de formato de datos ni en `modules/textmuy/`.
 
 = 4.5.0 =
 * **Tipo de campo (spec 015)**: cada campo del catalogo declara ahora un **tipo** (`texto`, `imagen` u `opciones`) que se elige solo al crear y se muestra en la fila y en el editor (solo lectura; en edicion manda el del indice). La columna **Categorias** y la estrella de "plantilla reutilizable" desaparecen: la tabla queda en 6 columnas (id, nombre, tipo, uso, acciones) y el buscador va por texto. El tipo declara la intencion, no enruta: si un campo `opciones` esta colgado en `value` (o al reves), la consola avisa antes de procesar.

@@ -1,7 +1,10 @@
 # 016 — Editor visual de fotos del comprador
 
-> Estado: **en implementacion**. F0 (vendor de Cropper.js + encolado + puerta
-> Node) terminada el 2026-10-10. F1–F5 pendientes (ver `tasks.md`).
+> Estado: **implementada (2026-10-10)** — F0-F4 y docs de F5 terminadas, con
+> puerta `tests/selector-contrato.test.js` en verde (`SELECTOR CONTRATO OK
+> (F0-F4)`). Queda **T022** (recorrido manual en WP real, movil + escritorio;
+> seccion 6c del `MANUAL-PENDIENTE-WP-REAL.md`) y **T023** (filtros, fuera de
+> alcance con el gancho `ajustes:[]` reservado). Version del plugin 4.6.0.
 >
 > Continuacion natural de la 012 (US6/US7): alli nacio el cargador de imagenes;
 > esta spec **termina la experiencia** del comprador al cargar y ajustar sus

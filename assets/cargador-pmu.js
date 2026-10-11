@@ -106,7 +106,11 @@
             + '.cpmu-titulo{margin:0 0 8px;font-size:12px;color:#50575e}'
             + '.cpmu-tiras{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}'
             + '.cpmu-mini{width:56px;height:56px;border:1px solid #2271b1;background:#f0f6fc;'
-            + 'color:#2271b1;font:600 15px/1 system-ui,sans-serif;cursor:pointer;border-radius:4px}'
+            + 'color:#2271b1;font:600 15px/1 system-ui,sans-serif;cursor:pointer;border-radius:4px;'
+            + 'position:relative;overflow:hidden;padding:0}'
+            + '.cpmu-mini img{width:100%;height:100%;object-fit:cover;display:block;border-radius:inherit}'
+            + '.cpmu-mini-alto{outline:3px solid #d63638;outline-offset:1px}'
+            + '.cpmu-mini-cambiar{font-size:11px;min-height:28px;padding:2px 8px}'
             + '.cpmu-mini-circle{border-radius:50%}'
             + '.cpmu-zona{border:2px dashed #c3c4c7;border-radius:6px;padding:14px;text-align:center;'
             + 'color:#50575e;font-size:13px;cursor:pointer}'
@@ -126,13 +130,28 @@
             subir: typeof config.subir === 'function' ? config.subir : null,
             onChange: typeof config.onChange === 'function' ? config.onChange : null,
             onError: typeof config.onError === 'function' ? config.onError : null,
+            // Spec 016 (FR-015): el llamador resuelve la URL de cada id (el
+            // componente no conoce el endpoint). Sin urlDe, la mini queda con
+            // el numero (fallback, nunca una mini rota).
+            urlDe: typeof config.urlDe === 'function' ? config.urlDe : null,
             // Spec 012 (T011b/FR-009): en el preview de la consola se DIBUJAN las
             // ranuras sin subir nada (ni boton, ni arrastre, ni endpoint).
             preview: !!config.preview
         };
         this.estado = estadoInicial(this.config.ranuras);
+        // FR-017: al re-editar, los ids guardados se restauran en sus ranuras
+        // (uno por ranura, acotado por `max`). idsIniciales = [[ids]...].
+        if (Array.isArray(config.idsIniciales)) {
+            config.idsIniciales.forEach(function (ids, i) {
+                if (this.estado[i] && Array.isArray(ids) && this.config.ranuras[i]) {
+                    this.estado[i].ids = ids.map(String).slice(0, this.config.ranuras[i].max);
+                }
+            }, this);
+        }
         this.selectores = []; // un SelectorPMU por ranura
         this.raiz = null;
+        this._reemplazo = null;   // FR-016: {indice, posicion} al "cambiar"
+        this._temporizador = null;
     }
 
     CargadorPMU.prototype.montar = function () {
@@ -251,7 +270,9 @@
         var r = this.config.ranuras[indice];
         var slot = this.selectores[indice];
         if (!r || !slot) { return; }
-        if (slot.tira.querySelectorAll('.cpmu-mini').length >= r.max) { return; }
+        // FR-016: "Cambiar" reabre con la ranura llena (reemplaza); subir de
+        // cero sigue respetando el tope `max`.
+        if (!this._reemplazo && slot.tira.querySelectorAll('.cpmu-mini').length >= r.max) { return; }
 
         if (!slot.sel && typeof global.SelectorPMU !== 'function') {
             this._error('Falta selector-pmu.js: no se puede cargar la imagen.');
@@ -271,7 +292,9 @@
                 self._error('No se pudo generar el recorte.');
                 return;
             }
-            self._subir(indice, blob);
+            var reemplazo = self._reemplazo;
+            self._reemplazo = null;
+            self._subir(indice, blob, reemplazo ? reemplazo.posicion : null);
         });
         slot.sel.onError(function (mensaje) { self._error(mensaje); });
         slot.sel.open();
@@ -294,7 +317,7 @@
     };
 
     /** Sube el blob al item y, si el servidor devuelve id, lo anota. */
-    CargadorPMU.prototype._subir = function (indice, blob) {
+    CargadorPMU.prototype._subir = function (indice, blob, posicion) {
         var self = this;
         if (!this.config.subir) {
             this._error('No hay donde subir la imagen.');
@@ -312,7 +335,14 @@
                 self._error('El servidor no devolvio la imagen.');
                 return;
             }
-            self.estado[indice].ids.push(String(id));
+            // FR-016: con `posicion` la foto REEMPLAZA (no suma); sin el,
+            // se agrega al final (flujo de siempre).
+            if (posicion === null || posicion === undefined || posicion >= self.estado[indice].ids.length) {
+                self.estado[indice].ids.push(String(id));
+            } else {
+                self.estado[indice].ids[posicion] = String(id);
+            }
+            self._limpiarAlto();
             self._pintar();
         }, function (err) {
             btn.disabled = false;
@@ -322,6 +352,7 @@
 /** Repinta miniaturas, contadores y el boton de "Listo" (D16). */
     CargadorPMU.prototype._pintar = function () {
         var self = this;
+        this._limpiarAlto();
         this.config.ranuras.forEach(function (r, i) {
             var slot = self.selectores[i];
             if (!slot) { return; }
@@ -333,9 +364,12 @@
                 mini.type = 'button';
                 mini.className = 'cpmu-mini cpmu-mini-' + r.forma;
                 mini.setAttribute('data-id', id);
-                mini.title = 'Quitar esta imagen';
+                mini.title = 'Tocar para quitar o cambiar';
+                // FR-015: miniatura real (la foto); el numero es el fallback
+                // mientras la URL se resuelve (o si no hay urlDe).
                 mini.textContent = String(k + 1);
-                mini.addEventListener('click', function () { self._quitar(i, k); });
+                self._pintarMini(mini, id);
+                mini.addEventListener('click', function () { self._miniTocar(i, k, mini); });
                 slot.tira.appendChild(mini);
             });
             slot.boton.disabled = n >= r.max;
@@ -349,6 +383,70 @@
         if (this.config.onChange) {
             this.config.onChange(this.estadoActual());
         }
+    };
+
+    /**
+     * FR-015: pinta la foto real en la mini. `urlDe(id)` la resuelve (el
+     * componente no conoce el endpoint); si falla, queda el numero (nunca una
+     * mini rota).
+     */
+    CargadorPMU.prototype._pintarMini = function (mini, id) {
+        if (!this.config.urlDe || mini._pmuMiniImg) { return; }
+        var self = this;
+        Promise.resolve(this.config.urlDe(id)).then(function (url) {
+            if (!url || mini._pmuMiniImg) { return; }
+            var doc = mini.ownerDocument || global.document;
+            var img = doc.createElement('img');
+            img.alt = '';
+            img.src = url;
+            mini._pmuMiniImg = true;
+            mini.innerHTML = '';
+            mini.appendChild(img);
+        }).catch(function () { /* queda el numero */ });
+    };
+
+    /** FR-016: la 1era tocada marca para confirmar; la 2da quita. Ofrece Cambiar. */
+    CargadorPMU.prototype._miniTocar = function (indice, posicion, mini) {
+        var self = this;
+        if (mini.classList.contains('cpmu-mini-alto')) {
+            this._quitar(indice, posicion);
+            return;
+        }
+        this._limpiarAlto();
+        mini.classList.add('cpmu-mini-alto');
+        var doc = mini.ownerDocument || global.document;
+        var cambiar = doc.createElement('button');
+        cambiar.type = 'button';
+        cambiar.className = 'cpmu-mini-cambiar';
+        cambiar.textContent = 'Cambiar';
+        cambiar.addEventListener('click', function (e) {
+            e.stopPropagation();
+            self._cambiar(indice, posicion);
+        });
+        mini.parentNode.insertBefore(cambiar, mini.nextSibling);
+        mini._pmuBtnCambiar = cambiar;
+        if (this._temporizador) { clearTimeout(this._temporizador); }
+        this._temporizador = setTimeout(function () { self._limpiarAlto(); }, 3000);
+    };
+
+    /** FR-016: "Cambiar" reabre el editor y REEMPLAZA la foto (no suma). */
+    CargadorPMU.prototype._cambiar = function (indice, posicion) {
+        this._reemplazo = { indice: indice, posicion: posicion };
+        this._limpiarAlto();
+        this._abrir(indice, null);
+    };
+
+    /** Saca el estado "confirmado" de todas las minis (y su boton Cambiar). */
+    CargadorPMU.prototype._limpiarAlto = function () {
+        if (!this.raiz) { return; }
+        var minis = this.raiz.querySelectorAll('.cpmu-mini-alto');
+        [].slice.call(minis).forEach(function (m) {
+            m.classList.remove('cpmu-mini-alto');
+            if (m._pmuBtnCambiar && m._pmuBtnCambiar.parentNode) {
+                m._pmuBtnCambiar.parentNode.removeChild(m._pmuBtnCambiar);
+            }
+            m._pmuBtnCambiar = null;
+        });
     };
 
     CargadorPMU.prototype._quitar = function (indice, posicion) {
@@ -382,6 +480,7 @@
     };
 
     CargadorPMU.prototype.destruir = function () {
+        if (this._temporizador) { clearTimeout(this._temporizador); this._temporizador = null; }
         this.config.ranuras.forEach(function (r, i) {
             var s = this.selectores[i];
             if (s && s.sel && s.sel.destroy) { s.sel.destroy(); }
