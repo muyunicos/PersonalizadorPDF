@@ -285,10 +285,12 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
      pool por `handle_pool_png` (hash `sha1(valor|preset|settings|WxH)`; `limpiar=1`
      reemplaza el grupo) y compone los mockups 300x300 en la galería. Re-edición desde
      el carrito (`?pmu_item_key=`) reusa el item y regenera SOLO los hashes cambiados.
-   - `add-to-cart` → `carrito_validar` (exige draft ok/omisible; con `preview_omisible`
-     crea el item en el servidor) + `carrito_promover` (rename a `{cart_item_key}`,
+   - `add-to-cart` → `carrito_validar` (acepta el draft del producto sin exigir estado previo: el visto bueno es agregar al carrito; con `preview_omisible` y sin sesion crea el item en el servidor)
+     + `carrito_promover` (rename a `{cart_item_key}`,
      congela `mockup-{id}.webp` y marca `preview_estado=ok`). Cantidad fija 1;
      quitar del carrito borra el item. "Editar" vuelve a la ficha con el item cargado.
+     `preview_omisible` NO oculta la vista previa: el comprador puede pedirla igual;
+     solo deja de bloquear el boton de comprar mientras las vistas no estan listas.
    - Pedido → `pedido_item_crear` copia la meta al item Woo y hace staging
      (`tmp/orders/{id}/`); al pagarse `pedido_promover` lo renombra a `orders/{id}/{item}/`.
      El comprador descarga en `mi-cuenta/descargas/` (una fila por cada PDF aceptado

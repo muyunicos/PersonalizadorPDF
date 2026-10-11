@@ -399,7 +399,11 @@
             }
         }
         if (!Array.isArray(lista)) { return null; }
-        return lista.map(function (x) { return String(x); }).filter(Boolean);
+        return lista.map(function (x) { return String(x); }).filter(function (x) {
+            // El literal "Array" es el residuo del bug legado (4.6.6) que
+            // guardaba (string) de la lista de ids; nunca es un id real.
+            return x !== '' && x !== 'Array';
+        });
     }
 
     /**
@@ -1120,15 +1124,11 @@
         panel.addEventListener('input', aplicarFiltro);
         panel.addEventListener('change', aplicarFiltro);
         aplicarFiltro();
-        // US3 (T018): omisible = sin boton de vistas + carrito libre (el item
-        // se crea en el servidor al agregar, con preview_estado=omisible).
-        if (ficha.preview_omisible) {
-            bloquearCarrito(false);
-            engancharCarrito();
-            return api;
-        }
-        // T015: sin vistas el carrito permanece bloqueado.
-        bloquearCarrito(true);
+        // US3 (T018): omisible NO oculta la vista previa (el comprador puede
+        // pedirla igual): solo deja de bloquear el boton de comprar mientras
+        // las vistas no estan listas. Si no pide vistas, el item omisible se
+        // crea en el servidor al agregar (preview_estado=omisible).
+        bloquearCarrito(!ficha.preview_omisible);
         engancharCarrito();
         var btn = document.createElement('button');
         btn.type = 'button';

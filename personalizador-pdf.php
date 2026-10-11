@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.6.7
+ * Version: 4.6.9
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -471,6 +471,7 @@ class Personalizador_PDF_Plugin
         foreach ($panel['pdfs'] as $asoc) {
             $slugs[] = (string)$asoc['pdf'];
         }
+        $camposPanel = $this->campos_panel($panel['campos']);
         $valores = [];
         $itemEdicion = '';
         $sid = '';
@@ -483,6 +484,19 @@ class Personalizador_PDF_Plugin
                 && array_intersect($slugs, array_map('strval', (array)($manifest['pdfs'] ?? [])))) {
                 $itemEdicion = $pedido;
                 $valores = (array)($manifest['valores'] ?? []);
+                // Reparacion del legado (4.6.6 y anteriores): el valor de un
+                // campo con cargador (imagen) se guardaba como (string) del
+                // array de ids -> literal "Array" (o vacio). Al precargar se
+                // normaliza a [] para que el cargador arranque limpio y la foto
+                // nueva entre al mockup. Los campos de texto no se tocan.
+                foreach ($camposPanel as $campoP) {
+                    $cidP = (int)($campoP['id'] ?? 0);
+                    if ($cidP > 0 && !empty($campoP['cargador'])
+                        && isset($valores[$cidP]) && is_array($valores[$cidP])
+                        && !is_array($valores[$cidP]['valor'] ?? null)) {
+                        $valores[$cidP]['valor'] = [];
+                    }
+                }
             }
         } catch (\Throwable $e) {
             $itemEdicion = '';
@@ -492,7 +506,7 @@ class Personalizador_PDF_Plugin
             'pdfs' => $panel['pdfs'],
             'producto' => $product_id,
             'admin' => function_exists('current_user_can') ? current_user_can('manage_options') : false,
-            'campos' => $this->campos_panel($panel['campos']),
+            'campos' => $camposPanel,
             'preview_omisible' => !empty($panel['preview_omisible']),
             'valores' => $valores,
             'sesion' => $itemEdicion !== '' ? ['sid' => $sid, 'item_key' => $itemEdicion] : null,
@@ -1057,7 +1071,13 @@ class Personalizador_PDF_Plugin
                 // la guarda como array y el cliente la re-lee con idsDe().
                 $ids = [];
                 foreach ($valor as $idUno) {
-                    $ids[] = substr(sanitize_text_field((string)$idUno), 0, 200);
+                    $idLimpio = substr(sanitize_text_field((string)$idUno), 0, 200);
+                    // El id lo genera el servidor (uuid4 corto, hex de 12).
+                    // Un literal legado ("Array") o basura se descarta aca y
+                    // nunca vuelve a entrar al manifest.
+                    if (preg_match('/^[0-9a-f]{12}$/i', $idLimpio)) {
+                        $ids[] = $idLimpio;
+                    }
                 }
                 $valorLimpio = $ids;
             } else {

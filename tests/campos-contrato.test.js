@@ -129,6 +129,12 @@ const tienda = fs.readFileSync(path.join(__dirname, '..', 'assets', 'tienda.js')
 check('tienda.js delega en PMUCampo.montar', tienda.indexOf('PMUCampo.montar(raizEl, campos, inicial)') !== -1);
 check('tienda.js ya no define contextoRaiz', tienda.indexOf('function contextoRaiz') === -1);
 check('tienda.js avisa si falta el modulo', tienda.indexOf('falta campo-montar.js') !== -1);
+check('idsDe filtra el id fantasma "Array" (legado 4.6.6)',
+  tienda.indexOf("x !== 'Array'") !== -1
+  && tienda.indexOf('nunca es un id real') !== -1);
+check('omisible muestra la vista previa igual (solo no bloquea el carrito)',
+  tienda.indexOf('bloquearCarrito(!ficha.preview_omisible)') !== -1
+  && tienda.indexOf('omisible = sin boton de vistas') === -1);
 
 console.log('\n== CSS/JS global (spec 012, T020) ==');
 {

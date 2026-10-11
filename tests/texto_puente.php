@@ -657,7 +657,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('valor crudo acotado (sin strip)', is_array($man_v) && $man_v['valores'][$cid_v]['valor'] === '<b>Ana</b>');
             check('campo desconocido descartado', is_array($man_v) && !isset($man_v['valores'][999]));
             // Bug: el valor de un campo tipo imagen es una lista de ids; se
-            // preserva como array en el manifest (antes se guardaba "Array").
+            // preserva como array en el manifest (antes se guardaba "Array")
+            // y los ids fantasma (no hex de 12) se descartan en el saneo.
             $cid_img_v = isset($GLOBALS['test_previa_cid_img']) ? (int)$GLOBALS['test_previa_cid_img'] : 0;
             check('valor-array de imagen preservado (no "Array")', is_array($man_v)
                 && ($man_v['valores'][$cid_img_v]['valor'] ?? null) === ['6855dbae5bbb', '70aa11bb22cc']);
@@ -696,9 +697,22 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 ? $GLOBALS['test_localizados']['personalizador-pdf-tienda#PMU_FICHA'] : null;
             check('PMU_FICHA precarga valores + sesion', is_array($pf_e) && ($pf_e['valores'][1]['cliente'] ?? '') === 'Ana'
                 && is_array($pf_e['sesion'] ?? null) && strpos((string)($pf_e['sesion']['item_key'] ?? ''), 'draft-') === 0);
+            // Reparacion del legado: el manifest viejo guardaba "Array" en el
+            // campo imagen; la ficha lo precarga normalizado a [].
+            $cid_img_e = isset($GLOBALS['test_edicion_cid_img']) ? (int)$GLOBALS['test_edicion_cid_img'] : 0;
+            check('PMU_FICHA repara el legado del campo imagen ("Array" -> [])', is_array($pf_e)
+                && is_array($pf_e['valores'][$cid_img_e] ?? null)
+                && ($pf_e['valores'][$cid_img_e]['valor'] ?? 'x') === []);
             check('respuesta JSON success', is_array($json) && $json['success'] === true);
             check('item_key REUSADO (sin draft nuevo)', is_array($json) && ($json['data']['item_key'] ?? '') === ($GLOBALS['test_edicion_draft'] ?? ''));
             check('flag edicion=true', is_array($json) && ($json['data']['edicion'] ?? false) === true);
+            // El saneo de la re-vista previa descarta el id fantasma "Array"
+            // (no hex de 12) y conserva el id real.
+            $rutaMan_e = glob($testBase . '/uploads/pmu/tmp/sesion-' . ($GLOBALS['test_edicion_sid'] ?? '')
+                . DIRECTORY_SEPARATOR . ($GLOBALS['test_edicion_draft'] ?? '') . '/manifest.json');
+            $man_e2 = $rutaMan_e ? json_decode((string)@file_get_contents($rutaMan_e[0]), true) : null;
+            check('manifest sin el id fantasma tras re-vista previa', is_array($man_e2)
+                && ($man_e2['valores'][$cid_img_e]['valor'] ?? null) === ['70aa11bb22cc']);
             break;
         case 'ficha_omisible':
             // T018/T019: omisible = panel activo, flag true, item creado con
@@ -1307,7 +1321,7 @@ switch ($fase) {
             'pdf' => 'muestra.pdf',
             'valores' => json_encode([
                 $cid_f => ['valor' => '<b>Ana</b>', 'cliente' => 'Ana'],
-                $cid_img => ['valor' => ['6855dbae5bbb', '70aa11bb22cc'], 'cliente' => ''],
+                $cid_img => ['valor' => ['6855dbae5bbb', 'Array', '70aa11bb22cc'], 'cliente' => ''],
                 999 => ['valor' => 'intruso', 'cliente' => 'intruso'],
             ]),
             '_wpnonce' => 'nonce',
@@ -1386,16 +1400,27 @@ switch ($fase) {
         }
         $motor_e = new PMU_Uploads();
         $cid_e = $motor_e->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        // Campo tipo imagen con cargador (v3): cubre la reparacion del legado
+        // (el manifest 4.6.6 guardaba el valor como literal "Array" y el
+        // mockup nunca resolvia la foto al re-editar).
+        $cid_img_e = $motor_e->campo_alta('imagen', [
+            'nombre' => 'Fotos', 'titulo_cliente' => 'Fotos',
+            'cargador' => ['ranuras' => [['w' => 1000, 'h' => 1000, 'forma' => 'rect', 'min' => 1, 'max' => 6]]],
+        ], '', '', '');
         $motor_e->guardar_config('muestra', [
             'activo' => true,
-            'campos_ids' => [$cid_e],
+            'campos_ids' => [$cid_e, $cid_img_e],
             'placeholders' => ['0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => '[campo1]', 'settings' => '', 'repetir' => false]],
         ]);
         $sesion_e = new PMU_Sesion($motor_e);
         $sid_e = 'test-edit-1';
         $draft_e = $sesion_e->crear_draft($sid_e, ['muestra']);
         $man_e = $sesion_e->leer_manifest($sid_e, $draft_e);
-        $man_e['valores'] = [$cid_e => ['valor' => 'Ana', 'cliente' => 'Ana']];
+        $man_e['valores'] = [
+            $cid_e => ['valor' => 'Ana', 'cliente' => 'Ana'],
+            // Legado 4.6.6: el campo imagen quedo con el literal "Array".
+            $cid_img_e => ['valor' => 'Array', 'cliente' => ''],
+        ];
         $man_e['preview_estado'] = 'ok';
         $man_e['archivos'] = [['pdf' => 'muestra', 'grupo_id' => '0000FF', 'indice' => 0, 'file' => 'img/muestra-0000FF-1.png', 'hash' => sha1('Ana|neon-glow||1532x1145')]];
         $sesion_e->guardar_manifest($sid_e, $draft_e, $man_e);
@@ -1403,16 +1428,23 @@ switch ($fase) {
         $_GET = ['pmu_item_key' => $draft_e];
         $_COOKIE[PMU_Sesion::COOKIE] = $sid_e;
         $GLOBALS['test_edicion_html'] = $p->panel_ficha_html('muestra');
+        $GLOBALS['test_edicion_cid_img'] = $cid_img_e;
         $_GET = [];
         $_POST = [
             'action' => 'personalizador_pdf_vista_previa',
             'pdf' => 'muestra.pdf',
             'item_key' => $draft_e,
-            'valores' => json_encode([$cid_e => ['valor' => 'Beto', 'cliente' => 'Beto']]),
+            'valores' => json_encode([
+                $cid_e => ['valor' => 'Beto', 'cliente' => 'Beto'],
+                // La pagina envenenada reenvia el fantasma junto al id real:
+                // el saneo debe descartar "Array" y quedarse con el hex valido.
+                $cid_img_e => ['valor' => ['Array', '70aa11bb22cc'], 'cliente' => ''],
+            ]),
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
         $GLOBALS['test_edicion_draft'] = $draft_e;
+        $GLOBALS['test_edicion_sid'] = $sid_e;
         $p->handle_vista_previa(); // exit en wp_send_json_*
         break;
 

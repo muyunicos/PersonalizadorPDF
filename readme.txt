@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.6.7
+Stable tag: 4.6.9
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,12 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.6.9 =
+* **La vista previa omisible se muestra igual**: `preview_omisible=true` ya no oculta el boton "Vista previa" ni la galeria. El comprador puede pedir la vista cuando quiera; el flag solo deja de **bloquear el boton de comprar** mientras las vistas no estan listas. Si no pide vistas, el item omisible se sigue creando en el servidor al agregar.
+
+= 4.6.8 =
+* **Fix: al re-editar un item guardado con la 4.6.6, la foto seguia sin verse en la vista previa**. El manifest viejo guardaba el valor del campo imagen como literal `"Array"`; al precargar (`?pmu_item_key=`), el cargador restauraba ese id fantasma, que ocupaba la primera instancia del grupo y dejaba la capa placeholder sin recurso (caja gris). Triple correccion: la ficha **repara el legado al precargar** (campo con cargador y valor no-array -> lista vacia), el **saneo descarta ids que no son hex de 12** (el formato real del id del servidor) y el cliente **filtra el literal "Array"** en `idsDe()`. Los items viejos se auto-reparan al re-editar y generar la vista previa de nuevo.
 
 = 4.6.7 =
 * **Fix: las fotos del comprador no se veian en la vista previa**. En `assets/tienda.js` los grupos de imagen (cargador de la spec 012) subian sus PNG al pool del item pero **nunca entraban a `pngsPorGrupo`**, el mapa que usa `componerMockup()`: la capa placeholder no resolvia y se dibujaba la caja neutra gris en vez de la foto. Ahora `subirFotos()` devuelve el blob junto al grupo/instancia y se incorpora al mapa antes de componer. Ademas, un PDF de solo-imagen ya no carga el motor TextMuy (el iframe de render era dependencia innecesaria que, si no cargaba, marcaba la vista rota y aparecia "no hay vista previa").
