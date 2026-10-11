@@ -22,6 +22,13 @@ php tests/texto_puente.php campo_subida  # servidor intacto (D5)
 
 ## Probar F1-F5 (cuando se implementen)
 
+**Pre-check local en navegador real (sin WP)**: lab en `%TEMP%/pmu-e2e-016/`
+(pagina + smoke Playwright con el Chrome del sistema, misma convencion de los
+lab de la 015). Monta el cargador, abre el modal con Cropper, inyecta un PNG
+600x400, rota y acepta, y verifica: full-screen movil, badge en vivo, PNG de
+salida 300x300 exacto y la tira con miniatura real + quitar/cambiar.
+`node %TEMP%/pmu-e2e-016/smoke.js` -> **LAB 016 OK**.
+
 En un lab (shortcode `[pmu_personalizar pdf="slug"]` sin Woo) y en WP real:
 
 1. **Movil (DevTools emulado)**: tocar una ranura -> modal full-screen; cargar

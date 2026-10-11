@@ -197,7 +197,7 @@
         s.textContent =
             '.spmu-modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px}' +
             '.spmu-bloqueado{overflow:hidden}' +
-            '.spmu-caja{background:#fff;max-width:min(92vw,640px);max-height:92vh;overflow:auto;padding:16px;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.35);position:relative}' +
+            '.spmu-caja{box-sizing:border-box;background:#fff;max-width:min(92vw,640px);max-height:92vh;overflow:auto;padding:16px;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.35);position:relative}' +
             '.spmu-sobre{outline:3px dashed #2271b1;outline-offset:-6px}' +
             '.spmu-cabecera{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px}' +
             '.spmu-titulo{margin:0;font-weight:600}' +
