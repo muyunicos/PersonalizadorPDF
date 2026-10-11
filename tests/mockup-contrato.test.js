@@ -335,6 +335,30 @@ check('la UI dice Placeholders, no Huecos',
         && ed.indexOf('add-hueco') === -1
         && ed.indexOf('+ Hueco') === -1);
 
+/* ============ Tiradores de redimension y giro (doble transformacion) ============ */
+// La posicion del tirador vive en la geometria pura (testeable), no duplicada.
+var geoTir = require(path.join(RAIZ, 'assets/mockup-geometria.js'));
+check('la geometria exporta posicionTirador',
+    typeof geoTir.posicionTirador === 'function');
+check('el editor NO duplica posicionTirador (vive en la geometria)',
+    ed.indexOf('function posicionTirador') === -1,
+    'tenia una copia en mockups.js: dos fuentes de verdad se desalinean');
+// El DIBUJO usa la coordenada LOCAL (el contexto ya aplico translate+rot+sesgo).
+// Dibujar la global ahi era una doble transformacion y los tiradores salian
+// corridos por el centro, fuera del marco y sin poder agarrarse.
+check('el editor dibuja los tiradores en LOCAL',
+    /G\.TIRADORES\.forEach\([\s\S]{0,300}G\.posicionTirador\(c, t, \{ local: true \}\)/.test(ed),
+    'el dibujo debe usar { local: true }; la global es una doble transformacion');
+// El HIT-TEST usa la coordenada GLOBAL (compara contra el punto del puntero).
+check('el editor comprueba los tiradores en GLOBAL',
+    /G\.TIRADORES\[i\]\)/.test(ed)
+        && /G\.posicionTirador\(c, G\.TIRADORES\[i\]\)/.test(ed),
+    'tiradorEn debe comparar contra la posicion global, no la local');
+// El giro: fino (1 grado) sin Shift, rejilla de 15 con Shift (convencion estandar).
+check('el giro es fino sin Shift y de 15 con Shift',
+    ed.indexOf('paso: ev.shiftKey ? 15 : 1') !== -1,
+    'sin Shift salta de 15 en 15 y con Shift era al reves: poca precision');
+
 /* El indice que espera el nucleo: esValida() acepta 1..cont. */
 check('el nucleo acepta el indice de instancia 1-based',
     leer('assets/mockup-render.js').indexOf('indice < 1') !== -1

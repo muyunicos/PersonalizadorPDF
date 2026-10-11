@@ -158,6 +158,45 @@
         return acotar({ x: x, y: y, w: w, h: h }, lado);
     }
 
+    /* ============ Posicion de tiradores ============ */
+
+    /**
+     * Posicion de un tirador de redimension (8 esquinas/lados) de la capa.
+     *
+     * Por defecto (espacio GLOBAL del lienzo logico): posicion para el
+     * hit-test `tiradorEn()`, que compara contra el punto del puntero.
+     *
+     * Con `{ local: true }`: solo el offset respecto al centro, SIN sesgo ni
+     * rotacion, para DIBUJAR dentro del contexto del canvas que ya aplico
+     * `translate(centro) + rotate + transform(sesgo)`. Dibujar la posicion
+     * global ahi era una DOBLE transformacion: los tiradores salian corridos
+     * por el centro (fuera del marco) y no coincidian con el hit-test.
+     *
+     * La posicion global reproduce exactamente la transformacion del contexto
+     * (sesgo -> rotacion -> traslacion), asi que dibujar en local hace que el
+     * tirador caiga sobre la esquina del `strokeRect`, que tambien se dibuja
+     * en local.
+     */
+    function posicionTirador(capa, tirador, opciones) {
+        var op = opciones || {};
+        var hx = numero(capa.w, 1) / 2;
+        var hy = numero(capa.h, 1) / 2;
+        var t = String(tirador);
+        var x = t.indexOf('w') !== -1 ? -hx : (t.indexOf('e') !== -1 ? hx : 0);
+        var y = t.indexOf('n') !== -1 ? -hy : (t.indexOf('s') !== -1 ? hy : 0);
+        if (op.local) {
+            return { x: x, y: y };
+        }
+        var cx = numero(capa.x) + hx;
+        var cy = numero(capa.y) + hy;
+        var rad = numero(capa.rot) * Math.PI / 180;
+        var lx = x + numero(capa.sesgo) * y;
+        return {
+            x: cx + lx * Math.cos(rad) - y * Math.sin(rad),
+            y: cy + lx * Math.sin(rad) + y * Math.cos(rad)
+        };
+    }
+
     /* ============ Rotacion ============ */
 
     /** Centro de la caja de la capa. */
@@ -346,6 +385,7 @@
         acotar: acotar,
         ajustarImanes: ajustarImanes,
         redimensionarDesdeTirador: redimensionarDesdeTirador,
+        posicionTirador: posicionTirador,
         puntosDeRotacion: puntosDeRotacion,
         centro: centro,
         contiene: contiene,

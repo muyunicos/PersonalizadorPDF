@@ -97,6 +97,51 @@ igual('rotacion: angulo 90 abajo', puntoAbajo.angulo, 90);
 var conPaso = G.puntosDeRotacion(capaRot, { x: 143, y: 207 }, { paso: 15 });
 igual('rotacion: redondeo al paso mas cercano', conPaso.angulo, 90);
 
+/* ============ Posicion de tiradores (local para dibujo, global para hit-test) ============ */
+
+// Local: solo el offset respecto al centro (el contexto del canvas ya aplico
+// translate+rot+sesgo). Es lo que dibuja el editor sobre el strokeRect.
+var locSe = G.posicionTirador(capaRot, 'se', { local: true });
+igual('posTirador local se: x (borde este)', locSe.x, 50);
+igual('posTirador local se: y (borde sur)', locSe.y, 50);
+var locNw = G.posicionTirador(capaRot, 'nw', { local: true });
+igual('posTirador local nw: x (borde oeste)', locNw.x, -50);
+igual('posTirador local nw: y (borde norte)', locNw.y, -50);
+var locN = G.posicionTirador(capaRot, 'n', { local: true });
+igual('posTirador local n: centro horizontal', locN.x, 0);
+igual('posTirador local n: arriba', locN.y, -50);
+var locW = G.posicionTirador(capaRot, 'w', { local: true });
+igual('posTirador local w: izquierda', locW.x, -50);
+igual('posTirador local w: centro vertical', locW.y, 0);
+// La local es independiente de la posicion de la capa (es offset puro).
+var locLejos = G.posicionTirador({ x: 30, y: 200, w: 40, h: 60 }, 'se', { local: true });
+igual('posTirador local no depende de x/y (x)', locLejos.x, 20);
+igual('posTirador local no depende de x/y (y)', locLejos.y, 30);
+
+// Global sin rotar: centro + offset (esquina real del marco, para el hit-test).
+var globSe = G.posicionTirador(capaRot, 'se');
+igual('posTirador global se: x', globSe.x, 200);
+igual('posTirador global se: y', globSe.y, 200);
+var globNw = G.posicionTirador(capaRot, 'nw');
+igual('posTirador global nw: x', globNw.x, 100);
+igual('posTirador global nw: y', globNw.y, 100);
+// Global con rotacion 90: la esquina se este cae en (100, 200).
+var globRot = G.posicionTirador({ x: 100, y: 100, w: 100, h: 100, rot: 90 }, 'se');
+igual('posTirador global rot 90: x', globRot.x, 100);
+igual('posTirador global rot 90: y', globRot.y, 200);
+
+// La global debe ser exactamente la transformacion del contexto (sesgo ->
+// rotacion -> traslacion) aplicada a la local: asi dibujo y hit-test coinciden.
+var capaCons = { x: 60, y: 40, w: 80, h: 40, rot: 30, sesgo: 0.3 };
+var consLocal = G.posicionTirador(capaCons, 'ne', { local: true });
+var consGlobal = G.posicionTirador(capaCons, 'ne');
+var u = consLocal.x + 0.3 * consLocal.y;              // sesgo
+var r = 30 * Math.PI / 180;
+var esperadoX = (capaCons.x + capaCons.w / 2) + u * Math.cos(r) - consLocal.y * Math.sin(r);
+var esperadoY = (capaCons.y + capaCons.h / 2) + u * Math.sin(r) + consLocal.y * Math.cos(r);
+igual('posTirador local+sesgo+rot+centro = global (x)', consGlobal.x, esperadoX);
+igual('posTirador local+sesgo+rot+centro = global (y)', consGlobal.y, esperadoY);
+
 /* ============ Acierto de capa (inversa de rotacion y sesgo) ============ */
 
 var capas = [

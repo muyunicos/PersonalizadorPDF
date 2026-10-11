@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.6.5
+Stable tag: 4.6.6
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,10 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.6.6 =
+* **Fix: los tiradores de redimension del editor de mockups estaban desalineados**. En `dibujarSeleccion()` los cuadraditos se dibujaban con la posicion **global** dentro de un contexto del canvas que ya tenia `translate(centro) + rotate + transform(sesgo)`: la transformacion se aplicaba DOS veces y cada tirador salia corrido por el centro de la capa (muchas veces fuera del marco), lejos de donde el hit-test buscaba el clic. La posicion del tirador pasa a la geometria pura (`PMUGeometria.posicionTirador`), testeable, con dos modos: `{local: true}` para DIBUJAR (offset respecto al centro, el contexto ya transforma) y global para el hit-test. Se elimino la copia duplicada que vivia en `mockups.js`. Test: 18 checks nuevos en `mockup-geometria.test.js` + 4 en `mockup-contrato.test.js`.
+* **Mejora: el giro de una capa ahora es preciso**. El tirador de rotacion redondeaba a 15 grados por defecto (la convencion estaba invertida): sin Shift saltaba de 15 en 15 y con Shift pasaba a 1. Ahora **sin Shift gira grado a grado** y con Shift ajusta a la rejilla de 15 grados (0, 15, 30...), igual que en los editores estandar. Test: assert en `mockup-contrato.test.js`.
 
 = 4.6.5 =
 * **Fix: los placeholders no aparecian en el editor de mockups**. En `pintarGrupos()` (`assets/mockups.js`) se construia el `<li>` de cada placeholder (grupo, instancias, etiqueta PH-...) pero **nunca se insertaba en el `<ul>`**, asi que el panel "Placeholders" quedaba vacio con el aviso "Este PDF no tiene grupos" oculto (porque `grupos.length > 0`). Una linea: `$ul.append($li)` dentro del `forEach`. Test: assert nuevo en `mockup-contrato.test.js` que exige el append (70 checks).

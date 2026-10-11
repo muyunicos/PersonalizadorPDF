@@ -388,7 +388,10 @@ jQuery(function ($) {
         ctx.strokeRect(-c.w / 2, -c.h / 2, c.w, c.h);
         if (!c.bloqueada) {
             G.TIRADORES.forEach(function (t) {
-                var p = posicionTirador(c, t);
+                // Coordenada LOCAL (offset al centro): el contexto ya aplico
+                // translate(centro)+rotate+sesgo. Usar la global aqui era una
+                // doble transformacion y los tiradores salian corridos.
+                var p = G.posicionTirador(c, t, { local: true });
                 ctx.fillStyle = '#fff';
                 ctx.strokeStyle = '#2271b1';
                 ctx.lineWidth = 1.5 / f;
@@ -435,19 +438,6 @@ jQuery(function ($) {
         ctx.restore();
     }
 
-    /** Posicion de un tirador de redimension en el espacio logico local. */
-    function posicionTirador(c, tirador) {
-        var hx = c.w / 2;
-        var hy = c.h / 2;
-        var x = tirador.indexOf('w') !== -1 ? -hx : (tirador.indexOf('e') !== -1 ? hx : 0);
-        var y = tirador.indexOf('n') !== -1 ? -hy : (tirador.indexOf('s') !== -1 ? hy : 0);
-        var cx = c.x + c.w / 2;
-        var cy = c.y + c.h / 2;
-        var rad = (c.rot || 0) * Math.PI / 180;
-        var lx = x + c.sesgo * y;
-        return { x: cx + lx * Math.cos(rad) - y * Math.sin(rad), y: cy + lx * Math.sin(rad) + y * Math.cos(rad) };
-    }
-
     /** Cual de los tiradores (o el de rotacion) esta bajo el punto. */
     function tiradorEn(p) {
         var c = capa();
@@ -459,7 +449,7 @@ jQuery(function ($) {
         var hy = c.y + c.h / 2 + radio * Math.sin(ang);
         if (Math.abs(p.x - hx) <= tol * 1.6 && Math.abs(p.y - hy) <= tol * 1.6) { return 'rotar'; }
         for (var i = 0; i < G.TIRADORES.length; i++) {
-            var pos = posicionTirador(c, G.TIRADORES[i]);
+            var pos = G.posicionTirador(c, G.TIRADORES[i]);
             if (Math.abs(p.x - pos.x) <= tol && Math.abs(p.y - pos.y) <= tol) { return G.TIRADORES[i]; }
         }
         return '';
@@ -533,7 +523,7 @@ jQuery(function ($) {
             c.y = imanes.y;
             estado.guias = imanes.guias;
         } else if (a.tipo === 'rotar') {
-            var ang = G.puntosDeRotacion(c, p, { paso: ev.shiftKey ? 1 : 15 });
+            var ang = G.puntosDeRotacion(c, p, { paso: ev.shiftKey ? 15 : 1 });
             c.rot = ang.angulo;
             estado.guias = [];
         } else {
