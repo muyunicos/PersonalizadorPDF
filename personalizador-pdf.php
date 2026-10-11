@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.6.0
+ * Version: 4.6.1
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -2861,22 +2861,17 @@ JS;
                 'cargador' => null,
             ];
         case 'imagen':
+            // El cargador lo monta el SISTEMA (tienda.js montarCargadores en la
+            // ficha y el preview del admin) dentro de .pmu-campo-cuerpo: el
+            // htm NO lleva boton propio. Antes traia un boton placeholder que
+            // referenciaba un componente con nombre viejo (que nunca existio)
+            // y avisaba que el cargador faltaba al tocarlo (spec 016,
+            // correccion 4.6.1). cargador sigue declarando las ranuras
+            // por defecto.
             return [
-                'htm' => "<label class=\"pmu-et\">Subi tus imagenes</label>\n"
-                    . "<button type=\"button\" class=\"pmu-subir\" data-pmu-subir>Subir imagenes</button>\n"
-                    . "<span class=\"pmu-lista\" data-pmu-lista></span>",
-                'css' => ".pmu-lista{display:block;margin-top:8px;font-size:13px}\n"
-                    . ".pmu-lista img{width:72px;height:72px;object-fit:cover;margin:4px;border-radius:4px}",
-                // El cargador real llega en F6 (assets/cargador-pmu.js); mientras
-                // tanto el boton avisa en vez de romper la ficha.
-                'js' => "function (ctx, root) {\n"
-                    . "    var b = root.querySelector('[data-pmu-subir]');\n"
-                    . "    if (!b) { return; }\n"
-                    . "    b.addEventListener('click', function () {\n"
-                    . "        if (window.PMUCargador) { new window.PMUCargador(root).abrir(); }\n"
-                    . "        else { b.textContent = 'El cargador todavia no esta disponible'; }\n"
-                    . "    });\n"
-                    . "}",
+                'htm' => '',
+                'css' => '',
+                'js' => '',
                 'cargador' => 'size:1000 max:6',
             ];
     }

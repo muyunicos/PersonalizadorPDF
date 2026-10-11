@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.6.0
+Stable tag: 4.6.1
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.6.1 =
+* **Correccion (plantilla "Imagen (cargador)")**: la plantilla traia un boton placeholder que decia "El cargador todavia no esta disponible" al tocarlo (referenciaba un PMUCargador que nunca existio; el cargador real lo monta el sistema). La plantilla queda limpia y el comprador ve directamente las ranuras del cargador. Los campos creados antes con esa plantilla se corrigen vaciando su HTML/script desde la pestana Campos (o recreandolos).
 
 = 4.6.0 =
 * **Editor visual de fotos (spec 016)**: el modal de ajuste del comprador pasa de un canvas con slider a un editor visual completo. En modo recorte usa **Cropper.js 1.6.2 vendoreado** (sin CDN, hash de integridad documentado en `assets/vendor/cropper/ORIGEN.md`): pan, pinch-zoom 1x-8x, doble tap para alternar encuadre, rotacion de 90 grados por boton y por gesto de dos dedos, guia de tercios, zona fuera atenuada y un badge en vivo con el tamano de salida y el zoom. En movil el modal es full-screen (camara, soltar el archivo sobre el modal, botones grandes, safe-area); en escritorio un dialogo amplio. Sin Cropper cargado (o navegador viejo) degrada al editor anterior sin romper la ficha.

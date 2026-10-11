@@ -227,6 +227,16 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
   check('el cargador NO pisa el valor del campo.js al montar',
     /if \(mio \|\| est\.ids\.length > 0\)/.test(tienda2));
 
+  // Spec 016 (correccion 4.6.1): la plantilla "Imagen (cargador)" no debe
+  // llevar el boton placeholder con PMUCargador (nombre que nunca existio):
+  // el cargador lo monta el sistema (montarCargadores / preview del admin).
+  check('la plantilla imagen ya no referencia PMUCargador',
+    plugin2.indexOf('PMUCargador') === -1);
+  check('la plantilla imagen ya no trae el boton placeholder',
+    plugin2.indexOf('data-pmu-subir') === -1
+    && plugin2.indexOf('todavia no esta disponible') === -1);
+  check('la plantilla imagen conserva su cargador por defecto',
+    plugin2.indexOf("'cargador' => 'size:1000 max:6'") !== -1);
   // T011b/FR-009: "Probar" dibuja las ranuras sin subir nada.
   const cargadorJs = fs.readFileSync(path.join(__dirname, '..', 'assets', 'cargador-pmu.js'), 'utf8');
   const adm = fs.readFileSync(path.join(__dirname, '..', 'assets', 'admin.js'), 'utf8');

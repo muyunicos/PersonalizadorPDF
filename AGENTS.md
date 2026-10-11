@@ -683,6 +683,8 @@ foreach ($f in @('a.js','b.js')) { node --check $f }  # bucle
 **No usar** (sintaxis de bash, no existe en pwsh): `cat <<EOF`, `ls`, `grep`,
 `sed -i`, `&&` para encadenar (usar `;`), `/tmp/` (usar `$env:TEMP`).
 
+| El boton "Subir imagenes" dice "El cargador todavia no esta disponible" | La plantilla "Imagen (cargador)" traia un boton placeholder con `PMUCargador` (nombre que nunca existio; el real es `CargadorPMU` y lo monta el sistema) | La plantilla quedo sin boton (4.6.1); los campos creados antes se corrigen vaciando su HTML/script desde la pestana Campos |
+
 ## 10.bis Fuente unica de la version (spec 011, 2026-10-01)
 
 La version del plugin esta en **un solo sitio**: la cabecera `* Version:` de `personalizador-pdf.php`.
