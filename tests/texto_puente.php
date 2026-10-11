@@ -473,7 +473,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             $c = isset($GLOBALS['test_conciliacion']) ? (array)$GLOBALS['test_conciliacion'] : [];
             check('analisis intacto tras guardar config', ($c['analisis_antes'] ?? '') === ($c['analisis_despues'] ?? ''));
             check('config editable conserva preview obligatoria', ($c['preview_omisible'] ?? true) === false && ($c['repetir'] ?? false) === true);
-            check('draft sin pool no habilita carrito', ($c['carrito_ok'] ?? true) === false);
+            check('draft arranca en sin_vista (estado previo al visto bueno)', ($c['estado_prevalidar'] ?? '') === 'sin_vista');
+            check('draft del producto habilita carrito sin exigir ok previo', ($c['carrito_ok'] ?? false) === true);
             check('no hay salida parcial', count((array)glob($uploads . '/tmp/muestras/muestra/*_procesado.pdf')) === 0);
             break;
 
@@ -655,6 +656,11 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('manifest con valor dual', is_array($man_v) && isset($man_v['valores'][$cid_v]) && $man_v['valores'][$cid_v]['cliente'] === 'Ana');
             check('valor crudo acotado (sin strip)', is_array($man_v) && $man_v['valores'][$cid_v]['valor'] === '<b>Ana</b>');
             check('campo desconocido descartado', is_array($man_v) && !isset($man_v['valores'][999]));
+            // Bug: el valor de un campo tipo imagen es una lista de ids; se
+            // preserva como array en el manifest (antes se guardaba "Array").
+            $cid_img_v = isset($GLOBALS['test_previa_cid_img']) ? (int)$GLOBALS['test_previa_cid_img'] : 0;
+            check('valor-array de imagen preservado (no "Array")', is_array($man_v)
+                && ($man_v['valores'][$cid_img_v]['valor'] ?? null) === ['6855dbae5bbb', '70aa11bb22cc']);
             // T016 (render parcial): hashes vigentes + URL del pool en la respuesta.
             check('archivos[] + pool_url normativos', is_array($json) && is_array($json['data']['archivos'] ?? null)
                 && (bool)preg_match('#uploads/pmu/tmp/sesion-[a-z0-9_-]+/draft-[a-z0-9_-]+/$#', (string)($json['data']['pool_url'] ?? '')));
@@ -1283,19 +1289,27 @@ switch ($fase) {
         }
         $motor_f = new PMU_Uploads();
         $cid_f = $motor_f->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        // Campo tipo imagen (cargador): publica valor = [ids de subida]. Cubre
+        // el bug que guardaba (string) del array como literal "Array".
+        $cid_img = $motor_f->campo_alta([0, 'Fotos', 'image', [], '', true, '<div></div>', '', '', false]);
         $motor_f->guardar_config('muestra', [
             'activo' => true,
-            'campos_ids' => [$cid_f],
+            'campos_ids' => [$cid_f, $cid_img],
             'placeholders' => ['0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => '[campo1]', 'settings' => '', 'repetir' => false]],
         ]);
         $GLOBALS['test_previa_cid'] = $cid_f;
+        $GLOBALS['test_previa_cid_img'] = $cid_img;
         if ($fase === 'vista_previa_mal') {
             putenv('PD_PUENTE_SIN_NONCE=1');
         }
         $_POST = [
             'action' => 'personalizador_pdf_vista_previa',
             'pdf' => 'muestra.pdf',
-            'valores' => json_encode([$cid_f => ['valor' => '<b>Ana</b>', 'cliente' => 'Ana'], 999 => ['valor' => 'intruso', 'cliente' => 'intruso']]),
+            'valores' => json_encode([
+                $cid_f => ['valor' => '<b>Ana</b>', 'cliente' => 'Ana'],
+                $cid_img => ['valor' => ['6855dbae5bbb', '70aa11bb22cc'], 'cliente' => ''],
+                999 => ['valor' => 'intruso', 'cliente' => 'intruso'],
+            ]),
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
@@ -1981,11 +1995,16 @@ switch ($fase) {
         $draft_c = $sesion_c->crear_draft('test-conc', ['muestra']);
         $_POST = ['pmu_sid' => 'test-conc', 'pmu_item_key' => $draft_c];
         $_REQUEST = $_POST;
+        // Bug del ciclo: el draft arranca en sin_vista y NUNCA se promueve antes
+        // del add-to-cart (promover corre en woocommerce_add_to_cart, despues de
+        // esta validacion). Validar debe aceptarlo IGUAL: el visto bueno es
+        // agregar al carrito, no un estado ok previo que solo existe tras promover.
         $GLOBALS['test_conciliacion'] = [
             'analisis_antes' => $analisis_c,
             'analisis_despues' => (string)file_get_contents($motor_c->ruta_analisis('muestra')),
             'preview_omisible' => $motor_c->leer_config('muestra')['preview_omisible'],
             'repetir' => !empty($motor_c->leer_config('muestra')['placeholders']['0000FF']['repetir']),
+            'estado_prevalidar' => $sesion_c->estado_preview('test-conc', $draft_c),
             'carrito_ok' => $p->carrito_validar(true, 4242, 1),
         ];
         break;

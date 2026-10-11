@@ -862,9 +862,14 @@
                 if (!url) { return null; }
                 return rasterizar(url, f.g.w, f.g.h).then(function (blob) {
                     if (!blob) { return null; }
+                    // El blob se devuelve junto al grupo/instancia para que la
+                    // composicion del mockup lo dibuje (bug: las fotos iban al
+                    // pool pero nunca entraban a pngsPorGrupo -> caja neutra).
                     return subirPool(sid, itemKey, pdfDatos.pdf, f.gid, blob, {
                         valor: f.id, preset: '', settings: '', w: f.g.w, h: f.g.h
-                    }, f.primero);
+                    }, f.primero).then(function () {
+                        return { gid: f.gid, i: f.i, blob: blob };
+                    });
                 });
             }).catch(function () { return null; });   // una foto que falla no frena al resto
         }));
@@ -963,18 +968,23 @@
         }
         // Solo renderiza lo que NO esta en el pool (render parcial, T016).
         var nuevos = pendientes.filter(function (p) { return !p.urlGuardada; });
-        return renderCore().then(function (core) {
-            if (!nuevos.length) { return []; }
-            var items = nuevos.map(function (p) {
-                var it = { id: p.gid + '-' + (p.i + 1), text: p.texto, preset: p.g.preset, width: p.g.w, height: p.g.h };
-                // FR-003 (spec 015, T014): el objeto fusionado viaja como
-                // `overrides`; TextMuy lo mergeDeep sobre el preset del hueco
-                // (api.js:271). Sin `settings` string (H4).
-                if (p.overrides) { it.overrides = p.overrides; }
-                return it;
-            });
-            return core.TextMuyAPI.renderBatch(items);
-        }).then(function (out) {
+        // Sin texto nuevo que renderizar NO se carga el motor TextMuy: un PDF
+        // de solo-imagen no debe depender de que el iframe de render cargue
+        // (si falla, la vista se marcaba rota y aparecia "no hay vista previa").
+        var promesaRender = nuevos.length
+            ? renderCore().then(function (core) {
+                var items = nuevos.map(function (p) {
+                    var it = { id: p.gid + '-' + (p.i + 1), text: p.texto, preset: p.g.preset, width: p.g.w, height: p.g.h };
+                    // FR-003 (spec 015, T014): el objeto fusionado viaja como
+                    // `overrides`; TextMuy lo mergeDeep sobre el preset del hueco
+                    // (api.js:271). Sin `settings` string (H4).
+                    if (p.overrides) { it.overrides = p.overrides; }
+                    return it;
+                });
+                return core.TextMuyAPI.renderBatch(items);
+            })
+            : Promise.resolve([]);
+        return promesaRender.then(function (out) {
             var porId = {};
             (out || []).forEach(function (r) { porId[r.id] = r.blob; });
             var subidas = nuevos.map(function (p) {
@@ -989,8 +999,11 @@
             });
             // Las fotos se esperan junto al texto: la composicion del mockup solo
             // arranca cuando TODAS las imagenes estan en el pool (spec 012, T027).
-            subidas.push(trabajoFotos);
+            // `trabajoFotos` resuelve a [{gid, i, blob}] (o null por instancia):
+            // se espera aparte para poder incorporarlas a pngsPorGrupo.
             return Promise.all(subidas).then(function () {
+                return trabajoFotos;
+            }).then(function (fotosListas) {
                 var pngsPorGrupo = {};
                 pendientes.forEach(function (p) {
                     var recurso = p.urlGuardada || porId[p.gid + '-' + (p.i + 1)];
@@ -998,6 +1011,15 @@
                     var lista = pngsPorGrupo[p.gid] || [];
                     lista.push(recurso);
                     pngsPorGrupo[p.gid] = lista;
+                });
+                // Bug: los grupos de imagen (fotos del comprador) iban al pool
+                // pero NUNCA entraban a pngsPorGrupo, asi que la capa placeholder
+                // no resolvia y salia una caja neutra gris en vez de la foto.
+                (fotosListas || []).forEach(function (t) {
+                    if (!t || !t.blob) { return; }
+                    var listaF = pngsPorGrupo[t.gid] || [];
+                    listaF[t.i] = t.blob;
+                    pngsPorGrupo[t.gid] = listaF;
                 });
                 return componerMockup(pdfDatos, vista.mockup, pngsPorGrupo).then(function (canvas) {
                     var espera = vista.marco.querySelector('.pmu-gal-espera');

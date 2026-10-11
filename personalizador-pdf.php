@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.6.6
+ * Version: 4.6.7
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -1048,8 +1048,23 @@ class Personalizador_PDF_Plugin
             if ($cid < 1 || !isset($camposPanel[$cid]) || !is_array($par)) {
                 continue;
             }
+            $valor = $par['valor'] ?? '';
+            if (is_array($valor)) {
+                // Campos con cargador (spec 012) publican valor = [ids de subida].
+                // Guardar (string) de un array daba literalmente "Array" y rompia
+                // la re-edicion (idsDe("Array") no resuelve ninguna foto). Se
+                // preserva la lista, con cada id saneado y acotado; el manifest
+                // la guarda como array y el cliente la re-lee con idsDe().
+                $ids = [];
+                foreach ($valor as $idUno) {
+                    $ids[] = substr(sanitize_text_field((string)$idUno), 0, 200);
+                }
+                $valorLimpio = $ids;
+            } else {
+                $valorLimpio = substr((string)$valor, 0, 2000);
+            }
             $limpios[$cid] = [
-                'valor' => substr((string)($par['valor'] ?? ''), 0, 2000),
+                'valor' => $valorLimpio,
                 'cliente' => sanitize_text_field((string)($par['cliente'] ?? '')),
             ];
         }
@@ -1645,10 +1660,13 @@ class Personalizador_PDF_Plugin
             if (empty($enItem) || !array_intersect($enItem, $delProducto)) {
                 throw new \RuntimeException('motor:sesion:item:ausente');
             }
-            $estado = $sesion->estado_preview($sid, $item);
-            if ($estado !== PMU_Sesion::ESTADO_OK && $estado !== PMU_Sesion::ESTADO_OMISIBLE) {
-                throw new \RuntimeException('motor:sesion:preview:' . $estado);
-            }
+            // El visto bueno ES agregar al carrito (no un estado previo): el
+            // `preview_estado=ok` solo se marca en carrito_promover(), que corre
+            // en woocommerce_add_to_cart, es decir DESPUES de esta validacion
+            // (woocommerce_add_to_cart_validation). Exigirlo aca bloqueaba el
+            // primer intento siempre (estado sin_vista) y recargaba la ficha con
+            // los campos en blanco. Con que el draft exista y sea del producto,
+            // la venta sigue; el ok/omisible queda como registro para el admin.
             // Spec 005 (T009/D7): con declaracion del navegador el snapshot se
             // REEMPLAZA (nunca se fusiona con el anterior).
             $declarados = $this->pdfs_declarados();

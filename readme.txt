@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.6.6
+Stable tag: 4.6.7
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,11 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.6.7 =
+* **Fix: las fotos del comprador no se veian en la vista previa**. En `assets/tienda.js` los grupos de imagen (cargador de la spec 012) subian sus PNG al pool del item pero **nunca entraban a `pngsPorGrupo`**, el mapa que usa `componerMockup()`: la capa placeholder no resolvia y se dibujaba la caja neutra gris en vez de la foto. Ahora `subirFotos()` devuelve el blob junto al grupo/instancia y se incorpora al mapa antes de componer. Ademas, un PDF de solo-imagen ya no carga el motor TextMuy (el iframe de render era dependencia innecesaria que, si no cargaba, marcaba la vista rota y aparecia "no hay vista previa").
+* **Fix: el valor de un campo tipo imagen se guardaba como "Array"**. `valores_sanitizados()` hacia `(string)` de la lista de ids que publica el cargador, y el manifest quedaba con el literal `"Array"`: al re-editar (`?pmu_item_key=`) la imagen no resolvia. Ahora la lista se preserva como array (ids saneados y acotados) y `idsDe()` la re-lee tal cual.
+* **Fix: el primer "Agregar al carrito" fallaba siempre**. `carrito_validar()` exigia `preview_estado=ok`, pero ese estado solo se marca en `carrito_promover()`, que corre en `woocommerce_add_to_cart` (DESPUES de la validacion de `woocommerce_add_to_cart_validation`). Resultado: la validacion rechazaba con "Tu personalizacion ya no es valida" y Woo recargaba la ficha con los campos en blanco. El visto bueno es agregar al carrito: la validacion acepta el draft del producto sin exigir `ok`, y el estado queda como registro para el admin. Arnés: la fase `conciliacion` ahora verifica el orden real (draft en `sin_vista` habilita carrito) y `vista_previa` verifica el array preservado.
 
 = 4.6.6 =
 * **Fix: los tiradores de redimension del editor de mockups estaban desalineados**. En `dibujarSeleccion()` los cuadraditos se dibujaban con la posicion **global** dentro de un contexto del canvas que ya tenia `translate(centro) + rotate + transform(sesgo)`: la transformacion se aplicaba DOS veces y cada tirador salia corrido por el centro de la capa (muchas veces fuera del marco), lejos de donde el hit-test buscaba el clic. La posicion del tirador pasa a la geometria pura (`PMUGeometria.posicionTirador`), testeable, con dos modos: `{local: true}` para DIBUJAR (offset respecto al centro, el contexto ya transforma) y global para el hit-test. Se elimino la copia duplicada que vivia en `mockups.js`. Test: 18 checks nuevos en `mockup-geometria.test.js` + 4 en `mockup-contrato.test.js`.
