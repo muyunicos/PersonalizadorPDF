@@ -116,6 +116,42 @@ class PMU_Sesion
         return is_array($datos) ? $datos : null;
     }
 
+    /**
+     * Mutacion serializada del manifest de un item (spec 004, T003): TODAS las
+     * operaciones de leer-modificar-escribir del manifest pasan por aca bajo un
+     * lock `flock` por item. Sin esto, la rafaga de POSTs del pool (texto + fotos
+     * por instancia, en paralelo) chocaba en el `manifest.json.tmp` de nombre
+     * fijo y lanzaba `motor:sesion:manifest:invalido` (rename a medias), ademas
+     * de perder filas por el read-modify-write concurrente (la capa de imagen
+     * salia gris porque la instancia sin fila no resolvia).
+     *
+     * El callable recibe el manifest POR REFERENCIA: `function (&$m) {...}`.
+     */
+    private function mutar_manifest($sid, $item_key, callable $fn)
+    {
+        $dir = $this->motor->dir_sesion_item($sid, $item_key, true);
+        $lock = @fopen($dir . DIRECTORY_SEPARATOR . '.manifest.lock', 'c');
+        if ($lock === false) {
+            throw new Exception('motor:sesion:manifest:invalido');
+        }
+        if (!@flock($lock, LOCK_EX)) {
+            @fclose($lock);
+            throw new Exception('motor:sesion:manifest:invalido');
+        }
+        try {
+            $manifest = $this->leer_manifest($sid, $item_key);
+            if (!is_array($manifest)) {
+                throw new Exception('motor:sesion:item:ausente');
+            }
+            $fn($manifest);
+            $this->guardar_manifest($sid, $item_key, $manifest);
+        } finally {
+            @flock($lock, LOCK_UN);
+            @fclose($lock);
+        }
+        return $manifest;
+    }
+
     /** Guarda el manifest con escritura atomica (.tmp + rename). */
     public function guardar_manifest($sid, $item_key, array $manifest)
     {
@@ -193,29 +229,27 @@ class PMU_Sesion
         if ($bytes === null || $bytes === '') {
             throw new Exception('motor:sesion:png:vacio');
         }
-        $imgDir = $this->motor->dir_sesion_item_img($sid, $item_key, true);
-        $n = $this->siguiente_n($imgDir, $pdf, $grupo);
-        $file = 'img/' . $pdf . '-' . $grupo . '-' . $n . '.png';
-        if (@file_put_contents($imgDir . DIRECTORY_SEPARATOR . basename($file), $bytes) === false) {
-            throw new Exception('motor:sesion:directorio:no_escribible');
-        }
-        $manifest = $this->leer_manifest($sid, $item_key);
-        if (!is_array($manifest)) {
-            throw new Exception('motor:sesion:item:ausente');
-        }
-        if (!isset($manifest['archivos']) || !is_array($manifest['archivos'])) {
-            $manifest['archivos'] = [];
-        }
-        $fila = [
-            'pdf' => $pdf,
-            'grupo_id' => $grupo,
-            'indice' => $n - 1,
-            'file' => $file,
-            'hash' => (string)($hash !== null ? $hash : sha1($bytes)),
-        ];
-        $manifest['archivos'][] = $fila;
-        $this->guardar_manifest($sid, $item_key, $manifest);
-        return ['indice' => $fila['indice'], 'file' => $file, 'hash' => $fila['hash']];
+        $fila = null;
+        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $pdf, $grupo, $bytes, $hash, &$fila) {
+            $imgDir = $this->motor->dir_sesion_item_img($sid, $item_key, true);
+            $n = $this->siguiente_n($imgDir, $pdf, $grupo);
+            $file = 'img/' . $pdf . '-' . $grupo . '-' . $n . '.png';
+            if (@file_put_contents($imgDir . DIRECTORY_SEPARATOR . basename($file), $bytes) === false) {
+                throw new Exception('motor:sesion:directorio:no_escribible');
+            }
+            if (!isset($manifest['archivos']) || !is_array($manifest['archivos'])) {
+                $manifest['archivos'] = [];
+            }
+            $fila = [
+                'pdf' => $pdf,
+                'grupo_id' => $grupo,
+                'indice' => $n - 1,
+                'file' => $file,
+                'hash' => (string)($hash !== null ? $hash : sha1($bytes)),
+            ];
+            $manifest['archivos'][] = $fila;
+        });
+        return ['indice' => $fila['indice'], 'file' => $fila['file'], 'hash' => $fila['hash']];
     }
 
     /**
@@ -229,28 +263,25 @@ class PMU_Sesion
         if (!preg_match('/^[0-9A-F]{6}$/', $grupo)) {
             throw new Exception('motor:sesion:grupo:invalido');
         }
-        $imgDir = $this->motor->dir_sesion_item_img($sid, $item_key, false);
-        if (is_dir($imgDir)) {
-            foreach ((array)glob($imgDir . DIRECTORY_SEPARATOR . $pdf . '-' . $grupo . '-*.png') as $ruta) {
-                @unlink($ruta);
+        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $pdf, $grupo) {
+            $imgDir = $this->motor->dir_sesion_item_img($sid, $item_key, false);
+            if (is_dir($imgDir)) {
+                foreach ((array)glob($imgDir . DIRECTORY_SEPARATOR . $pdf . '-' . $grupo . '-*.png') as $ruta) {
+                    @unlink($ruta);
+                }
             }
-        }
-        $manifest = $this->leer_manifest($sid, $item_key);
-        if (!is_array($manifest)) {
-            throw new Exception('motor:sesion:item:ausente');
-        }
-        $resto = [];
-        foreach ((array)($manifest['archivos'] ?? []) as $fila) {
-            if (is_array($fila)
-                && isset($fila['pdf'], $fila['grupo_id'])
-                && (string)$fila['pdf'] === $pdf
-                && strtoupper((string)$fila['grupo_id']) === $grupo) {
-                continue;
+            $resto = [];
+            foreach ((array)($manifest['archivos'] ?? []) as $fila) {
+                if (is_array($fila)
+                    && isset($fila['pdf'], $fila['grupo_id'])
+                    && (string)$fila['pdf'] === $pdf
+                    && strtoupper((string)$fila['grupo_id']) === $grupo) {
+                    continue;
+                }
+                $resto[] = $fila;
             }
-            $resto[] = $fila;
-        }
-        $manifest['archivos'] = $resto;
-        $this->guardar_manifest($sid, $item_key, $manifest);
+            $manifest['archivos'] = $resto;
+        });
     }
 
     /* ==================== Subidas del comprador (spec 012, T021) ============ */
@@ -328,28 +359,30 @@ class PMU_Sesion
         if ($firma === null) {
             throw new Exception('motor:subida:formato:invalido');
         }
-        $manifest = $this->leer_manifest($sid, $item_key);
-        if (!is_array($manifest) || (string)($manifest['item_key'] ?? '') !== (string)$item_key) {
-            throw new Exception('motor:sesion:item:ausente');
-        }
-        $dir = $this->dir_subidas($sid, $item_key, true);
-        $id = substr(str_replace('-', '', $this->uuid4()), 0, 12);
-        $file = 'subidas/' . $id . '.' . $firma['ext'];
-        if (@file_put_contents($dir . DIRECTORY_SEPARATOR . $id . '.' . $firma['ext'], $bytes) === false) {
-            throw new Exception('motor:sesion:subidas:no_escribible');
-        }
-        $filas = isset($manifest['subidas']) && is_array($manifest['subidas'])
-            ? array_values($manifest['subidas']) : [];
-        $filas[] = [
-            'id' => $id,
-            'file' => $file,
-            'mime' => $firma['mime'],
-            'bytes' => strlen($bytes),
-            'creado' => time(),
-        ];
-        $manifest['subidas'] = $filas;
-        $this->guardar_manifest($sid, $item_key, $manifest);
-        return ['id' => $id, 'file' => $file, 'mime' => $firma['mime'], 'bytes' => strlen($bytes)];
+        $salida = null;
+        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $bytes, $firma, &$salida) {
+            if ((string)($manifest['item_key'] ?? '') !== (string)$item_key) {
+                throw new Exception('motor:sesion:item:ausente');
+            }
+            $dir = $this->dir_subidas($sid, $item_key, true);
+            $id = substr(str_replace('-', '', $this->uuid4()), 0, 12);
+            $file = 'subidas/' . $id . '.' . $firma['ext'];
+            if (@file_put_contents($dir . DIRECTORY_SEPARATOR . $id . '.' . $firma['ext'], $bytes) === false) {
+                throw new Exception('motor:sesion:subidas:no_escribible');
+            }
+            $filas = isset($manifest['subidas']) && is_array($manifest['subidas'])
+                ? array_values($manifest['subidas']) : [];
+            $filas[] = [
+                'id' => $id,
+                'file' => $file,
+                'mime' => $firma['mime'],
+                'bytes' => strlen($bytes),
+                'creado' => time(),
+            ];
+            $manifest['subidas'] = $filas;
+            $salida = ['id' => $id, 'file' => $file, 'mime' => $firma['mime'], 'bytes' => strlen($bytes)];
+        });
+        return $salida;
     }
 
     /**
@@ -394,16 +427,14 @@ class PMU_Sesion
         if (@file_put_contents($dir . DIRECTORY_SEPARATOR . 'mockup-' . $mockup_id . '.webp', $bytes) === false) {
             throw new Exception('motor:sesion:directorio:no_escribible');
         }
-        $manifest = $this->leer_manifest($sid, $item_key);
-        if (is_array($manifest)) {
+        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($mockup_id) {
             $vistas = isset($manifest['mockup_vistas']) && is_array($manifest['mockup_vistas']) ? $manifest['mockup_vistas'] : [];
             if (!in_array($mockup_id, $vistas, true)) {
                 $vistas[] = $mockup_id;
             }
             $manifest['mockup_vistas'] = array_values($vistas);
             $manifest['mockup_visto'] = $mockup_id;
-            $this->guardar_manifest($sid, $item_key, $manifest);
-        }
+        });
         return $dir . DIRECTORY_SEPARATOR . 'mockup-' . $mockup_id . '.webp';
     }
 
@@ -418,24 +449,21 @@ class PMU_Sesion
         foreach ($pdfs as $pdf) {
             $aceptados[(string)$this->motor->nombre_seguro($pdf, 'sesion:pool_filtrar_pdfs')] = true;
         }
-        $manifest = $this->leer_manifest($sid, $item_key);
-        if (!is_array($manifest)) {
-            throw new Exception('motor:sesion:item:ausente');
-        }
-        $imgDir = $this->dir_item($sid, $item_key) . DIRECTORY_SEPARATOR . 'img';
-        $resto = [];
-        foreach ((array)($manifest['archivos'] ?? []) as $fila) {
-            $pdf = is_array($fila) ? (string)($fila['pdf'] ?? '') : '';
-            if ($pdf !== '' && !isset($aceptados[$pdf])) {
-                if (!empty($fila['file']) && is_dir($imgDir)) {
-                    @unlink($imgDir . DIRECTORY_SEPARATOR . basename((string)$fila['file']));
+        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $aceptados) {
+            $imgDir = $this->dir_item($sid, $item_key) . DIRECTORY_SEPARATOR . 'img';
+            $resto = [];
+            foreach ((array)($manifest['archivos'] ?? []) as $fila) {
+                $pdf = is_array($fila) ? (string)($fila['pdf'] ?? '') : '';
+                if ($pdf !== '' && !isset($aceptados[$pdf])) {
+                    if (!empty($fila['file']) && is_dir($imgDir)) {
+                        @unlink($imgDir . DIRECTORY_SEPARATOR . basename((string)$fila['file']));
+                    }
+                    continue;
                 }
-                continue;
+                $resto[] = $fila;
             }
-            $resto[] = $fila;
-        }
-        $manifest['archivos'] = $resto;
-        $this->guardar_manifest($sid, $item_key, $manifest);
+            $manifest['archivos'] = $resto;
+        });
     }
 
     /** Estado de preview del item: ok | sin_vista | omisible. */
@@ -555,6 +583,8 @@ class PMU_Sesion
                 if (!is_dir($dest) && !@mkdir($dest, 0775, true)) {
                     throw new Exception('motor:sesion:directorio:no_escribible');
                 }
+            } elseif (basename((string)$item->getPathname()) === '.manifest.lock') {
+                continue; // lock de escritura del manifest: no viaja al pedido
             } elseif (!@copy($item->getPathname(), $dest)) {
                 throw new Exception('motor:sesion:directorio:no_escribible');
             }
@@ -566,12 +596,16 @@ class PMU_Sesion
         if (!$dir || !is_dir($dir)) {
             return;
         }
-        foreach ((array)glob($dir . DIRECTORY_SEPARATOR . '*') as $f) {
-            if (is_dir($f)) {
-                $this->borrar_arbol($f);
+        // FilesystemIterator (no glob): lista TAMBIEN los dotfiles como el
+        // .manifest.lock del mutar_manifest; con glob('*') el lock quedaba y
+        // el rmdir fallaba en silencio (borrado "quirurgico" incompleto).
+        $it = new FilesystemIterator($dir, FilesystemIterator::SKIP_DOTS);
+        foreach ($it as $f) {
+            if ($f->isDir()) {
+                $this->borrar_arbol($f->getPathname());
                 continue;
             }
-            @unlink($f);
+            @unlink($f->getPathname());
         }
         @rmdir($dir);
     }

@@ -21,7 +21,7 @@ if (PHP_SAPI !== 'cli') {
  *    validez | validez_admin | validez_admin_mal | ficha* | vista_previa* |
  *    carrito | pool* | overrides | sesion | conciliacion | completados | mockups* |
  *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
- *    reanalizar | borrado | campo_global | campo_subida`
+ *    reanalizar | borrado | campo_global | campo_subida | pool_concurrente`
  */
 
 $fase = isset($argv[1]) ? $argv[1] : 'setup';
@@ -55,15 +55,21 @@ set_error_handler(function ($errno, $errstr, $errfile = '', $errline = 0) {
 error_reporting(E_ALL);
 
 // ====== Entorno aislado en %TEMP% ======
-$testBase = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pd_puente_' . getmypid();
-if (is_dir($testBase)) {
-    foreach (new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($testBase, FilesystemIterator::SKIP_DOTS),
-        RecursiveIteratorIterator::CHILD_FIRST
-    ) as $x) {
-        $x->isDir() ? @rmdir($x->getPathname()) : @unlink($x->getPathname());
+// Los hijos de la fase `pool_concurrente` reciben la base del padre por
+// argv[2] y NO limpian (comparten el entorno sembrado por el padre).
+$testBase = isset($argv[2]) && $argv[2] !== ''
+    ? (string)$argv[2]
+    : sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pd_puente_' . getmypid();
+if (!isset($argv[2]) || $argv[2] === '') {
+    if (is_dir($testBase)) {
+        foreach (new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($testBase, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        ) as $x) {
+            $x->isDir() ? @rmdir($x->getPathname()) : @unlink($x->getPathname());
+        }
+        @rmdir($testBase);
     }
-    @rmdir($testBase);
 }
 
 // ====== Stubs minimos de WordPress ======
@@ -476,6 +482,19 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('draft arranca en sin_vista (estado previo al visto bueno)', ($c['estado_prevalidar'] ?? '') === 'sin_vista');
             check('draft del producto habilita carrito sin exigir ok previo', ($c['carrito_ok'] ?? false) === true);
             check('no hay salida parcial', count((array)glob($uploads . '/tmp/muestras/muestra/*_procesado.pdf')) === 0);
+            break;
+        case 'pool_hijo':
+            // Hijo de la fase de concurrencia: sin verificacion propia (el padre
+            // recoge su stdout). Solo se evita el default de fase desconocida.
+            break;
+        case 'pool_concurrente':
+            // Concurrencia real del manifest: los hijos corren en paralelo sobre
+            // el mismo item; el lock debe conservar TODAS las filas y no dejar
+            // manifest.json.tmp colgando (bug en produccion: manifest:invalido).
+            $pc = isset($GLOBALS['test_pool_concurrente']) ? (array)$GLOBALS['test_pool_concurrente'] : [];
+            check('pool concurrente: los 8 hijos terminaron sin manifest:invalido', ($pc['fallos'] ?? 99) === 0, (string)($pc['fallos'] ?? ''));
+            check('pool concurrente: las 8 filas quedaron en el manifest', ($pc['filas'] ?? 0) === 8, (string)($pc['filas'] ?? ''));
+            check('pool concurrente: sin .tmp colgado', ($pc['tmp_colgado'] ?? 99) === 0);
             break;
 
         case 'admin':
@@ -2038,6 +2057,80 @@ switch ($fase) {
             'repetir' => !empty($motor_c->leer_config('muestra')['placeholders']['0000FF']['repetir']),
             'estado_prevalidar' => $sesion_c->estado_preview('test-conc', $draft_c),
             'carrito_ok' => $p->carrito_validar(true, 4242, 1),
+        ];
+        break;
+
+    case 'pool_hijo':
+        // Hijo de `pool_concurrente`: un guardar_png y salida. El entorno ya lo
+        // sembro el padre (argv[2] = testBase compartido; no se limpia).
+        // argv[3] = item_key real, argv[4] = indice del hijo (hash).
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $item_h = isset($argv[3]) ? (string)$argv[3] : '';
+        $motor_h = new PMU_Uploads();
+        $sesion_h = new PMU_Sesion($motor_h);
+        $pngH = sys_get_temp_dir() . '/pd_puente_png_hijo_' . getmypid() . '.png';
+        \ExtractCorel\Engine\PngWriter::write($pngH, 300, 200);
+        try {
+            $filaH = $sesion_h->guardar_png('test-conc2', $item_h, 'muestra', '0000FF', (string)@file_get_contents($pngH), 'hijo-' . (int)($argv[4] ?? 0));
+            echo 'HIJO OK ' . ($filaH['file'] ?? '') . "\n";
+        } catch (\Throwable $e) {
+            echo 'HIJO FAIL ' . $e->getMessage() . "\n";
+        }
+        @unlink($pngH);
+        exit(0);
+        break;
+
+    case 'pool_concurrente':
+        // Concurrencia real del manifest: N procesos hijos hacen guardar_png en
+        // paralelo sobre el MISMO item. El lock flock debe conservar TODAS las
+        // filas (antes: motor:sesion:manifest:invalido por colision del .tmp y
+        // filas perdidas por el read-modify-write concurrente).
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $motor_cc = new PMU_Uploads();
+        $sesion_cc = new PMU_Sesion($motor_cc);
+        $draft_cc = $sesion_cc->crear_draft('test-conc2', ['muestra']);
+        $N_cc = 8;
+        $procs = [];
+        for ($i = 0; $i < $N_cc; $i++) {
+            $cmd_cc = 'php "' . __FILE__ . '" pool_hijo "' . $testBase . '" "' . $draft_cc . '" ' . $i;
+            $descr_cc = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+            $proc_cc = @proc_open($cmd_cc, $descr_cc, $pipes_cc);
+            if (is_resource($proc_cc)) {
+                @fclose($pipes_cc[0]);
+                $procs[] = [$proc_cc, $pipes_cc];
+            }
+        }
+        $fallos_cc = 0;
+        foreach ($procs as $par_cc) {
+            list($proc_cc, $pipes_cc) = $par_cc;
+            $out_cc = (string)@stream_get_contents($pipes_cc[1]);
+            $err_cc = (string)@stream_get_contents($pipes_cc[2]);
+            @fclose($pipes_cc[1]);
+            @fclose($pipes_cc[2]);
+            @proc_close($proc_cc);
+            if (strpos($out_cc . $err_cc, 'FAIL') !== false) {
+                $fallos_cc++;
+            }
+        }
+        $man_cc = $sesion_cc->leer_manifest('test-conc2', $draft_cc);
+        $dir_cc = $sesion_cc->dir_item('test-conc2', $draft_cc);
+        $GLOBALS['test_pool_concurrente'] = [
+            'filas' => is_array($man_cc) ? count((array)($man_cc['archivos'] ?? [])) : 0,
+            'fallos' => $fallos_cc,
+            'tmp_colgado' => count((array)glob($dir_cc . DIRECTORY_SEPARATOR . 'manifest.json.tmp')),
         ];
         break;
 

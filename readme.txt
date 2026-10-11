@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.6.9
+Stable tag: 4.6.10
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.6.10 =
+* **Fix: `motor:sesion:manifest:invalido` y capa de imagen gris en la vista previa con varios grupos**. La rafaga de POSTs del pool (texto + fotos por instancia, en paralelo) chocaba en la escritura del manifest: `manifest.json.tmp` de nombre fijo + rename sin lock, y read-modify-write concurrente que perdia filas. Una instancia fallida dejaba la capa placeholder sin recurso (caja gris) y la vista se marcaba rota. Ahora TODAS las mutaciones del manifest del item (`guardar_png`, `limpiar_grupo`, `guardar_subida`, `congelar_webp`, `pool_filtrar_pdfs`) pasan por un lock `flock` por item (`.manifest.lock`, que no viaja al pedido). Test: fase nueva `pool_concurrente` que lanza 8 procesos hijos escribiendo el pool en paralelo y exige las 8 filas sin fallos ni `.tmp` colgando.
 
 = 4.6.9 =
 * **La vista previa omisible se muestra igual**: `preview_omisible=true` ya no oculta el boton "Vista previa" ni la galeria. El comprador puede pedir la vista cuando quiera; el flag solo deja de **bloquear el boton de comprar** mientras las vistas no estan listas. Si no pide vistas, el item omisible se sigue creando en el servidor al agregar.
