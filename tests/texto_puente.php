@@ -192,19 +192,24 @@ class TestWC_Product { private $id = 0; public function __construct($id = 0) { $
 class TestPMUOrder {
     private $id;
     private $meta = [];
-    public function __construct($id = 0, array $meta = []) { $this->id = (int)$id; $this->meta = $meta; }
+    private $items = [];
+    public function __construct($id = 0, array $meta = [], array $items = []) { $this->id = (int)$id; $this->meta = $meta; $this->items = $items; }
     public function get_id() { return $this->id; }
     public function get_meta($key = '', $single = false) { return $this->meta[$key] ?? ''; }
     public function update_meta_data($key, $value) { $this->meta[$key] = $value; }
     public function save() { return true; }
+    public function get_items() { return $this->items; }
     public function get_order_key() { return 'test-order-key'; }
     public function get_customer_id() { return 1; }
 }
-// Item de linea de pedido (T022/T023): solo necesita guardar meta para el test.
+// Item de linea de pedido (T022/T023 + spec 017): guarda meta y _urls_files.
 class TestPMUOrderItem {
     private $meta = [];
+    public function __construct(array $meta = []) { $this->meta = $meta; }
     public function add_meta_data($key, $value) { $this->meta[$key] = $value; }
+    public function update_meta_data($key, $value) { $this->meta[$key] = $value; }
     public function get_meta($key = '', $single = false) { return $this->meta[$key] ?? ''; }
+    public function save() { return true; }
 }
 function wc_get_order($id = 0) { return $GLOBALS['test_order'] ?? null; }
 function get_current_user_id() { return (int)($GLOBALS['test_user_id'] ?? 1); }
@@ -722,6 +727,21 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && is_file(($GLOBALS['test_completados_dir'] ?? '') . DIRECTORY_SEPARATOR . 'muestra_procesado.pdf')
                 && is_file(($GLOBALS['test_completados_dir'] ?? '') . DIRECTORY_SEPARATOR . 'otro_procesado.pdf')
                 && !is_file(($GLOBALS['test_completados_dir'] ?? '') . DIRECTORY_SEPARATOR . 'x_procesado.pdf'));
+            break;
+        case 'entrega_tema':
+            // Spec 017: con el tema activo, publica _urls_files protegida y no
+            // inyecta fila propia (el tema entrega).
+            $et = isset($GLOBALS['test_entrega_tema']) ? $GLOBALS['test_entrega_tema'] : [];
+            check('tema: publica _urls_files (adaptador encendido)', !empty($et['tema_activo']),
+                'urls=' . count((array)($et['urls'] ?? [])));
+            check('tema: la URL apunta al endpoint propio (protegida)', !empty($et['apunta_endpoint']));
+            check('tema: no publica ruta cruda de uploads/', !empty($et['sin_crudo']));
+            check('tema: idempotente (no duplica al republicar)', !empty($et['idempotente']));
+            check('tema: descargas_cliente NO inyecta fila propia', !empty($et['descargas_sin_inyeccion']));
+            break;
+        case 'entrega_sin_tema':
+            // Regresion: sin tema, descargas_cliente sigue funcionando (hoy intacto).
+            check('sin tema: descargas_cliente responde array', !empty($GLOBALS['test_entrega_sin_tema']['descargas_ok']));
             break;
         case 'ficha_edicion':
             // T016: re-edicion: HTML con leyenda de edicion + PMU_FICHA precargada;
@@ -1438,6 +1458,78 @@ switch ($fase) {
         $_REQUEST = $_POST;
         $GLOBALS['test_completados_dir'] = $dirK;
         $p->handle_item_regenerar(); // exit en responder(JSON)
+        break;
+
+    case 'entrega_tema':
+        // Spec 017: con el tema activo, el plugin publica _urls_files y NO
+        // inyecta fila propia en descargas_cliente. El tema entrega.
+        preparar_entorno($testBase, $base);
+        // El tema activo = existe su helper. Se define SOLO en esta fase (una
+        // fase por proceso), asi las demas fases siguen sin tema.
+        if (!function_exists('mu_update_item_files')) {
+            eval('function mu_update_item_files($a, $b, $c) { return true; }');
+        }
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $motor_t = $p->motor_para_tests();
+        $cid_t = $motor_t->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $motor_t->guardar_config('muestra', [
+            'activo' => true,
+            'campos_ids' => [$cid_t],
+            'placeholders' => ['0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => '[campo1]', 'settings' => '', 'repetir' => false]],
+        ]);
+        // Item ya promovido a orders/{order}/{item}/ con su pool (como completados).
+        $dirT = $motor_t->dir_ambito('orders', true) . DIRECTORY_SEPARATOR . '4242' . DIRECTORY_SEPARATOR . 'item-abc';
+        wp_mkdir_p($dirT . DIRECTORY_SEPARATOR . 'img');
+        $pngT = sys_get_temp_dir() . '/pd_puente_png_' . getmypid() . '_t.png';
+        \ExtractCorel\Engine\PngWriter::write($pngT, 300, 200);
+        copy($pngT, $dirT . DIRECTORY_SEPARATOR . 'img' . DIRECTORY_SEPARATOR . 'muestra-0000FF-1.png');
+        file_put_contents($dirT . DIRECTORY_SEPARATOR . 'manifest.json', json_encode([
+            'item_key' => 'item-abc',
+            'sid' => 'test-8f2a',
+            'pdfs' => ['muestra'],
+            'pdfs_descartados' => [],
+            'valores' => [$cid_t => ['valor' => 'Ana', 'cliente' => 'Ana']],
+            'archivos' => [
+                ['pdf' => 'muestra', 'grupo_id' => '0000FF', 'indice' => 0, 'file' => 'img/muestra-0000FF-1.png', 'hash' => 'h1'],
+            ],
+            'preview_estado' => 'ok',
+        ]));
+        // Line item del pedido con _pmu_item_key, como lo deja pedido_item_crear.
+        $lineT = new TestPMUOrderItem(['_pmu_item_key' => 'item-abc']);
+        $orderT = new TestPMUOrder(4242, ['_pmu_items' => ['item-abc' => 'entregado']], [$lineT]);
+        $GLOBALS['test_order'] = $orderT;
+        // Publica en _urls_files via el entregador del tema.
+        $p->entregar_por_tema($orderT, 'item-abc');
+        $urlsT = $lineT->get_meta('_urls_files', true);
+        $urlsT = is_array($urlsT) ? $urlsT : [];
+        $GLOBALS['test_entrega_tema'] = [
+            'urls' => $urlsT,
+            'tema_activo' => $urlsT !== [], // solo escribe si el tema esta activo
+            'apunta_endpoint' => (bool)preg_grep('/action=personalizador_pdf_item_descargar/', $urlsT),
+            'sin_crudo' => !(bool)preg_grep('#/uploads/#', $urlsT),
+        ];
+        // Idempotencia: segunda llamada no duplica.
+        $p->entregar_por_tema($orderT, 'item-abc');
+        $GLOBALS['test_entrega_tema']['idempotente'] = count($urlsT) === count((array)$lineT->get_meta('_urls_files', true));
+        // Con tema activo, descargas_cliente NO inyecta fila propia (retorna igual).
+        $entradaDesc = [['order_id' => 4242, 'product_id' => 123, 'product_name' => 'P', 'order_key' => 'test-order-key']];
+        $GLOBALS['test_entrega_tema']['descargas_sin_inyeccion'] =
+            $p->descargas_cliente($entradaDesc) === $entradaDesc;
+        unset($GLOBALS['test_order']);
+        break;
+
+    case 'entrega_sin_tema':
+        // Regresion: sin el tema, descargas_cliente entrega como hoy (fila propia).
+        preparar_entorno($testBase, $base);
+        $GLOBALS['test_order'] = null;
+        $GLOBALS['test_entrega_sin_tema'] = [];
+        // Sin definir mu_update_item_files, el adaptador NO debe escribir _urls_files
+        // ni alterar descargas_cliente. Se ejercita descargas_cliente con un pedido
+        // sembrado minimo (sin items PMU => no agrega, pero no debe crashear).
+        $GLOBALS['test_entrega_sin_tema']['descargas_ok'] =
+            is_array($p->descargas_cliente([['order_id' => 999999, 'product_id' => 1, 'product_name' => 'X', 'order_key' => 'k']]));
         break;
 
     case 'ficha_edicion':

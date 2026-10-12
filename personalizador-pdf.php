@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.6.14
+ * Version: 4.6.15
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -1041,6 +1041,9 @@ class Personalizador_PDF_Plugin
     /** Draft vigente detectado por carrito_validar() (sid + item_key). */
     private $item_draft_valido = [];
 
+    /** Spec 017 (D1): cache de si el tema Muy Únicos esta activo (null = sin evaluar). */
+    private $tema_muyunicos_cache = null;
+
     /** Tupla de campo por id desde el catalogo (null si no existe). */
     public function campo_por_id($id)
     {
@@ -1754,6 +1757,127 @@ class Personalizador_PDF_Plugin
         }
     }
 
+    /* ==================== Entrega por el tema Muy Únicos (spec 017, D1/D6) ==================== */
+
+    /**
+     * RC4.6.15 / spec 017 (D1): detecta el tema Muy Únicos por CAPACIDAD, no por
+     * slug. `mu_update_item_files()` es la helper real del tema
+     * (`inc/orders-files.php`); si existe, el tema puede entregar `_urls_files`
+     * (email + mi-cuenta/descargas/). Cacheada para no repetir el chequeo.
+     */
+    private function tema_muyunicos_activo()
+    {
+        if ($this->tema_muyunicos_cache === null) {
+            $this->tema_muyunicos_cache = function_exists('mu_update_item_files');
+        }
+        return $this->tema_muyunicos_cache;
+    }
+
+    /**
+     * Spec 017 (D3/FR-002): URL de descarga protegida del PDF de un item, servida
+     * por el endpoint propio (con order_key), NO una ruta cruda de uploads/.
+     */
+    private function url_descarga_pdf($order_id, $item_key, $pdf, $order_key)
+    {
+        return add_query_arg([
+            'action' => 'personalizador_pdf_item_descargar',
+            'order_id' => (int)$order_id,
+            'item_key' => (string)$item_key,
+            'pdf' => (string)$pdf,
+            'clave' => (string)$order_key,
+        ], admin_url('admin-post.php'));
+    }
+
+    /**
+     * Spec 017 (D2/D5/FR-001/FR-005): publica las URLs de descarga del item en la
+     * meta `_urls_files` del order item (el contrato del tema). AGREGA sin pisar
+     * (idempotente: no duplica ni borra archivos que el admin subio a mano). Usa
+     * la API estandar de Woo, no el interno del tema. Fail-safe: si el tema no
+     * esta activo o algo falla, no hace nada (el plugin entrega por su via propia).
+     */
+    private function publicar_urls_files($order, $item_key, array $pdfs, $order_key)
+    {
+        if (!$this->tema_muyunicos_activo() || !$pdfs
+            || !$order || !method_exists($order, 'get_items') || !method_exists($order, 'get_id')) {
+            return;
+        }
+        try {
+            foreach ($order->get_items() as $lineItem) {
+                if (!method_exists($lineItem, 'get_meta')
+                    || (string)$lineItem->get_meta('_pmu_item_key') !== (string)$item_key) {
+                    continue;
+                }
+                $files = $lineItem->get_meta('_urls_files', true);
+                if (!is_array($files)) {
+                    $files = [];
+                }
+                $cambio = false;
+                foreach ($pdfs as $pdf) {
+                    $pdf = $this->pmu_uploads()->nombre_seguro((string)$pdf, 'descarga');
+                    $url = $this->url_descarga_pdf((int)$order->get_id(), $item_key, $pdf, $order_key);
+                    if (!in_array($url, $files, true)) {
+                        $files[] = $url;
+                        $cambio = true;
+                    }
+                }
+                if ($cambio) {
+                    $lineItem->update_meta_data('_urls_files', $files);
+                    if (method_exists($lineItem, 'save')) {
+                        $lineItem->save();
+                    }
+                }
+                return; // un solo line item por item_key
+            }
+        } catch (\Throwable $e) {
+            $this->log_pedido(sprintf(
+                'tema:publicar:falla order=%d item=%s err=%s',
+                (int)$order->get_id(),
+                (string)$item_key,
+                $e->getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Spec 017 (D4/FR-001/FR-006): con el tema activo, tras promover el item
+     * genera el PDF desde el pool y publica la URL en `_urls_files`. Idempotente
+     * (reusado por pedido_promover en cada cambio de estado y por el boton
+     * "Generar PDF" del pedido via `MuyUnicos_PDF_Generator`). Fail-safe (FR-007):
+     * una generacion fallida no tumba la promocion.
+     */
+    public function entregar_por_tema($order, $item_key)
+    {
+        if (!$this->tema_muyunicos_activo() || !$order || !method_exists($order, 'get_id')) {
+            return;
+        }
+        try {
+            $oid = (int)$order->get_id();
+            $manifest = $this->manifest_item($oid, (string)$item_key);
+            $pdfs = is_array($manifest) ? array_values((array)($manifest['pdfs'] ?? [])) : [];
+            if (!$pdfs) {
+                return;
+            }
+            // Genera/reusa el PDF final de cada PDF aceptado del snapshot.
+            $rutas = $this->item_generar_pdfs($oid, (string)$item_key);
+            $aceptados = [];
+            foreach ($pdfs as $pdf) {
+                $seguro = $this->pmu_uploads()->nombre_seguro((string)$pdf, 'descarga');
+                if (isset($rutas[$seguro])) {
+                    $aceptados[] = $seguro;
+                }
+            }
+            $orderKey = method_exists($order, 'get_order_key') ? (string)$order->get_order_key() : '';
+            $this->publicar_urls_files($order, (string)$item_key, $aceptados, $orderKey);
+        } catch (\Throwable $e) {
+            $this->log_pedido(sprintf(
+                'tema:entregar:falla order=%d item=%s err=%s',
+                (int)$order->get_id(),
+                (string)$item_key,
+                $e->getMessage()
+            ));
+        }
+    }
+
     /**
      * T022: al crearse el pedido se copia la meta del item y se hace el staging
      * (`tmp/orders/{order_id}/{item_key}/`). Fail-safe: nunca tumba el checkout.
@@ -1845,6 +1969,9 @@ class Personalizador_PDF_Plugin
                 $sesion->promover_order((int)$order_id, (string)$itemKey);
                 $items[$itemKey] = 'entregado';
                 $cambios = true;
+                // Spec 017 (D4): con el tema activo, publica el PDF en _urls_files
+                // para que email + mi-cuenta/descargas/ los entregue el tema.
+                $this->entregar_por_tema($order, (string)$itemKey);
             } catch (\Throwable $e) {
                 // Queda pendiente: se reintenta en el proximo cambio de estado.
                 $this->log_pedido(sprintf(
@@ -1890,7 +2017,16 @@ class Personalizador_PDF_Plugin
      */
     public function descargas_cliente($productos)
     {
-        if (!is_array($productos) || !$productos || !function_exists('wc_get_order')) {
+        if (!is_array($productos) || !function_exists('wc_get_order')) {
+            return $productos;
+        }
+        // Spec 017 (D5/FR-003): con el tema activo la entrega la hace el tema
+        // desde _urls_files (publicado en pedido_promover). No inyectamos fila
+        // propia para no duplicar la descarga en mi-cuenta/descargas/.
+        if ($this->tema_muyunicos_activo()) {
+            return $productos;
+        }
+        if (!$productos) {
             return $productos;
         }
         $agregadas = [];
@@ -4571,6 +4707,41 @@ JS;
 }
 
 Personalizador_PDF_Plugin::instance();
+
+if (!class_exists('MuyUnicos_PDF_Generator')) {
+    /**
+     * Spec 017 (D6/FR-006): gancho que el tema Muy Únicos invoca desde el boton
+     * "Generar PDF" de la pantalla del pedido (`inc/orders-files.php`, hoy
+     * responde "Generador PDF no activo" porque esta clase no existia). Genera el
+     * PDF del item desde su pool del manifest y publica la URL en `_urls_files`.
+     * No depende del tema para existir: el tema solo la llama si esta definida.
+     * Fail-safe: si el item no es de PMU o el plugin no esta, no hace nada.
+     *
+     * `$image_id` (biblioteca de medios del tema) no se usa: el PDF personalizado
+     * se arma desde el pool del item (manifest.archivos[]), no desde una imagen
+     * suelta.
+     */
+    class MuyUnicos_PDF_Generator
+    {
+        public static function generate($order, $item, $image_id = 0)
+        {
+            if (!is_object($item) || !method_exists($item, 'get_meta')
+                || !is_object($order) || !method_exists($order, 'get_id')) {
+                return false;
+            }
+            $itemKey = (string)$item->get_meta('_pmu_item_key', true);
+            if ($itemKey === '') {
+                return false;
+            }
+            $plugin = Personalizador_PDF_Plugin::instance();
+            if (!$plugin || !method_exists($plugin, 'entregar_por_tema')) {
+                return false;
+            }
+            $plugin->entregar_por_tema($order, $itemKey);
+            return true;
+        }
+    }
+}
 
 /**
  * Activacion del plugin.

@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.6.14
+Stable tag: 4.6.15
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.6.15 =
+* **Entrega por el tema Muy Únicos (spec 017, D1-D6)**: cuando el tema `muyunicos` (`generatepress-child`) esta activo, el plugin deja de duplicar la capa de entrega y **publica el PDF en la meta `_urls_files` del order item**. A partir de ahi el **tema** (que ya funciona en produccion) se encarga de: mostrar el descargable en `mi-cuenta/descargas/` con su propia tabla e **incluir el link en el email de "pedido completado"** (hoy el cliente NO recibe el link por email). Deteccion por **capacidad** (`function_exists('mu_update_item_files')`), URL **protegida** por el endpoint propio (`personalizador_pdf_item_descargar` con `order_key`, NO una ruta cruda de `uploads/`), escritura **idempotente** (no duplica ni pisa archivos que el admin subio a mano) y **sin doble fila**: con el tema activo `descargas_cliente` ya no inyecta su fila propia. Ademas se define la clase `MuyUnicos_PDF_Generator::generate()` que el boton "Generar PDF" de la pantalla del pedido ya invocaba (hoy respondia "Generador PDF no activo"). Portable: sin el tema, el comportamiento propio queda intacto. Tests: fases nuevas `entrega_tema` (5 checks) y `entrega_sin_tema`.
 
 = 4.6.14 =
 * **Fix: al completar la compra el pedido seguia sin llegar a la pestaña Pedidos ni a las descargas** (segunda causa, tras el fix 4.6.13 del `item_key` en el carrito). En el checkout (otro request HTTP donde Woo restaura el carrito de su sesion) los **custom cart data `pmu_sid`/`pmu_item_key` no sobreviven**, y `pedido_item_crear()` los usaba para identificar el item: con `$values` vacio entraba en un `return` temprano silencioso, no se creaba el staging (`tmp/orders/`) ni `_pmu_items`, y el pedido nunca se promovia a `orders/`. Ahora la identidad sale de la **cookie `pmu_sid`** (`sid_actual()`, norma spec 014) y el `item_key` se resuelve probando el **`cart_item_key` real de Woo** (`$clave`, que coincide con el nombre de la carpeta tras promover) y luego el de los datos; gana el primero cuyo manifest exista bajo ese sid. Ademas, log de diagnostico `uploads/pmu/pmu-pedidos.log` (bajo volumen, fail-safe) en los caminos de fallo de `pedido_item_crear`/`pedido_promover`. Test: la fase `carrito` ahora ejercita el ciclo con **`$values` vacio** (custom data perdidos) y exige staging + `_pmu_items` + promocion a `orders/`.
