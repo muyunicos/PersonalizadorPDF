@@ -1583,15 +1583,17 @@ switch ($fase) {
         $GLOBALS['test_carrito']['webp_ok'] = is_file($rutaWebp)
             && strpos((string)@file_get_contents($rutaWebp, false, null, 0, 12), 'WEBP') !== false;
         $GLOBALS['test_carrito']['etiquetas'] = $p->carrito_mostrar([], ['pmu_sid' => $sid_c, 'pmu_item_key' => 'abc123def456']);
-        // RC4.6.13: ciclo REAL del pedido sobre el item ya promovido. El checkout
-        // pasa $values con el item_key que quedo en el carrito (el real) y $clave
-        // (cart_item_key). El staging debe nacer en tmp/orders/{id}/{item_key}/.
+        // RC4.6.14: ciclo REAL del pedido sobre el item ya promovido, simulando
+        // el CASO DEL BUG: en el checkout Woo restaura el carrito de su sesion y
+        // los custom cart data NO sobreviven ($values vacio). La identidad sale
+        // de la COOKIE pmu_sid y el item_key del cart_item_key real ($clave).
+        $_COOKIE[PMU_Sesion::COOKIE] = $sid_c;
         $orderCiclo = new TestPMUOrder(4242, []);
         $itemCiclo = new TestPMUOrderItem();
         $p->pedido_item_crear(
             $itemCiclo,
             'abc123def456',
-            ['pmu_sid' => $sid_c, 'pmu_item_key' => (string)$GLOBALS['test_carrito']['cart_item_key_tras_promover']],
+            [], // custom cart data perdidos: DEBE resolver por cookie + $clave
             $orderCiclo
         );
         $dirStagingCiclo = $motor_c->dir_tmp_order(4242) . DIRECTORY_SEPARATOR . 'abc123def456';
@@ -1606,6 +1608,7 @@ switch ($fase) {
             && is_file($dirOrdersCiclo . DIRECTORY_SEPARATOR . 'manifest.json');
         $GLOBALS['test_carrito']['pmu_items_final'] = (array)$orderCiclo->get_meta('_pmu_items');
         unset($GLOBALS['test_order']);
+        unset($_COOKIE[PMU_Sesion::COOKIE]);
         // Se restaura el carrito para el borrado quirurgico (carrito_quitar).
         $GLOBALS['test_wc']->cart->cart_contents['abc123def456'] = ['pmu_sid' => $sid_c, 'pmu_item_key' => 'abc123def456'];
         $p->carrito_quitar('abc123def456');

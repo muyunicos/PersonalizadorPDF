@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.6.13
+ * Version: 4.6.14
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -1732,33 +1732,71 @@ class Personalizador_PDF_Plugin
     /* ==================== Pedido y descarga (spec 004, T022/T023) ==================== */
 
     /**
+     * RC4.6.14: log de diagnostico del ciclo del pedido. Bajo volumen (solo se
+     * llama en los caminos de fallo) y fail-safe: nunca tumba el checkout ni la
+     * promocion. Escribe una linea en `uploads/pmu/pmu-pedidos.log`.
+     */
+    private function log_pedido($mensaje)
+    {
+        try {
+            $dir = $this->pmu_uploads()->dir_pmu();
+            if (!is_dir($dir) || !wp_is_writable($dir)) {
+                return;
+            }
+            $linea = sprintf(
+                "[%s] %s\n",
+                gmdate('Y-m-d H:i:s'),
+                (string)$mensaje
+            );
+            @file_put_contents($dir . DIRECTORY_SEPARATOR . 'pmu-pedidos.log', $linea, FILE_APPEND | LOCK_EX);
+        } catch (\Throwable $e) {
+            // El log jamas debe romper el flujo.
+        }
+    }
+
+    /**
      * T022: al crearse el pedido se copia la meta del item y se hace el staging
      * (`tmp/orders/{order_id}/{item_key}/`). Fail-safe: nunca tumba el checkout.
      */
     public function pedido_item_crear($item, $clave, $values, $order = null)
     {
-        if (empty($values['pmu_sid']) || empty($values['pmu_item_key']) || !is_object($item)) {
+        if (!is_object($item)) {
             return;
         }
-        $sid = (string)$values['pmu_sid'];
-        $itemKey = (string)$values['pmu_item_key'];
-        // RC4.6.13 (defensa): el 2.º parametro del hook es el cart_item_key
-        // real de Woo. Si el item_key de los datos apunta a un draft ya
-        // promovido (huerfano: su carpeta se renombró), el staging fallaria
-        // en silencio (fail-safe) y el pedido nunca llegaria a orders/. Con el
-        // fix de carrito_promover ya no deberia pasar, pero aca se cubre el
-        // item promovido por otra via o el dato del carrito desactualizado.
-        if ($clave !== '' && (string)$clave !== $itemKey) {
-            $probe = $this->sesion();
-            if (!is_array($probe->leer_manifest($sid, $itemKey))
-                && is_array($probe->leer_manifest($sid, (string)$clave))) {
-                $itemKey = (string)$clave;
+        // RC4.6.14 (identidad robusta): el checkout es OTRO request HTTP donde
+        // Woo restaura el carrito de su sesion y los custom cart data
+        // (pmu_sid / pmu_item_key) NO siempre sobreviven. Confiar en $values
+        // dejaba este handler en un return temprano SILENCIOSO: sin staging, sin
+        // _pmu_items, y el pedido nunca llegaba a orders/ (no aparecia en la
+        // pestaña Pedidos ni en descargas). Ahora la identidad sale de la cookie
+        // (norma spec 014) y el item_key se resuelve probando el cart_item_key
+        // real de Woo ($clave, que ES el nombre de la carpeta tras promover) y
+        // luego el de los datos; gana el primero cuyo manifest exista bajo el sid.
+        $sesion = $this->sesion();
+        $sid = $sesion->sid_actual();
+        $itemKey = '';
+        $candidatos = array_filter(
+            array_unique([(string)$clave, (string)($values['pmu_item_key'] ?? '')]),
+            static function ($c) { return $c !== ''; }
+        );
+        foreach ($candidatos as $candidato) {
+            if (is_array($sesion->leer_manifest($sid, (string)$candidato))) {
+                $itemKey = (string)$candidato;
+                break;
             }
+        }
+        if ($sid === '' || $itemKey === '') {
+            $this->log_pedido(sprintf(
+                'item_crear:sin_item sid=%s clave=%s valor_item=%s',
+                $sid,
+                (string)$clave,
+                (string)($values['pmu_item_key'] ?? '')
+            ));
+            return;
         }
         $item->add_meta_data('_pmu_sid', $sid);
         $item->add_meta_data('_pmu_item_key', $itemKey);
         try {
-            $sesion = $this->sesion();
             $manifest = $sesion->leer_manifest($sid, $itemKey);
             $estado = $sesion->estado_preview($sid, $itemKey);
             $item->add_meta_data('_pmu_preview_estado', $estado);
@@ -1774,6 +1812,7 @@ class Personalizador_PDF_Plugin
             }
         } catch (\Throwable $e) {
             // Sin staging/estado el item se regenera al descargar (T023).
+            $this->log_pedido('item_crear:falla ' . $e->getMessage());
         }
     }
 
@@ -1793,6 +1832,7 @@ class Personalizador_PDF_Plugin
         }
         $items = (array)$order->get_meta('_pmu_items');
         if (!$items) {
+            $this->log_pedido(sprintf('promover:sin_items order=%d', (int)$order_id));
             return;
         }
         $sesion = $this->sesion();
@@ -1807,6 +1847,12 @@ class Personalizador_PDF_Plugin
                 $cambios = true;
             } catch (\Throwable $e) {
                 // Queda pendiente: se reintenta en el proximo cambio de estado.
+                $this->log_pedido(sprintf(
+                    'promover:falla order=%d item=%s err=%s',
+                    (int)$order_id,
+                    (string)$itemKey,
+                    $e->getMessage()
+                ));
             }
         }
         if ($cambios) {

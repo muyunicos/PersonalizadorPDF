@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.6.13
+Stable tag: 4.6.14
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.6.14 =
+* **Fix: al completar la compra el pedido seguia sin llegar a la pestaña Pedidos ni a las descargas** (segunda causa, tras el fix 4.6.13 del `item_key` en el carrito). En el checkout (otro request HTTP donde Woo restaura el carrito de su sesion) los **custom cart data `pmu_sid`/`pmu_item_key` no sobreviven**, y `pedido_item_crear()` los usaba para identificar el item: con `$values` vacio entraba en un `return` temprano silencioso, no se creaba el staging (`tmp/orders/`) ni `_pmu_items`, y el pedido nunca se promovia a `orders/`. Ahora la identidad sale de la **cookie `pmu_sid`** (`sid_actual()`, norma spec 014) y el `item_key` se resuelve probando el **`cart_item_key` real de Woo** (`$clave`, que coincide con el nombre de la carpeta tras promover) y luego el de los datos; gana el primero cuyo manifest exista bajo ese sid. Ademas, log de diagnostico `uploads/pmu/pmu-pedidos.log` (bajo volumen, fail-safe) en los caminos de fallo de `pedido_item_crear`/`pedido_promover`. Test: la fase `carrito` ahora ejercita el ciclo con **`$values` vacio** (custom data perdidos) y exige staging + `_pmu_items` + promocion a `orders/`.
 
 = 4.6.13 =
 * **Fix: al completar la compra el pedido nunca llegaba a la pestaña Pedidos** (`orders/` y `tmp/orders/` quedaban vacios). `carrito_promover()` renombraba en disco la carpeta del item de `draft-{uuid}` al `cart_item_key` real de Woo, pero **no actualizaba** `pmu_item_key` en los datos del carrito: seguia apuntando al draft, que ya no existia. En el checkout, `pedido_item_crear()` leia ese draft huerfano, `staging_order()` fallaba con `motor:sesion:item:ausente` y el fail-safe se lo tragaba en silencio; al pagar, `pedido_promover()` no encontraba staging y no promovia nada. Ahora, tras promover, el carrito se actualiza al `item_key` real (`WC()->cart->cart_contents[$item_key]['pmu_item_key']`), y `pedido_item_crear()` tiene ademas una defensa: si el item_key de los datos no resuelve pero el `cart_item_key` (2.º parametro del hook) si, usa el real. Cubre checkout, staging, promocion, re-edicion y etiquetas. Test: la fase `carrito` ahora encadena el ciclo real (agregar -> promover -> checkout -> staging -> pago -> `orders/`) con checks nuevos.
