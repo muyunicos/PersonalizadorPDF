@@ -195,8 +195,16 @@ class TestPMUOrder {
     public function __construct($id = 0, array $meta = []) { $this->id = (int)$id; $this->meta = $meta; }
     public function get_id() { return $this->id; }
     public function get_meta($key = '', $single = false) { return $this->meta[$key] ?? ''; }
+    public function update_meta_data($key, $value) { $this->meta[$key] = $value; }
+    public function save() { return true; }
     public function get_order_key() { return 'test-order-key'; }
     public function get_customer_id() { return 1; }
+}
+// Item de linea de pedido (T022/T023): solo necesita guardar meta para el test.
+class TestPMUOrderItem {
+    private $meta = [];
+    public function add_meta_data($key, $value) { $this->meta[$key] = $value; }
+    public function get_meta($key = '', $single = false) { return $this->meta[$key] ?? ''; }
 }
 function wc_get_order($id = 0) { return $GLOBALS['test_order'] ?? null; }
 function get_current_user_id() { return (int)($GLOBALS['test_user_id'] ?? 1); }
@@ -775,6 +783,17 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             $etiquetas = is_array($c['etiquetas'] ?? null) ? $c['etiquetas'] : [];
             check('etiqueta cliente con titulo del campo', count($etiquetas) === 1 && $etiquetas[0]['name'] === 'Nombre' && $etiquetas[0]['value'] === 'Ana');
             check('borrado quirurgico al quitar', isset($c['dir_item']) && !is_dir($c['dir_item']));
+            // RC4.6.13: el carrito debio actualizar pmu_item_key del draft al real.
+            check('carrito apunta al item_key real tras promover',
+                ($c['cart_item_key_tras_promover'] ?? '') === 'abc123def456',
+                'quedo en: ' . (string)($c['cart_item_key_tras_promover'] ?? ''));
+            // Ciclo real del pedido: staging -> orders (bug: quedaba en draft huerfano).
+            check('checkout crea el staging del item', !empty($c['staging_ok']));
+            check('pedido registra el item en _pmu_items',
+                is_array($c['pmu_items'] ?? null) && isset($c['pmu_items']['abc123def456']));
+            check('pago promueve el staging a orders/', !empty($c['orders_ok']));
+            check('item marcado entregado tras el pago',
+                is_array($c['pmu_items_final'] ?? null) && ($c['pmu_items_final']['abc123def456'] ?? '') === 'entregado');
             break;
         case 'pool':
         case 'pool_reem':
@@ -1104,6 +1123,12 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('subida: resolver SOLO acepta ids del manifest',
                 is_array($su['resueltas']) && count($su['resueltas']) === 1
                 && isset($su['a']) && isset($su['resueltas'][$su['a']['id']]));
+            // La ruta resuelta DEBE apuntar a un archivo real (bug: la buscaba
+            // en la raiz del item, no en subidas/ -> motor:subida:archivo:ausente
+            // y la foto no se veia en la vista previa).
+            check('subida: la ruta resuelta apunta a un archivo REAL (subidas/)',
+                !empty($su['resuelto_existe']),
+                'ruta=' . (string) (isset($su['a']) && isset($su['resueltas'][$su['a']['id']]) ? $su['resueltas'][$su['a']['id']] : ''));
             check('FR-035: la subida viaja al item promovido', !empty($su['existe_destino']));
             check('FR-035: el manifest promovido conserva subidas[]',
                 is_array($su['man_destino'] ?? null) && count((array)($su['man_destino']['subidas'] ?? [])) === 2);
@@ -1539,7 +1564,17 @@ switch ($fase) {
             'dir_draft' => $sesion_c->dir_item($sid_c, $draft_c),
         ];
         $GLOBALS['test_carrito']['meta'] = $p->carrito_agregar([], 42, 0, 1);
+        // RC4.6.13: el carrito simulado lleva el item con el pmu_item_key=DRAFT,
+        // igual que en Woo. Tras promover debe quedar apuntando al item_key real
+        // (si no, el checkout lee el draft huerfano y el pedido no llega a Pedidos).
+        $GLOBALS['test_wc'] = new TestWC();
+        $GLOBALS['test_wc']->cart->cart_contents['abc123def456'] = [
+            'pmu_sid' => $sid_c, 'pmu_item_key' => $draft_c,
+        ];
         $p->carrito_promover('abc123def456', 42, 1, 0, null);
+        // El item_key en el carrito debio actualizarse al nombre real de la carpeta.
+        $GLOBALS['test_carrito']['cart_item_key_tras_promover'] =
+            (string)($GLOBALS['test_wc']->cart->cart_contents['abc123def456']['pmu_item_key'] ?? '');
         $GLOBALS['test_carrito']['dir_item'] = $motor_c->dir_sesion_item($sid_c, 'abc123def456');
         $GLOBALS['test_carrito']['man_item'] = $sesion_c->leer_manifest($sid_c, 'abc123def456');
         $GLOBALS['test_carrito']['estado'] = $sesion_c->estado_preview($sid_c, 'abc123def456');
@@ -1548,7 +1583,30 @@ switch ($fase) {
         $GLOBALS['test_carrito']['webp_ok'] = is_file($rutaWebp)
             && strpos((string)@file_get_contents($rutaWebp, false, null, 0, 12), 'WEBP') !== false;
         $GLOBALS['test_carrito']['etiquetas'] = $p->carrito_mostrar([], ['pmu_sid' => $sid_c, 'pmu_item_key' => 'abc123def456']);
-        $GLOBALS['test_wc'] = new TestWC();
+        // RC4.6.13: ciclo REAL del pedido sobre el item ya promovido. El checkout
+        // pasa $values con el item_key que quedo en el carrito (el real) y $clave
+        // (cart_item_key). El staging debe nacer en tmp/orders/{id}/{item_key}/.
+        $orderCiclo = new TestPMUOrder(4242, []);
+        $itemCiclo = new TestPMUOrderItem();
+        $p->pedido_item_crear(
+            $itemCiclo,
+            'abc123def456',
+            ['pmu_sid' => $sid_c, 'pmu_item_key' => (string)$GLOBALS['test_carrito']['cart_item_key_tras_promover']],
+            $orderCiclo
+        );
+        $dirStagingCiclo = $motor_c->dir_tmp_order(4242) . DIRECTORY_SEPARATOR . 'abc123def456';
+        $GLOBALS['test_carrito']['staging_ok'] = is_dir($dirStagingCiclo)
+            && is_file($dirStagingCiclo . DIRECTORY_SEPARATOR . 'manifest.json');
+        $GLOBALS['test_carrito']['pmu_items'] = (array)$orderCiclo->get_meta('_pmu_items');
+        // Pago confirmado: promover_order mueve el staging a orders/{id}/{item_key}/.
+        $GLOBALS['test_order'] = $orderCiclo;
+        $p->pedido_promover(4242);
+        $dirOrdersCiclo = $motor_c->dir_ambito('orders') . DIRECTORY_SEPARATOR . '4242' . DIRECTORY_SEPARATOR . 'abc123def456';
+        $GLOBALS['test_carrito']['orders_ok'] = is_dir($dirOrdersCiclo)
+            && is_file($dirOrdersCiclo . DIRECTORY_SEPARATOR . 'manifest.json');
+        $GLOBALS['test_carrito']['pmu_items_final'] = (array)$orderCiclo->get_meta('_pmu_items');
+        unset($GLOBALS['test_order']);
+        // Se restaura el carrito para el borrado quirurgico (carrito_quitar).
         $GLOBALS['test_wc']->cart->cart_contents['abc123def456'] = ['pmu_sid' => $sid_c, 'pmu_item_key' => 'abc123def456'];
         $p->carrito_quitar('abc123def456');
         break;
@@ -2922,6 +2980,12 @@ switch ($fase) {
 
             $resueltas = $ses->resolver_subidas($sid, $draft, [$a['id'], 'id-inventado']);
             $existeFisico = is_file($dirDraft . '/' . $a['file']) && is_file($dirDraft . '/' . $b['file']);
+            // El assert que faltaba: la ruta que DEVUELVE resolver_subidas debe
+            // apuntar a un archivo REAL. Antes resolvia con dir_item()+basename()
+            // (raiz del item) en vez de subidas/, y el archivo no existia ahi:
+            // handle_subida_url tiraba motor:subida:archivo:ausente y la vista
+            // previa nunca mostraba la foto. Se mide ANTES de promover.
+            $resueltoExiste = isset($resueltas[$a['id']]) && is_file((string) $resueltas[$a['id']]);
 
             // FR-035: al promover el draft, `subidas/` viaja con el item.
             $ses->promover($sid, $draft, 'cart-abc');
@@ -2932,6 +2996,7 @@ switch ($fase) {
                 'man_subidas' => isset($man['subidas']) ? $man['subidas'] : [],
                 'err_fmt' => $errFmt, 'err_vacia' => $errVacia,
                 'resueltas' => $resueltas,
+                'resuelto_existe' => $resueltoExiste,
                 'ids_distintos' => ((string) $a['id'] !== (string) $b['id']),
                 'existe_fisico' => $existeFisico,
                 'existe_destino' => is_file($destino . '/' . $a['file']),

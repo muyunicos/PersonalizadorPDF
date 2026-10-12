@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.6.10
+Stable tag: 4.6.13
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,15 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.6.13 =
+* **Fix: al completar la compra el pedido nunca llegaba a la pestaña Pedidos** (`orders/` y `tmp/orders/` quedaban vacios). `carrito_promover()` renombraba en disco la carpeta del item de `draft-{uuid}` al `cart_item_key` real de Woo, pero **no actualizaba** `pmu_item_key` en los datos del carrito: seguia apuntando al draft, que ya no existia. En el checkout, `pedido_item_crear()` leia ese draft huerfano, `staging_order()` fallaba con `motor:sesion:item:ausente` y el fail-safe se lo tragaba en silencio; al pagar, `pedido_promover()` no encontraba staging y no promovia nada. Ahora, tras promover, el carrito se actualiza al `item_key` real (`WC()->cart->cart_contents[$item_key]['pmu_item_key']`), y `pedido_item_crear()` tiene ademas una defensa: si el item_key de los datos no resuelve pero el `cart_item_key` (2.º parametro del hook) si, usa el real. Cubre checkout, staging, promocion, re-edicion y etiquetas. Test: la fase `carrito` ahora encadena el ciclo real (agregar -> promover -> checkout -> staging -> pago -> `orders/`) con checks nuevos.
+
+= 4.6.12 =
+* **Fix: la foto subida por el comprador no se veia en la vista previa (hueco transparente / gris), con error `motor:subida:archivo:ausente` en `personalizador_pdf_subida_url`**. `PMU_Sesion::resolver_subidas()` reconstruia la ruta del archivo con `dir_item()` + `basename()`, o sea que le arrancaba la carpeta `subidas/` y la buscaba en la **raiz del item**, donde el archivo no existe (`handle_subida_url` respondia `motor:subida:archivo:ausente`, el cliente recibia null y la instancia de imagen nunca entraba al mockup). Ahora resuelve contra `dir_subidas()`. El texto no se veia afectado porque no usa esta ruta. Test: assert nuevo en la fase `campo_subida` que exige que la ruta devuelta por `resolver_subidas()` apunte a un archivo REAL (antes solo se comprobaba la ruta cruda del manifest, por eso el bug paso desapercibido).
+
+= 4.6.11 =
+* **Campos: el indice `campos.json` vive junto al codigo de los campos** (`uploads/pmu/campos/campos.json`, antes en la raiz de `pmu/`) con migracion one-shot automatica, idempotente y tolerante (si el `rename` falla, la lectura sigue sobre la ruta legada y ningun dato se pierde; la escritura siempre va a la nueva). Ademas: **cola del pool por grupo** en la ficha (`PURO.enCola`, serializa `limpiar`+subidas de un mismo grupo entre instancias y entre vistas) y **la vista del cliente ya no muestra la caja neutra gris** de un hueco sin recurso (`PMUMockup.componer` acepta `huecosTransparentes: true`; solo la usa la ficha).
 
 = 4.6.10 =
 * **Fix: `motor:sesion:manifest:invalido` y capa de imagen gris en la vista previa con varios grupos**. La rafaga de POSTs del pool (texto + fotos por instancia, en paralelo) chocaba en la escritura del manifest: `manifest.json.tmp` de nombre fijo + rename sin lock, y read-modify-write concurrente que perdia filas. Una instancia fallida dejaba la capa placeholder sin recurso (caja gris) y la vista se marcaba rota. Ahora TODAS las mutaciones del manifest del item (`guardar_png`, `limpiar_grupo`, `guardar_subida`, `congelar_webp`, `pool_filtrar_pdfs`) pasan por un lock `flock` por item (`.manifest.lock`, que no viaja al pedido). Test: fase nueva `pool_concurrente` que lanza 8 procesos hijos escribiendo el pool en paralelo y exige las 8 filas sin fallos ni `.tmp` colgando.

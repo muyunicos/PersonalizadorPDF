@@ -403,14 +403,19 @@ class PMU_Sesion
                 $porId[(string)$fila['id']] = (string)$fila['file'];
             }
         }
-        $dir = $this->dir_item($sid, $item_key);
+        // La foto vive en `{item}/subidas/` (D14), NO en la raiz del item.
+        // Antes se usaba `dir_item()` + `basename()`, que le arrancaba la
+        // carpeta `subidas/` y buscaba el archivo en la raiz (donde no esta):
+        // `handle_subida_url` respondia `motor:subida:archivo:ausente`, el
+        // cliente recibia null y la vista previa NUNCA mostraba la foto del
+        // comprador (el hueco quedaba transparente). `basename()` se conserva
+        // como defensa anti-traversal por si el manifest fuera editado a mano.
+        $dirSub = $this->dir_subidas($sid, $item_key, false);
         $out = [];
         foreach ($ids as $id) {
             $id = (string)$id;
             if ($id !== '' && isset($porId[$id])) {
-                // El `file` del manifest lo escribio el servidor; aun asi se
-                // normaliza a nombre plano por si el manifest fuera editado.
-                $out[$id] = $dir . DIRECTORY_SEPARATOR . basename($porId[$id]);
+                $out[$id] = $dirSub . DIRECTORY_SEPARATOR . basename($porId[$id]);
             }
         }
         return $out;

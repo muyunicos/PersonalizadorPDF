@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.6.11
+ * Version: 4.6.13
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -1742,6 +1742,19 @@ class Personalizador_PDF_Plugin
         }
         $sid = (string)$values['pmu_sid'];
         $itemKey = (string)$values['pmu_item_key'];
+        // RC4.6.13 (defensa): el 2.º parametro del hook es el cart_item_key
+        // real de Woo. Si el item_key de los datos apunta a un draft ya
+        // promovido (huerfano: su carpeta se renombró), el staging fallaria
+        // en silencio (fail-safe) y el pedido nunca llegaria a orders/. Con el
+        // fix de carrito_promover ya no deberia pasar, pero aca se cubre el
+        // item promovido por otra via o el dato del carrito desactualizado.
+        if ($clave !== '' && (string)$clave !== $itemKey) {
+            $probe = $this->sesion();
+            if (!is_array($probe->leer_manifest($sid, $itemKey))
+                && is_array($probe->leer_manifest($sid, (string)$clave))) {
+                $itemKey = (string)$clave;
+            }
+        }
         $item->add_meta_data('_pmu_sid', $sid);
         $item->add_meta_data('_pmu_item_key', $itemKey);
         try {
@@ -2391,6 +2404,20 @@ class Personalizador_PDF_Plugin
         try {
             $sesion = $this->sesion();
             $sesion->promover($sid, $draft, $item_key);
+            // RC4.6.13: tras el rename, la carpeta del item YA se llama
+            // {cart_item_key}, pero los datos del carrito seguian apuntando al
+            // `draft-` viejo (que ya no existe en disco). En el checkout,
+            // `pedido_item_crear` leia ese draft huérfano: el staging fallaba
+            // con `motor:sesion:item:ausente`, el fail-safe se lo tragaba y el
+            // pedido NUNCA llegaba a `orders/` (no aparecia en Pedidos). Se
+            // actualiza el item_key en el carrito para que todo el ciclo
+            // (checkout, staging, promocion, re-edicion, etiquetas) use el
+            // nombre real de la carpeta.
+            if (function_exists('WC') && WC() && WC()->cart
+                && isset(WC()->cart->cart_contents[$item_key])
+                && is_array(WC()->cart->cart_contents[$item_key])) {
+                WC()->cart->cart_contents[$item_key]['pmu_item_key'] = (string)$item_key;
+            }
             // Congelar vistas aprobadas: el cliente envia {mockup_id: webp dataURL}
             // (lo que vio y aprobo en la galeria). Sin vistas validas el estado
             // queda sin_vista (venta habilitada, reintento al descargar).
