@@ -573,12 +573,23 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && substr_count($admin_html, 'name="tienda[4242][validez]"') === 1);
             check('tienda: bloquear visible solo con validez', substr_count($admin_html, 'class="ec-tienda-bloquear"') === 2
                 && substr_count($admin_html, 'class="ec-tienda-bloquear" hidden') === 1);
-            // Spec 018: el acordeon Bonus renderiza con su form de subida y su
+            // Spec 018: el acordeon Bonus renderiza con su div de subida y su
             // boton guardar (admin.js enlaza todo lo demas sin recarga).
             check('bonus: acordeon presente en la consola', strpos($admin_html, 'ec-acordeon-bonus') !== false
-                && strpos($admin_html, 'personalizador_pdf_bonus_subir') !== false);
+                && strpos($admin_html, 'ec-bonus-subir-btn') !== false);
             check('bonus: tabla y guardar sin recarga', strpos($admin_html, 'ec-bonus-tabla') !== false
                 && strpos($admin_html, 'ec-bonus-guardar') !== false);
+            // 4.6.20: el bloque de subida NO puede ser un <form> (anidado dentro
+            // de ec-form-config el navegador lo descarta y el boton dispara el
+            // guardado de config: el archivo nunca se subia). Y la lista de
+            // archivos subidos es SIEMPRE visible (chips o estado vacio).
+            check('bonus: subida sin <form> anidado', strpos($admin_html, '<form class="ec-form-bonus-subir"') === false
+                && strpos($admin_html, 'class="ec-form-bonus-subir"') !== false
+                && strpos($admin_html, 'ec-bonus-subir-btn') !== false);
+            check('bonus: lista de subidos siempre visible', strpos($admin_html, 'ec-bonus-subidos') !== false);
+            // Estructura de forms: abre = cierra (atrapa cualquier anidamiento
+            // futuro: el HTML no permite forms dentro de forms).
+            check('forms: equilibrio abrir/cerrar', substr_count($admin_html, '<form') === substr_count($admin_html, '</form'));
             break;
         case 'setup':
             check('PDF en pdfs/muestra/muestra.pdf', is_file($uploads . '/pdfs/muestra/muestra.pdf'));

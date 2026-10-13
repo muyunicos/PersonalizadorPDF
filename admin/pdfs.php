@@ -557,17 +557,35 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                         <button type="button" class="button button-primary ec-bonus-guardar">Guardar bonus</button>
                         <span class="ec-guardar-status ec-bonus-status" aria-live="polite"></span>
                     </p>
-                    <form class="ec-form-bonus-subir" method="post" action="<?php echo esc_url($post_url); ?>" enctype="multipart/form-data">
-                        <input type="hidden" name="action" value="personalizador_pdf_bonus_subir">
-                        <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
-                        <?php wp_nonce_field('personalizador_pdf_bonus_subir'); ?>
+                    <?php if (empty($lista_bonus)) : ?>
+                        <p class="description ec-bonus-subidos-vacio">Todavia no hay archivos subidos para
+                            <?php echo esc_html($seleccionado ? $this->nombre_de($seleccionado) : ''); ?>.</p>
+                    <?php else : ?>
+                        <p class="ec-bonus-subidos">
+                            <strong>Archivos subidos:</strong>
+                            <?php foreach ($lista_bonus as $file_b => $url_b) : ?>
+                                <button type="button" class="button button-small ec-bonus-chip"
+                                    data-archivo="<?php echo esc_attr($file_b); ?>"><?php echo esc_html($file_b); ?></button>
+                            <?php endforeach; ?>
+                        </p>
+                    <?php endif; ?>
+                    <?php // IMPORTANTE (4.6.20): NO es un <form>. Este bloque vive dentro del
+                          // <form class="ec-form-config"> (linea 222): el navegador DESCARTA
+                          // los forms anidados, el handler JS no encontraba el form y el
+                          // boton dispara el guardado de config (el archivo nunca se subia).
+                          // Es un div con data-attrs; el JS bindea `click` y arma FormData. ?>
+                    <div class="ec-form-bonus-subir"
+                        data-archivo="<?php echo esc_attr($seleccionado); ?>"
+                        data-nonce="<?php echo esc_attr(wp_create_nonce('personalizador_pdf_bonus_subir')); ?>">
                         <p>
-                            <input type="file" name="bonus" accept=".pdf,.zip,.png,.jpg,.jpeg,.gif,.webp" required>
-                            <?php submit_button('Subir archivo bonus', 'secondary', 'submit', false); ?>
+                            <input type="file" name="bonus" accept=".pdf,.zip,.png,.jpg,.jpeg,.gif,.webp">
+                            <button type="button" class="button ec-bonus-subir-btn">Subir archivo bonus</button>
+                            <span class="ec-guardar-status ec-bonus-status-subir" aria-live="polite"></span>
                         </p>
                         <p class="description">PDF, ZIP o imagen. Queda en
-                            <code>pdfs/{nombre}/bonus/</code> y aparece arriba para elegirlo.</p>
-                    </form>
+                            <code>pdfs/{nombre}/bonus/</code>. Al subirlo aparece arriba en la lista
+                            y se elige con un clic en el titulo del bonus.</p>
+                    </div>
                 </div>
             </details>
 

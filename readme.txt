@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.6.19
+Stable tag: 4.6.20
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.6.20 =
+* **Bonus: la subida de archivos NUNCA funcionó (form anidado)**. El bloque de subida era un `<form>` DENTRO del `<form class="ec-form-config">`: el HTML no permite forms anidados, así que el navegador descartaba el tag interno, el JS no encontraba el form y el boton "Subir archivo bonus" terminaba disparando el guardado de **configuracion** (JSON `{avisos_cableado, avisos_vinculo}`) con `serializeArray()`, que ignora los input file. El archivo nunca salía del navegador → cero archivos en `pdfs/{nombre}/bonus/`. Ahora: (1) el bloque es un `<div data-archivo/data-nonce>` con `<button type="button" class="ec-bonus-subir-btn">` y el JS bindea `click` + FormData propio; (2) **lista siempre visible** de archivos subidos (chips `ec-bonus-chip` o estado vacio) bajo el boton — antes los archivos subidos solo existian como radios dentro de filas guardadas y con 0 filas eran invisibles tras cualquier recarga; (3) clic en un chip = elegirlo en la primera fila vacia (la crea si no hay); (4) status propio de subida (`ec-bonus-status-subir`) separado del de guardado. Tests: fase `admin` con 3 checks nuevos — sin `<form class="ec-form-bonus-subir">`, lista de subidos visible, y equilibrio `<form`/`</form` del render (atrapa anidamientos futuros).
 
 = 4.6.19 =
 * **Bonus: UX de la consola arreglada (subir -> elegir sin recarga)**. Antes, subir un archivo parecia "no hacer nada": el servidor respondia la lista pero el JS la ignoraba (los radios solo aparecian tras F5) y un guardado sin archivo/URL decia "Guardado ✓ (0 bonus)". Ahora: (1) al subir se **repintan los radios en todas las filas** y el archivo nuevo queda **elegido en la primera fila vacia** (o se crea la fila si no hay), sin recargar; (2) las filas nuevas por "Agregar bonus" traen su contenedor de radios (antes quedaban sin donde mostrarlos); (3) mensajes honestos: `Guardado ✓ (n bonus)` solo si algo quedo en disco, y en rojo `0 bonus guardados: cada fila necesita titulo Y archivo/URL.` si el motor descarto todas las filas; (4) el handler `bonus_subir` responde ademas `archivo` (nombre real guardado, saneado/renombrado) y el form trae `action` al admin-post (fallback nativo). Tests: fase `admin` exige el acordeon Bonus + su form en el render real (2 checks).

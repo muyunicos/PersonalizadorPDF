@@ -492,6 +492,45 @@ jQuery(function ($) {
             });
         }
 
+        // Coloca `file` en la primera fila con URL vacia (creandola si no hay)
+        // y marca su radio. Flujo: subir -> clic en el chip -> titulo -> guardar.
+        function elegirEnFila(file) {
+            if (!file) { return; }
+            var $fila = $tabla.find('tr').filter(function () {
+                return $.trim($(this).find('.ec-bonus-url').val() || '') === '';
+            }).first();
+            if (!$fila.length) {
+                $fila = filaNueva();
+                $tabla.append($fila);
+            }
+            $fila.find('.ec-bonus-url').val(file);
+            $fila.find('.ec-bonus-archivos input[type=radio]').each(function () {
+                if ($(this).val() === file) { $(this).prop('checked', true); }
+            });
+        }
+
+        // Repinta la lista SIEMPRE visible de archivos subidos (chips clickeables).
+        // `mapa` es {archivo: url}; si no hay ninguno se muestra el estado vacio.
+        function pintarSubidos(mapa) {
+            var archivos = Object.keys(mapa || {});
+            var $p = $caja.find('p.ec-bonus-subidos');
+            if (!$p.length) {
+                var $vacio = $caja.find('p.ec-bonus-subidos-vacio');
+                $p = $('<p class="ec-bonus-subidos"></p>');
+                if ($vacio.length) { $vacio.replaceWith($p); }
+                else { $caja.find('.ec-bonus-tabla').after($p); }
+            }
+            $p.empty().append($('<strong></strong>').text('Archivos subidos: '));
+            if (!archivos.length) {
+                $p.append($('<span class="description"></span>').text('Ninguno todavia.'));
+                return;
+            }
+            archivos.forEach(function (file) {
+                $p.append($('<button type="button" class="button button-small ec-bonus-chip"></button>')
+                    .attr('data-archivo', file).text(file));
+            });
+        }
+
         $(document).on('click', '.ec-bonus-agregar', function () {
             $tabla.append(filaNueva());
         });
@@ -506,6 +545,12 @@ jQuery(function ($) {
             $radio.closest('tr').find('.ec-bonus-url').val($radio.val());
         });
 
+        // Clic en un chip de la lista "Archivos subidos" = elegirlo en la
+        // primera fila vacia (la crea si no existe).
+        $(document).on('click', '.ec-bonus-chip', function () {
+            elegirEnFila($(this).attr('data-archivo') || '');
+        });
+
         $(document).on('click', '.ec-bonus-guardar', function () {
             var lista = [];
             $tabla.find('tr').each(function () {
@@ -515,11 +560,11 @@ jQuery(function ($) {
                     url: $tr.find('.ec-bonus-url').val() || ''
                 });
             });
-            var $form = $caja.find('.ec-form-bonus-subir');
+            var $cajaSubir = $caja.find('.ec-form-bonus-subir');
             $status.removeClass('ec-ok ec-error').text('Guardando...');
             pmuPost('personalizador_pdf_bonus',
-                { archivo: $form.find('input[name=archivo]').val(), bonus: JSON.stringify(lista) },
-                NONCES.bonus || $form.find('input[name=_wpnonce]').val())
+                { archivo: String($cajaSubir.attr('data-archivo') || ''), bonus: JSON.stringify(lista) },
+                NONCES.bonus)
                 .then(function (res) {
                     var n = (res.data && res.data.bonus) || 0;
                     // Honestidad del mensaje: si habia filas y el motor descarto
@@ -535,51 +580,45 @@ jQuery(function ($) {
                 });
         });
 
-        // Subir archivo bonus sin recarga: el servidor devuelve la lista `bonus`
-        // refrescada (igual que las fotos de mockup).
-        var $formSubir = $caja.find('.ec-form-bonus-subir');
-        if ($formSubir.length && !$formSubir.data('pmu-enlazado')) {
-            $formSubir.data('pmu-enlazado', true);
-            $formSubir.on('submit', function (e) {
-                e.preventDefault();
-                var input = $formSubir.find('input[type=file]')[0];
+        // Subir archivo bonus sin recarga. NOTA (4.6.20): NO es un submit de
+        // form (el bloque vive dentro de `ec-form-config` y el navegador
+        // descarta los forms anidados) sino un `click` sobre el boton; el
+        // servidor responde la lista `bonus` refrescada + el nombre `archivo`
+        // realmente guardado.
+        var $subir = $caja.find('.ec-form-bonus-subir');
+        if ($subir.length && !$subir.data('pmu-enlazado')) {
+            $subir.data('pmu-enlazado', true);
+            var $statusSubir = $subir.find('.ec-bonus-status-subir');
+            $subir.find('.ec-bonus-subir-btn').on('click', function () {
+                var input = $subir.find('input[type=file]')[0];
                 var file = input && input.files ? input.files[0] : null;
                 if (!file) {
-                    pmuAviso($formSubir.closest('.card, .wrap'), 'Elegi un archivo para subir.', true);
+                    pmuAviso($subir.closest('.card, .wrap'), 'Elegi un archivo para subir.', true);
                     return;
                 }
                 var fd = new FormData();
-                fd.append('archivo', $formSubir.find('input[name=archivo]').val());
+                fd.append('archivo', String($subir.attr('data-archivo') || ''));
                 fd.append('bonus', file, file.name);
-                $status.removeClass('ec-ok ec-error').text('Subiendo...');
-                pmuPost('personalizador_pdf_bonus_subir', fd, NONCES.bonus_subir || $formSubir.find('input[name=_wpnonce]').val())
+                $statusSubir.removeClass('ec-ok ec-error').text('Subiendo...');
+                pmuPost('personalizador_pdf_bonus_subir', fd, NONCES.bonus_subir || String($subir.attr('data-nonce') || ''))
                     .then(function (res) {
                         var d = res.data || {};
                         var mapa = d.bonus || {};
                         var nuevo = d.archivo || '';
+                        // Repinta chips (lista visible) y radios (por fila) y
+                        // deja el archivo elegido en la primera fila vacia.
+                        pintarSubidos(mapa);
                         if (!$tabla.find('tr').length) {
                             $tabla.append(filaNueva());
                         }
-                        // Repinta los radios en todas las filas SIN recargar y
-                        // deja el archivo recien subido elegido en la primera
-                        // fila sin URL (flujo subir -> poner titulo -> guardar).
                         pintarArchivos(mapa);
-                        if (nuevo && mapa[nuevo]) {
-                            var $fila = $tabla.find('tr').filter(function () {
-                                return $.trim($(this).find('.ec-bonus-url').val() || '') === '';
-                            }).first();
-                            if (!$fila.length) { $fila = $tabla.find('tr').first(); }
-                            $fila.find('.ec-bonus-url').val(nuevo);
-                            $fila.find('.ec-bonus-archivos input[type=radio]').each(function () {
-                                if ($(this).val() === nuevo) { $(this).prop('checked', true); }
-                            });
-                        }
+                        elegirEnFila(nuevo);
                         // Limpia el input file para subir otro sin duplicar.
-                        $formSubir.find('input[type=file]').val('');
-                        $status.addClass('ec-ok').text('Subido ✓ (' + nuevo + '). Pone el titulo y guarda.');
+                        $subir.find('input[type=file]').val('');
+                        $statusSubir.addClass('ec-ok').text('Subido ✓ (' + nuevo + '). Pone el titulo y guarda.');
                     })
                     .catch(function (err) {
-                        $status.addClass('ec-error').text((err && err.message) || 'Fallo la subida.');
+                        $statusSubir.addClass('ec-error').text((err && err.message) || 'Fallo la subida.');
                     });
             });
         }
