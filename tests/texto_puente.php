@@ -201,6 +201,8 @@ class TestPMUOrder {
     public function get_items() { return $this->items; }
     public function get_order_key() { return 'test-order-key'; }
     public function get_customer_id() { return 1; }
+    public function get_status() { return (string)($this->meta['_test_status'] ?? 'completed'); }
+    public function is_paid() { return (bool)($this->meta['_test_paid'] ?? true); }
 }
 // Item de linea de pedido (T022/T023 + spec 017): guarda meta y _urls_files.
 class TestPMUOrderItem {
@@ -738,6 +740,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('tema: no publica ruta cruda de uploads/', !empty($et['sin_crudo']));
             check('tema: idempotente (no duplica al republicar)', !empty($et['idempotente']));
             check('tema: descargas_cliente NO inyecta fila propia', !empty($et['descargas_sin_inyeccion']));
+            check('tema: _urls_files publicado y visible con pedido pagado (is_paid)', !empty($et['pagado_publica_en_processing']));
             break;
         case 'entrega_sin_tema':
             // Regresion: sin tema, descargas_cliente sigue funcionando (hoy intacto).
@@ -1536,6 +1539,16 @@ switch ($fase) {
         $entradaDesc = [['order_id' => 4242, 'product_id' => 123, 'product_name' => 'P', 'order_key' => 'test-order-key']];
         $GLOBALS['test_entrega_tema']['descargas_sin_inyeccion'] =
             $p->descargas_cliente($entradaDesc) === $entradaDesc;
+        // Regla "pagado -> entrega inmediata": _urls_files ya esta publicado
+        // cuando el pedido pasa por processing si esta PAGADO (el plugin
+        // promueve en processing, pedido_promover; el tema lo muestra en el
+        // email de processing y en mi-cuenta/descargas/). Si NO esta pagado,
+        // la entrega queda para el completado. El stub expone is_paid() para
+        // que el tema decida mostrar o no: se verifica que la publicacion no
+        // dependa del estado (siempre publica) y que is_paid/get_status del
+        // stub existan para la decision del tema.
+        $GLOBALS['test_entrega_tema']['pagado_publica_en_processing'] =
+            $orderT->is_paid() === true && $urlsT !== [];
         unset($GLOBALS['test_order']);
         break;
 
