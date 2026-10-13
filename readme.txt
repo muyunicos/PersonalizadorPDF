@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.6.15
+Stable tag: 4.6.16
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.6.16 =
+* **Fix: el pedido no llegaba a `orders/` ni aparecia en la pestaña Pedidos** (causa real, diagnosticada con `uploads/pmu/pmu-pedidos.log`). Dos bugs: (1) el staging se creaba en `woocommerce_checkout_create_order_line_item`, donde el pedido **todavia no tiene ID** (`get_id()` = 0), y `dir_tmp_order(0)` lanzaba `motor:dir_tmp_order:pedido:invalido` -> el staging nunca se creaba; (2) al fallar, `_pmu_items` del pedido quedaba con una **clave fantasma `0`**. Ahora: el staging se crea en el hook **`woocommerce_checkout_order_processed`** (`pedido_staging_crear()`, con el ID real) y `pedido_promover()` **ya no depende de `_pmu_items`**: itera los line items del pedido y usa su metadata `_pmu_sid`/`_pmu_item_key` (que si persiste), creando el staging al vuelo si falta e **ignorando la clave fantasma `0`**. Esto recupera pedidos anteriores (ej. #29079): al re-guardar el estado o con "Regenerar" se promueven solos. Test: la fase `carrito` ahora siembra `_pmu_items` corrupto (claves `0` + real) y exige que solo el item real llegue a `orders/`.
 
 = 4.6.15 =
 * **Entrega por el tema Muy Únicos (spec 017, D1-D6)**: cuando el tema `muyunicos` (`generatepress-child`) esta activo, el plugin deja de duplicar la capa de entrega y **publica el PDF en la meta `_urls_files` del order item**. A partir de ahi el **tema** (que ya funciona en produccion) se encarga de: mostrar el descargable en `mi-cuenta/descargas/` con su propia tabla e **incluir el link en el email de "pedido completado"** (hoy el cliente NO recibe el link por email). Deteccion por **capacidad** (`function_exists('mu_update_item_files')`), URL **protegida** por el endpoint propio (`personalizador_pdf_item_descargar` con `order_key`, NO una ruta cruda de `uploads/`), escritura **idempotente** (no duplica ni pisa archivos que el admin subio a mano) y **sin doble fila**: con el tema activo `descargas_cliente` ya no inyecta su fila propia. Ademas se define la clase `MuyUnicos_PDF_Generator::generate()` que el boton "Generar PDF" de la pantalla del pedido ya invocaba (hoy respondia "Generador PDF no activo"). Portable: sin el tema, el comportamiento propio queda intacto. Tests: fases nuevas `entrega_tema` (5 checks) y `entrega_sin_tema`.

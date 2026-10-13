@@ -807,13 +807,21 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('carrito apunta al item_key real tras promover',
                 ($c['cart_item_key_tras_promover'] ?? '') === 'abc123def456',
                 'quedo en: ' . (string)($c['cart_item_key_tras_promover'] ?? ''));
-            // Ciclo real del pedido: staging -> orders (bug: quedaba en draft huerfano).
-            check('checkout crea el staging del item', !empty($c['staging_ok']));
-            check('pedido registra el item en _pmu_items',
-                is_array($c['pmu_items'] ?? null) && isset($c['pmu_items']['abc123def456']));
+            // Ciclo real del pedido: metadata del item -> staging -> orders.
+            // RC4.6.16: pedido_item_crear SOLO copia metadata al line item; el
+            // staging se crea en pedido_staging_crear (order_processed) y la
+            // identidad de la promocion sale del line item, no de _pmu_items.
+            check('checkout copia _pmu_item_key al line item',
+                ($c['meta_item_key'] ?? '') === 'abc123def456',
+                'item=' . (string)($c['meta_item_key'] ?? ''));
+            check('checkout copia _pmu_sid al line item (cookie)',
+                ($c['meta_sid'] ?? '') !== '');
+            check('order_processed crea el staging del item', !empty($c['staging_ok']));
             check('pago promueve el staging a orders/', !empty($c['orders_ok']));
             check('item marcado entregado tras el pago',
                 is_array($c['pmu_items_final'] ?? null) && ($c['pmu_items_final']['abc123def456'] ?? '') === 'entregado');
+            // RC4.6.16: la clave fantasma 0 de _pmu_items NO se promueve.
+            check('clave fantasma 0 en _pmu_items se ignora', !empty($c['fantasma_ignorado']));
             break;
         case 'pool':
         case 'pool_reem':
@@ -1680,21 +1688,36 @@ switch ($fase) {
         // los custom cart data NO sobreviven ($values vacio). La identidad sale
         // de la COOKIE pmu_sid y el item_key del cart_item_key real ($clave).
         $_COOKIE[PMU_Sesion::COOKIE] = $sid_c;
-        $orderCiclo = new TestPMUOrder(4242, []);
+        // RC4.6.16: el line item se crea ANTES para que el order lo devuelva en
+        // get_items(); pedido_item_crear solo le copia la metadata (_pmu_*).
         $itemCiclo = new TestPMUOrderItem();
+        $orderCiclo = new TestPMUOrder(4242, [], [$itemCiclo]);
         $p->pedido_item_crear(
             $itemCiclo,
             'abc123def456',
             [], // custom cart data perdidos: DEBE resolver por cookie + $clave
             $orderCiclo
         );
+        // pedido_item_crear YA NO toca _pmu_items ni crea staging: solo metadata
+        // del line item. El staging se crea en pedido_staging_crear (order_processed).
+        $GLOBALS['test_carrito']['meta_item_key'] = (string)$itemCiclo->get_meta('_pmu_item_key', true);
+        $GLOBALS['test_carrito']['meta_sid'] = (string)$itemCiclo->get_meta('_pmu_sid', true);
+        $p->pedido_staging_crear(4242, [], $orderCiclo);
         $dirStagingCiclo = $motor_c->dir_tmp_order(4242) . DIRECTORY_SEPARATOR . 'abc123def456';
         $GLOBALS['test_carrito']['staging_ok'] = is_dir($dirStagingCiclo)
             && is_file($dirStagingCiclo . DIRECTORY_SEPARATOR . 'manifest.json');
-        $GLOBALS['test_carrito']['pmu_items'] = (array)$orderCiclo->get_meta('_pmu_items');
-        // Pago confirmado: promover_order mueve el staging a orders/{id}/{item_key}/.
+        // RC4.6.16 - caso del pedido real #29079: _pmu_items del pedido quedaba
+        // con la clave fantasma 0. Sembramos _pmu_items corrupto para probar que
+        // la promocion lo IGNORA (la identidad sale del line item, no de ahi) y
+        // promueve solo el item real (recuperacion del historico).
+        $orderCiclo->update_meta_data('_pmu_items', ['0' => 'pendiente', 'abc123def456' => 'pendiente']);
+        // Pago confirmado: promover usa los LINE ITEMS (no _pmu_items del pedido) y
+        // mueve el staging a orders/{id}/{item_key}/.
         $GLOBALS['test_order'] = $orderCiclo;
         $p->pedido_promover(4242);
+        // El fantasma 0 NO debe haberse promovido a orders/.
+        $GLOBALS['test_carrito']['fantasma_ignorado'] =
+            !is_dir($motor_c->dir_ambito('orders') . DIRECTORY_SEPARATOR . '4242' . DIRECTORY_SEPARATOR . '0');
         $dirOrdersCiclo = $motor_c->dir_ambito('orders') . DIRECTORY_SEPARATOR . '4242' . DIRECTORY_SEPARATOR . 'abc123def456';
         $GLOBALS['test_carrito']['orders_ok'] = is_dir($dirOrdersCiclo)
             && is_file($dirOrdersCiclo . DIRECTORY_SEPARATOR . 'manifest.json');

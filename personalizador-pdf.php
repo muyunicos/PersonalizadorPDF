@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.6.15
+ * Version: 4.6.16
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -111,6 +111,9 @@ class Personalizador_PDF_Plugin
 
         // Spec 004 (T022/T023): ciclo del pedido y descarga del PDF final.
         add_action('woocommerce_checkout_create_order_line_item', [$this, 'pedido_item_crear'], 10, 4);
+        // RC4.6.16: el staging se crea AQUI, cuando el pedido ya tiene ID real
+        // (en create_order_line_item get_id() daba 0 y el staging fallaba).
+        add_action('woocommerce_checkout_order_processed', [$this, 'pedido_staging_crear'], 10, 3);
         add_action('woocommerce_order_status_processing', [$this, 'pedido_promover'], 10, 1);
         add_action('woocommerce_order_status_completed', [$this, 'pedido_promover'], 10, 1);
         add_filter('woocommerce_customer_get_downloadable_products', [$this, 'descargas_cliente'], 10, 1);
@@ -1928,15 +1931,55 @@ class Personalizador_PDF_Plugin
             $item->add_meta_data('_pmu_pdfs', wp_json_encode(array_values((array)($manifest['pdfs'] ?? []))));
             // Spec 005 (T009/T022): auditoria de lo declarado y no aceptado.
             $item->add_meta_data('_pmu_pdfs_descartados', wp_json_encode(array_values((array)($manifest['pdfs_descartados'] ?? []))));
-            if ($order && method_exists($order, 'get_id')) {
-                $pendientes = (array)$order->get_meta('_pmu_items');
-                $pendientes[$itemKey] = $estado === PMU_Sesion::ESTADO_OK ? 'ok' : 'pendiente';
-                $order->update_meta_data('_pmu_items', $pendientes);
-                $sesion->staging_order((int)$order->get_id(), $itemKey, $sid);
-            }
+            // RC4.6.16: el staging NO se hace aca. En woocommerce_checkout_create_
+            // order_line_item el pedido todavia no tiene ID (get_id() = 0), y
+            // dir_tmp_order(0) lanza motor:dir_tmp_order:pedido:invalido -> el
+            // staging nunca se creaba y el pedido no llegaba a orders/. Ahora el
+            // staging se crea en pedido_staging_crear() (woocommerce_checkout_
+            // order_processed, con el order_id real) y, como red de seguridad, en
+            // pedido_promover() (crea al vuelo si falta). La identidad para ambas
+            // sale de la metadata del item de mas abajo (_pmu_sid/_pmu_item_key),
+            // que SI persiste; ya no dependemos de _pmu_items del pedido.
         } catch (\Throwable $e) {
-            // Sin staging/estado el item se regenera al descargar (T023).
             $this->log_pedido('item_crear:falla ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * RC4.6.16: crea el staging del pedido (tmp/orders/{order_id}/{item_key}/)
+     * cuando el checkout YA asigno el ID real. Recorre los line items y usa la
+     * metadata que dejo pedido_item_crear (_pmu_sid/_pmu_item_key), que es la que
+     * persiste de forma confiable. Idempotente (staging_order no duplica).
+     */
+    public function pedido_staging_crear($order_id, $posted_data = null, $order = null)
+    {
+        if (!function_exists('wc_get_order')) {
+            return;
+        }
+        $order = $order ?: wc_get_order($order_id);
+        if (!$order || !method_exists($order, 'get_items')) {
+            return;
+        }
+        $sesion = $this->sesion();
+        foreach ($order->get_items() as $lineItem) {
+            if (!method_exists($lineItem, 'get_meta')) {
+                continue;
+            }
+            $itemKey = (string)$lineItem->get_meta('_pmu_item_key', true);
+            $sid = (string)$lineItem->get_meta('_pmu_sid', true);
+            if ($itemKey === '' || $sid === '') {
+                continue;
+            }
+            try {
+                $sesion->staging_order((int)$order->get_id(), $itemKey, $sid);
+            } catch (\Throwable $e) {
+                $this->log_pedido(sprintf(
+                    'staging:falla order=%d item=%s err=%s',
+                    (int)$order->get_id(),
+                    $itemKey,
+                    $e->getMessage()
+                ));
+            }
         }
     }
 
@@ -1951,42 +1994,63 @@ class Personalizador_PDF_Plugin
             return;
         }
         $order = wc_get_order($order_id);
-        if (!$order || !method_exists($order, 'get_meta')) {
-            return;
-        }
-        $items = (array)$order->get_meta('_pmu_items');
-        if (!$items) {
-            $this->log_pedido(sprintf('promover:sin_items order=%d', (int)$order_id));
+        if (!$order || !method_exists($order, 'get_items')) {
             return;
         }
         $sesion = $this->sesion();
         $cambios = false;
-        foreach ($items as $itemKey => $estado) {
-            if ($estado === 'entregado') {
+        // RC4.6.16: la identidad sale de cada LINE ITEM (_pmu_sid/_pmu_item_key),
+        // que persiste de forma confiable. Ya NO dependemos de _pmu_items del
+        // pedido (que en el checkout podia quedar vacio o con la clave fantasma
+        // 0). Asi se cubre el historico: pedidos creados con 4.6.14 cuyo _pmu_items
+        // quedo corrupto igual promueven, y se recuperan al re-guardar el estado.
+        foreach ($order->get_items() as $lineItem) {
+            if (!method_exists($lineItem, 'get_meta')) {
                 continue;
             }
+            $itemKey = (string)$lineItem->get_meta('_pmu_item_key', true);
+            $sid = (string)$lineItem->get_meta('_pmu_sid', true);
+            if ($itemKey === '' || $itemKey === '0' || $sid === '') {
+                continue; // no es un item PMU (o clave fantasma): se ignora
+            }
+            $oid = (int)$order->get_id();
             try {
-                $sesion->promover_order((int)$order_id, (string)$itemKey);
-                $items[$itemKey] = 'entregado';
+                // Red de seguridad: si el staging no se creo en el checkout
+                // (order_id era 0), se crea aca, ahora que el ID es real.
+                $sesion->staging_order($oid, $itemKey, $sid);
+                $sesion->promover_order($oid, $itemKey);
                 $cambios = true;
                 // Spec 017 (D4): con el tema activo, publica el PDF en _urls_files
                 // para que email + mi-cuenta/descargas/ los entregue el tema.
-                $this->entregar_por_tema($order, (string)$itemKey);
+                $this->entregar_por_tema($order, $itemKey);
             } catch (\Throwable $e) {
                 // Queda pendiente: se reintenta en el proximo cambio de estado.
                 $this->log_pedido(sprintf(
                     'promover:falla order=%d item=%s err=%s',
-                    (int)$order_id,
-                    (string)$itemKey,
+                    $oid,
+                    $itemKey,
                     $e->getMessage()
                 ));
             }
         }
-        if ($cambios) {
-            $order->update_meta_data('_pmu_items', $items);
-            if (method_exists($order, 'save')) {
-                $order->save();
+        // Refresco defensivo de _pmu_items (por compatibilidad con lecturas viejas);
+        // ya no es la fuente de la identidad. Se RECONSTRUYE sin claves fantasma
+        // (0 / vacia) para sanear el historico del checkout.
+        if ($cambios && method_exists($order, 'get_meta')) {
+            $previos = [];
+            foreach ($order->get_items() as $lineItem) {
+                if (!method_exists($lineItem, 'get_meta')) {
+                    continue;
+                }
+                $ik = (string)$lineItem->get_meta('_pmu_item_key', true);
+                if ($ik !== '' && $ik !== '0') {
+                    $previos[$ik] = 'entregado';
+                }
             }
+            $order->update_meta_data('_pmu_items', $previos);
+        }
+        if ($cambios && method_exists($order, 'save')) {
+            $order->save();
         }
     }
 
