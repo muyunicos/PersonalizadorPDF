@@ -464,9 +464,32 @@ jQuery(function ($) {
 
         function filaNueva() {
             // Etiqueta HTML bien cerrada en UN solo literal (los literales
-            // concatenados con + se saltan del check de cierre).
-            var $tr = $('<tr><td><input type="text" class="ec-bonus-titulo" maxlength="80" style="width:100%;"></td><td><input type="text" class="ec-bonus-url" style="width:100%;" placeholder="archivo.pdf o https://..."></td><td><button type="button" class="button button-small ec-bonus-quitar">Quitar</button></td></tr>');
+            // concatenados con + se saltan del check de cierre). Trae ya el
+            // contenedor de radios: una fila creada despues de subir archivos
+            // tiene donde mostrarlos.
+            var $tr = $('<tr><td><input type="text" class="ec-bonus-titulo" maxlength="80" style="width:100%;"></td><td><input type="text" class="ec-bonus-url" style="width:100%;" placeholder="archivo.pdf o https://..."><div class="description ec-bonus-archivos"></div></td><td><button type="button" class="button button-small ec-bonus-quitar">Quitar</button></td></tr>');
             return $tr;
+        }
+
+        // Pinta los radios de archivos subidos en TODAS las filas (name unico
+        // por indice de fila). `mapa` es {archivo: url} del servidor; se
+        // repinta completo para que SUBIR -> elegir pase SIN recargar.
+        function pintarArchivos(mapa) {
+            $tabla.find('tr').each(function (i) {
+                var $tr = $(this);
+                var $cajaArch = $tr.find('.ec-bonus-archivos');
+                if (!$cajaArch.length) {
+                    $cajaArch = $('<div class="description ec-bonus-archivos"></div>');
+                    $tr.find('.ec-bonus-url').after($cajaArch);
+                }
+                $cajaArch.empty();
+                Object.keys(mapa || {}).forEach(function (file) {
+                    var $label = $('<label style="display:inline-block;margin-right:8px;"></label>');
+                    var $radio = $('<input type="radio">').attr('name', 'ec-bonus-ref-' + i).val(file);
+                    $label.append($radio).append(document.createTextNode(' ' + file));
+                    $cajaArch.append($label);
+                });
+            });
         }
 
         $(document).on('click', '.ec-bonus-agregar', function () {
@@ -499,6 +522,12 @@ jQuery(function ($) {
                 NONCES.bonus || $form.find('input[name=_wpnonce]').val())
                 .then(function (res) {
                     var n = (res.data && res.data.bonus) || 0;
+                    // Honestidad del mensaje: si habia filas y el motor descarto
+                    // todas (sin titulo o sin archivo/URL), NO es un exito verde.
+                    if (n === 0 && lista.length > 0) {
+                        $status.addClass('ec-error').text('0 bonus guardados: cada fila necesita titulo Y archivo/URL.');
+                        return;
+                    }
                     $status.addClass('ec-ok').text('Guardado ✓ (' + n + ' bonus)');
                 })
                 .catch(function (err) {
@@ -524,8 +553,30 @@ jQuery(function ($) {
                 fd.append('bonus', file, file.name);
                 $status.removeClass('ec-ok ec-error').text('Subiendo...');
                 pmuPost('personalizador_pdf_bonus_subir', fd, NONCES.bonus_subir || $formSubir.find('input[name=_wpnonce]').val())
-                    .then(function () {
-                        $status.addClass('ec-ok').text('Subido ✓. Recarga para elegirlo en la lista.');
+                    .then(function (res) {
+                        var d = res.data || {};
+                        var mapa = d.bonus || {};
+                        var nuevo = d.archivo || '';
+                        if (!$tabla.find('tr').length) {
+                            $tabla.append(filaNueva());
+                        }
+                        // Repinta los radios en todas las filas SIN recargar y
+                        // deja el archivo recien subido elegido en la primera
+                        // fila sin URL (flujo subir -> poner titulo -> guardar).
+                        pintarArchivos(mapa);
+                        if (nuevo && mapa[nuevo]) {
+                            var $fila = $tabla.find('tr').filter(function () {
+                                return $.trim($(this).find('.ec-bonus-url').val() || '') === '';
+                            }).first();
+                            if (!$fila.length) { $fila = $tabla.find('tr').first(); }
+                            $fila.find('.ec-bonus-url').val(nuevo);
+                            $fila.find('.ec-bonus-archivos input[type=radio]').each(function () {
+                                if ($(this).val() === nuevo) { $(this).prop('checked', true); }
+                            });
+                        }
+                        // Limpia el input file para subir otro sin duplicar.
+                        $formSubir.find('input[type=file]').val('');
+                        $status.addClass('ec-ok').text('Subido ✓ (' + nuevo + '). Pone el titulo y guarda.');
                     })
                     .catch(function (err) {
                         $status.addClass('ec-error').text((err && err.message) || 'Fallo la subida.');

@@ -557,7 +557,7 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                         <button type="button" class="button button-primary ec-bonus-guardar">Guardar bonus</button>
                         <span class="ec-guardar-status ec-bonus-status" aria-live="polite"></span>
                     </p>
-                    <form class="ec-form-bonus-subir" method="post" enctype="multipart/form-data">
+                    <form class="ec-form-bonus-subir" method="post" action="<?php echo esc_url($post_url); ?>" enctype="multipart/form-data">
                         <input type="hidden" name="action" value="personalizador_pdf_bonus_subir">
                         <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
                         <?php wp_nonce_field('personalizador_pdf_bonus_subir'); ?>

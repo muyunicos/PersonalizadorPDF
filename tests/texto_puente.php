@@ -573,6 +573,12 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && substr_count($admin_html, 'name="tienda[4242][validez]"') === 1);
             check('tienda: bloquear visible solo con validez', substr_count($admin_html, 'class="ec-tienda-bloquear"') === 2
                 && substr_count($admin_html, 'class="ec-tienda-bloquear" hidden') === 1);
+            // Spec 018: el acordeon Bonus renderiza con su form de subida y su
+            // boton guardar (admin.js enlaza todo lo demas sin recarga).
+            check('bonus: acordeon presente en la consola', strpos($admin_html, 'ec-acordeon-bonus') !== false
+                && strpos($admin_html, 'personalizador_pdf_bonus_subir') !== false);
+            check('bonus: tabla y guardar sin recarga', strpos($admin_html, 'ec-bonus-tabla') !== false
+                && strpos($admin_html, 'ec-bonus-guardar') !== false);
             break;
         case 'setup':
             check('PDF en pdfs/muestra/muestra.pdf', is_file($uploads . '/pdfs/muestra/muestra.pdf'));

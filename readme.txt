@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.6.18
+Stable tag: 4.6.19
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.6.19 =
+* **Bonus: UX de la consola arreglada (subir -> elegir sin recarga)**. Antes, subir un archivo parecia "no hacer nada": el servidor respondia la lista pero el JS la ignoraba (los radios solo aparecian tras F5) y un guardado sin archivo/URL decia "Guardado ✓ (0 bonus)". Ahora: (1) al subir se **repintan los radios en todas las filas** y el archivo nuevo queda **elegido en la primera fila vacia** (o se crea la fila si no hay), sin recargar; (2) las filas nuevas por "Agregar bonus" traen su contenedor de radios (antes quedaban sin donde mostrarlos); (3) mensajes honestos: `Guardado ✓ (n bonus)` solo si algo quedo en disco, y en rojo `0 bonus guardados: cada fila necesita titulo Y archivo/URL.` si el motor descarto todas las filas; (4) el handler `bonus_subir` responde ademas `archivo` (nombre real guardado, saneado/renombrado) y el form trae `action` al admin-post (fallback nativo). Tests: fase `admin` exige el acordeon Bonus + su form en el render real (2 checks).
 
 = 4.6.18 =
 * **Bonus por PDF 0..N (spec 018)**: cada PDF puede declarar archivos extra que el comprador recibe junto al PDF final (email + pagina de gracias + `mi-cuenta/descargas/`, con la misma regla "pagado -> entrega inmediata"). Nuevo `ec-acordeon` "Bonus" en la consola del PDF (tabla titulo/archivo + alta + subida a `pdfs/{nombre}/bonus/` + guardado sin recarga); se guarda en `config.json:bonus[]` (`{titulo, url}`, URL absoluta o relativa a `bonus/`); al promover el item se **congela** en la meta `_pmu_bonus` del line item (no cambia si el admin lo edita despues; deduplicado por URL; salta archivos borrados). El tema los lista junto a "Archivos Disponibles" (email con rehidratacion ya hecha, gracias y descargas). El ZIP fijo de etiquetas (bonus del tema para cat.18) sigue igual: los bonus por PDF van *ademas*. Tests: fase nueva `bonus` (7 checks: defaults, normalizacion, descarte, congelado, deduplicacion, salto de rotos, URL publica). Requiere actualizar el tema `muyunicos` (listado de `_pmu_bonus`).
