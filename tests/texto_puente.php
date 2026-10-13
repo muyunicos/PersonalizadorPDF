@@ -822,6 +822,17 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 is_array($c['pmu_items_final'] ?? null) && ($c['pmu_items_final']['abc123def456'] ?? '') === 'entregado');
             // RC4.6.16: la clave fantasma 0 de _pmu_items NO se promueve.
             check('clave fantasma 0 en _pmu_items se ignora', !empty($c['fantasma_ignorado']));
+            // RC4.6.17: checkout con cart_item_key RECALCULADO (hash de Woo distinto
+            // al nombre de la carpeta). Debe resolver por sid + scan al nombre real,
+            // copiar la metadata con ESE nombre y promover ahi (no al hash de Woo).
+            check('checkout resuelve el item real pese al cart_item_key recalculado',
+                ($c['r17_meta_item_key'] ?? '') === ($c['r17_nombre_real'] ?? ''),
+                'clave_woo=' . (string)($c['r17_clave_woo'] ?? '') . ' meta=' . (string)($c['r17_meta_item_key'] ?? ''));
+            check('checkout NO guarda el hash recalculado de Woo como item_key',
+                ($c['r17_meta_item_key'] ?? '') !== ($c['r17_clave_woo'] ?? ''));
+            check('checkout copia _pmu_sid al line item (scan)', ($c['r17_meta_sid'] ?? '') !== '');
+            check('pago promueve a orders/{id}/{nombre_real}/', !empty($c['r17_orders_ok']));
+            check('no se promueve al nombre del hash de Woo', !empty($c['r17_orders_hash_woo_ok']));
             break;
         case 'pool':
         case 'pool_reem':
@@ -1722,6 +1733,41 @@ switch ($fase) {
         $GLOBALS['test_carrito']['orders_ok'] = is_dir($dirOrdersCiclo)
             && is_file($dirOrdersCiclo . DIRECTORY_SEPARATOR . 'manifest.json');
         $GLOBALS['test_carrito']['pmu_items_final'] = (array)$orderCiclo->get_meta('_pmu_items');
+        // RC4.6.17 - caso del pedido real #29081: en el checkout Woo reporta un
+        // cart_item_key RECALCULADO (d74c337e) que NO coincide con el nombre de la
+        // carpeta que dejo carrito_promover (27d3659c). La busqueda por nombre
+        // fallaba (item_crear:sin_item) y el pedido nunca se promovia. Aca se
+        // siembra el item bajo su nombre real y se llama pedido_item_crear con un
+        // $clave DISTINTO: debe resolver por sid + scan y copiar la metadata con
+        // el NOMBRE REAL de la carpeta (no el hash de Woo).
+        $sid_r17 = 'test-r17-29081';
+        $draft_r17 = $sesion_c->crear_draft($sid_r17, ['muestra']);
+        $man_r17 = $sesion_c->leer_manifest($sid_r17, $draft_r17);
+        $man_r17['valores'] = [$cid_c => ['valor' => 'Caro', 'cliente' => 'Caro']];
+        $man_r17['preview_estado'] = 'ok';
+        $sesion_c->guardar_manifest($sid_r17, $draft_r17, $man_r17);
+        $GLOBALS['test_carrito']['r17_nombre_real'] = $draft_r17;
+        // El checkout llega con un $clave que NO existe en disco (hash recalculado).
+        $claveRecalculada = 'd74c337e388e1e0c638d12a3f0f5ead3';
+        $GLOBALS['test_carrito']['r17_clave_woo'] = $claveRecalculada;
+        $itemR17 = new TestPMUOrderItem();
+        $orderR17 = new TestPMUOrder(4243, [], [$itemR17]);
+        $_COOKIE[PMU_Sesion::COOKIE] = $sid_r17;
+        $p->pedido_item_crear($itemR17, $claveRecalculada, [], $orderR17);
+        // Debe haber resuelto al nombre real (NO al hash de Woo).
+        $GLOBALS['test_carrito']['r17_meta_item_key'] = (string)$itemR17->get_meta('_pmu_item_key', true);
+        $GLOBALS['test_carrito']['r17_meta_sid'] = (string)$itemR17->get_meta('_pmu_sid', true);
+        // Y el pedido debe promover a orders/{id}/{nombre_real}/ pese al hash woo.
+        $GLOBALS['test_order'] = $orderR17;
+        $p->pedido_promover(4243);
+        unset($GLOBALS['test_order']);
+        $dirOrdersR17 = $motor_c->dir_ambito('orders') . DIRECTORY_SEPARATOR . '4243' . DIRECTORY_SEPARATOR . $draft_r17;
+        $GLOBALS['test_carrito']['r17_orders_ok'] = is_dir($dirOrdersR17)
+            && is_file($dirOrdersR17 . DIRECTORY_SEPARATOR . 'manifest.json');
+        $GLOBALS['test_carrito']['r17_orders_hash_woo_ok'] = !is_dir(
+            $motor_c->dir_ambito('orders') . DIRECTORY_SEPARATOR . '4243' . DIRECTORY_SEPARATOR . $claveRecalculada
+        );
+        unset($_COOKIE[PMU_Sesion::COOKIE]);
         unset($GLOBALS['test_order']);
         unset($_COOKIE[PMU_Sesion::COOKIE]);
         // Se restaura el carrito para el borrado quirurgico (carrito_quitar).

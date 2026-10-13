@@ -117,6 +117,80 @@ class PMU_Sesion
     }
 
     /**
+     * RC4.6.17: resuelve el item_key REAL de una compra en el checkout sin
+     * depender del cart_item_key de Woo. Woo recalcula el hash del item del
+     * carrito en el request del checkout (los custom cart data pmu_sid /
+     * pmu_item_key no siempre sobreviven), asi que el cart_item_key que reporta
+     * el checkout NO coincide con el nombre de la carpeta que dejo
+     * carrito_promover al agregar al carrito. Confiar en ese nombre dejaba
+     * pedido_item_crear en un return temprano silencioso (item_crear:sin_item):
+     * sin metadata PMU en el line item -> pedido_promover no promovia nada ->
+     * orders/ vacio -> sin email ni descarga (el #29081 quedo asi).
+     *
+     * Estrategia determinista:
+     *   1) Prueba los candidatos directos (cart_item_key del checkout y el
+     *      pmu_item_key de los datos): gana el primero cuyo manifest exista.
+     *   2) Si ninguno resuelve, escanea tmp/sesion-{sid}/ y toma los item con
+     *      manifest.json. En la practica hay UN item por compra/sesion, asi que
+     *      es univoco; si hubiera mas de uno (re-edicion), devuelve el mas
+     *      reciente por manifest.creado y ademas la lista completa por si el
+     *      llamador quiere distinguir.
+     *
+     * @return array{item:string,candidatos:string[],multiples:string[]}
+     *         'item' es el nombre real de la carpeta ('' si no hay ninguno).
+     */
+    public function resolver_item_checkout($sid, array $candidatos = [])
+    {
+        $sid = $this->motor->sesion_segura((string)$sid, 'resolver_item_checkout');
+        $candidatos = array_values(array_unique(array_filter(
+            array_map('strval', $candidatos),
+            static function ($c) { return $c !== '' && $c !== '0'; }
+        )));
+
+        // 1) Candidatos directos: el primero cuyo manifest exista gana.
+        foreach ($candidatos as $cand) {
+            if (is_array($this->leer_manifest($sid, $cand))) {
+                return ['item' => $cand, 'candidatos' => $candidatos, 'multiples' => []];
+            }
+        }
+
+        // 2) Scan de la sesion: carpetas con manifest.json real.
+        $dir = $this->motor->dir_sesion($sid, false);
+        if (!is_dir($dir)) {
+            return ['item' => '', 'candidatos' => $candidatos, 'multiples' => []];
+        }
+        $encontrados = [];
+        $it = new FilesystemIterator($dir, FilesystemIterator::SKIP_DOTS);
+        foreach ($it as $entrada) {
+            if (!$entrada->isDir()) {
+                continue;
+            }
+            $nombre = $entrada->getFilename();
+            // Un item valido tiene manifest.json (draft-* o cart_item_key).
+            if (!is_file($entrada->getPathname() . DIRECTORY_SEPARATOR . 'manifest.json')) {
+                continue;
+            }
+            $m = $this->leer_manifest($sid, $nombre);
+            if (!is_array($m)) {
+                continue;
+            }
+            $encontrados[$nombre] = strtotime((string)($m['creado'] ?? '0')) ?: 0;
+        }
+        if (!$encontrados) {
+            return ['item' => '', 'candidatos' => $candidatos, 'multiples' => []];
+        }
+        // Mas reciente primero.
+        arsort($encontrados);
+        $nombres = array_keys($encontrados);
+        return [
+            'item' => (string)$nombres[0],
+            'candidatos' => $candidatos,
+            'multiples' => $nombres, // >1 = hay re-edicion; el llamador decide
+        ];
+    }
+
+
+    /**
      * Mutacion serializada del manifest de un item (spec 004, T003): TODAS las
      * operaciones de leer-modificar-escribir del manifest pasan por aca bajo un
      * lock `flock` por item. Sin esto, la rafaga de POSTs del pool (texto + fotos

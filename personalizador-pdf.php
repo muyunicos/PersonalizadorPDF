@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.6.16
+ * Version: 4.6.17
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -1896,28 +1896,30 @@ class Personalizador_PDF_Plugin
         // dejaba este handler en un return temprano SILENCIOSO: sin staging, sin
         // _pmu_items, y el pedido nunca llegaba a orders/ (no aparecia en la
         // pestaña Pedidos ni en descargas). Ahora la identidad sale de la cookie
-        // (norma spec 014) y el item_key se resuelve probando el cart_item_key
-        // real de Woo ($clave, que ES el nombre de la carpeta tras promover) y
-        // luego el de los datos; gana el primero cuyo manifest exista bajo el sid.
+        // (norma spec 014) y el item_key se resuelve por manifest existente.
+        //
+        // RC4.6.17: el cart_item_key que reporta el checkout NO siempre coincide
+        // con el nombre de la carpeta que dejo carrito_promover (Woo recalcula el
+        // hash del item en el checkout). Por eso NO adivinamos el nombre:
+        // resolver_item_checkout prueba los candidatos directos y, si ninguno
+        // resuelve, escanea la sesion y toma el item real por su manifest.
+        // Devuelve el NOMBRE REAL de la carpeta, que es el que se guarda en
+        // _pmu_item_key para que pedido_promover promueva (no depende del rename).
         $sesion = $this->sesion();
         $sid = $sesion->sid_actual();
-        $itemKey = '';
-        $candidatos = array_filter(
-            array_unique([(string)$clave, (string)($values['pmu_item_key'] ?? '')]),
-            static function ($c) { return $c !== ''; }
-        );
-        foreach ($candidatos as $candidato) {
-            if (is_array($sesion->leer_manifest($sid, (string)$candidato))) {
-                $itemKey = (string)$candidato;
-                break;
-            }
-        }
+        $candidatos = array_values(array_unique(array_filter([
+            (string)$clave,
+            (string)($values['pmu_item_key'] ?? ''),
+        ], static function ($c) { return $c !== '' && $c !== '0'; })));
+        $resuelto = $sesion->resolver_item_checkout($sid, $candidatos);
+        $itemKey = (string)($resuelto['item'] ?? '');
         if ($sid === '' || $itemKey === '') {
             $this->log_pedido(sprintf(
-                'item_crear:sin_item sid=%s clave=%s valor_item=%s',
+                'item_crear:sin_item sid=%s clave=%s valor_item=%s candidatos=%s',
                 $sid,
                 (string)$clave,
-                (string)($values['pmu_item_key'] ?? '')
+                (string)($values['pmu_item_key'] ?? ''),
+                implode(',', $candidatos)
             ));
             return;
         }
@@ -2012,6 +2014,20 @@ class Personalizador_PDF_Plugin
             $sid = (string)$lineItem->get_meta('_pmu_sid', true);
             if ($itemKey === '' || $itemKey === '0' || $sid === '') {
                 continue; // no es un item PMU (o clave fantasma): se ignora
+            }
+            // RC4.6.17: red de seguridad del historico. Si el _pmu_item_key que
+            // quedo en el item NO resuelve contra el manifest (p.ej. el checkout
+            // guardo un cart_item_key recalculado que no existe en disco, como el
+            // #29081), se re-resuelve por sid + scan antes de promover. Asi
+            // re-guardar el estado de un pedido viejo lo recupera.
+            if (!is_array($sesion->leer_manifest($sid, $itemKey))) {
+                $re = $sesion->resolver_item_checkout($sid, [$itemKey]);
+                $real = (string)($re['item'] ?? '');
+                if ($real !== '' && $real !== $itemKey) {
+                    $itemKey = $real;
+                    $lineItem->update_meta_data('_pmu_item_key', $real);
+                    $cambios = true; // hay metadata del item que persistir
+                }
             }
             $oid = (int)$order->get_id();
             try {

@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.6.16
+Stable tag: 4.6.17
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.6.17 =
+* **Fix: el pedido seguia sin email ni descarga (y a veces sin Pedidos) aunque el formulario estuviera completo** (causa real diagnosticada con `uploads/pmu/pmu-pedidos.log` + disco del item, caso #29081). El checkout de Woo reporta un **`cart_item_key` RECALCULADO** (el hash del item cambia al restaurar el carrito en el request de checkout: los custom cart data no sobreviven) que **NO coincidia con el nombre real de la carpeta** que dejo `carrito_promover` al agregar al carrito. `pedido_item_crear()` buscaba el manifest por ese nombre, fallaba (`item_crear:sin_item`) y volvia en un `return` temprano silencioso: sin metadata `_pmu_sid`/`_pmu_item_key` en el line item, `pedido_promover()` no tenia nada que promover, `orders/` quedaba vacio, y en consecuencia tampoco se publicaba `_urls_files` para que el tema entregue el **email de completado** y `mi-cuenta/descargas/`. Ahora: `PMU_Sesion::resolver_item_checkout()` resuelve el item por **sid + manifest existente** (candidatos directos y, si ninguno coincide, scan de la sesion tomando el item real por su `manifest.json`), sin depender de la estabilidad del hash de Woo. `pedido_promover()` tiene la misma red de seguridad: si el `_pmu_item_key` guardado no resuelve, se re-resuelve por scan antes de promover (recupera pedidos historicos como el #29081 al re-guardar el estado). Test: la fase `carrito` siembra el caso exacto del #29081 (item bajo su nombre real + checkout con hash recalculado distinto) y exige que la metadata quede con el **nombre real** y que la promocion vaya a `orders/{id}/{nombre_real}/` (5 checks nuevos; 20/20 en verde).
 
 = 4.6.16 =
 * **Fix: el pedido no llegaba a `orders/` ni aparecia en la pestaña Pedidos** (causa real, diagnosticada con `uploads/pmu/pmu-pedidos.log`). Dos bugs: (1) el staging se creaba en `woocommerce_checkout_create_order_line_item`, donde el pedido **todavia no tiene ID** (`get_id()` = 0), y `dir_tmp_order(0)` lanzaba `motor:dir_tmp_order:pedido:invalido` -> el staging nunca se creaba; (2) al fallar, `_pmu_items` del pedido quedaba con una **clave fantasma `0`**. Ahora: el staging se crea en el hook **`woocommerce_checkout_order_processed`** (`pedido_staging_crear()`, con el ID real) y `pedido_promover()` **ya no depende de `_pmu_items`**: itera los line items del pedido y usa su metadata `_pmu_sid`/`_pmu_item_key` (que si persiste), creando el staging al vuelo si falta e **ignorando la clave fantasma `0`**. Esto recupera pedidos anteriores (ej. #29079): al re-guardar el estado o con "Regenerar" se promueven solos. Test: la fase `carrito` ahora siembra `_pmu_items` corrupto (claves `0` + real) y exige que solo el item real llegue a `orders/`.
