@@ -520,6 +520,57 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                           // duplicado se elimino en la spec 011 (FR-031). ?>
                 </div>
             </details>
+            <details class="ec-acordeon ec-acordeon-bonus">
+                <summary class="ec-acordeon-cab">Bonus</summary>
+                <div class="ec-acordeon-cuerpo">
+                    <p class="description">Archivos extra (0..N) que recibe el comprador
+                        junto al PDF final: se listan en el email, la pagina de gracias
+                        y <em>mi-cuenta/descargas/</em>. Cada bonus lleva titulo y
+                        archivo (subido aqui o URL externa).</p>
+                    <?php $cfg_bonus = $seleccionado ? $this->pmu_uploads()->leer_config($this->nombre_de($seleccionado)) : ['bonus' => []]; ?>
+                    <?php $lista_bonus = $seleccionado ? $this->pmu_uploads()->bonus_fotos_lista($this->nombre_de($seleccionado)) : []; ?>
+                    <table class="widefat striped ec-tabla ec-bonus-tabla">
+                        <thead>
+                        <tr>
+                            <th>Titulo</th>
+                            <th>Archivo / URL</th>
+                            <th>Acciones</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach (($cfg_bonus['bonus'] ?? []) as $i_b => $bono) : ?>
+                        <tr data-bonus-fila="<?php echo (int)$i_b; ?>">
+                            <td><input type="text" class="ec-bonus-titulo" value="<?php echo esc_attr((string)($bono['titulo'] ?? '')); ?>" maxlength="80" style="width:100%;"></td>
+                            <td><input type="text" class="ec-bonus-url" value="<?php echo esc_attr((string)($bono['url'] ?? '')); ?>" style="width:100%;" placeholder="archivo.pdf o https://...">
+                                <div class="description ec-bonus-archivos">
+                                <?php foreach ($lista_bonus as $file_b => $url_b) : ?>
+                                    <label style="display:inline-block;margin-right:8px;"><input type="radio" name="ec-bonus-ref-<?php echo (int)$i_b; ?>" value="<?php echo esc_attr($file_b); ?>" <?php checked((string)($bono['url'] ?? '') === (string)$file_b); ?>> <?php echo esc_html($file_b); ?></label>
+                                <?php endforeach; ?>
+                                </div></td>
+                            <td><button type="button" class="button button-small ec-bonus-quitar">Quitar</button></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                    <p>
+                        <button type="button" class="button ec-bonus-agregar">Agregar bonus</button>
+                        <button type="button" class="button button-primary ec-bonus-guardar">Guardar bonus</button>
+                        <span class="ec-guardar-status ec-bonus-status" aria-live="polite"></span>
+                    </p>
+                    <form class="ec-form-bonus-subir" method="post" enctype="multipart/form-data">
+                        <input type="hidden" name="action" value="personalizador_pdf_bonus_subir">
+                        <input type="hidden" name="archivo" value="<?php echo esc_attr($seleccionado); ?>">
+                        <?php wp_nonce_field('personalizador_pdf_bonus_subir'); ?>
+                        <p>
+                            <input type="file" name="bonus" accept=".pdf,.zip,.png,.jpg,.jpeg,.gif,.webp" required>
+                            <?php submit_button('Subir archivo bonus', 'secondary', 'submit', false); ?>
+                        </p>
+                        <p class="description">PDF, ZIP o imagen. Queda en
+                            <code>pdfs/{nombre}/bonus/</code> y aparece arriba para elegirlo.</p>
+                    </form>
+                </div>
+            </details>
+
 
             <div class="ec-fila-final">
                 <button type="submit" class="button button-primary">Guardar</button>

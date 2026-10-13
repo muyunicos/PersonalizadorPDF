@@ -170,6 +170,62 @@ class PMU_Uploads
         }
         return $this->dir_mockups($pdf) . DIRECTORY_SEPARATOR . $archivo;
     }
+    /**
+     * Carpeta de archivos bonus del admin: uploads/pmu/pdfs/{nombre}/bonus/
+     * (spec 018). Ambito de datos del producto, SIN catalogo ni sprite
+     * (igual que mockups/): los reutilizables viven en el catalogo img/.
+     */
+    public function dir_bonus($pdf, $crear = false)
+    {
+        $pdf = $this->nombre_seguro($pdf, 'dir_bonus');
+        $dir = $this->dir_pdf($pdf, $crear) . DIRECTORY_SEPARATOR . 'bonus';
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        return $dir;
+    }
+
+    /** Archivo bonus: pdfs/{nombre}/bonus/{archivo} (nombre ya saneado por el llamador). */
+    public function ruta_bonus($pdf, $archivo)
+    {
+        $pdf = $this->nombre_seguro($pdf, 'ruta_bonus');
+        $archivo = basename((string)$archivo); // sin subrutas
+        if ($archivo === '' || $archivo === '.' || $archivo === '..') {
+            throw new Exception('motor:ruta_bonus:nombre:invalido');
+        }
+        return $this->dir_bonus($pdf) . DIRECTORY_SEPARATOR . $archivo;
+    }
+
+    /**
+     * Archivos bonus del PDF: archivo => URL publica
+     * (uploads/pmu/pdfs/{nombre}/bonus/). Sin catalogo: datos del producto.
+     * Allowlist de documentos: pdf/zip + imagenes.
+     */
+    public function bonus_fotos_lista($pdf)
+    {
+        $out = [];
+        try {
+            $dir = $this->dir_bonus($pdf);
+        } catch (\Throwable $e) {
+            return $out;
+        }
+        if (!is_dir($dir)) {
+            return $out;
+        }
+        $base = $this->url_ambito('pdfs') . rawurlencode($this->nombre_seguro($pdf, 'bonus_lista')) . '/bonus/';
+        foreach ((array)glob($dir . DIRECTORY_SEPARATOR . '*.*') as $ruta) {
+            $ext = strtolower(pathinfo($ruta, PATHINFO_EXTENSION));
+            if (!in_array($ext, ['pdf', 'zip', 'png', 'jpg', 'jpeg', 'gif', 'webp'], true)) {
+                continue;
+            }
+            $file = basename($ruta);
+            $out[$file] = $base . rawurlencode($file);
+        }
+        ksort($out);
+        return $out;
+    }
+
+
 
     /**
      * Carpeta del codigo de los campos: uploads/pmu/campos/ (spec 012, T002).
@@ -1495,6 +1551,56 @@ class PMU_Uploads
         }
         return $ph;
     }
+    /**
+     * Publica la normalizacion de bonus para que el handler que guarda la
+     * consola use EXACTAMENTE la misma regla (una sola implementacion: si el
+     * handler sanea distinto, se pierde lo que el motor no acepta).
+     */
+    public function normalizar_bonus($valor)
+    {
+        return $this->config_bonus($valor);
+    }
+
+    /**
+     * Normaliza la lista de bonus del PDF (0..N): [{titulo, url}].
+     * - titulo: texto plano <= 80 (vacio = se descarta la fila).
+     * - url: cadena <= 500; se acepta URL absoluta (http/https) o ruta
+     *   relativa a la carpeta bonus/ del PDF (se sanea como nombre de archivo
+     *   plano, sin rutas ni traversal). Vacia = se descarta la fila.
+     * Las filas invalidas se descartan en silencio (lectura tolerante).
+     */
+    private function config_bonus($valor)
+    {
+        $out = [];
+        foreach ((array)$valor as $b) {
+            if (!is_array($b)) {
+                continue;
+            }
+            $titulo = trim((string)($b['titulo'] ?? ''));
+            if ($titulo === '') {
+                continue;
+            }
+            $titulo = substr($titulo, 0, 80);
+            $url = trim((string)($b['url'] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            if (preg_match('#^https?://#i', $url)) {
+                $url = substr($url, 0, 500);
+            } else {
+                // Ruta relativa a bonus/ del PDF: nombre plano, sin traversal.
+                $base = basename(str_replace('\\', '/', $url));
+                if ($base === '' || $base === '.' || $base === '..') {
+                    continue;
+                }
+                $url = substr($base, 0, 128);
+            }
+            $out[] = ['titulo' => $titulo, 'url' => $url];
+        }
+        return array_values($out);
+    }
+
+
 
     /**
      * Normaliza la seccion preview_omisible de un config (bool, solo persiste
@@ -1511,7 +1617,7 @@ class PMU_Uploads
         $pdf = $this->nombre_seguro($pdf, 'leer_config');
         $ruta = $this->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . $pdf
             . DIRECTORY_SEPARATOR . 'config.json';
-        $base = ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => [], 'tienda' => []];
+        $base = ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => [], 'tienda' => [], 'bonus' => []];
         $datos = $this->leer_json($ruta);
         if (!is_array($datos)) {
             return $base;
@@ -1541,6 +1647,9 @@ class PMU_Uploads
         );
         if (isset($datos['placeholders'])) {
             $base['placeholders'] = $this->config_placeholders($datos['placeholders']);
+        }
+        if (isset($datos['bonus'])) {
+            $base['bonus'] = $this->config_bonus($datos['bonus']);
         }
         if (isset($datos['tienda'])) {
             // Lectura tolerante: `previo` = el mismo valor crudo del disco, asi
@@ -1586,6 +1695,9 @@ class PMU_Uploads
         );
         if (isset($config['placeholders'])) {
             $canon['placeholders'] = $this->config_placeholders($config['placeholders']);
+        }
+        if (isset($config['bonus'])) {
+            $canon['bonus'] = $this->config_bonus($config['bonus']);
         }
         if (isset($config['tienda'])) {
             // Validacion por cambio: compara contra lo ya guardado (`$canon`).

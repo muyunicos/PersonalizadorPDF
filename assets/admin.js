@@ -454,6 +454,87 @@ jQuery(function ($) {
         $('.ec-modal').attr('hidden', true);
     });
     } // fin guarda $formSubir (pestana PDFs)
+    /* ============ 1.bis Bonus por PDF 0..N (spec 018) ============ */
+
+    (function bonusUI() {
+        var $caja = $('.ec-acordeon-bonus .ec-acordeon-cuerpo');
+        if (!$caja.length) { return; }
+        var $tabla = $caja.find('.ec-bonus-tabla tbody');
+        var $status = $caja.find('.ec-bonus-status');
+
+        function filaNueva() {
+            // Etiqueta HTML bien cerrada en UN solo literal (los literales
+            // concatenados con + se saltan del check de cierre).
+            var $tr = $('<tr><td><input type="text" class="ec-bonus-titulo" maxlength="80" style="width:100%;"></td><td><input type="text" class="ec-bonus-url" style="width:100%;" placeholder="archivo.pdf o https://..."></td><td><button type="button" class="button button-small ec-bonus-quitar">Quitar</button></td></tr>');
+            return $tr;
+        }
+
+        $(document).on('click', '.ec-bonus-agregar', function () {
+            $tabla.append(filaNueva());
+        });
+
+        $(document).on('click', '.ec-bonus-quitar', function () {
+            $(this).closest('tr').remove();
+        });
+
+        // Elegir un archivo subido llena la URL de esa fila.
+        $(document).on('change', '.ec-bonus-archivos input[type=radio]', function () {
+            var $radio = $(this);
+            $radio.closest('tr').find('.ec-bonus-url').val($radio.val());
+        });
+
+        $(document).on('click', '.ec-bonus-guardar', function () {
+            var lista = [];
+            $tabla.find('tr').each(function () {
+                var $tr = $(this);
+                lista.push({
+                    titulo: $tr.find('.ec-bonus-titulo').val() || '',
+                    url: $tr.find('.ec-bonus-url').val() || ''
+                });
+            });
+            var $form = $caja.find('.ec-form-bonus-subir');
+            $status.removeClass('ec-ok ec-error').text('Guardando...');
+            pmuPost('personalizador_pdf_bonus',
+                { archivo: $form.find('input[name=archivo]').val(), bonus: JSON.stringify(lista) },
+                NONCES.bonus || $form.find('input[name=_wpnonce]').val())
+                .then(function (res) {
+                    var n = (res.data && res.data.bonus) || 0;
+                    $status.addClass('ec-ok').text('Guardado ✓ (' + n + ' bonus)');
+                })
+                .catch(function (err) {
+                    $status.addClass('ec-error').text((err && err.message) || 'Fallo el guardado.');
+                });
+        });
+
+        // Subir archivo bonus sin recarga: el servidor devuelve la lista `bonus`
+        // refrescada (igual que las fotos de mockup).
+        var $formSubir = $caja.find('.ec-form-bonus-subir');
+        if ($formSubir.length && !$formSubir.data('pmu-enlazado')) {
+            $formSubir.data('pmu-enlazado', true);
+            $formSubir.on('submit', function (e) {
+                e.preventDefault();
+                var input = $formSubir.find('input[type=file]')[0];
+                var file = input && input.files ? input.files[0] : null;
+                if (!file) {
+                    pmuAviso($formSubir.closest('.card, .wrap'), 'Elegi un archivo para subir.', true);
+                    return;
+                }
+                var fd = new FormData();
+                fd.append('archivo', $formSubir.find('input[name=archivo]').val());
+                fd.append('bonus', file, file.name);
+                $status.removeClass('ec-ok ec-error').text('Subiendo...');
+                pmuPost('personalizador_pdf_bonus_subir', fd, NONCES.bonus_subir || $formSubir.find('input[name=_wpnonce]').val())
+                    .then(function () {
+                        $status.addClass('ec-ok').text('Subido ✓. Recarga para elegirlo en la lista.');
+                    })
+                    .catch(function (err) {
+                        $status.addClass('ec-error').text((err && err.message) || 'Fallo la subida.');
+                    });
+            });
+        }
+    })();
+
+
 
     /* ============ 2. Imagenes por grupo sin recargar (galeria, drag & drop, quitar) ============ */
 

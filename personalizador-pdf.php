@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.6.17
+ * Version: 4.6.18
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -77,6 +77,10 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_mockup_borrar', [$this, 'handle_mockup_borrar']);
         // Spec 004 (T008): guardado del editor de mockups (solo mockups + omisible).
         add_action('admin_post_personalizador_pdf_mockups', [$this, 'handle_mockups_guardar']);
+        // Spec 018: bonus por PDF 0..N (subida/borrado de archivos + guardado).
+        add_action('admin_post_personalizador_pdf_bonus_subir', [$this, 'handle_bonus_subir']);
+        add_action('admin_post_personalizador_pdf_bonus_borrar', [$this, 'handle_bonus_borrar']);
+        add_action('admin_post_personalizador_pdf_bonus', [$this, 'handle_bonus_guardar']);
         // Pestana "Test": smoke test nativo (WP/Woo reales, sin exec).
         add_action('admin_post_personalizador_pdf_smoke', [$this, 'handle_smoke_test']);
 
@@ -1880,6 +1884,79 @@ class Personalizador_PDF_Plugin
             ));
         }
     }
+    /**
+     * Spec 018: congela los bonus del PDF en el line item (meta `_pmu_bonus`).
+     * Lee `config.json:bonus[]` de cada PDF del snapshot del item y guarda
+     * [{titulo, url}] con la URL ya resuelta (relativa a bonus/ del PDF o
+     * absoluta). Congelado = no cambia si el admin edita los bonus despues.
+     * El tema los lista junto a "Archivos Disponibles" (email + gracias +
+     * mi-cuenta/descargas/) con la misma regla de entrega inmediata. No usa
+     * el tema (funciona sin el): el listado propio los muestra igual.
+     * Idempotente y fail-safe: nunca tumba la promocion.
+     */
+    public function congelar_bonus_item($order, $lineItem, $order_id, $item_key)
+    {
+        try {
+            if (!is_object($lineItem) || !method_exists($lineItem, 'get_meta')
+                || !method_exists($lineItem, 'update_meta_data')) {
+                return;
+            }
+            $manifest = $this->manifest_item((int)$order_id, (string)$item_key);
+            $pdfs = is_array($manifest) ? array_values((array)($manifest['pdfs'] ?? [])) : [];
+            if (!$pdfs) {
+                return;
+            }
+            $bonus = [];
+            foreach ($pdfs as $pdf) {
+                $pdf = $this->pmu_uploads()->nombre_seguro((string)$pdf, 'bonus_congelar');
+                try {
+                    $cfg = $this->pmu_uploads()->leer_config($pdf);
+                } catch (\Throwable $e) {
+                    continue;
+                }
+                foreach ((array)($cfg['bonus'] ?? []) as $b) {
+                    if (!is_array($b)) {
+                        continue;
+                    }
+                    $titulo = trim((string)($b['titulo'] ?? ''));
+                    $url = trim((string)($b['url'] ?? ''));
+                    if ($titulo === '' || $url === '') {
+                        continue;
+                    }
+                    // Relativa = archivo de bonus/ del PDF: se resuelve a URL publica.
+                    if (!preg_match('#^https?://#i', $url)) {
+                        $mapa = $this->pmu_uploads()->bonus_fotos_lista($pdf);
+                        $base = basename(str_replace('\\', '/', $url));
+                        if (!isset($mapa[$base])) {
+                            continue; // el archivo ya no existe: se salta
+                        }
+                        $url = $mapa[$base];
+                    }
+                    $bonus[] = ['titulo' => substr($titulo, 0, 80), 'url' => substr($url, 0, 500), 'pdf' => $pdf];
+                }
+            }
+            // Deduplica por URL (N PDFs pueden traer el mismo bonus).
+            $vistos = [];
+            $unicos = [];
+            foreach ($bonus as $b) {
+                if (isset($vistos[$b['url']])) {
+                    continue;
+                }
+                $vistos[$b['url']] = true;
+                $unicos[] = $b;
+            }
+            $lineItem->update_meta_data('_pmu_bonus', array_values($unicos));
+        } catch (\Throwable $e) {
+            $this->log_pedido(sprintf(
+                'bonus:congelar:falla order=%d item=%s err=%s',
+                (int)$order_id,
+                (string)$item_key,
+                $e->getMessage()
+            ));
+        }
+    }
+
+
 
     /**
      * T022: al crearse el pedido se copia la meta del item y se hace el staging
@@ -2039,6 +2116,10 @@ class Personalizador_PDF_Plugin
                 // Spec 017 (D4): con el tema activo, publica el PDF en _urls_files
                 // para que email + mi-cuenta/descargas/ los entregue el tema.
                 $this->entregar_por_tema($order, $itemKey);
+                // Spec 018: congela los bonus del PDF en el line item (_pmu_bonus).
+                // Van con el pedido (no cambian si el admin los edita despues) y el
+                // tema los lista junto a "Archivos Disponibles".
+                $this->congelar_bonus_item($order, $lineItem, $oid, $itemKey);
             } catch (\Throwable $e) {
                 // Queda pendiente: se reintenta en el proximo cambio de estado.
                 $this->log_pedido(sprintf(
@@ -3637,6 +3718,107 @@ JS;
         $this->responder(true, ['mockups' => count($mockups)]);
     }
 
+    /* ==================== Bonus por PDF 0..N (spec 018) ==================== */
+
+    /**
+     * Sube un archivo bonus del admin: pdfs/{nombre}/bonus/{archivo}.
+     * Ambito de datos del producto (sin catalogo, igual que mockups/).
+     * Allowlist de documentos: pdf/zip + imagenes.
+     */
+    public function handle_bonus_subir()
+    {
+        $this->seguridad('personalizador_pdf_bonus_subir');
+        $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
+        if (!$archivo || !is_file($this->ruta_pdf($archivo))) {
+            $this->responder(false, [], 'pdf_inexistente');
+        }
+        if (empty($_FILES['bonus']) || !is_array($_FILES['bonus'])
+            || ($_FILES['bonus']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            $this->responder(false, [], 'no_file');
+        }
+        $file = $_FILES['bonus'];
+        $nombre = sanitize_file_name((string)$file['name']);
+        $ext = strtolower(pathinfo($nombre, PATHINFO_EXTENSION));
+        if (!in_array($ext, ['pdf', 'zip', 'png', 'jpg', 'jpeg', 'gif', 'webp'], true)) {
+            $this->responder(false, [], 'formato');
+        }
+        $dir = $this->pmu_uploads()->dir_bonus($this->nombre_de($archivo), true);
+        $base = $this->pmu_uploads()->nombre_seguro(
+            pathinfo($nombre, PATHINFO_FILENAME),
+            'bonus_subir'
+        );
+        $destino = $dir . DIRECTORY_SEPARATOR . $base . '.' . $ext;
+        $k = 2;
+        while (is_file($destino)) {
+            $destino = $dir . DIRECTORY_SEPARATOR . $base . '-' . $k++ . '.' . $ext;
+        }
+        // file_get_contents en vez de move_uploaded_file: el tmp de la subida
+        // es legible en CLI (tests) y en WP; evita el chequeo is_uploaded_file.
+        $bytes = @file_get_contents((string)$file['tmp_name']);
+        if ($bytes === false || $bytes === '' || @file_put_contents($destino, $bytes) === false) {
+            $this->responder(false, [], 'move');
+        }
+        $this->responder(true, [
+            'bonus' => $this->pmu_uploads()->bonus_fotos_lista($this->nombre_de($archivo)),
+        ]);
+    }
+
+    /** Borra un archivo bonus del admin (dentro de pdfs/{nombre}/bonus/). */
+    public function handle_bonus_borrar()
+    {
+        $this->seguridad('personalizador_pdf_bonus_borrar');
+        $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
+        $bonus = isset($_POST['bonus']) ? basename((string)$_POST['bonus']) : '';
+        if (!$archivo || !is_file($this->ruta_pdf($archivo)) || $bonus === '') {
+            $this->responder(false, [], 'datos_invalidos');
+        }
+        $ruta = $this->pmu_uploads()->ruta_bonus($this->nombre_de($archivo), $bonus);
+        if (!is_file($ruta) || !@unlink($ruta)) {
+            $this->responder(false, [], 'bonus_inexistente');
+        }
+        $this->responder(true, [
+            'bonus' => $this->pmu_uploads()->bonus_fotos_lista($this->nombre_de($archivo)),
+        ]);
+    }
+
+    /**
+     * Guarda SOLO la lista de bonus del PDF: endpoint propio
+     * (action=personalizador_pdf_bonus). Nunca toca activo, productos,
+     * campos, mockups ni mapeos: guardar_config parte del config vigente y
+     * solo pisa la clave bonus. El saneo vive en el motor
+     * (`PMU_Uploads::config_bonus`) y es el MISMO que aplica
+     * `guardar_config` (si difirieran, la consola creeria que guardo algo
+     * que el motor descarto).
+     */
+    public function handle_bonus_guardar()
+    {
+        $this->seguridad('personalizador_pdf_bonus');
+        $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
+        if (!$archivo || !is_file($this->ruta_pdf($archivo))) {
+            $this->responder(false, [], 'datos_invalidos');
+        }
+        $nombre = $this->nombre_de($archivo);
+        if (!$this->analisis_de($nombre)) {
+            $this->responder(false, [], 'Este PDF no tiene datos analizados. Usa "Re-analizar".');
+        }
+        // OJO: WordPress aplica `add_magic_quotes()` a `$_POST`, asi que el
+        // JSON llega con las comillas escapadas (`\"`). Sin `wp_unslash()` el
+        // `json_decode` falla (bug en vivo `mockups_invalidos` con el editor).
+        $crudo = isset($_POST['bonus']) ? (string)wp_unslash($_POST['bonus']) : '';
+        $decodificado = $crudo === '' ? [] : json_decode($crudo, true);
+        if (!is_array($decodificado)) {
+            $motivo = function_exists('json_last_error_msg') ? json_last_error_msg() : '?';
+            $this->responder(false, [], 'No se pudo leer la lista de bonus (JSON invalido: ' . $motivo . '). Recarga la pagina.');
+        }
+        $bonus = $this->pmu_uploads()->normalizar_bonus($decodificado);
+        $ok = $this->pmu_uploads()->guardar_config($nombre, ['bonus' => $bonus]);
+        if (!$ok) {
+            $this->responder(false, [], 'No se pudieron guardar los bonus.');
+        }
+        $this->responder(true, ['bonus' => count($bonus)]);
+    }
+
+
     /**
      * Aviso de cableado (spec 015 T010 / FR-008): el tipo del campo DECLARA para
      * que se usa su `valor`, y el cableado (`value` vs `settings`) tiene que
@@ -4038,6 +4220,9 @@ JS;
                 'mockups' => wp_create_nonce('personalizador_pdf_mockups'),
                 'mockup_subir' => wp_create_nonce('personalizador_pdf_mockup_subir'),
                 'mockup_borrar' => wp_create_nonce('personalizador_pdf_mockup_borrar'),
+                'bonus_subir' => wp_create_nonce('personalizador_pdf_bonus_subir'),
+                'bonus_borrar' => wp_create_nonce('personalizador_pdf_bonus_borrar'),
+                'bonus' => wp_create_nonce('personalizador_pdf_bonus'),
                 'item_regenerar' => wp_create_nonce('personalizador_pdf_item_regenerar'),
             ],
             // Editor de mockups (spec 004, T008): datos del PDF seleccionado.

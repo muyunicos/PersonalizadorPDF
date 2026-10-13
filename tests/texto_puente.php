@@ -427,6 +427,32 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('foto guardada con nombre saneado', is_file($dirF . '/fiesta.png'));
             check('foto valida PNG', substr((string)@file_get_contents($dirF . '/fiesta.png', false, null, 0, 8), 0, 4) === "\x89PNG");
             break;
+        case 'bonus':
+            // Spec 018: normalizacion del motor + congelado al line item.
+            $defBonus = isset($GLOBALS['test_bonus_defaults']) ? $GLOBALS['test_bonus_defaults'] : [];
+            check('bonus por defecto es lista vacia', is_array($defBonus) && ($defBonus['bonus'] ?? null) === []);
+            $normBonus = isset($GLOBALS['test_bonus_norm']) ? (array)$GLOBALS['test_bonus_norm'] : [];
+            $urlsNorm = array_column($normBonus, 'url');
+            check('normaliza 3 filas validas (guia, externo, traversal->passwd)',
+                count($normBonus) === 3
+                && in_array('guia.pdf', $urlsNorm, true)
+                && in_array('https://ejemplo.com/recurso.zip', $urlsNorm, true)
+                && in_array('passwd', $urlsNorm, true));
+            check('descarta filas sin titulo/url o no-array',
+                !in_array('vacio.pdf', $urlsNorm, true) && !in_array('', $urlsNorm, true));
+            $congBonus = isset($GLOBALS['test_bonus_congelado']) ? $GLOBALS['test_bonus_congelado'] : null;
+            $titulosCong = is_array($congBonus) ? array_column($congBonus, 'titulo') : [];
+            check('congela bonus al line item (_pmu_bonus)',
+                is_array($congBonus) && in_array('Guia', $titulosCong, true)
+                && in_array('Externo', $titulosCong, true));
+            check('deduplica por URL (guia 1 sola vez)',
+                is_array($congBonus) && count($congBonus) === 2);
+            check('salta el archivo inexistente (Roto fuera)',
+                is_array($congBonus) && !in_array('Roto', $titulosCong, true));
+            check('la URL relativa se resuelve a publica',
+                is_array($congBonus) && (bool)preg_grep('#/bonus/guia\\.pdf$#', array_column($congBonus, 'url')));
+            break;
+
         case 'mockup_foto_baja':
             // T007: borrado quirurgico dentro de mockups/, sin tocar vecinos.
             $fotos_baja = is_array($json) ? (array)($json['data']['fotos'] ?? []) : [];
@@ -2797,6 +2823,51 @@ switch ($fase) {
         $p->handle_mockup_subir(); // exit en wp_send_json_success
         break;
 
+    case 'bonus':
+        // Spec 018: bonus por PDF 0..N.
+        // - config_bonus(): normaliza [{titulo,url}], descarta filas invalidas,
+        //   URLs absolutas tal cual + relativas como nombre plano anti-traversal.
+        // - congelar_bonus_item(): congela los bonus del config al line item
+        //   (_pmu_bonus) con URL publica resuelta; deduplica por URL.
+        preparar_entorno($testBase, $base);
+        $motor_b = $p->motor_para_tests();
+        $cfgBonus = $motor_b->leer_config('muestra');
+        $GLOBALS['test_bonus_defaults'] = $cfgBonus;
+        // Normalizacion directa del motor (misma que usa handle_bonus_guardar).
+        $normBonus = $motor_b->normalizar_bonus([
+            ['titulo' => 'Guia de impresion', 'url' => 'guia.pdf'],
+            ['titulo' => 'ZIP externo', 'url' => 'https://ejemplo.com/recurso.zip'],
+            ['titulo' => '', 'url' => 'vacio.pdf'],              // sin titulo: fuera
+            ['titulo' => 'Sin url', 'url' => ''],                 // sin url: fuera
+            ['titulo' => 'Traversal', 'url' => '../../etc/passwd'], // basename: passwd
+            'no-es-array',                                        // fila invalida: fuera
+        ]);
+        $GLOBALS['test_bonus_norm'] = $normBonus;
+        // Congelado al line item: siembra config con bonus + staging promovido
+        // y exige _pmu_bonus con URLs resueltas y deduplicadas.
+        $motor_b->guardar_config('muestra', ['bonus' => [
+            ['titulo' => 'Guia', 'url' => 'guia.pdf'],
+            ['titulo' => 'Guia duplicada', 'url' => 'guia.pdf'], // misma URL: 1 sola
+            ['titulo' => 'Externo', 'url' => 'https://ejemplo.com/x.zip'],
+            ['titulo' => 'Roto', 'url' => 'no-existe.pdf'],      // sin fisico: fuera
+        ]]);
+        $dirBonusB = $motor_b->dir_bonus('muestra', true);
+        file_put_contents($dirBonusB . DIRECTORY_SEPARATOR . 'guia.pdf', '%PDF-falso');
+        $dirOrdB = $motor_b->dir_ambito('orders', true) . DIRECTORY_SEPARATOR . '4242'
+            . DIRECTORY_SEPARATOR . 'item-bonus';
+        wp_mkdir_p($dirOrdB . DIRECTORY_SEPARATOR . 'img');
+        file_put_contents($dirOrdB . DIRECTORY_SEPARATOR . 'manifest.json', json_encode([
+            'item_key' => 'item-bonus', 'sid' => 'test-8f2a',
+            'pdfs' => ['muestra'], 'pdfs_descartados' => [],
+            'valores' => [], 'archivos' => [], 'preview_estado' => 'ok',
+        ]));
+        $lineBonus = new TestPMUOrderItem(['_pmu_item_key' => 'item-bonus']);
+        $orderBonus = new TestPMUOrder(4242, [], [$lineBonus]);
+        $p->congelar_bonus_item($orderBonus, $lineBonus, 4242, 'item-bonus');
+        $GLOBALS['test_bonus_congelado'] = $lineBonus->get_meta('_pmu_bonus', true);
+        break;
+
+
     case 'smoke':
         // Pestana Test: smoke nativo con WP/Woo (stubs) -> JSON de checks.
         preparar_entorno($testBase, $base);
@@ -3264,7 +3335,7 @@ switch ($fase) {
                 ],
             ]);
             $GLOBALS['test_config'] = $motor_g->leer_config('muestra');
-            $GLOBALS['test_config_defaults'] = ($motor_g->leer_config('inexistente') === ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => [], 'tienda' => []]);
+            $GLOBALS['test_config_defaults'] = ($motor_g->leer_config('inexistente') === ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => [], 'tienda' => [], 'bonus' => []]);
         } catch (\Throwable $e) {
             $GLOBALS['test_config_error'] = $e->getMessage();
         }
