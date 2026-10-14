@@ -473,6 +473,20 @@ body.ec-c-drawer-abierto { overflow: hidden; }
     max-width: 440px;
     box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
 }
+/* ============ Bonus: biblioteca compartida (modal, 4.7.0) ============ */
+.ec-bonus-modal .ec-modal-caja { max-width: 620px; position: relative; }
+.ec-bonus-modal .ec-modal-cancelar { position: absolute; top: 8px; right: 12px; font-size: 22px; cursor: pointer; color: #787c82; }
+.ec-bonus-libreria { list-style: none; margin: 12px 0; padding: 0; max-height: 320px; overflow: auto; border: 1px solid #dcdcde; border-radius: 4px; }
+.ec-bonus-libreria li { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid #f0f0f1; flex-wrap: wrap; }
+.ec-bonus-libreria li:last-child { border-bottom: 0; }
+.ec-bonus-lib-nombre { font-family: Consolas, Monaco, monospace; font-size: 12px; min-width: 150px; word-break: break-all; }
+.ec-bonus-lib-titulo { flex: 1; min-width: 130px; }
+.ec-bonus-lib-acciones { display: inline-flex; gap: 4px; }
+.ec-bonus-lib-vacio[hidden] { display: none; }
+.ec-bonus-chip { display: inline-block; background: #f0f6fc; border: 1px solid #c3c4c7; border-radius: 3px; padding: 2px 6px; margin-right: 6px; font-size: 12px; }
+.ec-bonus-chip[hidden] { display: none; }
+.ec-bonus-chip-x { border: 0; background: none; cursor: pointer; font-size: 13px; color: #8c8f94; padding: 0 2px; }
+
 /* ============ Pestana Estilos de Texto (modulo TextMuy en iframe) ============ */
 .ec-textmuy-frame-wrap {
     margin-top: 18px;

@@ -528,25 +528,29 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                         y <em>mi-cuenta/descargas/</em>. Cada bonus lleva titulo y
                         archivo (subido aqui o URL externa).</p>
                     <?php $cfg_bonus = $seleccionado ? $this->pmu_uploads()->leer_config($this->nombre_de($seleccionado)) : ['bonus' => []]; ?>
-                    <?php $lista_bonus = $seleccionado ? $this->pmu_uploads()->bonus_fotos_lista($this->nombre_de($seleccionado)) : []; ?>
+                    <?php // Libreria GLOBAL (4.7.0): archivos compartidos por todos los PDFs. ?>
+                    <?php $lista_bonus = $this->pmu_uploads()->bonus_lista(); ?>
+                    <?php // Trazabilidad: el JS necesita saber que config guarda este acordeon. ?>
+                    <input type="hidden" class="ec-bonus-pdf" value="<?php echo esc_attr($seleccionado); ?>">
                     <table class="widefat striped ec-tabla ec-bonus-tabla">
                         <thead>
                         <tr>
-                            <th>Titulo</th>
-                            <th>Archivo / URL</th>
+                            <th>Titulo (vacio = por defecto)</th>
+                            <th>Archivo de la biblioteca / URL externa</th>
                             <th>Acciones</th>
                         </tr>
                         </thead>
                         <tbody>
                         <?php foreach (($cfg_bonus['bonus'] ?? []) as $i_b => $bono) : ?>
+                        <?php $sel_archivo = (string)($bono['archivo'] ?? ''); ?>
+                        <?php $sel_url = (string)($bono['url'] ?? ''); ?>
                         <tr data-bonus-fila="<?php echo (int)$i_b; ?>">
                             <td><input type="text" class="ec-bonus-titulo" value="<?php echo esc_attr((string)($bono['titulo'] ?? '')); ?>" maxlength="80" style="width:100%;"></td>
-                            <td><input type="text" class="ec-bonus-url" value="<?php echo esc_attr((string)($bono['url'] ?? '')); ?>" style="width:100%;" placeholder="archivo.pdf o https://...">
-                                <div class="description ec-bonus-archivos">
-                                <?php foreach ($lista_bonus as $file_b => $url_b) : ?>
-                                    <label style="display:inline-block;margin-right:8px;"><input type="radio" name="ec-bonus-ref-<?php echo (int)$i_b; ?>" value="<?php echo esc_attr($file_b); ?>" <?php checked((string)($bono['url'] ?? '') === (string)$file_b); ?>> <?php echo esc_html($file_b); ?></label>
-                                <?php endforeach; ?>
-                                </div></td>
+                            <td>
+                                <span class="ec-bonus-chip" data-archivo="<?php echo esc_attr($sel_archivo); ?>" <?php echo $sel_archivo === '' ? 'hidden' : ''; ?>><span class="ec-bonus-chip-nombre"><?php echo esc_html($sel_archivo); ?></span><button type="button" class="ec-bonus-chip-x" title="Quitar seleccion">&times;</button></span>
+                                <input type="text" class="ec-bonus-url" value="<?php echo esc_attr($sel_archivo === '' ? $sel_url : ''); ?>" style="width:55%;" placeholder="o URL externa https://...">
+                                <button type="button" class="button button-small ec-bonus-elegir">Elegir&hellip;</button>
+                            </td>
                             <td><button type="button" class="button button-small ec-bonus-quitar">Quitar</button></td>
                         </tr>
                         <?php endforeach; ?>
@@ -557,35 +561,10 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                         <button type="button" class="button button-primary ec-bonus-guardar">Guardar bonus</button>
                         <span class="ec-guardar-status ec-bonus-status" aria-live="polite"></span>
                     </p>
-                    <?php if (empty($lista_bonus)) : ?>
-                        <p class="description ec-bonus-subidos-vacio">Todavia no hay archivos subidos para
-                            <?php echo esc_html($seleccionado ? $this->nombre_de($seleccionado) : ''); ?>.</p>
-                    <?php else : ?>
-                        <p class="ec-bonus-subidos">
-                            <strong>Archivos subidos:</strong>
-                            <?php foreach ($lista_bonus as $file_b => $url_b) : ?>
-                                <button type="button" class="button button-small ec-bonus-chip"
-                                    data-archivo="<?php echo esc_attr($file_b); ?>"><?php echo esc_html($file_b); ?></button>
-                            <?php endforeach; ?>
-                        </p>
-                    <?php endif; ?>
-                    <?php // IMPORTANTE (4.6.20): NO es un <form>. Este bloque vive dentro del
-                          // <form class="ec-form-config"> (linea 222): el navegador DESCARTA
-                          // los forms anidados, el handler JS no encontraba el form y el
-                          // boton dispara el guardado de config (el archivo nunca se subia).
-                          // Es un div con data-attrs; el JS bindea `click` y arma FormData. ?>
-                    <div class="ec-form-bonus-subir"
-                        data-archivo="<?php echo esc_attr($seleccionado); ?>"
-                        data-nonce="<?php echo esc_attr(wp_create_nonce('personalizador_pdf_bonus_subir')); ?>">
-                        <p>
-                            <input type="file" name="bonus" accept=".pdf,.zip,.png,.jpg,.jpeg,.gif,.webp">
-                            <button type="button" class="button ec-bonus-subir-btn">Subir archivo bonus</button>
-                            <span class="ec-guardar-status ec-bonus-status-subir" aria-live="polite"></span>
-                        </p>
-                        <p class="description">PDF, ZIP o imagen. Queda en
-                            <code>pdfs/{nombre}/bonus/</code>. Al subirlo aparece arriba en la lista
-                            y se elige con un clic en el titulo del bonus.</p>
-                    </div>
+                    <p class="description">Cada bonus usa un archivo de la <strong>biblioteca compartida</strong>
+                        (visible con &ldquo;Elegir&hellip;&rdquo;) o una URL externa. El titulo vacio usa el
+                        titulo por defecto del archivo (dinamico: cambiarlo en la biblioteca actualiza a
+                        todos los PDFs).</p>
                 </div>
             </details>
 
@@ -623,6 +602,44 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                     <span class="ec-campo-status" aria-live="polite"></span>
                 </p>
                 <p class="description">Despues lo completas en la pestana Campos.</p>
+            </div>
+        </div>
+
+        <?php // Modal de la biblioteca bonus (4.7.0): archivos compartidos por todos
+              // los PDFs (uploads/pmu/bonus/). Patron del mu-file-manager-modal del
+              // tema: lista + elegir + reemplazar (conserva referencias) + borrar
+              // (con escaneo de uso) + titulo por defecto inline + subir. ?>
+        <div class="ec-modal ec-bonus-modal" hidden>
+            <div class="ec-modal-caja">
+                <span class="ec-bonus-modal-cerrar ec-modal-cancelar" title="Cerrar">&times;</span>
+                <h3 style="margin-top:0;">Bonus: biblioteca compartida</h3>
+                <p class="description">Archivos compartidos por todos los PDFs
+                    (<code>uploads/pmu/bonus/</code>). &ldquo;Reemplazar&rdquo; conserva las referencias
+                    de todos los PDFs; &ldquo;Borrar&rdquo; avisa si esta en uso.</p>
+                <ul class="ec-bonus-libreria">
+                    <?php foreach ($lista_bonus as $file_b => $dat_b) : ?>
+                    <?php $def_b = $this->pmu_uploads()->bonus_titulo_defecto($file_b); ?>
+                    <li data-archivo="<?php echo esc_attr($file_b); ?>">
+                        <span class="ec-bonus-lib-nombre"><?php echo esc_html($file_b); ?></span>
+                        <input type="text" class="ec-bonus-lib-titulo" value="<?php echo esc_attr($dat_b['titulo']); ?>"
+                            maxlength="80" placeholder="<?php echo esc_attr($def_b); ?>">
+                        <span class="ec-bonus-lib-acciones">
+                            <button type="button" class="button button-small ec-bonus-lib-elegir">Elegir</button>
+                            <button type="button" class="button button-small ec-bonus-lib-reemplazar">Reemplazar</button>
+                            <button type="button" class="button button-small ec-bonus-lib-borrar">Borrar</button>
+                        </span>
+                    </li>
+                    <?php endforeach; ?>
+                </ul>
+                <p class="ec-bonus-lib-vacio" <?php echo empty($lista_bonus) ? '' : 'hidden'; ?>>Todavia no hay archivos. Subi uno abajo.</p>
+                <p>
+                    <input type="file" class="ec-bonus-modal-file" accept=".pdf,.zip,.png,.jpg,.jpeg,.gif,.webp">
+                    <button type="button" class="button ec-bonus-modal-subir">Subir archivo</button>
+                    <span class="ec-guardar-status ec-bonus-status-subir" aria-live="polite"></span>
+                </p>
+                <?php // Input oculto del "Reemplazar": al elegir archivo se sube con
+                      // sobrescribir=<nombre> y el contenido cambia para todos. ?>
+                <input type="file" class="ec-bonus-reemplazar-file" accept=".pdf,.zip,.png,.jpg,.jpeg,.gif,.webp" hidden>
             </div>
         </div>
 

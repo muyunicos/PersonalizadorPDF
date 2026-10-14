@@ -131,6 +131,35 @@ if (!defined('ABSPATH')) {
             congeladas. <strong>"Regenerar PDF"</strong> rearma todos los PDFs aceptados
             desde el pool; en Descargas hay una fila por PDF del snapshot.</li>
     </ol>
+    <h2>Bonus: biblioteca compartida</h2>
+    <ol>
+        <li><strong>Que es</strong>: cada PDF puede entregar, ademas de su PDF final,
+            <strong>0..N archivos bonus</strong> (guia, plantilla, ZIP, etc.). Los archivos
+            viven en una <strong>biblioteca global</strong>
+            (<code>uploads/pmu/bonus/</code>): <em>un mismo archivo puede usarse en
+            varios PDFs</em> y <strong>reemplazarlo</strong> (mismo nombre, contenido nuevo)
+            actualiza a todos de una. Tambien se acepta una URL externa por fila.</li>
+        <li><strong>Acordeon "Bonus"</strong> (consola de PDFs): cada fila lleva
+            <em>titulo</em> y una seleccion. El boton <strong>"Elegir…"</strong> abre el
+            <strong>modal de la biblioteca</strong>: lista los archivos, permite
+            <em>subir</em> nuevos, editar el <strong>titulo por defecto</strong> de cada uno
+            (se guarda al escribir), <strong>Elegir</strong> para una fila,
+            <strong>Reemplazar</strong> (mismo nombre, contenido nuevo: las referencias de
+            todos los PDFs quedan apuntando al archivo reemplazado) y
+            <strong>Borrar</strong> — que <em>avisa si esta en uso</em> ("lo usan N PDFs:
+            a, b") y, al confirmar, borra el archivo y quita su referencia de esos
+            PDFs (los pedidos ya entregados no cambian).</li>
+        <li><strong>Titulo por defecto (dinamico)</strong>: si el titulo de una fila queda
+            vacio, se usa el titulo del catalogo (<code>uploads/pmu/bonus/bonus.json</code>)
+            y, si no tiene, el nombre del archivo sin extension. Cambiar el titulo en la
+            biblioteca lo heredan todos los PDFs que lo usen con titulo vacio, hasta el
+            momento de la compra (el pedido <em>congela</em> lo que vio el comprador).</li>
+        <li><strong>Entrega</strong>: al pagarse el pedido, los bonus de sus PDFs se
+            congelan en el line item (<code>_pmu_bonus</code>, titulo resuelto + URL) y se
+            listan en el email, la pagina de gracias y <code>mi-cuenta/descargas/</code>
+            junto al PDF final, con la misma regla de entrega (con el tema Muy Únicos
+            activo los entrega el tema).</li>
+    </ol>
 </div>
 
 <div class="card">

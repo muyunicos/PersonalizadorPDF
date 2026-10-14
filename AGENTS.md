@@ -347,9 +347,14 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `tienda{product_id}` (spec 005: Configuracion
   tienda por asociacion PDFxproducto: `activo`/`validez`/`mensaje_html`/`bloquear`;
   la expresion `validez` se evalua SOLO en el navegador, PHP nunca evalua JS), `placeholders[id]` con
-  `tipo`/`preset`/`value`/`settings`, `bonus[]` (spec 018: archivos extra 0..N
-  `{titulo, url}` que el comprador recibe junto al PDF final; al promover se
-  congelan en la meta `_pmu_bonus` del line item).
+  `tipo`/`preset`/`value`/`settings`, `bonus[]` (4.7.0: archivos extra 0..N
+  de la **biblioteca global compartida** `uploads/pmu/bonus/` con catalogo
+  `bonus.json`; filas `{archivo, titulo}` (biblioteca; `titulo` vacio =
+  titulo por defecto DINAMICO del catalogo, o nombre sin extension) o
+  `{url, titulo}` (externa); el archivo se elige por modal, se puede
+  reemplazar (conserva referencias) y borrar con escaneo de uso; al comprar
+  se congelan en la meta `_pmu_bonus` del line item con el titulo resuelto.
+  Migracion one-shot desde el layout viejo `pdfs/{nombre}/bonus/`).
   **Spec 011 (contrato de capa)**: `capas[].ref` lleva **namespace** — `pdf:{archivo}`
   (foto del PDF) o `img:{id}` (id numerico del catálogo `img`); un `ref` plano se lee
   como `pdf:` (compatibilidad con los mockups previos). `capas[].filtros` admite
@@ -361,9 +366,11 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   (norma ex-008 + decision preview 2026-09-17; la migración `.migrado-007` ya no se ejecuta).
 - Fotos de mockups del admin: `pdfs/{nombre}/mockups/` (datos de usuario, sin catálogo);
   las reutilizables viven en el catálogo `img/`.
-- Archivos bonus del admin (spec 018): `pdfs/{nombre}/bonus/` (datos de usuario,
-  sin catálogo; URL absoluta o relativa a `bonus/`); la lista vive en
-  `config.json:bonus[]` y se congela por pedido en `_pmu_bonus` del line item.
+- Archivos bonus del admin (4.7.0): biblioteca global `uploads/pmu/bonus/`
+  (compartida por todos los PDFs) + catalogo `bonus/bonus.json`
+  (`{version, items:[{archivo, titulo}]}`, titulos por defecto dinamicos);
+  la lista vive en `config.json:bonus[]` como `{archivo, titulo}` o
+  `{url, titulo}` (externa) y se congela por pedido en `_pmu_bonus`.
 - **Campos reutilizables (specs 012 + 015, formato v3)**: `uploads/pmu/campos/campos.json` es
   **solo el indice** (RC4.6.11: vive junto al codigo de los campos, dentro de
   `uploads/pmu/campos/`; con migracion one-shot automatica desde el layout

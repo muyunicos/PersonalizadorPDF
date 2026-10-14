@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.6.20
+Stable tag: 4.7.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,11 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.7.0 =
+* **Bonus: biblioteca COMPARTIDA entre PDFs + modal + titulos dinamicos**. El layout por PDF (`pdfs/{nombre}/bonus/`) pasa a ser una libreria global `uploads/pmu/bonus/`: un archivo puede referenciarse desde N PDFs y **reemplazarlo** (mismo nombre, contenido nuevo) actualiza a todos. Nuevo catalogo `uploads/pmu/bonus/bonus.json` (`{version, items:[{archivo, titulo}]}`): cada archivo tiene su **titulo por defecto (dinamico)** — cambiarlo en la biblioteca lo heredan todos los PDFs que lo usen con titulo vacio. `config.json:bonus[]` pasa a `{archivo, titulo}` (biblioteca) o `{url, titulo}` (externa); el titulo vacio = default dinamico (antes era obligatorio). **Migracion one-shot**: mueve los archivos de `pdfs/*/bonus/` al global y reescribe las filas viejas (relativas o absolutas al layout viejo) a `{archivo}`.
+* **Consola: modal de biblioteca** (patron del `mu-file-manager-modal` del tema): lista con nombre, titulo por defecto editable inline (guardado al momento), Elegir / Reemplazar / **Borrar inteligente** (escanea `pdfs/*/config.json` y avisa "en uso por N PDFs"; al confirmar borra el archivo y quita sus referencias) y subida desde el modal. Las filas de bonus pasan a chip de seleccion + boton "Elegir…" + campo de URL externa; fuera los radios. El congelado al pedido resuelve el titulo dinamico.
+* Tests: fase `bonus` reescrita (15 checks: normalizacion v2, migracion de los 2 formatos, catalogo/default, congelado con titulo dinamico y dedupe, escaneo de uso y borrado con limpieza) + fase `admin` (modal, sin radios, equilibrio de forms). Bump menor: cambia el esquema de datos de `bonus[]`.
 
 = 4.6.20 =
 * **Bonus: la subida de archivos NUNCA funcionó (form anidado)**. El bloque de subida era un `<form>` DENTRO del `<form class="ec-form-config">`: el HTML no permite forms anidados, así que el navegador descartaba el tag interno, el JS no encontraba el form y el boton "Subir archivo bonus" terminaba disparando el guardado de **configuracion** (JSON `{avisos_cableado, avisos_vinculo}`) con `serializeArray()`, que ignora los input file. El archivo nunca salía del navegador → cero archivos en `pdfs/{nombre}/bonus/`. Ahora: (1) el bloque es un `<div data-archivo/data-nonce>` con `<button type="button" class="ec-bonus-subir-btn">` y el JS bindea `click` + FormData propio; (2) **lista siempre visible** de archivos subidos (chips `ec-bonus-chip` o estado vacio) bajo el boton — antes los archivos subidos solo existian como radios dentro de filas guardadas y con 0 filas eran invisibles tras cualquier recarga; (3) clic en un chip = elegirlo en la primera fila vacia (la crea si no hay); (4) status propio de subida (`ec-bonus-status-subir`) separado del de guardado. Tests: fase `admin` con 3 checks nuevos — sin `<form class="ec-form-bonus-subir">`, lista de subidos visible, y equilibrio `<form`/`</form` del render (atrapa anidamientos futuros).

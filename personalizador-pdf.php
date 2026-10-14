@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.6.20
+ * Version: 4.7.0
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -80,6 +80,7 @@ class Personalizador_PDF_Plugin
         // Spec 018: bonus por PDF 0..N (subida/borrado de archivos + guardado).
         add_action('admin_post_personalizador_pdf_bonus_subir', [$this, 'handle_bonus_subir']);
         add_action('admin_post_personalizador_pdf_bonus_borrar', [$this, 'handle_bonus_borrar']);
+        add_action('admin_post_personalizador_pdf_bonus_titulo', [$this, 'handle_bonus_titulo']);
         add_action('admin_post_personalizador_pdf_bonus', [$this, 'handle_bonus_guardar']);
         // Pestana "Test": smoke test nativo (WP/Woo reales, sin exec).
         add_action('admin_post_personalizador_pdf_smoke', [$this, 'handle_smoke_test']);
@@ -1907,6 +1908,9 @@ class Personalizador_PDF_Plugin
                 return;
             }
             $bonus = [];
+            // Titulos por defecto de la libreria (dinamicos): solo se leen si
+            // algun PDF usa filas con `archivo` (o legado) y titulo vacio.
+            $lib = null;
             foreach ($pdfs as $pdf) {
                 $pdf = $this->pmu_uploads()->nombre_seguro((string)$pdf, 'bonus_congelar');
                 try {
@@ -1919,18 +1923,44 @@ class Personalizador_PDF_Plugin
                         continue;
                     }
                     $titulo = trim((string)($b['titulo'] ?? ''));
+                    $archivo = trim((string)($b['archivo'] ?? ''));
                     $url = trim((string)($b['url'] ?? ''));
-                    if ($titulo === '' || $url === '') {
-                        continue;
-                    }
-                    // Relativa = archivo de bonus/ del PDF: se resuelve a URL publica.
-                    if (!preg_match('#^https?://#i', $url)) {
-                        $mapa = $this->pmu_uploads()->bonus_fotos_lista($pdf);
+                    if ($archivo !== '') {
+                        // Libreria global: resuelve URL y, si no hay titulo
+                        // propio, el titulo por defecto del catalogo (4.7.0).
+                        if ($lib === null) {
+                            $lib = $this->pmu_uploads()->bonus_lista();
+                        }
+                        if (!isset($lib[$archivo])) {
+                            continue; // el archivo fue borrado de la libreria
+                        }
+                        $url = $lib[$archivo]['url'];
+                        if ($titulo === '') {
+                            $titulo = $lib[$archivo]['titulo'];
+                        }
+                    } elseif ($url !== '' && !preg_match('#^https?://#i', $url)) {
+                        // Legado 4.6.18-4.6.20: relativa a bonus/ del PDF.
+                        if ($lib === null) {
+                            $lib = $this->pmu_uploads()->bonus_lista();
+                        }
                         $base = basename(str_replace('\\', '/', $url));
-                        if (!isset($mapa[$base])) {
+                        if (!isset($lib[$base])) {
                             continue; // el archivo ya no existe: se salta
                         }
-                        $url = $mapa[$base];
+                        $url = $lib[$base]['url'];
+                        if ($titulo === '') {
+                            $titulo = $lib[$base]['titulo'];
+                        }
+                    } elseif ($url !== '') {
+                        // URL externa: con titulo vacio usamos el nombre del archivo.
+                        if ($titulo === '') {
+                            $titulo = (string)pathinfo((string)basename(str_replace('\\', '/', $url)), PATHINFO_FILENAME);
+                        }
+                    } else {
+                        continue; // sin archivo ni url: fila inutil
+                    }
+                    if ($titulo === '') {
+                        continue;
                     }
                     $bonus[] = ['titulo' => substr($titulo, 0, 80), 'url' => substr($url, 0, 500), 'pdf' => $pdf];
                 }
@@ -3728,29 +3758,37 @@ JS;
     public function handle_bonus_subir()
     {
         $this->seguridad('personalizador_pdf_bonus_subir');
-        $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
-        if (!$archivo || !is_file($this->ruta_pdf($archivo))) {
-            $this->responder(false, [], 'pdf_inexistente');
-        }
         if (empty($_FILES['bonus']) || !is_array($_FILES['bonus'])
             || ($_FILES['bonus']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             $this->responder(false, [], 'no_file');
         }
         $file = $_FILES['bonus'];
         $nombre = sanitize_file_name((string)$file['name']);
-        $ext = strtolower(pathinfo($nombre, PATHINFO_EXTENSION));
-        if (!in_array($ext, ['pdf', 'zip', 'png', 'jpg', 'jpeg', 'gif', 'webp'], true)) {
+        if (!$this->pmu_uploads()->bonus_ext_valida($nombre)) {
             $this->responder(false, [], 'formato');
         }
-        $dir = $this->pmu_uploads()->dir_bonus($this->nombre_de($archivo), true);
+        $dir = $this->pmu_uploads()->dir_bonus(true);
         $base = $this->pmu_uploads()->nombre_seguro(
             pathinfo($nombre, PATHINFO_FILENAME),
             'bonus_subir'
         );
+        // Reemplazo (4.7.0): con `sobrescribir` se pisa el MISMO nombre para
+        // que todas las referencias de todos los PDFs apunten al contenido
+        // nuevo. Sin el, el nombre en conflicto gana sufijo -2, -3...
+        // El destino tambien pasa la allowlist (nunca se escribe otro tipo).
+        $sobrescribir = isset($_POST['sobrescribir']) ? basename((string)$_POST['sobrescribir']) : '';
+        if (!$this->pmu_uploads()->bonus_ext_valida($sobrescribir)) {
+            $sobrescribir = '';
+        }
+        $ext = (string)pathinfo($nombre, PATHINFO_EXTENSION);
         $destino = $dir . DIRECTORY_SEPARATOR . $base . '.' . $ext;
-        $k = 2;
-        while (is_file($destino)) {
-            $destino = $dir . DIRECTORY_SEPARATOR . $base . '-' . $k++ . '.' . $ext;
+        if ($sobrescribir !== '' && $sobrescribir !== '.' && $sobrescribir !== '..') {
+            $destino = $dir . DIRECTORY_SEPARATOR . $sobrescribir;
+        } else {
+            $k = 2;
+            while (is_file($destino)) {
+                $destino = $dir . DIRECTORY_SEPARATOR . $base . '-' . $k++ . '.' . $ext;
+            }
         }
         // file_get_contents en vez de move_uploaded_file: el tmp de la subida
         // es legible en CLI (tests) y en WP; evita el chequeo is_uploaded_file.
@@ -3759,29 +3797,72 @@ JS;
             $this->responder(false, [], 'move');
         }
         $this->responder(true, [
-            'bonus' => $this->pmu_uploads()->bonus_fotos_lista($this->nombre_de($archivo)),
-            // El nombre REAL guardado (puede haber sido saneado/renombrado con
-            // sufijo): el cliente lo preselecciona en la fila sin recargar.
+            // Libreria global: [archivo => {url, titulo}] (repinta el modal).
+            'bonus' => $this->pmu_uploads()->bonus_lista(),
+            // El nombre REAL guardado: el cliente lo muestra/selecciona.
             'archivo' => basename($destino),
         ]);
     }
 
-    /** Borra un archivo bonus del admin (dentro de pdfs/{nombre}/bonus/). */
+    /**
+     * Borra un archivo de la libreria bonus (global). Borrado INTELIGENTE
+     * (4.7.0): primero escanea `bonus_en_uso()`; si hay PDFs que lo usan y no
+     * llego `confirmar=1`, responde con la lista (el modal avisa "en uso por
+     * N PDFs") sin borrar nada. Con confirmacion, borra el archivo y limpia
+     * las referencias de esos configs (los pedidos ya congelados no se tocan).
+     */
     public function handle_bonus_borrar()
     {
         $this->seguridad('personalizador_pdf_bonus_borrar');
-        $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
         $bonus = isset($_POST['bonus']) ? basename((string)$_POST['bonus']) : '';
-        if (!$archivo || !is_file($this->ruta_pdf($archivo)) || $bonus === '') {
+        if ($bonus === '' || $bonus === '.' || $bonus === '..') {
             $this->responder(false, [], 'datos_invalidos');
         }
-        $ruta = $this->pmu_uploads()->ruta_bonus($this->nombre_de($archivo), $bonus);
-        if (!is_file($ruta) || !@unlink($ruta)) {
-            $this->responder(false, [], 'bonus_inexistente');
+        $usos = array_keys($this->pmu_uploads()->bonus_en_uso($bonus));
+        $confirmar = !empty($_POST['confirmar']);
+        if ($usos && !$confirmar) {
+            // Aun no se borra: el cliente decide tras ver el aviso.
+            $this->responder(true, ['en_uso' => $usos, 'requiere_confirmacion' => 1, 'bonus' => $this->pmu_uploads()->bonus_lista()]);
+        }
+        try {
+            $res = $this->pmu_uploads()->bonus_borrar($bonus, $confirmar ? $usos : []);
+        } catch (\Throwable $e) {
+            $this->responder(false, [], 'No se pudo borrar el archivo (¿fue borrado hace un momento?).');
         }
         $this->responder(true, [
-            'bonus' => $this->pmu_uploads()->bonus_fotos_lista($this->nombre_de($archivo)),
+            'bonus' => $this->pmu_uploads()->bonus_lista(),
+            'borrado' => $bonus,
+            'pdfs_limpios' => $res['pdfs'],
         ]);
+    }
+
+    /**
+     * Guarda el TITULO POR DEFECTO de un archivo de la libreria
+     * (bonus.json). Es dinamico: todos los PDFs cuyo bonus use ese archivo
+     * con titulo vacio heredan el nuevo valor al congelarse el pedido.
+     */
+    public function handle_bonus_titulo()
+    {
+        $this->seguridad('personalizador_pdf_bonus_titulo');
+        $archivo = isset($_POST['bonus']) ? basename((string)$_POST['bonus']) : '';
+        if ($archivo === '' || $archivo === '.' || $archivo === '..'
+            || !is_file($this->pmu_uploads()->ruta_bonus($archivo))) {
+            $this->responder(false, [], 'datos_invalidos');
+        }
+        $titulo = isset($_POST['titulo']) ? (string)wp_unslash($_POST['titulo']) : '';
+        $titulo = trim($titulo);
+        try {
+            $cat = $this->pmu_uploads()->bonus_catalogo_leer();
+            if ($titulo === '') {
+                unset($cat[$archivo]);
+            } else {
+                $cat[$archivo] = substr($titulo, 0, 80);
+            }
+            $this->pmu_uploads()->bonus_catalogo_guardar($cat);
+        } catch (\Throwable $e) {
+            $this->responder(false, [], 'No se pudo guardar el titulo (permisos en uploads/pmu/bonus/).');
+        }
+        $this->responder(true, ['bonus' => $this->pmu_uploads()->bonus_lista()]);
     }
 
     /**
@@ -4225,6 +4306,7 @@ JS;
                 'mockup_borrar' => wp_create_nonce('personalizador_pdf_mockup_borrar'),
                 'bonus_subir' => wp_create_nonce('personalizador_pdf_bonus_subir'),
                 'bonus_borrar' => wp_create_nonce('personalizador_pdf_bonus_borrar'),
+                'bonus_titulo' => wp_create_nonce('personalizador_pdf_bonus_titulo'),
                 'bonus' => wp_create_nonce('personalizador_pdf_bonus'),
                 'item_regenerar' => wp_create_nonce('personalizador_pdf_item_regenerar'),
             ],

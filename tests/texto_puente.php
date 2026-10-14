@@ -428,29 +428,50 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('foto valida PNG', substr((string)@file_get_contents($dirF . '/fiesta.png', false, null, 0, 8), 0, 4) === "\x89PNG");
             break;
         case 'bonus':
-            // Spec 018: normalizacion del motor + congelado al line item.
+            // Bonus v2 (4.7.0): libreria global + catalogo dinamico +
+            // migracion + congelado + borrado con escaneo.
             $defBonus = isset($GLOBALS['test_bonus_defaults']) ? $GLOBALS['test_bonus_defaults'] : [];
             check('bonus por defecto es lista vacia', is_array($defBonus) && ($defBonus['bonus'] ?? null) === []);
             $normBonus = isset($GLOBALS['test_bonus_norm']) ? (array)$GLOBALS['test_bonus_norm'] : [];
+            $archNorm = array_column($normBonus, 'archivo');
             $urlsNorm = array_column($normBonus, 'url');
-            check('normaliza 3 filas validas (guia, externo, traversal->passwd)',
-                count($normBonus) === 3
-                && in_array('guia.pdf', $urlsNorm, true)
-                && in_array('https://ejemplo.com/recurso.zip', $urlsNorm, true)
-                && in_array('passwd', $urlsNorm, true));
-            check('descarta filas sin titulo/url o no-array',
-                !in_array('vacio.pdf', $urlsNorm, true) && !in_array('', $urlsNorm, true));
+            check('normaliza v2: archivo con titulo vacio es valido', in_array('guia.pdf', $archNorm, true)
+                && array_search('guia.pdf', $archNorm, true) !== false
+                && ($normBonus[array_search('guia.pdf', $archNorm, true)]['titulo'] ?? 'x') === '');
+            check('normaliza v2: url externa y legado relativa -> archivo',
+                in_array('https://ejemplo.com/recurso.zip', $urlsNorm, true)
+                && in_array('guia-legacy.pdf', $archNorm, true));
+            check('normaliza v2: descarta allowlist y filas inutiles',
+                !in_array('no-valido.txt', $archNorm, true)
+                && !in_array('Sin nada', array_column($normBonus, 'titulo'), true)
+                && count($normBonus) === 3);
+            $mig = isset($GLOBALS['test_bonus_migr']) ? $GLOBALS['test_bonus_migr'] : null;
+            check('migracion: archivo movido a la libreria global', is_array($mig) && !empty($mig['movido']));
+            check('migracion: config relativa reescrita a archivo', is_array($mig)
+                && (($mig['muestra'][0]['archivo'] ?? '') === 'legado.zip'));
+            check('migracion: config absoluta vieja reescrita', is_array($mig)
+                && (($mig['otro'][0]['archivo'] ?? '') === 'legado.zip'));
+            $listaB = isset($GLOBALS['test_bonus_lista']) ? (array)$GLOBALS['test_bonus_lista'] : [];
+            check('lista: titulo efectivo del catalogo (dinamico)', (($listaB['legado.zip']['titulo'] ?? '') === 'Guia de corte'));
+            check('lista: sin catalogo el default es nombre sin extension', (($listaB['simple.pdf']['titulo'] ?? '') === 'simple'));
+            check('lista: la URL es publica bajo /pmu/bonus/', (bool)preg_grep('#/pmu/bonus/legado\\.zip$#', [($listaB['legado.zip']['url'] ?? '')]));
             $congBonus = isset($GLOBALS['test_bonus_congelado']) ? $GLOBALS['test_bonus_congelado'] : null;
             $titulosCong = is_array($congBonus) ? array_column($congBonus, 'titulo') : [];
-            check('congela bonus al line item (_pmu_bonus)',
-                is_array($congBonus) && in_array('Guia', $titulosCong, true)
-                && in_array('Externo', $titulosCong, true));
-            check('deduplica por URL (guia 1 sola vez)',
-                is_array($congBonus) && count($congBonus) === 2);
-            check('salta el archivo inexistente (Roto fuera)',
-                is_array($congBonus) && !in_array('Roto', $titulosCong, true));
-            check('la URL relativa se resuelve a publica',
-                is_array($congBonus) && (bool)preg_grep('#/bonus/guia\\.pdf$#', array_column($congBonus, 'url')));
+            check('congelado: titulo dinamico del catalogo + externa por nombre', is_array($congBonus)
+                && in_array('Guia de corte', $titulosCong, true)
+                && in_array('x', $titulosCong, true));
+            check('congelado: deduplica por URL (mismo archivo 2 veces = 1)', is_array($congBonus) && count($congBonus) === 2);
+            $usoB = isset($GLOBALS['test_bonus_uso']) ? (array)$GLOBALS['test_bonus_uso'] : [];
+            check('escaneo de uso: los 2 PDFs que referencian', in_array('muestra', $usoB, true) && in_array('otro', $usoB, true));
+            $postB = isset($GLOBALS['test_bonus_post']) ? $GLOBALS['test_bonus_post'] : null;
+            check('borrado: archivo y catalogo limpios; simple.pdf queda', is_array($postB)
+                && !isset($postB['lista']['legado.zip'])
+                && isset($postB['lista']['simple.pdf'])
+                && !isset($postB['catalogo']['legado.zip']));
+            check('borrado: referencias quitadas de los 2 configs', is_array($postB)
+                && $postB['otro'] === []
+                && count($postB['muestra']) === 1
+                && (($postB['muestra'][0]['url'] ?? '') === 'https://ejemplo.com/x.zip'));
             break;
 
         case 'mockup_foto_baja':
@@ -573,20 +594,17 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && substr_count($admin_html, 'name="tienda[4242][validez]"') === 1);
             check('tienda: bloquear visible solo con validez', substr_count($admin_html, 'class="ec-tienda-bloquear"') === 2
                 && substr_count($admin_html, 'class="ec-tienda-bloquear" hidden') === 1);
-            // Spec 018: el acordeon Bonus renderiza con su div de subida y su
-            // boton guardar (admin.js enlaza todo lo demas sin recarga).
+            // Spec 018 v2 (4.7.0): biblioteca compartida en MODAL (sin radios
+            // por fila): filas con chip + Elegir..., modal ec-bonus-modal.
             check('bonus: acordeon presente en la consola', strpos($admin_html, 'ec-acordeon-bonus') !== false
-                && strpos($admin_html, 'ec-bonus-subir-btn') !== false);
+                && strpos($admin_html, 'class="ec-bonus-pdf"') !== false);
             check('bonus: tabla y guardar sin recarga', strpos($admin_html, 'ec-bonus-tabla') !== false
                 && strpos($admin_html, 'ec-bonus-guardar') !== false);
-            // 4.6.20: el bloque de subida NO puede ser un <form> (anidado dentro
-            // de ec-form-config el navegador lo descarta y el boton dispara el
-            // guardado de config: el archivo nunca se subia). Y la lista de
-            // archivos subidos es SIEMPRE visible (chips o estado vacio).
-            check('bonus: subida sin <form> anidado', strpos($admin_html, '<form class="ec-form-bonus-subir"') === false
-                && strpos($admin_html, 'class="ec-form-bonus-subir"') !== false
-                && strpos($admin_html, 'ec-bonus-subir-btn') !== false);
-            check('bonus: lista de subidos siempre visible', strpos($admin_html, 'ec-bonus-subidos') !== false);
+            check('bonus: modal de biblioteca con lista y subida', strpos($admin_html, 'ec-bonus-modal') !== false
+                && strpos($admin_html, 'ec-bonus-libreria') !== false
+                && strpos($admin_html, 'ec-bonus-modal-subir') !== false);
+            check('bonus: sin radios por fila ni <form> anidado', strpos($admin_html, 'ec-bonus-ref-') === false
+                && strpos($admin_html, '<form class="ec-bonus') === false);
             // Estructura de forms: abre = cierra (atrapa cualquier anidamiento
             // futuro: el HTML no permite forms dentro de forms).
             check('forms: equilibrio abrir/cerrar', substr_count($admin_html, '<form') === substr_count($admin_html, '</form'));
@@ -2841,35 +2859,55 @@ switch ($fase) {
         break;
 
     case 'bonus':
-        // Spec 018: bonus por PDF 0..N.
-        // - config_bonus(): normaliza [{titulo,url}], descarta filas invalidas,
-        //   URLs absolutas tal cual + relativas como nombre plano anti-traversal.
-        // - congelar_bonus_item(): congela los bonus del config al line item
-        //   (_pmu_bonus) con URL publica resuelta; deduplica por URL.
+        // Bonus v2 (4.7.0): libreria global uploads/pmu/bonus/ compartida
+        // por PDFs, catalogo de titulos por defecto DINAMICOS (bonus.json),
+        // config {archivo|url, titulo opcional}, migracion one-shot desde el
+        // layout viejo, congelado al line item y borrado con escaneo de uso.
         preparar_entorno($testBase, $base);
         $motor_b = $p->motor_para_tests();
-        $cfgBonus = $motor_b->leer_config('muestra');
-        $GLOBALS['test_bonus_defaults'] = $cfgBonus;
-        // Normalizacion directa del motor (misma que usa handle_bonus_guardar).
-        $normBonus = $motor_b->normalizar_bonus([
-            ['titulo' => 'Guia de impresion', 'url' => 'guia.pdf'],
-            ['titulo' => 'ZIP externo', 'url' => 'https://ejemplo.com/recurso.zip'],
-            ['titulo' => '', 'url' => 'vacio.pdf'],              // sin titulo: fuera
-            ['titulo' => 'Sin url', 'url' => ''],                 // sin url: fuera
-            ['titulo' => 'Traversal', 'url' => '../../etc/passwd'], // basename: passwd
-            'no-es-array',                                        // fila invalida: fuera
+        $GLOBALS['test_bonus_defaults'] = $motor_b->leer_config('muestra');
+
+        // (1) Normalizacion v2 (misma que handle_bonus_guardar).
+        $GLOBALS['test_bonus_norm'] = $motor_b->normalizar_bonus([
+            ['archivo' => 'guia.pdf', 'titulo' => ''],                 // titulo vacio = default dinamico: VALIDA
+            ['archivo' => 'no-valido.txt', 'titulo' => 'x'],           // extension fuera de allowlist: fuera
+            ['url' => 'https://ejemplo.com/recurso.zip', 'titulo' => 'ZIP externo'],
+            ['titulo' => 'Legado relativa', 'url' => 'guia-legacy.pdf'], // relativa -> archivo
+            ['titulo' => 'Sin nada'],                                   // sin archivo ni url: fuera
+            'no-es-array',
         ]);
-        $GLOBALS['test_bonus_norm'] = $normBonus;
-        // Congelado al line item: siembra config con bonus + staging promovido
-        // y exige _pmu_bonus con URLs resueltas y deduplicadas.
+
+        // (2) Migracion one-shot: sembrar el layout viejo con configs CRUDOS
+        // (sin pasar por guardar_config, que ya normalizaria) y dispararla.
+        $dirViejoB = $motor_b->dir_ambito('pdfs', true) . DIRECTORY_SEPARATOR . 'muestra' . DIRECTORY_SEPARATOR . 'bonus';
+        wp_mkdir_p($dirViejoB);
+        file_put_contents($dirViejoB . DIRECTORY_SEPARATOR . 'legado.zip', 'zip-viejo');
+        wp_mkdir_p($motor_b->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . 'otro');
+        file_put_contents($motor_b->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . 'muestra' . DIRECTORY_SEPARATOR . 'config.json', json_encode([
+            'bonus' => [['titulo' => 'Legado relativa', 'url' => 'legado.zip']],
+        ]));
+        file_put_contents($motor_b->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . 'otro' . DIRECTORY_SEPARATOR . 'config.json', json_encode([
+            'bonus' => [['titulo' => 'Legado absoluta', 'url' => 'https://ejemplo.com/wp-content/uploads/pmu/pdfs/muestra/bonus/legado.zip']],
+        ]));
+        $motor_b->dir_bonus(true); // dispara bonus_migrar_legado()
+        $GLOBALS['test_bonus_migr'] = [
+            'movido' => is_file($motor_b->ruta_bonus('legado.zip')) && !is_file($dirViejoB . '/legado.zip'),
+            'muestra' => $motor_b->leer_config('muestra')['bonus'],
+            'otro' => $motor_b->leer_config('otro')['bonus'],
+        ];
+
+        // (3) Catalogo de titulos + segundo archivo SIN catalogo (default).
+        file_put_contents($motor_b->ruta_bonus('simple.pdf'), '%PDF-falso');
+        $motor_b->bonus_catalogo_guardar(['legado.zip' => 'Guia de corte']);
+        $GLOBALS['test_bonus_lista'] = $motor_b->bonus_lista();
+
+        // (4) Congelado al line item: titulo dinamico + custom + externa
+        // (mismo archivo 2 veces = misma URL -> dedupe conserva el primero).
         $motor_b->guardar_config('muestra', ['bonus' => [
-            ['titulo' => 'Guia', 'url' => 'guia.pdf'],
-            ['titulo' => 'Guia duplicada', 'url' => 'guia.pdf'], // misma URL: 1 sola
-            ['titulo' => 'Externo', 'url' => 'https://ejemplo.com/x.zip'],
-            ['titulo' => 'Roto', 'url' => 'no-existe.pdf'],      // sin fisico: fuera
+            ['archivo' => 'legado.zip', 'titulo' => ''],
+            ['archivo' => 'legado.zip', 'titulo' => 'Otra guia'],
+            ['url' => 'https://ejemplo.com/x.zip', 'titulo' => ''],
         ]]);
-        $dirBonusB = $motor_b->dir_bonus('muestra', true);
-        file_put_contents($dirBonusB . DIRECTORY_SEPARATOR . 'guia.pdf', '%PDF-falso');
         $dirOrdB = $motor_b->dir_ambito('orders', true) . DIRECTORY_SEPARATOR . '4242'
             . DIRECTORY_SEPARATOR . 'item-bonus';
         wp_mkdir_p($dirOrdB . DIRECTORY_SEPARATOR . 'img');
@@ -2882,6 +2920,16 @@ switch ($fase) {
         $orderBonus = new TestPMUOrder(4242, [], [$lineBonus]);
         $p->congelar_bonus_item($orderBonus, $lineBonus, 4242, 'item-bonus');
         $GLOBALS['test_bonus_congelado'] = $lineBonus->get_meta('_pmu_bonus', true);
+
+        // (5) Escaneo de uso + borrado con limpieza de referencias.
+        $GLOBALS['test_bonus_uso'] = array_keys($motor_b->bonus_en_uso('legado.zip'));
+        $GLOBALS['test_bonus_borrado'] = $motor_b->bonus_borrar('legado.zip', ['muestra', 'otro']);
+        $GLOBALS['test_bonus_post'] = [
+            'lista' => $motor_b->bonus_lista(),
+            'muestra' => $motor_b->leer_config('muestra')['bonus'],
+            'otro' => $motor_b->leer_config('otro')['bonus'],
+            'catalogo' => $motor_b->bonus_catalogo_leer(),
+        ];
         break;
 
 

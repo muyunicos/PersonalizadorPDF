@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
  */
 class PMU_Uploads
 {
-    private static $AMBITOS = ['fonts', 'img', 'mockups', 'pdfs', 'orders', 'tmp', 'tm-presets'];
+    private static $AMBITOS = ['fonts', 'img', 'mockups', 'pdfs', 'orders', 'tmp', 'tm-presets', 'bonus'];
     private static $AMBITOS_GALERIA = ['fonts', 'img', 'mockups', 'tm-presets'];
 
     /** Nombre explicito del catalogo por ambito: NUNCA derivado del directorio. */
@@ -46,6 +46,8 @@ class PMU_Uploads
     ];
 
     private $galeria;
+    /** Migracion one-shot de la libreria bonus (4.7.0) ya ejecutada en este request. */
+    private $bonus_migrado = false;
 
     private function get_galeria()
     {
@@ -171,58 +173,308 @@ class PMU_Uploads
         return $this->dir_mockups($pdf) . DIRECTORY_SEPARATOR . $archivo;
     }
     /**
-     * Carpeta de archivos bonus del admin: uploads/pmu/pdfs/{nombre}/bonus/
-     * (spec 018). Ambito de datos del producto, SIN catalogo ni sprite
-     * (igual que mockups/): los reutilizables viven en el catalogo img/.
+     * Carpeta GLOBAL de archivos bonus: uploads/pmu/bonus/ (4.7.0).
+     *
+     * Libreria compartida por TODOS los PDFs: un archivo puede referenciarse
+     * desde N config.json. Lleva su catalogo `bonus.json`
+     * ({version, items:[{archivo, titulo}]}): el titulo por defecto vive ahi
+     * y es dinamico (cambiarlo actualiza a todos los PDFs que lo usan).
+     * Al crear/leer se dispara una unica vez la migracion one-shot desde el
+     * layout viejo `pdfs/{pdf}/bonus/` (4.6.18-4.6.20).
      */
-    public function dir_bonus($pdf, $crear = false)
+    public function dir_bonus($crear = false)
     {
-        $pdf = $this->nombre_seguro($pdf, 'dir_bonus');
-        $dir = $this->dir_pdf($pdf, $crear) . DIRECTORY_SEPARATOR . 'bonus';
+        $dir = $this->dir_ambito('bonus', $crear);
         if ($crear && !is_dir($dir)) {
             wp_mkdir_p($dir);
+        }
+        if (!$this->bonus_migrado) {
+            $this->bonus_migrado = true;
+            $this->bonus_migrar_legado();
         }
         return $dir;
     }
 
-    /** Archivo bonus: pdfs/{nombre}/bonus/{archivo} (nombre ya saneado por el llamador). */
-    public function ruta_bonus($pdf, $archivo)
+    /** Archivo bonus global: uploads/pmu/bonus/{archivo} (sin subrutas). */
+    public function ruta_bonus($archivo)
     {
-        $pdf = $this->nombre_seguro($pdf, 'ruta_bonus');
         $archivo = basename((string)$archivo); // sin subrutas
         if ($archivo === '' || $archivo === '.' || $archivo === '..') {
             throw new Exception('motor:ruta_bonus:nombre:invalido');
         }
-        return $this->dir_bonus($pdf) . DIRECTORY_SEPARATOR . $archivo;
+        return $this->dir_bonus() . DIRECTORY_SEPARATOR . $archivo;
+    }
+
+    /** Catalogo de la libreria bonus: uploads/pmu/bonus/bonus.json */
+    public function ruta_bonus_catalogo()
+    {
+        return $this->dir_bonus() . DIRECTORY_SEPARATOR . 'bonus.json';
+    }
+
+    /** Allowlist de documentos bonus: pdf/zip + imagenes. */
+    public function bonus_ext_valida($archivo)
+    {
+        $ext = strtolower(pathinfo((string)$archivo, PATHINFO_EXTENSION));
+        return in_array($ext, ['pdf', 'zip', 'png', 'jpg', 'jpeg', 'gif', 'webp'], true);
     }
 
     /**
-     * Archivos bonus del PDF: archivo => URL publica
-     * (uploads/pmu/pdfs/{nombre}/bonus/). Sin catalogo: datos del producto.
-     * Allowlist de documentos: pdf/zip + imagenes.
+     * Catalogo de la libreria bonus: [archivo => titulo]. Lectura tolerante:
+     * un JSON roto o ausente devuelve [] (los archivos siguen listables con su
+     * titulo por defecto).
      */
-    public function bonus_fotos_lista($pdf)
+    public function bonus_catalogo_leer()
     {
+        $datos = $this->leer_json($this->ruta_bonus_catalogo());
         $out = [];
-        try {
-            $dir = $this->dir_bonus($pdf);
-        } catch (\Throwable $e) {
+        if (!is_array($datos)) {
             return $out;
         }
-        if (!is_dir($dir)) {
-            return $out;
-        }
-        $base = $this->url_ambito('pdfs') . rawurlencode($this->nombre_seguro($pdf, 'bonus_lista')) . '/bonus/';
-        foreach ((array)glob($dir . DIRECTORY_SEPARATOR . '*.*') as $ruta) {
-            $ext = strtolower(pathinfo($ruta, PATHINFO_EXTENSION));
-            if (!in_array($ext, ['pdf', 'zip', 'png', 'jpg', 'jpeg', 'gif', 'webp'], true)) {
+        foreach ((array)($datos['items'] ?? []) as $it) {
+            if (!is_array($it)) {
                 continue;
             }
-            $file = basename($ruta);
-            $out[$file] = $base . rawurlencode($file);
+            $file = basename((string)($it['archivo'] ?? ''));
+            if ($file === '' || $file === '.' || $file === '..') {
+                continue;
+            }
+            $out[$file] = substr(trim((string)($it['titulo'] ?? '')), 0, 80);
+        }
+        return $out;
+    }
+
+    /** Guarda el catalogo [archivo => titulo] (solo entradas validas, orden estable). */
+    public function bonus_catalogo_guardar(array $mapa)
+    {
+        $dir = $this->dir_bonus();
+        if (!is_dir($dir) || !wp_is_writable($dir)) {
+            throw new Exception('motor:bonus:catalogo:no_escribible');
+        }
+        $items = [];
+        foreach ($mapa as $file => $titulo) {
+            $file = basename((string)$file);
+            if ($file === '' || $file === '.' || $file === '..') {
+                continue;
+            }
+            $items[] = ['archivo' => $file, 'titulo' => substr(trim((string)$titulo), 0, 80)];
+        }
+        usort($items, function ($a, $b) {
+            return strcmp($a['archivo'], $b['archivo']);
+        });
+        $ok = @file_put_contents(
+            $this->ruta_bonus_catalogo(),
+            wp_json_encode(['version' => 1, 'items' => $items], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+        );
+        if ($ok === false) {
+            throw new Exception('motor:bonus:catalogo:no_escribible');
+        }
+        return true;
+    }
+
+    /** Titulo por defecto de un archivo de la libreria: nombre sin extension. */
+    public function bonus_titulo_defecto($archivo)
+    {
+        $nom = basename(str_replace('\\', '/', (string)$archivo));
+        $sinExt = (string)pathinfo($nom, PATHINFO_FILENAME);
+        return $sinExt === '' ? substr($nom, 0, 80) : substr($sinExt, 0, 80);
+    }
+
+    /**
+     * Libreria bonus: [archivo => ['url' => URL publica, 'titulo' => titulo
+     * efectivo]]. El titulo efectivo es el del catalogo (dinamico) o, si no
+     * hay entrada, el por defecto (nombre sin extension). Solo archivos
+     * fisicos con extension valida; orden alfabetico.
+     */
+    public function bonus_lista()
+    {
+        $cat = $this->bonus_catalogo_leer();
+        $out = [];
+        $dir = $this->dir_bonus();
+        if (is_dir($dir)) {
+            $base = $this->url_ambito('bonus');
+            foreach ((array)glob($dir . DIRECTORY_SEPARATOR . '*.*') as $ruta) {
+                $file = basename($ruta);
+                if ($file === 'bonus.json' || !$this->bonus_ext_valida($file)) {
+                    continue;
+                }
+                $titulo = isset($cat[$file]) && $cat[$file] !== '' ? $cat[$file] : $this->bonus_titulo_defecto($file);
+                $out[$file] = ['url' => $base . rawurlencode($file), 'titulo' => $titulo];
+            }
         }
         ksort($out);
         return $out;
+    }
+
+    /**
+     * Escaneo de uso: [pdf => true] de los PDFs cuyo config.json bonus[]
+     * referencia $archivo (por `archivo` o por url relativa legada).
+     * Base del borrado inteligente: el modal avisa "en uso por N PDFs".
+     */
+    public function bonus_en_uso($archivo)
+    {
+        $archivo = basename(str_replace('\\', '/', (string)$archivo));
+        $usos = [];
+        if ($archivo === '' || $archivo === '.' || $archivo === '..') {
+            return $usos;
+        }
+        foreach ((array)glob($this->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . '*' . DIRECTORY_SEPARATOR . 'config.json') as $cfg) {
+            $pdf = basename(dirname($cfg));
+            $datos = $this->leer_json($cfg);
+            if (!is_array($datos) || !isset($datos['bonus']) || !is_array($datos['bonus'])) {
+                continue;
+            }
+            foreach ($datos['bonus'] as $b) {
+                if (!is_array($b)) {
+                    continue;
+                }
+                $ref = (string)($b['archivo'] ?? '');
+                if ($ref === '') {
+                    // Legado 4.6.18-4.6.20: url relativa o absoluta vieja
+                    // (pdfs/{pdf}/bonus/...) a la carpeta bonus del PDF.
+                    $u = (string)($b['url'] ?? '');
+                    if ($u !== '' && !preg_match('#^https?://#i', $u)) {
+                        $ref = basename(str_replace('\\', '/', $u));
+                    } elseif ($u !== '' && preg_match('~[^/]/bonus/([^/?#]+)$~i', $u, $mmU)) {
+                        $ref = rawurldecode($mmU[1]);
+                    }
+                }
+                if ($ref === $archivo) {
+                    $usos[$pdf] = true;
+                    break;
+                }
+            }
+        }
+        return $usos;
+    }
+
+    /**
+     * Borra un archivo de la libreria. Si $limpiar_en trae nombres de PDF,
+     * tambien quita las filas que lo referenciaban de esos configs (solo
+     * despues de la confirmacion del admin). Devuelve ['pdfs' => [...]].
+     */
+    public function bonus_borrar($archivo, array $limpiar_en = [])
+    {
+        $ruta = $this->ruta_bonus($archivo);
+        if (!is_file($ruta) || !@unlink($ruta)) {
+            throw new Exception('motor:bonus:borrar:fallo');
+        }
+        $base = basename($archivo);
+        $cat = $this->bonus_catalogo_leer();
+        if (array_key_exists($base, $cat)) {
+            unset($cat[$base]);
+            try {
+                $this->bonus_catalogo_guardar($cat);
+            } catch (\Throwable $e) {
+                // Catalogo no escribible: bonus_lista() ignora los huecos.
+            }
+        }
+        $limpios = [];
+        foreach ($limpiar_en as $pdf) {
+            $pdf = $this->nombre_seguro((string)$pdf, 'bonus_borrar');
+            try {
+                $cfg = $this->leer_config($pdf);
+            } catch (\Throwable $e) {
+                continue;
+            }
+            $filas = [];
+            foreach ((array)$cfg['bonus'] as $b) {
+                $ref = is_array($b) ? (string)($b['archivo'] ?? '') : '';
+                if ($ref === '' && is_array($b)) {
+                    $u = (string)($b['url'] ?? '');
+                    if ($u !== '' && !preg_match('#^https?://#i', $u)) {
+                        $ref = basename(str_replace('\\', '/', $u));
+                    } elseif ($u !== '' && preg_match('~[^/]/bonus/([^/?#]+)$~i', $u, $mmB)) {
+                        $ref = rawurldecode($mmB[1]);
+                    }
+                }
+                if ($ref !== $base) {
+                    $filas[] = $b;
+                }
+            }
+            if (count($filas) !== count((array)$cfg['bonus'])) {
+                $this->guardar_config($pdf, ['bonus' => $filas]);
+                $limpios[] = $pdf;
+            }
+        }
+        return ['pdfs' => $limpios];
+    }
+
+    /**
+     * Migracion one-shot del layout viejo `pdfs/{pdf}/bonus/` (4.6.18-4.6.20)
+     * a la libreria global: mueve los archivos fisicos y reescribe las filas
+     * de cada config (url relativa o absoluta vieja -> `archivo`).
+     * Idempotente: sin carpetas viejas no hace nada; un archivo ya global no
+     * se pisa (el viejo queda con sufijo -migr-N).
+     */
+    private function bonus_migrar_legado()
+    {
+        $viejas = (array)glob($this->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . '*' . DIRECTORY_SEPARATOR . 'bonus' . DIRECTORY_SEPARATOR . '*.*');
+        $movidos = []; // "{pdf}/{archivo_viejo}" => "archivo_global"
+        foreach ($viejas as $ruta) {
+            $file = basename($ruta);
+            if (!$this->bonus_ext_valida($file)) {
+                continue;
+            }
+            $pdf = basename(dirname(dirname($ruta)));
+            try {
+                $destino = $this->ruta_bonus($file);
+            } catch (\Throwable $e) {
+                continue;
+            }
+            if (is_file($destino)) {
+                $k = 2;
+                $base = (string)pathinfo($file, PATHINFO_FILENAME);
+                $ext = (string)pathinfo($file, PATHINFO_EXTENSION);
+                do {
+                    $destino = $this->dir_bonus() . DIRECTORY_SEPARATOR . $base . '-migr-' . $k++ . '.' . $ext;
+                } while (is_file($destino));
+            }
+            if (@rename($ruta, $destino)) {
+                $movidos[$pdf . '/' . $file] = basename($destino);
+            }
+        }
+        if (!$movidos) {
+            return;
+        }
+        foreach ((array)glob($this->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . '*' . DIRECTORY_SEPARATOR . 'config.json') as $cfg) {
+            $pdf = basename(dirname($cfg));
+            $datos = $this->leer_json($cfg);
+            if (!is_array($datos) || !isset($datos['bonus']) || !is_array($datos['bonus'])) {
+                continue;
+            }
+            $cambio = false;
+            $filas = [];
+            foreach ($datos['bonus'] as $b) {
+                if (!is_array($b)) {
+                    $filas[] = $b;
+                    continue;
+                }
+                $u = (string)($b['url'] ?? '');
+                $nuevo = null;
+                if ($u !== '' && !preg_match('#^https?://#i', $u)) {
+                    // Relativa: era de la carpeta del propio PDF.
+                    $ref = basename(str_replace('\\', '/', $u));
+                    if (isset($movidos[$pdf . '/' . $ref])) {
+                        $nuevo = $movidos[$pdf . '/' . $ref];
+                    }
+                } elseif (preg_match('~[^/]/pdfs/([^/]+)/bonus/([^/?#]+)$~i', $u, $mm)) {
+                    // Absoluta al layout viejo.
+                    $ref = rawurldecode($mm[2]);
+                    if (isset($movidos[rawurldecode($mm[1]) . '/' . $ref])) {
+                        $nuevo = $movidos[rawurldecode($mm[1]) . '/' . $ref];
+                    }
+                }
+                if ($nuevo !== null) {
+                    $filas[] = ['archivo' => $nuevo, 'titulo' => (string)($b['titulo'] ?? '')];
+                    $cambio = true;
+                } else {
+                    $filas[] = $b;
+                }
+            }
+            if ($cambio) {
+                $this->guardar_config($pdf, ['bonus' => $filas]);
+            }
+        }
     }
 
 
@@ -1562,12 +1814,15 @@ class PMU_Uploads
     }
 
     /**
-     * Normaliza la lista de bonus del PDF (0..N): [{titulo, url}].
-     * - titulo: texto plano <= 80 (vacio = se descarta la fila).
-     * - url: cadena <= 500; se acepta URL absoluta (http/https) o ruta
-     *   relativa a la carpeta bonus/ del PDF (se sanea como nombre de archivo
-     *   plano, sin rutas ni traversal). Vacia = se descarta la fila.
-     * Las filas invalidas se descartan en silencio (lectura tolerante).
+     * Normaliza la lista de bonus del PDF (0..N). Filas v2 (4.7.0):
+     * - {archivo, titulo}  -> archivo de la libreria global (compartido);
+     *   `titulo` PUEDE ser vacio = usar el titulo por defecto DINAMICO del
+     *   catalogo (bonus.json).
+     * - {url, titulo}       -> URL externa (http/https); con titulo vacio el
+     *   congelado usa el nombre del archivo de la URL.
+     * Legado 4.6.18-4.6.20: url relativa a la carpeta bonus/ del PDF se
+     * reinterpreta como `archivo` de la libreria. Las filas invalidas se
+     * descartan en silencio (lectura tolerante).
      */
     private function config_bonus($valor)
     {
@@ -1576,26 +1831,26 @@ class PMU_Uploads
             if (!is_array($b)) {
                 continue;
             }
-            $titulo = trim((string)($b['titulo'] ?? ''));
-            if ($titulo === '') {
+            $titulo = substr(trim((string)($b['titulo'] ?? '')), 0, 80);
+            $archivo = basename(str_replace('\\', '/', (string)($b['archivo'] ?? '')));
+            $url = trim((string)($b['url'] ?? ''));
+            if ($archivo !== '' && $archivo !== '.' && $archivo !== '..' && $this->bonus_ext_valida($archivo)) {
+                $out[] = ['archivo' => $archivo, 'titulo' => $titulo];
                 continue;
             }
-            $titulo = substr($titulo, 0, 80);
-            $url = trim((string)($b['url'] ?? ''));
             if ($url === '') {
-                continue;
+                continue; // sin archivo ni url: fila inutil, se descarta
             }
             if (preg_match('#^https?://#i', $url)) {
-                $url = substr($url, 0, 500);
-            } else {
-                // Ruta relativa a bonus/ del PDF: nombre plano, sin traversal.
-                $base = basename(str_replace('\\', '/', $url));
-                if ($base === '' || $base === '.' || $base === '..') {
-                    continue;
-                }
-                $url = substr($base, 0, 128);
+                $out[] = ['url' => substr($url, 0, 500), 'titulo' => $titulo];
+                continue;
             }
-            $out[] = ['titulo' => $titulo, 'url' => $url];
+            // Legado: ruta relativa -> nombre de archivo de la libreria.
+            $base = basename($url);
+            if ($base === '' || $base === '.' || $base === '..' || !$this->bonus_ext_valida($base)) {
+                continue;
+            }
+            $out[] = ['archivo' => substr($base, 0, 128), 'titulo' => $titulo];
         }
         return array_values($out);
     }
