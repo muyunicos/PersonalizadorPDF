@@ -1,10 +1,9 @@
 # Indice de specs — Personalizador PDF
 
 > Jerarquia: `constitution` (.specify/memory/constitution.md) > `AGENTS.md` > resto.
-> Ultima actualizacion: 2026-10-03 (modulo en RC40 con 21 suites Node; documentacion de entorno del plugin alineada).
+> Ultima actualizacion: 2026-10-14 (v4.7.0: bonus v2 con biblioteca global; modulo en RC71).
 
 ## Activos (codigo completo, falta solo manual WP real)
-
 | Spec | Codigo | Pendiente manual | Docs normativos |
 |------|--------|------------------|-----------------|
 | [004-woocommerce-pdf-personalization](./004-woocommerce-pdf-personalization/) | 33/34 `[X]` (T031 verde) | T030 | spec, plan, data-model, contracts/, quickstart §1 (auto) |
@@ -14,32 +13,27 @@
 | [012-campos-consola](./012-campos-consola/) | **37/38 `[X]` + 1 `[~]`** (F0-F8, v4.4.0 + 4.6.3), **verificada en navegador real** (lab, sin Woo, por el shortcode `[pmu_personalizar]`): F5 (global CSS/JS), F6 (cargador subiendo 2 fotos de verdad) y F7 (motor con N imagenes + conciliacion que nunca bloquea). F8 (docs) cerrada en 4.6.3 | T031 (recorrido manual, `MANUAL-PENDIENTE-WP-REAL.md` §6b) + T017 `[~]` (export/import fuera de alcance) | spec + plan + research + data-model + contracts/campos.md (enmienda la v1: el campo pierde `tipo`, `nombre` != `titulo_cliente`) + contracts/campos-consola.md + quickstart + tasks. Editor en linea sin recarga, preview en iframe con el **mismo** montaje que la ficha (`assets/campo-montar.js`), buscar/filtrar/ordenar con columna de uso, 3 plantillas + marcar/duplicar/restaurar, CSS/JS global (uno del plugin, prefijado `[data-pmu-panel]`), cargador del comprador (`CargadorPMU`, N ranuras, `min` como validacion real, `subidas/`), y el Motor acepta N imagenes por grupo. **Export/import fuera de alcance** (D22) y **nunca bloquea la compra** (D17-D19) |
 | [013-consola-campos-ux](./013-consola-campos-ux/) | **12/12 `[X]` + 3 `[~]` fuera de alcance** (v4.4.0), verificada en navegador real | — | spec + plan + tasks. Mejora de uso de la pestana Campos, **sin tocar motor ni datos**. Orden por frecuencia de uso (lista primero, "Nuevo campo" como boton, estilos globales al pie y plegados), el editor sale de la tabla a un **drawer** que sirve para alta y edicion, la vista previa en **modal al ancho del panel del comprador** (la columna de una ficha de Woo, 324-538 px) que se abre **desde la lista sin entrar a editar**, y las acciones de la fila con **iconos del core** (el estado de plantilla va en `aria-pressed`). Enmienda de la 012 solo el *lugar* del global (FR-024 se conserva: se edita desde Campos, sin navegar) |
 | [014-comprador-invitado](./014-comprador-invitado/) | **7/7 `[X]`** (v4.4.0), verificada en navegador **sin sesion** | T031 (recorrido manual con Woo real; el lab no lo tiene) | spec + plan + tasks. El comprador puede ser un **invitado** (checkout sin cuenta, el default de WooCommerce): los 4 endpoints que exigian `current_user_can('read')` se autorizan ahora por la **cookie `pmu_sid`** (`sesion_del_comprador()`). El `sid` del POST se ignora, lo que cierra de paso un hueco que existia **tambien para los logueados** (el nonce va impreso en la ficha, o sea que es publico). Requisito del negocio decidido por el usuario el 2026-10-05 |
-| [015-tipo-y-overrides](./015-tipo-y-overrides/) | **especificada, 0 implementadas** | — | spec + plan + tasks (2026-10-05) |
+| [015-tipo-y-overrides](./015-tipo-y-overrides/) | **implementada (2026-10-05: commits 5f7c012 + 7187328 + cierre T020-T022, v4.5.0)**. Tipo en el campo + overrides que funcionan (settings como lista de referencias, fusion en orden hacia items[].overrides). Enmienda la FR-5.2 de la 004. Sin tocar modules/textmuy/ | -- | spec + plan + tasks (D1-D11) |
 | [016-editor-visual-fotos](./016-editor-visual-fotos/) | **F0-F4 + docs F5 implementadas (2026-10-10, v4.6.0)**; pendiente T022 (recorrido manual, §6c del MANUAL) | T022 + T023 (filtros, fuera de alcance) | spec + plan + tasks + contracts/selector-visual.md (enmienda del contrato 004 selector-pmu) + research + quickstart + checklist. Editor visual del modal de fotos: Cropper.js 1.6.2 vendoreado (`assets/vendor/cropper/`, nunca CDN), shell full-screen movil (camara, drop zone, focus trap, safe-area), pinch/doble tap/rotacion, badge en vivo, degradacion sin Cropper, tira del cargador con miniaturas reales + quitar/cambiar + restauracion al re-editar; puerta `tests/selector-contrato.test.js` |
+| [017-entrega-tema-muyunicos](./017-entrega-tema-muyunicos/) | **implementada (2026-10-12, v4.6.15, T000-T008 [X])**. Adaptador de entrega por el tema muyunicos (_urls_files protegida, idempotente, sin doble fila) + clase MuyUnicos_PDF_Generator | T009 (recorrido WP real) | spec + plan + tasks (D1-D6); fases entrega_tema + entrega_sin_tema |
 
 Recorrido manual unico (cubre T030 + T012 + T017 + T029 + T051 en una sesion):
 [MANUAL-PENDIENTE-WP-REAL.md](./MANUAL-PENDIENTE-WP-REAL.md).
 
 ## En especificacion (sin implementar)
-
 | Spec | Estado | Docs normativos |
 |------|--------|-----------------|
 | [009-galerias-sprite-unificado](./009-galerias-sprite-unificado/) | spec + clarificaciones (2026-09-30), checklist 16/16, `plan.md` + `tasks.md` (2026-10-01); pendiente implementacion | spec + plan + data-model + contracts/ + quickstart + tasks (continua el contrato de 006: certificacion de hoja para los 3 ambitos, generacion automatica de huecos, Google Fonts por familia unica) |
 | [010-api-wordpress](./010-api-wordpress/) | spec + contrato + `plan.md` (2026-10-01), decisiones D1-D5 cerradas; pendiente `data-model.md` + `quickstart.md` + `tasks.md` | spec + plan + contracts/api.md (endpoint unico `admin_post_pmu_api` con `op=`; raster por grupo, Application Passwords, `uploads/pmu/api/{job_id}/` con TTL 7 dias, sincrono; enmienda de constitucion 2.0.1 -> 2.1.0 declarada) |
-| [015-tipo-y-overrides](./015-tipo-y-overrides/) | spec + plan + tasks (2026-10-05), decisiones D1-D11 cerradas; **implementada (2026-10-05: commits `5f7c012` + `7187328` + cierre)**; **enmienda la FR-5.2 de la 004**, que se escribio como si funcionara y **nunca funciono** hasta aqui. Dos commits: (1) **Tipo** en el campo (`plantilla` -> `tipo` con `texto\|imagen\|opciones`), **Categorias fuera**, estrella de Plantilla fuera, tabla de 6 columnas; (2) **los overrides que funcionan**: `settings` pasa a ser solo lista de referencias, se parsea el `valor` de cada campo y se fusiona en orden hacia `items[].overrides`. **Hallazgo clave**: `modules/textmuy/` **ya esta listo** (`renderBatch` acepta `overrides` y hace `mergeDeep`), asi que la spec **no toca el modulo**. Y el Motor no renderiza texto (solo pega PNGs), asi que **la vista previa ES el PDF final**. 6 hallazgos verificados con archivo y linea en el spec |
-| [017-entrega-tema-muyunicos](./017-entrega-tema-muyunicos/) | spec + plan + tasks (2026-10-12), decisiones D1-D6 cerradas; **implementada (2026-10-12, v4.6.15)**. **Adaptador de entrega**: con el tema `muyunicos` activo el plugin publica el PDF en `_urls_files` del order item y el **tema** entrega (email + `mi-cuenta/descargas/` + admin del pedido), en vez de duplicar la capa. **Deteccion por capacidad** (`mu_update_item_files`), URL **protegida** por el endpoint propio (no `uploads/` crudo), **idempotente**, **sin doble fila**. Incluye la clase `MuyUnicos_PDF_Generator::generate()` (boton "Generar PDF" del pedido). Portable: sin tema, comportamiento propio intacto. Tests: fases `entrega_tema` (5 checks) + `entrega_sin_tema` |
 
 ## Archivados (trazabilidad, no implementar)
-
 | Ruta | Que es |
 |------|--------|
 | [_archivo/003-galeria-engine/](./_archivo/003-galeria-engine/) | Obsoleto 2026-09-16, superado por 006. Tareas referencian `engine/PMU_Uploads.php` (inexistente). |
 | [004-woocommerce-pdf-personalization/_archivo/](./004-woocommerce-pdf-personalization/_archivo/) | Diseno 2026-09-13 derogado por norma 2026-09-17 (data-model, quickstart, tasks viejos). |
 | [_archivo/007-layout-historico/](./_archivo/007-layout-historico/) | Spec historico `metadata.json` unica fuente, derogado por norma ex-008. |
 | [_archivo/auditoria-galeria-RC34-RC36.md](./_archivo/auditoria-galeria-RC34-RC36.md) | Auditoria galeria RC34–RC36 (ex `007-galeria-textmuy/research.md`). Nunca fue feature; sin backlog. Canonico: `modules/textmuy/AGENTS.md`. |
-
 ## Norma vigente (resumen)
-
 - `constitution` §I+§IV: mockup obligatorio 300x300 (salvo `preview_omisible`), sesion
   por item `tmp/sesion-{sid}/{item_key}/`, pool dedicado `img/{pdf}-{id}-{n}.png`,
   `preview_estado` (`ok`|`sin_vista`|`omisible`), multivinculo `_pmu_pdf_slugs` +

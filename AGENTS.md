@@ -152,6 +152,9 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   ├── campos_migracion.php ← CRUD de campos v3 (specs 012 + 015, corre en %TEMP%)
 │   ├── certificacion_hoja.php ← Certificación de `thumbs.sprite_firma` (ThumbEngine)
 │   ├── inventario_repo.php  ← Inventario de CODIGO del repo (genera docs/inventario-repo.md)
+│   ├── inventario_pmu.php   ← Inventario de DATOS de usuario (manifiesto uploads/pmu/)
+│   ├── estado_pmu.php       ← Estado del espejo uploads/pmu (solo lectura)
+│   ├── sin_lectura.php      ← LEER no escribe catalogos (RC47)
 │   ├── campos-contrato.test.js ← Contrato del montaje de campos + cargador (spec 012)
 │   ├── conciliacion.js      ← `PURO.conciliarGrupo` (spec 012, D17-D19)
 │   ├── expected_muestra.json
@@ -592,6 +595,10 @@ node tests/mockup-contrato.test.js    # Cableado nucleo-consumidores + comportam
                               # nucleo de render (spec 011): debe decir "CONTRATO OK (N checks)"
                               # ATRAPA: miembro de PMUMockup que el editor/ficha llaman y no
                               # existe; orden de dibujo asincrono; HTML mal formado en jQuery.
+node tests/validez.js         # Expresiones de validez PDFxproducto (spec 005): "VALIDEZ OK"
+php tests/sin_lectura.php     # LEER no escribe catalogos (RC47): "SIN_LECTURA OK"
+php tests/estado_pmu.php      # Estado del espejo uploads/pmu (solo lectura, contra datos reales)
+php tests/inventario_pmu.php --resumen  # Manifiesto de DATOS de usuario (hermano de inventario_repo)
 php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
                               # setup | guardar_ajax | guardar_vacio | procesar |
                               # rechazo | imagen_adjunto [mal] |

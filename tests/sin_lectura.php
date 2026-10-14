@@ -16,6 +16,8 @@ if (PHP_SAPI !== 'cli') {
  * Ahora leer devuelve el catalogo vacio + aviso SIN tocar disco, y la siembra
  * queda en los caminos de escritura (alta/baja/editar).
  *
+ * Ambito de prueba: `img` (catalogo vigente con sprite certificado).
+ *
  * Uso: php tests/sin_lectura.php
  */
 
@@ -86,7 +88,7 @@ check('presets vacios', ($inv['presets'] ?? null) === []);
 check('imagenes vacias', ($inv['imagenes'] ?? null) === []);
 check('fuentes vacias', ($inv['fuentes'] ?? null) === []);
 check('NO se creo uploads/pmu', !is_dir($pmu));
-foreach (['fonts', 'img', 'tm-presets', 'mockups'] as $ambito) {
+foreach (['fonts', 'img', 'tm-presets'] as $ambito) {
     $motor->listar($ambito);
     check('listar(' . $ambito . ') no escribe', count(archivos_de($pmu)) === $antes,
         count(archivos_de($pmu)) . ' archivos');
@@ -99,19 +101,19 @@ $png = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pd_sl_' . getmypid() . '.png'
 file_put_contents($png, base64_decode(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
 ));
-$res = $motor->alta('mockups', 'Alta de prueba', 'varios', [
+$res = $motor->alta('img', 'Alta de prueba', 'varios', [
     'name' => 'prueba.png', 'type' => 'image/png', 'tmp_name' => $png,
     'error' => UPLOAD_ERR_OK, 'size' => (int)@filesize($png),
 ], '');
 @unlink($png);
 $id = isset($res['id']) ? (int)$res['id'] : 0;
 check('alta() devolvio id', $id >= 1, 'id=' . $id);
-check('se creo mockups/mockups.json', is_file($pmu . '/mockups/mockups.json'));
-check('el catalogo tiene el item', count($motor->listar('mockups')['items']) === 1);
+check('se creo img/img.json', is_file($pmu . '/img/img.json'));
+check('el catalogo tiene el item', count($motor->listar('img')['items']) === 1);
 
 echo "\n== 4. Limpieza ==\n";
-$motor->baja('mockups', $id, $res['nombre']);
-check('baja deja el catalogo sin items', count($motor->listar('mockups')['items']) === 0);
+$motor->baja('img', $id, $res['nombre']);
+check('baja deja el catalogo sin items', count($motor->listar('img')['items']) === 0);
 
 $limpiar($base);
 echo "\n";

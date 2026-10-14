@@ -1940,6 +1940,7 @@ class Personalizador_PDF_Plugin
                         }
                     } elseif ($url !== '' && !preg_match('#^https?://#i', $url)) {
                         // Legado 4.6.18-4.6.20: relativa a bonus/ del PDF.
+                        // LIMPIEZA 2026-10-14: retirar con bonus_migrar_legado().
                         if ($lib === null) {
                             $lib = $this->pmu_uploads()->bonus_lista();
                         }

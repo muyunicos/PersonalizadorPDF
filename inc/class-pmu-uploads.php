@@ -405,6 +405,12 @@ class PMU_Uploads
      * de cada config (url relativa o absoluta vieja -> `archivo`).
      * Idempotente: sin carpetas viejas no hace nada; un archivo ya global no
      * se pisa (el viejo queda con sufijo -migr-N).
+     *
+     * LIMPIEZA 2026-10-14: a retirar cuando no queden sitios en 4.6.18-4.6.20
+     * (el one-shot ya cumplio en los migrados; los nuevos nunca generan el
+     * layout viejo). Al retirarla, quitar tambien `$bonus_migrado`, la llamada
+     * en `dir_bonus()`, la rama legado de `congelar_bonus_item()` y la siembra
+     * legado de la fase `bonus` del arnes.
      */
     private function bonus_migrar_legado()
     {
