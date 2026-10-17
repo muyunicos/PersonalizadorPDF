@@ -45,15 +45,21 @@
      */
     function acotar(capa, lienzo) {
         var lado = numero(lienzo, LIENZO);
-        var c = {
-            tipo: capa.tipo,
-            ref: capa.ref,
-            x: numero(capa.x), y: numero(capa.y),
-            w: Math.max(1, numero(capa.w, 1)),
-            h: Math.max(1, numero(capa.h, 1)),
-            rot: acotarNumero(numero(capa.rot), -360, 360),
-            sesgo: acotarNumero(numero(capa.sesgo), -1, 1)
-        };
+        var c = {};
+        // Conserva los campos extra de la capa (nombre, filtros, modo, oculta,
+        // bloqueada, envoltura...): el acotado ajusta SOLO la geometria. Antes
+        // se reconstruia el objeto con 8 claves y toda la recarga del editor
+        // perdia los ajustes (bug real: nombre/filtros/oculta no sobrevivian
+        // normalizarCapa al abrir la consola).
+        Object.keys(capa || {}).forEach(function (k) { c[k] = capa[k]; });
+        c.tipo = capa.tipo;
+        c.ref = capa.ref;
+        c.x = numero(capa.x);
+        c.y = numero(capa.y);
+        c.w = Math.max(1, numero(capa.w, 1));
+        c.h = Math.max(1, numero(capa.h, 1));
+        c.rot = acotarNumero(numero(capa.rot), -360, 360);
+        c.sesgo = acotarNumero(numero(capa.sesgo), -1, 1);
         if (c.w > lado) { c.w = lado; }
         if (c.h > lado) { c.h = lado; }
         c.x = acotarNumero(c.x, 0, lado - c.w);

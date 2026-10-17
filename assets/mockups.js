@@ -51,7 +51,9 @@ jQuery(function ($) {
         redo: [],
         avisoCapa: null,
         arrastre: null,
-        guias: []
+        guias: [],
+        // Caché de envolturas pedidas bajo demanda: clave `{gid}#{n}`.
+        envs: {}
     };
 
     function normalizarMockup(m) {
@@ -105,7 +107,41 @@ jQuery(function ($) {
     function contexto() {
         // Spec 011 (T032): el catalogo `mockups` es la unica fuente de
         // imagenes; ya no hay `fotos` por PDF.
-        return { imagenes: datos.imagenes || [], grupos: grupos };
+        // Envolturas (PowerClip): la pagina solo trae las de refs usadas
+        // (ficha) o las claves (editor); lo demas llega bajo demanda y vive
+        // en estado.envs. El nucleo recibe el MISMO contrato `grupos[].envs`.
+        var gs = grupos.map(function (g) {
+            var copia = {};
+            Object.keys(g).forEach(function (k) { copia[k] = g[k]; });
+            var envs = {};
+            Object.keys(g.envs || {}).forEach(function (k) { envs[k] = g.envs[k]; });
+            Object.keys(estado.envs).forEach(function (clave) {
+                var partes = clave.split('#');
+                if (partes[0] === String(g.id) && estado.envs[clave]) {
+                    envs[partes[1]] = estado.envs[clave];
+                }
+            });
+            copia.envs = Object.keys(envs).length ? envs : null;
+            return copia;
+        });
+        return { imagenes: datos.imagenes || [], grupos: gs };
+    }
+
+    /**
+     * Disponibilidad de la envoltura de un ref segun las CLAVES del analisis
+     * (`datos.envolturas`): `disponible` = existe envolturas.json (false =
+     * re-analizar); `hay` = esta clave tiene clip en el PDF.
+     */
+    function infoEnvoltura(ref) {
+        var ev = datos.envolturas || {};
+        var partes = String(ref || '').split('#');
+        var n = parseInt(partes[1], 10) || 1;
+        var claves = (ev.claves || {})[partes[0]] || [];
+        return {
+            disponible: !!ev.disponible,
+            n: n,
+            hay: !!ev.disponible && claves.map(String).indexOf(String(n)) !== -1
+        };
     }
     /** Nombre legible de una capa (usado en lista, etiqueta y aviso). */
     function nombreCapa(c) {
@@ -833,6 +869,23 @@ jQuery(function ($) {
             html += '<label>' + f[1] + ' <input type="number" class="ec-mk-geo" data-geo="' + f[0]
                 + '" step="' + f[2] + '" value="' + (Math.round((c[f[0]] || 0) * 100) / 100) + '"></label>';
         });
+        if (c.tipo === 'placeholder') {
+            // Envoltura (PowerClip del PDF): recorta la capa al contenedor
+            // vectorial del hueco. La pagina solo trae CLAVES: el toggle se
+            // habilita segun el analisis y la geometria se pide al marcar.
+            var infoEnv = infoEnvoltura(c.ref);
+            html += '<label class="ec-mk-ancho"><input type="checkbox" class="ec-mk-envoltura"'
+                + (c.envoltura ? ' checked' : '') + (infoEnv.hay ? '' : ' disabled')
+                + '> Envoltura del PDF (PowerClip)</label>';
+            if (!infoEnv.hay) {
+                html += infoEnv.disponible
+                    ? '<p class="description">Este placeholder no esta recortado en ninguna'
+                        + ' forma del PDF (sin envoltura).</p>'
+                    : '<p class="description">Sin envolturas analizadas: si el PDF recorta'
+                        + ' placeholders dentro de formas (PowerClip), pulsa "Re-analizar"'
+                        + ' para extraerlas.</p>';
+            }
+        }
         html += '<div class="ec-mk-seccion">Ajustes (solo el mockup)</div>';
         AJUSTES.forEach(function (a) {
             var v = valorAjuste(c, a.k);
@@ -1298,6 +1351,61 @@ jQuery(function ($) {
         sinGuardar();
         refrescar();
     });
+
+    /* Envoltura (PowerClip): on/off por capa placeholder. La geometria NO
+       viaja en la pagina: al marcar se pide bajo demanda (op=envoltura), se
+       cachea en la sesion y el nucleo la recibe via contexto(). */
+    $ed.on('change', '.ec-mk-envoltura', function () {
+        var c = capa();
+        if (!c) { return; }
+        var activar = this.checked === true;
+        c.envoltura = activar;
+        marcarPaso();
+        sinGuardar();
+        if (!activar || R.envolturaDeRef(c.ref, contexto())) {
+            refrescar();
+            return;
+        }
+        pedirEnvoltura(c);
+    });
+
+    /** Pide la geometria de la envoltura de la capa y refresca. Sin ella (o
+        sin red) la capa vuelve a sin envoltura, con aviso visible. */
+    function pedirEnvoltura(c) {
+        var ref = c.ref;
+        var gid = String(ref).split('#')[0];
+        var info = infoEnvoltura(ref);
+        if (!apiMotor || !info.hay) {
+            c.envoltura = false;
+            $ed.find('.ec-mk-alertas').text('No hay envoltura analizada para este placeholder.');
+            refrescar();
+            return;
+        }
+        apiMotor('envoltura', { pdf: datos.pdf, gid: gid, n: info.n })
+            .then(function (j) {
+                var env = j && j.data ? j.data.envoltura : null;
+                if (env) {
+                    estado.envs[gid + '#' + info.n] = env;
+                }
+                var actual = capa();
+                if (actual && actual.ref === ref) {
+                    if (!env) {
+                        actual.envoltura = false;
+                        $ed.find('.ec-mk-alertas').text(
+                            'El analisis no conserva la envoltura de este placeholder: se quito el recorte.');
+                    }
+                    refrescar();
+                }
+            })
+            .catch(function (e) {
+                var actual = capa();
+                if (actual && actual.ref === ref) { actual.envoltura = false; }
+                var msg = (e instanceof Error && e.message)
+                    ? e.message : 'No se pudo pedir la envoltura al servidor.';
+                $ed.find('.ec-mk-alertas').text(msg);
+                refrescar();
+            });
+    }
 
     /* Recursos: miniaturas del catalogo y placeholders (un clic = capa). */
     $ed.on('click', '.ec-mk-mini', function () {

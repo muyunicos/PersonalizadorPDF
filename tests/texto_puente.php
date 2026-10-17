@@ -21,7 +21,7 @@ if (PHP_SAPI !== 'cli') {
  *    validez | validez_admin | validez_admin_mal | ficha* | vista_previa* |
  *    carrito | pool* | overrides | sesion | conciliacion | completados | mockups* |
  *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
- *    reanalizar | borrado | campo_global | campo_subida | pool_concurrente`
+ *    reanalizar | envoltura_op | borrado | campo_global | campo_subida | pool_concurrente`
  */
 
 $fase = isset($argv[1]) ? $argv[1] : 'setup';
@@ -315,10 +315,35 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && ($json['data']['ec_pdf'] ?? '') === 'muestra.pdf');
             $analisis_r = json_decode(file_get_contents($uploads . '/pdfs/muestra/analisis.json'), true);
             check('grupos hex detectados', array_column($analisis_r['grupos'], 'id') === ['0000FF', 'FF0000']);
+            check('analisis sin envs (formato original)', !isset($analisis_r['grupos'][0]['envs']));
+            $env_r = json_decode((string)@file_get_contents($uploads . '/pdfs/muestra/envolturas.json'), true);
+            check('envolturas.json regenerado con el PowerClip', is_array($env_r)
+                && !empty($env_r['grupos']['0000FF']['2']['subs']));
             check('config preservada al reanalizar', $p->motor_para_tests()->leer_config('muestra') === $GLOBALS['test_config_previa']);
             $archivos_r = array_values(array_diff(scandir($uploads . '/pdfs/muestra'), ['.', '..']));
             sort($archivos_r);
-            check('solo PDF, analisis y config', $archivos_r === ['analisis.json', 'config.json', 'muestra.pdf']);
+            check('solo PDF, analisis, config y envolturas', $archivos_r === ['analisis.json', 'config.json', 'envolturas.json', 'muestra.pdf']);
+            break;
+        case 'envoltura_op':
+            // Lazy: sin archivo = re-analizar; con archivo = claves + la geo
+            // pedida via op=envoltura (y null para claves sin clip).
+            check('sin archivo: disponible=false',
+                ($GLOBALS['eo_ausente']['claves']['disponible'] ?? true) === false);
+            check('sin archivo: sin geometria',
+                ($GLOBALS['eo_ausente']['datos']['archivado'] ?? true) === false
+                && ($GLOBALS['eo_ausente']['datos']['envoltura'] ?? null) === null);
+            check('con archivo: claves 0000FF => [1]',
+                ($GLOBALS['eo_con']['claves']['claves']['0000FF'] ?? null) === ['1']);
+            check('con archivo: clave sin clip -> archivado sin envoltura',
+                ($GLOBALS['eo_con']['otra']['archivado'] ?? false) === true
+                && ($GLOBALS['eo_con']['otra']['envoltura'] ?? null) === null);
+            check('endpoint: success con la geometria', is_array($json)
+                && ($json['success'] ?? false) === true
+                && ($json['data']['archivado'] ?? false) === true
+                // Comparacion numerica: json_encode escribe 1.0 como 1 y el
+                // decode devuelve enteros (no dependir del tipo float).
+                && ($json['data']['envoltura']['subs'][0]['m'] ?? null) == [0, 1],
+                'json=' . json_encode($json));
             break;
         case 'mockups_guardar':
             // T008: guardado parcial del editor de mockups.
@@ -378,6 +403,12 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('nombre/oculta/bloqueada persistidos', is_array($mc)
                 && ($capas[2]['nombre'] ?? '') === 'Marco' && ($capas[2]['oculta'] ?? false) === true
                 && ($capas[2]['bloqueada'] ?? false) === true);
+            check('envoltura persistida en placeholder', is_array($mc)
+                && ($capas[2]['envoltura'] ?? false) === true);
+            check('envoltura forzada a false en img', is_array($mc)
+                && ($capas[0]['envoltura'] ?? true) === false);
+            check('envoltura default false sin declarar', is_array($mc)
+                && ($capas[3]['envoltura'] ?? true) === false);
             check('defaults de los campos nuevos ausentes', is_array($mc)
                 && ($capas[0]['modo'] ?? '') === 'normal' && ($capas[0]['nombre'] ?? '') === ''
                 && ($capas[0]['oculta'] ?? true) === false && ($capas[0]['bloqueada'] ?? true) === false);
@@ -412,6 +443,18 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && $mp['cfg']['mockups'][0]['capas'][1]['ref'] === '0000FF#1');
             check('ajustes de la capa persistidos para la ficha', is_array($mp)
                 && (array)($mp['cfg']['mockups'][0]['capas'][1]['filtros'] ?? []) === ['gama' => 0, 'opacidad' => 90]);
+            check('ficha: geo embebida SOLO del ref usado (0000FF#1)', is_array($mp)
+                && ($mp['render']['grupos'][0]['id'] ?? '') === '0000FF'
+                && !empty($mp['render']['grupos'][0]['envs']['1']['subs'])
+                && ($mp['render']['grupos'][1]['id'] ?? '') === 'FF0000'
+                && array_key_exists('envs', (array)($mp['render']['grupos'][1] ?? []))
+                && $mp['render']['grupos'][1]['envs'] === null);
+            check('ficha: claves de envolturas disponibles para el editor', is_array($mp)
+                && ($mp['render']['envolturas']['disponible'] ?? false) === true
+                && ($mp['render']['envolturas']['claves']['0000FF'] ?? null) === ['1']
+                && ($mp['render']['envolturas']['claves']['FF0000'] ?? null) === ['1']);
+            check('envoltura persistida en la capa de la ficha', is_array($mp)
+                && ($mp['cfg']['mockups'][0]['capas'][1]['envoltura'] ?? false) === true);
             check('omisible guardado desde el editor', is_array($mp)
                 && $mp['cfg']['preview_omisible'] === true);
             check('el resto del config intacto', is_array($mp)
@@ -2465,6 +2508,38 @@ switch ($fase) {
             $p->handle_reanalizar();
         }
         break;
+    case 'envoltura_op':
+        // Lazy de envolturas (PowerClip): op=envoltura del endpoint motor.
+        // 1) sin archivo -> disponible=false; 2) con archivo -> claves y
+        // geometria; 3) el endpoint devuelve la de gid#n (exit en JSON).
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        $motor_eo = $p->motor_para_tests();
+        $GLOBALS['eo_ausente'] = [
+            'claves' => $motor_eo->envoltura_claves('muestra'),
+            'datos' => $motor_eo->envoltura_datos('muestra', '0000FF', 1),
+        ];
+        \ExtractCorel\Engine\Metadata::guardar([
+            'version' => 1,
+            'pdf' => 'muestra',
+            'creado' => '2026-10-17T00:00:00Z',
+            'grupos' => ['0000FF' => ['1' => [
+                'par' => 0,
+                'subs' => [['m' => [0.0, 1.0],
+                    's' => [['l', 1.0, 1.0], ['l', 1.0, 0.0], ['l', 0.0, 0.0]], 'c' => 1]],
+            ]]],
+        ], $motor_eo->ruta_envolturas('muestra'));
+        $GLOBALS['eo_con'] = [
+            'claves' => $motor_eo->envoltura_claves('muestra'),
+            'otra' => $motor_eo->envoltura_datos('muestra', 'FF0000', 1),
+        ];
+        $_POST = ['op' => 'envoltura', 'pdf' => 'muestra', 'gid' => '0000FF', 'n' => 1, '_wpnonce' => 'nonce'];
+        $_REQUEST = $_POST;
+        $motor_eo->handle_request(); // exit en wp_send_json_success
+        break;
     case 'sesion':
         // T003/T017: ciclo completo del item (draft -> pool -> webp -> promover
         // -> staging -> promover_order) + TTL, borrado quirurgico y estados.
@@ -2976,7 +3051,27 @@ switch ($fase) {
             'productos' => [7],
             'placeholders' => ['0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow',
                 'value' => 'Ana', 'settings' => '', 'repetir' => true]],
+            // El mockup usa SOLO 0000FF#1 con envoltura: la ficha debe embeber
+            // esa geo y NO la de FF0000 aunque el archivo la tenga (lazy).
+            'mockups' => [[
+                'id' => 'fiesta', 'titulo' => 'Fiesta',
+                'capas' => [
+                    ['tipo' => 'img', 'ref' => 'mock:3', 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300],
+                    ['tipo' => 'placeholder', 'ref' => '0000FF#1', 'x' => 90, 'y' => 60,
+                        'w' => 110, 'h' => 180, 'envoltura' => true],
+                ],
+            ]],
         ]);
+        // envolturas.json con geo de DOS grupos (solo la usada viaja a la ficha).
+        \ExtractCorel\Engine\Metadata::guardar([
+            'version' => 1, 'pdf' => 'muestra', 'creado' => '2026-10-17T00:00:00Z',
+            'grupos' => [
+                '0000FF' => ['1' => ['par' => 0, 'subs' => [['m' => [0.1, 0.2],
+                    's' => [['l', 0.9, 0.2], ['l', 0.9, 0.8], ['l', 0.1, 0.8]], 'c' => 1]]]],
+                'FF0000' => ['1' => ['par' => 1, 'subs' => [['m' => [0.0, 0.0],
+                    's' => [['l', 1.0, 0.0], ['l', 1.0, 1.0], ['l', 0.0, 1.0]], 'c' => 1]]]],
+            ],
+        ], $motor_mp->ruta_envolturas('muestra'));
         $previo_mp = $motor_mp->leer_config('muestra');
         try {
             $nucleo = [];
@@ -2995,7 +3090,8 @@ switch ($fase) {
                     'capas' => [
                         ['tipo' => 'img', 'ref' => 'mock:3', 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300],
                         ['tipo' => 'placeholder', 'ref' => '0000FF#1', 'x' => 90, 'y' => 60,
-                            'w' => 110, 'h' => 180, 'filtros' => ['gama' => 0, 'opacidad' => 90]],
+                            'w' => 110, 'h' => 180, 'filtros' => ['gama' => 0, 'opacidad' => 90],
+                            'envoltura' => true],
                     ],
                 ]])),
                 '_wpnonce' => 'nonce',
@@ -3035,13 +3131,13 @@ switch ($fase) {
                 'capas' => [
                     // 0: ref plano legado (compatibilidad con mockups previos).
                     ['tipo' => 'img', 'ref' => 'fondo.png', 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300,
-                        'filtros' => ['brillo' => 100]],
+                        'filtros' => ['brillo' => 100], 'envoltura' => true],
                     // 1: imagen del catalogo por id numerico.
                     ['tipo' => 'img', 'ref' => 'mock:7', 'x' => 10, 'y' => 10, 'w' => 50, 'h' => 50],
                     // 2: ajustes ampliados + campos nuevos.
                     ['tipo' => 'placeholder', 'ref' => '0000FF#1', 'x' => 5, 'y' => 5, 'w' => 40, 'h' => 60,
                         'rot' => 400, 'sesgo' => 9, 'nombre' => 'Marco', 'modo' => 'multiply',
-                        'oculta' => true, 'bloqueada' => true,
+                        'oculta' => true, 'bloqueada' => true, 'envoltura' => true,
                         'filtros' => ['gama' => 0, 'opacidad' => 80, 'desenfoque' => 4.5, 'tono' => -30, 'xxx' => 1]],
                     // 3: fuera de rango -> clamp; modo invalido -> normal.
                     ['tipo' => 'img', 'ref' => 'pdf:marco.png', 'x' => 0, 'y' => 0, 'w' => 10, 'h' => 10,

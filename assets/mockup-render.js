@@ -194,6 +194,71 @@
     }
 
 
+    /* ============ Envolturas (PowerClip) ============ */
+
+    /**
+     * Envoltura (clip vectorial del PDF, p.ej. PowerClip de Corel) de una
+     * capa placeholder. `grupos` trae `envs` por instancia del analisis
+     * (`{n: {par, subs}}`, normalizado 0..1 con v en espacio canvas). El
+     * `ref` plano ({grupo}) usa la instancia #1. Sin envoltura -> null: la
+     * composicion degrada al rectangulo (nunca falla).
+     */
+    function envolturaDeRef(ref, grupos) {
+        var partes = String(ref || '').split('#');
+        var n = parseInt(partes[1], 10);
+        if (isNaN(n) || n < 1) { n = 1; }
+        var env = null;
+        (grupos || []).forEach(function (g) {
+            if (g && String(g.id) === partes[0] && g.envs) {
+                var cand = g.envs[String(n)];
+                if (cand && cand.subs && cand.subs.length) { env = cand; }
+            }
+        });
+        return env;
+    }
+
+    /**
+     * Comandos de dibujo de la envoltura mapeados al rect de la capa (puro:
+     * testeable con node). `env.subs[].m` es el origen y los segmentos van
+     * planos: ['l',x,y] / ['c',x1,y1,x2,y2,x3,y3]; `c` cierra la subruta.
+     * Salida: [['M',x,y], ['L',x,y], ['C',...], ['Z'], ...].
+     */
+    function comandosEnvoltura(env, caja) {
+        var c = caja || { x: 0, y: 0, w: LIENZO, h: LIENZO };
+        var out = [];
+        if (!env || !env.subs) { return out; }
+        function px(u) { return c.x + numero(u) * c.w; }
+        function py(v) { return c.y + numero(v) * c.h; }
+        env.subs.forEach(function (sub) {
+            if (!sub || !sub.m) { return; }
+            out.push(['M', px(sub.m[0]), py(sub.m[1])]);
+            (sub.s || []).forEach(function (seg) {
+                if (!seg) { return; }
+                if (seg[0] === 'l') {
+                    out.push(['L', px(seg[1]), py(seg[2])]);
+                } else if (seg[0] === 'c') {
+                    out.push(['C', px(seg[1]), py(seg[2]), px(seg[3]), py(seg[4]), px(seg[5]), py(seg[6])]);
+                }
+            });
+            if (sub.c) { out.push(['Z']); }
+        });
+        return out;
+    }
+
+    /**
+     * Traza los comandos sobre el ctx (via canvas path, sin Path2D: tambien
+     * funciona con el ctx falso de los tests). Llamar dentro de save/restore.
+     */
+    function trazarEnvoltura(ctx, comandos) {
+        ctx.beginPath();
+        comandos.forEach(function (k) {
+            if (k[0] === 'M') { ctx.moveTo(k[1], k[2]); }
+            else if (k[0] === 'L') { ctx.lineTo(k[1], k[2]); }
+            else if (k[0] === 'C') { ctx.bezierCurveTo(k[1], k[2], k[3], k[4], k[5], k[6]); }
+            else if (k[0] === 'Z') { ctx.closePath(); }
+        });
+    }
+
     /* ============ Composicion ============ */
 
     /** Dibuja la caja neutra de encuadre (recurso ausente o sin render). */
@@ -262,12 +327,17 @@
                 }
                 var listo = recurso && recurso.url ? imagen(recurso.url) : Promise.resolve(null);
                 return listo.then(function (img) {
+                    var env = null;
+                    if (capa.tipo === 'placeholder' && capa.envoltura && op.contexto) {
+                        env = envolturaDeRef(capa.ref, op.contexto.grupos);
+                    }
                     compuestas.push({
                         indice: indice,
                         capa: capa,
                         caja: caja,
                         img: img,
-                        recurso: recurso || null
+                        recurso: recurso || null,
+                        env: env
                     });
                 });
             });
@@ -291,6 +361,16 @@
                 }
                 if (numero(c.sesgo) !== 0) {
                     ctx.transform(1, 0, acotar(numero(c.sesgo), -1, 1), 1, 0, 0);
+                }
+                // Envoltura (PowerClip): el clip recorta la imagen Y la caja
+                // neutra al contenedor vectorial del PDF. Sin envoltura
+                // disponible no se recorta nada (degradacion silenciosa: el
+                // editor ya informa la causa en el panel de propiedades).
+                if (item.env) {
+                    trazarEnvoltura(ctx, comandosEnvoltura(item.env, {
+                        x: -caja.w / 2, y: -caja.h / 2, w: caja.w, h: caja.h
+                    }));
+                    ctx.clip(item.env.par ? 'evenodd' : 'nonzero');
                 }
                 if (item.img && item.img.img) {
                     var medidas = item.recurso && item.recurso.w && item.recurso.h
@@ -323,7 +403,10 @@
         urlDeImagen: urlDeImagen,
         imagen: imagen,
         limpiarCache: limpiarCache,
-        cajaNeutra: cajaNeutra
+        cajaNeutra: cajaNeutra,
+        envolturaDeRef: envolturaDeRef,
+        comandosEnvoltura: comandosEnvoltura,
+        trazarEnvoltura: trazarEnvoltura
     };
 }));
 

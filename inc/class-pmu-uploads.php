@@ -147,6 +147,77 @@ class PMU_Uploads
     }
 
     /**
+     * Envolturas (PowerClip) del producto: pdfs/{nombre}/envolturas.json.
+     * Archivo DERIVADO del analisis (no vive en analisis.json): se regenera
+     * al Subir/Re-analizar y se lee bajo demanda (editor via op=envoltura;
+     * ficha: solo las usadas, embebidas por datos_pdf_render). Ausente =
+     * PDF analizado con una version sin este soporte (Re-analizar).
+     */
+    public function ruta_envolturas($nombre)
+    {
+        $nombre = $this->nombre_seguro($nombre, 'ruta_envolturas');
+        return $this->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . $nombre
+            . DIRECTORY_SEPARATOR . 'envolturas.json';
+    }
+
+    /**
+     * Lectura tolerante de envolturas.json: array del archivo o null si no
+     * existe / no es legible / es invalido. Nunca lanza ni escribe.
+     */
+    public function leer_envolturas($pdf)
+    {
+        $ruta = $this->ruta_envolturas($pdf);
+        if (!is_file($ruta)) {
+            return null;
+        }
+        $raw = @file_get_contents($ruta);
+        $dec = $raw === false ? null : json_decode($raw, true);
+        if (!is_array($dec) || !isset($dec['grupos']) || !is_array($dec['grupos'])) {
+            return null;
+        }
+        return $dec;
+    }
+
+    /**
+     * Claves de envoltura por grupo (`{gid: [n, ...]}`) + bandera `disponible`
+     * (existe el archivo). Solo CLAVES: la geometria viaja bajo demanda.
+     */
+    public function envoltura_claves($pdf)
+    {
+        $datos = $this->leer_envolturas($pdf);
+        $claves = [];
+        if ($datos !== null) {
+            foreach ((array)$datos['grupos'] as $gid => $envs) {
+                $ks = [];
+                foreach ((array)$envs as $n => $e) {
+                    if (is_array($e)) {
+                        $ks[] = (string)$n;
+                    }
+                }
+                if ($ks) {
+                    $claves[(string)$gid] = $ks;
+                }
+            }
+        }
+        return ['disponible' => $datos !== null, 'claves' => $claves];
+    }
+
+    /**
+     * Geometria de UNA envoltura (`gid#n`): `{archivado, envoltura}`.
+     * `archivado` = existe el archivo; `envoltura` = la geometria o null.
+     */
+    public function envoltura_datos($pdf, $gid, $n)
+    {
+        $datos = $this->leer_envolturas($pdf);
+        $env = null;
+        if ($datos !== null) {
+            $cand = $datos['grupos'][(string)$gid][(string)(int)$n] ?? null;
+            $env = is_array($cand) ? $cand : null;
+        }
+        return ['archivado' => $datos !== null, 'envoltura' => $env];
+    }
+
+    /**
      * Carpeta de fotos de mockup del admin: uploads/pmu/pdfs/{nombre}/mockups/
      * (spec 004, T004). Ambito de datos del producto, SIN catalogo ni sprite
      * (a diferencia de fonts/img/tm-presets): las fotos reutilizables viven en
@@ -1652,6 +1723,9 @@ class PMU_Uploads
                     'nombre' => substr(trim((string)($c['nombre'] ?? '')), 0, 60),
                     'oculta' => !empty($c['oculta']),
                     'bloqueada' => !empty($c['bloqueada']),
+                    // Envoltura (PowerClip del PDF): solo tiene sentido en capas
+                    // placeholder; en `img` se fuerza a false.
+                    'envoltura' => $tipo === 'placeholder' && !empty($c['envoltura']),
                 ];
             }
             if ($id === '' || isset($out[$id])) {
@@ -2554,7 +2628,7 @@ return $destino;
             wp_send_json_error('motor:op:falta');
         }
         $op = (string)$_POST['op'];
-        if (!in_array($op, ['listar', 'alta', 'baja', 'editar', 'sprite', 'miniatura'], true)) {
+        if (!in_array($op, ['listar', 'alta', 'baja', 'editar', 'sprite', 'miniatura', 'envoltura'], true)) {
             wp_send_json_error('motor:op:invalido:' . $op);
         }
         try {
@@ -2625,6 +2699,17 @@ return $destino;
                         wp_send_json_error('motor:miniatura:falta:archivo');
                     }
                     wp_send_json_success($this->miniatura($nombre, $subida));
+                    break;
+                case 'envoltura':
+                    // Lectura ON-DEMAND de la geometria de UNA envoltura
+                    // (PowerClip) para el editor de mockups. Solo lectura.
+                    $pdf = (string)$this->param(['pdf', 'nombre'], '');
+                    $gid = strtoupper(trim((string)$this->param(['gid', 'grupo'], '')));
+                    $n = (int)$this->param(['n'], 0);
+                    if ($pdf === '' || preg_match('/^[0-9A-F]{6}$/', $gid) !== 1 || $n < 1) {
+                        wp_send_json_error('motor:envoltura:falta:pdf|gid|n');
+                    }
+                    wp_send_json_success($this->envoltura_datos($pdf, $gid, $n));
                     break;
             }
         } catch (Exception $e) {

@@ -1110,7 +1110,7 @@ class Personalizador_PDF_Plugin
     public function datos_pdf_render($nombre)
     {
         $vacio = ['pdf' => '', 'grupos' => [], 'fotos' => [], 'mockups' => [], 'preview_omisible' => false,
-            'imagenes' => []];
+            'imagenes' => [], 'envolturas' => ['disponible' => false, 'claves' => []]];
         try {
             $nombre = $this->pmu_uploads()->nombre_seguro($nombre, 'ficha_render');
             $vista = $this->vista_grupos($nombre);
@@ -1124,10 +1124,27 @@ class Personalizador_PDF_Plugin
                     $repetir[(string)$gid] = true;
                 }
             }
+            // Envolturas (PowerClip): SOLO CLAVES para que el editor sepa que
+            // toggles habilitar (la geometria la pide bajo demanda via
+            // op=envoltura) y geometria embebida SOLO de los refs usados con
+            // `envoltura: true` en los mockups guardados: asi la ficha del
+            // comprador compone con clip sin exponer un endpoint publico.
+            $envsInfo = $this->pmu_uploads()->envoltura_claves($nombre);
+            $usadas = $this->envolturas_usadas((array)($config['mockups'] ?? []));
             $grupos = [];
             foreach ((array)($vista['grupos'] ?? []) as $g) {
+                $gid = (string)$g['id'];
+                $envsGrupo = [];
+                if (!empty($envsInfo['disponible'])) {
+                    foreach (array_keys((array)($usadas[$gid] ?? [])) as $n) {
+                        $env = $this->pmu_uploads()->envoltura_datos($nombre, $gid, (int)$n);
+                        if (!empty($env['envoltura'])) {
+                            $envsGrupo[(string)$n] = $env['envoltura'];
+                        }
+                    }
+                }
                 $grupos[] = [
-                    'id' => (string)$g['id'],
+                    'id' => $gid,
                     'w' => (int)$g['w'],
                     'h' => (int)$g['h'],
                     'cont' => isset($g['cont']) ? (int)$g['cont'] : 1,
@@ -1135,7 +1152,8 @@ class Personalizador_PDF_Plugin
                     'value' => isset($g['value']) ? (string)$g['value'] : '',
                     'preset' => isset($g['preset']) ? (string)$g['preset'] : '',
                     'settings' => isset($g['config']) ? (string)$g['config'] : '',
-                    'repetir' => !empty($repetir[(string)$g['id']]),
+                    'repetir' => !empty($repetir[$gid]),
+                    'envs' => $envsGrupo ? $envsGrupo : null,
                 ];
             }
             return [
@@ -1148,10 +1166,42 @@ class Personalizador_PDF_Plugin
                 // capas del mockup (capas con `ref = "img:{id}"`). Solo lectura:
                 // el catalogo lo escribe unicamente el modulo TextMuy.
                 'imagenes' => $this->mockup_catalogo_imagenes(),
+                'envolturas' => $envsInfo,
             ];
         } catch (\Throwable $e) {
             return $vacio;
         }
+    }
+
+    /**
+     * Refs placeholder con `envoltura: true` en los mockups guardados:
+     * `{gid: {n: true}}`. Es lo UNICO que la ficha embebe (solo compone con
+     * esas capas) y lo que permite avisar cobertura sin mandar el archivo.
+     */
+    private function envolturas_usadas(array $mockups)
+    {
+        $usadas = [];
+        foreach ($mockups as $m) {
+            foreach ((array)(isset($m['capas']) && is_array($m['capas']) ? $m['capas'] : []) as $c) {
+                if (!is_array($c) || ($c['tipo'] ?? '') !== 'placeholder' || empty($c['envoltura'])) {
+                    continue;
+                }
+                $partes = explode('#', (string)($c['ref'] ?? ''));
+                $gid = strtoupper(trim($partes[0]));
+                if (preg_match('/^[0-9A-F]{6}$/', $gid) !== 1) {
+                    continue;
+                }
+                $n = isset($partes[1]) ? (int)$partes[1] : 1;
+                if ($n < 1) {
+                    $n = 1;
+                }
+                if (!isset($usadas[$gid])) {
+                    $usadas[$gid] = [];
+                }
+                $usadas[$gid][(string)$n] = true;
+            }
+        }
+        return $usadas;
     }
 
     /**
@@ -4325,7 +4375,7 @@ JS;
     public function mockups_para_editor()
     {
         $vacio = ['pdf' => '', 'grupos' => [], 'fotos' => [], 'mockups' => [], 'preview_omisible' => false,
-            'imagenes' => []];
+            'imagenes' => [], 'envolturas' => ['disponible' => false, 'claves' => []]];
         try {
             $get = isset($_GET['ec_pdf']) ? sanitize_file_name(wp_unslash((string)$_GET['ec_pdf'])) : '';
             $pdfs = $this->pdfs_subidos();
@@ -4494,6 +4544,11 @@ JS;
         $config_previa = $this->config_de($nombre);
         $analisis = Metadata::generarAnalisis($nombre, $grupos, 200);
         Metadata::guardar($analisis, $motor->ruta_analisis($nombre));
+        // Envolturas (PowerClip): archivo DERIVADO aparte (nunca en
+        // analisis.json, que vuelve a su formato original). El editor lo pide
+        // bajo demanda (op=envoltura) y la ficha recibe solo las usadas.
+        // Grupos vacios = "analizado sin envolturas" (distingue de ausente).
+        Metadata::guardar(Metadata::generarEnvolturas($nombre, $grupos), $motor->ruta_envolturas($nombre));
         // Poda de mapeos huerfanos: placeholders de ids que ya no existen.
         $ids_nuevos = [];
         foreach ($grupos as $g) {

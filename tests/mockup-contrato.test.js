@@ -89,6 +89,75 @@ check('el editor expone los botones de distribuir', editor.indexOf('ec-mk-dist')
 check('el editor lleva el estado de seleccion multiple', editor.indexOf('seleccionados: []') !== -1
     && editor.indexOf('ec-mk-sel') !== -1);
 
+/* ============ Envolturas (PowerClip del PDF) ============ */
+
+check('el nucleo exporta envolturaDeRef/comandosEnvoltura/trazarEnvoltura',
+    typeof R.envolturaDeRef === 'function'
+        && typeof R.comandosEnvoltura === 'function'
+        && typeof R.trazarEnvoltura === 'function');
+
+var envEjemplo = {
+    par: 0,
+    subs: [{
+        m: [0, 0],
+        s: [['l', 1, 0], ['c', 1, 0.5, 1, 1, 0, 1]],
+        c: 1
+    }]
+};
+
+check('envolturaDeRef resuelve {grupo}#n (1-based)', (function () {
+    var g = [{ id: '0000FF', cont: 2, envs: { '1': envEjemplo } }];
+    return R.envolturaDeRef('0000FF#1', g) === envEjemplo
+        && R.envolturaDeRef('0000FF#2', g) === null
+        && R.envolturaDeRef('0000FF#9', g) === null;
+})());
+check('envolturaDeRef: ref plano usa la instancia 1', (function () {
+    var g = [{ id: '0000FF', cont: 1, envs: { '1': envEjemplo } }];
+    return R.envolturaDeRef('0000FF', g) === envEjemplo;
+})());
+check('envolturaDeRef: sin envs en el grupo devuelve null',
+    R.envolturaDeRef('0000FF', [{ id: '0000FF', cont: 1 }]) === null);
+
+check('comandosEnvoltura mapea 0..1 al rect de la capa', (function () {
+    var cmds = R.comandosEnvoltura(envEjemplo, { x: -50, y: -25, w: 100, h: 50 });
+    return cmds.length === 4
+        && cmds[0][0] === 'M' && cmds[0][1] === -50 && cmds[0][2] === -25
+        && cmds[1][0] === 'L' && cmds[1][1] === 50 && cmds[1][2] === -25
+        && cmds[2][0] === 'C' && cmds[2][5] === -50 && cmds[2][6] === 25
+        && cmds[3][0] === 'Z';
+})());
+
+check('el editor trae el toggle de envoltura con su handler', editor.indexOf('ec-mk-envoltura') !== -1
+    && editor.indexOf('c.envoltura = activar') !== -1
+    && editor.indexOf('R.envolturaDeRef(c.ref, contexto())') !== -1
+    && editor.indexOf('para extraerla') !== -1);
+check('el editor pide la geometria bajo demanda (lazy)', editor.indexOf("apiMotor('envoltura'") !== -1
+    && editor.indexOf('estado.envs') !== -1
+    && editor.indexOf('infoEnvoltura(') !== -1);
+check('el saneo PHP persiste envoltura solo en placeholder',
+    leer('inc/class-pmu-uploads.php').indexOf("'envoltura' => $tipo === 'placeholder'") !== -1);
+check('datos_pdf_render embebe solo las envolturas usadas + claves',
+    leer('personalizador-pdf.php').indexOf("'envs' => $envsGrupo") !== -1
+        && leer('personalizador-pdf.php').indexOf("'envolturas' => $envsInfo") !== -1
+        && leer('personalizador-pdf.php').indexOf('envolturas_usadas') !== -1);
+check('el motor publica envolturas.json y su op lazy',
+    leer('inc/class-pmu-uploads.php').indexOf('ruta_envolturas') !== -1
+        && leer('inc/class-pmu-uploads.php').indexOf("'miniatura', 'envoltura'") !== -1);
+check('analizar_y_guardar regenera envolturas.json junto al analisis',
+    leer('personalizador-pdf.php').indexOf('Metadata::generarEnvolturas') !== -1
+        && leer('personalizador-pdf.php').indexOf('$motor->ruta_envolturas($nombre)') !== -1);
+
+check('normalizarCapa conserva los campos extra de la capa', (function () {
+    var r = geometria.normalizarCapa({
+        tipo: 'placeholder', ref: '0000FF', x: 0, y: 0, w: 10, h: 10,
+        nombre: 'Fondo', filtros: { brillo: 90 }, modo: 'multiply',
+        oculta: true, bloqueada: true, envoltura: true
+    });
+    return r.capa.nombre === 'Fondo' && r.capa.filtros.brillo === 90
+        && r.capa.modo === 'multiply' && r.capa.oculta === true
+        && r.capa.bloqueada === true && r.capa.envoltura === true;
+})(), 'acotar solo debe ajustar la geometria, no reconstruir la capa');
+
 /* ============ 2. Comportamiento del nucleo con contexto falso ============ */
 
 /** Contexto 2D falso que registra lo que se dibuja y en que orden. */
@@ -114,6 +183,10 @@ function ctxFalso() {
         fillText: function (t) { ops.push('fillText:' + t); },
         measureText: function () { return { width: 10 }; },
         setLineDash: function () { },
+        closePath: function () { ops.push('closePath'); },
+        bezierCurveTo: function () { ops.push('bezierCurveTo'); },
+        // componer llama ctx.clip(regla) (API valida: una sola cadena).
+        clip: function (a, b) { ops.push('clip:' + (typeof b === 'string' ? b : (a || 'nonzero'))); },
         drawImage: function (img, x, y, w, h) {
             ops.push('drawImage:' + (img && img.url ? img.url : '?') + '@' +
                 Math.round(x) + ',' + Math.round(y) + ',' + Math.round(w) + ',' + Math.round(h));
@@ -556,6 +629,63 @@ check('T032: la firma PNG compara los 8 bytes de la cabecera',
     up.indexOf('substr($firma, 0, 8)') !== -1
         && up.indexOf('return $corta ===') !== -1,
     'leer 12 bytes y comparar contra 8 nunca puede ser cierto');
+
+/* ============ Envolturas: comportamiento del nucleo ============ */
+
+pruebas.push(function () {
+    var ctx = ctxFalso();
+    var g = [{ id: '0000FF', cont: 1, envs: { '1': envEjemplo } }];
+    return R.componer(ctx, [capa('placeholder', '0000FF', { envoltura: true })], {
+        resolver: function () { return { url: 'x' }; },
+        contexto: { grupos: g },
+        lienzo: 300
+    }).then(function () {
+        var iClip = ctx.ops.indexOf('clip:nonzero');
+        var iDraw = -1;
+        ctx.ops.forEach(function (o, i) {
+            if (iDraw === -1 && o.indexOf('drawImage:x') === 0) { iDraw = i; }
+        });
+        check('envoltura activa -> ctx.clip antes de dibujar la imagen', iClip !== -1 && iClip < iDraw,
+            'ops=' + ctx.ops.join('|'));
+    });
+});
+
+pruebas.push(function () {
+    var ctx = ctxFalso();
+    var g = [{ id: '0000FF', cont: 1, envs: { '1': { par: 1, subs: envEjemplo.subs } } }];
+    return R.componer(ctx, [capa('placeholder', '0000FF', { envoltura: true })], {
+        resolver: function () { return { url: 'x' }; },
+        contexto: { grupos: g },
+        lienzo: 300
+    }).then(function () {
+        check('envoltura even-odd (W*) -> regla evenodd', ctx.ops.indexOf('clip:evenodd') !== -1);
+    });
+});
+
+pruebas.push(function () {
+    var ctx = ctxFalso();
+    return R.componer(ctx, [capa('placeholder', '0000FF', { envoltura: true })], {
+        resolver: function () { return { url: 'x' }; },
+        contexto: { grupos: [{ id: '0000FF', cont: 1 }] },
+        lienzo: 300
+    }).then(function () {
+        check('envoltura pedida sin envs del analisis -> degrada sin clip',
+            !ctx.ops.some(function (o) { return o.indexOf('clip:') === 0; }));
+    });
+});
+
+pruebas.push(function () {
+    var ctx = ctxFalso();
+    var g = [{ id: '0000FF', cont: 1, envs: { '1': envEjemplo } }];
+    return R.componer(ctx, [capa('img', 'pdf:a.png', { envoltura: true })], {
+        resolver: function () { return { url: 'x' }; },
+        contexto: { grupos: g },
+        lienzo: 300
+    }).then(function () {
+        check('una capa img nunca se recorta con envoltura',
+            !ctx.ops.some(function (o) { return o.indexOf('clip:') === 0; }));
+    });
+});
 
 /* ============ Ejecucion ============ */
 var i = 0;

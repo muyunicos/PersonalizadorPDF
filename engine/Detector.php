@@ -88,6 +88,10 @@ class ContentParser
     private $instancias = [];
     private $streamIdx = 0;
     private $depth = 0;
+    /** Snapshot del clip pendiente (W/W* aun sin pintar): ['subs'=>, 'par'=>]. */
+    private $clipPend = null;
+    /** Clips activos en device space; el ultimo es el vigente. */
+    private $pilaClips = [];
 
     public function __construct(Pdf $pdf, $pageIdx, $height, $resources, $extgs = [], $ctm = null, $streamIdx = 0, $depth = 0)
     {
@@ -176,6 +180,7 @@ class ContentParser
                     'fillColor' => $this->fillColor,
                     'fillAlpha' => $this->fillAlpha,
                     'cs' => $this->cs,
+                    'profClips' => count($this->pilaClips),
                 ];
                 break;
             case 'Q':
@@ -185,6 +190,13 @@ class ContentParser
                     $this->fillColor = $s['fillColor'];
                     $this->fillAlpha = $s['fillAlpha'];
                     $this->cs = $s['cs'];
+                    // El clip solo se establece al PINTAR el path: un W/W* sin
+                    // pintar se abandona aqui, y los clips activos se recortan
+                    // hasta la profundidad del q correspondiente.
+                    $this->clipPend = null;
+                    if (isset($s['profClips'])) {
+                        $this->pilaClips = array_slice($this->pilaClips, 0, (int)$s['profClips']);
+                    }
                 }
                 break;
             case 'cm':
@@ -240,7 +252,7 @@ class ContentParser
             case 'c':
             case 'v':
             case 'y':
-                $this->curveTo($args);
+                $this->curveTo($args, $op);
                 break;
             case 'h':
                 if ($this->cur) {
@@ -254,13 +266,22 @@ class ContentParser
             case 'B*':
             case 'b':
             case 'b*':
+                // Pintar el path fija el clip pendiente (W/W*) ANTES de evaluar
+                // el relleno: el placeholder visto aqui ya ve su envoltura.
+                $this->establecerClip();
                 $this->fill($opOffset, $op);
                 break;
             case 'S':
             case 's':
             case 'n':
+                $this->establecerClip();
+                $this->clearPath();
+                break;
             case 'W':
             case 'W*':
+                // El clip se fija al pintar el path (casi siempre con 'n'):
+                // aqui solo se fotografian los segmentos en device space.
+                $this->clipPend = ['subs' => $this->subsClip(), 'par' => $op === 'W*' ? 1 : 0];
                 $this->clearPath();
                 break;
             case 'BT':
@@ -330,15 +351,31 @@ class ContentParser
         $this->cur['segs'][] = ['l', $p];
     }
 
-    private function curveTo($args)
+    private function curveTo($args, $op = 'c')
     {
         if (count($args) < 2 || !$this->cur) {
             return;
         }
-        $end = count($args) >= 6 ? 4 : 2;
-        $p = $this->txf((float)$args[$end], (float)$args[$end + 1]);
-        $this->cur['pts'][] = $p;
-        $this->cur['segs'][] = ['c', $p];
+        // Los puntos de control se conservan COMPLETOS: 'v'/'y' rellenan el
+        // punto ausente (PDF 32000-1, 8.5.3) y la envoltura del clip necesita
+        // la forma real de la curva, no solo su extremo.
+        $act = $this->cur['pts'][count($this->cur['pts']) - 1];
+        $par = count($args) >= 6;
+        $fin = $this->txf((float)$args[$par ? 4 : 2], (float)$args[$par ? 5 : 3]);
+        if ($par) {
+            $c1 = $this->txf((float)$args[0], (float)$args[1]);
+            $c2 = $this->txf((float)$args[2], (float)$args[3]);
+        } elseif ($op === 'y') {
+            // 'y': el segundo control es el punto final.
+            $c1 = $this->txf((float)$args[0], (float)$args[1]);
+            $c2 = $fin;
+        } else {
+            // 'v': el primer control es el punto actual.
+            $c1 = $act;
+            $c2 = $this->txf((float)$args[0], (float)$args[1]);
+        }
+        $this->cur['pts'][] = $fin;
+        $this->cur['segs'][] = ['c', $c1, $c2, $fin];
     }
 
     private function addRect($args)
@@ -367,6 +404,85 @@ class ContentParser
     {
         $this->subs = [];
         $this->cur = null;
+    }
+
+    /** Fotografia del path actual en device space (para el clip pendiente). */
+    private function subsClip()
+    {
+        $out = [];
+        foreach ($this->subs as $sub) {
+            if (isset($sub['type']) && $sub['type'] === 'rect') {
+                $r = $sub['rect'];
+                $out[] = [
+                    'm' => [(float)$r[0][0], (float)$r[0][1]],
+                    's' => [
+                        ['l', (float)$r[1][0], (float)$r[1][1]],
+                        ['l', (float)$r[2][0], (float)$r[2][1]],
+                        ['l', (float)$r[3][0], (float)$r[3][1]],
+                    ],
+                    'c' => 1,
+                ];
+                continue;
+            }
+            $linea = $this->subClip($sub);
+            if ($linea !== null) {
+                $out[] = $linea;
+            }
+        }
+        if ($this->cur) {
+            $linea = $this->subClip($this->cur);
+            if ($linea !== null) {
+                $out[] = $linea;
+            }
+        }
+        return $out;
+    }
+
+    /** Un subpath abierto/cerrado -> [m, s(l|c), c]. Null si no hay puntos. */
+    private function subClip(array $sub)
+    {
+        $pts = isset($sub['pts']) ? $sub['pts'] : [];
+        if (!$pts) {
+            return null;
+        }
+        $segs = [];
+        foreach ((array)(isset($sub['segs']) ? $sub['segs'] : []) as $seg) {
+            if (!is_array($seg) || !isset($seg[0]) || !isset($seg[1])) {
+                continue;
+            }
+            if ($seg[0] === 'c' && isset($seg[3])) {
+                // 'c': [control1, control2, final] ya en device space.
+                $segs[] = ['c', (float)$seg[1][0], (float)$seg[1][1], (float)$seg[2][0], (float)$seg[2][1], (float)$seg[3][0], (float)$seg[3][1]];
+            } else {
+                $segs[] = ['l', (float)$seg[1][0], (float)$seg[1][1]];
+            }
+        }
+        return [
+            'm' => [(float)$pts[0][0], (float)$pts[0][1]],
+            's' => $segs,
+            'c' => !empty($sub['close']) ? 1 : 0,
+        ];
+    }
+
+    /** Fija el clip pendiente (W/W*) como activo: el path ya fue pintado. */
+    private function establecerClip()
+    {
+        if ($this->clipPend === null) {
+            return;
+        }
+        if (!empty($this->clipPend['subs'])) {
+            $this->pilaClips[] = $this->clipPend;
+        }
+        $this->clipPend = null;
+    }
+
+    /** Clip vigente (ultimo de la pila) o null si el trazo esta sin recortar. */
+    private function clipActivo()
+    {
+        if (!$this->pilaClips) {
+            return null;
+        }
+        return $this->pilaClips[count($this->pilaClips) - 1];
     }
 
     private function fill($opOffset = 0, $op = '')
@@ -603,19 +719,27 @@ class ContentParser
             'color' => $color,
             'color_hex' => Round::rgbHex($this->fillColor),
         ];
+        // Envoltura (PowerClip): el clip vigente en el momento del relleno,
+        // en device space. Se normaliza despues (Metadata) al marco del rect.
+        $env = $this->clipActivo();
+        if ($env !== null && !empty($env['subs'])) {
+            $inst['env'] = $env;
+        }
+        // Geometria de apoyo (mapeo de la envoltura al rect del placeholder):
+        // CTM y rect en device space crudo, para TODAS las instancias.
+        $inst['ctm'] = array_map('floatval', $this->ctm);
+        $inst['dev_bbox'] = array_map('floatval', $bbox);
+        if ($quad !== null && count($quad) === 4) {
+            $inst['dev_quad'] = array_map(function ($p) {
+                return [(float)$p[0], (float)$p[1]];
+            }, $quad);
+        }
         // Solo en streams de pagina (depth 0) tenemos offset donde "splicear" la
         // imagen respetando clips/ornamentos. Dentro de Form XObjects no aplica.
         if ($this->depth === 0 && $opOffset !== null) {
             $inst['stream'] = $this->streamIdx;
             $inst['offset'] = (int)$opOffset;
             $inst['op'] = (string)$op;
-            $inst['ctm'] = array_map('floatval', $this->ctm);
-            $inst['dev_bbox'] = array_map('floatval', $bbox);
-            if ($quad !== null && count($quad) === 4) {
-                $inst['dev_quad'] = array_map(function ($p) {
-                    return [(float)$p[0], (float)$p[1]];
-                }, $quad);
-            }
         }
         $this->instancias[] = $inst;
     }
@@ -753,6 +877,9 @@ class ContentParser
         $sub->fillColor = $this->fillColor;
         $sub->fillAlpha = $this->fillAlpha;
         $sub->cs = $this->cs;
+        // Los clips activos se heredan al interior del Form (mismo graphics
+        // state); la pila propia del sub-form se gestiona con sus q/Q.
+        $sub->pilaClips = $this->pilaClips;
         $sub->run($data);
         foreach ($sub->instancias as $inst) {
             $this->instancias[] = $inst;
@@ -879,17 +1006,25 @@ class Detector
                     'w' => Round::halfEven($in['w'], 2),
                     'h' => Round::halfEven($in['h'], 2),
                 ];
+                // Geometria de apoyo de la envoltura (Metadata la normaliza).
+                if (isset($in['ctm'])) {
+                    $inst['ctm'] = array_map('floatval', $in['ctm']);
+                }
+                if (isset($in['dev_bbox'])) {
+                    $inst['dev_bbox'] = array_map('floatval', $in['dev_bbox']);
+                }
+                if (isset($in['dev_quad'])) {
+                    $inst['dev_quad'] = array_map(function ($p) {
+                        return [(float)$p[0], (float)$p[1]];
+                    }, $in['dev_quad']);
+                }
+                if (isset($in['env'])) {
+                    $inst['env'] = $in['env'];
+                }
                 if (isset($in['stream'], $in['offset'])) {
                     $inst['stream'] = $in['stream'];
                     $inst['offset'] = $in['offset'];
                     $inst['op'] = isset($in['op']) ? $in['op'] : '';
-                    $inst['ctm'] = isset($in['ctm']) ? array_map('floatval', $in['ctm']) : null;
-                    $inst['dev_bbox'] = isset($in['dev_bbox']) ? array_map('floatval', $in['dev_bbox']) : null;
-                    if (isset($in['dev_quad'])) {
-                        $inst['dev_quad'] = array_map(function ($p) {
-                            return [(float)$p[0], (float)$p[1]];
-                        }, $in['dev_quad']);
-                    }
                 }
                 $insts[] = $inst;
             }

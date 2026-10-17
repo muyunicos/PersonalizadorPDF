@@ -148,6 +148,7 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 ├── tests/
 │   ├── motor_smoke.php      ← Test crítico del motor (CORRER SIEMPRE TRAS CAMBIOS)
 │   ├── parity.php           ← Oráculo de detección (vs expected_muestra.json)
+│   ├── envolturas.php       ← Envolturas PowerClip -> envolturas.json (PDF sintéticos CLI)
 │   ├── texto_puente.php     ← Puente TextMuy con stubs WP (fases separadas)
 │   ├── campos_migracion.php ← CRUD de campos v3 (specs 012 + 015, corre en %TEMP%)
 │   ├── certificacion_hoja.php ← Certificación de `thumbs.sprite_firma` (ThumbEngine)
@@ -343,7 +344,13 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   muestran etiquetas en cada F5. Ampliarlo a los tres ámbitos es la spec 009 (T004/T005).
   `pdfs/`, `orders/` y `tmp/` son ámbitos de datos del motor, sin catálogo ni sprite.
 - Datasets PDF: `pdfs/{nombre}/analisis.json` (geometría inmutable del Detector: grupos
-  `id`/`w`/`h`/`cont`/`pgs`) + `pdfs/{nombre}/config.json` (editable: `activo`, `productos`,
+  `id`/`w`/`h`/`cont`/`pgs`; **sin envolturas**: su formato original nunca cambia)
+  + `pdfs/{nombre}/envolturas.json` (archivo DERIVADO: envolturas PowerClip por instancia `#n`
+  (`{par, subs}` normalizado 0..1 al rect del placeholder); se regenera en Subir/Re-analizar, se
+  lee bajo demanda via `op=envoltura` y `datos_pdf_render` solo emite las claves + la geometria
+  de las refs usadas con `envoltura:true`; archivo ausente = analizado sin soporte → el toggle
+  "Envoltura del PDF" sale deshabilitado hasta Re-analizar; `grupos` vacios = analizado sin
+  envolturas) + `pdfs/{nombre}/config.json` (editable: `activo`, `productos`,
   `campos_ids`, `preview_omisible` (bool, default `false` = mockup obligatorio en ficha),
   `mockups[]` (plantillas de vista previa: `capas[]` con `tipo`/`ref`/`x`/`y`/`w`/`h`/
   `rot`/`sesgo`/`filtros`/`modo`/`nombre`/`oculta`/`bloqueada`; canvas 300x300),
@@ -588,6 +595,7 @@ node tests/selector-contrato.test.js  # Contrato del selector visual (spec 016):
 node tests/conciliacion.js    # `PURO.conciliarGrupo` (spec 012, D17-D19): "CONCILIACION OK"
 php tests/motor_smoke.php     # Smoke del motor (debe decir "SMOKE OK")
 php tests/parity.php          # Oráculo del detector (debe decir "PARIDAD OK")
+php tests/envolturas.php      # Envolturas PowerClip (debe decir "ENVOLTURAS OK")
 php tests/inventario_repo.php  # Inventario de CODIGO del repo (genera docs/inventario-repo.md)
 node tests/mockup-geometria.test.js   # Geometria pura del editor de mockups (spec 011):
                               # debe decir "GEOMETRIA OK (N checks)"
@@ -610,7 +618,7 @@ php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
                               # completados | mockups* | mockup_capas |
                              # mockup_preview | mockup_foto |
                               # mockup_foto_baja | mockup_foto_ajax |
-                              # desactivar | reanalizar | borrado | campo_global | smoke
+                              # desactivar | reanalizar | envoltura_op | borrado | campo_global | smoke
 ```
 Los 3 arneses CLI salen de inmediato si no corren por CLI (`PHP_SAPI !== 'cli'`):
 la carpeta `tests/` viaja con el plugin al hosting y no debe ser ejecutable por HTTP.
@@ -783,6 +791,7 @@ el numero a mano. El stub `get_file_data` del arnes esta en `tests/texto_puente.
 | Compro y el pedido **sigue sin aparecer en Pedidos** aunque la metadata del item este OK; el log muestra `motor:dir_tmp_order:pedido:invalido` y `promover:falla ... item=0` | El staging se creaba en `woocommerce_checkout_create_order_line_item`, donde `$order->get_id()` = 0 (el pedido aun no tiene ID) -> `dir_tmp_order(0)` lanza y el staging nunca se crea; y `_pmu_items` quedaba con **clave fantasma `0`** | El staging se crea en **`woocommerce_checkout_order_processed`** (`pedido_staging_crear()`, ID real) y `pedido_promover()` itera los **line items** (`_pmu_item_key`/`_pmu_sid`, que si persisten) en vez de `_pmu_items`, crea el staging al vuelo e **ignora la clave `0`**. Recupera pedidos viejos al re-guardar el estado. Diagnostico: `uploads/pmu/pmu-pedidos.log` |
 | El PDF no aparece en `mi-cuenta/descargas/` aunque el pedido este en `orders/`; o aparece **duplicado** | El plugin inyectaba su fila en `woocommerce_customer_get_downloadable_products`, que de Woo solo procesa productos **marcados como descargables**; si no lo estan, la fila no sale. Y con el tema activo podia duplicarse | Spec 017: con el tema `muyunicos` activo (`function_exists('mu_update_item_files')`), el plugin publica la URL protegida en `_urls_files` del item y **deja de inyectar** (el tema entrega email + descargas). Portable: sin tema, comportamiento propio intacto. Fases `entrega_tema`/`entrega_sin_tema` |
 | Un override no cambia el estilo del PDF | `renderBatch` se arma **sin** `settings` (`tienda.js:831`), y TextMUy no los espera en `settings` sino en **`overrides`**, como **objeto** (`api.js:296, 271`) | Pasar el objeto ya fusionado en `items[].overrides`. `mergeDeep` del modulo lo aplica sobre el preset: **no hace falta tocar `modules/textmuy/`** |
+| El toggle "Envoltura del PDF (PowerClip)" del editor de mockups sale deshabilitado | No existe `pdfs/{nombre}/envolturas.json` (PDF analizado con una version sin soporte) o esa instancia no tiene clip en el PDF | **Re-analizar** si el archivo falta (regenera `envolturas.json`); si el archivo existe pero la clave no, ese placeholder simplemente no esta recortado en ninguna forma (sin envoltura) |
 | El PDF sale con `[object Object]` | `resolverPlantilla` hace `String(v)` y un objeto se convierte en eso, en silencio | El `valor` de un campo es **siempre string**; el tipo `opciones` publica `JSON.stringify(overrides)` y lo parsea el render |
 | El cliente ve un estilo y el PDF trae otro | El hash del pool (`valor\|preset\|settings\|WxH`) **no incluia** los overrides: el primero que renderiza llena la cache y el resto recibe su PNG | Meter los overrides resueltos en el hash **en el mismo commit** que los activa: el fallo no es excepcion, es el PDF equivocado (hecho en 4.5.0: `hashRender` + `hash_pool()` con `\|{json}`) |
 | `motor:sesion:manifest:invalido` en la vista previa y capa de imagen gris | Rafaga de POSTs del pool concurrentes (texto + fotos por instancia, en paralelo) chocando en `manifest.json.tmp` (nombre fijo, rename sin lock) + read-modify-write que perdia filas: la instancia sin fila dejaba la capa placeholder sin recurso | TODAS las mutaciones del manifest del item pasan por `PMU_Sesion::mutar_manifest()` con lock `flock` por item (`.manifest.lock`, que `copiar_arbol` no traslada al pedido). Lo cubre la fase `pool_concurrente` del arnés (8 hijos en paralelo, 8 filas) |

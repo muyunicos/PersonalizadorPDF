@@ -1,6 +1,6 @@
 # Contract: Capas de mockup y render compartido
 
-**Feature**: 011-editor-mockups-visual | **Version**: 2 (enmienda `004-woocommerce-pdf-personalization/contracts/mockups.md`)
+**Feature**: 011-editor-mockups-visual | **Version**: 3 (enmienda `004-woocommerce-pdf-personalization/contracts/mockups.md`; v3 agrega envolturas PowerClip)
 
 Contrato de la composicion de un mockup (`config.json:mockups[]`) y del **nucleo de render
 compartido** que la usan el editor del admin y la ficha del cliente. Especificacion: [../spec.md](../spec.md).
@@ -37,6 +37,7 @@ compartido** que la usan el editor del admin y la ficha del cliente. Especificac
 | `nombre` | string <= 60; default = derivado del `ref` | **nuevo** |
 | `oculta` | bool; default `false` | **nuevo** |
 | `bloqueada` | bool; default `false` | **nuevo** |
+| `envoltura` | bool; default `false`; **solo** `tipo=placeholder` (en `img` el saneo fuerza `false`). Recorta la capa al clip vectorial del hueco en el PDF (PowerClip) | **nuevo (v3)** |
 
 ### 1.2 Ajustes (`filtros`)
 
@@ -59,6 +60,49 @@ Este contrato lo reemplaza por el namespace `pdf:` / `img:` y aclara la misma re
 catalogo se referencia por **id numerico**, no por nombre de archivo (el nombre puede cambiar en una
 edicion del catalogo; el id no). `ref` plano se tolera como `pdf:`.
 
+### 1.4 Envolturas (PowerClip del PDF) — v3
+
+Un placeholder puede venir **recortado dentro de una forma vectorial** en el PDF (PowerClip de
+CorelDRAW: corazon, estrella, etc.). El procesado ya lo respeta en el PDF final (`Overlay`
+splicea la imagen dentro del clip activo, AGENTS §4.5); aqui se define su **previsualizacion** en
+el mockup, con envio **lazy** de la geometria.
+
+- **Extraccion**: `Detector` captura el clip activo (`W`/`W*` + `q`/`Q`, tambien dentro de Form
+  XObjects) al detectar cada instancia; `Metadata::generarEnvolturas` lo normaliza al marco del
+  rect y lo escribe en el archivo **derivado** `pdfs/{nombre}/envolturas.json`
+  (regenerado en Subir PDF / Re-analizar; **nunca** vive en `analisis.json`, que conserva su
+  formato original):
+
+  ```json
+  { "version": 1, "pdf": "muestra", "creado": "...",
+    "grupos": { "0000FF": { "1": { "par": 0, "subs": [ { "m": [0.5, -0.2], "s": [["c", 1, 0.5, 1, 1, 0, 1]], "c": 1 } ] } } } }
+  ```
+
+  - clave = indice **1-based** de la instancia (el `{grupo}#n` del editor); ausente = sin envoltura;
+  - `par`: 1 = even-odd (`W*`), 0 = non-zero (`W`);
+  - `subs[].m` + segmentos planos `["l",u,v]` / `["c",u1,v1,u2,v2,u3,v3]`; `c` cierra la subruta;
+  - coordenadas **normalizadas 0..1** sobre el rect del placeholder, con `v` ya en espacio canvas;
+  - topes: `Metadata::ENV_MAX` (100) envolturas por grupo y `Metadata::ENV_SEG_MAX` (5000)
+    segmentos por envoltura (una forma patologicamente densa no se publica);
+  - **archivo presente con `grupos` vacios = "analizado sin envolturas"**; archivo ausente =
+    PDF analizado con una version sin soporte (Re-analizar).
+- **Envio lazy (sin superficie publica nueva)**:
+  - `datos_pdf_render` publica `envolturas: {disponible, claves: {gid: [n,...]}}` (solo CLAVES)
+    y `grupos[].envs` con la geometria **SOLO de los refs usados** con `envoltura: true` en los
+    mockups guardados: la ficha del comprador compone con clip sin ningun endpoint publico;
+  - el editor pide la de `gid#n` al motor via **`op=envoltura`** (`admin_post_pmu_uploads`,
+    nonce + capability; respuesta `{archivado, envoltura|null}`) y la cachea en la sesion
+    (`estado.envs`), mezclandola en `contexto().grupos[].envs` (el nucleo no cambia).
+- **Capa**: `envoltura: true` en una capa placeholder pide recortarla. El clip se resuelve con
+  `envolturaDeRef(ref, contexto.grupos)` (ref plano = instancia #1).
+- **Aplicacion**: `componer` traza la envoltura (`comandosEnvoltura` + `trazarEnvoltura`) y aplica
+  `ctx.clip(regla)` dentro del `save`/`restore` de la capa, ANTES de dibujar la imagen (y la caja
+  neutra): la forma recorta todo lo que dibuje esa capa. Afecta igual al editor y a la ficha.
+- **Degradacion**: sin envoltura disponible para el `ref` pedido, la capa compone sin clip y el
+  editor informa la causa diferenciada: **sin archivo** -> "pulsa Re-analizar para extraerlas";
+  **con archivo pero sin esa clave** -> "este placeholder no esta recortado en ninguna forma".
+  Si el pedido falla (red/servidor), la capa se desmarca con aviso.
+
 ## 2. Nucleo de render compartido
 
 `assets/mockup-render.js` expone `PMUMockup`:
@@ -69,6 +113,9 @@ edicion del catalogo; el id no). `ref` plano se tolera como `pdf:`.
 | `contener(destino, recurso)` | Encaja el recurso en la caja **sin deformar** (regla `contain` vigente) y devuelve el rectangulo usado + si hubo discrepancia de proporcion. |
 | `filtroCss(filtros, modo)` | Traduce ajustes a `ctx.filter` + `globalAlpha` + `globalCompositeOperation`. |
 | `esValida(capa, contexto)` | Dice si la capa resuelve (foto en `fotos`/catalogo, grupo existente, indice dentro de `cont`). |
+| `envolturaDeRef(ref, grupos)` | Envoltura (clip del PDF) de una capa placeholder segun su `ref` (v3). `null` = sin envoltura. |
+| `comandosEnvoltura(env, caja)` | Puro: comandos `M/L/C/Z` de la envoltura mapeados 0..1 al rect de la capa. |
+| `trazarEnvoltura(ctx, comandos)` | Trazado sobre el ctx (canvas path, sin Path2D). |
 
 Reglas:
 
@@ -112,6 +159,11 @@ Un ajuste nuevo debe estar en los **dos** lados, o el cliente ve distinto a lo q
 
 - [ ] `PMU_Uploads::config_mockups` (allowlist + clamp) **y** `handle_mockups_guardar` (saneo)
 - [ ] `PMUMockup.filtroCss` (aplicacion unica, compartida por editor y ficha)
+- [ ] envolturas: `Detector` (captura del clip) **y** `Metadata::generarEnvolturas`
+      (`analizar_y_guardar` escribe `envolturas.json`); `PMU_Uploads` (`ruta_envolturas` +
+      `leer_envolturas` + `op=envoltura`); `datos_pdf_render` (claves + solo las usadas);
+      `PMU_Uploads::config_mockups` (`envoltura`) **y** `PMUMockup.componer` (clip via
+      `envolturaDeRef`/`comandosEnvoltura`)
 
 ## 6. Criterios de verificacion
 
@@ -122,4 +174,13 @@ Un ajuste nuevo debe estar en los **dos** lados, o el cliente ve distinto a lo q
 - `gama` guardado se aplica al componer (bug corregido).
 - El editor no escribe en `img.json` ni en ningun sprite (unico escritor: `assets/miniaturas.js`).
 - `ref` plano (mockup previo) se sigue composing igual (compatibilidad).
+- Una capa placeholder con `envoltura: true` y `envs` en el contexto recorta con `ctx.clip` ANTES
+  de dibujar; sin `envs` (sin archivo o sin esa clave) compone sin clip y el editor informa la
+  causa diferenciada.
+- `analisis.json` **nunca** lleva `envs` (formato original intacto); `envolturas.json` con
+  `grupos` vacios = analizado sin envolturas (distinto de archivo ausente = Re-analizar).
+- El chequeo del toggle/lazy del editor, del saneo PHP y del endpoint viven en
+  `tests/mockup-contrato.test.js`; la extraccion, en `tests/envolturas.php` (PDF sintetico:
+  W, W*, Q, Form XObject y forma densa > ENV_SEG_MAX); el endpoint, en la fase
+  `envoltura_op` de `tests/texto_puente.php`.
 
