@@ -127,25 +127,58 @@ check('comandosEnvoltura mapea 0..1 al rect de la capa', (function () {
         && cmds[3][0] === 'Z';
 })());
 
+var pluginPhp = leer('personalizador-pdf.php');
+var motorPhp = leer('inc/class-pmu-uploads.php');
+
 check('el editor trae el toggle de envoltura con su handler', editor.indexOf('ec-mk-envoltura') !== -1
     && editor.indexOf('c.envoltura = activar') !== -1
     && editor.indexOf('R.envolturaDeRef(c.ref, contexto())') !== -1
     && editor.indexOf('para extraerla') !== -1);
+check('el toggle checked exige que ademas HAYA envoltura (sin contradiccion)',
+    editor.indexOf('c.envoltura && infoEnv.hay') !== -1);
 check('el editor pide la geometria bajo demanda (lazy)', editor.indexOf("apiMotor('envoltura'") !== -1
     && editor.indexOf('estado.envs') !== -1
     && editor.indexOf('infoEnvoltura(') !== -1);
+check('el fallo del pedido revierte POR REF y avisa tras refrescar', (function () {
+    var iRev = editor.indexOf('function revertirEnvoltura');
+    if (iRev === -1 || editor.indexOf('revertirEnvoltura(ref') === -1) { return false; }
+    // pintarAlertas() vacia .ec-mk-alertas en cada refrescar(): el .text()
+    // del aviso DEBE ir despues del refrescar, o nunca se ve.
+    var cuerpo = editor.slice(iRev, iRev + 700);
+    var iRef = cuerpo.indexOf('refrescar();');
+    var iTxt = cuerpo.indexOf("$ed.find('.ec-mk-alertas').text(mensaje)");
+    return iRef !== -1 && iTxt > iRef;
+})());
+check('pedirEnvoltura avisa tambien tras refrescar en la rama sin apiMotor', (function () {
+    var iPed = editor.indexOf('function pedirEnvoltura');
+    if (iPed === -1) { return false; }
+    var cuerpo = editor.slice(iPed, iPed + 900);
+    var iRef = cuerpo.indexOf('refrescar();');
+    var iTxt = cuerpo.indexOf("text('No hay envoltura analizada para este placeholder.')");
+    return iRef !== -1 && iTxt > iRef;
+})());
+check('revertirEnvoltura busca por ref, no por seleccion', (function () {
+    var iRev = editor.indexOf('function revertirEnvoltura');
+    if (iRev === -1) { return false; }
+    var cuerpo = editor.slice(iRev, iRev + 700);
+    return cuerpo.indexOf('capa2.ref === ref') !== -1
+        && cuerpo.indexOf('capa2.envoltura = false') !== -1;
+})());
 check('el saneo PHP persiste envoltura solo en placeholder',
-    leer('inc/class-pmu-uploads.php').indexOf("'envoltura' => $tipo === 'placeholder'") !== -1);
+    motorPhp.indexOf("'envoltura' => $tipo === 'placeholder'") !== -1);
 check('datos_pdf_render embebe solo las envolturas usadas + claves',
-    leer('personalizador-pdf.php').indexOf("'envs' => $envsGrupo") !== -1
-        && leer('personalizador-pdf.php').indexOf("'envolturas' => $envsInfo") !== -1
-        && leer('personalizador-pdf.php').indexOf('envolturas_usadas') !== -1);
+    pluginPhp.indexOf("'envs' => $envsGrupo") !== -1
+        && pluginPhp.indexOf("'envolturas' => $envsInfo") !== -1
+        && pluginPhp.indexOf('envolturas_usadas') !== -1);
 check('el motor publica envolturas.json y su op lazy',
-    leer('inc/class-pmu-uploads.php').indexOf('ruta_envolturas') !== -1
-        && leer('inc/class-pmu-uploads.php').indexOf("'miniatura', 'envoltura'") !== -1);
+    motorPhp.indexOf('ruta_envolturas') !== -1
+        && motorPhp.indexOf("'miniatura', 'envoltura'") !== -1);
 check('analizar_y_guardar regenera envolturas.json junto al analisis',
-    leer('personalizador-pdf.php').indexOf('Metadata::generarEnvolturas') !== -1
-        && leer('personalizador-pdf.php').indexOf('$motor->ruta_envolturas($nombre)') !== -1);
+    pluginPhp.indexOf('Metadata::generarEnvolturas') !== -1
+        && pluginPhp.indexOf('$motor->ruta_envolturas($nombre)') !== -1);
+check('envolturas_usadas reutiliza id_valido (sin regex duplicada)',
+    pluginPhp.indexOf('if (!$this->id_valido($gid))') !== -1
+        && pluginPhp.indexOf("preg_match('/^[0-9A-F]{6}$/', $gid)") === -1);
 
 check('normalizarCapa conserva los campos extra de la capa', (function () {
     var r = geometria.normalizarCapa({

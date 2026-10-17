@@ -101,7 +101,9 @@ el mockup, con envio **lazy** de la geometria.
 - **Degradacion**: sin envoltura disponible para el `ref` pedido, la capa compone sin clip y el
   editor informa la causa diferenciada: **sin archivo** -> "pulsa Re-analizar para extraerlas";
   **con archivo pero sin esa clave** -> "este placeholder no esta recortado en ninguna forma".
-  Si el pedido falla (red/servidor), la capa se desmarca con aviso.
+  Si el pedido falla (red/servidor), la capa se desmarca **por `ref` (no por seleccion: pudo
+  cambiar mientras viajaba el pedido)** con aviso posterior al `refrescar()` (que vacia el
+  contenedor de alertas).
 
 ## 2. Nucleo de render compartido
 
@@ -161,9 +163,9 @@ Un ajuste nuevo debe estar en los **dos** lados, o el cliente ve distinto a lo q
 - [ ] `PMUMockup.filtroCss` (aplicacion unica, compartida por editor y ficha)
 - [ ] envolturas: `Detector` (captura del clip) **y** `Metadata::generarEnvolturas`
       (`analizar_y_guardar` escribe `envolturas.json`); `PMU_Uploads` (`ruta_envolturas` +
-      `leer_envolturas` + `op=envoltura`); `datos_pdf_render` (claves + solo las usadas);
-      `PMU_Uploads::config_mockups` (`envoltura`) **y** `PMUMockup.componer` (clip via
-      `envolturaDeRef`/`comandosEnvoltura`)
+      `leer_envolturas` + `op=envoltura`); `datos_pdf_render` (claves + solo las usadas,
+      con `envolturas_usadas` reutilizando `id_valido`); `PMU_Uploads::config_mockups`
+      (`envoltura`) **y** `PMUMockup.componer` (clip via `envolturaDeRef`/`comandosEnvoltura`)
 
 ## 6. Criterios de verificacion
 

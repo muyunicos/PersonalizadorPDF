@@ -362,18 +362,34 @@ resultante es la misma composicion y el mismo tamano que la que recibe el client
   ni construir rutas fuera del dueno unico de datos; todo recurso anadido por el admin DEBE vivir
   en los ambitos vigentes.
 
+### Envelopes (PowerClip, v3)
+
+- **FR-046**: Las propiedades de una capa **placeholder** DEBEN ofrecer el toggle **"Envoltura del
+  PDF (PowerClip)"**, que recorta la capa al contenedor vectorial del hueco en el PDF para
+  previsualizar el recorte que aplicara el motor. El toggle DEBE habilitarse solo si el analisis
+  registra envoltura para ese `{grupo}#n`: sin `envolturas.json` DEBE informar la causa accionable
+  (Re-analizar) y, con archivo pero sin esa clave, que el placeholder no esta recortado en ninguna
+  forma; nunca DEBE mostrarse marcado un toggle que no aplica.
+- **FR-047**: La geometria de la envoltura DEBE viajar **bajo demanda** (op `envoltura` del endpoint
+  motor, cacheada por sesion) y **nunca completa en la pagina**: `datos_pdf_render` publica solo las
+  claves disponibles y la geometria de los refs usados con `envoltura: true` en los mockups
+  guardados, para que la ficha del comprador componga con el clip sin exponer un endpoint publico.
+  Si el pedido falla, la capa DEBE volver a sin envoltura con aviso visible (la composicion nunca
+  falla).
+
 ### Key Entities
 
 - **Mockup**: vista aprobada por el cliente. Atributos: identificador, titulo, orden y lista de
   capas. Persiste en la configuracion editable del PDF.
 - **Capa**: elemento de la composicion. Atributos: tipo (foto o hueco), referencia (foto del PDF o
-  grupo del PDF con indice de instancia), geometria (posicion, tamano, rotacion, sesgo) y ajustes
-  visuales (brillo, contraste, saturacion, gama, opacidad, desenfoque, tono, modo de fusion).
-  Afecta **solo** al mockup.
+  grupo del PDF con indice de instancia), geometria (posicion, tamano, rotacion, sesgo), ajustes
+  visuales (brillo, contraste, saturacion, gama, opacidad, desenfoque, tono, modo de fusion) y
+  **envoltura** (recorte PowerClip opcional, solo en placeholders). Afecta **solo** al mockup.
 - **Foto de referencia**: imagen subida por el admin al ambito de datos del PDF; sirve de capa
   "foto". Las imagenes del catalogo del proyecto son fuente alternativa equivalente.
 - **Grupo del PDF**: hueco detectado (identificador de color, tamano real, paginas, numero de
-  instancias). Su geometria es **inmutable** y no se edita desde el editor.
+  instancias). Su geometria es **inmutable** y no se edita desde el editor; sus **envolturas
+  PowerClip** por instancia viven en el archivo derivado `envolturas.json` (no en `analisis.json`).
 - **Preview del grupo**: render del texto con su estilo al tamano del hueco, producido por la accion
   "Probar" y **compartido** entre su panel y el editor de mockups.
 - **Vista de cliente**: composicion 300x300 que la ficha muestra al comprador (y el PNG congelado
@@ -414,6 +430,10 @@ resultante es la misma composicion y el mismo tamano que la que recibe el client
 - **SC-012**: Con dos pestanas del admin sobre el mismo PDF, el ultimo guardado que llega **no
   corrompe** el archivo: la configuracion del PDF sigue siendo legible y el editor informa el
   conflicto en lugar de fallar en silencio.
+- **SC-013**: Con placeholders recortados en formas (PowerClip), activar "Envoltura del PDF" en una
+  capa placeholder recorta la capa en el editor **sin recargar la pagina**, y la ficha del comprador
+  muestra **el mismo recorte** que el editor; el HTML de la pagina **no incluye** la geometria de
+  envolturas no usadas (verificable en el JSON de `datos_pdf_render`).
 
 ## Assumptions
 

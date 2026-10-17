@@ -873,9 +873,12 @@ jQuery(function ($) {
             // Envoltura (PowerClip del PDF): recorta la capa al contenedor
             // vectorial del hueco. La pagina solo trae CLAVES: el toggle se
             // habilita segun el analisis y la geometria se pide al marcar.
+            // `checked` solo si ademas HAY envoltura: una capa guardada con
+            // envoltura cuya clave desaparecio no se muestra marcada con un
+            // aviso que la contradice (el flag persiste en el config).
             var infoEnv = infoEnvoltura(c.ref);
             html += '<label class="ec-mk-ancho"><input type="checkbox" class="ec-mk-envoltura"'
-                + (c.envoltura ? ' checked' : '') + (infoEnv.hay ? '' : ' disabled')
+                + (c.envoltura && infoEnv.hay ? ' checked' : '') + (infoEnv.hay ? '' : ' disabled')
                 + '> Envoltura del PDF (PowerClip)</label>';
             if (!infoEnv.hay) {
                 html += infoEnv.disponible
@@ -1377,8 +1380,10 @@ jQuery(function ($) {
         var info = infoEnvoltura(ref);
         if (!apiMotor || !info.hay) {
             c.envoltura = false;
-            $ed.find('.ec-mk-alertas').text('No hay envoltura analizada para este placeholder.');
+            // OJO: refrescar() vacia .ec-mk-alertas (pintarAlertas); el aviso
+            // SIEMPRE va DESPUES del refrescar, o desaparece al instante.
             refrescar();
+            $ed.find('.ec-mk-alertas').text('No hay envoltura analizada para este placeholder.');
             return;
         }
         apiMotor('envoltura', { pdf: datos.pdf, gid: gid, n: info.n })
@@ -1386,25 +1391,36 @@ jQuery(function ($) {
                 var env = j && j.data ? j.data.envoltura : null;
                 if (env) {
                     estado.envs[gid + '#' + info.n] = env;
-                }
-                var actual = capa();
-                if (actual && actual.ref === ref) {
-                    if (!env) {
-                        actual.envoltura = false;
-                        $ed.find('.ec-mk-alertas').text(
-                            'El analisis no conserva la envoltura de este placeholder: se quito el recorte.');
-                    }
+                    // Cache nueva: repintar siempre, aunque la seleccion haya
+                    // cambiado mientras viajaba el pedido.
                     refrescar();
+                    return;
                 }
+                revertirEnvoltura(ref,
+                    'El analisis no conserva la envoltura de este placeholder: se quito el recorte.');
             })
             .catch(function (e) {
-                var actual = capa();
-                if (actual && actual.ref === ref) { actual.envoltura = false; }
                 var msg = (e instanceof Error && e.message)
                     ? e.message : 'No se pudo pedir la envoltura al servidor.';
-                $ed.find('.ec-mk-alertas').text(msg);
-                refrescar();
+                revertirEnvoltura(ref, msg);
             });
+    }
+
+    /**
+     * Desmarca `envoltura` en la capa con ese `ref` dentro de la vista ACTUAL
+     * (la seleccion pudo cambiar mientras viajaba el pedido: se busca por ref,
+     * no por seleccion) y avisa. El aviso va despues de refrescar, que vacia
+     * el contenedor de alertas.
+     */
+    function revertirEnvoltura(ref, mensaje) {
+        var m = mockup();
+        (m ? m.capas : []).forEach(function (capa2) {
+            if (capa2 && capa2.ref === ref) {
+                capa2.envoltura = false;
+            }
+        });
+        refrescar();
+        $ed.find('.ec-mk-alertas').text(mensaje);
     }
 
     /* Recursos: miniaturas del catalogo y placeholders (un clic = capa). */

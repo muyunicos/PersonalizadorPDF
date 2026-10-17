@@ -10,6 +10,9 @@
  * - indice 0 al fondo; `oculta` se salta pero conserva su geometria;
  * - el recurso se ENCAJA sin deformar (nunca estirar) y se informa si la
  *   proporcion de la caja difiere de la del recurso;
+ * - si la capa placeholder pide `envoltura` y el contexto trae su clip
+ *   (PowerClip del PDF), se aplica `ctx.clip` ANTES de dibujar; sin clip
+ *   disponible, degrada sin recortar (nunca falla);
  * - rotacion y sesgo en el centro de la caja, cada capa aislada con
  *   save/restore (mismo criterio que Overlay en el motor, AGENTS 4.4);
  * - si el recurso no existe, la capa cae a una caja neutra con su ref: la

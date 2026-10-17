@@ -1188,7 +1188,7 @@ class Personalizador_PDF_Plugin
                 }
                 $partes = explode('#', (string)($c['ref'] ?? ''));
                 $gid = strtoupper(trim($partes[0]));
-                if (preg_match('/^[0-9A-F]{6}$/', $gid) !== 1) {
+                if (!$this->id_valido($gid)) {
                     continue;
                 }
                 $n = isset($partes[1]) ? (int)$partes[1] : 1;
