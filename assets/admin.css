@@ -441,6 +441,18 @@ body.ec-c-drawer-abierto { overflow: hidden; }
     margin: 8px 0;
 }
 
+/* Envoltura (PowerClip) del grupo: campo representativo en la cabecera. */
+.ec-panel-grupo .ec-env-grupo {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: #50575e;
+}
+.ec-panel-grupo .ec-env-grupo label { font-weight: 600; }
+.ec-panel-grupo .ec-env-forma { width: 62px; }
+
 /* ============ Procesar ============ */
 .ec-procesar {
     margin-top: 18px;

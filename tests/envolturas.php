@@ -95,11 +95,14 @@ $a1 = analizar(
 $g1 = $a1['analisis']['grupos'][0] ?? null;
 check('W: grupo FF0000 con 2 instancias', $g1 && $g1['id'] === 'FF0000' && (int)$g1['cont'] === 2);
 check('analisis sin envs (formato original)', $g1 && !isset($g1['envs']));
-check('envolturas: version y pdf', ($a1['envolturas']['version'] ?? 0) === 1
+check('envolturas: version 2 y pdf', ($a1['envolturas']['version'] ?? 0) === 2
     && ($a1['envolturas']['pdf'] ?? '') === 'envoltura');
-$e1s = $a1['envolturas']['grupos']['FF0000'] ?? null;
-check('W: envs SOLO en la instancia 1', is_array($e1s) && count($e1s) === 1 && isset($e1s['1']) && !isset($e1s['2']));
-$e1 = is_array($e1s) ? ($e1s['1'] ?? null) : null;
+$e1g = $a1['envolturas']['grupos']['FF0000'] ?? null;
+check('W: 1 forma distinta con mapa COMPLETO', is_array($e1g) && count($e1g['formas']) === 1
+    && ($e1g['mapa']['1'] ?? null) === 1 && ($e1g['mapa']['2'] ?? null) === 0);
+check('W: defecto = la unica forma y usos = 1', is_array($e1g)
+    && (int)$e1g['defecto'] === 1 && (int)$e1g['formas'][0]['usos'] === 1);
+$e1 = is_array($e1g) ? ($e1g['formas'][0] ?? null) : null;
 check('W: par = 0 (non-zero)', $e1 && (int)$e1['par'] === 0);
 check('W: una subruta con curva y cierre', $e1 && count($e1['subs']) === 1
     && count($e1['subs'][0]['s']) === 1 && $e1['subs'][0]['s'][0][0] === 'c'
@@ -117,7 +120,7 @@ check('W: curva con 3 puntos (controles + final)', count($s1) === 7
 $a2 = analizar(
     "/GS1 gs\nq\n100 100 200 200 re W* n\n1 0 0 rg\n150 150 60 60 re f\nQ\n"
 );
-$e2 = $a2['envolturas']['grupos']['FF0000']['1'] ?? null;
+$e2 = $a2['envolturas']['grupos']['FF0000']['formas'][0] ?? null;
 check('W*: par = 1 (even-odd)', $e2 && (int)$e2['par'] === 1);
 check('W*: subruta cerrada de lineas', $e2 && count($e2['subs'][0]['s']) === 3
     && $e2['subs'][0]['s'][0][0] === 'l' && !empty($e2['subs'][0]['c']));
@@ -139,7 +142,7 @@ $a4 = analizar(
     "q\n300 300 m 400 300 l 400 400 l 300 400 l h W n\n1 0 0 rg\n310 310 80 80 re f\nQ\n"
 );
 $g4 = $a4['analisis']['grupos'][0]['id'] ?? '';
-$e4 = $a4['envolturas']['grupos'][$g4]['1'] ?? null;
+$e4 = $a4['envolturas']['grupos'][$g4]['formas'][0] ?? null;
 check('Form XObject: placeholder con envoltura', $e4 !== null);
 // Rect 310,310 80x80; clip m(300,300) -> u=-0.125, v=1.125.
 $m4 = $e4['subs'][0]['m'] ?? [99, 99];
@@ -157,6 +160,41 @@ $g5 = $a5['analisis']['grupos'][0] ?? null;
 check('densa: la instancia se detecta igual', $g5 && (int)$g5['cont'] === 1);
 check('densa: sin envoltura por tope de segmentos',
     ($a5['envolturas']['grupos'][$g5['id'] ?? ''] ?? null) === null);
+
+/* 6) EL CASO REPORTADO: N instancias, cada una con SU marco identico
+   (relativo a su rect) -> UNA sola forma. Antes se guardaba una copia por
+   instancia y el tope de 100 truncaba el resto. */
+$repes = '';
+for ($i = 0; $i < 60; $i++) {
+    $dx = 1 + ($i % 10);
+    $dy = 1 + intdiv($i, 10);
+    $repes .= "q\n1 0 0 1 $dx $dy cm\n"
+        . "200 300 m 400 300 400 500 200 500 c h W n\n"
+        . "1 0 0 rg\n250 350 100 120 re f\nQ\n";
+}
+$a6 = analizar("/GS1 gs\n" . $repes);
+$g6 = $a6['analisis']['grupos'][0] ?? null;
+$e6 = $a6['envolturas']['grupos']['FF0000'] ?? null;
+check('60 iguales: las 60 instancias se detectan', $g6 && (int)$g6['cont'] === 60);
+check('60 iguales: UNA sola forma con usos = 60', is_array($e6)
+    && count($e6['formas']) === 1 && (int)$e6['formas'][0]['usos'] === 60);
+check('60 iguales: mapa completo (60 entradas, todas la forma 1)', is_array($e6)
+    && count($e6['mapa']) === 60 && count(array_unique($e6['mapa'])) === 1
+    && (int)$e6['mapa']['60'] === 1);
+check('60 iguales: archivo chico (sin copias del marco)',
+    strlen(json_encode($a6['envolturas'])) < 4000,
+    strlen(json_encode($a6['envolturas'])) . ' bytes');
+
+/* 7) Dos instancias con marcos DISTINTOS -> dos formas y excepcion real. */
+$a7 = analizar(
+    "/GS1 gs\nq\n200 300 m 400 300 400 500 200 500 c h W n\n1 0 0 rg\n250 350 100 120 re f\nQ\n"
+    . "q\n300 300 m 500 300 500 500 300 500 c h W n\n1 0 0 rg\n320 350 100 120 re f\nQ\n"
+);
+$e7 = $a7['envolturas']['grupos']['FF0000'] ?? null;
+check('distintos: 2 formas y defecto = la primera', is_array($e7)
+    && count($e7['formas']) === 2 && (int)$e7['defecto'] === 1);
+check('distintos: mapa por instancia (1->1, 2->2)', is_array($e7)
+    && (int)$e7['mapa']['1'] === 1 && (int)$e7['mapa']['2'] === 2);
 
 if ($fallas > 0) {
     echo "ENVOLTURAS FALLA: $fallas checks.\n";

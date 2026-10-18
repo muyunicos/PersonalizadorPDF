@@ -200,10 +200,12 @@
     /* ============ Envolturas (PowerClip) ============ */
 
     /**
-     * Envoltura (clip vectorial del PDF, p.ej. PowerClip de Corel) de una
-     * capa placeholder. `grupos` trae `envs` por instancia del analisis
-     * (`{n: {par, subs}}`, normalizado 0..1 con v en espacio canvas). El
-     * `ref` plano ({grupo}) usa la instancia #1. Sin envoltura -> null: la
+     * Envoltura (clip del PDF) de una capa placeholder. v2 (formas
+     * deduplicadas): la pagina trae la forma POR DEFECTO del grupo UNA vez
+     * (`env_defecto`) + las excepciones (`env_exc`, 0 = sin envoltura) + la
+     * geometria de las excepciones ya resueltas (`envs`). Resolucion:
+     * excepcion explicita > geometria resuelta > forma por defecto. El `ref`
+     * plano ({grupo}) usa la instancia #1. Sin envoltura -> null: la
      * composicion degrada al rectangulo (nunca falla).
      */
     function envolturaDeRef(ref, grupos) {
@@ -212,10 +214,24 @@
         if (isNaN(n) || n < 1) { n = 1; }
         var env = null;
         (grupos || []).forEach(function (g) {
-            if (g && String(g.id) === partes[0] && g.envs) {
-                var cand = g.envs[String(n)];
-                if (cand && cand.subs && cand.subs.length) { env = cand; }
+            if (!g || String(g.id) !== partes[0]) { return; }
+            var exc = g.env_exc || {};
+            var esExc = Object.prototype.hasOwnProperty.call(exc, String(n));
+            if (esExc && numero(exc[String(n)]) === 0) {
+                env = null; // excepcion explicita: esta instancia no tiene envoltura
+                return;
             }
+            var resuelta = (g.envs && g.envs[String(n)]) || null;
+            if (resuelta && resuelta.subs && resuelta.subs.length) {
+                env = resuelta; // excepcion con geometria (embebida o pedida)
+                return;
+            }
+            if (esExc) {
+                env = null; // excepcion pendiente de pedido: NUNCA cae a la default
+                return;
+            }
+            var def = g.env_defecto || null;
+            env = (def && def.subs && def.subs.length) ? def : null;
         });
         return env;
     }

@@ -55,6 +55,16 @@
         return out;
     }
 
+    /**
+     * Envoltura valida (geometria `{par, subs}` normalizada 0..1) o null.
+     * Es la guia visual del recorte real (PowerClip) del grupo: NUNCA corta
+     * el PNG (el clip lo aplica el PDF al procesar).
+     */
+    function envolturaValida(e) {
+        if (!e || !e.subs || !e.subs.length) { return null; }
+        return { par: e.par ? 1 : 0, subs: e.subs };
+    }
+
     /** Estado inicial de las ranuras: N bloques vacios. */
     function estadoInicial(ranuras) {
         return ranuras.map(function () { return { ids: [] }; });
@@ -104,6 +114,9 @@
             '.cpmu{margin:0 0 12px}'
             + '.cpmu-ranura{border:1px solid #dcdcde;border-radius:6px;padding:10px;margin:0 0 10px}'
             + '.cpmu-titulo{margin:0 0 8px;font-size:12px;color:#50575e}'
+            + '.cpmu-guia{display:inline-block;margin:0 0 8px;padding:6px 8px;border:1px dashed #c3c4c7;border-radius:4px}'
+            + '.cpmu-guia-tit{margin:0 0 4px;font-size:11.5px;color:#646970}'
+            + '.cpmu-guia-canvas{display:block;background:#fff}'
             + '.cpmu-tiras{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}'
             + '.cpmu-mini{width:56px;height:56px;border:1px solid #2271b1;background:#f0f6fc;'
             + 'color:#2271b1;font:600 15px/1 system-ui,sans-serif;cursor:pointer;border-radius:4px;'
@@ -136,7 +149,10 @@
             urlDe: typeof config.urlDe === 'function' ? config.urlDe : null,
             // Spec 012 (T011b/FR-009): en el preview de la consola se DIBUJAN las
             // ranuras sin subir nada (ni boton, ni arrastre, ni endpoint).
-            preview: !!config.preview
+            preview: !!config.preview,
+            // Guia del cargador (envoltura del grupo, opcion b): pista visual
+            // del recorte que aplicara el clip del PDF.
+            envoltura: envolturaValida(config.envoltura)
         };
         this.estado = estadoInicial(this.config.ranuras);
         // FR-017: al re-editar, los ids guardados se restauran en sus ranuras
@@ -193,6 +209,40 @@
         return true;
     }
 
+    /** Guia visual: la forma de la envoltura escalada a la ranura. */
+    CargadorPMU.prototype._guia = function (doc, r) {
+        var max = Math.max(1, Math.max(r.w, r.h));
+        var w = Math.max(40, Math.round(120 * (r.w / max)));
+        var h = Math.max(40, Math.round(120 * (r.h / max)));
+        var caja = doc.createElement('div');
+        caja.className = 'cpmu-guia';
+        var tit = doc.createElement('p');
+        tit.className = 'cpmu-guia-tit';
+        tit.textContent = 'Guia de la envoltura (' + r.w + 'x' + r.h + ' px)';
+        caja.appendChild(tit);
+        var cv = doc.createElement('canvas');
+        cv.width = w;
+        cv.height = h;
+        cv.className = 'cpmu-guia-canvas';
+        var ctx = cv.getContext('2d');
+        var env = this.config.envoltura;
+        var comandos = (global.PMUMockup && global.PMUMockup.comandosEnvoltura)
+            ? global.PMUMockup.comandosEnvoltura(env, { x: 0, y: 0, w: w, h: h })
+            : [];
+        ctx.fillStyle = 'rgba(34, 113, 177, .08)';
+        ctx.strokeStyle = '#2271b1';
+        ctx.lineWidth = 1.5;
+        if (comandos.length && global.PMUMockup.trazarEnvoltura) {
+            global.PMUMockup.trazarEnvoltura(ctx, comandos);
+            ctx.fill(env.par ? 'evenodd' : 'nonzero');
+            ctx.stroke();
+        } else {
+            ctx.strokeRect(0.75, 0.75, w - 1.5, h - 1.5);
+        }
+        caja.appendChild(cv);
+        return caja;
+    };
+
     /** Un bloque por ranura: encabezado, miniaturas, zona de arrastrar. */
     CargadorPMU.prototype._bloque = function (r, i, doc) {
         var self = this;
@@ -205,6 +255,13 @@
         tit.textContent = r.w + 'x' + r.h + ' px - ' + r.forma
             + ' - min ' + r.min + (r.max > 1 ? ' - hasta ' + r.max : '');
         div.appendChild(tit);
+
+        // Guia visual de la envoltura (PowerClip) del grupo: el comprador ve
+        // la forma en la que su foto quedara cortada. Solo PISTA: el PNG se
+        // guarda sin cortar y el clip real lo aplica el PDF.
+        if (this.config.envoltura) {
+            div.appendChild(this._guia(doc, r));
+        }
 
         var tira = doc.createElement('div');
         tira.className = 'cpmu-tiras';

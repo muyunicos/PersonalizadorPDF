@@ -1,6 +1,6 @@
 # Contract: Capas de mockup y render compartido
 
-**Feature**: 011-editor-mockups-visual | **Version**: 3 (enmienda `004-woocommerce-pdf-personalization/contracts/mockups.md`; v3 agrega envolturas PowerClip)
+**Feature**: 011-editor-mockups-visual | **Version**: 4 (enmienda `004-woocommerce-pdf-personalization/contracts/mockups.md`; v3 envolturas PowerClip, v4 dedup de formas + forma representativa + guia del cargador)
 
 Contrato de la composicion de un mockup (`config.json:mockups[]`) y del **nucleo de render
 compartido** que la usan el editor del admin y la ficha del cliente. Especificacion: [../spec.md](../spec.md).
@@ -60,50 +60,65 @@ Este contrato lo reemplaza por el namespace `pdf:` / `img:` y aclara la misma re
 catalogo se referencia por **id numerico**, no por nombre de archivo (el nombre puede cambiar en una
 edicion del catalogo; el id no). `ref` plano se tolera como `pdf:`.
 
-### 1.4 Envolturas (PowerClip del PDF) — v3
+### 1.4 Envolturas (PowerClip del PDF) — v4
 
 Un placeholder puede venir **recortado dentro de una forma vectorial** en el PDF (PowerClip de
 CorelDRAW: corazon, estrella, etc.). El procesado ya lo respeta en el PDF final (`Overlay`
-splicea la imagen dentro del clip activo, AGENTS §4.5); aqui se define su **previsualizacion** en
-el mockup, con envio **lazy** de la geometria.
+splicea la imagen dentro del clip activo, AGENTS §4.5); aqui se define su **previsualizacion**: en
+el mockup (recorte de la capa) y en el cargador del comprador (guia al subir la foto).
 
 - **Extraccion**: `Detector` captura el clip activo (`W`/`W*` + `q`/`Q`, tambien dentro de Form
   XObjects) al detectar cada instancia; `Metadata::generarEnvolturas` lo normaliza al marco del
   rect y lo escribe en el archivo **derivado** `pdfs/{nombre}/envolturas.json`
-  (regenerado en Subir PDF / Re-analizar; **nunca** vive en `analisis.json`, que conserva su
-  formato original):
+  (regenerado en Subir PDF / Re-analizar; **nunca** vive en `analisis.json`):
 
   ```json
-  { "version": 1, "pdf": "muestra", "creado": "...",
-    "grupos": { "0000FF": { "1": { "par": 0, "subs": [ { "m": [0.5, -0.2], "s": [["c", 1, 0.5, 1, 1, 0, 1]], "c": 1 } ] } } } }
+  { "version": 2, "pdf": "muestra", "creado": "...",
+    "grupos": { "0000FF": {
+        "formas": [ {"par":0, "usos":598, "subs":[ {"m":[0.5,-0.2], "s":[["c",1,0.5,1,1,0,1]], "c":1} ]} ],
+        "defecto": 1,
+        "mapa": { "1": 1, "2": 1, "37": 2, "42": 0 } } } }
   ```
 
-  - clave = indice **1-based** de la instancia (el `{grupo}#n` del editor); ausente = sin envoltura;
-  - `par`: 1 = even-odd (`W*`), 0 = non-zero (`W`);
-  - `subs[].m` + segmentos planos `["l",u,v]` / `["c",u1,v1,u2,v2,u3,v3]`; `c` cierra la subruta;
+  - **`formas`**: las formas **DISTINTAS** con sus `usos` (una sola copia por forma: un grupo de
+    600 instancias con el mismo marco ocupa ~12 KB, no 600 copias ni 100 truncadas);
+  - **`defecto`**: la forma **mas usada** (empate -> la primera); es la "representativa" del grupo;
+  - **`mapa`**: `n -> k` para **TODAS** las instancias (k=0 = sin envoltura). Es completo (ints,
+    barato) para que el override del admin no falsee la geometria real de cada instancia;
+  - `par`: 1 = even-odd (`W*`), 0 = non-zero (`W`); `subs[].m` + segmentos planos
+    `["l",u,v]` / `["c",u1,v1,u2,v2,u3,v3]`; `c` cierra la subruta;
   - coordenadas **normalizadas 0..1** sobre el rect del placeholder, con `v` ya en espacio canvas;
-  - topes: `Metadata::ENV_MAX` (100) envolturas por grupo y `Metadata::ENV_SEG_MAX` (5000)
-    segmentos por envoltura (una forma patologicamente densa no se publica);
-  - **archivo presente con `grupos` vacios = "analizado sin envolturas"**; archivo ausente =
-    PDF analizado con una version sin soporte (Re-analizar).
-- **Envio lazy (sin superficie publica nueva)**:
-  - `datos_pdf_render` publica `envolturas: {disponible, claves: {gid: [n,...]}}` (solo CLAVES)
-    y `grupos[].envs` con la geometria **SOLO de los refs usados** con `envoltura: true` en los
-    mockups guardados: la ficha del comprador compone con clip sin ningun endpoint publico;
-  - el editor pide la de `gid#n` al motor via **`op=envoltura`** (`admin_post_pmu_uploads`,
-    nonce + capability; respuesta `{archivado, envoltura|null}`) y la cachea en la sesion
-    (`estado.envs`), mezclandola en `contexto().grupos[].envs` (el nucleo no cambia).
-- **Capa**: `envoltura: true` en una capa placeholder pide recortarla. El clip se resuelve con
-  `envolturaDeRef(ref, contexto.grupos)` (ref plano = instancia #1).
-- **Aplicacion**: `componer` traza la envoltura (`comandosEnvoltura` + `trazarEnvoltura`) y aplica
-  `ctx.clip(regla)` dentro del `save`/`restore` de la capa, ANTES de dibujar la imagen (y la caja
-  neutra): la forma recorta todo lo que dibuje esa capa. Afecta igual al editor y a la ficha.
-- **Degradacion**: sin envoltura disponible para el `ref` pedido, la capa compone sin clip y el
-  editor informa la causa diferenciada: **sin archivo** -> "pulsa Re-analizar para extraerlas";
-  **con archivo pero sin esa clave** -> "este placeholder no esta recortado en ninguna forma".
-  Si el pedido falla (red/servidor), la capa se desmarca **por `ref` (no por seleccion: pudo
-  cambiar mientras viajaba el pedido)** con aviso posterior al `refrescar()` (que vacia el
-  contenedor de alertas).
+  - topes: `Metadata::ENV_MAX` (100) **formas distintas** por grupo y `Metadata::ENV_SEG_MAX`
+    (5000) segmentos por forma;
+  - **`grupos` vacio = "analizado sin envolturas"**; archivo ausente = analizado con una version
+    sin soporte (Re-analizar). Un archivo **v1** (una entrada por instancia) se deduplica EN
+    MEMORIA al leer: nada se rompe antes de re-analizar.
+- **Forma representativa (config editable)**: `config.json:envolturas{gid:{forma:k}}` — el admin
+  la elige en la cabecera del grupo (consola: "Envoltura: [1..N]", deshabilitado con "sin
+  envolturas"). `0`/ausente = la detectada. Resolucion de `gid#n`:
+  **`mapa[n]` > override > `defecto`** (el override cambia la representativa —guia del cargador y
+  relleno del mockup—, nunca la geometria real de una instancia).
+- **Envio al navegador (sin superficie publica nueva)**: `datos_pdf_render` publica por grupo
+  `env_defecto` (la forma por defecto, **UNA vez**) + `env_exc` (`{n:k}`, solo lo que difiere del
+  defecto) + `env_formas` (N) + `envs` (geometria de las **excepciones usadas** en los mockups
+  guardados) + `envolturas:{disponible,formas,defecto,usos,excepciones}`. Con eso, una instancia
+  que usa la forma por defecto **no pide nada**; una excepcion pide su geometria via
+  **`op=envoltura`** (`admin_post_pmu_uploads`, nonce + capability; respuesta
+  `{archivado, forma, envoltura|null}`) y se cachea en `estado.envs`.
+- **Capa del mockup**: `envoltura: true` en una capa placeholder. `envolturaDeRef(ref, grupos)`
+  resuelve **excepcion > geometria resuelta > forma por defecto** (una excepcion pendiente NUNCA
+  cae a la default). `componer` traza la envoltura (`comandosEnvoltura` + `trazarEnvoltura`) y
+  aplica `ctx.clip(regla)` ANTES de dibujar; afecta igual al editor y a la ficha.
+- **Guia del cargador (opcion b)**: `config.json:campos_envoltura{campo_id: gid}` — la asociacion
+  es por **PDF** (un campo se reutiliza en N PDFs) y se elige en la consola. `panel_ficha` resuelve
+  la forma por defecto del grupo y la publica en el campo (`envoltura` + `envoltura_gid`);
+  `cargador-pmu.js` dibuja un canvas de guia por ranura (`_guia`, reusa `comandosEnvoltura`). El
+  PNG del pool va **sin cortar**: el corte real lo hace el clip del PDF (evita doble corte).
+- **Degradacion**: sin envoltura la capa compone sin clip y el editor informa la causa
+  diferenciada: **sin archivo** -> "pulsa Re-analizar para extraerlas"; **instancia con `k=0`** ->
+  "esta instancia no tiene envoltura en el PDF"; **con archivo pero sin forma** -> "no esta
+  recortado en ninguna forma". Si el pedido falla (red/servidor), la capa se desmarca **por `ref`**
+  con aviso posterior al `refrescar()`.
 
 ## 2. Nucleo de render compartido
 
@@ -161,11 +176,13 @@ Un ajuste nuevo debe estar en los **dos** lados, o el cliente ve distinto a lo q
 
 - [ ] `PMU_Uploads::config_mockups` (allowlist + clamp) **y** `handle_mockups_guardar` (saneo)
 - [ ] `PMUMockup.filtroCss` (aplicacion unica, compartida por editor y ficha)
-- [ ] envolturas: `Detector` (captura del clip) **y** `Metadata::generarEnvolturas`
-      (`analizar_y_guardar` escribe `envolturas.json`); `PMU_Uploads` (`ruta_envolturas` +
-      `leer_envolturas` + `op=envoltura`); `datos_pdf_render` (claves + solo las usadas,
-      con `envolturas_usadas` reutilizando `id_valido`); `PMU_Uploads::config_mockups`
-      (`envoltura`) **y** `PMUMockup.componer` (clip via `envolturaDeRef`/`comandosEnvoltura`)
+- [ ] envolturas: `Detector` (captura del clip) **y** `Metadata::generarEnvolturas` +
+      `agruparFormas` (dedup, `analizar_y_guardar` escribe `envolturas.json` v2); `PMU_Uploads`
+      (`ruta_envolturas` + `leer_envolturas` v1/v2 + `envoltura_claves`/`envoltura_datos`/
+      `envoltura_defecto` + `op=envoltura`); config `envolturas` y `campos_envoltura` (allowlist);
+      `datos_pdf_render` (forma por defecto + excepciones usadas + claves) **y** `PMUMockup.componer`
+      (clip via `envolturaDeRef`/`comandosEnvoltura`); `panel_ficha` (guia del cargador) **y**
+      `cargador-pmu.js` (`_guia`)
 
 ## 6. Criterios de verificacion
 
@@ -181,6 +198,13 @@ Un ajuste nuevo debe estar en los **dos** lados, o el cliente ve distinto a lo q
   causa diferenciada.
 - `analisis.json` **nunca** lleva `envs` (formato original intacto); `envolturas.json` con
   `grupos` vacios = analizado sin envolturas (distinto de archivo ausente = Re-analizar).
+- **Dedup**: 60 instancias con el mismo marco -> **1 forma** (`usos: 60`) + `mapa` de 60 entradas
+  (< 4 KB); dos marcos distintos -> 2 formas y `mapa` {1:1, 2:2}. Un archivo v1 se lee igual
+  (dedup en memoria).
+- La forma por defecto **viaja una vez** por grupo (`env_defecto`): una instancia default no pide
+  nada; una excepcion pide su geometria (y nunca cae a la default mientras no llega).
+- El cargador del comprador dibuja la guia de la forma representativa del grupo asociado
+  (`campos_envoltura`) y el PNG del pool sigue **sin cortar** (el clip lo aplica el PDF).
 - El chequeo del toggle/lazy del editor, del saneo PHP y del endpoint viven en
   `tests/mockup-contrato.test.js`; la extraccion, en `tests/envolturas.php` (PDF sintetico:
   W, W*, Q, Form XObject y forma densa > ENV_SEG_MAX); el endpoint, en la fase

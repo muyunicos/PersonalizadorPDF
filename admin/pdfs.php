@@ -273,6 +273,47 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                         <span class="description">Los campos elegidos aca alimentan el selector de cada placeholder.</span>
                     </p>
                     <?php
+                    // Envoltura del cargador (opcion b): por CAMPO dentro de ESTE
+                    // PDF (un campo se reutiliza en N PDFs). El comprador ve la
+                    // forma como guia al cortar su foto; el corte real lo hace el
+                    // clip del PDF.
+                    $grupos_env = [];
+                    foreach ((array)$grupos as $g_env) {
+                        $gid_env = (string)($g_env['id'] ?? '');
+                        $n_env = isset($g_env['envoltura']['formas']) ? (int)$g_env['envoltura']['formas'] : 0;
+                        if ($gid_env !== '' && $n_env > 0) {
+                            $grupos_env[$gid_env] = $n_env;
+                        }
+                    }
+                    if (!empty($cfg_pdf['campos_ids']) && $grupos_env) :
+                    ?>
+                    <p>
+                        <span class="ec-block-label">Envoltura del cargador (guia al subir la foto)</span>
+                        <?php foreach ((array)$cfg_pdf['campos_ids'] as $cid_sel) :
+                            $cid_sel = (int)$cid_sel;
+                            if (!isset($todos_campos[$cid_sel])) {
+                                continue;
+                            }
+                            $t_sel = $todos_campos[$cid_sel];
+                            $gid_sel = isset($cfg_pdf['campos_envoltura'][(string)$cid_sel])
+                                ? (string)$cfg_pdf['campos_envoltura'][(string)$cid_sel] : '';
+                        ?>
+                        <label class="ec-env-campo">
+                            #<?php echo (int)$cid_sel; ?> <?php echo esc_html($t_sel[1] !== '' ? $t_sel[1] : '(oculto)'); ?>:
+                            <select name="campos_envoltura[<?php echo (int)$cid_sel; ?>]">
+                                <option value="" <?php selected($gid_sel, ''); ?>>sin guia</option>
+                                <?php foreach ($grupos_env as $gid_env => $n_env) : ?>
+                                <option value="<?php echo esc_attr($gid_env); ?>" <?php selected($gid_sel, $gid_env); ?>>
+                                    #<?php echo esc_html($gid_env); ?> (<?php echo (int)$n_env; ?> forma<?php echo $n_env > 1 ? 's' : ''; ?>)
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <?php endforeach; ?>
+                        <span class="description">El comprador ve la forma como guia al cortar su foto (el corte real lo hace el clip del PDF).</span>
+                    </p>
+                    <?php endif; ?>
+                    <?php
                     // Spec 005 (T004): "Configuracion tienda" por asociacion PDFxproducto.
                     // `validez` es una expresion JS que se evalua SOLO en el navegador
                     // (PHP nunca evalua JS); `bloquear` solo tiene efecto con validez.
@@ -385,6 +426,40 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                             <h3>Grupo <?php echo esc_html(strtoupper($gid)); ?>
                                 <span class="ec-badge" style="background:#<?php echo esc_attr($gid); ?>"><?php echo esc_html('#' . $gid); ?></span>
                             </h3>
+                            <?php
+                            // Envoltura (PowerClip) del grupo: se elige la forma
+                            // REPRESENTATIVA (1..N de las formas distintas de
+                            // envolturas.json). Es la que usa la guia del cargador
+                            // del comprador y el relleno del mockup. Sin envolturas
+                            // el campo sale deshabilitado con la causa.
+                            $envG = isset($g['envoltura']) && is_array($g['envoltura']) ? $g['envoltura'] : [];
+                            $envN = isset($envG['formas']) ? (int)$envG['formas'] : 0;
+                            $envDef = isset($envG['defecto']) ? (int)$envG['defecto'] : 0;
+                            $envUsos = isset($envG['usos']) ? array_values((array)$envG['usos']) : [];
+                            $envExc = isset($envG['excepciones']) ? (array)$envG['excepciones'] : [];
+                            ?>
+                            <span class="ec-env-grupo">
+                                <label for="ec-env-<?php echo esc_attr($gid); ?>">Envoltura:</label>
+                                <?php if ($envN > 0) : ?>
+                                    <input type="number" id="ec-env-<?php echo esc_attr($gid); ?>"
+                                           class="ec-env-forma small-text" min="1" max="<?php echo (int)$envN; ?>"
+                                           step="1" name="envolturas[<?php echo esc_attr($gid); ?>][forma]"
+                                           value="<?php echo (int)$envDef; ?>">
+                                    <span class="description">
+                                        <?php echo (int)$envN; ?> forma(s); la <?php echo (int)$envDef; ?> es la
+                                        mas usada (<?php echo (int)(isset($envUsos[$envDef - 1]) ? $envUsos[$envDef - 1] : 0); ?>
+                                        de <?php echo (int)$g['cont']; ?> instancias)<?php
+                                        echo $envExc ? ' — ' . count($envExc) . ' excepcion(es)' : ''; ?>
+                                    </span>
+                                <?php else : ?>
+                                    <input type="number" id="ec-env-<?php echo esc_attr($gid); ?>"
+                                           class="ec-env-forma small-text" value="" disabled
+                                           title="Sin envolturas analizadas para este grupo">
+                                    <span class="description">sin envolturas<?php
+                                        echo empty($envG['disponible'])
+                                            ? ' — re-analiza el PDF para extraerlas' : ''; ?></span>
+                                <?php endif; ?>
+                            </span>
                         </div>
                         <p class="ec-datos-grupo">
                             Marco: <strong><?php echo (int)$mnW; ?>x<?php echo (int)$mnH; ?> px</strong> —

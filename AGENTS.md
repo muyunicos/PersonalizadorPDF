@@ -345,18 +345,22 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `pdfs/`, `orders/` y `tmp/` son ámbitos de datos del motor, sin catálogo ni sprite.
 - Datasets PDF: `pdfs/{nombre}/analisis.json` (geometría inmutable del Detector: grupos
   `id`/`w`/`h`/`cont`/`pgs`; **sin envolturas**: su formato original nunca cambia)
-  + `pdfs/{nombre}/envolturas.json` (archivo DERIVADO: envolturas PowerClip por instancia `#n`
-  (`{par, subs}` normalizado 0..1 al rect del placeholder); se regenera en Subir/Re-analizar, se
-  lee bajo demanda via `op=envoltura` y `datos_pdf_render` solo emite las claves + la geometria
-  de las refs usadas con `envoltura:true`; archivo ausente = analizado sin soporte → el toggle
-  "Envoltura del PDF" sale deshabilitado hasta Re-analizar; `grupos` vacios = analizado sin
-  envolturas) + `pdfs/{nombre}/config.json` (editable: `activo`, `productos`,
+  + `pdfs/{nombre}/envolturas.json` (archivo DERIVADO **v2**, formas DEDUPLICADAS: `formas[]`
+  distintas con `usos`, `defecto` (la más usada = representativa) y `mapa` `{n: k}` completo
+  (0 = instancia sin envoltura); se regenera en Subir/Re-analizar, se lee bajo demanda via
+  `op=envoltura` y `datos_pdf_render` emite la forma por defecto UNA vez por grupo +
+  las excepciones usadas; un v1 se deduplica al leer; archivo ausente = Re-analizar;
+  `grupos` vacios = analizado sin envolturas) + `pdfs/{nombre}/config.json` (editable: `activo`, `productos`,
   `campos_ids`, `preview_omisible` (bool, default `false` = mockup obligatorio en ficha),
   `mockups[]` (plantillas de vista previa: `capas[]` con `tipo`/`ref`/`x`/`y`/`w`/`h`/
   `rot`/`sesgo`/`filtros`/`modo`/`nombre`/`oculta`/`bloqueada`; canvas 300x300),
   `tienda{product_id}` (spec 005: Configuracion
   tienda por asociacion PDFxproducto: `activo`/`validez`/`mensaje_html`/`bloquear`;
-  la expresion `validez` se evalua SOLO en el navegador, PHP nunca evalua JS), `placeholders[id]` con
+  la expresion `validez` se evalua SOLO en el navegador, PHP nunca evalua JS),
+  `envolturas{gid:{forma:k}}` (contrato v4: forma representativa del grupo dentro de
+  `envolturas.json`; 0/ausente = la mas usada; el campo sale en la cabecera del grupo),
+  `campos_envoltura{campo_id: gid}` (contrato v4: guia del cargador del comprador por
+  asociacion PDFxcampo — el campo se reutiliza en N PDFs), `placeholders[id]` con
   `tipo`/`preset`/`value`/`settings`, `bonus[]` (4.7.0: archivos extra 0..N
   de la **biblioteca global compartida** `uploads/pmu/bonus/` con catalogo
   `bonus.json`; filas `{archivo, titulo}` (biblioteca; `titulo` vacio =

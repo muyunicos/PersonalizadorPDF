@@ -132,13 +132,40 @@ var motorPhp = leer('inc/class-pmu-uploads.php');
 
 check('el editor trae el toggle de envoltura con su handler', editor.indexOf('ec-mk-envoltura') !== -1
     && editor.indexOf('c.envoltura = activar') !== -1
-    && editor.indexOf('R.envolturaDeRef(c.ref, contexto())') !== -1
+    && editor.indexOf('infoEnvoltura(c.ref)') !== -1
     && editor.indexOf('para extraerla') !== -1);
 check('el toggle checked exige que ademas HAYA envoltura (sin contradiccion)',
     editor.indexOf('c.envoltura && infoEnv.hay') !== -1);
 check('el editor pide la geometria bajo demanda (lazy)', editor.indexOf("apiMotor('envoltura'") !== -1
     && editor.indexOf('estado.envs') !== -1
     && editor.indexOf('infoEnvoltura(') !== -1);
+check('la forma por defecto se resuelve SIN pedidos (env_defecto)', (function () {
+    var g = [{ id: '0000FF', env_defecto: envEjemplo }];
+    return R.envolturaDeRef('0000FF', g) === envEjemplo
+        && R.envolturaDeRef('0000FF#5', g) === envEjemplo;
+})());
+check('una excepcion NUNCA cae a la forma por defecto', (function () {
+    var g = [{ id: '0000FF', env_defecto: envEjemplo, env_exc: { '3': 2 } }];
+    return R.envolturaDeRef('0000FF#3', g) === null;
+})());
+check('una excepcion resuelta usa SU geometria', (function () {
+    var otra = { par: 1, subs: envEjemplo.subs };
+    var g = [{ id: '0000FF', env_defecto: envEjemplo, env_exc: { '3': 2 }, envs: { '3': otra } }];
+    return R.envolturaDeRef('0000FF#3', g) === otra;
+})());
+check('excepcion 0 = instancia sin envoltura', (function () {
+    var g = [{ id: '0000FF', env_defecto: envEjemplo, env_exc: { '4': 0 } }];
+    return R.envolturaDeRef('0000FF#4', g) === null
+        && R.envolturaDeRef('0000FF#7', g) === envEjemplo;
+})());
+check('el aviso de "sin envoltura" va despues del refrescar', (function () {
+    var iH = editor.indexOf("$ed.on('change', '.ec-mk-envoltura'");
+    if (iH === -1) { return false; }
+    var cuerpo = editor.slice(iH, iH + 1400);
+    var iRef = cuerpo.indexOf('refrescar();');
+    var iTxt = cuerpo.indexOf('.text(info.sin');
+    return iRef !== -1 && iTxt > iRef;
+})());
 check('el fallo del pedido revierte POR REF y avisa tras refrescar', (function () {
     var iRev = editor.indexOf('function revertirEnvoltura');
     if (iRev === -1 || editor.indexOf('revertirEnvoltura(ref') === -1) { return false; }
@@ -147,14 +174,6 @@ check('el fallo del pedido revierte POR REF y avisa tras refrescar', (function (
     var cuerpo = editor.slice(iRev, iRev + 700);
     var iRef = cuerpo.indexOf('refrescar();');
     var iTxt = cuerpo.indexOf("$ed.find('.ec-mk-alertas').text(mensaje)");
-    return iRef !== -1 && iTxt > iRef;
-})());
-check('pedirEnvoltura avisa tambien tras refrescar en la rama sin apiMotor', (function () {
-    var iPed = editor.indexOf('function pedirEnvoltura');
-    if (iPed === -1) { return false; }
-    var cuerpo = editor.slice(iPed, iPed + 900);
-    var iRef = cuerpo.indexOf('refrescar();');
-    var iTxt = cuerpo.indexOf("text('No hay envoltura analizada para este placeholder.')");
     return iRef !== -1 && iTxt > iRef;
 })());
 check('revertirEnvoltura busca por ref, no por seleccion', (function () {
@@ -179,6 +198,26 @@ check('analizar_y_guardar regenera envolturas.json junto al analisis',
 check('envolturas_usadas reutiliza id_valido (sin regex duplicada)',
     pluginPhp.indexOf('if (!$this->id_valido($gid))') !== -1
         && pluginPhp.indexOf("preg_match('/^[0-9A-F]{6}$/', $gid)") === -1);
+check('la consola expone "Envoltura" por grupo y por campo', (function () {
+    var consola = leer('admin/pdfs.php');
+    return consola.indexOf('name="envolturas[') !== -1
+        && consola.indexOf('name="campos_envoltura[') !== -1
+        && consola.indexOf('Envoltura del cargador') !== -1;
+})());
+check('el config sanea envolturas y campos_envoltura (una sola allowlist)',
+    motorPhp.indexOf('function config_envolturas(') !== -1
+        && motorPhp.indexOf('function config_campos_envoltura(') !== -1
+        && pluginPhp.indexOf("'campos_envoltura' => $campos_envoltura") !== -1);
+check('la ficha lleva la guia del cargador al campo (opcion b)',
+    pluginPhp.indexOf('envoltura_defecto($nombre, $gid)') !== -1
+        && pluginPhp.indexOf("'envoltura' => isset($c['envoltura'])") !== -1
+        && leer('assets/tienda.js').indexOf('envoltura: campo.envoltura || null') !== -1);
+check('el cargador dibuja la guia SIN cortar el PNG', (function () {
+    var cargador = leer('assets/cargador-pmu.js');
+    return cargador.indexOf('_guia = function') !== -1
+        && cargador.indexOf('comandosEnvoltura') !== -1
+        && cargador.indexOf('envolturaValida') !== -1;
+})());
 
 check('normalizarCapa conserva los campos extra de la capa', (function () {
     var r = geometria.normalizarCapa({

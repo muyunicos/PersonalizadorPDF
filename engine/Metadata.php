@@ -16,7 +16,8 @@ class Metadata
 {
     const ARCHIVO_ANALISIS = 'analisis.json';
     const ARCHIVO_CONFIG = 'config.json';
-    /** Tope de envolturas por grupo en envolturas.json (limite de peso). */
+    /** Tope de formas DISTINTAS por grupo en envolturas.json (peso real).
+     *  Ya no limita instancias: una forma compartida por 600 instancias cuenta 1. */
     const ENV_MAX = 100;
     /** Tope de segmentos por envoltura: una forma patologicamente densa no se
      *  publica (el archivo sigue liviano; el editor informa sin envoltura). */
@@ -75,14 +76,23 @@ class Metadata
     }
 
     /**
-     * Envolturas (PowerClip de Corel) por grupo/instancia para el archivo
-     * DERIVADO `pdfs/{nombre}/envolturas.json` (no vive en analisis.json: el
-     * dataset vuelve a su formato original y la geo se pide bajo demanda).
+     * Envolturas (PowerClip de Corel) del producto para el archivo DERIVADO
+     * `pdfs/{nombre}/envolturas.json` (nunca vive en analisis.json).
      *
-     * Estructura: {version, pdf, creado, grupos: {gid: {n: {par, subs}}}}.
-     * `grupos` vacio = "analizado sin envolturas" (se distingue de "sin
-     * analizar": no existe el archivo). Clave n = indice 1-based de la
-     * instancia (el `{grupo}#n` del editor).
+     * v2: las formas se DEDUPLICAN. Antes se guardaba una copia por instancia
+     * (un grupo de 600 instancias con el mismo marco escribia 100 copias y
+     * truncaba el resto por el tope). Ahora:
+     *
+     *   {version: 2, pdf, creado, grupos: {gid: {
+     *       formas: [{par, subs, usos}, ...],   // formas DISTINTAS
+     *       defecto: k,                          // la mas usada (1-based)
+     *       mapa: {n: k}                         // TODAS las instancias (0 = sin envoltura)
+     *   }}}
+     *
+     * `mapa` es completo (ints, barato) para que el override del admin no
+     * falsee la geometria real de cada instancia; el ahorro esta en `formas`.
+     * Un grupo sin ninguna envoltura no aparece. ENV_MAX ahora cuenta formas
+     * DISTINTAS (ya no trunca instancias); ENV_SEG_MAX sigue por forma.
      */
     public static function generarEnvolturas($pdf, $grupos)
     {
@@ -92,33 +102,103 @@ class Metadata
             if (!self::idValido($gid)) {
                 continue;
             }
-            $envs = [];
+            $porN = [];
             $n = 0;
             foreach ((array)(isset($g['instancias']) ? $g['instancias'] : []) as $in) {
                 $n++;
-                if (count($envs) >= self::ENV_MAX) {
-                    break;
+                $e = null;
+                if (!empty($in['env']) && is_array($in['env'])) {
+                    $e = self::envNormalizado($in['env'], $in);
                 }
-                if (empty($in['env']) || !is_array($in['env'])) {
-                    continue;
-                }
-                $e = self::envNormalizado($in['env'], $in);
-                if ($e !== null) {
-                    $envs[(string)$n] = $e;
-                }
+                $porN[(string)$n] = $e; // null = sin envoltura (o no extraible)
             }
-            if ($envs) {
-                $salida[$gid] = $envs;
+            $grupo = self::agruparFormas($porN);
+            if ($grupo !== null) {
+                $salida[$gid] = $grupo;
             }
         }
         return [
-            'version' => 1,
+            'version' => 2,
             'pdf' => (string)$pdf,
             'creado' => gmdate('Y-m-d\TH:i:s\Z'),
             'grupos' => $salida,
         ];
     }
 
+
+    /**
+     * Deduplica envolturas por forma: `[n => env|null]` ->
+     * `{formas, defecto, mapa}`. `formas` = formas DISTINTAS con sus `usos`;
+     * `defecto` = la mas usada (empate -> la primera); `mapa` = n -> k para
+     * TODAS las instancias (k=0 = sin envoltura). Null si no hay ninguna.
+     * Lo usan el Detector (generarEnvolturas) y la lectura de archivos v1.
+     */
+    public static function agruparFormas(array $porN)
+    {
+        $formas = [];
+        $indice = [];
+        $usos = [];
+        $mapa = [];
+        foreach ($porN as $n => $e) {
+            if (!is_array($e) || empty($e['subs'])) {
+                $mapa[(string)(int)$n] = 0;
+                continue;
+            }
+            $firma = self::firmaForma($e);
+            if (!isset($indice[$firma])) {
+                if (count($formas) >= self::ENV_MAX) {
+                    // Tope de formas DISTINTAS: esta instancia queda sin
+                    // envoltura (el editor lo informa sin culpar al analisis).
+                    $mapa[(string)(int)$n] = 0;
+                    continue;
+                }
+                $formas[] = ['par' => !empty($e['par']) ? 1 : 0, 'subs' => $e['subs']];
+                $indice[$firma] = count($formas); // 1-based
+                $usos[count($formas)] = 0;
+            }
+            $k = $indice[$firma];
+            $usos[$k]++;
+            $mapa[(string)(int)$n] = $k;
+        }
+        if (!$formas) {
+            return null;
+        }
+        $defecto = 0;
+        $mejor = -1;
+        foreach ($usos as $k => $u) {
+            if ($u > $mejor) {
+                $mejor = $u;
+                $defecto = (int)$k;
+            }
+        }
+        foreach ($formas as $i => $f) {
+            $formas[$i]['usos'] = isset($usos[$i + 1]) ? $usos[$i + 1] : 0;
+        }
+        return ['formas' => $formas, 'defecto' => $defecto, 'mapa' => $mapa];
+    }
+
+    /**
+     * Firma estable de una forma para deduplicar (tolerante al ruido
+     * sub-milesimal entre instancias del mismo PowerClip).
+     */
+    private static function firmaForma(array $e)
+    {
+        $partes = [];
+        foreach ((array)(isset($e['subs']) ? $e['subs'] : []) as $sub) {
+            $segs = [];
+            foreach ((array)(isset($sub['s']) ? $sub['s'] : []) as $seg) {
+                $vals = [];
+                foreach (array_slice((array)$seg, 1) as $v) {
+                    $vals[] = round((float)$v, 3);
+                }
+                $segs[] = $seg[0] . ':' . implode(',', $vals);
+            }
+            $m = isset($sub['m']) && is_array($sub['m']) ? $sub['m'] : [0, 0];
+            $partes[] = round((float)($m[0] ?? 0), 3) . ',' . round((float)($m[1] ?? 0), 3)
+                . '|' . implode(';', $segs) . '|' . (!empty($sub['c']) ? 'c' : 'a');
+        }
+        return (!empty($e['par']) ? '1' : '0') . '#' . implode('/', $partes);
+    }
 
     /**
      * Envoltura de una instancia -> formato de envolturas.json. Los puntos
@@ -181,6 +261,42 @@ class Metadata
             return null;
         }
         return ['par' => !empty($env['par']) ? 1 : 0, 'subs' => $out];
+    }
+
+    /**
+     * Indice (1-based) de la forma que usa una instancia en un grupo v2:
+     * `mapa[n]` > override del admin > `defecto`. 0 = sin envoltura.
+     */
+    public static function formaIndice(array $grupo, $n, $override = 0)
+    {
+        $mapa = isset($grupo['mapa']) && is_array($grupo['mapa']) ? $grupo['mapa'] : [];
+        $clave = (string)(int)$n;
+        if (array_key_exists($clave, $mapa)) {
+            return (int)$mapa[$clave];
+        }
+        $override = (int)$override;
+        if ($override > 0) {
+            return $override;
+        }
+        return (int)(isset($grupo['defecto']) ? $grupo['defecto'] : 0);
+    }
+
+    /**
+     * Geometria de la forma `k` (sin `usos`) o null. Es lo UNICO que viaja al
+     * cliente: `{par, subs}`.
+     */
+    public static function forma(array $grupo, $k)
+    {
+        $k = (int)$k;
+        $formas = isset($grupo['formas']) && is_array($grupo['formas']) ? $grupo['formas'] : [];
+        if ($k < 1 || !isset($formas[$k - 1]) || !is_array($formas[$k - 1])) {
+            return null;
+        }
+        $f = $formas[$k - 1];
+        return [
+            'par' => !empty($f['par']) ? 1 : 0,
+            'subs' => isset($f['subs']) && is_array($f['subs']) ? $f['subs'] : [],
+        ];
     }
 
     /**

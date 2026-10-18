@@ -161,8 +161,10 @@ class PMU_Uploads
     }
 
     /**
-     * Lectura tolerante de envolturas.json: array del archivo o null si no
-     * existe / no es legible / es invalido. Nunca lanza ni escribe.
+     * Lectura tolerante de envolturas.json en vista v2 (formas deduplicadas):
+     * array normalizado o null si no existe / no es legible / es invalido.
+     * Un archivo v1 (una entrada por instancia) se deduplica EN MEMORIA con
+     * Metadata::agruparFormas: nada se rompe antes de re-analizar.
      */
     public function leer_envolturas($pdf)
     {
@@ -172,49 +174,177 @@ class PMU_Uploads
         }
         $raw = @file_get_contents($ruta);
         $dec = $raw === false ? null : json_decode($raw, true);
-        if (!is_array($dec) || !isset($dec['grupos']) || !is_array($dec['grupos'])) {
+        return $this->envolturas_v2($dec);
+    }
+
+    /** Normaliza el contenido de envolturas.json (v1 o v2) a la vista v2. */
+    private function envolturas_v2($datos)
+    {
+        if (!is_array($datos) || !isset($datos['grupos']) || !is_array($datos['grupos'])) {
             return null;
         }
-        return $dec;
+        $grupos = [];
+        foreach ($datos['grupos'] as $gid => $valor) {
+            $gid = strtoupper((string)$gid);
+            if (preg_match('/^[0-9A-F]{6}$/', $gid) !== 1 || !is_array($valor)) {
+                continue;
+            }
+            if (isset($valor['formas']) && is_array($valor['formas'])) {
+                // v2: saneo minimo (formas + mapa + defecto en rango).
+                $formas = [];
+                foreach ($valor['formas'] as $f) {
+                    if (is_array($f) && !empty($f['subs']) && is_array($f['subs'])) {
+                        $formas[] = [
+                            'par' => !empty($f['par']) ? 1 : 0,
+                            'subs' => $f['subs'],
+                            'usos' => isset($f['usos']) ? (int)$f['usos'] : 0,
+                        ];
+                    }
+                }
+                if (!$formas) {
+                    continue;
+                }
+                $mapa = [];
+                foreach ((array)(isset($valor['mapa']) ? $valor['mapa'] : []) as $n => $k) {
+                    $mapa[(string)(int)$n] = (int)$k;
+                }
+                $defecto = (int)(isset($valor['defecto']) ? $valor['defecto'] : 1);
+                if ($defecto < 1 || $defecto > count($formas)) {
+                    $defecto = 1;
+                }
+                $grupos[$gid] = ['formas' => $formas, 'defecto' => $defecto, 'mapa' => $mapa];
+                continue;
+            }
+            // v1: {n: {par, subs}} -> dedup en memoria (una sola implementacion).
+            if (!class_exists('\\ExtractCorel\\Engine\\Metadata')) {
+                require_once dirname(__DIR__) . '/engine/Metadata.php';
+            }
+            $porN = [];
+            foreach ($valor as $n => $e) {
+                $porN[(string)(int)$n] = is_array($e) ? $e : null;
+            }
+            $g = \ExtractCorel\Engine\Metadata::agruparFormas($porN);
+            if ($g !== null) {
+                $grupos[$gid] = $g;
+            }
+        }
+        return [
+            'version' => 2,
+            'pdf' => isset($datos['pdf']) ? (string)$datos['pdf'] : '',
+            'grupos' => $grupos,
+        ];
+    }
+
+    /** Override del admin para un grupo desde un config YA leido (0 = ninguno). */
+    private function forma_override(array $cfg, $gid)
+    {
+        $env = isset($cfg['envolturas'][(string)$gid]) ? $cfg['envolturas'][(string)$gid] : null;
+        return is_array($env) ? (int)(isset($env['forma']) ? $env['forma'] : 0) : 0;
     }
 
     /**
-     * Claves de envoltura por grupo (`{gid: [n, ...]}`) + bandera `disponible`
-     * (existe el archivo). Solo CLAVES: la geometria viaja bajo demanda.
+     * Claves/formas de envoltura por grupo (consola + editor):
+     * `{disponible, formas:{gid:N}, defecto:{gid:k}, usos:{gid:[...]},
+     * excepciones:{gid:{n:k}}}`. `defecto` es el EFECTIVO (override del admin
+     * aplicado) y `excepciones` lista solo lo que difiere de el (k=0 = sin
+     * envoltura). Solo CLAVES y contadores: la geometria viaja bajo demanda.
      */
     public function envoltura_claves($pdf)
     {
         $datos = $this->leer_envolturas($pdf);
-        $claves = [];
-        if ($datos !== null) {
-            foreach ((array)$datos['grupos'] as $gid => $envs) {
-                $ks = [];
-                foreach ((array)$envs as $n => $e) {
-                    if (is_array($e)) {
-                        $ks[] = (string)$n;
+        $formas = [];
+        $defectos = [];
+        $usos = [];
+        $excepciones = [];
+        if ($datos !== null && $datos['grupos']) {
+            $cfg = $this->leer_config($pdf);
+            foreach ($datos['grupos'] as $gid => $grupo) {
+                $n = count($grupo['formas']);
+                $def = $this->forma_override($cfg, $gid);
+                if ($def < 1 || $def > $n) {
+                    $def = (int)$grupo['defecto'];
+                }
+                $formas[$gid] = $n;
+                $defectos[$gid] = $def;
+                $usos[$gid] = array_map(function ($f) {
+                    return (int)(isset($f['usos']) ? $f['usos'] : 0);
+                }, $grupo['formas']);
+                $exc = [];
+                foreach ((array)$grupo['mapa'] as $nn => $k) {
+                    if ((int)$k !== $def) {
+                        $exc[(string)$nn] = (int)$k;
                     }
                 }
-                if ($ks) {
-                    $claves[(string)$gid] = $ks;
+                if ($exc) {
+                    $excepciones[$gid] = $exc;
                 }
             }
         }
-        return ['disponible' => $datos !== null, 'claves' => $claves];
+        return [
+            'disponible' => $datos !== null,
+            'formas' => $formas,
+            'defecto' => $defectos,
+            'usos' => $usos,
+            'excepciones' => $excepciones,
+        ];
     }
 
     /**
-     * Geometria de UNA envoltura (`gid#n`): `{archivado, envoltura}`.
-     * `archivado` = existe el archivo; `envoltura` = la geometria o null.
+     * Envoltura de `gid#n`: `{archivado, forma, envoltura}`.
+     * `archivado` = existe el archivo; `forma` = indice resuelto (0 = sin
+     * envoltura); `envoltura` = `{par, subs}` o null.
      */
     public function envoltura_datos($pdf, $gid, $n)
     {
         $datos = $this->leer_envolturas($pdf);
-        $env = null;
-        if ($datos !== null) {
-            $cand = $datos['grupos'][(string)$gid][(string)(int)$n] ?? null;
-            $env = is_array($cand) ? $cand : null;
+        if ($datos === null) {
+            return ['archivado' => false, 'forma' => 0, 'envoltura' => null];
         }
-        return ['archivado' => $datos !== null, 'envoltura' => $env];
+        $grupo = isset($datos['grupos'][(string)$gid]) ? $datos['grupos'][(string)$gid] : null;
+        if (!is_array($grupo)) {
+            return ['archivado' => true, 'forma' => 0, 'envoltura' => null];
+        }
+        $k = $this->forma_de($pdf, $grupo, $gid, (int)$n);
+        $env = $this->geometria_forma($grupo, $k);
+        return ['archivado' => true, 'forma' => $env === null ? 0 : $k, 'envoltura' => $env];
+    }
+
+    /**
+     * Forma por DEFECTO efectiva de un grupo (la que usan la guia del cargador
+     * y el relleno del mockup): `{forma, envoltura}`.
+     */
+    public function envoltura_defecto($pdf, $gid)
+    {
+        $datos = $this->leer_envolturas($pdf);
+        if ($datos === null || !isset($datos['grupos'][(string)$gid])) {
+            return ['forma' => 0, 'envoltura' => null];
+        }
+        $grupo = $datos['grupos'][(string)$gid];
+        $n = count($grupo['formas']);
+        $def = $this->forma_override($this->leer_config($pdf), $gid);
+        if ($def < 1 || $def > $n) {
+            $def = (int)$grupo['defecto'];
+        }
+        return ['forma' => $def, 'envoltura' => $this->geometria_forma($grupo, $def)];
+    }
+
+    /** Indice de forma de una instancia (mapa > override > defecto). */
+    private function forma_de($pdf, array $grupo, $gid, $n)
+    {
+        return \ExtractCorel\Engine\Metadata::formaIndice(
+            $grupo,
+            (int)$n,
+            $this->forma_override($this->leer_config($pdf), $gid)
+        );
+    }
+
+    /** Geometria `{par, subs}` de la forma `k` (sin `usos`) o null. */
+    private function geometria_forma(array $grupo, $k)
+    {
+        if (!class_exists('\\ExtractCorel\\Engine\\Metadata')) {
+            require_once dirname(__DIR__) . '/engine/Metadata.php';
+        }
+        return \ExtractCorel\Engine\Metadata::forma($grupo, (int)$k);
     }
 
     /**
@@ -1883,6 +2013,49 @@ class PMU_Uploads
         }
         return $ph;
     }
+
+    /**
+     * Envoltura representativa por grupo (editable en la consola):
+     * `{gid: {forma: k}}` con k = indice 1-based dentro de `formas` de
+     * envolturas.json. 0/ausente = la detectada (la mas usada). Mismo saneo
+     * al leer y al guardar (una sola implementacion).
+     */
+    private function config_envolturas($valor)
+    {
+        $out = [];
+        foreach ((array)$valor as $gid => $m) {
+            $gid = strtoupper((string)$gid);
+            if (preg_match('/^[0-9A-F]{6}$/', $gid) !== 1 || !is_array($m)) {
+                continue;
+            }
+            $k = (int)(isset($m['forma']) ? $m['forma'] : 0);
+            if ($k > 0) {
+                $out[$gid] = ['forma' => $k];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Envoltura del CARGADOR por campo en ESTE PDF (`{campo_id: gid}`): la
+     * guia visual que ve el comprador al subir/cortar su foto (opcion b: la
+     * asociacion es por PDF, porque un campo se reutiliza en N PDFs). Vacio =
+     * sin guia. Mismo saneo al leer y al guardar.
+     */
+    private function config_campos_envoltura($valor)
+    {
+        $out = [];
+        foreach ((array)$valor as $cid => $gid) {
+            $cid = (int)$cid;
+            $gid = strtoupper(trim((string)$gid));
+            if ($cid < 1 || preg_match('/^[0-9A-F]{6}$/', $gid) !== 1) {
+                continue;
+            }
+            $out[(string)$cid] = $gid;
+        }
+        return $out;
+    }
+
     /**
      * Publica la normalizacion de bonus para que el handler que guarda la
      * consola use EXACTAMENTE la misma regla (una sola implementacion: si el
@@ -1952,7 +2125,7 @@ class PMU_Uploads
         $pdf = $this->nombre_seguro($pdf, 'leer_config');
         $ruta = $this->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . $pdf
             . DIRECTORY_SEPARATOR . 'config.json';
-        $base = ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => [], 'tienda' => [], 'bonus' => []];
+        $base = ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => [], 'tienda' => [], 'bonus' => [], 'envolturas' => [], 'campos_envoltura' => []];
         $datos = $this->leer_json($ruta);
         if (!is_array($datos)) {
             return $base;
@@ -1985,6 +2158,12 @@ class PMU_Uploads
         }
         if (isset($datos['bonus'])) {
             $base['bonus'] = $this->config_bonus($datos['bonus']);
+        }
+        if (isset($datos['envolturas'])) {
+            $base['envolturas'] = $this->config_envolturas($datos['envolturas']);
+        }
+        if (isset($datos['campos_envoltura'])) {
+            $base['campos_envoltura'] = $this->config_campos_envoltura($datos['campos_envoltura']);
         }
         if (isset($datos['tienda'])) {
             // Lectura tolerante: `previo` = el mismo valor crudo del disco, asi
@@ -2033,6 +2212,12 @@ class PMU_Uploads
         }
         if (isset($config['bonus'])) {
             $canon['bonus'] = $this->config_bonus($config['bonus']);
+        }
+        if (isset($config['envolturas'])) {
+            $canon['envolturas'] = $this->config_envolturas($config['envolturas']);
+        }
+        if (isset($config['campos_envoltura'])) {
+            $canon['campos_envoltura'] = $this->config_campos_envoltura($config['campos_envoltura']);
         }
         if (isset($config['tienda'])) {
             // Validacion por cambio: compara contra lo ya guardado (`$canon`).

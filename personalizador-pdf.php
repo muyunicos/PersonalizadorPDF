@@ -435,6 +435,10 @@ class Personalizador_PDF_Plugin
                 'cargador' => !empty($d['cargador']['ranuras'])
                     ? ['ranuras' => array_values((array) $d['cargador']['ranuras'])]
                     : null,
+                // Guia del cargador: envoltura por defecto del grupo asociado
+                // en este PDF (opcion b). Solo lectura; el corte real lo hace
+                // el clip del PDF, esto es la pista visual del comprador.
+                'envoltura' => isset($c['envoltura']) && is_array($c['envoltura']) ? $c['envoltura'] : null,
             ];
         }
         return $out;
@@ -551,10 +555,25 @@ class Personalizador_PDF_Plugin
         // `campo_listar()` ya excluye los dados de baja.
         $campos = $this->pmu_uploads()->campo_listar();
         $elegidos = [];
+        // Envoltura del cargador por campo (opcion b): el gid asociado en ESTE
+        // PDF se resuelve a la forma por defecto de su grupo (1 sola, chica).
+        $campos_env = isset($config['campos_envoltura']) && is_array($config['campos_envoltura'])
+            ? $config['campos_envoltura'] : [];
         foreach ((array)($config['campos_ids'] ?? []) as $cid) {
-            if (isset($campos[(int)$cid])) {
-                $elegidos[(int)$cid] = $campos[(int)$cid];
+            $cid = (int)$cid;
+            if (!isset($campos[$cid])) {
+                continue;
             }
+            $fila = $campos[$cid];
+            $gid = isset($campos_env[(string)$cid]) ? (string)$campos_env[(string)$cid] : '';
+            if ($gid !== '') {
+                $def = $this->pmu_uploads()->envoltura_defecto($nombre, $gid);
+                if (!empty($def['envoltura'])) {
+                    $fila['envoltura'] = $def['envoltura'];
+                    $fila['envoltura_gid'] = $gid;
+                }
+            }
+            $elegidos[$cid] = $fila;
         }
         return [
             'pdf' => $nombre,
@@ -1110,7 +1129,7 @@ class Personalizador_PDF_Plugin
     public function datos_pdf_render($nombre)
     {
         $vacio = ['pdf' => '', 'grupos' => [], 'fotos' => [], 'mockups' => [], 'preview_omisible' => false,
-            'imagenes' => [], 'envolturas' => ['disponible' => false, 'claves' => []]];
+            'imagenes' => [], 'envolturas' => ['disponible' => false, 'formas' => [], 'defecto' => [], 'usos' => [], 'excepciones' => []]];
         try {
             $nombre = $this->pmu_uploads()->nombre_seguro($nombre, 'ficha_render');
             $vista = $this->vista_grupos($nombre);
@@ -1124,22 +1143,31 @@ class Personalizador_PDF_Plugin
                     $repetir[(string)$gid] = true;
                 }
             }
-            // Envolturas (PowerClip): SOLO CLAVES para que el editor sepa que
-            // toggles habilitar (la geometria la pide bajo demanda via
-            // op=envoltura) y geometria embebida SOLO de los refs usados con
-            // `envoltura: true` en los mockups guardados: asi la ficha del
-            // comprador compone con clip sin exponer un endpoint publico.
-            $envsInfo = $this->pmu_uploads()->envoltura_claves($nombre);
+            // Envolturas (PowerClip) v2 (formas deduplicadas): la pagina lleva
+            // la forma POR DEFECTO de cada grupo (1 por grupo: con eso el
+            // mockup dibuja cualquier instancia default SIN pedir nada) + las
+            // excepciones (que instancia usa otra forma) + la geometria de las
+            // excepciones USADAS en los mockups guardados (la ficha compone sin
+            // endpoint publico). El resto se pide bajo demanda.
+            $envsInfo = isset($vista['envolturas']) ? (array)$vista['envolturas'] : [];
             $usadas = $this->envolturas_usadas((array)($config['mockups'] ?? []));
             $grupos = [];
             foreach ((array)($vista['grupos'] ?? []) as $g) {
                 $gid = (string)$g['id'];
+                $info = isset($g['envoltura']) && is_array($g['envoltura']) ? $g['envoltura'] : [];
+                $defecto = isset($info['defecto']) ? (int)$info['defecto'] : 0;
+                $exc = isset($info['excepciones']) ? (array)$info['excepciones'] : [];
                 $envsGrupo = [];
-                if (!empty($envsInfo['disponible'])) {
+                $defDatos = ['forma' => 0, 'envoltura' => null];
+                if (!empty($info['disponible'])) {
+                    $defDatos = $this->pmu_uploads()->envoltura_defecto($nombre, $gid);
                     foreach (array_keys((array)($usadas[$gid] ?? [])) as $n) {
-                        $env = $this->pmu_uploads()->envoltura_datos($nombre, $gid, (int)$n);
-                        if (!empty($env['envoltura'])) {
-                            $envsGrupo[(string)$n] = $env['envoltura'];
+                        $k = array_key_exists((string)$n, $exc) ? (int)$exc[(string)$n] : $defecto;
+                        if ($k > 0 && $k !== $defecto) {
+                            $d = $this->pmu_uploads()->envoltura_datos($nombre, $gid, (int)$n);
+                            if (!empty($d['envoltura'])) {
+                                $envsGrupo[(string)$n] = $d['envoltura'];
+                            }
                         }
                     }
                 }
@@ -1154,6 +1182,10 @@ class Personalizador_PDF_Plugin
                     'settings' => isset($g['config']) ? (string)$g['config'] : '',
                     'repetir' => !empty($repetir[$gid]),
                     'envs' => $envsGrupo ? $envsGrupo : null,
+                    // Envoltura v2: forma por defecto + excepciones + N formas.
+                    'env_defecto' => $defDatos['envoltura'],
+                    'env_exc' => $exc ? $exc : null,
+                    'env_formas' => isset($info['formas']) ? (int)$info['formas'] : 0,
                 ];
             }
             return [
@@ -3111,8 +3143,27 @@ class Personalizador_PDF_Plugin
             }
             $grupos[] = $g;
         }
+        // Envolturas (PowerClip) v2: claves/formas por grupo. La consola las
+        // usa para el campo "Envoltura" y el render para embeber la forma por
+        // defecto (una por grupo) sin mandar el archivo.
+        $envs = ['disponible' => false, 'formas' => [], 'defecto' => [], 'usos' => [], 'excepciones' => []];
+        try {
+            $envs = $this->pmu_uploads()->envoltura_claves($nombre);
+        } catch (\Throwable $e) {
+            // Sin archivo o sin permisos: se comporta como "no disponible".
+        }
+        foreach ($grupos as $i => $g) {
+            $gid = (string)$g['id'];
+            $grupos[$i]['envoltura'] = [
+                'disponible' => !empty($envs['disponible']),
+                'formas' => isset($envs['formas'][$gid]) ? (int)$envs['formas'][$gid] : 0,
+                'defecto' => isset($envs['defecto'][$gid]) ? (int)$envs['defecto'][$gid] : 0,
+                'usos' => isset($envs['usos'][$gid]) ? array_values((array)$envs['usos'][$gid]) : [],
+                'excepciones' => isset($envs['excepciones'][$gid]) ? (array)$envs['excepciones'][$gid] : [],
+            ];
+        }
         $analisis['grupos'] = $grupos;
-        return ['analisis' => $analisis, 'config' => $config, 'grupos' => $grupos];
+        return ['analisis' => $analisis, 'config' => $config, 'grupos' => $grupos, 'envolturas' => $envs];
     }
 
     /* ==================== Campos reutilizables (spec 004) ==================== */
@@ -4047,6 +4098,19 @@ JS;
                 'repetir' => !empty($m['repetir']),
             ];
         }
+        // Envoltura representativa por grupo (v2): `envolturas[GID][forma]`.
+        // Solo ids del dataset vigente; 0/ausente = la detectada.
+        $envolturas = [];
+        foreach ((array)($_POST['envolturas'] ?? []) as $gid => $m) {
+            $gid = strtoupper((string)$gid);
+            if (!isset($ids_dataset[$gid]) || !is_array($m)) {
+                continue;
+            }
+            $k = (int)(isset($m['forma']) ? $m['forma'] : 0);
+            if ($k > 0) {
+                $envolturas[$gid] = ['forma' => $k];
+            }
+        }
         $campos_ids = [];
         foreach ((array)($_POST['campos_ids'] ?? []) as $c) {
             $c = (int)$c;
@@ -4069,12 +4133,25 @@ JS;
             }
             $productos = array_values(array_slice(array_unique($productos), 0, 100));
         }
+        // Envoltura del cargador por campo (opcion b): la asociacion es por
+        // PDF, asi que vive en el config; solo campos elegidos y grupos vigentes.
+        $campos_envoltura = [];
+        foreach ((array)($_POST['campos_envoltura'] ?? []) as $cid => $gid) {
+            $cid = (int)$cid;
+            $gid = strtoupper(trim((string)$gid));
+            if ($cid < 1 || !in_array($cid, $campos_ids, true) || !isset($ids_dataset[$gid])) {
+                continue;
+            }
+            $campos_envoltura[(string)$cid] = $gid;
+        }
         $config = [
             'activo' => !empty($_POST['activo']),
             'productos' => $productos,
             'campos_ids' => $campos_ids,
             'preview_omisible' => !empty($_POST['preview_omisible']),
             'placeholders' => $placeholders,
+            'envolturas' => $envolturas,
+            'campos_envoltura' => $campos_envoltura,
         ];
         // Spec 005 (T004): "Configuracion tienda" por asociacion PDFxproducto.
         // Solo se toca `tienda` si la seccion viajo en el POST (marcador
@@ -4375,7 +4452,7 @@ JS;
     public function mockups_para_editor()
     {
         $vacio = ['pdf' => '', 'grupos' => [], 'fotos' => [], 'mockups' => [], 'preview_omisible' => false,
-            'imagenes' => [], 'envolturas' => ['disponible' => false, 'claves' => []]];
+            'imagenes' => [], 'envolturas' => ['disponible' => false, 'formas' => [], 'defecto' => [], 'usos' => [], 'excepciones' => []]];
         try {
             $get = isset($_GET['ec_pdf']) ? sanitize_file_name(wp_unslash((string)$_GET['ec_pdf'])) : '';
             $pdfs = $this->pdfs_subidos();

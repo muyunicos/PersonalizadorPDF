@@ -452,6 +452,9 @@
             var mio = false;
             var cargador = new window.CargadorPMU(cont, {
                 ranuras: campo.cargador.ranuras,
+                // Envoltura del grupo asociado en este PDF (opcion b): guia
+                // visual del recorte real. Solo pista; el PNG va sin cortar.
+                envoltura: campo.envoltura || null,
                 // Spec 016 (FR-015/FR-017): la tira pinta las fotos reales y,
                 // al re-editar, restaura los ids ya guardados resolviendolos
                 // contra el manifest (endpoint de la 012; nunca una ruta).

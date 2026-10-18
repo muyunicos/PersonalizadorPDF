@@ -317,32 +317,47 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('grupos hex detectados', array_column($analisis_r['grupos'], 'id') === ['0000FF', 'FF0000']);
             check('analisis sin envs (formato original)', !isset($analisis_r['grupos'][0]['envs']));
             $env_r = json_decode((string)@file_get_contents($uploads . '/pdfs/muestra/envolturas.json'), true);
-            check('envolturas.json regenerado con el PowerClip', is_array($env_r)
-                && !empty($env_r['grupos']['0000FF']['2']['subs']));
+            check('envolturas.json v2 con el PowerClip deduplicado', is_array($env_r)
+                && ($env_r['version'] ?? 0) === 2
+                && !empty($env_r['grupos']['0000FF']['formas'][0]['subs'])
+                && (int)$env_r['grupos']['0000FF']['mapa']['2'] === 1);
             check('config preservada al reanalizar', $p->motor_para_tests()->leer_config('muestra') === $GLOBALS['test_config_previa']);
             $archivos_r = array_values(array_diff(scandir($uploads . '/pdfs/muestra'), ['.', '..']));
             sort($archivos_r);
             check('solo PDF, analisis, config y envolturas', $archivos_r === ['analisis.json', 'config.json', 'envolturas.json', 'muestra.pdf']);
             break;
         case 'envoltura_op':
-            // Lazy: sin archivo = re-analizar; con archivo = claves + la geo
-            // pedida via op=envoltura (y null para claves sin clip).
+            // v2: formas deduplicadas, defecto efectivo (override), excepcion
+            // k=0 (sin envoltura) y compatibilidad con archivos v1.
             check('sin archivo: disponible=false',
                 ($GLOBALS['eo_ausente']['claves']['disponible'] ?? true) === false);
             check('sin archivo: sin geometria',
                 ($GLOBALS['eo_ausente']['datos']['archivado'] ?? true) === false
                 && ($GLOBALS['eo_ausente']['datos']['envoltura'] ?? null) === null);
-            check('con archivo: claves 0000FF => [1]',
-                ($GLOBALS['eo_con']['claves']['claves']['0000FF'] ?? null) === ['1']);
-            check('con archivo: clave sin clip -> archivado sin envoltura',
-                ($GLOBALS['eo_con']['otra']['archivado'] ?? false) === true
-                && ($GLOBALS['eo_con']['otra']['envoltura'] ?? null) === null);
-            check('endpoint: success con la geometria', is_array($json)
+            check('v1 se normaliza: 1 forma, defecto 1, sin excepciones',
+                ($GLOBALS['eo_v1']['claves']['formas']['0000FF'] ?? null) === 1
+                && ($GLOBALS['eo_v1']['claves']['defecto']['0000FF'] ?? null) === 1
+                && ($GLOBALS['eo_v1']['claves']['excepciones']['0000FF'] ?? null) === null);
+            check('v1: la geometria se lee igual',
+                !empty($GLOBALS['eo_v1']['datos']['envoltura']['subs']));
+            check('v2: defecto EFECTIVO = override (forma 2)',
+                ($GLOBALS['eo_v2']['claves']['defecto']['0000FF'] ?? null) === 2
+                && ($GLOBALS['eo_v2']['defecto']['forma'] ?? 0) === 2);
+            check('v2: excepciones = lo que difiere del defecto',
+                ($GLOBALS['eo_v2']['claves']['excepciones']['0000FF'] ?? null) === ['1' => 1, '3' => 0]);
+            check('v2: el mapa manda sobre el override (n=1 usa SU forma)',
+                ($GLOBALS['eo_v2']['n1']['forma'] ?? 0) === 1
+                && ($GLOBALS['eo_v2']['n2']['forma'] ?? 0) === 2);
+            check('v2: k=0 = instancia sin envoltura',
+                ($GLOBALS['eo_v2']['n3']['forma'] ?? -1) === 0
+                && ($GLOBALS['eo_v2']['n3']['envoltura'] ?? null) === null);
+            check('v2: instancia fuera del mapa cae al override',
+                ($GLOBALS['eo_v2']['n9']['forma'] ?? 0) === 2);
+            check('endpoint: success con la geometria de la excepcion', is_array($json)
                 && ($json['success'] ?? false) === true
                 && ($json['data']['archivado'] ?? false) === true
-                // Comparacion numerica: json_encode escribe 1.0 como 1 y el
-                // decode devuelve enteros (no dependir del tipo float).
-                && ($json['data']['envoltura']['subs'][0]['m'] ?? null) == [0, 1],
+                && ($json['data']['forma'] ?? 0) === 2
+                && ($json['data']['envoltura']['par'] ?? null) === 1,
                 'json=' . json_encode($json));
             break;
         case 'mockups_guardar':
@@ -443,16 +458,18 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && $mp['cfg']['mockups'][0]['capas'][1]['ref'] === '0000FF#1');
             check('ajustes de la capa persistidos para la ficha', is_array($mp)
                 && (array)($mp['cfg']['mockups'][0]['capas'][1]['filtros'] ?? []) === ['gama' => 0, 'opacidad' => 90]);
-            check('ficha: geo embebida SOLO del ref usado (0000FF#1)', is_array($mp)
+            check('ficha: forma por defecto embebida (1 por grupo, sin pedidos)', is_array($mp)
                 && ($mp['render']['grupos'][0]['id'] ?? '') === '0000FF'
-                && !empty($mp['render']['grupos'][0]['envs']['1']['subs'])
-                && ($mp['render']['grupos'][1]['id'] ?? '') === 'FF0000'
-                && array_key_exists('envs', (array)($mp['render']['grupos'][1] ?? []))
-                && $mp['render']['grupos'][1]['envs'] === null);
-            check('ficha: claves de envolturas disponibles para el editor', is_array($mp)
+                && !empty($mp['render']['grupos'][0]['env_defecto']['subs'])
+                && ($mp['render']['grupos'][0]['env_formas'] ?? 0) === 2);
+            check('ficha: la excepcion usada viaja resuelta (envs)', is_array($mp)
+                && !empty($mp['render']['grupos'][0]['envs']['2']['subs'])
+                && ($mp['render']['grupos'][0]['env_exc']['2'] ?? null) === 2);
+            check('ficha: claves de envolturas (formas + defecto)', is_array($mp)
                 && ($mp['render']['envolturas']['disponible'] ?? false) === true
-                && ($mp['render']['envolturas']['claves']['0000FF'] ?? null) === ['1']
-                && ($mp['render']['envolturas']['claves']['FF0000'] ?? null) === ['1']);
+                && ($mp['render']['envolturas']['formas']['0000FF'] ?? null) === 2
+                && ($mp['render']['envolturas']['defecto']['0000FF'] ?? null) === 1,
+                'env=' . json_encode($mp['render']['envolturas'] ?? null));
             check('envoltura persistida en la capa de la ficha', is_array($mp)
                 && ($mp['cfg']['mockups'][0]['capas'][1]['envoltura'] ?? false) === true);
             check('omisible guardado desde el editor', is_array($mp)
@@ -768,6 +785,9 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('omisible por defecto false', is_array($ficha) && $ficha['preview_omisible'] === false);
             check('shortcode devuelve el mismo panel', is_array($sc) && $sc == $ficha);
             check('PDF inactivo/sin analisis se oculta', $GLOBALS['test_ficha_oculta'] === false);
+            check('cargador con guia de envoltura (opcion b)', is_array($GLOBALS['test_ficha_env'] ?? null)
+                && !empty($GLOBALS['test_ficha_env']['campos'][$GLOBALS['test_ficha_cid']]['envoltura']['subs'])
+                && ($GLOBALS['test_ficha_env']['campos'][$GLOBALS['test_ficha_cid']]['envoltura_gid'] ?? '') === '0000FF');
             // T016: HTML real del panel (hook Woo y shortcode pintan esto).
             // T016: HTML real del panel (hook Woo y shortcode pintan esto).
             $html = isset($GLOBALS['test_ficha_html1']) ? (string)$GLOBALS['test_ficha_html1'] : '';
@@ -1323,6 +1343,12 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('placeholder valido persiste', is_array($cfg) && isset($cfg['placeholders']['0000FF']) && $cfg['placeholders']['0000FF']['value'] === '[campo2]');
             check('ids invalidos descartados', is_array($cfg) && !isset($cfg['placeholders']['ZZZZZZ']) && !isset($cfg['placeholders']['FF0000']));
             check('defaults sin config', $GLOBALS['test_config_defaults'] === true);
+            check('envoltura representativa persiste (gid invalido descartado)',
+                is_array($cfg) && ($cfg['envolturas']['0000FF']['forma'] ?? 0) === 2
+                && !isset($cfg['envolturas']['ZZZZZZ']));
+            check('envoltura del cargador por campo persiste (saneo por id)',
+                is_array($cfg) && ($cfg['campos_envoltura']['56'] ?? '') === '0000FF'
+                && !isset($cfg['campos_envoltura']['56x']));
             break;
         case 'tienda':
             // 004/Fase B: handler personalizador_pdf_config (via pmuPost).
@@ -1482,7 +1508,22 @@ switch ($fase) {
             'campos_ids' => [$cid_f],
             'placeholders' => ['0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => '[campo1]', 'settings' => '', 'repetir' => false]],
         ]);
+        $GLOBALS['test_ficha_cid'] = $cid_f;
+        // Envoltura del cargador (opcion b): guia por campo en ESTE PDF.
+        // Se siembra ANTES de capturar el panel para que las capturas
+        // (panel, shortcode, HTML) vean el MISMO estado.
+        \ExtractCorel\Engine\Metadata::guardar([
+            'version' => 2, 'pdf' => 'muestra', 'creado' => '2026-10-17T00:00:00Z',
+            'grupos' => ['0000FF' => [
+                'formas' => [['par' => 0, 'usos' => 1, 'subs' => [['m' => [0.1, 0.2],
+                    's' => [['l', 0.9, 0.2], ['l', 0.9, 0.8], ['l', 0.1, 0.8]], 'c' => 1]]]],
+                'defecto' => 1,
+                'mapa' => ['1' => 1],
+            ]],
+        ], $motor_f->ruta_envolturas('muestra'));
+        $motor_f->guardar_config('muestra', ['campos_envoltura' => [(string)$cid_f => '0000FF']]);
         $GLOBALS['test_ficha'] = $p->panel_ficha('muestra');
+        $GLOBALS['test_ficha_env'] = $GLOBALS['test_ficha'];
         $GLOBALS['test_ficha_shortcode'] = $p->shortcode_panel(['pdf' => 'muestra']);
         $GLOBALS['test_ficha_oculta'] = $p->panel_ficha('inexistente');
         // T016: HTML del panel (shortcode render): una sola vez, con PMU_FICHA.
@@ -2509,9 +2550,9 @@ switch ($fase) {
         }
         break;
     case 'envoltura_op':
-        // Lazy de envolturas (PowerClip): op=envoltura del endpoint motor.
-        // 1) sin archivo -> disponible=false; 2) con archivo -> claves y
-        // geometria; 3) el endpoint devuelve la de gid#n (exit en JSON).
+        // Envolturas v2 (formas deduplicadas) por el endpoint motor:
+        // 1) sin archivo; 2) v1 normalizado en memoria; 3) v2 con default,
+        // excepcion (k=0) y override del admin.
         preparar_entorno($testBase, $base);
         if (!class_exists('PMU_Uploads')) {
             require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
@@ -2522,6 +2563,7 @@ switch ($fase) {
             'claves' => $motor_eo->envoltura_claves('muestra'),
             'datos' => $motor_eo->envoltura_datos('muestra', '0000FF', 1),
         ];
+        // v1 (una entrada por instancia) -> se deduplica al leer.
         \ExtractCorel\Engine\Metadata::guardar([
             'version' => 1,
             'pdf' => 'muestra',
@@ -2532,11 +2574,36 @@ switch ($fase) {
                     's' => [['l', 1.0, 1.0], ['l', 1.0, 0.0], ['l', 0.0, 0.0]], 'c' => 1]],
             ]]],
         ], $motor_eo->ruta_envolturas('muestra'));
-        $GLOBALS['eo_con'] = [
+        $GLOBALS['eo_v1'] = [
             'claves' => $motor_eo->envoltura_claves('muestra'),
-            'otra' => $motor_eo->envoltura_datos('muestra', 'FF0000', 1),
+            'datos' => $motor_eo->envoltura_datos('muestra', '0000FF', 1),
         ];
-        $_POST = ['op' => 'envoltura', 'pdf' => 'muestra', 'gid' => '0000FF', 'n' => 1, '_wpnonce' => 'nonce'];
+        // v2: 2 formas, defecto 1, mapa {1:1, 2:2, 3:0} + override a la 2.
+        \ExtractCorel\Engine\Metadata::guardar([
+            'version' => 2,
+            'pdf' => 'muestra',
+            'creado' => '2026-10-17T00:00:00Z',
+            'grupos' => ['0000FF' => [
+                'formas' => [
+                    ['par' => 0, 'usos' => 1, 'subs' => [['m' => [0.0, 1.0],
+                        's' => [['l', 1.0, 1.0], ['l', 1.0, 0.0], ['l', 0.0, 0.0]], 'c' => 1]]],
+                    ['par' => 1, 'usos' => 1, 'subs' => [['m' => [0.1, 0.9],
+                        's' => [['l', 0.9, 0.9], ['l', 0.9, 0.1], ['l', 0.1, 0.1]], 'c' => 1]]],
+                ],
+                'defecto' => 1,
+                'mapa' => ['1' => 1, '2' => 2, '3' => 0],
+            ]],
+        ], $motor_eo->ruta_envolturas('muestra'));
+        $motor_eo->guardar_config('muestra', ['envolturas' => ['0000FF' => ['forma' => 2]]]);
+        $GLOBALS['eo_v2'] = [
+            'claves' => $motor_eo->envoltura_claves('muestra'),
+            'defecto' => $motor_eo->envoltura_defecto('muestra', '0000FF'),
+            'n1' => $motor_eo->envoltura_datos('muestra', '0000FF', 1),
+            'n2' => $motor_eo->envoltura_datos('muestra', '0000FF', 2),
+            'n3' => $motor_eo->envoltura_datos('muestra', '0000FF', 3),
+            'n9' => $motor_eo->envoltura_datos('muestra', '0000FF', 9),
+        ];
+        $_POST = ['op' => 'envoltura', 'pdf' => 'muestra', 'gid' => '0000FF', 'n' => 2, '_wpnonce' => 'nonce'];
         $_REQUEST = $_POST;
         $motor_eo->handle_request(); // exit en wp_send_json_success
         break;
@@ -3059,18 +3126,25 @@ switch ($fase) {
                     ['tipo' => 'img', 'ref' => 'mock:3', 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300],
                     ['tipo' => 'placeholder', 'ref' => '0000FF#1', 'x' => 90, 'y' => 60,
                         'w' => 110, 'h' => 180, 'envoltura' => true],
+                    ['tipo' => 'placeholder', 'ref' => '0000FF#2', 'x' => 10, 'y' => 10,
+                        'w' => 60, 'h' => 60, 'envoltura' => true],
                 ],
             ]],
         ]);
-        // envolturas.json con geo de DOS grupos (solo la usada viaja a la ficha).
+        // envolturas.json v2: 2 formas, defecto 1, con la #2 como excepcion
+        // (asi la fase cubre la forma por defecto embebida Y la excepcion).
         \ExtractCorel\Engine\Metadata::guardar([
-            'version' => 1, 'pdf' => 'muestra', 'creado' => '2026-10-17T00:00:00Z',
-            'grupos' => [
-                '0000FF' => ['1' => ['par' => 0, 'subs' => [['m' => [0.1, 0.2],
-                    's' => [['l', 0.9, 0.2], ['l', 0.9, 0.8], ['l', 0.1, 0.8]], 'c' => 1]]]],
-                'FF0000' => ['1' => ['par' => 1, 'subs' => [['m' => [0.0, 0.0],
-                    's' => [['l', 1.0, 0.0], ['l', 1.0, 1.0], ['l', 0.0, 1.0]], 'c' => 1]]]],
-            ],
+            'version' => 2, 'pdf' => 'muestra', 'creado' => '2026-10-17T00:00:00Z',
+            'grupos' => ['0000FF' => [
+                'formas' => [
+                    ['par' => 0, 'usos' => 1, 'subs' => [['m' => [0.1, 0.2],
+                        's' => [['l', 0.9, 0.2], ['l', 0.9, 0.8], ['l', 0.1, 0.8]], 'c' => 1]]],
+                    ['par' => 1, 'usos' => 1, 'subs' => [['m' => [0.0, 0.0],
+                        's' => [['l', 1.0, 0.0], ['l', 1.0, 1.0], ['l', 0.0, 1.0]], 'c' => 1]]],
+                ],
+                'defecto' => 1,
+                'mapa' => ['1' => 1, '2' => 2],
+            ]],
         ], $motor_mp->ruta_envolturas('muestra'));
         $previo_mp = $motor_mp->leer_config('muestra');
         try {
@@ -3092,6 +3166,8 @@ switch ($fase) {
                         ['tipo' => 'placeholder', 'ref' => '0000FF#1', 'x' => 90, 'y' => 60,
                             'w' => 110, 'h' => 180, 'filtros' => ['gama' => 0, 'opacidad' => 90],
                             'envoltura' => true],
+                        ['tipo' => 'placeholder', 'ref' => '0000FF#2', 'x' => 10, 'y' => 10,
+                            'w' => 60, 'h' => 60, 'envoltura' => true],
                     ],
                 ]])),
                 '_wpnonce' => 'nonce',
@@ -3494,9 +3570,19 @@ switch ($fase) {
                     'ZZZZZZ' => ['tipo' => 'texto'],
                     'FF0000' => ['tipo' => 'foto'],
                 ],
+                // Envoltura representativa por grupo (v2) + una invalida.
+                'envolturas' => [
+                    '0000FF' => ['forma' => 2],
+                    'ZZZZZZ' => ['forma' => 3],
+                ],
+                // Envoltura del CARGADOR por campo (opcion b) + una invalida.
+                'campos_envoltura' => [
+                    '56' => '0000FF',
+                    '56x' => '0000FF',
+                ],
             ]);
             $GLOBALS['test_config'] = $motor_g->leer_config('muestra');
-            $GLOBALS['test_config_defaults'] = ($motor_g->leer_config('inexistente') === ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => [], 'tienda' => [], 'bonus' => []]);
+            $GLOBALS['test_config_defaults'] = ($motor_g->leer_config('inexistente') === ['activo' => false, 'productos' => [], 'campos_ids' => [], 'preview_omisible' => false, 'mockups' => [], 'placeholders' => [], 'tienda' => [], 'bonus' => [], 'envolturas' => [], 'campos_envoltura' => []]);
         } catch (\Throwable $e) {
             $GLOBALS['test_config_error'] = $e->getMessage();
         }

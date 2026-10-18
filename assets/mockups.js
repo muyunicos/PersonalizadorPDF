@@ -128,19 +128,38 @@ jQuery(function ($) {
     }
 
     /**
-     * Disponibilidad de la envoltura de un ref segun las CLAVES del analisis
-     * (`datos.envolturas`): `disponible` = existe envolturas.json (false =
-     * re-analizar); `hay` = esta clave tiene clip en el PDF.
+     * Disponibilidad de la envoltura de un ref (v2, formas deduplicadas):
+     * `disponible` = existe envolturas.json; `hay` = esta instancia tiene
+     * envoltura (forma por defecto o excepcion); `necesita` = usa una forma
+     * DISTINTA de la default y su geometria aun no esta (hay que pedirla);
+     * `sin` = excepcion explicita sin envoltura en el PDF.
      */
     function infoEnvoltura(ref) {
         var ev = datos.envolturas || {};
         var partes = String(ref || '').split('#');
         var n = parseInt(partes[1], 10) || 1;
-        var claves = (ev.claves || {})[partes[0]] || [];
+        var disponible = !!ev.disponible;
+        var g = null;
+        grupos.forEach(function (x) { if (String(x.id) === partes[0]) { g = x; } });
+        if (!g) {
+            return { disponible: disponible, n: n, hay: false, necesita: false, sin: false };
+        }
+        var exc = g.env_exc || {};
+        var esExc = Object.prototype.hasOwnProperty.call(exc, String(n));
+        var k = esExc ? parseFloat(exc[String(n)]) : null;
+        if (esExc && k === 0) {
+            return { disponible: disponible, n: n, hay: false, necesita: false, sin: true };
+        }
+        var resuelta = (g.envs && g.envs[String(n)]) || null;
+        var tieneDef = !!(g.env_defecto && g.env_defecto.subs && g.env_defecto.subs.length);
+        var necesita = esExc && !resuelta;
+        var hay = !!resuelta || (!esExc && tieneDef) || necesita;
         return {
-            disponible: !!ev.disponible,
+            disponible: disponible,
             n: n,
-            hay: !!ev.disponible && claves.map(String).indexOf(String(n)) !== -1
+            hay: disponible && hay,
+            necesita: necesita,
+            sin: false
         };
     }
     /** Nombre legible de una capa (usado en lista, etiqueta y aviso). */
@@ -881,12 +900,14 @@ jQuery(function ($) {
                 + (c.envoltura && infoEnv.hay ? ' checked' : '') + (infoEnv.hay ? '' : ' disabled')
                 + '> Envoltura del PDF (PowerClip)</label>';
             if (!infoEnv.hay) {
-                html += infoEnv.disponible
-                    ? '<p class="description">Este placeholder no esta recortado en ninguna'
-                        + ' forma del PDF (sin envoltura).</p>'
-                    : '<p class="description">Sin envolturas analizadas: si el PDF recorta'
-                        + ' placeholders dentro de formas (PowerClip), pulsa "Re-analizar"'
-                        + ' para extraerlas.</p>';
+                html += infoEnv.sin
+                    ? '<p class="description">Esta instancia no tiene envoltura en el PDF.</p>'
+                    : (infoEnv.disponible
+                        ? '<p class="description">Este placeholder no esta recortado en ninguna'
+                            + ' forma del PDF (sin envoltura).</p>'
+                        : '<p class="description">Sin envolturas analizadas: si el PDF recorta'
+                            + ' placeholders dentro de formas (PowerClip), pulsa "Re-analizar"'
+                            + ' para extraerlas.</p>');
             }
         }
         html += '<div class="ec-mk-seccion">Ajustes (solo el mockup)</div>';
@@ -1355,9 +1376,9 @@ jQuery(function ($) {
         refrescar();
     });
 
-    /* Envoltura (PowerClip): on/off por capa placeholder. La geometria NO
-       viaja en la pagina: al marcar se pide bajo demanda (op=envoltura), se
-       cachea en la sesion y el nucleo la recibe via contexto(). */
+    /* Envoltura (PowerClip): on/off por capa placeholder. v2: la forma por
+       defecto del grupo ya viaja en la pagina (sin pedidos); SOLO las
+       instancias con otra forma piden su geometria (op=envoltura, cacheada). */
     $ed.on('change', '.ec-mk-envoltura', function () {
         var c = capa();
         if (!c) { return; }
@@ -1365,25 +1386,35 @@ jQuery(function ($) {
         c.envoltura = activar;
         marcarPaso();
         sinGuardar();
-        if (!activar || R.envolturaDeRef(c.ref, contexto())) {
+        if (!activar) {
+            refrescar();
+            return;
+        }
+        var info = infoEnvoltura(c.ref);
+        if (!info.hay) {
+            c.envoltura = false;
+            refrescar();
+            $ed.find('.ec-mk-alertas').text(info.sin
+                ? 'Esta instancia no tiene envoltura en el PDF.'
+                : 'No hay envoltura analizada para este placeholder: re-analiza el PDF.');
+            return;
+        }
+        if (!info.necesita) {
             refrescar();
             return;
         }
         pedirEnvoltura(c);
     });
 
-    /** Pide la geometria de la envoltura de la capa y refresca. Sin ella (o
-        sin red) la capa vuelve a sin envoltura, con aviso visible. */
+    /** Pide la geometria de una EXCEPCION (forma distinta de la default) y
+        refresca. Sin ella (o sin red) la capa vuelve a sin envoltura, con
+        aviso visible. */
     function pedirEnvoltura(c) {
         var ref = c.ref;
         var gid = String(ref).split('#')[0];
         var info = infoEnvoltura(ref);
-        if (!apiMotor || !info.hay) {
-            c.envoltura = false;
-            // OJO: refrescar() vacia .ec-mk-alertas (pintarAlertas); el aviso
-            // SIEMPRE va DESPUES del refrescar, o desaparece al instante.
-            refrescar();
-            $ed.find('.ec-mk-alertas').text('No hay envoltura analizada para este placeholder.');
+        if (!apiMotor || !info.necesita) {
+            revertirEnvoltura(ref, 'No se pudo pedir la envoltura al servidor.');
             return;
         }
         apiMotor('envoltura', { pdf: datos.pdf, gid: gid, n: info.n })
@@ -1397,7 +1428,7 @@ jQuery(function ($) {
                     return;
                 }
                 revertirEnvoltura(ref,
-                    'El analisis no conserva la envoltura de este placeholder: se quito el recorte.');
+                    'El analisis no conserva la envoltura de esta instancia: se quito el recorte.');
             })
             .catch(function (e) {
                 var msg = (e instanceof Error && e.message)

@@ -362,20 +362,30 @@ resultante es la misma composicion y el mismo tamano que la que recibe el client
   ni construir rutas fuera del dueno unico de datos; todo recurso anadido por el admin DEBE vivir
   en los ambitos vigentes.
 
-### Envelopes (PowerClip, v3)
+### Envelopes (PowerClip, v3/v4)
 
 - **FR-046**: Las propiedades de una capa **placeholder** DEBEN ofrecer el toggle **"Envoltura del
   PDF (PowerClip)"**, que recorta la capa al contenedor vectorial del hueco en el PDF para
-  previsualizar el recorte que aplicara el motor. El toggle DEBE habilitarse solo si el analisis
-  registra envoltura para ese `{grupo}#n`: sin `envolturas.json` DEBE informar la causa accionable
-  (Re-analizar) y, con archivo pero sin esa clave, que el placeholder no esta recortado en ninguna
-  forma; nunca DEBE mostrarse marcado un toggle que no aplica.
-- **FR-047**: La geometria de la envoltura DEBE viajar **bajo demanda** (op `envoltura` del endpoint
-  motor, cacheada por sesion) y **nunca completa en la pagina**: `datos_pdf_render` publica solo las
-  claves disponibles y la geometria de los refs usados con `envoltura: true` en los mockups
-  guardados, para que la ficha del comprador componga con el clip sin exponer un endpoint publico.
-  Si el pedido falla, la capa DEBE volver a sin envoltura con aviso visible (la composicion nunca
-  falla).
+  previsualizar el recorte que aplicara el motor. El toggle DEBE habilitarse solo si esa instancia
+  tiene envoltura: sin `envolturas.json` DEBE informar la causa accionable (Re-analizar), con
+  archivo pero sin forma que no esta recortado, y con la instancia en `k=0` que ESA instancia no
+  tiene envoltura; nunca DEBE mostrarse marcado un toggle que no aplica.
+- **FR-047**: La geometria de la envoltura DEBE viajar **deduplicada y bajo demanda**: el archivo
+  guarda las **formas distintas** (con `defecto` y `mapa` por instancia) y la pagina publica la
+  forma por defecto **una vez por grupo** mas las excepciones usadas; una instancia que usa la
+  forma por defecto NO pide nada y una excepcion pide solo su geometria (`op=envoltura`, cacheada
+  por sesion). Nunca DEBE publicarse la geometria completa en el HTML. Si el pedido falla, la capa
+  DEBE volver a sin envoltura con aviso visible (la composicion nunca falla).
+- **FR-048**: La consola DEBE ofrecer, en la **cabecera de cada grupo**, el campo **"Envoltura"**
+  con el numero de la forma representativa (rango 1..N de las formas distintas), deshabilitado con
+  la causa cuando el grupo no tiene envolturas; el valor DEBE persistir en `config.json` y usarse
+  como forma por defecto del grupo (guia y relleno), sin alterar la geometria real de cada
+  instancia.
+- **FR-049**: El **cargador del comprador** DEBE mostrar la envoltura del grupo asociado como
+  **guia visual** al subir/cortar la foto (asociacion **PDF x campo**, elegida en la consola),
+  reutilizando la misma geometria del mockup; el PNG del pool DEBE seguir guardandose **sin
+  cortar** (el corte real lo aplica el clip del PDF), evitando el doble corte y los artefactos de
+  borde.
 
 ### Key Entities
 
@@ -434,6 +444,10 @@ resultante es la misma composicion y el mismo tamano que la que recibe el client
   capa placeholder recorta la capa en el editor **sin recargar la pagina**, y la ficha del comprador
   muestra **el mismo recorte** que el editor; el HTML de la pagina **no incluye** la geometria de
   envolturas no usadas (verificable en el JSON de `datos_pdf_render`).
+- **SC-014**: Un PDF con **N instancias que comparten el mismo marco** produce **una sola forma**
+  en `envolturas.json` (archivo < 4 KB para 60 instancias, sin copias ni truncamiento), y el
+  cargador del comprador muestra esa forma como guia al subir la foto cuando el admin la asocia al
+  campo.
 
 ## Assumptions
 
