@@ -1407,6 +1407,32 @@ jQuery(function ($) {
             abrirPreview(id);
         });
 
+        /* Spec 018 (T010): "Cargar la plantilla de este tipo" rellena HTML, CSS y
+           JS con la plantilla del tipo elegido. Las plantillas las sirve el
+           servidor (`PersonalizadorPDF.plantillas`, generadas por
+           `plantilla_campo()`): una sola fuente, sin duplicarlas en JS. Sirve para
+           RECUPERAR un campo creado con una plantilla vieja (o vacio). */
+        $(document).on('click', '.ec-c-plantilla', function (ev) {
+            ev.preventDefault();
+            var $form = $(this).closest('form.ec-form-campo');
+            if (!$form.length) { return; }
+            var tipo = String($form.find('select[name=tipo]').val() || '');
+            var pls = (window.PersonalizadorPDF && window.PersonalizadorPDF.plantillas) || {};
+            var pl = pls[tipo];
+            if (!pl) {
+                pmuAviso($form.closest('.card, .wrap'), 'Elegi un tipo antes de cargar su plantilla.', true);
+                return;
+            }
+            if (!window.confirm('Se reemplazan el HTML, el CSS y el JS de este campo por los de la plantilla "' + tipo + '". ¿Seguir?')) {
+                return;
+            }
+            $form.find('textarea[name=html]').val(pl.htm || '');
+            $form.find('textarea[name=css]').val(pl.css || '');
+            $form.find('textarea[name=js]').val(pl.js || '');
+            $form.find('.ec-campo-status').removeClass('ec-error').addClass('ec-ok')
+                .text('Plantilla "' + tipo + '" cargada. Guarda para aplicarla.');
+        });
+
     /* ============ 3. Acciones sin recarga (re-analizar, borrar, regenerar) ============ */
 
     /* ============ 3. Acciones sin recarga (re-analizar, borrar, regenerar) ============ */

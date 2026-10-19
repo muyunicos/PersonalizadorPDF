@@ -445,6 +445,9 @@ class Personalizador_PDF_Plugin
                 'grupo_gid' => isset($c['envoltura_gid']) ? (string)$c['envoltura_gid'] : null,
                 'grupo_w' => isset($c['grupo_w']) ? (int)$c['grupo_w'] : null,
                 'grupo_h' => isset($c['grupo_h']) ? (int)$c['grupo_h'] : null,
+                // Spec 019 (F2): la guia salio del CABLEADO del hueco (no del
+                // select "Envoltura del cargador"). Informativo para la consola.
+                'envoltura_auto' => !empty($c['envoltura_auto']),
             ];
         }
         return $out;
@@ -540,6 +543,69 @@ class Personalizador_PDF_Plugin
     }
 
     /** Datos del panel de ficha para un PDF (false si el PDF no es ofrecible). */
+    /**
+     * Spec 019 (F2): la guia de envoltura de un campo se **DEDUCE** cuando el
+     * admin no la forzo. Criterios, en orden:
+     *
+     *   1. **CABLEADO**: el hueco de un grupo CON envoltura referencia `[campoN]`
+     *      (en `value` o `settings`): ese campo hereda la forma de ese grupo. Es
+     *      la deduccion fuerte, porque el cableado ya dice a que grupo va el campo.
+     *   2. **UNICO**: si el PDF tiene UN solo grupo con envoltura y el campo
+     *      declara tipo `imagen`, se usa ese (no hay ambiguedad posible).
+     *
+     * Devuelve `[campo_id => gid]`. Lo que el admin eligio en "Envoltura del
+     * cargador" (`config.json:campos_envoltura`) **siempre gana** sobre esto.
+     */
+    public function campos_envoltura_deducida($nombre)
+    {
+        $mapa = [];
+        $env = $this->pmu_uploads()->leer_json($this->pmu_uploads()->ruta_envolturas($nombre));
+        $conEnv = [];
+        foreach ((array)($env['grupos'] ?? []) as $gid => $g) {
+            if (is_array($g) && !empty($g['formas'])) {
+                $conEnv[(string)$gid] = true;
+            }
+        }
+        if (!$conEnv) {
+            return $mapa;
+        }
+        $config = $this->config_de($nombre);
+        // 1) cableado del hueco -> campo.
+        foreach ((array)($config['placeholders'] ?? []) as $gid => $m) {
+            $gid = (string)$gid;
+            if (!isset($conEnv[$gid]) || !is_array($m)) {
+                continue;
+            }
+            foreach (['value', 'settings'] as $destino) {
+                $txt = isset($m[$destino]) ? (string)$m[$destino] : '';
+                if (!preg_match_all('/\[campo(\d+)\]/', $txt, $mm)) {
+                    continue;
+                }
+                foreach ($mm[1] as $crudo) {
+                    $cid = (int)$crudo;
+                    if ($cid > 0 && !isset($mapa[$cid])) {
+                        $mapa[$cid] = $gid;
+                    }
+                }
+            }
+        }
+        // 2) un solo grupo con envoltura + campo de tipo imagen sin cablear.
+        if (count($conEnv) === 1) {
+            $unico = (string)array_key_first($conEnv);
+            $tipos = [];
+            foreach ($this->pmu_uploads()->campo_listar() as $cid => $c) {
+                $tipos[(int)$cid] = isset($c['tipo']) ? (string)$c['tipo'] : '';
+            }
+            foreach ((array)($config['campos_ids'] ?? []) as $cid) {
+                $cid = (int)$cid;
+                if ($cid > 0 && !isset($mapa[$cid]) && ($tipos[$cid] ?? '') === 'imagen') {
+                    $mapa[$cid] = $unico;
+                }
+            }
+        }
+        return $mapa;
+    }
+
     public function panel_ficha($pdf)
     {
         try {
@@ -563,8 +629,11 @@ class Personalizador_PDF_Plugin
         $elegidos = [];
         // Envoltura del cargador por campo (opcion b): el gid asociado en ESTE
         // PDF se resuelve a la forma por defecto de su grupo (1 sola, chica).
+        // Spec 019 (F2): lo que el admin NO eligio se DEDUCE del cableado del
+        // hueco (`campos_envoltura_deducida`); el select queda como override.
         $campos_env = isset($config['campos_envoltura']) && is_array($config['campos_envoltura'])
             ? $config['campos_envoltura'] : [];
+        $campos_env_auto = $this->campos_envoltura_deducida($nombre);
         foreach ((array)($config['campos_ids'] ?? []) as $cid) {
             $cid = (int)$cid;
             if (!isset($campos[$cid])) {
@@ -572,11 +641,18 @@ class Personalizador_PDF_Plugin
             }
             $fila = $campos[$cid];
             $gid = isset($campos_env[(string)$cid]) ? (string)$campos_env[(string)$cid] : '';
+            $auto = false;
+            if ($gid === '' && isset($campos_env_auto[$cid])) {
+                $gid = (string)$campos_env_auto[$cid];
+                $auto = true;
+            }
             if ($gid !== '') {
                 $def = $this->pmu_uploads()->envoltura_defecto($nombre, $gid);
                 if (!empty($def['envoltura'])) {
                     $fila['envoltura'] = $def['envoltura'];
                     $fila['envoltura_gid'] = $gid;
+                    // `true` = la guia salio del cableado, no del select.
+                    $fila['envoltura_auto'] = $auto;
                     // Spec 019 (FR-001): el tamano del grupo base viaja al navegador
                     // para que la ranura pueda adaptarse (`phsize`). El dato ya esta
                     // en analisis.json, donde `grupos` es una LISTA (no un dict):
@@ -3471,7 +3547,14 @@ function (ctx, root) {
         { w: 1000, h: 1000, forma: 'fit', min: 1, max: 1, phsize: 0 }
     ];
     var cont = root.querySelector('[data-pmu-cargador]');
-    if (!cont || !window.PMU_API || !window.CargadorPMU) {
+    if (!cont) {
+        // Sin contenedor no hay donde dibujar: se avisa CON LA CAUSA.
+        console.warn('[PMU] el campo no tiene <div data-pmu-cargador></div> en su HTML.');
+        ctx.set(ctx.id, { valor: null, cliente: '' });
+        return;
+    }
+    if (!window.PMU_API || !window.CargadorPMU) {
+        console.warn('[PMU] falta PMU_API o CargadorPMU en la ficha: el cargador no se monto.');
         ctx.set(ctx.id, { valor: null, cliente: '' });
         return;
     }
@@ -3485,6 +3568,7 @@ function (ctx, root) {
     if (!cargador) {
         // Red de seguridad (D8): sin componente montado el campo se declara VACIO
         // (existe y no tiene fotos), que no es lo mismo que no tener el campo.
+        console.warn('[PMU] el cargador no se monto: revisa RANURAS en este campo.js.');
         ctx.set(ctx.id, { valor: null, cliente: '' });
     }
 }
@@ -3681,6 +3765,11 @@ JS;
                                             <option value="imagen" <?php selected($tipo, 'imagen'); ?>>Imagen</option>
                                             <option value="opciones" <?php selected($tipo, 'opciones'); ?>>Opciones (Overrides)</option>
                                         </select>
+                                        <?php // Spec 018 (T010): rellena HTML/CSS/JS con la plantilla del
+                                              // tipo elegido, en el cliente (las plantillas viajan en
+                                              // PersonalizadorPDF.plantillas). Pide confirmacion. ?>
+                                        <button type="button" class="button ec-c-plantilla">Cargar la plantilla de este tipo</button>
+                                        <p class="description">Reemplaza el HTML, el CSS y el JS de este campo por los de la plantilla del tipo elegido.</p>
                                         <?php if ($tipo !== '') : ?>
                                             <span class="description"><?php echo esc_html($etiquetas[$tipo] ?? $tipo); ?>.
                                                 <?php
@@ -4455,6 +4544,15 @@ JS;
             'postUrl' => admin_url('admin-post.php'),
             'nonceBuscar' => wp_create_nonce('personalizador_pdf_buscar_productos'),
             'nonceCampo' => wp_create_nonce('personalizador_pdf_campo'),
+            // Spec 018 (T010): las 3 plantillas base viajan al navegador para el
+            // boton "Cargar la plantilla de este tipo" del drawer (rellena
+            // HTML/CSS/JS en el cliente: sin endpoint y sin duplicar la plantilla
+            // en JS — la fuente sigue siendo `plantilla_campo()`).
+            'plantillas' => [
+                'texto' => $this->plantilla_campo('texto'),
+                'imagen' => $this->plantilla_campo('imagen'),
+                'opciones' => $this->plantilla_campo('opciones'),
+            ],
             'nonceConfig' => wp_create_nonce('personalizador_pdf_config'),
             'nonceMockups' => wp_create_nonce('personalizador_pdf_mockups'),
             'nonceAccion' => [

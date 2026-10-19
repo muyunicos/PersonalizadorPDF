@@ -24,6 +24,12 @@
   accionable si `phsize > 0` sin `grupo_w`/`grupo_h` (FR-003).
 - [X] **T007** `node tests/campos-contrato.test.js`: la funcion pura se **ejecuta** en un
   sandbox (0/1/2, cap, degradacion, `circle`, `fit`, `min`/`max`) — 12 checks nuevos.
+- [X] **T017** **La guia se deduce sola** (post-implementacion, 2026-10-19): el paso manual
+  "Envoltura del cargador" pasa a **override**. `campos_envoltura_deducida($nombre)` la saca del
+  **cableado del hueco** (`[campoN]` en `value`/`settings` de un grupo con envoltura) y, si el PDF
+  tiene un solo grupo con envoltura y el campo declara tipo `imagen`, de ese. `panel_ficha` marca
+  `envoltura_auto`, `campos_panel` lo publica y la consola muestra
+  "automatica: #gid (del cableado del hueco)". Cubierto por la fase `ficha`.
 
 ## Fase 3 — Aviso de ampliacion (`selector-pmu.js`, `cargador-pmu.js`)
 

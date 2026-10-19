@@ -1270,9 +1270,17 @@
         api.montarCargador = function (el, opts) {
             opts = opts || {};
             var campo = opts.campo || {};
-            if (!el || !window.CargadorPMU) {
+            if (!el) {
+                // Spec 018 (fix): sin contenedor el cargador no tiene donde
+                // dibujarse. Se avisa CON LA CAUSA (antes era mudo).
                 if (typeof console !== 'undefined' && console.warn) {
-                    console.warn('[PMU] CargadorPMU no disponible: el cargador del campo no se monto.');
+                    console.warn('[PMU] el campo no tiene contenedor: agrega <div data-pmu-cargador></div> a su HTML.');
+                }
+                return null;
+            }
+            if (!window.CargadorPMU) {
+                if (typeof console !== 'undefined' && console.warn) {
+                    console.warn('[PMU] CargadorPMU no disponible: cargador-pmu.js no se cargo en esta pagina.');
                 }
                 return null;
             }
@@ -1302,6 +1310,14 @@
                 }
                 ranuras.push(nr);
             });
+            if (!ranuras.length) {
+                // Spec 018 (fix): un campo con 0 ranuras era MUDO (no se dibujaba
+                // nada y no habia pista). El caso tipico: `RANURAS = []`.
+                if (typeof console !== 'undefined' && console.warn) {
+                    console.warn('[PMU] el campo declaro 0 ranuras: revisa RANURAS en su campo.js.');
+                }
+                return null;
+            }
             var mio = false;
             var cargador = new window.CargadorPMU(el, {
                 ranuras: ranuras,
@@ -1324,7 +1340,11 @@
                 }
             });
             // `montar()` se llama UNA sola vez: devuelve el cargador montado o null.
-            return cargador.montar() ? cargador : null;
+            var montado = cargador.montar();
+            if (!montado && typeof console !== 'undefined' && console.warn) {
+                console.warn('[PMU] CargadorPMU no dibujo la ranura (revisa w/h en RANURAS).');
+            }
+            return montado ? cargador : null;
         };
         // T006/T007: la validez se re-evalua al instante con cada cambio.
         panel.addEventListener('input', aplicarFiltro);

@@ -286,6 +286,10 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                         }
                     }
                     if (!empty($cfg_pdf['campos_ids']) && $grupos_env) :
+                        // Spec 019 (F2): si el admin no forzo la guia, se DEDUCE del
+                        // cableado del hueco ([campoN] en value/settings). Se muestra
+                        // como "automatica" para no pedir un paso que ya es deducible.
+                        $env_auto = $seleccionado ? $this->campos_envoltura_deducida($this->nombre_de($seleccionado)) : [];
                     ?>
                     <p>
                         <span class="ec-block-label">Envoltura del cargador (guia al subir la foto)</span>
@@ -297,11 +301,16 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                             $t_sel = $todos_campos[$cid_sel];
                             $gid_sel = isset($cfg_pdf['campos_envoltura'][(string)$cid_sel])
                                 ? (string)$cfg_pdf['campos_envoltura'][(string)$cid_sel] : '';
+                            $gid_auto = isset($env_auto[$cid_sel]) ? (string)$env_auto[$cid_sel] : '';
                         ?>
                         <label class="ec-env-campo">
                             #<?php echo (int)$cid_sel; ?> <?php echo esc_html($t_sel[1] !== '' ? $t_sel[1] : '(oculto)'); ?>:
                             <select name="campos_envoltura[<?php echo (int)$cid_sel; ?>]">
-                                <option value="" <?php selected($gid_sel, ''); ?>>sin guia</option>
+                                <option value="" <?php selected($gid_sel, ''); ?>>
+                                    <?php echo $gid_auto !== ''
+                                        ? 'automatica: #' . esc_html($gid_auto) . ' (del cableado del hueco)'
+                                        : 'sin guia'; ?>
+                                </option>
                                 <?php foreach ($grupos_env as $gid_env => $n_env) : ?>
                                 <option value="<?php echo esc_attr($gid_env); ?>" <?php selected($gid_sel, $gid_env); ?>>
                                     #<?php echo esc_html($gid_env); ?> (<?php echo (int)$n_env; ?> forma<?php echo $n_env > 1 ? 's' : ''; ?>)

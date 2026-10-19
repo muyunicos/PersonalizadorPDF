@@ -35,6 +35,8 @@
   ya tenia uno, conservarlo; editar otro dato no rompe el campo legacy (D3).
 - [X] **T010** `<select name="tipo">` en el editor (3 tipos + texto corto) y boton
   "Cargar la plantilla de este tipo" que rellena HTML/CSS/JS en el cliente (D4).
+  **Cerrado de verdad el 2026-10-19**: el boton existe (`.ec-c-plantilla`) y las 3 plantillas
+  viajan en `PersonalizadorPDF.plantillas` (una sola fuente: `plantilla_campo()`), sin endpoint.
 - [X] **T011** `campo_editar($id, $datos, $htm, $css, $js, $tipo = null)`:
   actualiza `items[].tipo` del indice **y** `datos.json:tipo`; `campo_listar()`
   refleja el cambio (FR-007).

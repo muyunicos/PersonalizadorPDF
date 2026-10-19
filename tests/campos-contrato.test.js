@@ -143,7 +143,8 @@ check('Legacy: el cargador del sistema se apaga si el campo trae campo.js',
   && tienda.indexOf('el cargador legacy se APAGA cuando el campo ya trae') !== -1);
 // `montar()` se llama UNA sola vez (el `campo.js` no debe volver a montarlo).
 check('montarCargador monta una sola vez',
-  tienda.indexOf('return cargador.montar() ? cargador : null;') !== -1);
+  tienda.indexOf('var montado = cargador.montar();') !== -1
+  && tienda.indexOf('return montado ? cargador : null;') !== -1);
 // La guia de envoltura (spec 016 F6) se resuelve desde PMU_FICHA.campos: el
 // `campo.js` solo conoce `ctx` (id + set), no el objeto del campo.
 check('montarCargador resuelve la envoltura desde PMU_FICHA.campos',
@@ -248,6 +249,33 @@ console.log('\n== spec 019: ranura adaptativa (phsize + aviso) ==');
     && selector019.indexOf('_factorAmpliacion()') !== -1);
   const cargador019 = fs.readFileSync(path.join(__dirname, '..', 'assets', 'cargador-pmu.js'), 'utf8');
   check('la tira muestra el aviso de la ranura', cargador019.indexOf('cpmu-aviso') !== -1);
+}
+
+console.log('\n== spec 018: el cargador NUNCA es mudo + plantilla recargable ==');
+{
+  const tienda18 = fs.readFileSync(path.join(__dirname, '..', 'assets', 'tienda.js'), 'utf8');
+  const admin18 = fs.readFileSync(path.join(__dirname, '..', 'assets', 'admin.js'), 'utf8');
+  const plugin18 = fs.readFileSync(path.join(__dirname, '..', 'personalizador-pdf.php'), 'utf8');
+  // Avisos CON LA CAUSA (antes: silencio total si faltaba el contenedor o las ranuras).
+  check('avisa si el campo no tiene contenedor',
+    tienda18.indexOf('el campo no tiene contenedor') !== -1);
+  check('avisa si el campo declara 0 ranuras',
+    tienda18.indexOf('el campo declaro 0 ranuras') !== -1);
+  check('avisa si CargadorPMU no dibujo la ranura',
+    tienda18.indexOf('no dibujo la ranura') !== -1);
+  check('la plantilla avisa si falta el contenedor en el HTML',
+    plugin18.indexOf('no tiene <div data-pmu-cargador></div> en su HTML') !== -1);
+  check('la plantilla avisa si falta PMU_API/CargadorPMU',
+    plugin18.indexOf('falta PMU_API o CargadorPMU en la ficha') !== -1);
+  // Boton "Cargar la plantilla de este tipo" (T010): plantillas servidas por PHP.
+  check('el drawer tiene el boton de plantilla',
+    plugin18.indexOf('class="button ec-c-plantilla"') !== -1);
+  check('las 3 plantillas viajan al navegador (una sola fuente)',
+    plugin18.indexOf("'plantillas' => [") !== -1
+    && plugin18.indexOf("$this->plantilla_campo('imagen')") !== -1);
+  check('el admin rellena HTML/CSS/JS con la plantilla elegida',
+    admin18.indexOf("$(document).on('click', '.ec-c-plantilla'") !== -1
+    && admin18.indexOf("textarea[name=js]').val(pl.js") !== -1);
 }
 check('idsDe filtra el id fantasma "Array" (legado 4.6.6)',
   tienda.indexOf("x !== 'Array'") !== -1

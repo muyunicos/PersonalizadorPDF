@@ -810,6 +810,14 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 array_key_exists('grupo_w', $cs19) && array_key_exists('grupo_h', $cs19)
                 && array_key_exists('grupo_gid', $cs19)
                 && $cs19['grupo_w'] === null && $cs19['grupo_h'] === null && $cs19['grupo_gid'] === null);
+            // Spec 019 (F2): deduccion por cableado (sin `campos_envoltura`).
+            $fa19 = (isset($GLOBALS['test_ficha_auto']['campos'][$GLOBALS['test_ficha_cid']]))
+                ? $GLOBALS['test_ficha_auto']['campos'][$GLOBALS['test_ficha_cid']] : [];
+            check('spec 019: sin select, la guia se deduce del cableado del hueco',
+                !empty($fa19['envoltura']['subs'])
+                && ($fa19['envoltura_gid'] ?? '') === '0000FF'
+                && !empty($fa19['envoltura_auto']),
+                json_encode([$fa19['envoltura_gid'] ?? null, $fa19['envoltura_auto'] ?? null]));
             // T016: HTML real del panel (hook Woo y shortcode pintan esto).
             // T016: HTML real del panel (hook Woo y shortcode pintan esto).
             $html = isset($GLOBALS['test_ficha_html1']) ? (string)$GLOBALS['test_ficha_html1'] : '';
@@ -1597,6 +1605,14 @@ switch ($fase) {
             'htm' => '', 'css' => '', 'js' => '',
         ]]);
         $GLOBALS['test_ficha_cp_sin'] = isset($cpSin19[0]) ? $cpSin19[0] : [];
+        // Spec 019 (F2): sin asociacion explicita, la guia se DEDUCE del cableado
+        // del hueco (el grupo 0000FF referencia [campo1] en su `value`). Se borra
+        // la clave del config a mano: `guardar_config` conserva lo que no viaja.
+        $rutaCfg19 = $motor_f->ruta_config('muestra');
+        $cfg19f = json_decode((string)@file_get_contents($rutaCfg19), true);
+        unset($cfg19f['campos_envoltura']);
+        file_put_contents($rutaCfg19, json_encode($cfg19f));
+        $GLOBALS['test_ficha_auto'] = $p->panel_ficha('muestra');
         break;
 
     case 'vista_previa':
