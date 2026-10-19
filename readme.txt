@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.7.0
+Stable tag: 4.8.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,13 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.8.0 =
+* **Envolturas (PowerClip) v2: DEDUPLICADAS y con forma representativa**. `envolturas.json` guarda las formas **distintas** (`formas[]` con `usos`), la `defecto` (la mas usada) y un `mapa` completo por instancia (0 = sin envoltura): un grupo de 600 instancias con el mismo marco ocupa ~0,6 KB en vez de ~1 MB, y ya no se truncan las instancias 101+. `analisis.json` sigue sin envolturas; un archivo v1 se deduplica al leer.
+* **Consola**: campo **"Envoltura"** en la cabecera de cada grupo (forma representativa, 1..N) y **"Envoltura del cargador"** por campo en cada PDF (asociacion PDF x campo). Se guardan en `config.json` (`envolturas` y `campos_envoltura`).
+* **Editor de mockups**: la forma por defecto viaja UNA vez por grupo (una instancia default no pide nada; solo las excepciones piden su geometria por `op=envoltura`) y el toggle informa si la instancia no tiene envoltura.
+* **Cargador y modal de fotos**: guia visual de la forma (canvas separado, `pointer-events:none`) en la tira y **dentro de `SelectorPMU`** (caja de preview en vivo en `crop` y overlay en `fit`). El PNG del pool va **sin cortar**: el clip real lo aplica el PDF.
+* **Fix**: `PMUGeometria.acotar` ya no descarta `nombre`/`filtros`/`modo`/`oculta`/`bloqueada`/`envoltura` al abrir el editor (los ajustes sobreviven la recarga).
 
 = 4.7.0 =
 * **Bonus: biblioteca COMPARTIDA entre PDFs + modal + titulos dinamicos**. El layout por PDF (`pdfs/{nombre}/bonus/`) pasa a ser una libreria global `uploads/pmu/bonus/`: un archivo puede referenciarse desde N PDFs y **reemplazarlo** (mismo nombre, contenido nuevo) actualiza a todos. Nuevo catalogo `uploads/pmu/bonus/bonus.json` (`{version, items:[{archivo, titulo}]}`): cada archivo tiene su **titulo por defecto (dinamico)** — cambiarlo en la biblioteca lo heredan todos los PDFs que lo usen con titulo vacio. `config.json:bonus[]` pasa a `{archivo, titulo}` (biblioteca) o `{url, titulo}` (externa); el titulo vacio = default dinamico (antes era obligatorio). **Migracion one-shot**: mueve los archivos de `pdfs/*/bonus/` al global y reescribe las filas viejas (relativas o absolutas al layout viejo) a `{archivo}`.
