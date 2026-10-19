@@ -220,7 +220,11 @@
         var s = document.createElement('style');
         s.id = ESTILO_ID;
         s.textContent =
-            '.spmu-modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px}' +
+            // z-index 180000: POR ENCIMA del drawer (160000) y del preview (170000)
+            // de la consola. El modal se cuelga del `body` del documento donde corre
+            // el script, y en el admin ese documento es el de la consola: con 100000
+            // el drawer lo tapaba y el recorte no se podia usar.
+            '.spmu-modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:180000;display:flex;align-items:center;justify-content:center;padding:16px}' +
             '.spmu-bloqueado{overflow:hidden}' +
             '.spmu-caja{box-sizing:border-box;background:#fff;max-width:min(92vw,640px);max-height:92vh;overflow:auto;padding:16px;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.35);position:relative}' +
             '.spmu-sobre{outline:3px dashed #2271b1;outline-offset:-6px}' +

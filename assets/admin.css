@@ -468,11 +468,15 @@ body.ec-c-drawer-abierto { overflow: hidden; }
 .ec-aviso { color: #8a6116; }
 
 /* ============ Modal conflicto de nombre ============ */
+/* Escala de capas de la consola (un solo lugar, para no repetir el bug del
+   selector de recorte: con 100000 quedaba DEBAJO del drawer):
+     160000 drawer | 170000 preview del campo | 180000 modales (conflicto,
+     bonus, selector de recorte) | 190000 overlay de render (tapa todo) */
 .ec-modal {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.45);
-    z-index: 100000;
+    z-index: 180000;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -531,7 +535,7 @@ body.ec-c-drawer-abierto { overflow: hidden; }
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.55);
-    z-index: 100001;
+    z-index: 190000;
     display: flex;
     align-items: center;
     justify-content: center;
