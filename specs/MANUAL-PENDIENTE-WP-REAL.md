@@ -1,7 +1,7 @@
 # Recorrido manual pendiente en WP real (sesion unica)
 
 > Cubre en UNA sesion: T030 (004) + T012-recorrido (005) + T017/T029 (006) + T031 (012)
-> + T022 (016, cuando F1-F5 esten implementadas).
+> + T022 (016, cuando F1-F5 esten implementadas) + **T021/T022 (018)** + **T016 (019)**.
 > Requiere: panel WP del administrador con plugin activo + Woo + modulo integrado
 > (`modules/textmuy/`) + `uploads/pmu/pdfs/muestra.pdf` (dato de usuario, no versionado).
 > Las puertas automaticas ya estan en verde (ver §0); esto es solo verificacion con datos reales.
@@ -166,6 +166,47 @@ Detalle completo por spec: [004/quickstart.md §1](./004-woocommerce-pdf-persona
 7. Vista previa + PDF final: la foto ajustada llega al hueco correcto (flujo 012 intacto).
    (Origen: [016/quickstart.md](./016-editor-visual-fotos/quickstart.md).)
 
+## 6d. Campos v4 + ranura adaptativa (018 T021/T022 + 019 T016)
+
+> Requiere el release **4.10.0** desplegado y **Ctrl+F5** (los JS/CSS cambian de `?ver=`).
+> Se puede hacer **sin Woo**: alcanza una pagina con `[pmu_personalizar pdf="muestra"]`.
+
+1. **El cargador es del campo** (018): crear un campo desde la plantilla **Imagen (cargador)**.
+   El drawer muestra **HTML** con `<div data-pmu-cargador></div>` y un **JS** con `RANURAS` +
+   `PMU_API.montarCargador`. Ya **no** existe la fila "Cargador de imagenes".
+2. **Preview fiel** (018 D9): "Probar" dibuja la ranura; al tocar "Agregar imagen" abre el recorte
+   y al subir una foto la miniatura aparece al instante. En DevTools → Network: **cero** POST a
+   `admin-post.php` (la subida es simulada).
+3. **El recorte se ve** (fix de capas): con el **drawer abierto** y tambien desde el preview,
+   el modal de recorte queda **encima** (antes lo tapaba el drawer).
+4. **Legacy intacto** (018 D3): un campo viejo con `cargador` en `datos.json` y **sin** `campo.js`
+   sigue mostrando su cargador en la ficha. Editarle el **nombre** y guardar: en
+   `uploads/pmu/campos/{id}/datos.json` el `cargador` sigue ahi y `protegido`/`texto_ayuda` no se
+   borraron (write-through).
+5. **Tipo editable** (018 D4): cambiar el `<select>` **Tipo** y guardar; la columna Tipo de la
+   fila cambia y `datos.json:tipo` tambien. El HTML/CSS/JS del campo **no** se toca.
+6. **Dos campos de imagen en el mismo PDF** (018 T021): asociar los **dos** campos al mismo PDF
+   (`campos_ids`), subir **1 foto en cada uno** en la ficha y pedir "Vista previa": salen **2
+   lineas** en la galeria/carrito y cada hueco lleva su foto. Despues "Editar" desde el carrito:
+   las **dos** minis vuelven a sus ranuras.
+7. **Un modal a la vez** (018 T022): con 2 campos de imagen, abrir una ranura, cerrarla y abrir la
+   del otro campo: nunca hay dos modales apilados ni **botones duplicados** en la misma ranura
+   (regla `cargador && !campo.js`).
+8. **`phsize: 1` = tamano del hueco** (019): en "Envoltura del cargador" asociar el campo a un
+   grupo; en el `campo.js`, poner `phsize: 1` en la ranura. En la ficha, el titulo de la ranura
+   debe mostrar el **mismo** `WxH` que el grupo. Subir una foto y mirar el PNG del pool
+   (`uploads/pmu/tmp/sesion-{sid}/{item_key}/img/…`): tiene ese tamano.
+9. **`phsize: 2`** duplica el tamano (acotado a 3000 px): el titulo de la ranura lo refleja.
+   Con `phsize: 1` y el campo **sin** envoltura asociada: la ranura usa sus `w`/`h` y la consola
+   avisa por `console.warn` (DevTools).
+10. **Aviso de ampliacion** (019 D6): subir una foto **mas chica** que la ranura (200x200 con una
+    ranura de 1000x1000): el badge del selector muestra `se amplia 5.0x` y **no** bloquea
+    "Aceptar". Con una foto mas grande, no aparece.
+11. **PDF final**: procesar y descargar; la foto entra **encajada** (sin deformar ni recortar) en
+    el hueco. Con `phsize` cambia el tamano del PNG, pero el encaje del PDF es el mismo.
+    (Origen: [018/spec.md](./018-campos-consola-v4/spec.md) y
+    [019/spec.md](./019-ranura-adaptativa/spec.md).)
+
 ## 7. Cierre
 
 - [ ] §1 raiz unica OK (T017-parcial + T029-parcial)
@@ -176,6 +217,9 @@ Detalle completo por spec: [004/quickstart.md §1](./004-woocommerce-pdf-persona
 - [ ] §6 fallos + respaldo OK (T029-resto)
 - [ ] §6b campos reutilizables OK (012 T031: editor, global, cargador, nunca bloquea)
 - [ ] §6c editor visual de fotos OK (016 T022: dedos/mouse, cambio de foto, restauracion)
+- [ ] §6d campos v4 OK (018 T021/T022: cargador del campo, legacy intacto, tipo editable,
+      dos campos de imagen, un modal a la vez)
+- [ ] §6d ranura adaptativa OK (019 T016: `phsize` 1/2, degradacion con aviso, aviso de ampliacion)
 - [ ] Datos de prueba limpiados (solo `tmp/sesion-*`, `tmp/muestras/*`, `tmp/orders/*`)
 - [ ] Al cerrar todo: marcar T030/T012/T017/T029 `[X]` en sus `tasks.md` y archivar
       este archivo a `_archivo/` con fecha.

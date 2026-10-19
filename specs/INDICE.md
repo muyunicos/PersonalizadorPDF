@@ -1,7 +1,7 @@
 # Indice de specs — Personalizador PDF
 
 > Jerarquia: `constitution` (.specify/memory/constitution.md) > `AGENTS.md` > resto.
-> Ultima actualizacion: 2026-10-19 (spec 018 `campos-consola-v4` **implementada**; spec 019 `ranura-adaptativa` en especificacion; v4.8.0 vigente, release pendiente).
+> Ultima actualizacion: 2026-10-19 (release **4.10.0**: spec 018 `campos-consola-v4` + spec 019 `ranura-adaptativa` implementadas; pendiente el recorrido manual en WP real).
 
 ## Activos (codigo completo, falta solo manual WP real)
 | Spec | Codigo | Pendiente manual | Docs normativos |

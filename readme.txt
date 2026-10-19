@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.8.0
+Stable tag: 4.10.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,15 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.10.0 =
+* **Consola de Campos v4: el cargador se declara EN EL CAMPO (spec 018)**. El `campo.htm` trae un contenedor `[data-pmu-cargador]` y el `campo.js` lo monta con `PMU_API.montarCargador` (nuevo contrato publico: `subirFoto`, `urlDeSubida`, `montarCargador`), asi que el admin elige donde va el boton, que HTML lo rodea y puede reutilizar el patron. La fila "Cargador de imagenes" desaparece del editor y `datos.json:cargador` pasa a ser **legacy**: el sistema lo monta solo si el campo NO tiene `campo.js` (regla `cargador && !campo.js`), sin migracion ni perdida de datos.
+* **El tipo se puede corregir en edicion** (`<select name="tipo">`): sigue **declarando, no enrutando** (015 D11) y el guardado actualiza indice + `datos.json` sin tocar el codigo del campo. Salen de la consola `array`, `protegido` y `texto_ayuda`; el motor los **arrastra** del `datos.json` previo (`datos_con_legacy`) para que editar otro dato no desproteja el campo ni le borre el cargador. Titulos del drawer y del modal de vista previa limpios (`.ec-c-nombre-txt`).
+* **Preview del admin fiel**: corre el **mismo `campo.js`** que la ficha con un stub de `PMU_API` (subida simulada en memoria, cero peticiones). Sostiene **N campos de imagen por producto/PDF**.
+* **Ranura adaptativa (spec 019)**: la ranura puede tomar el **tamano del hueco** con `phsize: 0|1|2` (0 = default = comportamiento historico; 1 = tamano del grupo del PDF; 2 = el doble, acotado a 3000 px), resuelto por el sistema en runtime (`PURO.normalizarRanura`). Sin envoltura asociada degrada a los `w`/`h` declarados y avisa. `panel_ficha` publica `grupo_w`/`grupo_h`/`grupo_gid` en `PMU_FICHA.campos[]`.
+* **Aviso de ampliacion**: el modal de recorte muestra `· se amplia Nx` en su badge cuando la foto es mas chica que la ranura (informativo: nunca bloquea). La tira del cargador muestra el aviso de la ranura cuando `phsize` degrada o se acota.
+* **Fix de capas en la consola**: el modal de recorte (`spmu-modal`) quedaba **debajo** del drawer y del preview de la consola (`z-index` 100000 vs 160000/170000), asi que no se podia usar con el drawer abierto. Escala unica documentada en `admin.css`: 160000 drawer < 170000 preview < 180000 modales (conflicto/bonus/recorte) < 190000 overlay de render.
+* Tests: fase `campos` (tipo editable, write-through de `cargador`/`array`, `phsize` conservado y acotado), fase `ficha` (`grupo_w`/`grupo_h`/`grupo_gid` publicados y `null` sin asociacion) y `tests/campos-contrato.test.js` (la normalizacion de la ranura se **ejecuta** en un sandbox: 0/1/2, cap, degradacion, `circle`/`fit`).
 
 = 4.8.0 =
 * **Envolturas (PowerClip) v2: DEDUPLICADAS y con forma representativa**. `envolturas.json` guarda las formas **distintas** (`formas[]` con `usos`), la `defecto` (la mas usada) y un `mapa` completo por instancia (0 = sin envoltura): un grupo de 600 instancias con el mismo marco ocupa ~0,6 KB en vez de ~1 MB, y ya no se truncan las instancias 101+. `analisis.json` sigue sin envolturas; un archivo v1 se deduplica al leer.

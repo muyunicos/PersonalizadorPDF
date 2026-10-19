@@ -52,7 +52,8 @@
   "la ranura quedo del tamano viejo"), `specs/INDICE.md`.
 - [ ] **T016** `readme.txt` (changelog 4.10.0) + bump de `* Version:` (fuente unica) y
   recorrido WP real con `phsize: 1` (tamano del PNG en el pool + resultado en el PDF).
-  **Pendiente: release.**
+  **Release hecho 2026-10-19** (cabecera `4.10.0` + `Stable tag` + changelog);
+  **pendiente solo el recorrido** (§6d de `MANUAL-PENDIENTE-WP-REAL.md`).
 
 ## Nota
 

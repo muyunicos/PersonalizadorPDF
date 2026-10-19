@@ -91,7 +91,9 @@
   `php tests/motor_smoke.php` (SMOKE OK); `php tests/parity.php` (PARIDAD OK).
 - [ ] **T024** `readme.txt` (changelog 4.9.0) + version en la cabecera
   (`* Version: 4.9.0`, unica fuente) y recorrido WP real: compra de prueba con un
-  campo de imagen (vista previa, carrito, PDF final). **Pendiente: release.**
+  campo de imagen (vista previa, carrito, PDF final).
+  **Release hecho 2026-10-19 dentro de 4.10.0** (junto con la spec 019: changelog + cabecera
+  + `Stable tag`); **pendiente solo el recorrido** (§6d de `MANUAL-PENDIENTE-WP-REAL.md`).
 
 ## Nota
 
