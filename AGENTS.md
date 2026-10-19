@@ -589,6 +589,15 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   fuera** (no ampliar la foto exige tocar `engine/Imagen.php` + `tienda.js:rasterizar`, o el Motor
   re-amplía): va como spec aparte. Artefactos en `specs/019-ranura-adaptativa/` (D1-D9,
   FR-001..009, T001-T015 cerradas; pendiente T016: release 4.10.0 + recorrido WP real).
+- ✅ **Spec 020 `limpieza-legacy` (en especificación, SIN implementar)**: regla del negocio — **en
+  desarrollo no hay migraciones ni retrocompatibilidad** (el admin borra los campos viejos y regenera
+  los PDFs). Se eliminan: `protegido` (feature completa, D1), `array` del almacén (D2),
+  `texto_ayuda` (D3), el **cargador legacy** (`datos.json:cargador` + regla `cargador && !campo.js` +
+  red de seguridad de la plantilla + `validar_cargador()`, D4), `datos_con_legacy` (D5), los puentes
+  de **tupla v1** (D6) y los formatos muertos (filtro `'Array'`, `envolturas.json` v1, `ref` plano de
+  mockups, migración de `bonus`, D7). **NO** toca la norma ex-008 ni las features (D8). Se hace **por
+  bloques**, con la batería en verde en cada uno (D10). Artefactos en `specs/020-limpieza-legacy/`
+  (D1-D10, T001-T022); versión objetivo 4.11.0.
 - ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
   (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
