@@ -1242,8 +1242,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('id 1 activo en catalogo', is_array($ver) && in_array(1, $ver['ids'], true));
             check('id 2 dado de baja (excluido del listado)', is_array($ver) && !in_array(2, $ver['ids'], true));
             check('sin aviso de catalogo', is_array($ver) && $ver['aviso'] === null);
-            check('campo v2 con datos + codigo + array', is_array($ver) && is_array($ver['t1'])
-                && !empty($ver['t1']['datos']) && !empty($ver['t1']['datos']['array'])
+            check('campo v2 con datos + codigo', is_array($ver) && is_array($ver['t1'])
+                && !empty($ver['t1']['datos'])
                 && array_key_exists('htm', $ver['t1']));
             check('la baja CONSERVA los archivos del campo', is_array($ver) && !empty($ver['archivos_baja']));
             check('alta con script prohibido rechazada', (string)($ver['err_nueva'] ?? '') === '');
@@ -1252,18 +1252,15 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('spec 018: editar corrige el tipo en indice y datos.json',
                 is_array($v4) && $v4['tipo_indice'] === 'imagen' && $v4['tipo_datos'] === 'imagen',
                 is_array($v4) ? ($v4['tipo_indice'] . '/' . $v4['tipo_datos']) : 'sin datos');
-            check('spec 018: el cargador legacy sobrevive a una edicion sin cargador (D3)',
-                is_array($v4) && !empty($v4['cargador']));
-            check('spec 018: `array` legacy sobrevive (D5, write-through)',
-                is_array($v4) && !empty($v4['array']));
+            check('spec 020: `datos.json` sin claves muertas (cargador/array/protegido/texto_ayuda)',
+                is_array($v4) && is_array($v4['claves'])
+                && !in_array('cargador', $v4['claves'], true)
+                && !in_array('array', $v4['claves'], true)
+                && !in_array('protegido', $v4['claves'], true)
+                && !in_array('texto_ayuda', $v4['claves'], true),
+                is_array($v4) ? implode(',', $v4['claves']) : 'sin datos');
             check('spec 018: el nombre si se actualiza', is_array($v4) && $v4['nombre'] === 'Foto editada',
                 is_array($v4) ? $v4['nombre'] : '');
-            // Spec 019 (FR-007).
-            $ph19 = isset($GLOBALS['test_campos_phsize']) ? $GLOBALS['test_campos_phsize'] : ['ok' => -1, 'cap' => -1];
-            check('spec 019: validar_cargador conserva phsize',
-                (int)$ph19['ok'] === 2, (string)$ph19['ok']);
-            check('spec 019: phsize fuera de rango se acota a 2',
-                (int)$ph19['cap'] === 2, (string)$ph19['cap']);
             break;
             check('handler responde JSON success (ya migrado)', is_array($json) && $json['success'] === true
                 && ($json['data']['motivo'] ?? '') === 'ya migrado');
@@ -3460,17 +3457,14 @@ switch ($fase) {
             } catch (\Throwable $e) {
                 $err_nueva = $e->getMessage();
             }
-            // Spec 018 (T013): el tipo se puede CORREGIR en edicion y las claves
-            // legacy que salieron de la consola sobreviven a un POST que ya no las
-            // manda (write-through de `datos_con_legacy`).
+            // Spec 018 (T013) + spec 020 (D1-D5): el tipo se puede CORREGIR en
+            // edicion y las claves muertas (`cargador`/`array`/`protegido`/
+            // `texto_ayuda`) ya NO existen: ni se escriben ni se arrastran.
             $id3 = $motor_c->campo_alta('texto', ['nombre' => 'Foto', 'titulo_cliente' => 'Foto'],
                 '<div data-pmu-cargador></div>', '', 'function(ctx,root){return {valor:null,cliente:""};}');
             $motor_c->campo_editar($id3, [
                 'nombre' => 'Foto', 'descripcion' => '', 'titulo_cliente' => 'Foto',
-                'cargador' => ['ranuras' => [['w' => 1000, 'h' => 1000, 'forma' => 'fit', 'min' => 1, 'max' => 1]]],
-                'array' => true,
             ], '<div data-pmu-cargador></div>', '', 'function(ctx,root){return {valor:null,cliente:""};}', 'imagen');
-            // Edicion tal como la manda la consola v4: SIN `cargador` ni `array`.
             $motor_c->campo_editar($id3, [
                 'nombre' => 'Foto editada', 'descripcion' => '', 'titulo_cliente' => 'Foto',
             ], '<div data-pmu-cargador></div>', '', 'function(ctx,root){return {valor:null,cliente:""};}');
@@ -3485,16 +3479,8 @@ switch ($fase) {
             $GLOBALS['test_campos_v4'] = [
                 'tipo_indice' => $tipo3,
                 'tipo_datos' => isset($d3['tipo']) ? (string) $d3['tipo'] : '',
-                'cargador' => !empty($d3['cargador']['ranuras']) ? 1 : 0,
-                'array' => !empty($d3['array']) ? 1 : 0,
+                'claves' => array_keys((array) $d3),
                 'nombre' => isset($d3['nombre']) ? (string) $d3['nombre'] : '',
-            ];
-            // Spec 019 (FR-007): `phsize` se CONSERVA al normalizar (y se acota a 0..2).
-            $r19c = $motor_c->validar_cargador([['w' => 100, 'h' => 100, 'phsize' => 2]]);
-            $r19x = $motor_c->validar_cargador([['w' => 100, 'h' => 100, 'phsize' => 9]]);
-            $GLOBALS['test_campos_phsize'] = [
-                'ok' => isset($r19c[0]['phsize']) ? (int)$r19c[0]['phsize'] : -1,
-                'cap' => isset($r19x[0]['phsize']) ? (int)$r19x[0]['phsize'] : -1,
             ];
             $res_c = ['aviso' => null];
             $ids_c = [];

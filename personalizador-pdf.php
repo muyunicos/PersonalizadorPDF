@@ -411,16 +411,12 @@ class Personalizador_PDF_Plugin
             $d = $v2 ? $c['datos'] : [
                 'nombre' => isset($c[1]) ? (string) $c[1] : '',
                 'titulo_cliente' => isset($c[1]) ? (string) $c[1] : '',
-                'array' => !empty($c[9]),
-                'protegido' => false,
             ];
             $cuerpo = $v2 ? (string) $c['htm'] : (isset($c[6]) ? (string) $c[6] : '');
             $estilo = $v2 ? (string) $c['css'] : (isset($c[7]) ? (string) $c[7] : '');
             $guion = $v2 ? (string) $c['js'] : (isset($c[8]) ? (string) $c[8] : '');
-            // Un campo protegido NUNCA viaja al HTML de la ficha (FR-040).
-            if (!empty($d['protegido'])) {
-                continue;
-            }
+            // Spec 020 (D1): `protegido` ya no existe (la feature se elimino con su
+            // checkbox): todo campo del catalogo viaja a la ficha.
             $out[] = [
                 'id' => (int)$cid,
                 'nombre' => (string)$d['nombre'],
@@ -428,13 +424,6 @@ class Personalizador_PDF_Plugin
                 'htm' => $cuerpo,
                 'css' => $estilo,
                 'js' => $guion,
-                'array' => !empty($d['array']),
-                // Spec 012 (T024): las ranuras del cargador. El shape ya esta
-                // validado por el servidor al guardar el campo, asi que viaja
-                // tal cual; `tienda.js` monta un CargadorPMU por campo.
-                'cargador' => !empty($d['cargador']['ranuras'])
-                    ? ['ranuras' => array_values((array) $d['cargador']['ranuras'])]
-                    : null,
                 // Guia del cargador: envoltura por defecto del grupo asociado
                 // en este PDF (opcion b). Solo lectura; el corte real lo hace
                 // el clip del PDF, esto es la pista visual del comprador.
@@ -502,19 +491,6 @@ class Personalizador_PDF_Plugin
                 && array_intersect($slugs, array_map('strval', (array)($manifest['pdfs'] ?? [])))) {
                 $itemEdicion = $pedido;
                 $valores = (array)($manifest['valores'] ?? []);
-                // Reparacion del legado (4.6.6 y anteriores): el valor de un
-                // campo con cargador (imagen) se guardaba como (string) del
-                // array de ids -> literal "Array" (o vacio). Al precargar se
-                // normaliza a [] para que el cargador arranque limpio y la foto
-                // nueva entre al mockup. Los campos de texto no se tocan.
-                foreach ($camposPanel as $campoP) {
-                    $cidP = (int)($campoP['id'] ?? 0);
-                    if ($cidP > 0 && !empty($campoP['cargador'])
-                        && isset($valores[$cidP]) && is_array($valores[$cidP])
-                        && !is_array($valores[$cidP]['valor'] ?? null)) {
-                        $valores[$cidP]['valor'] = [];
-                    }
-                }
             }
         } catch (\Throwable $e) {
             $itemEdicion = '';
@@ -3217,14 +3193,7 @@ class Personalizador_PDF_Plugin
             // `datos_pdf_render`): la consola lo lee de aca y el checkbox
             // "Repetir por placeholder" deja de depender de una variable sin
             // definir (quedaba SIEMPRE desmarcado al recargar).
-            // DIAG TEMPORAL (revertir): expone por header lo que fusiona la vista.
             $g['repetir'] = $m !== null && !empty($m['repetir']);
-            if (php_sapi_name() !== 'cli') {
-                header('X-Diag-Repetir: ' . $gid . '=' . var_export($g['repetir'], true)
-                    . '|mapa=' . (isset($mapa[$gid]) ? 'si' : 'no')
-                    . '|mapaKeys=' . implode(',', array_keys($mapa))
-                    . '|gidLen=' . strlen((string)$gid));
-            }
             $grupos[] = $g;
         }
         // Envolturas (PowerClip) v2: claves/formas por grupo. La consola las
@@ -3383,9 +3352,6 @@ class Personalizador_PDF_Plugin
                     $c['htm'] = $base['htm'];
                     $c['css'] = $base['css'];
                     $c['js'] = $base['js'];
-                    if (empty($c['datos']['cargador'])) {
-                        $c['datos']['cargador'] = $base['cargador'];
-                    }
                 }
                 $id = $this->pmu_uploads()->campo_alta($tipo, $c['datos'], $c['htm'], $c['css'], $c['js']);
             }
@@ -3402,7 +3368,7 @@ class Personalizador_PDF_Plugin
     /**
      * Las 3 plantillas base de un campo (spec 012, T015 / D5). Solo dejan el
      * formulario **prepared**: el admin edita el HTML, el CSS y el JS a su medida
-     * (FR-016). Devuelve ['htm','css','js','cargador']; plantilla desconocida o
+     * (FR-016). Devuelve ['htm','css','js']; plantilla desconocida o
      * vacia = campo en blanco.
      */
     public function plantilla_campo($plantilla)
@@ -3417,7 +3383,7 @@ function (ctx, root) {
     publicar();
 }
 JS;
-    $vacío = ['htm' => '', 'css' => '', 'js' => '', 'cargador' => null];
+    $vacío = ['htm' => '', 'css' => '', 'js' => ''];
     switch ((string)$plantilla) {
         case 'texto':
             return [
@@ -3425,7 +3391,6 @@ JS;
                     . "<input type=\"text\" data-rol=\"valor\" placeholder=\"tu texto\">",
                 'css' => '',
                 'js' => $espejo,
-                'cargador' => null,
             ];
         case 'opciones':
             // Spec 015 T011 / FR-010. La diferencia con `texto` NO es el HTML:
@@ -3507,7 +3472,6 @@ JS;
                 'htm' => $htmOpciones,
                 'css' => $cssOpciones,
                 'js' => $jsOpciones,
-                'cargador' => null,
             ];
         case 'imagen':
             // Spec 018 (D1): el cargador se declara EN EL CAMPO — un contenedor en
@@ -3564,11 +3528,6 @@ JS;
                 'htm' => $htmImagen,
                 'css' => '',
                 'js' => $jsImagen,
-                // Red de seguridad (D8): la plantilla deja el cargador LEGACY por
-                // defecto. Si el campo trae su `campo.js`, el sistema lo APAGA
-                // (regla `cargador && !campo.js`); si el admin vacia el JS, el
-                // cargador sigue funcionando sin reconfigurar nada.
-                'cargador' => 'size:1000 max:6',
             ];
     }
     return $vacío;
@@ -3636,14 +3595,12 @@ JS;
         // aca: sin esto el action queda vacio y el POST se va a la pagina actual
         // en vez de a admin-post.php (la baja deja de funcionar).
         $post = esc_url(admin_url('admin-post.php'));
-        $cargador = !empty($d['cargador']) ? wp_json_encode($d['cargador']) : '';
         $tipo = isset($c['tipo']) ? (string) $c['tipo'] : '';
         ob_start();
         ?>
                 <tr data-id="<?php echo (int)$cid; ?>" data-tipo="<?php echo esc_attr($tipo); ?>"
                     data-modificado="<?php echo (int)$c['modificado']; ?>"
-                    data-creado="<?php echo esc_attr($c['creado']); ?>"
-                    data-cargador="<?php echo esc_attr($cargador); ?>">
+                    data-creado="<?php echo esc_attr($c['creado']); ?>">
                     <td><strong><?php echo (int)$cid; ?></strong></td>
                     <td class="ec-c-nombre">
                         <?php // Misma estructura que arma `pintarFila()` en el JS: si

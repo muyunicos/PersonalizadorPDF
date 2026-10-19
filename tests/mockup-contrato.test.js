@@ -211,10 +211,10 @@ check('la consola expone "Envoltura" por grupo y la guia del cargador AUTOMATICA
 check('el config sanea envolturas y LIMPIA campos_envoltura (guia automatica)',
     motorPhp.indexOf('function config_envolturas(') !== -1
         && pluginPhp.indexOf("'campos_envoltura' => []") !== -1);
-check('la ficha lleva la guia del cargador al campo (opcion b)',
+check('la ficha lleva la guia del cargador al campo (deducida, spec 019)',
     pluginPhp.indexOf('envoltura_defecto($nombre, $gid)') !== -1
         && pluginPhp.indexOf("'envoltura' => isset($c['envoltura'])") !== -1
-        && leer('assets/tienda.js').indexOf('envoltura: campo.envoltura || null') !== -1);
+        && leer('assets/tienda.js').indexOf('envoltura: envoltura,') !== -1);
 check('el cargador dibuja la guia SIN cortar el PNG', (function () {
     var cargador = leer('assets/cargador-pmu.js');
     return cargador.indexOf('_guia = function') !== -1

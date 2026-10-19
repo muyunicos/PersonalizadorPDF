@@ -141,11 +141,11 @@ check('tienda.js publica PMU_API completa ANTES de montarCampos',
 check('PMU_API expone subirFoto', tienda.indexOf('api.subirFoto = function') !== -1);
 check('PMU_API expone urlDeSubida', tienda.indexOf('api.urlDeSubida = function') !== -1);
 check('PMU_API expone montarCargador', tienda.indexOf('api.montarCargador = function') !== -1);
-// El legacy se apaga con el `campo.js` del campo (regla cargador && !campo.js, D3):
-// sin esto habria DOS cargadores montados en el mismo contenedor.
-check('Legacy: el cargador del sistema se apaga si el campo trae campo.js',
-  tienda.indexOf('if (campo.js) { return; }') !== -1
-  && tienda.indexOf('el cargador legacy se APAGA cuando el campo ya trae') !== -1);
+// Spec 020 (D4): el cargador LEGACY ya no existe: cada campo lo monta en su
+// `campo.js` con `PMU_API.montarCargador`.
+check('el cargador legacy se elimino (spec 020 D4)',
+  tienda.indexOf('function montarCargadores') === -1
+  && tienda.indexOf('if (campo.js) { return; }') === -1);
 // `montar()` se llama UNA sola vez (el `campo.js` no debe volver a montarlo).
 check('montarCargador monta una sola vez',
   tienda.indexOf('var montado = cargador.montar();') !== -1
@@ -184,19 +184,18 @@ console.log('\n== spec 018: la plantilla de imagen y el preview ==');
     adminJs.indexOf("'<script>window.PMU_API") === -1);
   check('el preview no llama al endpoint de subida real',
     adminJs.indexOf("'personalizador_pdf_subida'") === -1);
-  check('el cargador legacy del preview se apaga si el campo trae campo.js',
-    adminJs.indexOf('&& !campo.js && window.CargadorPMU') !== -1);
+  check('el preview no monta un cargador legacy (solo el del campo.js)',
+    adminJs.indexOf('campo.cargador') === -1
+    && adminJs.indexOf('&& !campo.js && window.CargadorPMU') === -1);
   // La consola ya no declara el cargador en el formulario (D1/D5).
   check('el form del campo NO postea `cargador`', plugin.indexOf('name="cargador"') === -1);
   check('el form del campo NO postea `array` ni `protegido`',
     plugin.indexOf('name="array"') === -1 && plugin.indexOf('name="protegido"') === -1);
   check('el editor expone el tipo como <select> (D4)',
     plugin.indexOf('<select name="tipo" class="regular-text">') !== -1);
-  // El motor conserva lo que ya no se edita (D3/D5): sin esto, editar otro dato
-  // desprotege el campo y pierde su cargador legacy.
-  check('el motor arrastra las claves legacy al editar (datos_con_legacy)',
-    uploads.indexOf('private function datos_con_legacy($id, array $datos)') !== -1
-    && uploads.indexOf("foreach (['cargador', 'array', 'protegido', 'texto_ayuda'] as $k)") !== -1);
+  // Spec 020 (D5): sin write-through: las claves muertas no existen.
+  check('el motor no arrastra claves muertas al editar (spec 020 D5)',
+    uploads.indexOf('datos_con_legacy') === -1);
   check('campo_editar acepta el tipo (D4)',
     uploads.indexOf('public function campo_editar($id, array $datos, $htm = \'\', $css = \'\', $js = \'\', $tipo = null)') !== -1);
 }
@@ -331,6 +330,17 @@ console.log('\n== CSS/JS global (spec 012, T020) ==');
     plugin.indexOf("public function css_global_prefijo($css, $prefijo = '[data-pmu-panel]')") !== -1);
 }
 
+console.log('\n== baja de campos: confirmacion antes del POST ==');
+{
+  const adminJs = fs.readFileSync(path.join(__dirname, '..', 'assets', 'admin.js'), 'utf8');
+  const inicio = adminJs.indexOf('function enlazarBaja($forms)');
+  const fin = adminJs.indexOf("enlazarBaja($('form.ec-form-campo-baja'))", inicio);
+  const baja = inicio >= 0 && fin > inicio ? adminJs.slice(inicio, fin) : '';
+  check('Cancelar la baja detiene pmuForm antes del POST',
+    baja.indexOf('submit.pmu-confirma') >= 0
+    && baja.indexOf('submit.pmu-confirma') < baja.indexOf("pmuForm($f, 'personalizador_pdf_campo_baja'"));
+}
+
 console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
 {
   const Carg = require(path.join(__dirname, '..', 'assets', 'cargador-pmu.js'));
@@ -379,12 +389,13 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
   const tienda2 = fs.readFileSync(path.join(__dirname, '..', 'assets', 'tienda.js'), 'utf8');
   check('cargador-pmu.js se encola', plugin2.indexOf("assets/cargador-pmu.js") !== -1);
   check('tienda.js depende del cargador', plugin2.indexOf("'personalizador-pdf-cargador'") !== -1);
-  check('tienda.js monta los cargadores al montar los campos',
-    tienda2.indexOf('montarCargadores(raizEl, campos, estado)') !== -1);
+  check('el montaje NO tiene camino legacy (spec 020 D4)',
+    tienda2.indexOf('montarCargadores(raizEl, campos, estado)') === -1);
   check('tienda.js sube al endpoint de subida',
     tienda2.indexOf("'personalizador_pdf_subida'") !== -1);
   check('el cargador NO pisa el valor del campo.js al montar',
-    /if \(mio \|\| est\.ids\.length > 0\)/.test(tienda2));
+    /var mio = false;/.test(tienda2)
+    && /} else if \(mio \|\| \(est\.ids && est\.ids\.length > 0\)\) \{/.test(tienda2));
 
   // Spec 016 (correccion 4.6.1): la plantilla "Imagen (cargador)" no debe
   // llevar el boton placeholder con PMUCargador (nombre que nunca existio):
@@ -394,8 +405,9 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
   check('la plantilla imagen ya no trae el boton placeholder',
     plugin2.indexOf('data-pmu-subir') === -1
     && plugin2.indexOf('todavia no esta disponible') === -1);
-  check('la plantilla imagen conserva su cargador por defecto',
-    plugin2.indexOf("'cargador' => 'size:1000 max:6'") !== -1);
+  check('la plantilla imagen ya no declara cargador legacy (spec 020 D4)',
+    plugin2.indexOf("'cargador' => 'size:1000 max:6'") === -1
+    && plugin2.indexOf("'cargador' => null") === -1);
   // T011b/FR-009: "Probar" dibuja las ranuras sin subir nada.
   const cargadorJs = fs.readFileSync(path.join(__dirname, '..', 'assets', 'cargador-pmu.js'), 'utf8');
   const adm = fs.readFileSync(path.join(__dirname, '..', 'assets', 'admin.js'), 'utf8');
@@ -415,13 +427,13 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
     camposPhp.indexOf('personalizador_pdf_campo_migrar') === -1
     && adm.indexOf('personalizador_pdf_campo_migrar') === -1
     && uploadsJs.indexOf('migrar_campos') === -1);
-  check('la fila emite data-cargador', plug.indexOf('data-cargador=') !== -1);
+  check('la fila ya NO emite data-cargador (spec 020 D4)', plug.indexOf('data-cargador=') === -1);
   check('cargador-pmu.js se encola tambien en la consola',
     (plug.match(/assets\/cargador-pmu\.js/g) || []).length >= 2);
-  check('admin.js lee el cargador de la fila',
-    adm.indexOf("attr('data-cargador')") !== -1);
-  check('el preview monta el cargador como el comprador (subida simulada)',
-    adm.indexOf('subir: function (blob)') !== -1
+  check('admin.js ya no lee data-cargador (spec 020 D4)',
+    adm.indexOf("attr('data-cargador')") === -1);
+  check('el preview simula la subida (stub apiPreview, sin endpoint)',
+    adm.indexOf('function apiPreview()') !== -1
     && adm.indexOf('URL.createObjectURL(blob)') !== -1
     && adm.indexOf('urlDe: function (id)') !== -1);
   check('el preview no pinta un boton de agregar muerto',

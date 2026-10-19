@@ -392,20 +392,17 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   (`{version:3, items:[{id,tipo,baja}], meta:{id:{creado,modificado}}}`) y cada campo es una carpeta
   `uploads/pmu/campos/{id}/` con `datos.json` + `campo.htm` + `campo.css` + `campo.js`. El `id` se
   reutiliza en N PDFs y **nunca se recicla**: una baja deja `baja:true` (tombstone) y conserva los
-  archivos. `datos.json` lleva `nombre`, `descripcion`, `titulo_cliente` (etiqueta del comprador),
-  `texto_ayuda`, `array`, `protegido` y `cargador:{ranuras:[{w,h,forma,min,max}]}`. El **`tipo`**
-  (`texto|imagen|opciones`) se elige **solo al crear** (en edicion manda el del indice) y
-  **declara la intencion, no enruta** (spec 015 D10/D11): la salida la decide el placeholder y el
-  tipo sirve para avisar cuando el cableado no coincide. **Categorias fuera** del formato y de la
-  UI (D9). La pareja `valor`/`cliente` la publica el `campo.js`
+  archivos. `datos.json` lleva `nombre`, `descripcion`, `titulo_cliente` (etiqueta del comprador) y
+  `tipo` (espejo del indice). El **`tipo`** (`texto|imagen|opciones`) se elige al crear, se puede
+  **corregir en edicion** (spec 018 D4) y **declara la intencion, no enruta** (spec 015 D11): la salida
+  la decide el placeholder y el tipo sirve para avisar cuando el cableado no coincide. **Categorias
+  fuera** del formato y de la UI (D9). La pareja `valor`/`cliente` la publica el `campo.js`
   (`function(ctx, root)`) y, si no hay JS, se lee de los `[data-rol]` del HTML; `cliente` **nunca**
   cae a `valor` (el sistema no traduce nada). Contratos: `specs/012.../contracts/campos.md`.
-  **Spec 018 (implementada 2026-10-19)** cambia este punto: el cargador se declara en el
-  HTML+JS del campo (contenedor `[data-pmu-cargador]` + `PMU_API.montarCargador`), `cargador` pasa a
-  **legacy** (se lee si existe, no se escribe desde la UI y no se pisa al editar:
-  `PMU_Uploads::datos_con_legacy`), el `tipo` se puede corregir en edicion y
-  `array`/`protegido`/`texto_ayuda` salen de la UI (siguen en `datos.json`: lectura y escritura
-  tolerantes). **Sin migracion.**
+  **Spec 020 (B1-B3, implementado 2026-10-19)**: eliminadas `texto_ayuda`, `array`, `protegido`
+  (feature completa), el **cargador legacy** (`datos.json:cargador` + `validar_cargador()` +
+  `cargador_desde_texto()` + regla `cargador && !campo.js`) y el write-through (`datos_con_legacy`).
+  El cargador vive **solo** en el `campo.js` (spec 018). **Sin migracion.**
 - **CSS/JS global del plugin (spec 012)**: `uploads/pmu/campos/global.css` y `global.js`, **uno solo
   para todo el plugin**, editables desde la tarjeta de arriba de la pestana Campos. Se cargan **solo
   en fichas con >=1 campo**; el CSS se inyecta prefijado con `[data-pmu-panel]` y el JS con
@@ -827,14 +824,12 @@ el numero a mano. El stub `get_file_data` del arnes esta en `tests/texto_puente.
 | Un preset recién guardado no aparece en el selector de un grupo | Página "PDFs" abierta antes de guardar | Recargar: el listado se genera con glob en cada carga |
 | Error del puente tras tener el admin mucho tiempo abierto | Nonce expirado (~12-24 h) | Recargar la página y reintentar |
 | El cargador de un campo nuevo no aparece (nada que subir) y la consola solo avisa por `console.warn` | El `campo.js` del campo monta con `PMU_API.montarCargador` pero pasa `ranuras: []` (o falta `PMU_API`/`CargadorPMU`) | La plantilla "Imagen (cargador)" ya trae `RANURAS` por defecto: revisar que el campo conserve esa lista. `montarCargador` devuelve `null` y avisa; nunca inventa ranuras |
-| Dos cargadores en el mismo contenedor (botones duplicados) | El cargador legacy no se apago: la regla es `cargador && !campo.js` | Si el campo declara su cargador en `campo.js`, el sistema NO debe montar el legacy. Verificado por `node tests/campos-contrato.test.js` (`if (campo.js) { return; }`) |
-| Editar un campo lo desprotege, le borra la ayuda o le pierde el cargador | La consola v4 ya no manda esas claves en el POST y el motor las normalizaba a `false`/`''`/`null` | `PMU_Uploads::datos_con_legacy()` las arrastra del `datos.json` previo (write-through). Lo cubre la fase `campos` (checks "spec 018") |
 | El preview del admin no muestra el cargador del `campo.js` | El stub de `PMU_API` se inyectaba en el `srcdoc` del iframe, pero `campo-montar.js` ejecuta el `campo.js` con `new Function` **en el realm de la pagina del admin** | El stub va en el padre (`admin.js:apiPreview()` + `activarApiPreview()`), no en el srcdoc. Lo cubre `node tests/campos-contrato.test.js` |
 | El modal de recorte (`spmu-modal`) aparece **por debajo** del drawer o del preview de la consola | El modal se cuelga del `body` del documento donde corre el script (en el admin, el de la consola) y tenia `z-index: 100000`, menor que el drawer (160000) y el preview (170000) | Escala de capas documentada en `admin.css` ("Escala de capas de la consola"): 160000 drawer < 170000 preview < 180000 modales (conflicto/bonus/recorte) < 190000 overlay de render. El `.spmu-modal` subio a 180000 en `selector-pmu.js` |
 | La ranura del cargador pide un tamaño que ya no coincide con el hueco (PDF re-analizado o campo reutilizado en otro PDF) | El `w`/`h` de la ranura se escribe a mano y no sigue al grupo; el Motor encaja igual, asi que el error es invisible | Declarar `phsize: 1` (o `2`) en la ranura: `PMU_API.montarCargador` toma `grupo_w`/`grupo_h` del PDF en runtime (spec 019). Sin envoltura asociada degrada a `w`/`h` y avisa por `console.warn` |
 | El cargador no se monta y el aviso dice `falta PMU_API o CargadorPMU en la ficha`, aunque el `campo.js` esta bien | `global.PMU_API = api;` se publicaba **despues** de `montarCampos()`, pero el `campo.js` corre DENTRO del montaje (spec 018 T001): durante el montaje la API no existia. Lo delato el aviso por causa, no un error | La API **COMPLETA** (con `montarCargador`) se publica **antes** de `montarCampos` y `api.estado` se asigna al terminar. `idsIniciales` se resuelve de `PMU_FICHA.valores` (no del estado a medio llenar). El test **exige el orden** (`global.PMU_API = api;` < `api.estado = montarCampos(`); comparar `var api = {` era un falso positivo |
 | El cargador no aparece en la ficha y **no hay ningún aviso** en la consola | El `campo.js` hacia `return` sin avisar cuando faltaba `[data-pmu-cargador]`, `PMU_API`, `CargadorPMU`, o cuando las ranuras venian vacias (`RANURAS = []`) | Desde la spec 018 (fix) cada causa avisa por `console.warn` (`montarCargador` + la plantilla). Sin aviso y sin cargador: revisar que el `campo.htm` traiga `<div data-pmu-cargador></div>` |
-| La guia dice "sin guia" aunque el grupo tiene envoltura | La asociacion campo->grupo (`config.json:campos_envoltura`) era un paso manual y el `<select>` arrancaba vacio | Spec 019 (F2): la guia se **deduce** del cableado del hueco (`[campoN]` en `value`/`settings`) o del unico grupo con envoltura si el campo es de tipo `imagen`. El `<select>` es un **override** |
+| La guia dice "sin guia" aunque el grupo tiene envoltura | La guia se deduce del cableado del hueco y ese hueco no referencia el campo (p.ej. apunta a `[campo1]`, un campo borrado) | Spec 019 (F2): la guia se **deduce** del cableado del hueco (`[campoN]` en `value`/`settings`) o del unico grupo con envoltura si el campo es de tipo `imagen`. **No hay `<select>`**: si dice "sin guia", revisar a que campo apunta el hueco |
 | Un campo con plantilla vieja no tiene boton de cargador y no hay como recuperarlo desde la UI | La plantilla `imagen` cambio (4.10.0) y los campos guardados conservan su HTML/JS anterior | Drawer -> **"Cargar la plantilla de este tipo"** (rellena HTML/CSS/JS desde `PersonalizadorPDF.plantillas`, sin endpoint). Faltaba en T010 de la spec 018 |
 | **SMOKE CON 11 FALLOS** tras tocar `Overlay`/`Motor` | Una spec de imagen **ya es un array** (con su clave `tipo`), así que `is_array($x)` no distingue "una spec" de "lista de specs": `array_values($spec)` devuelve los valores sueltos y el PDF sale roto | Distinguir por la clave `tipo` (`Overlay::esListaDeSpecs()`) y llevar la bandera `$multi` sobre las **rutas** en `Motor` (que no tienen ambigüedad). Nunca sniffear el resultado |
 | El PDF del pedido sale con claves numéricas (`[0, "otro"]`) en vez de nombres de PDF | Un `foreach ($porIdx as $gid => $rutas)` **pisa** la variable de salida `$rutas` en `item_generar_pdfs()` | Nombre distinto en el bucle interno (`$rutasGrupo`). Lo caza la fase `completados` |

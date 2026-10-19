@@ -76,11 +76,10 @@ check('la baja CONSERVA la carpeta (v3, a diferencia de la v1)', is_dir($m->dir_
 $d = json_decode(file_get_contents($m->ruta_campo(1, 'datos.json')), true);
 check('datos.json: nombre', $d['nombre'] === 'Nombre');
 check('datos.json: titulo_cliente', $d['titulo_cliente'] === 'Nombre');
-check('datos.json: texto_ayuda', $d['texto_ayuda'] === 'Escribi tu nombre');
-check('datos.json: array=false', $d['array'] === false);
-check('datos.json: protegido=false', $d['protegido'] === false);
-$d2 = json_decode(file_get_contents($m->ruta_campo(2, 'datos.json')), true);
-check('datos.json: array=true (campo 2)', $d2['array'] === true);
+// Spec 020 (D1-D3): las claves muertas ya NO se escriben.
+check('datos.json: sin texto_ayuda/array/protegido',
+    !array_key_exists('texto_ayuda', $d) && !array_key_exists('array', $d)
+    && !array_key_exists('protegido', $d));
 
 // --- Sin migracion v1: el metodo ya no existe (retirado en 4.6.3) ---
 check('migrar_campos() retirado', !method_exists($m, 'migrar_campos'));
@@ -123,18 +122,9 @@ if ($crudoIndice === false || file_put_contents($legado, $crudoIndice) === false
 check('escribir despues de migrar va a la ruta nueva',
     $m->guardar_indice_campos($m->indice_campos()) && is_file($m->ruta_campos()) && !is_file($legado));
 
-// --- Cargador: los 3 atajos del admin ---
-$c1 = $m->validar_cargador('canvas:circle size:1000');
-check('atajo 1 ranura', count($c1) === 1 && $c1[0]['w'] === 1000 && $c1[0]['h'] === 1000 && $c1[0]['forma'] === 'circle');
-$c2 = $m->validar_cargador('size:2000 max:6');
-check('atajo size+max', count($c2) === 1 && $c2[0]['w'] === 2000 && $c2[0]['max'] === 6);
-$c3 = $m->validar_cargador('1_size:1000 1_canvas:circle 2_size:1024x768 2_min:2 2_max:2');
-check('atajo 2 ranuras', count($c3) === 2);
-check('atajo ranura 1 circular', $c3[0]['w'] === 1000 && $c3[0]['forma'] === 'circle');
-check('atajo ranura 2 rectangular exacta', $c3[1]['w'] === 1024 && $c3[1]['h'] === 768 && $c3[1]['min'] === 2 && $c3[1]['max'] === 2);
-check('sin cargador = null', $m->validar_cargador(null) === null && $m->validar_cargador('') === null);
-$e = lanza(function () use ($m) { $m->validar_cargador('w'); });
-check('cargador basura rechazada', $e !== false && strpos($e, 'cargador:invalido') !== false);
+// --- Cargador: (spec 020 D4) sin atajos de texto ni validacion en el servidor ---
+// `validar_cargador()`/`cargador_desde_texto()` se eliminaron: el cargador vive en
+// el `campo.js` del campo y el servidor no evalua JS.
 
 // --- Validaciones de escritura ---
 $e = lanza(function () use ($m) { $m->escribir_campo(1, ['nombre' => 'x'], '<script>a</script>'); });

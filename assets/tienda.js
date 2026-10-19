@@ -418,10 +418,9 @@
             if (typeof console !== 'undefined' && console.warn) {
                 console.warn('PMU: falta campo-montar.js; los campos no se montan.');
             }
-            return estado;
         }
-        // Spec 012 (T024): los campos con `cargador` publican ids de imagenes.
-        montarCargadores(raizEl, campos, estado);
+        // Spec 020 (D4): el cargador vive SOLO en el `campo.js` del campo (spec 018):
+        // no hay camino legacy que montar desde aca.
         return estado;
     }
 
@@ -478,60 +477,10 @@
     }
 
     /**
-     * Monta un `CargadorPMU` por cada campo con `cargador` (spec 012, T024,
-     * FR-033/FR-034). El cargador escribe `valor = [ids]` en el MISMO estado
-     * que leyo `conciliarGrupo`, asi que el placeholder `[campoN]` lo ve sin
-     * que ningun modulo sepa del otro.
-     * Legacy (T005): montar cargadores solo si no tienen campo.js.
-     * La regla de compatibilidad es: cargador && !campo.js.
+     * El cargador legacy (`datos.json:cargador`) se elimino (spec 020 D4): ahora
+     * cada campo monta el suyo desde su `campo.js` con `PMU_API.montarCargador`.
      */
-    function montarCargadores(raizEl, campos, estado) {
-        if (typeof window.CargadorPMU === 'undefined' || !raizEl) { return {}; }
-        var mapa = {};
-        (campos || []).forEach(function (campo) {
-            if (!campo || !campo.cargador || !campo.cargador.ranuras) { return; }
-            // Spec 018 (T005): el cargador legacy se APAGA cuando el campo ya trae
-            // su propio `campo.js` (regla `cargador && !campo.js`, D3): ese JS lo
-            // monta el mismo con `PMU_API.montarCargador`. Sin esto habria DOS
-            // cargadores montados en el mismo contenedor.
-            if (campo.js) { return; }
-            var cont = raizEl.querySelector('.pmu-campo-' + campo.id + ' .pmu-campo-cuerpo');
-            if (!cont) { return; }
-            // `onChange` dispara tambien en el montaje, cuando aun no hay ids. Si
-            // escribieramos ahi, `valor = []` pisaria lo que publico el
-            // `campo.js` del campo. Se toma el control del `valor` recien cuando
-            // el comprador sube su primera foto, y a partir de ahi manda el
-            // cargador (incluido para dejarlo en cero).
-            var mio = false;
-            var cargador = new window.CargadorPMU(cont, {
-                ranuras: campo.cargador.ranuras,
-                // Envoltura del grupo asociado en este PDF (opcion b): guia
-                // visual del recorte real. Solo pista; el PNG va sin cortar.
-                envoltura: campo.envoltura || null,
-                // Spec 016 (FR-015/FR-017): la tira pinta las fotos reales y,
-                // al re-editar, restaura los ids ya guardados resolviendolos
-                // contra el manifest (endpoint de la 012; nunca una ruta).
-                idsIniciales: idsDe(estado[campo.id] && estado[campo.id].valor),
-                urlDe: function (id) {
-                    var ses = (global.PMU_API && global.PMU_API.sesion) || {};
-                    return urlDeSubida(ses.sid, ses.item_key, id);
-                },
-                subir: function (blob) { return subirFoto(blob, campo.id); },
-                onChange: function (est) {
-                    if (!estado[campo.id]) { estado[campo.id] = { valor: null, cliente: '' }; }
-                    if (mio || est.ids.length > 0) {
-                        mio = true;
-                        estado[campo.id].valor = est.ids;
-                    }
-                    // `array` si alguna ranura admite mas de una (FR-034).
-                    estado[campo.id].array = est.array;
-                    estado[campo.id].listo = est.listo;
-                }
-            });
-            if (cargador.montar()) { mapa[campo.id] = cargador; }
-        });
-        return mapa;
-    }
+
 
     /** Carga perezosa del render-core (contrato AGENTS 2.1; igual que admin.js). */
     function renderCore() {
@@ -1350,7 +1299,6 @@
                         api.estado[cid].valor = est.ids;
                     }
                     // `array` si alguna ranura admite mas de una (FR-034).
-                    api.estado[cid].array = est.array;
                     api.estado[cid].listo = est.listo;
                 }
             });

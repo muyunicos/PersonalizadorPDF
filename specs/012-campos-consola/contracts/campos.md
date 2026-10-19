@@ -1,7 +1,13 @@
 # Contract: Campos (montaje en la ficha del comprador)
 
-**Feature**: 012-campos-consola | **Version**: 4 (spec 018, 2026-10-19)
+**Feature**: 012-campos-consola | **Version**: 5 (spec 020, 2026-10-19)
 
+> **Enmienda v5 (spec 020, 2026-10-19)**: se **eliminaron** del formato `texto_ayuda`, `array` y
+> `protegido` (la feature completa) y el **cargador legacy** (`datos.json:cargador`, la regla
+> `cargador && !campo.js` y `validar_cargador()`). `datos.json` lleva solo `nombre`, `descripcion`,
+> `titulo_cliente` y `tipo`. **Sin migración** (en desarrollo el admin borra los campos viejos y
+> regenera los PDFs).
+>
 > **Enmienda v4 (spec 018, 2026-10-19)**: el cargador deja de declararse en `datos.json:cargador` y pasa a
 > **declararse en el campo** (contenedor `[data-pmu-cargador]` + `campo.js` que monta con `PMU_API`).
 > El `tipo` se puede **corregir en edicion** (D4) y salen de la UI `array`, `protegido` y `texto_ayuda`.
@@ -80,8 +86,8 @@ Por cada campo monta:
    comprador veria una linea vacia en el carrito, y el admin lo resuelve escribiendo la regla en su
    `global.js` o en el `campo.js` del campo.
 
-**Campos protegidos**: los que tienen `protegido: true` **no se montan en la ficha** (nunca viajan
-al HTML publico). Son utilissimos para valores por defecto del admin o pruebas internas.
+**Campos protegidos**: (spec 020) la feature se elimino: `protegido` ya no existe y todo campo del
+catalogo viaja a la ficha.
 
 **Campos invisibles**: un campo cuyo HTML no muestra nada al comprador sigue publicando su
 ## Cargador de imagenes (`assets/cargador-pmu.js`)

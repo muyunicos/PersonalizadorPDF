@@ -1233,123 +1233,14 @@ class PMU_Uploads
         }
     }
 
-    /* ============ Campos v2 (spec 012, T004): datos, cargador y archivos ============ */
+    /* ============ Campos v2 (spec 012, T004): datos y archivos ============ */
 
-    /**
-     * Valida y normaliza el `cargador` de un campo (ranuras del cargador de
-     * imagenes). Acepta la forma estructurada (array de ranuras) y tambien el
-     * atajo de texto que ideo el admin: `size:2000 max:6`,
-     * `canvas:circle size:1000`, `1_size:1000 1_canvas:circle 2_size:1024x768 2_min:2 2_max:2`.
-     * Devuelve null si el campo no tiene cargador; o el array de ranuras
-     * normalizado. Lanza motor:campos:cargador:invalido si algo no cuadra.
-     */
-    public function validar_cargador($cargador)
-    {
-        if ($cargador === null || $cargador === '' || $cargador === []) {
-            return null;
-        }
-        // Atajo de texto -> estructura.
-        if (!is_array($cargador)) {
-            $cargador = $this->cargador_desde_texto((string)$cargador);
-        }
-        if (isset($cargador['ranuras']) && is_array($cargador['ranuras'])) {
-            $cargador = $cargador['ranuras'];
-        }
-        if (!is_array($cargador) || !$cargador) {
-            throw new Exception('motor:campos:cargador:invalido');
-        }
-        $formas = ['circle', 'square', 'rect', 'fit'];
-        $ranuras = [];
-        foreach ($cargador as $n => $r) {
-            if (!is_array($r)) {
-                throw new Exception('motor:campos:cargador:invalido');
-            }
-            $w = isset($r['w']) ? (int)$r['w'] : 0;
-            $h = isset($r['h']) ? (int)$r['h'] : 0;
-            $forma = isset($r['forma']) ? (string)$r['forma'] : 'rect';
-            $min = isset($r['min']) ? (int)$r['min'] : 1;
-            $max = isset($r['max']) ? (int)$r['max'] : 1;
-            if ($w < 1 || $h < 1 || !in_array($forma, $formas, true)) {
-                throw new Exception('motor:campos:cargador:invalido');
-            }
-            if ($min < 1) {
-                $min = 1;
-            }
-            if ($max < $min) {
-                $max = $min;
-            }
-            $ranuras[] = [
-                'etiqueta' => isset($r['etiqueta']) ? substr(strip_tags((string)$r['etiqueta']), 0, 100) : ('Foto ' . ((int)$n + 1)),
-                'w' => $w,
-                'h' => $h,
-                'forma' => $forma,
-                'min' => $min,
-                'max' => $max,
-                // Spec 019 (D9/FR-007): `phsize` (0|1|2) se CONSERVA al normalizar,
-                // para que un `cargador` legacy que lo declare no lo pierda al
-                // editarse. 0 = tamano declarado (comportamiento historico).
-                'phsize' => isset($r['phsize']) ? max(0, min(2, (int)$r['phsize'])) : 0,
-            ];
-        }
-        return $ranuras;
-    }
+    // (spec 020 D4) `validar_cargador()` y `cargador_desde_texto()` se eliminaron:
+    // el cargador vive en el `campo.js` del campo (spec 018) y no pasa por el
+    // servidor (PHP no evalua JS).
 
-    /**
-     * Parsea el atajo de texto del cargador a la estructura de ranuras
-     * (spec 012, data-model.md §3). Sintaxis:
-     *   size:2000 max:6                                -> 1 ranura 2000x2000, max 6
-     *   canvas:circle size:1000                        -> 1 ranura circular 1000x1000
-     *   1_size:1000 1_canvas:circle 2_size:1024x768 2_min:2 2_max:2 -> 2 ranuras
-     * `W:H` (o `size:WxH`) define el alto; por defecto `size:N` es cuadrado.
-     */
-    private function cargador_desde_texto($texto)
-    {
-        $texto = strtolower(trim((string)$texto));
-        if ($texto === '') {
-            return null;
-        }
-        $formas = ['circle', 'square', 'rect', 'fit'];
-        $mapa = ['canvas' => 'forma', 'forma' => 'forma', 'size' => 'size',
-            'w' => 'w', 'h' => 'h', 'min' => 'min', 'max' => 'max'];
-        $out = [];
-        if (!preg_match_all('/(\d*)_?(canvas|forma|size|w|h|min|max)\s*[:=]\s*([a-z0-9x]+)/', $texto, $m, PREG_SET_ORDER)) {
-            throw new Exception('motor:campos:cargador:invalido');
-        }
-        foreach ($m as $tok) {
-            $idx = $tok[1] === '' ? 1 : (int)$tok[1];
-            $clave = $mapa[$tok[2]];
-            $valor = $tok[3];
-            if (!isset($out[$idx])) {
-                $out[$idx] = ['forma' => 'rect', 'min' => 1, 'max' => 1];
-            }
-            if ($clave === 'forma') {
-                if (!in_array($valor, $formas, true)) {
-                    throw new Exception('motor:campos:cargador:invalido');
-                }
-                $out[$idx]['forma'] = $valor;
-            } elseif ($clave === 'size') {
-                if (strpos($valor, 'x') !== false) {
-                    list($w, $h) = array_pad(explode('x', $valor, 2), 2, $valor);
-                    $out[$idx]['w'] = (int)$w;
-                    $out[$idx]['h'] = (int)$h;
-                } else {
-                    $out[$idx]['w'] = (int)$valor;
-                    $out[$idx]['h'] = (int)$valor;
-                }
-            } else {
-                $out[$idx][$clave] = (int)$valor;
-            }
-        }
-        ksort($out);
-        $ranuras = [];
-        foreach ($out as $r) {
-            if (!isset($r['w']) || !isset($r['h'])) {
-                throw new Exception('motor:campos:cargador:invalido');
-            }
-            $ranuras[] = $r;
-        }
-        return $ranuras;
-    }
+    /* (spec 020 D4) `cargador_desde_texto()` eliminado: sin atajos de texto. */
+
 
     /**
      * Lee un campo v2 completo desde uploads/pmu/campos/{id}/ (spec 012, T002).
@@ -1402,9 +1293,6 @@ class PMU_Uploads
             if (strlen((string)$contenido) > self::LIMITE_CAMPO_CARACTERES) {
                 throw new Exception('motor:campos:' . $archivo . ':tamano');
             }
-        }
-        if (!empty($datos['cargador'])) {
-            $datos['cargador'] = ['ranuras' => $this->validar_cargador($datos['cargador'])];
         }
 
         $ok = true;
@@ -1536,17 +1424,7 @@ class PMU_Uploads
             'nombre' => $corta(isset($datos['nombre']) ? $datos['nombre'] : '', 200),
             'descripcion' => $corta(isset($datos['descripcion']) ? $datos['descripcion'] : '', 500),
             'titulo_cliente' => $corta(isset($datos['titulo_cliente']) ? $datos['titulo_cliente'] : '', 200),
-            // Spec 018 (D5): `texto_ayuda`, `array` y `protegido` ya no se editan
-            // desde la consola, pero el ALMACEN sigue teniendolos: el llamador
-            // los arrastra con write-through (handle_campo_guardar) para que
-            // editar otro dato no desproteja el campo ni lo vacie.
-            'texto_ayuda' => $corta(isset($datos['texto_ayuda']) ? $datos['texto_ayuda'] : '', 500),
-            'array' => !empty($datos['array']),
-            'protegido' => !empty($datos['protegido']),
             'tipo' => $this->tipo_valida($tipo),
-            // Spec 018 (D3): `cargador` es LEGACY. Se lee si existe y se conserva
-            // tal cual (write-through); no se escribe desde la UI.
-            'cargador' => !empty($datos['cargador']) ? $datos['cargador'] : null,
         ];
     }
 
@@ -1664,35 +1542,12 @@ class PMU_Uploads
                 $tipoActual = $tipoNuevo;
             }
         }
-        $datos = $this->datos_con_legacy($id, $datos);
         $datos = $this->normalizar_datos_campo($datos, $tipoActual);
         $indice = $this->tocar_meta($indice, $id);
         if (!$this->guardar_indice_campos($indice) || !$this->escribir_campo($id, $datos, $htm, $css, $js)) {
             throw new Exception('motor:editar:directorio:no_escribible');
         }
         return true;
-    }
-
-    /**
-     * Spec 018 (D3/D5): `cargador`, `array`, `protegido` y `texto_ayuda` salieron
-     * de la consola, asi que un POST de edicion NO las trae. Si el llamador no
-     * las manda, se arrastran del `datos.json` guardado (write-through) para que
-     * editar otro dato no desproteja el campo, vacie su ayuda ni pierda su
-     * cargador legacy. Si algun dia vuelven a la UI, hay que distinguir "ausente"
-     * de "vacio" (hoy `campo_desde_post` no emite esas claves).
-     */
-    private function datos_con_legacy($id, array $datos)
-    {
-        $previo = $this->leer_campo($id);
-        if ($previo === null || !isset($previo['datos']) || !is_array($previo['datos'])) {
-            return $datos;
-        }
-        foreach (['cargador', 'array', 'protegido', 'texto_ayuda'] as $k) {
-            if (!array_key_exists($k, $datos) && array_key_exists($k, $previo['datos'])) {
-                $datos[$k] = $previo['datos'][$k];
-            }
-        }
-        return $datos;
     }
 
     /**

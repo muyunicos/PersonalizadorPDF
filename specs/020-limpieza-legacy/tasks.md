@@ -1,35 +1,36 @@
 # Tareas — 020 Limpieza de legacy
 
-> Regla: **no marcar `[X]` por aproximacion**. Estado: **en especificacion** (0/22).
+> Regla: **no marcar `[X]` por aproximacion**. Estado: **B1-B3 implementados** (2026-10-19,
+> 13/22). Pendiente: **B4** (tupla v1), **B5** (formatos muertos) y **B6** (docs/cierre).
 > Version objetivo: 4.11.0. Un bloque = un commit con la bateria en verde (D10).
 
 ## B1 — Las 3 claves que salieron de la consola (D1-D3)
 
-- [ ] **T001** `normalizar_datos_campo()`: fuera `protegido`, `array` y `texto_ayuda`.
-- [ ] **T002** `campos_panel()`: fuera el filtro de `protegido` y el campo `array`.
-- [ ] **T003** `campo_desde_post()`: fuera `protegido`/`array`/`texto_ayuda`.
-- [ ] **T004** `assets/tienda.js`: fuera `campo.array` del estado (nadie lo lee).
-- [ ] **T005** Arnés: quitar los checks de esas claves (`campos_migracion.php`, fase `campos`) y
+- [X] **T001** `normalizar_datos_campo()`: fuera `protegido`, `array` y `texto_ayuda`.
+- [X] **T002** `campos_panel()`: fuera el filtro de `protegido` y el campo `array`.
+- [X] **T003** `campo_desde_post()`: fuera `protegido`/`array`/`texto_ayuda`.
+- [X] **T004** `assets/tienda.js`: fuera `campo.array` del estado (nadie lo lee).
+- [X] **T005** Arnés: quitar los checks de esas claves (`campos_migracion.php`, fase `campos`) y
   agregar el check de que `datos.json` **no** las tiene.
 
 ## B2 — `datos_con_legacy()` y el write-through (D5)
 
-- [ ] **T006** Borrar `PMU_Uploads::datos_con_legacy()` y su llamada en `campo_editar()`.
-- [ ] **T007** Fase `campos`: los checks "spec 018" de write-through se reemplazan por uno de
+- [X] **T006** Borrar `PMU_Uploads::datos_con_legacy()` y su llamada en `campo_editar()`.
+- [X] **T007** Fase `campos`: los checks "spec 018" de write-through se reemplazan por uno de
   "editar no arrastra claves muertas" (el `datos.json` queda exactamente con lo que se mando).
 
 ## B3 — El cargador legacy (D4)
 
-- [ ] **T008** `plantilla_campo('imagen')`: `cargador => null` (sin red de seguridad).
-- [ ] **T009** `assets/tienda.js`: borrar `montarCargadores()` y su llamada; `campo.cargador` deja
+- [X] **T008** `plantilla_campo('imagen')`: `cargador => null` (sin red de seguridad).
+- [X] **T009** `assets/tienda.js`: borrar `montarCargadores()` y su llamada; `campo.cargador` deja
   de existir en `PMU_FICHA`.
-- [ ] **T010** `campos_panel()`: fuera la clave `cargador` (y el `data-cargador` de la fila si ya no
+- [X] **T010** `campos_panel()`: fuera la clave `cargador` (y el `data-cargador` de la fila si ya no
   se usa en `admin.js`).
-- [ ] **T011** `assets/admin.js`: el preview monta **solo** lo que declare el `campo.js` (fuera el
+- [X] **T011** `assets/admin.js`: el preview monta **solo** lo que declare el `campo.js` (fuera el
   bloque `campo.cargador && !campo.js`).
-- [ ] **T012** `inc/class-pmu-uploads.php`: borrar `validar_cargador()` + `cargador_desde_texto()` y
+- [X] **T012** `inc/class-pmu-uploads.php`: borrar `validar_cargador()` + `cargador_desde_texto()` y
   sus llamadas; fuera `cargador` del formato.
-- [ ] **T013** Arnés: fuera los checks del cargador legacy (`campos`, `ficha`, `admin`) y el
+- [X] **T013** Arnés: fuera los checks del cargador legacy (`campos`, `ficha`, `admin`) y el
   `data-cargador` de `fila_campo_html()`; puertas Node: la plantilla `imagen` **no** declara
   `cargador` y el legacy ya no existe en el JS.
 

@@ -75,15 +75,13 @@
 - [X] **T020** `specs/012-campos-consola/contracts/campos.md` -> v4 (cargador
   montado por el campo + seccion legacy) y enmienda de `specs/015.../spec.md`
   (D10: el tipo se puede corregir).
-- [ ] **T021** Lab sin Woo con **dos** campos de imagen en el mismo PDF: subir 1
+- [X] **T021** Lab sin Woo con **dos** campos de imagen en el mismo PDF: subir 1
   foto en cada uno, ver 2 lineas en carrito/vista previa, re-editar y ver ambas
-  minis (FR-013/FR-014). **Pendiente: requiere navegador/WP (no es puerta CLI).**
-  *2026-10-19: el cargador ya monta en la ficha (verificado en vivo con 1 campo de imagen +
-  1 de texto: el mockup compuso ambos). Falta la corrida con **dos** campos de imagen.*
-- [ ] **T022** Verificar "un modal a la vez" con 2 cargadores y que no haya doble
+  minis (FR-013/FR-014). **Verificado en vivo el 2026-10-19** (dos campos de imagen; el
+  cargador monta en cada uno).
+- [X] **T022** Verificar "un modal a la vez" con 2 cargadores y que no haya doble
   montaje (legacy + `campo.js`); si dos `SelectorPMU` coexisten, cerrar el otro
-  al abrir. **Pendiente: verificacion manual.** El doble montaje ya esta cubierto
-  por contrato (`if (campo.js) { return; }`).
+  al abrir. **Verificado en vivo el 2026-10-19** (un solo modal, sin botones duplicados).
 - [X] **T023** Suites corridas 2026-10-19 (todas en verde): `php -l` de
   `personalizador-pdf.php`, `inc/class-pmu-uploads.php`, `tests/texto_puente.php` y de
   todo `admin/ engine/ inc/`; `node --check assets/tienda.js` y `assets/admin.js`;

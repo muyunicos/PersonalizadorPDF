@@ -332,6 +332,15 @@ jQuery(function ($) {
         function enlazarBaja($forms) {
             $forms.each(function () {
                 var $f = $(this);
+                // Debe registrarse ANTES de pmuForm: los handlers de jQuery se
+                // ejecutan en el orden de alta. Si se agrega despues, pmuForm
+                // inicia el POST antes de que Cancelar pueda detenerlo.
+                $f.off('submit.pmu-confirma').on('submit.pmu-confirma', function (ev) {
+                    if (!window.confirm('¿Dar de baja este campo? Los PDFs que lo usan quedan sin ese dato, pero podes restaurarlo despues.')) {
+                        ev.stopImmediatePropagation();
+                        ev.preventDefault();
+                    }
+                });
                 pmuForm($f, 'personalizador_pdf_campo_baja', nonceCampo, function (d) {
                     var id = (d && d.id) || $f.find('input[name=id]').val();
                     // El formulario ya no cuelga de la fila: vive en el dormitorio.
@@ -340,13 +349,6 @@ jQuery(function ($) {
                     $('.ec-campo-form[data-form="' + id + '"]').remove();
                     $fila.fadeOut(300, function () { $fila.remove(); });
                     pmuAviso($f.closest('.card, .wrap'), 'Campo ' + id + ' dado de baja (podes restaurarlo abajo).');
-                });
-                // Confirmacion una sola vez (pmuForm ya evita doble enlace).
-                $f.off('submit.pmu-confirma').on('submit.pmu-confirma', function (ev) {
-                    if (!window.confirm('¿Dar de baja este campo? Los PDFs que lo usan quedan sin ese dato, pero podes restaurarlo despues.')) {
-                        ev.stopImmediatePropagation();
-                        ev.preventDefault();
-                    }
                 });
             });
         }
@@ -1204,17 +1206,11 @@ jQuery(function ($) {
             var $campo = $('.ec-campo-form[data-form="' + id + '"]');
             if (!$campo.length) { return null; }
             var val = function (sel) { return ($campo.find(sel).val() || ''); };
-            var crudoCarg = $fila.attr('data-cargador') || '';
-            var defCarg = null;
-            if (crudoCarg) {
-                try { defCarg = JSON.parse(crudoCarg); } catch (e) { defCarg = null; }
-            }
             return {
                 id: id,
                 htm: val('textarea[name=html]'),
                 css: val('textarea[name=css]'),
-                js: val('textarea[name=js]'),
-                cargador: defCarg
+                js: val('textarea[name=js]')
             };
         }
 
@@ -1347,33 +1343,8 @@ jQuery(function ($) {
                 var estado;
                 try {
                     estado = PMUCampo.montar(doc.getElementById('pmu-preview'), [campo]);
-                // T011b/FR-009 + spec 018 (T005): el cargador LEGACY (declarado en
-                // `datos.json:cargador`) se dibuja desde el padre contra el DOM del
-                // iframe. Se apaga cuando el campo ya trae su propio `campo.js`
-                // (regla `cargador && !campo.js`, D3): en ese caso lo monta el JS
-                // del campo con `PMU_API.montarCargador`.
-                if (campo.cargador && campo.cargador.ranuras && !campo.js && window.CargadorPMU) {
-                    var cuerpo = doc.querySelector('.pmu-campo-' + campo.id + ' .pmu-campo-cuerpo');
-                    if (cuerpo) {
-                        // Spec 016 (v4.6.2): el preview monta el cargador TAL CUAL
-                        // lo ve el comprador (boton Agregar imagen + drop zone +
-                        // Listo). La subida es SIMULADA en memoria (objectURL por
-                        // id): sin endpoint, sin item, y el selector real se
-                        // encola en la consola para poder recortar y ver la mini
-                        // al instante.
-                        var blobsPv = {};
-                        var nPv = 0;
-                        new window.CargadorPMU(cuerpo, {
-                            ranuras: campo.cargador.ranuras,
-                            subir: function (blob) {
-                                nPv++;
-                                blobsPv['pv-' + nPv] = URL.createObjectURL(blob);
-                                return Promise.resolve({ id: 'pv-' + nPv });
-                            },
-                            urlDe: function (id) { return Promise.resolve(blobsPv[id] || null); }
-                        }).montar();
-                    }
-                }
+                // Spec 020 (D4): sin camino legacy. El cargador del preview lo monta
+                // el `campo.js` con `PMU_API.montarCargador` (stub en `apiPreview`).
                 } catch (e) {
                     $status.addClass('ec-error').text('El JS del campo fallo: ' + e.message);
                     return;

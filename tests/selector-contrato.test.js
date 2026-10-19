@@ -124,7 +124,7 @@ check('FR-016: "Cambiar" reabre el editor y reemplaza sin sumar',
 check('FR-017: restauracion de ids al montar (acotada por max)',
   /idsIniciales/.test(cargador16) && /slice\(0, this\.config\.ranuras\[i\]\.max\)/.test(cargador16));
 check('tienda.js pasa idsIniciales y urlDe (endpoint de la 012)',
-  /idsIniciales: idsDe\(estado\[campo\.id\]/.test(tienda16)
+  /var idsIniciales = opts\.idsIniciales;/.test(tienda16)
   && /urlDeSubida\(ses\.sid, ses\.item_key, id\)/.test(tienda16));
 check('idsDe normaliza array, string unico y JSON de ids', /function idsDe\(v\)/.test(tienda16)
   && /JSON\.parse\(s\)/.test(tienda16));
