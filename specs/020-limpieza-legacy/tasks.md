@@ -53,10 +53,14 @@
 
 ## B6 — Docs y cierre
 
-- [ ] **T021** `AGENTS.md` §5 (formatos sin las claves muertas), §7 (entrada del 020) y §11 (quitar
-  las filas de errores que ya no pueden ocurrir); contratos de la 012 (`campos.md`) y de la 011.
-- [ ] **T022** Bateria completa del §9 en verde + recorrido manual minimo (un campo nuevo de imagen
-  de punta a punta) y `readme.txt`/version **4.11.0**.
+- [X] **T021** `AGENTS.md` §5 (formatos sin las claves muertas), §7 (entrada del 020) y §11 (quitar
+  las filas de errores que ya no pueden ocurrir); contratos de la 012 (`campos.md`, v5) y de la 011
+  (`mockup-capas.md`, namespace obligatorio). `admin/ayuda.php` alineado (tipo editable + boton de
+  plantilla) y `readme.txt` con el changelog 4.11.0.
+- [ ] **T022** Bateria completa del §9 en verde (**hecha 2026-10-19**: 5 puertas Node, 10 fases del
+  arnes, smoke, parity, campos_migracion, envolturas, sin_lectura, certificacion y `php -l` de todo)
+  + `readme.txt`/version **4.11.0** (**hecho**). **Pendiente solo el recorrido manual minimo**: un
+  campo nuevo de imagen de punta a punta (ficha -> preview -> PDF).
 
 ## Nota
 

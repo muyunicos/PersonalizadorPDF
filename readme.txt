@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.10.1
+Stable tag: 4.11.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,14 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.11.0 =
+* **Limpieza de legacy (spec 020): el codigo deja de cargar compatibilidad que nadie usa.** Regla del negocio: en desarrollo no hay migraciones ni retrocompatibilidad (el admin borra los campos viejos y regenera los PDFs). Esto **no** toca el formato vigente (`analisis.json`, `config.json`, `campos/campos.json` v3, `bonus/bonus.json`) ni el ciclo compra->pedido.
+* **Campos: fuera las claves muertas.** `protegido` (feature completa), `array` y `texto_ayuda` salen de `datos.json`, del panel y del estado del cliente. `datos.json` lleva solo `nombre`, `descripcion`, `titulo_cliente` y `tipo`.
+* **Cargador: un solo modelo.** Se elimino el **cargador legacy** (`datos.json:cargador`, `validar_cargador()`, `cargador_desde_texto()`, la regla `cargador && !campo.js`, `montarCargadores()` en la ficha, el bloque legacy del preview y el `data-cargador` de la fila). El cargador vive **solo** en el `campo.js` (spec 018). Tambien se retiro el write-through (`datos_con_legacy`).
+* **Formato de campos: sin el adaptador v1.** `campo_alta()`/`campo_editar()` ya no traducen la tupla de 10 slots, `campos_panel()` lee la fila v2 directo y `campos_activos()`/`campo_por_id()` devuelven la fila completa. El arnes de tests pasa a la **firma real**, asi que valida el mismo camino que produccion.
+* **Formatos muertos fuera.** El filtro del id fantasma `"Array"` (bug de 4.6.6), la lectura de `envolturas.json` **v1** (solo v2: re-analizar), el `ref` **plano** de imagenes en mockups (namespace `pdf:`/`mock:` obligatorio; el servidor normaliza al leer) y las migraciones one-shot del layout viejo de **bonus** y del **indice de campos** (el indice vive solo en `uploads/pmu/campos/campos.json`).
+* **Avisos**: si un PDF referencia campos que ya no existen, la consola lo marca (y la ficha avisa por consola) en vez de quedar en blanco.
 
 = 4.10.1 =
 * **Fix critico: el cargador no se montaba en la ficha.** `global.PMU_API` se publicaba **despues** de `montarCampos()`, pero el `campo.js` corre **dentro** del montaje: durante el montaje la API no existia y el campo salia por el `return` (sin cargador, sin error). Ahora la API **completa** (con `montarCargador`) se publica antes y `api.estado` se asigna al terminar; la re-edicion desde el carrito sigue restaurando las fotos (los ids salen de `PMU_FICHA.valores`). El test exige ese orden: antes comparaba `var api = {` y era un falso positivo.

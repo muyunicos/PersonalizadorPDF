@@ -65,13 +65,13 @@ if (!defined('ABSPATH')) {
             <code>cliente</code> es lo que lee el comprador. El sistema <strong>no traduce nada</strong>
             por si solo: si querés convertir un codigo en texto, lo escribis en el <em>Script global</em>.</li>
         <li><strong>Probar:</strong> el boton "Probar" muestra el campo tal cual lo vera el comprador,
-            con el CSS del tema y los estilos globales. Si tiene cargador, dibuja las ranuras sin subir
-            nada.</li>
-        <li><strong>Tipo:</strong> al crear un campo elegis un tipo (Texto, Opciones o
-            Imagenes) que solo deja el formulario preparado y declara para que sirve el
-            <code>valor</code>; despues editas el HTML a tu medida. El tipo se muestra en la fila y
-            en el editor (solo lectura: no se cambia despues de crear). Un campo existente se
-            puede duplicar.</li>
+            con el CSS del tema y los estilos globales. Si el campo monta un cargador (su
+            <code>campo.js</code>), dibuja las ranuras sin subir nada.</li>
+        <li><strong>Tipo:</strong> el tipo (Texto, Opciones o Imagenes) solo deja el formulario preparado
+            y declara para que sirve el <code>valor</code>; despues editas el HTML a tu medida. Se
+            puede <strong>corregir en el editor</strong> y el boton <strong>"Cargar la plantilla de este
+            tipo"</strong> rellena HTML/CSS/JS con la plantilla vigente. Un campo existente se puede
+            duplicar.</li>
         <li><strong>Estilos globales / Script global:</strong> un unico par de archivos para todo el
             plugin (<code>uploads/pmu/campos/global.css</code> y <code>global.js</code>). Se cargan solo
             en las fichas que tienen al menos un campo. El CSS se inyecta limitado al panel, asi que
