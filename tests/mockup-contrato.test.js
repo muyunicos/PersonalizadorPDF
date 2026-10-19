@@ -198,16 +198,19 @@ check('analizar_y_guardar regenera envolturas.json junto al analisis',
 check('envolturas_usadas reutiliza id_valido (sin regex duplicada)',
     pluginPhp.indexOf('if (!$this->id_valido($gid))') !== -1
         && pluginPhp.indexOf("preg_match('/^[0-9A-F]{6}$/', $gid)") === -1);
-check('la consola expone "Envoltura" por grupo y por campo', (function () {
+check('la consola expone "Envoltura" por grupo y la guia del cargador AUTOMATICA', (function () {
     var consola = leer('admin/pdfs.php');
+    // Spec 019 (F2, ajuste): el <select name="campos_envoltura[...]"> se elimino
+    // (era redundante: el hueco [campoN] ya dice a que grupo va el campo). Se
+    // informa la guia que el sistema deduce.
     return consola.indexOf('name="envolturas[') !== -1
-        && consola.indexOf('name="campos_envoltura[') !== -1
-        && consola.indexOf('Envoltura del cargador') !== -1;
+        && consola.indexOf('name="campos_envoltura[') === -1
+        && consola.indexOf('Envoltura del cargador') !== -1
+        && consola.indexOf('automatica, del cableado del hueco') !== -1;
 })());
-check('el config sanea envolturas y campos_envoltura (una sola allowlist)',
+check('el config sanea envolturas y LIMPIA campos_envoltura (guia automatica)',
     motorPhp.indexOf('function config_envolturas(') !== -1
-        && motorPhp.indexOf('function config_campos_envoltura(') !== -1
-        && pluginPhp.indexOf("'campos_envoltura' => $campos_envoltura") !== -1);
+        && pluginPhp.indexOf("'campos_envoltura' => []") !== -1);
 check('la ficha lleva la guia del cargador al campo (opcion b)',
     pluginPhp.indexOf('envoltura_defecto($nombre, $gid)') !== -1
         && pluginPhp.indexOf("'envoltura' => isset($c['envoltura'])") !== -1

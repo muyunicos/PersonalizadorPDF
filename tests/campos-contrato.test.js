@@ -129,10 +129,15 @@ const tienda = fs.readFileSync(path.join(__dirname, '..', 'assets', 'tienda.js')
 check('tienda.js delega en PMUCampo.montar', tienda.indexOf('PMUCampo.montar(raizEl, campos, inicial)') !== -1);
 check('tienda.js ya no define contextoRaiz', tienda.indexOf('function contextoRaiz') === -1);
 check('tienda.js avisa si falta el modulo', tienda.indexOf('falta campo-montar.js') !== -1);
-// Spec 018 (T006): API publica PMU_API.
-check('tienda.js crea PMU_API antes de montarCampos',
-  tienda.indexOf('var api = {') !== -1
-  && tienda.indexOf('var estado = montarCampos') > tienda.indexOf('var api = {'));
+// Spec 018 (T006): API publica PMU_API. El ORDEN es el contrato: el `campo.js`
+// corre DENTRO de `montarCampos`, asi que la API COMPLETA (con montarCargador)
+// tiene que estar publicada antes. (Antes el check comparaba `var api = {` y no
+// `global.PMU_API = api;`: falso positivo que dejo pasar el bug real.)
+check('tienda.js publica PMU_API completa ANTES de montarCampos',
+  tienda.indexOf('api.montarCargador = function') !== -1
+  && tienda.indexOf('api.montarCargador = function') < tienda.indexOf('global.PMU_API = api;')
+  && tienda.indexOf('global.PMU_API = api;') !== -1
+  && tienda.indexOf('global.PMU_API = api;') < tienda.indexOf('api.estado = montarCampos('));
 check('PMU_API expone subirFoto', tienda.indexOf('api.subirFoto = function') !== -1);
 check('PMU_API expone urlDeSubida', tienda.indexOf('api.urlDeSubida = function') !== -1);
 check('PMU_API expone montarCargador', tienda.indexOf('api.montarCargador = function') !== -1);

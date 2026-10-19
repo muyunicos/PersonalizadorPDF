@@ -193,9 +193,24 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                 $campos_pdf[(int)$cid] = $todos_campos[(int)$cid];
             }
         }
+        // Spec 018/019 (F3): ids de `campos_ids` que YA NO existen en el catalogo
+        // (el admin borra campos y regenera). Sin aviso la ficha queda sin panel y
+        // parece un bug del cargador: se dice explicitamente.
+        $campos_huerfanos = array_values(array_diff(
+            array_map('intval', (array)$cfg_pdf['campos_ids']),
+            array_keys($campos_pdf)
+        ));
         ?>
         <?php if ($aviso_cfg_campos !== '') : ?>
             <div class="notice notice-warning"><p><strong>Aviso de recursos:</strong> <?php echo esc_html($aviso_cfg_campos); ?></p></div>
+        <?php endif; ?>
+        <?php if (!empty($campos_huerfanos)) : ?>
+            <div class="notice notice-error"><p>
+                <strong>Campos inexistentes:</strong> este PDF referencia
+                <?php echo esc_html(implode(', ', array_map(function ($c) { return '#' . (int)$c; }, $campos_huerfanos))); ?>
+                pero ya no estan en el catalogo (se borraron). Re-asignalos abajo o en la pestana Campos:
+                mientras tanto la ficha del comprador no muestra ningun campo.
+            </p></div>
         <?php endif; ?>
 
         <div class="ec-cabecera">
@@ -286,9 +301,11 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                         }
                     }
                     if (!empty($cfg_pdf['campos_ids']) && $grupos_env) :
-                        // Spec 019 (F2): si el admin no forzo la guia, se DEDUCE del
-                        // cableado del hueco ([campoN] en value/settings). Se muestra
-                        // como "automatica" para no pedir un paso que ya es deducible.
+                        // Spec 019 (F2, ajuste 2026-10-19): la guia se DEDUCE del
+                        // cableado del hueco. Ya NO hay <select>: era redundante (el
+                        // `[campoN]` del hueco ya dice a que grupo va el campo) y sus
+                        // valores guardados pisaban la deduccion. Solo se informa que
+                        // forma usara el sistema.
                         $env_auto = $seleccionado ? $this->campos_envoltura_deducida($this->nombre_de($seleccionado)) : [];
                     ?>
                     <p>
@@ -299,27 +316,16 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                                 continue;
                             }
                             $t_sel = $todos_campos[$cid_sel];
-                            $gid_sel = isset($cfg_pdf['campos_envoltura'][(string)$cid_sel])
-                                ? (string)$cfg_pdf['campos_envoltura'][(string)$cid_sel] : '';
                             $gid_auto = isset($env_auto[$cid_sel]) ? (string)$env_auto[$cid_sel] : '';
                         ?>
-                        <label class="ec-env-campo">
+                        <span class="ec-env-campo">
                             #<?php echo (int)$cid_sel; ?> <?php echo esc_html($t_sel[1] !== '' ? $t_sel[1] : '(oculto)'); ?>:
-                            <select name="campos_envoltura[<?php echo (int)$cid_sel; ?>]">
-                                <option value="" <?php selected($gid_sel, ''); ?>>
-                                    <?php echo $gid_auto !== ''
-                                        ? 'automatica: #' . esc_html($gid_auto) . ' (del cableado del hueco)'
-                                        : 'sin guia'; ?>
-                                </option>
-                                <?php foreach ($grupos_env as $gid_env => $n_env) : ?>
-                                <option value="<?php echo esc_attr($gid_env); ?>" <?php selected($gid_sel, $gid_env); ?>>
-                                    #<?php echo esc_html($gid_env); ?> (<?php echo (int)$n_env; ?> forma<?php echo $n_env > 1 ? 's' : ''; ?>)
-                                </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </label>
+                            <strong><?php echo $gid_auto !== ''
+                                ? '#' . esc_html($gid_auto) . ' (automatica, del cableado del hueco)'
+                                : 'sin guia'; ?></strong>
+                        </span>
                         <?php endforeach; ?>
-                        <span class="description">El comprador ve la forma como guia al cortar su foto (el corte real lo hace el clip del PDF).</span>
+                        <span class="description">El comprador ve la forma como guia al cortar su foto (el corte real lo hace el clip del PDF). Se toma del grupo al que el hueco referencia el campo: <code>[campoN]</code>.</span>
                     </p>
                     <?php endif; ?>
                     <?php

@@ -109,9 +109,12 @@ el mockup (recorte de la capa) y en el cargador del comprador (guia al subir la 
   resuelve **excepcion > geometria resuelta > forma por defecto** (una excepcion pendiente NUNCA
   cae a la default). `componer` traza la envoltura (`comandosEnvoltura` + `trazarEnvoltura`) y
   aplica `ctx.clip(regla)` ANTES de dibujar; afecta igual al editor y a la ficha.
-- **Guia del cargador (opcion b)**: `config.json:campos_envoltura{campo_id: gid}` — la asociacion
-  es por **PDF** (un campo se reutiliza en N PDFs) y se elige en la consola. `panel_ficha` resuelve
-  la forma por defecto del grupo y la publica en el campo (`envoltura` + `envoltura_gid`);
+- **Guia del cargador (spec 019 F2)**: la guia se **DEDUCE** del **cableado del hueco**
+  (`[campoN]` en `value`/`settings` del grupo con envoltura) y, si el PDF tiene un solo grupo con
+  envoltura y el campo declara tipo `imagen`, de ese (`campos_envoltura_deducida()`). **No hay
+  `<select>` por campo**: `config.json:campos_envoltura` dejo de usarse (se limpia al guardar la
+  config y se elimina del formato en la spec 020). `panel_ficha` resuelve la forma por defecto del
+  grupo y la publica en el campo (`envoltura` + `envoltura_gid`);
   `cargador-pmu.js` dibuja un canvas de guia por ranura (`_guia`, reusa `comandosEnvoltura`). El
   PNG del pool va **sin cortar**: el corte real lo hace el clip del PDF (evita doble corte).
 - **Degradacion**: sin envoltura la capa compone sin clip y el editor informa la causa

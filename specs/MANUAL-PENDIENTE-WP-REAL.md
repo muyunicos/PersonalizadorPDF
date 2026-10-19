@@ -192,8 +192,9 @@ Detalle completo por spec: [004/quickstart.md §1](./004-woocommerce-pdf-persona
 7. **Un modal a la vez** (018 T022): con 2 campos de imagen, abrir una ranura, cerrarla y abrir la
    del otro campo: nunca hay dos modales apilados ni **botones duplicados** en la misma ranura
    (regla `cargador && !campo.js`).
-8. **`phsize: 1` = tamano del hueco** (019): en "Envoltura del cargador" asociar el campo a un
-   grupo; en el `campo.js`, poner `phsize: 1` en la ranura. En la ficha, el titulo de la ranura
+8. **`phsize: 1` = tamano del hueco** (019): el hueco del grupo ya referencia `[campoN]`, asi que la
+   guia y el tamano salen **automaticos** (la consola muestra "automatica: #gid (del cableado del
+   hueco)"). En el `campo.js`, poner `phsize: 1` en la ranura: en la ficha, el titulo de la ranura
    debe mostrar el **mismo** `WxH` que el grupo. Subir una foto y mirar el PNG del pool
    (`uploads/pmu/tmp/sesion-{sid}/{item_key}/img/…`): tiene ese tamano.
 9. **`phsize: 2`** duplica el tamano (acotado a 3000 px): el titulo de la ranura lo refleja.

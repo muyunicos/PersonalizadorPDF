@@ -1240,7 +1240,16 @@
         var panel = raiz();
         if (!panel) { return null; }
         ficha = global.PMU_FICHA || {};
-        if (!ficha.pdf || !(ficha.campos || []).length) { return null; }
+        if (!ficha.pdf || !(ficha.campos || []).length) {
+            // Spec 018/019 (F3): el PDF esta activo pero no queda ningun campo
+            // valido (ids borrados). Antes la ficha quedaba MUDA y parecia un bug
+            // del cargador: se avisa con la causa y donde arreglarlo.
+            if (ficha.pdf && typeof console !== 'undefined' && console.warn) {
+                console.warn('[PMU] el PDF "' + ficha.pdf + '" esta activo pero no tiene campos validos'
+                    + ' (revisa "Campos" en la consola: ids inexistentes).');
+            }
+            return null;
+        }
         // Spec 005: asociaciones de la ficha (validez/bloquear/mensaje por PDF).
         if (!(ficha.pdfs || []).length) {
             ficha.pdfs = [{ pdf: ficha.pdf, validez: '', mensaje_html: '', bloquear: false }];
@@ -1252,11 +1261,11 @@
             sesion: (ficha.sesion && ficha.sesion.item_key) ?
                 { sid: ficha.sesion.sid, item_key: ficha.sesion.item_key } : null,
             valores: null,
-            estado: null
+            // El estado REAL se asigna al terminar `montarCampos`; mientras tanto es
+            // un objeto vacio para que los callbacks (y el campo.js) no rompan.
+            estado: {}
         };
-        var estado = montarCampos(panel, ficha.campos, ficha.valores);
-        api.estado = estado;
-        api.valores = function () { return estado; };
+        api.valores = function () { return api.estado; };
         // Spec 018 (T002/T003): metodos publicos.
         api.subirFoto = function (blob, campo) {
             return subirFoto(blob, campo ? (campo.id || campo) : campo);
@@ -1265,7 +1274,6 @@
             var ses = api.sesion || {};
             return urlDeSubida(ses.sid, ses.item_key, id);
         };
-        global.PMU_API = api;
         // Spec 018 (T004): montar cargador desde el campo.
         api.montarCargador = function (el, opts) {
             opts = opts || {};
@@ -1293,9 +1301,16 @@
                 if (c && parseInt(c.id, 10) === cid) { defCampo = c; }
             });
             var envoltura = opts.envoltura || (defCampo && defCampo.envoltura) || null;
-            // Re-edicion: los ids ya guardados se resuelven contra el manifest.
-            var idsIniciales = opts.idsIniciales
-                || idsDe((api.estado && api.estado[cid] && api.estado[cid].valor) || null);
+            // Re-edicion: los ids guardados vienen de `PMU_FICHA.valores` (manifest),
+            // que YA esta disponible durante el montaje. `api.estado` todavia se esta
+            // llenando (la API se publica ANTES de montar: spec 018 T001).
+            var idsIniciales = opts.idsIniciales;
+            if (!idsIniciales) {
+                var valsPrev = ficha.valores || {};
+                var parPrev = valsPrev[cid] || valsPrev[String(cid)] || null;
+                idsIniciales = idsDe((parPrev && parPrev.valor)
+                    || (api.estado && api.estado[cid] && api.estado[cid].valor) || null);
+            }
             // El cargador no pisa lo que publico el `campo.js` al montar: toma el
             // control del `valor` recien con la primera foto (misma regla que el
             // cargador legacy de `montarCargadores`). Si el campo trae su propio
@@ -1346,6 +1361,12 @@
             }
             return montado ? cargador : null;
         };
+        // Spec 018 (T001/FIX): PUBLICAR la API COMPLETA **antes** de montar. El
+        // `campo.js` de cada campo corre DENTRO de `montarCampos` y usa
+        // `PMU_API.montarCargador`; si la API se publica despues, el cargador nunca
+        // monta (el bug que dejaba `window.PMU_API === undefined` durante el montaje).
+        global.PMU_API = api;
+        api.estado = montarCampos(panel, ficha.campos, ficha.valores);
         // T006/T007: la validez se re-evalua al instante con cada cambio.
         panel.addEventListener('input', aplicarFiltro);
         panel.addEventListener('change', aplicarFiltro);

@@ -445,9 +445,6 @@ class Personalizador_PDF_Plugin
                 'grupo_gid' => isset($c['envoltura_gid']) ? (string)$c['envoltura_gid'] : null,
                 'grupo_w' => isset($c['grupo_w']) ? (int)$c['grupo_w'] : null,
                 'grupo_h' => isset($c['grupo_h']) ? (int)$c['grupo_h'] : null,
-                // Spec 019 (F2): la guia salio del CABLEADO del hueco (no del
-                // select "Envoltura del cargador"). Informativo para la consola.
-                'envoltura_auto' => !empty($c['envoltura_auto']),
             ];
         }
         return $out;
@@ -627,12 +624,9 @@ class Personalizador_PDF_Plugin
         // `campo_listar()` ya excluye los dados de baja.
         $campos = $this->pmu_uploads()->campo_listar();
         $elegidos = [];
-        // Envoltura del cargador por campo (opcion b): el gid asociado en ESTE
-        // PDF se resuelve a la forma por defecto de su grupo (1 sola, chica).
-        // Spec 019 (F2): lo que el admin NO eligio se DEDUCE del cableado del
-        // hueco (`campos_envoltura_deducida`); el select queda como override.
-        $campos_env = isset($config['campos_envoltura']) && is_array($config['campos_envoltura'])
-            ? $config['campos_envoltura'] : [];
+        // Envoltura del cargador: la guia se DEDUCE del cableado del hueco (spec 019
+        // F2). Ya no hay override manual: `config.json:campos_envoltura` dejo de
+        // usarse (la clave muerta se borra en la spec 020).
         $campos_env_auto = $this->campos_envoltura_deducida($nombre);
         foreach ((array)($config['campos_ids'] ?? []) as $cid) {
             $cid = (int)$cid;
@@ -640,19 +634,12 @@ class Personalizador_PDF_Plugin
                 continue;
             }
             $fila = $campos[$cid];
-            $gid = isset($campos_env[(string)$cid]) ? (string)$campos_env[(string)$cid] : '';
-            $auto = false;
-            if ($gid === '' && isset($campos_env_auto[$cid])) {
-                $gid = (string)$campos_env_auto[$cid];
-                $auto = true;
-            }
+            $gid = isset($campos_env_auto[$cid]) ? (string)$campos_env_auto[$cid] : '';
             if ($gid !== '') {
                 $def = $this->pmu_uploads()->envoltura_defecto($nombre, $gid);
                 if (!empty($def['envoltura'])) {
                     $fila['envoltura'] = $def['envoltura'];
                     $fila['envoltura_gid'] = $gid;
-                    // `true` = la guia salio del cableado, no del select.
-                    $fila['envoltura_auto'] = $auto;
                     // Spec 019 (FR-001): el tamano del grupo base viaja al navegador
                     // para que la ranura pueda adaptarse (`phsize`). El dato ya esta
                     // en analisis.json, donde `grupos` es una LISTA (no un dict):
@@ -4257,17 +4244,10 @@ JS;
             }
             $productos = array_values(array_slice(array_unique($productos), 0, 100));
         }
-        // Envoltura del cargador por campo (opcion b): la asociacion es por
-        // PDF, asi que vive en el config; solo campos elegidos y grupos vigentes.
-        $campos_envoltura = [];
-        foreach ((array)($_POST['campos_envoltura'] ?? []) as $cid => $gid) {
-            $cid = (int)$cid;
-            $gid = strtoupper(trim((string)$gid));
-            if ($cid < 1 || !in_array($cid, $campos_ids, true) || !isset($ids_dataset[$gid])) {
-                continue;
-            }
-            $campos_envoltura[(string)$cid] = $gid;
-        }
+        // Spec 019 (F2, ajuste): la guia del cargador ya NO se elige por campo: se
+        // deduce del cableado del hueco (`campos_envoltura_deducida`). La clave
+        // `campos_envoltura` deja de escribirse (el dato viejo se ignora; se borra
+        // del formato en la spec 020).
         $config = [
             'activo' => !empty($_POST['activo']),
             'productos' => $productos,
@@ -4275,7 +4255,10 @@ JS;
             'preview_omisible' => !empty($_POST['preview_omisible']),
             'placeholders' => $placeholders,
             'envolturas' => $envolturas,
-            'campos_envoltura' => $campos_envoltura,
+            // Se LIMPIA: la guia se deduce del cableado y `guardar_config` hace
+            // merge, asi que sin esta linea los overrides viejos sobreviven en disco.
+            // La clave se elimina del formato en la spec 020.
+            'campos_envoltura' => [],
         ];
         // Spec 005 (T004): "Configuracion tienda" por asociacion PDFxproducto.
         // Solo se toca `tienda` si la seccion viajo en el POST (marcador

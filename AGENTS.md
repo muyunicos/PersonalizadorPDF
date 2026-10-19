@@ -411,20 +411,19 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   en fichas con >=1 campo**; el CSS se inyecta prefijado con `[data-pmu-panel]` y el JS con
   `wp_add_inline_script(..., 'before')` sobre `campo-montar` (unico orden prometido). En el preview de
   la consola viaja como portador `<script type="text/css" id="pmu-campo-global-css">`.
-- **Guia de envoltura en el cargador (contrato v4 de la 011 + spec 016 F6)**: por **campo**
-  (`config.json:campos_envoltura{campo_id: gid}`, opcion b: un campo se reutiliza en N PDFs),
-  `panel_ficha` resuelve la forma por defecto del grupo y la publica en el campo (`envoltura` +
-  `envoltura_gid`). **Spec 019**: ademas publica **`grupo_w`/`grupo_h`/`grupo_gid`** (el tamaño
+- **Guia de envoltura en el cargador (contrato v4 de la 011 + spec 016 F6)**: **Spec 019 (F2)** la guia
+  se **DEDUCE** del **cableado del hueco** (`[campoN]` en `value`/`settings` del grupo con envoltura;
+  `campos_envoltura_deducida()`) y, si el PDF tiene **un solo** grupo con envoltura y el campo declara
+  tipo `imagen`, de ese. **No hay `<select>`**: `config.json:campos_envoltura` dejo de usarse (se
+  **limpia** al guardar la config y se borra del formato en la spec 020). La consola solo informa
+  "automatica: #gid (del cableado del hueco)". `panel_ficha` resuelve la forma por defecto del grupo y
+  publica en el campo (`envoltura` + `envoltura_gid`) y **`grupo_w`/`grupo_h`/`grupo_gid`** (el tamaño
   del grupo base; `analisis.json:grupos` es una **lista**, se busca por `id`) para que la ranura
   pueda adaptarse con **`phsize: 0|1|2`** (0 = default = los `w`/`h` declarados; 1 = el grupo;
   2 = x2, acotado por `PH_MAX=3000`), resuelto por `PMU_API.montarCargador`
-  (`PURO.normalizarRanura`, pura y testeada) y no por el `campo.js`. Sin asociacion las tres
-  claves van `null` y `phsize>0` degrada con aviso. El selector avisa `se amplia Nx` cuando el
-  recorte amplia (informativo, nunca bloquea). **Spec 019 (F2): la guía se DEDUCE** —
-  `campos_envoltura_deducida()` la saca del **cableado del hueco** (`[campoN]` en `value`/`settings`
-  del grupo con envoltura) y, si el PDF tiene **un solo** grupo con envoltura y el campo declara
-  tipo `imagen`, de ese; el `<select>` "Envoltura del cargador" queda como **override** y la consola
-  muestra "automatica: #gid (del cableado del hueco)". `cargador-pmu.js` dibuja una guia por ranura
+  (`PURO.normalizarRanura`, pura y testeada) y no por el `campo.js`. Sin guia deducible las claves van
+  `null` y `phsize>0` degrada con aviso. El selector avisa `se amplia Nx` cuando el
+  recorte amplia (informativo, nunca bloquea). `cargador-pmu.js` dibuja una guia por ranura
   (`_guia`) y el **modal
   `selector-pmu.js`** la superpone en un canvas **separado** (`pointer-events:none`,
   `aria-hidden`): oscurece fuera de la forma y dibuja el contorno, reusando

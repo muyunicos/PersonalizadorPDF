@@ -810,14 +810,14 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 array_key_exists('grupo_w', $cs19) && array_key_exists('grupo_h', $cs19)
                 && array_key_exists('grupo_gid', $cs19)
                 && $cs19['grupo_w'] === null && $cs19['grupo_h'] === null && $cs19['grupo_gid'] === null);
-            // Spec 019 (F2): deduccion por cableado (sin `campos_envoltura`).
+            // Spec 019 (F2): deduccion por cableado del hueco (el grupo 0000FF
+            // referencia [campo1] en su `value`). Ya no hay `<select>` ni override.
             $fa19 = (isset($GLOBALS['test_ficha_auto']['campos'][$GLOBALS['test_ficha_cid']]))
                 ? $GLOBALS['test_ficha_auto']['campos'][$GLOBALS['test_ficha_cid']] : [];
             check('spec 019: sin select, la guia se deduce del cableado del hueco',
                 !empty($fa19['envoltura']['subs'])
-                && ($fa19['envoltura_gid'] ?? '') === '0000FF'
-                && !empty($fa19['envoltura_auto']),
-                json_encode([$fa19['envoltura_gid'] ?? null, $fa19['envoltura_auto'] ?? null]));
+                && ($fa19['envoltura_gid'] ?? '') === '0000FF',
+                json_encode([$fa19['envoltura_gid'] ?? null]));
             // T016: HTML real del panel (hook Woo y shortcode pintan esto).
             // T016: HTML real del panel (hook Woo y shortcode pintan esto).
             $html = isset($GLOBALS['test_ficha_html1']) ? (string)$GLOBALS['test_ficha_html1'] : '';
@@ -1393,9 +1393,11 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('envoltura representativa persiste (gid invalido descartado)',
                 is_array($cfg) && ($cfg['envolturas']['0000FF']['forma'] ?? 0) === 2
                 && !isset($cfg['envolturas']['ZZZZZZ']));
-            check('envoltura del cargador por campo persiste (saneo por id)',
-                is_array($cfg) && ($cfg['campos_envoltura']['56'] ?? '') === '0000FF'
-                && !isset($cfg['campos_envoltura']['56x']));
+            // Spec 019 (F2): la guia se deduce del cableado del hueco; el config ya
+            // NO guarda `campos_envoltura` (el `<select>` se elimino y el POST se
+            // ignora). El default de `leer_config` puede traerla vacia.
+            check('la envoltura del cargador ya no se guarda por campo (se deduce)',
+                is_array($cfg) && empty($cfg['campos_envoltura']));
             break;
         case 'tienda':
             // 004/Fase B: handler personalizador_pdf_config (via pmuPost).
@@ -1568,7 +1570,8 @@ switch ($fase) {
                 'mapa' => ['1' => 1],
             ]],
         ], $motor_f->ruta_envolturas('muestra'));
-        $motor_f->guardar_config('muestra', ['campos_envoltura' => [(string)$cid_f => '0000FF']]);
+        // Spec 019 (F2): la guia ya NO se asocia por campo: se deduce del cableado
+        // del hueco (el placeholder 0000FF referencia [campo1]). Sin `campos_envoltura`.
         $GLOBALS['test_ficha'] = $p->panel_ficha('muestra');
         $GLOBALS['test_ficha_env'] = $GLOBALS['test_ficha'];
         $GLOBALS['test_ficha_shortcode'] = $p->shortcode_panel(['pdf' => 'muestra']);
@@ -3693,11 +3696,6 @@ switch ($fase) {
                 'envolturas' => [
                     '0000FF' => ['forma' => 2],
                     'ZZZZZZ' => ['forma' => 3],
-                ],
-                // Envoltura del CARGADOR por campo (opcion b) + una invalida.
-                'campos_envoltura' => [
-                    '56' => '0000FF',
-                    '56x' => '0000FF',
                 ],
             ]);
             $GLOBALS['test_config'] = $motor_g->leer_config('muestra');
