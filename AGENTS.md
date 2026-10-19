@@ -405,6 +405,14 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   en fichas con >=1 campo**; el CSS se inyecta prefijado con `[data-pmu-panel]` y el JS con
   `wp_add_inline_script(..., 'before')` sobre `campo-montar` (unico orden prometido). En el preview de
   la consola viaja como portador `<script type="text/css" id="pmu-campo-global-css">`.
+- **Guia de envoltura en el cargador (contrato v4 de la 011 + spec 016 F6)**: por **campo**
+  (`config.json:campos_envoltura{campo_id: gid}`, opcion b: un campo se reutiliza en N PDFs),
+  `panel_ficha` resuelve la forma por defecto del grupo y la publica en el campo (`envoltura` +
+  `envoltura_gid`). `cargador-pmu.js` dibuja una guia por ranura (`_guia`) y el **modal
+  `selector-pmu.js`** la superpone en un canvas **separado** (`pointer-events:none`,
+  `aria-hidden`): oscurece fuera de la forma y dibuja el contorno, reusando
+  `PMUMockup.comandosEnvoltura`. **NUNCA** premascara el PNG (el clip lo aplica el PDF); el
+  recorte sigue rectangular. Sin `envoltura` no se agrega DOM; sin `PMUMockup` degrada.
 - **Fotos del comprador (spec 012)**: `tmp/sesion-{sid}/{item_key}/subidas/{id}.{ext}` con fila en
   `manifest.subidas[]` (`id`, `file`, `mime`, `bytes`). El `{id}` lo genera el **servidor** y el
   formato sale de la **firma de los bytes** (webp/png/jpg/gif), nunca del nombre que manda el
@@ -796,6 +804,7 @@ el numero a mano. El stub `get_file_data` del arnes esta en `tests/texto_puente.
 | El PDF no aparece en `mi-cuenta/descargas/` aunque el pedido este en `orders/`; o aparece **duplicado** | El plugin inyectaba su fila en `woocommerce_customer_get_downloadable_products`, que de Woo solo procesa productos **marcados como descargables**; si no lo estan, la fila no sale. Y con el tema activo podia duplicarse | Spec 017: con el tema `muyunicos` activo (`function_exists('mu_update_item_files')`), el plugin publica la URL protegida en `_urls_files` del item y **deja de inyectar** (el tema entrega email + descargas). Portable: sin tema, comportamiento propio intacto. Fases `entrega_tema`/`entrega_sin_tema` |
 | Un override no cambia el estilo del PDF | `renderBatch` se arma **sin** `settings` (`tienda.js:831`), y TextMUy no los espera en `settings` sino en **`overrides`**, como **objeto** (`api.js:296, 271`) | Pasar el objeto ya fusionado en `items[].overrides`. `mergeDeep` del modulo lo aplica sobre el preset: **no hace falta tocar `modules/textmuy/`** |
 | El toggle "Envoltura del PDF (PowerClip)" del editor de mockups sale deshabilitado | No existe `pdfs/{nombre}/envolturas.json` (PDF analizado con una version sin soporte) o esa instancia no tiene clip en el PDF | **Re-analizar** si el archivo falta (regenera `envolturas.json`); si el archivo existe pero la clave no, ese placeholder simplemente no esta recortado en ninguna forma (sin envoltura) |
+| La forma de la envoltura no aparece en la ficha ni en el modal de recorte | El campo no tiene envoltura asociada en ese PDF (`campos_envoltura` vacio) o el nucleo `mockup-render.js` no esta encolado en la ficha | Asociarla en la consola ("Envoltura del cargador") y Ctrl+F5. La guia es solo una PISTA: el PNG va crudo y el clip real lo aplica el PDF |
 | El PDF sale con `[object Object]` | `resolverPlantilla` hace `String(v)` y un objeto se convierte en eso, en silencio | El `valor` de un campo es **siempre string**; el tipo `opciones` publica `JSON.stringify(overrides)` y lo parsea el render |
 | El cliente ve un estilo y el PDF trae otro | El hash del pool (`valor\|preset\|settings\|WxH`) **no incluia** los overrides: el primero que renderiza llena la cache y el resto recibe su PNG | Meter los overrides resueltos en el hash **en el mismo commit** que los activa: el fallo no es excepcion, es el PDF equivocado (hecho en 4.5.0: `hashRender` + `hash_pool()` con `\|{json}`) |
 | `motor:sesion:manifest:invalido` en la vista previa y capa de imagen gris | Rafaga de POSTs del pool concurrentes (texto + fotos por instancia, en paralelo) chocando en `manifest.json.tmp` (nombre fijo, rename sin lock) + read-modify-write que perdia filas: la instancia sin fila dejaba la capa placeholder sin recurso | TODAS las mutaciones del manifest del item pasan por `PMU_Sesion::mutar_manifest()` con lock `flock` por item (`.manifest.lock`, que `copiar_arbol` no traslada al pedido). Lo cubre la fase `pool_concurrente` del arnés (8 hijos en paralelo, 8 filas) |

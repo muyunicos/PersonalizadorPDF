@@ -340,7 +340,10 @@
                 finalW: r.w,
                 finalH: r.h,
                 aspectRatio: (r.forma === 'fit' ? null : r.w / r.h),
-                mode: (r.forma === 'fit' ? 'fit' : 'crop')
+                mode: (r.forma === 'fit' ? 'fit' : 'crop'),
+                // Guia de la envoltura dentro del modal (spec 016 F6): misma
+                // geometria que la tira, nunca premascara el PNG.
+                envoltura: this.config.envoltura || null
             });
         }
         slot.sel.onSelect(function () {

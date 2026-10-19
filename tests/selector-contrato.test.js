@@ -129,9 +129,43 @@ check('tienda.js pasa idsIniciales y urlDe (endpoint de la 012)',
 check('idsDe normaliza array, string unico y JSON de ids', /function idsDe\(v\)/.test(tienda16)
   && /JSON\.parse\(s\)/.test(tienda16));
 
+console.log('\n== F5: envoltura del PDF como guia (spec 016 F6) ==');
+check('config.envoltura es opcional y se valida',
+  /function envolturaValida\(e\)/.test(selector)
+  && /envoltura: envolturaValida\(config\.envoltura\)/.test(selector));
+check('sin envoltura no se agrega DOM',
+  /if \(!this\.config\.envoltura\) \{ return ''; \}/.test(selector)
+  && /if \(!this\.config\.envoltura\) \{ return; \}/.test(selector));
+check('la guia es un canvas SEPARADO (pointer-events:none + aria-hidden)',
+  /\.spmu-envoltura\{position:absolute;pointer-events:none/.test(selector)
+  && /<canvas class="spmu-envoltura" aria-hidden="true"><\/canvas>/.test(selector));
+check('reusa la geometria del nucleo (una sola fuente)',
+  /core\.comandosEnvoltura\(/.test(selector) && /core\.trazarEnvoltura\(/.test(selector));
+check('oscurece SOLO fuera de la forma (destination-out y restaura)',
+  /destination-out/.test(selector)
+  && /globalCompositeOperation = 'source-over'/.test(selector)
+  && /fill\(env\.par \? 'evenodd' : 'nonzero'\)/.test(selector));
+check('el PNG de salida NO pasa por el overlay (getCroppedCanvas intacto)',
+  /getCroppedCanvas\(/.test(selector)
+  && !/getCroppedCanvas[\s\S]{0,200}env(oltura)?/.test(selector)
+  && /this\.ctxEnvoltura/.test(selector));
+check('crop: caja de preview en vivo via la opcion preview de Cropper',
+  /opciones\.preview = prev/.test(selector) && /spmu-preview-caja/.test(selector));
+check('fit/degradacion: overlay medido sobre el canvas de salida',
+  /_cajaEnvoltura = function/.test(selector)
+  && /getBoundingClientRect\(\)/.test(selector));
+check('sin PMUMockup degrada sin lanzar',
+  /typeof core\.comandosEnvoltura !== 'function'/.test(selector));
+check('close() remueve el listener de resize (sin fugas)',
+  /removeEventListener\('resize', this\._onResize\)/.test(selector));
+check('T027: el cargador pasa la envoltura al selector',
+  /envoltura: this\.config\.envoltura \|\| null/.test(cargador));
+check('la tira y el modal comparten la misma geometria',
+  /_guia = function/.test(cargador) && /comandosEnvoltura/.test(cargador));
+
 console.log('');
 if (fallos) {
   console.log('SELECTOR CONTRATO FALLA (' + fallos + ' checks en rojo)');
   process.exit(1);
 }
-console.log('SELECTOR CONTRATO OK (' + 'F0-F4' + ')');
+console.log('SELECTOR CONTRATO OK (F0-F5)');

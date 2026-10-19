@@ -52,6 +52,7 @@ datos, ni `modules/textmuy/`, ni agrega endpoints.
 | D8 | **v1 y no v2**: la linea v1 es la estable con build **UMD** (script plano, sin npm ni build); v2 exige ESM. Incompatibilidad descartada con el despliegue por git del repo. |
 | D9 | **Hibrido crop/fit** (H6): Cropper cubre `crop`; el modo `fit` (encajar completo con margenes transparentes) **conserva el path de canvas actual** de `selector-pmu.js`. |
 | D10 | **Encolado** con handle `personalizador-pdf-cropper` (script + estilo), declarado como dependencia de `personalizador-pdf-selector`, con `PERSONALIZADOR_PDF_VERSION` (fuente unica de version, regla 10.bis). |
+| D11 | **La envoltura (PowerClip) es una GUIA, no una mascara** (enmienda D6): se dibuja en un canvas **separado** superpuesto (`pointer-events:none`, `aria-hidden`), reusando `PMUMockup.comandosEnvoltura`; el PNG entregado sigue **sin cortar** y el recorte sigue siendo **rectangular**. El PDF aplica el clip real al procesar. Sin `envoltura` en el config no se agrega DOM; sin `PMUMockup` cargado degrada sin error. Reusa el dato `campo.envoltura` que publica la spec 011 (FR-049). |
 
 ## Modelo
 
@@ -146,6 +147,21 @@ Publico del modal nuevo (F1/F2):
 - **FR-021** El contrato 004 `selector-pmu.md` DEBE quedar enmendado
   (aditivamente) apuntando a esta spec.
 
+**US5b — Envoltura del PDF como guia (contrato v4 de la 011)**
+
+- **FR-022** Con `config.envoltura = {par, subs}` (geometria normalizada 0..1 que publica
+  el campo; spec 011 FR-049), el modal DEBE mostrar la envoltura como **guia visual
+  superpuesta** al area de resultado: en `crop`, sobre una **caja de preview** en vivo
+  (opcion `preview` de Cropper) con la proporcion `finalW:finalH`; en `fit` y en la
+  degradacion sin Cropper, encima del canvas de salida. La guia DEBE usar un **canvas
+  separado** (`pointer-events:none`, `aria-hidden="true"`), oscurecer **solo lo que queda
+  fuera** de la forma y dibujar su contorno; SIN `envoltura` el DOM NO cambia y sin
+  `PMUMockup` (nucleo no encolado) se omite sin lanzar.
+- **FR-023** La guia **NUNCA** DEBE alterar el recorte ni el PNG: el lienzo de salida
+  (`getCroppedCanvas(finalW, finalH)` / canvas de `fit`) NO se toca y el blob entregado a
+  `onSelect` queda **sin mascara** (el clip real lo aplica el PDF). El recorte sigue siendo
+  rectangular con el aspecto del hueco; la forma es informativa.
+
 ## Fuera de alcance
 
 - **Filtros** (brillo/contraste/tono/saturacion): queda reservado el gancho
@@ -167,6 +183,9 @@ Publico del modal nuevo (F1/F2):
 - La tira muestra las fotos reales y permite cambiarlas sin perder las otras.
 - Volver desde el carrito muestra las fotos ya cargadas.
 - Sin `Cropper` cargado (o en navegador viejo), el flujo no se rompe (FR-006).
+- Con `envoltura`, el recorte se ve en vivo dentro de la forma y el PNG entregado **no
+  contiene la mascara** (mismo recorte rectangular que sin guia); sin `envoltura`, el DOM
+  del modal es identico al de antes (FR-022/FR-023).
 - Ningun cambio de servidor, de formato de datos ni en `modules/textmuy/`.
 - Puertas en verde: `node tests/selector-contrato.test.js`,
   `node tests/campos-contrato.test.js`, `php -l`, `php tests/texto_puente.php`.

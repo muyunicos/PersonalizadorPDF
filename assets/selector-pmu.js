@@ -34,6 +34,16 @@
     var ZOOM_MIN = 1;
     var ZOOM_MAX = 8;
 
+    /**
+     * Envoltura valida `{par, subs}` (normalizada 0..1) o null. Es una GUIA
+     * visual del recorte final (PowerClip del PDF): NUNCA se dibuja en el
+     * lienzo de salida; el clip real lo aplica el PDF al procesar.
+     */
+    function envolturaValida(e) {
+        if (!e || !e.subs || !e.subs.length) { return null; }
+        return { par: e.par ? 1 : 0, subs: e.subs };
+    }
+
     function SelectorPMU(elemento, config) {
         config = config || {};
         this.elemento = elemento || null;
@@ -44,7 +54,9 @@
             mode: config.mode === 'fit' ? 'fit' : 'crop',
             category: config.category || '',
             // D4: pipeline de ajustes futuro (hoy vacio; nadie lo consume).
-            ajustes: Array.isArray(config.ajustes) ? config.ajustes : []
+            ajustes: Array.isArray(config.ajustes) ? config.ajustes : [],
+            // Envoltura (PowerClip del PDF, spec 011 FR-049): guia opcional.
+            envoltura: envolturaValida(config.envoltura)
         };
         if (this.config.finalW < 1 || this.config.finalH < 1) {
             throw new Error('selector-pmu: finalW/finalH son obligatorios (los define el campo/PDF).');
@@ -62,6 +74,9 @@
         this.cropper = null;
         this._gesto = null;        // rotacion por gesto de 2 dedos (FR-010)
         this._focoPrevio = null;   // focus trap (FR-005)
+        this.cvEnvoltura = null;   // overlay de la guia (canvas SEPARADO)
+        this.ctxEnvoltura = null;
+        this._onResize = null;     // re-mide la guia (DPR/movil)
     }
 
     SelectorPMU.prototype.on = function (evento, cb) {
@@ -105,6 +120,7 @@
             '<button type="button" class="spmu-x" aria-label="Cerrar">&#10005;</button>' +
             '</div>' +
             '<div class="spmu-escena"></div>' +
+            '<div class="spmu-guia-host"></div>' +
             '<p class="spmu-badge"><span class="spmu-origen"></span><span class="spmu-salida"></span></p>' +
             '<p class="spmu-controles">' +
             '<label class="spmu-lb-zoom">Zoom <input type="range" class="spmu-zoom" min="' + ZOOM_MIN + '" max="' + ZOOM_MAX + '" step="0.01" value="1"></label>' +
@@ -129,6 +145,9 @@
 
         var $ = function (sel) { return self.raiz.querySelector(sel); };
         this.escena = $('.spmu-escena');
+        // Host de la guia en `crop` (caja de preview debajo del recorte): si
+        // estuviera dentro del escena, seria un segundo flex-item y lo aplastaria.
+        this.guiaHost = $('.spmu-guia-host');
         this.txtOrigen = $('.spmu-origen');
         this.txtSalida = $('.spmu-salida');
 
@@ -175,6 +194,12 @@
         document.addEventListener('keydown', this._onKey);
 
         this._montarEscena();
+        // La guia se re-mide con el layout (DPR y movil): un listener por
+        // apertura, removido en close(). Sin envoltura no se registra nada.
+        if (this.config.envoltura) {
+            this._onResize = function () { self._pintarEnvoltura(); };
+            global.addEventListener('resize', this._onResize);
+        }
     };
 
     /** Cierra por cancelacion: misma via que el boton Cancelar. */
@@ -204,6 +229,12 @@
             '.spmu-x{border:0;background:none;font-size:18px;line-height:1;cursor:pointer;padding:8px;min-width:44px;min-height:44px;color:#50575e}' +
             '.spmu-escena{position:relative;display:flex;justify-content:center;align-items:center;touch-action:none;cursor:move;background:repeating-conic-gradient(#eee 0 25%,#fff 0 50%) 0/24px 24px;height:min(52vh,440px);min-height:200px;overflow:hidden}' +
             '.spmu-canvas{max-width:100%;max-height:100%;height:auto;display:block}' +
+            '.spmu-envoltura{position:absolute;pointer-events:none;display:block}' +
+            '.spmu-guia-host{text-align:center}' +
+            '.spmu-guia-caja{margin:8px 0 0;text-align:center}' +
+            '.spmu-preview-caja{position:relative;display:inline-block;overflow:hidden;border:1px solid #c3c4c7;border-radius:4px;background:#fff}' +
+            '.spmu-preview{position:absolute;inset:0;overflow:hidden}' +
+            '.spmu-guia-leyenda{margin:4px 0 0;font-size:12px;color:#646970}' +
             '.spmu-crop{width:100%;height:100%}' +
             '.spmu-crop img{display:block;max-width:100%}' +
             '.spmu-badge{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:6px 0 0;color:#50575e;font-size:12px}' +
@@ -325,12 +356,20 @@
         if (lbZoom) { lbZoom.hidden = this._conCropper(); }
         if (this._conCropper()) {
             this.escena.innerHTML = '<div class="spmu-crop"><img class="spmu-img" alt=""></div>';
+            if (this.guiaHost) {
+                this.guiaHost.innerHTML = this._htmlGuiaEnvoltura();
+            }
             if (this.imagen) { this._montarCropper(); }
             this._badge();
+            this._montarEnvoltura();
             return;
         }
+        if (this.guiaHost) { this.guiaHost.innerHTML = ''; }
         this.escena.innerHTML =
-            '<canvas class="spmu-canvas" width="' + this.config.finalW + '" height="' + this.config.finalH + '"></canvas>';
+            '<canvas class="spmu-canvas" width="' + this.config.finalW + '" height="' + this.config.finalH + '"></canvas>'
+            + (this.config.envoltura
+                ? '<canvas class="spmu-envoltura" aria-hidden="true"></canvas>'
+                : '');
         this.canvas = this.escena.querySelector('.spmu-canvas');
         this.ctx = this.canvas.getContext('2d');
         // Arrastre original (fit y degradacion): pointer events con captura.
@@ -349,6 +388,108 @@
         });
         this.escena.addEventListener('pointerup', function () { self._arrastrando = null; });
         this._dibujar();
+        this._montarEnvoltura();
+    };
+
+    /**
+     * HTML de la guia (solo con envoltura): en `crop` es una CAJA DE PREVIEW en
+     * vivo (Cropper pinta ahi el recorte) con el overlay como HERMANO, para que
+     * Cropper no lo toque. Sin envoltura no agrega nada al DOM (FR-022).
+     */
+    SelectorPMU.prototype._htmlGuiaEnvoltura = function () {
+        if (!this.config.envoltura) { return ''; }
+        var w = this.config.finalW;
+        var h = this.config.finalH;
+        var esc = Math.min(1, 160 / Math.max(1, Math.max(w, h)));
+        var pw = Math.max(40, Math.round(w * esc));
+        var ph = Math.max(40, Math.round(h * esc));
+        return '<div class="spmu-guia-caja">'
+            + '<div class="spmu-preview-caja" style="width:' + pw + 'px;height:' + ph + 'px">'
+            + '<div class="spmu-preview"></div>'
+            + '<canvas class="spmu-envoltura" aria-hidden="true"></canvas>'
+            + '</div>'
+            + '<p class="spmu-guia-leyenda">La forma azul es el recorte final del PDF.</p>'
+            + '</div>';
+    };
+
+    /** Toma el canvas de la guia (si existe) y lo pinta en el proximo frame. */
+    SelectorPMU.prototype._montarEnvoltura = function () {
+        this.cvEnvoltura = null;
+        this.ctxEnvoltura = null;
+        if (!this.config.envoltura) { return; }
+        var cv = this.guiaHost ? this.guiaHost.querySelector('.spmu-envoltura') : null;
+        if (!cv && this.escena) { cv = this.escena.querySelector('.spmu-envoltura'); }
+        if (!cv) { return; }
+        this.cvEnvoltura = cv;
+        this.ctxEnvoltura = cv.getContext('2d');
+        // El layout puede no estar listo (modal recien montado): siguiente frame.
+        var self = this;
+        if (global.requestAnimationFrame) {
+            global.requestAnimationFrame(function () { self._pintarEnvoltura(); });
+        } else {
+            this._pintarEnvoltura();
+        }
+    };
+
+    /**
+     * Rect (CSS px) del area de RESULTADO dentro del escena: la caja de preview
+     * en `crop` o el canvas de salida en `fit`/degradacion.
+     */
+    SelectorPMU.prototype._cajaEnvoltura = function () {
+        // `crop`: la caja de preview (padre del overlay). `fit`: el canvas.
+        var pc = this.cvEnvoltura ? this.cvEnvoltura.parentNode : null;
+        if (pc && pc.classList && pc.classList.contains('spmu-preview-caja')) {
+            return { x: 0, y: 0, w: pc.clientWidth, h: pc.clientHeight };
+        }
+        if (!this.escena || !this.canvas) { return null; }
+        var r = this.canvas.getBoundingClientRect();
+        var e = this.escena.getBoundingClientRect();
+        return { x: r.left - e.left, y: r.top - e.top, w: r.width, h: r.height };
+    };
+
+    /**
+     * Pinta la guia: oscurece SOLO lo que queda fuera de la forma (relleno +
+     * destination-out) y dibuja su contorno. Reusa la geometria del nucleo
+     * (`comandosEnvoltura`/`trazarEnvoltura`: una sola fuente). No toca el
+     * lienzo de salida (FR-023).
+     */
+    SelectorPMU.prototype._pintarEnvoltura = function () {
+        var cv = this.cvEnvoltura;
+        var ctx = this.ctxEnvoltura;
+        var env = this.config.envoltura;
+        if (!cv || !ctx || !env) { return; }
+        var core = global.PMUMockup;
+        if (!core || typeof core.comandosEnvoltura !== 'function'
+            || typeof core.trazarEnvoltura !== 'function') {
+            cv.width = 0;   // sin nucleo: sin guia (degrada, nunca lanza)
+            cv.height = 0;
+            return;
+        }
+        var caja = this._cajaEnvoltura();
+        if (!caja || caja.w < 1 || caja.h < 1) { return; }   // layout no listo
+        var dpr = global.devicePixelRatio || 1;
+        cv.style.left = (caja.x || 0) + 'px';
+        cv.style.top = (caja.y || 0) + 'px';
+        cv.style.width = caja.w + 'px';
+        cv.style.height = caja.h + 'px';
+        cv.width = Math.max(1, Math.round(caja.w * dpr));
+        cv.height = Math.max(1, Math.round(caja.h * dpr));
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, caja.w, caja.h);
+        var cmds = core.comandosEnvoltura(env, { x: 0, y: 0, w: caja.w, h: caja.h });
+        if (!cmds.length) { return; }
+        ctx.fillStyle = 'rgba(0,0,0,.38)';
+        ctx.fillRect(0, 0, caja.w, caja.h);
+        ctx.globalCompositeOperation = 'destination-out';
+        core.trazarEnvoltura(ctx, cmds);
+        ctx.fill(env.par ? 'evenodd' : 'nonzero');
+        ctx.globalCompositeOperation = 'source-over';
+        core.trazarEnvoltura(ctx, cmds);
+        ctx.strokeStyle = '#2271b1';
+        ctx.lineWidth = 1.5;
+        if (ctx.setLineDash) { ctx.setLineDash([5, 4]); }
+        ctx.stroke();
+        if (ctx.setLineDash) { ctx.setLineDash([]); }
     };
 
     /** Instancia Cropper sobre la imagen cargada (FR-007..FR-012). */
@@ -358,7 +499,7 @@
         if (!img || !this.imagen) { return; }
         this._destruirCropper();
         img.src = this.imagen.src;
-        this.cropper = new global.Cropper(img, {
+        var opciones = {
             viewMode: 1,
             aspectRatio: this.config.aspectRatio || NaN,
             autoCropArea: 1,
@@ -372,7 +513,12 @@
             checkOrientation: true,
             dblclick: true,        // FR-009: doble tap/clic alterna encuadre/100%
             wheelZoomRatio: 0.05
-        });
+        };
+        // FR-022: con envoltura, el recorte se ve EN VIVO en la caja de preview
+        // (la guia va encima, en un canvas hermano).
+        var prev = this.escena.querySelector('.spmu-preview');
+        if (prev) { opciones.preview = prev; }
+        this.cropper = new global.Cropper(img, opciones);
         if (img._pmuSelCableado) { return; }
         img._pmuSelCableado = true;
         img.addEventListener('cropmove', function (ev) { self._gestoRotar(ev); self._badge(); });
@@ -512,9 +658,16 @@
             document.removeEventListener('keydown', this._onKey);
             this._onKey = null;
         }
+        if (this._onResize) {
+            global.removeEventListener('resize', this._onResize);
+            this._onResize = null;
+        }
         if (this.raiz && this.raiz.parentNode) { this.raiz.parentNode.removeChild(this.raiz); }
         this.raiz = null;
         this.escena = null;
+        this.guiaHost = null;
+        this.cvEnvoltura = null;
+        this.ctxEnvoltura = null;
         this.txtOrigen = null;
         this.txtSalida = null;
         this.canvas = null;

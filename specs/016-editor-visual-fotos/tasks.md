@@ -102,6 +102,24 @@
   cargar con dedos y con mouse, rotar, doble tap, cambiar foto, volver del
   carrito, y PDF final con la foto correcta en el hueco.
 
+## F6 — Envoltura del PDF como guia (US5b, contrato v4 de la 011)
+
+- [X] **T024** `selector-pmu.js`: `config.envoltura = {par, subs}` opcional (validador
+  `envolturaValida`) + `_pintarEnvoltura()`: canvas **separado** (`pointer-events:none`,
+  `aria-hidden`), oscurece **solo lo de fuera** de la forma (relleno + `destination-out`)
+  y dibuja el contorno, reusando `PMUMockup.comandosEnvoltura`/`trazarEnvoltura`. Sin
+  `envoltura` no se agrega DOM; sin `PMUMockup` no lanza. Ver FR-022/FR-023.
+- [X] **T025** `fit` y degradacion sin Cropper: overlay encima del canvas de salida
+  (nunca dentro de `this.ctx`), redibujado en `resize` (DPR) y en `close` sin fugas.
+- [X] **T026** `crop`: caja de preview en vivo (opcion `preview` de Cropper) con la
+  proporcion `finalW:finalH` y el overlay encima; el overlay es **hermano** de la caja
+  de preview (Cropper no lo toca).
+- [X] **T027** `cargador-pmu.js::_abrir`: pasa `envoltura: this.config.envoltura` al
+  `SelectorPMU`. El preview del admin usa el mismo camino.
+- [X] **T028** Puerta F5 en `tests/selector-contrato.test.js` (sin `envoltura` no hay
+  overlay; con `envoltura` si; el export NO la usa; reusa `comandosEnvoltura`; el
+  cargador la pasa) + docs (`AGENTS.md` §5/§11).
+
 ## Fuera de alcance
 
 - [ ] **T023** Filtros (brillo/contraste/tono): el gancho `ajustes:[]` queda
