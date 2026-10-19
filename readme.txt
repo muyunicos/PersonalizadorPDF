@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.10.0
+Stable tag: 4.10.1
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,13 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.10.1 =
+* **Fix critico: el cargador no se montaba en la ficha.** `global.PMU_API` se publicaba **despues** de `montarCampos()`, pero el `campo.js` corre **dentro** del montaje: durante el montaje la API no existia y el campo salia por el `return` (sin cargador, sin error). Ahora la API **completa** (con `montarCargador`) se publica antes y `api.estado` se asigna al terminar; la re-edicion desde el carrito sigue restaurando las fotos (los ids salen de `PMU_FICHA.valores`). El test exige ese orden: antes comparaba `var api = {` y era un falso positivo.
+* **El cargador ya no es mudo**: si falta `[data-pmu-cargador]` en el HTML, falta `PMU_API`/`CargadorPMU`, o el campo declara **0 ranuras**, la consola avisa **con la causa** (antes no habia ninguna pista).
+* **"Cargar la plantilla de este tipo"** en el drawer de Campos: rellena HTML, CSS y JS con la plantilla vigente del tipo elegido (las 3 viajan en `PersonalizadorPDF.plantillas`, una sola fuente). Recupera en un clic un campo creado con una plantilla vieja.
+* **La guia de envoltura se DEDUCE sola** del cableado del hueco (`[campoN]` en el `value`/`settings` del grupo) y **se elimino el desplegable "Envoltura del cargador"** (era redundante): la consola solo informa `automatica: #gid (del cableado del hueco)`. `config.json:campos_envoltura` deja de usarse y se limpia al guardar la configuracion.
+* **Avisos de cableado**: la consola marca los `campos_ids` que ya no existen en el catalogo (campos borrados) y la ficha avisa por consola si el PDF esta activo pero sin campos validos.
 
 = 4.10.0 =
 * **Consola de Campos v4: el cargador se declara EN EL CAMPO (spec 018)**. El `campo.htm` trae un contenedor `[data-pmu-cargador]` y el `campo.js` lo monta con `PMU_API.montarCargador` (nuevo contrato publico: `subirFoto`, `urlDeSubida`, `montarCargador`), asi que el admin elige donde va el boton, que HTML lo rodea y puede reutilizar el patron. La fila "Cargador de imagenes" desaparece del editor y `datos.json:cargador` pasa a ser **legacy**: el sistema lo monta solo si el campo NO tiene `campo.js` (regla `cargador && !campo.js`), sin migracion ni perdida de datos.
