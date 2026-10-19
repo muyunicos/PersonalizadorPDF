@@ -127,6 +127,19 @@ function current_user_can($a) { return getenv('PD_PUENTE_SIN_CAP') ? false : tru
 function wp_json_encode($d = null, $f = 0) { return json_encode($d, $f); }
 function wp_is_writable($d) { return is_writable($d); }
 function wp_mkdir_p($d) { return @mkdir($d, 0777, true); }
+
+/**
+ * Spec 020 (B4): alta de campo con la firma REAL del plugin (v2). Antes el arnes
+ * pasaba la tupla de 10 slots (formato v1, eliminado): con este helper los tests
+ * prueban el MISMO camino que produccion.
+ */
+function campo_v2($motor, $tipo, $nombre, $htm = '<div></div>', $css = '', $js = '')
+{
+    return $motor->campo_alta($tipo, [
+        'nombre' => $nombre,
+        'titulo_cliente' => $nombre,
+    ], $htm, $css, $js);
+}
 function trailingslashit($s) { return rtrim($s, '/\\') . '/'; }
 function sanitize_key($k) { return strtolower(preg_replace('/[^a-z0-9_\-]/', '', (string)$k)); }
 function sanitize_file_name($n) { return preg_replace('/[^A-Za-z0-9_\-\.]/', '_', (string)$n); }
@@ -273,7 +286,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         // se siembra un item entregado para que la fila y sus acciones se rendericen.
         try {
             $m_ped = $p->motor_para_tests();
-            $cid_ped = $m_ped->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+            $cid_ped = campo_v2($m_ped, 'texto', 'Nombre');
             $dir_ped = $m_ped->dir_ambito('orders', true) . DIRECTORY_SEPARATOR . '4242'
                 . DIRECTORY_SEPARATOR . 'item-abc';
             wp_mkdir_p($dir_ped . DIRECTORY_SEPARATOR . 'img');
@@ -1548,7 +1561,7 @@ switch ($fase) {
             require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
         }
         $motor_f = new PMU_Uploads();
-        $cid_f = $motor_f->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $cid_f = campo_v2($motor_f, 'texto', 'Nombre');
         $motor_f->guardar_config('muestra', [
             'activo' => true,
             'campos_ids' => [$cid_f],
@@ -1624,10 +1637,10 @@ switch ($fase) {
             require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
         }
         $motor_f = new PMU_Uploads();
-        $cid_f = $motor_f->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $cid_f = campo_v2($motor_f, 'texto', 'Nombre');
         // Campo tipo imagen (cargador): publica valor = [ids de subida]. Cubre
         // el bug que guardaba (string) del array como literal "Array".
-        $cid_img = $motor_f->campo_alta([0, 'Fotos', 'image', [], '', true, '<div></div>', '', '', false]);
+        $cid_img = campo_v2($motor_f, 'imagen', 'Fotos');
         $motor_f->guardar_config('muestra', [
             'activo' => true,
             'campos_ids' => [$cid_f, $cid_img],
@@ -1659,7 +1672,7 @@ switch ($fase) {
             require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
         }
         $motor_k = $p->motor_para_tests();
-        $cid_k = $motor_k->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $cid_k = campo_v2($motor_k, 'texto', 'Nombre');
         $motor_k->guardar_config('muestra', [
             'activo' => true,
             'campos_ids' => [$cid_k],
@@ -1723,7 +1736,7 @@ switch ($fase) {
             require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
         }
         $motor_t = $p->motor_para_tests();
-        $cid_t = $motor_t->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $cid_t = campo_v2($motor_t, 'texto', 'Nombre');
         $motor_t->guardar_config('muestra', [
             'activo' => true,
             'campos_ids' => [$cid_t],
@@ -1803,7 +1816,7 @@ switch ($fase) {
             require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
         }
         $motor_e = new PMU_Uploads();
-        $cid_e = $motor_e->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $cid_e = campo_v2($motor_e, 'texto', 'Nombre');
         // Campo tipo imagen con cargador (v3): cubre la reparacion del legado
         // (el manifest 4.6.6 guardaba el valor como literal "Array" y el
         // mockup nunca resolvia la foto al re-editar).
@@ -1864,7 +1877,7 @@ switch ($fase) {
             require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
         }
         $motor_o = new PMU_Uploads();
-        $cid_o = $motor_o->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $cid_o = campo_v2($motor_o, 'texto', 'Nombre');
         $motor_o->guardar_config('muestra', [
             'activo' => true,
             'campos_ids' => [$cid_o],
@@ -1894,7 +1907,7 @@ switch ($fase) {
             require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
         }
         $motor_c = $p->motor_para_tests();
-        $cid_c = $motor_c->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $cid_c = campo_v2($motor_c, 'texto', 'Nombre');
         $motor_c->guardar_config('muestra', [
             'activo' => true,
             'campos_ids' => [$cid_c],
@@ -2302,7 +2315,7 @@ switch ($fase) {
             require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
         }
         $motor_va = new PMU_Uploads();
-        $cid_va = $motor_va->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
+        $cid_va = campo_v2($motor_va, 'texto', 'Nombre');
         $motor_va->guardar_config('muestra', ['activo' => true, 'productos' => [4242], 'campos_ids' => [$cid_va]]);
         $_POST = [
             'action' => 'personalizador_pdf_config',
@@ -2358,8 +2371,8 @@ switch ($fase) {
             $dirOtro . '/analisis.json'
         );
         $GLOBALS['test_postmeta'][4242]['_pmu_pdf_slugs'] = ['muestra', 'otro'];
-        $c1_fp = $motor_fp->campo_alta([0, 'Diseno', 'select', [], '', true, '<select></select>', '', '', false]);
-        $c2_fp = $motor_fp->campo_alta([0, 'Tamanio', 'select', [], '', true, '<select></select>', '', '', false]);
+        $c1_fp = campo_v2($motor_fp, 'texto', 'Diseno', '<select></select>');
+        $c2_fp = campo_v2($motor_fp, 'texto', 'Tamanio', '<select></select>');
         $motor_fp->guardar_config('muestra', [
             'activo' => true,
             'productos' => [4242],
@@ -2404,7 +2417,7 @@ switch ($fase) {
             $dirOtro . '/analisis.json'
         );
         $GLOBALS['test_postmeta'][4242]['_pmu_pdf_slugs'] = ['muestra', 'otro'];
-        $c1_fp = $motor_fp->campo_alta([0, 'Diseno', 'select', [], '', true, '<select></select>', '', '', false]);
+        $c1_fp = campo_v2($motor_fp, 'texto', 'Diseno', '<select></select>');
         foreach (['muestra', 'otro'] as $nom_fp) {
             $motor_fp->guardar_config($nom_fp, [
                 'activo' => true,
@@ -2792,8 +2805,8 @@ switch ($fase) {
             require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
         }
         $motor_t = new PMU_Uploads();
-        $motor_t->campo_alta([0, 'Nombre', 'text', [], '', true, '<div></div>', '', '', false]);
-        $motor_t->campo_alta([0, 'Color', 'override', [], '', true, '<div></div>', '', '', false]);
+        campo_v2($motor_t, 'texto', 'Nombre');
+        campo_v2($motor_t, 'opciones', 'Color');
         $_POST = [
             'action' => 'personalizador_pdf_config',
             'archivo' => 'muestra.pdf',
@@ -3446,14 +3459,22 @@ switch ($fase) {
         }
         try {
             $motor_c = new PMU_Uploads();
-            $id1 = $motor_c->campo_alta([0, 'Nombre', 'text', ['nombres'], 'Escribi tu nombre', true, '<div class="pmu-campo-x"><input name="nombre"></div>', '.x{}', 'function(ctx,root){return {valor:"",cliente:""};}', true]);
-            $id2 = $motor_c->campo_alta([0, 'Color', 'override', [], '', true, '<div class="c"></div>', '', '', false]);
-            $motor_c->campo_editar($id1, [$id1, 'Nombre editado', 'text', [], '', true, '<div></div>', '', '', true]);
+            $id1 = $motor_c->campo_alta('texto', [
+                'nombre' => 'Nombre',
+                'titulo_cliente' => 'Nombre',
+            ], '<div class="pmu-campo-x"><input name="nombre"></div>', '.x{}',
+                'function(ctx,root){return {valor:"",cliente:""};}');
+            $id2 = campo_v2($motor_c, 'opciones', 'Color', '<div class="c"></div>');
+            $motor_c->campo_editar($id1, [
+                'nombre' => 'Nombre editado',
+                'titulo_cliente' => 'Nombre editado',
+            ], '<div></div>', '', '', 'texto');
             $motor_c->campo_baja($id2);
             // Sandbox: alta con script prohibido debe rechazar (motor:campos:script:invalido).
             $err_nueva = '';
             try {
-                $motor_c->campo_alta([0, 'Malo', 'text', [], '', true, '<div></div>', '', 'function(ctx,root){document.getElementById("x");}', false]);
+                campo_v2($motor_c, 'texto', 'Malo', '<div></div>', '',
+                    'function(ctx,root){document.getElementById("x");}');
             } catch (\Throwable $e) {
                 $err_nueva = $e->getMessage();
             }

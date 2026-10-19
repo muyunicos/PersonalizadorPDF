@@ -406,15 +406,10 @@ class Personalizador_PDF_Plugin
     {
         $out = [];
         foreach ($elegidos as $cid => $c) {
-            // Acepta la fila v2 de cargar_campos() y la tupla v1 (arnés legacy).
-            $v2 = isset($c['datos']) && is_array($c['datos']);
-            $d = $v2 ? $c['datos'] : [
-                'nombre' => isset($c[1]) ? (string) $c[1] : '',
-                'titulo_cliente' => isset($c[1]) ? (string) $c[1] : '',
-            ];
-            $cuerpo = $v2 ? (string) $c['htm'] : (isset($c[6]) ? (string) $c[6] : '');
-            $estilo = $v2 ? (string) $c['css'] : (isset($c[7]) ? (string) $c[7] : '');
-            $guion = $v2 ? (string) $c['js'] : (isset($c[8]) ? (string) $c[8] : '');
+            $d = $c['datos'];
+            $cuerpo = (string) $c['htm'];
+            $estilo = (string) $c['css'];
+            $guion = (string) $c['js'];
             // Spec 020 (D1): `protegido` ya no existe (la feature se elimino con su
             // checkbox): todo campo del catalogo viaja a la ficha.
             $out[] = [
@@ -2564,8 +2559,10 @@ class Personalizador_PDF_Plugin
                 $valores = [];
                 foreach ((array)($manifest['valores'] ?? []) as $cid => $par) {
                     $campo = $this->campo_por_id((int)$cid);
+                    $nombreCli = (is_array($campo) && isset($campo['datos']['nombre']))
+                        ? (string)$campo['datos']['nombre'] : '';
                     $valores[] = [
-                        'titulo' => is_array($campo) && $campo[1] !== '' ? $campo[1] : ('Campo ' . (int)$cid),
+                        'titulo' => $nombreCli !== '' ? $nombreCli : ('Campo ' . (int)$cid),
                         'cliente' => (string)($par['cliente'] ?? ''),
                     ];
                 }
@@ -3006,7 +3003,9 @@ class Personalizador_PDF_Plugin
             $manifest = $sesion->leer_manifest((string)$datosCarrito['pmu_sid'], (string)$datosCarrito['pmu_item_key']);
             foreach ((array)($manifest['valores'] ?? []) as $cid => $par) {
                 $campo = $this->campo_por_id((int)$cid);
-                $titulo = is_array($campo) && $campo[1] !== '' ? $campo[1] : ('Campo ' . (int)$cid);
+                $nombreCli = (is_array($campo) && isset($campo['datos']['nombre']))
+                    ? (string)$campo['datos']['nombre'] : '';
+                $titulo = $nombreCli !== '' ? $nombreCli : ('Campo ' . (int)$cid);
                 $etiquetas[] = ['name' => $titulo, 'value' => sanitize_text_field((string)($par['cliente'] ?? ''))];
             }
         } catch (\Throwable $e) {
@@ -3301,7 +3300,6 @@ class Personalizador_PDF_Plugin
      */
     private function campos_activos()
     {
-        $out = [];
         $aviso = null;
         // El aviso sale del indice canonico (misma lectura que el CRUD, con la
         // migracion one-shot del layout ya aplicada).
@@ -3309,22 +3307,9 @@ class Personalizador_PDF_Plugin
         if (!is_array($indice) || !isset($indice['items']) || !is_array($indice['items'])) {
             $aviso = 'motor:listar:catalogo:invalido:campos';
         }
-        foreach ($this->pmu_uploads()->campo_listar() as $id => $c) {
-            $d = $c['datos'];
-            $out[(int)$id] = [
-                (int)$id,
-                isset($d['titulo_cliente']) ? (string) $d['titulo_cliente'] : '',
-                $c['tipo'] !== '' ? $c['tipo'] : 'texto',
-                [],
-                isset($d['texto_ayuda']) ? (string) $d['texto_ayuda'] : '',
-                true,
-                $c['htm'],
-                $c['css'],
-                $c['js'],
-                !empty($d['array']),
-            ];
-        }
-        return [$out, $aviso];
+        // Spec 020 (B4): se devuelven las filas v2 tal cual (`[id => fila]`).
+        // Antes se armaba la tupla de 10 slots (formato v1, eliminado).
+        return [$this->pmu_uploads()->campo_listar(), $aviso];
     }
 
     /** Guarda un campo (alta o edicion). Responde JSON o redirige. */

@@ -1437,22 +1437,6 @@ class PMU_Uploads
      */
     public function campo_alta($tipo = '', array $datos = [], $htm = '', $css = '', $js = '')
     {
-        // Puente v1 (spec 012, T005): los llamadores legacy pasan la tupla de 10
-        // slots como primer argumento. Se traduce aqui y se retira con el arnés
-        // en F1/F2. Firma v2 = ($tipo, $datos, $htm, $css, $js).
-        if (is_array($tipo)) {
-            $t = $tipo;
-            $tipo = '';
-            $datos = [
-                'nombre' => isset($t[1]) ? (string)$t[1] : '',
-                'titulo_cliente' => isset($t[1]) ? (string)$t[1] : '',
-                'texto_ayuda' => isset($t[4]) ? (string)$t[4] : '',
-                'array' => !empty($t[9]),
-            ];
-            $htm = isset($t[6]) ? (string)$t[6] : '';
-            $css = isset($t[7]) ? (string)$t[7] : '';
-            $js = isset($t[8]) ? (string)$t[8] : '';
-        }
         $indice = $this->indice_campos();
         $usados = [];
         foreach ($indice['items'] as $f) {
@@ -1508,19 +1492,6 @@ class PMU_Uploads
      */
     public function campo_editar($id, array $datos, $htm = '', $css = '', $js = '', $tipo = null)
     {
-        // Puente v1 (spec 012, T005): la tupla de 10 slots como 2do argumento.
-        if (isset($datos[1]) && !isset($datos['nombre']) && count($datos) > 3) {
-            $t = $datos;
-            $datos = [
-                'nombre' => isset($t[1]) ? (string)$t[1] : '',
-                'titulo_cliente' => isset($t[1]) ? (string)$t[1] : '',
-                'texto_ayuda' => isset($t[4]) ? (string)$t[4] : '',
-                'array' => !empty($t[9]),
-            ];
-            $htm = isset($t[6]) ? (string)$t[6] : '';
-            $css = isset($t[7]) ? (string)$t[7] : '';
-            $js = isset($t[8]) ? (string)$t[8] : '';
-        }
         $id = $this->campo_id_seguro($id, 'editar');
         $indice = $this->indice_campos();
         $fila = $this->fila_indice($indice, $id);

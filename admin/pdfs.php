@@ -281,7 +281,7 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                         <select name="campos_ids[]" multiple size="6" style="min-width:280px">
                             <?php foreach ($todos_campos as $cid => $t) : ?>
                                 <option value="<?php echo (int)$cid; ?>" <?php echo in_array($cid, (array)$cfg_pdf['campos_ids'], true) ? 'selected' : ''; ?>>
-                                    <?php echo (int)$cid; ?> — <?php echo esc_html($t[1] !== '' ? $t[1] : '(oculto)'); ?> (<?php echo esc_html($t[2]); ?>)
+                                    <?php echo (int)$cid; ?> — <?php echo esc_html(($t['datos']['nombre'] ?? '') !== '' ? $t['datos']['nombre'] : '(oculto)'); ?> (<?php echo esc_html($t['tipo'] ?? ''); ?>)
                                 </option>
                             <?php endforeach; ?>
                         </select>
@@ -319,7 +319,7 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                             $gid_auto = isset($env_auto[$cid_sel]) ? (string)$env_auto[$cid_sel] : '';
                         ?>
                         <span class="ec-env-campo">
-                            #<?php echo (int)$cid_sel; ?> <?php echo esc_html($t_sel[1] !== '' ? $t_sel[1] : '(oculto)'); ?>:
+                            #<?php echo (int)$cid_sel; ?> <?php echo esc_html(($t_sel['datos']['nombre'] ?? '') !== '' ? $t_sel['datos']['nombre'] : '(oculto)'); ?>:
                             <strong><?php echo $gid_auto !== ''
                                 ? '#' . esc_html($gid_auto) . ' (automatica, del cableado del hueco)'
                                 : 'sin guia'; ?></strong>
@@ -534,8 +534,8 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                                     <select class="ec-select-campo" data-id="<?php echo esc_attr($gid); ?>">
                                         <option value="">(sin campo)</option>
                                         <?php foreach ($campos_pdf as $cid => $t) : ?>
-                                            <option value="<?php echo (int)$cid; ?>" data-titulo="<?php echo esc_attr($t[1]); ?>" <?php selected($campo_id, (int)$cid); ?>>
-                                                <?php echo (int)$cid; ?> — <?php echo esc_html($t[1] !== '' ? $t[1] : '(oculto)'); ?> (<?php echo esc_html($t[2]); ?>)
+                                            <option value="<?php echo (int)$cid; ?>" data-titulo="<?php echo esc_attr($t['datos']['nombre'] ?? ''); ?>" <?php selected($campo_id, (int)$cid); ?>>
+                                                <?php echo (int)$cid; ?> — <?php echo esc_html(($t['datos']['nombre'] ?? '') !== '' ? $t['datos']['nombre'] : '(oculto)'); ?> (<?php echo esc_html($t['tipo'] ?? ''); ?>)
                                             </option>
                                         <?php endforeach; ?>
                                     </select>

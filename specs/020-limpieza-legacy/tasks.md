@@ -1,7 +1,7 @@
 # Tareas — 020 Limpieza de legacy
 
-> Regla: **no marcar `[X]` por aproximacion**. Estado: **B1-B3 implementados** (2026-10-19,
-> 13/22). Pendiente: **B4** (tupla v1), **B5** (formatos muertos) y **B6** (docs/cierre).
+> Regla: **no marcar `[X]` por aproximacion**. Estado: **B1-B4 implementados** (2026-10-19,
+> 16/22). Pendiente: **B5** (formatos muertos) y **B6** (docs/cierre).
 > Version objetivo: 4.11.0. Un bloque = un commit con la bateria en verde (D10).
 
 ## B1 — Las 3 claves que salieron de la consola (D1-D3)
@@ -36,9 +36,9 @@
 
 ## B4 — Los puentes de tupla v1 (D6)
 
-- [ ] **T014** `campo_alta()`/`campo_editar()`: fuera el `if (is_array($tipo))` y el `isset($datos[1])`.
-- [ ] **T015** `cargar_campos()`/`campos_panel()`: fuera el adaptador de tupla v1 (solo filas v2).
-- [ ] **T016** Arnés: las fases que llaman con tupla (`campos`, `config`, `tienda`, `pedido`,
+- [X] **T014** `campo_alta()`/`campo_editar()`: fuera el `if (is_array($tipo))` y el `isset($datos[1])`.
+- [X] **T015** `cargar_campos()`/`campos_panel()`: fuera el adaptador de tupla v1 (solo filas v2).
+- [X] **T016** Arnés: las fases que llaman con tupla (`campos`, `config`, `tienda`, `pedido`,
   `campo_subida`) pasan a la firma v2 (`campo_alta($tipo, $datos, $htm, $css, $js)`).
 
 ## B5 — Formatos muertos del cliente y de datos (D7)
