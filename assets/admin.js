@@ -200,7 +200,7 @@ jQuery(function ($) {
             var $fila = id ? $('.ec-campos-cuerpo tr[data-id="' + id + '"]') : $();
             $('.ec-campos-cuerpo tr.ec-editando').removeClass('ec-editando');
             $fila.toggleClass('ec-editando', !!id);
-            var nombre = id ? $fila.find('.ec-c-nombre').text() : '';
+            var nombre = id ? $fila.find('.ec-c-nombre-txt').text() : '';
             $tituloDrawer.text(id
                 ? ('Campo ' + id + ((nombre && nombre !== '(sin nombre)') ? ' — ' + nombre : ''))
                 : 'Nuevo campo');
@@ -1229,6 +1229,61 @@ jQuery(function ($) {
             return el ? String(el.textContent || '').replace(/<\\\//g, '</') : '';
         }
 
+        /* Spec 018 (T014/T015): stub de `PMU_API` para el preview del campo.
+           El `campo.js` se ejecuta con `new Function` en el realm de ESTA pagina
+           (campo-montar.js), asi que el stub vive ACA y no dentro del srcdoc: el
+           campo ve el mismo contrato que en la ficha, con la subida SIMULADA en
+           memoria (objectURL por id). Sin endpoint, sin item y sin nonce. */
+        function apiPreview() {
+            var blobs = {};
+            var n = 0;
+            function subir(blob) {
+                n++;
+                var id = 'pv-' + n;
+                blobs[id] = URL.createObjectURL(blob);
+                return Promise.resolve({ id: id, file: id + '.webp', mime: 'image/webp', bytes: 0 });
+            }
+            return {
+                pdf: 'preview',
+                sesion: null,
+                valores: function () { return {}; },
+                subirFoto: function (blob) { return subir(blob); },
+                urlDeSubida: function (id) { return Promise.resolve(blobs[id] || null); },
+                montarCargador: function (el, opts) {
+                    if (!el || !window.CargadorPMU) { return null; }
+                    opts = opts || {};
+                    var cargador = new window.CargadorPMU(el, {
+                        ranuras: opts.ranuras || [],
+                        envoltura: opts.envoltura || null,
+                        idsIniciales: opts.idsIniciales || null,
+                        subir: subir,
+                        urlDe: function (id) { return Promise.resolve(blobs[id] || null); },
+                        onChange: opts.onChange || function () {}
+                    });
+                    return cargador.montar() ? cargador : null;
+                }
+            };
+        }
+
+        /* El stub se instala mientras el modal esta abierto y se devuelve el valor
+           previo al cerrarlo (la consola no usa PMU_API, pero no se deja basura). */
+        var apiPreviewActiva = false;
+        var apiPreviewPrevia = null;
+
+        function activarApiPreview() {
+            if (apiPreviewActiva) { return; }
+            apiPreviewPrevia = window.PMU_API;
+            window.PMU_API = apiPreview();
+            apiPreviewActiva = true;
+        }
+
+        function desactivarApiPreview() {
+            if (!apiPreviewActiva) { return; }
+            window.PMU_API = apiPreviewPrevia;
+            apiPreviewPrevia = null;
+            apiPreviewActiva = false;
+        }
+
         function construirPreview(campo, $status) {
             var enlaces = hojasDelTema().map(function (h) {
                 return '<link rel="stylesheet" href="' + escapar(h) + '">';
@@ -1275,25 +1330,29 @@ jQuery(function ($) {
             if (!campo || !campo.id) { return; }
             $('#ec-pv-modal').prop('hidden', false);
             var $cuerpo = marcoPreview().empty();
-            var $filaTit = $('.ec-campos-cuerpo tr[data-id="' + id + '"] .ec-c-nombre').text();
+            var $filaTit = $('.ec-campos-cuerpo tr[data-id="' + id + '"] .ec-c-nombre-txt').text();
             $('#ec-pv-modal-titulo').text($filaTit ? $filaTit : 'Vista previa');
             $('<p class="ec-pv-titulo"></p>')
                 .text('Así lo verá el comprador (campo ' + campo.id + ')').appendTo($cuerpo);
             var $iframe = $('<iframe class="ec-pv-frame" title="Vista previa del campo"></iframe>')
                 .appendTo($cuerpo);
-            $iframe.attr('srcdoc', construirPreview(campo));
             var $status = $('<span class="ec-campo-status" aria-live="polite"></span>').appendTo($cuerpo);
+            // Spec 018 (T014): el campo ve el mismo `PMU_API` que en la ficha
+            // (stub con subida simulada); el `campo.js` lo usa al montar.
+            activarApiPreview();
+            $iframe.attr('srcdoc', construirPreview(campo, $status));
             $iframe.on('load', function () {
                 var doc = this.contentDocument;
                 if (!doc || !doc.getElementById('pmu-preview')) { return; }
                 var estado;
                 try {
                     estado = PMUCampo.montar(doc.getElementById('pmu-preview'), [campo]);
-                // T011b/FR-009: si el campo tiene cargador, se DIBUJA en el preview
-                // (medida, forma, min/max) sin subir nada. Se monta desde el padre
-                // contra el DOM del iframe: asi el preview usa el MISMO componente
-                // que la ficha, sin duplicarlo ni copiar su fuente al srcdoc.
-                if (campo.cargador && campo.cargador.ranuras && window.CargadorPMU) {
+                // T011b/FR-009 + spec 018 (T005): el cargador LEGACY (declarado en
+                // `datos.json:cargador`) se dibuja desde el padre contra el DOM del
+                // iframe. Se apaga cuando el campo ya trae su propio `campo.js`
+                // (regla `cargador && !campo.js`, D3): en ese caso lo monta el JS
+                // del campo con `PMU_API.montarCargador`.
+                if (campo.cargador && campo.cargador.ranuras && !campo.js && window.CargadorPMU) {
                     var cuerpo = doc.querySelector('.pmu-campo-' + campo.id + ' .pmu-campo-cuerpo');
                     if (cuerpo) {
                         // Spec 016 (v4.6.2): el preview monta el cargador TAL CUAL
@@ -1332,6 +1391,7 @@ jQuery(function ($) {
             if ($('#ec-pv-modal').prop('hidden')) { return false; }
             marcoPreview().empty();
             $('#ec-pv-modal').prop('hidden', true);
+            desactivarApiPreview();
             return true;
         }
 

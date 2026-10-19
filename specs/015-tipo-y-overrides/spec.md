@@ -47,7 +47,7 @@ el correcto.
 | D7 | `placeholders[id].campos[]` **no existe**: no hace falta. La referencia ya esta en el propio `value`/`settings`. |
 | D8 | Sin cambios en `modules/textmuy/` (H3). |
 | D9 | **Categorias fuera** completo: datos, `meta`, CRUD, columna, chips, buscador, modal, tests. |
-| D10 | La estrella de Plantilla **fuera** (con su endpoint). Las 3 plantillas base pasan a ser los 3 **tipos**, y rellenan el formulario al elegirlos. |
+| D10 | La estrella de Plantilla **fuera** (con su endpoint). Las 3 plantillas base pasan a ser los 3 **tipos**, y rellenan el formulario al elegirlos. **Enmendado por la spec 018 (D4, 2026-10-19)**: el `tipo` tambien se puede **corregir en edicion** (el editor lo expone como `<select name="tipo">` y el guardado actualiza indice + `datos.json`, sin tocar el codigo del campo). Sigue **declarando, no enrutando** (D11). |
 | D11 | `tipo` **declara la intencion y valida el cableado**. No enruta: enruta el cableado (`value` -> texto/fotos segun el `tipo` del placeholder; `settings` -> overrides). |
 
 ### Sobre D11 (correccion)

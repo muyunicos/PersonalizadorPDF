@@ -1217,6 +1217,17 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && array_key_exists('htm', $ver['t1']));
             check('la baja CONSERVA los archivos del campo', is_array($ver) && !empty($ver['archivos_baja']));
             check('alta con script prohibido rechazada', (string)($ver['err_nueva'] ?? '') === '');
+            // Spec 018 (T013).
+            $v4 = isset($GLOBALS['test_campos_v4']) ? $GLOBALS['test_campos_v4'] : null;
+            check('spec 018: editar corrige el tipo en indice y datos.json',
+                is_array($v4) && $v4['tipo_indice'] === 'imagen' && $v4['tipo_datos'] === 'imagen',
+                is_array($v4) ? ($v4['tipo_indice'] . '/' . $v4['tipo_datos']) : 'sin datos');
+            check('spec 018: el cargador legacy sobrevive a una edicion sin cargador (D3)',
+                is_array($v4) && !empty($v4['cargador']));
+            check('spec 018: `array` legacy sobrevive (D5, write-through)',
+                is_array($v4) && !empty($v4['array']));
+            check('spec 018: el nombre si se actualiza', is_array($v4) && $v4['nombre'] === 'Foto editada',
+                is_array($v4) ? $v4['nombre'] : '');
             break;
             check('handler responde JSON success (ya migrado)', is_array($json) && $json['success'] === true
                 && ($json['data']['motivo'] ?? '') === 'ya migrado');
@@ -3374,6 +3385,35 @@ switch ($fase) {
             } catch (\Throwable $e) {
                 $err_nueva = $e->getMessage();
             }
+            // Spec 018 (T013): el tipo se puede CORREGIR en edicion y las claves
+            // legacy que salieron de la consola sobreviven a un POST que ya no las
+            // manda (write-through de `datos_con_legacy`).
+            $id3 = $motor_c->campo_alta('texto', ['nombre' => 'Foto', 'titulo_cliente' => 'Foto'],
+                '<div data-pmu-cargador></div>', '', 'function(ctx,root){return {valor:null,cliente:""};}');
+            $motor_c->campo_editar($id3, [
+                'nombre' => 'Foto', 'descripcion' => '', 'titulo_cliente' => 'Foto',
+                'cargador' => ['ranuras' => [['w' => 1000, 'h' => 1000, 'forma' => 'fit', 'min' => 1, 'max' => 1]]],
+                'array' => true,
+            ], '<div data-pmu-cargador></div>', '', 'function(ctx,root){return {valor:null,cliente:""};}', 'imagen');
+            // Edicion tal como la manda la consola v4: SIN `cargador` ni `array`.
+            $motor_c->campo_editar($id3, [
+                'nombre' => 'Foto editada', 'descripcion' => '', 'titulo_cliente' => 'Foto',
+            ], '<div data-pmu-cargador></div>', '', 'function(ctx,root){return {valor:null,cliente:""};}');
+            $d3 = json_decode((string) file_get_contents($motor_c->ruta_campo($id3, 'datos.json')), true);
+            $idx3 = $motor_c->indice_campos();
+            $tipo3 = '';
+            foreach ((array) ($idx3['items'] ?? []) as $fila3) {
+                if ((int) ($fila3['id'] ?? 0) === (int) $id3) {
+                    $tipo3 = (string) ($fila3['tipo'] ?? '');
+                }
+            }
+            $GLOBALS['test_campos_v4'] = [
+                'tipo_indice' => $tipo3,
+                'tipo_datos' => isset($d3['tipo']) ? (string) $d3['tipo'] : '',
+                'cargador' => !empty($d3['cargador']['ranuras']) ? 1 : 0,
+                'array' => !empty($d3['array']) ? 1 : 0,
+                'nombre' => isset($d3['nombre']) ? (string) $d3['nombre'] : '',
+            ];
             $res_c = ['aviso' => null];
             $ids_c = [];
             $tit1 = null;

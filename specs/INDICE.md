@@ -1,7 +1,7 @@
 # Indice de specs — Personalizador PDF
 
 > Jerarquia: `constitution` (.specify/memory/constitution.md) > `AGENTS.md` > resto.
-> Ultima actualizacion: 2026-10-14 (v4.7.0: bonus v2 con biblioteca global; modulo en RC71).
+> Ultima actualizacion: 2026-10-19 (spec 018 `campos-consola-v4` **implementada**; v4.8.0 vigente, release 4.9.0 pendiente).
 
 ## Activos (codigo completo, falta solo manual WP real)
 | Spec | Codigo | Pendiente manual | Docs normativos |
@@ -16,6 +16,7 @@
 | [015-tipo-y-overrides](./015-tipo-y-overrides/) | **implementada (2026-10-05: commits 5f7c012 + 7187328 + cierre T020-T022, v4.5.0)**. Tipo en el campo + overrides que funcionan (settings como lista de referencias, fusion en orden hacia items[].overrides). Enmienda la FR-5.2 de la 004. Sin tocar modules/textmuy/ | -- | spec + plan + tasks (D1-D11) |
 | [016-editor-visual-fotos](./016-editor-visual-fotos/) | **F0-F4 + docs F5 implementadas (2026-10-10, v4.6.0)**; **F6 (envoltura del PDF como guia) implementada**: spec enmendada (D11 + FR-022/023), contrato `selector-visual.md` v2 y T024-T028 `[X]` + puerta F5; pendiente T022 (recorrido manual, §6c del MANUAL) | T022 + T023 (filtros, fuera de alcance) | spec + plan + tasks + contracts/selector-visual.md (enmienda del contrato 004 selector-pmu) + research + quickstart + checklist. Editor visual del modal de fotos: Cropper.js 1.6.2 vendoreado (`assets/vendor/cropper/`, nunca CDN), shell full-screen movil (camara, drop zone, focus trap, safe-area), pinch/doble tap/rotacion, badge en vivo, degradacion sin Cropper, tira del cargador con miniaturas reales + quitar/cambiar + restauracion al re-editar; puerta `tests/selector-contrato.test.js` |
 | [017-entrega-tema-muyunicos](./017-entrega-tema-muyunicos/) | **implementada (2026-10-12, v4.6.15, T000-T008 [X])**. Adaptador de entrega por el tema muyunicos (_urls_files protegida, idempotente, sin doble fila) + clase MuyUnicos_PDF_Generator | T009 (recorrido WP real) | spec + plan + tasks (D1-D6); fases entrega_tema + entrega_sin_tema |
+| [018-campos-consola-v4](./018-campos-consola-v4/) | **implementada (2026-10-19), 21/24 `[X]`**: el cargador se declara en el HTML+JS del campo (`[data-pmu-cargador]` + `PMU_API.montarCargador`), `cargador` pasa a **legacy** (`cargador && !campo.js`), tipo editable en el editor, consola sin `array`/`protegido`/`texto_ayuda` (write-through en el motor: editar no destruye), titulos limpios (`.ec-c-nombre-txt`), preview del admin con stub de `PMU_API` en el padre. Puertas: 93 checks Node + 4 checks nuevos en la fase `campos`. **Sin migracion** | T021 (lab sin Woo, 2 campos de imagen), T022 (un modal a la vez), T024 (changelog + bump 4.9.0 + recorrido WP real) | spec + plan + tasks (D1-D10, FR-001..014); enmienda `specs/012.../contracts/campos.md` (v4) y 015 D10 |
 
 Recorrido manual unico (cubre T030 + T012 + T017 + T029 + T051 en una sesion):
 [MANUAL-PENDIENTE-WP-REAL.md](./MANUAL-PENDIENTE-WP-REAL.md).

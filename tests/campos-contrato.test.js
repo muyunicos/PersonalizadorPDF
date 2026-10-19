@@ -129,6 +129,71 @@ const tienda = fs.readFileSync(path.join(__dirname, '..', 'assets', 'tienda.js')
 check('tienda.js delega en PMUCampo.montar', tienda.indexOf('PMUCampo.montar(raizEl, campos, inicial)') !== -1);
 check('tienda.js ya no define contextoRaiz', tienda.indexOf('function contextoRaiz') === -1);
 check('tienda.js avisa si falta el modulo', tienda.indexOf('falta campo-montar.js') !== -1);
+// Spec 018 (T006): API publica PMU_API.
+check('tienda.js crea PMU_API antes de montarCampos',
+  tienda.indexOf('var api = {') !== -1
+  && tienda.indexOf('var estado = montarCampos') > tienda.indexOf('var api = {'));
+check('PMU_API expone subirFoto', tienda.indexOf('api.subirFoto = function') !== -1);
+check('PMU_API expone urlDeSubida', tienda.indexOf('api.urlDeSubida = function') !== -1);
+check('PMU_API expone montarCargador', tienda.indexOf('api.montarCargador = function') !== -1);
+// El legacy se apaga con el `campo.js` del campo (regla cargador && !campo.js, D3):
+// sin esto habria DOS cargadores montados en el mismo contenedor.
+check('Legacy: el cargador del sistema se apaga si el campo trae campo.js',
+  tienda.indexOf('if (campo.js) { return; }') !== -1
+  && tienda.indexOf('el cargador legacy se APAGA cuando el campo ya trae') !== -1);
+// `montar()` se llama UNA sola vez (el `campo.js` no debe volver a montarlo).
+check('montarCargador monta una sola vez',
+  tienda.indexOf('return cargador.montar() ? cargador : null;') !== -1);
+// La guia de envoltura (spec 016 F6) se resuelve desde PMU_FICHA.campos: el
+// `campo.js` solo conoce `ctx` (id + set), no el objeto del campo.
+check('montarCargador resuelve la envoltura desde PMU_FICHA.campos',
+  tienda.indexOf('(ficha.campos || []).forEach(function (c)') !== -1
+  && tienda.indexOf('defCampo && defCampo.envoltura') !== -1);
+// El cargador no pisa lo que publico el campo.js al montar (bug historico).
+check('montarCargador no pisa el valor del campo.js al montar',
+  tienda.indexOf('var mio = false;') !== -1
+  && tienda.indexOf('} else if (mio || (est.ids && est.ids.length > 0)) {') !== -1);
+
+console.log('\n== spec 018: la plantilla de imagen y el preview ==');
+{
+  const plugin = fs.readFileSync(path.join(__dirname, '..', 'personalizador-pdf.php'), 'utf8');
+  const adminJs = fs.readFileSync(path.join(__dirname, '..', 'assets', 'admin.js'), 'utf8');
+  const uploads = fs.readFileSync(path.join(__dirname, '..', 'inc', 'class-pmu-uploads.php'), 'utf8');
+  // La plantilla declara el cargador EN EL CAMPO (D1).
+  check('la plantilla imagen trae el contenedor [data-pmu-cargador]',
+    plugin.indexOf('<div data-pmu-cargador></div>') !== -1);
+  check('la plantilla imagen monta con PMU_API.montarCargador',
+    plugin.indexOf('window.PMU_API.montarCargador(cont, {') !== -1);
+  check('la plantilla imagen declara RANURAS por defecto (no monta en vacio)',
+    plugin.indexOf('var RANURAS = [') !== -1
+    && plugin.indexOf("{ w: 1000, h: 1000, forma: 'fit', min: 1, max: 1 }") !== -1);
+  check('la plantilla NO vuelve a llamar montar() (montarCargador ya monta)',
+    plugin.indexOf('cargador && cargador.montar()') === -1);
+  // El preview del admin corre el mismo campo.js con un stub de PMU_API (D9).
+  check('el preview define el stub PMU_API en la pagina del admin (realm del campo.js)',
+    adminJs.indexOf('function apiPreview()') !== -1
+    && adminJs.indexOf('activarApiPreview();') !== -1
+    && adminJs.indexOf('desactivarApiPreview();') !== -1);
+  check('el stub del preview NO inyecta PMU_API en el srcdoc',
+    adminJs.indexOf("'<script>window.PMU_API") === -1);
+  check('el preview no llama al endpoint de subida real',
+    adminJs.indexOf("'personalizador_pdf_subida'") === -1);
+  check('el cargador legacy del preview se apaga si el campo trae campo.js',
+    adminJs.indexOf('&& !campo.js && window.CargadorPMU') !== -1);
+  // La consola ya no declara el cargador en el formulario (D1/D5).
+  check('el form del campo NO postea `cargador`', plugin.indexOf('name="cargador"') === -1);
+  check('el form del campo NO postea `array` ni `protegido`',
+    plugin.indexOf('name="array"') === -1 && plugin.indexOf('name="protegido"') === -1);
+  check('el editor expone el tipo como <select> (D4)',
+    plugin.indexOf('<select name="tipo" class="regular-text">') !== -1);
+  // El motor conserva lo que ya no se edita (D3/D5): sin esto, editar otro dato
+  // desprotege el campo y pierde su cargador legacy.
+  check('el motor arrastra las claves legacy al editar (datos_con_legacy)',
+    uploads.indexOf('private function datos_con_legacy($id, array $datos)') !== -1
+    && uploads.indexOf("foreach (['cargador', 'array', 'protegido', 'texto_ayuda'] as $k)") !== -1);
+  check('campo_editar acepta el tipo (D4)',
+    uploads.indexOf('public function campo_editar($id, array $datos, $htm = \'\', $css = \'\', $js = \'\', $tipo = null)') !== -1);
+}
 check('idsDe filtra el id fantasma "Array" (legado 4.6.6)',
   tienda.indexOf("x !== 'Array'") !== -1
   && tienda.indexOf('nunca es un id real') !== -1);

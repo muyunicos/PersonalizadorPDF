@@ -436,12 +436,19 @@
      * FR-033/FR-034). El cargador escribe `valor = [ids]` en el MISMO estado
      * que leyo `conciliarGrupo`, asi que el placeholder `[campoN]` lo ve sin
      * que ningun modulo sepa del otro.
+     * Legacy (T005): montar cargadores solo si no tienen campo.js.
+     * La regla de compatibilidad es: cargador && !campo.js.
      */
     function montarCargadores(raizEl, campos, estado) {
         if (typeof window.CargadorPMU === 'undefined' || !raizEl) { return {}; }
         var mapa = {};
         (campos || []).forEach(function (campo) {
             if (!campo || !campo.cargador || !campo.cargador.ranuras) { return; }
+            // Spec 018 (T005): el cargador legacy se APAGA cuando el campo ya trae
+            // su propio `campo.js` (regla `cargador && !campo.js`, D3): ese JS lo
+            // monta el mismo con `PMU_API.montarCargador`. Sin esto habria DOS
+            // cargadores montados en el mismo contenedor.
+            if (campo.js) { return; }
             var cont = raizEl.querySelector('.pmu-campo-' + campo.id + ' .pmu-campo-cuerpo');
             if (!cont) { return; }
             // `onChange` dispara tambien en el montaje, cuando aun no hay ids. Si
@@ -1193,18 +1200,76 @@
             ficha.pdfs = [{ pdf: ficha.pdf, validez: '', mensaje_html: '', bloquear: false }];
         }
         // Edicion (T016): valores guardados -> precarga de campos (ctx + inputs).
-        var estado = montarCampos(panel, ficha.campos, ficha.valores);
+        // Spec 018 (T001): API PUBLICA antes de montar los campos.
         var api = {
             pdf: ficha.pdf,
-            estado: estado,
-            valores: function () { return estado; },
-            filtro: function () { return filtroActual; }
+            sesion: (ficha.sesion && ficha.sesion.item_key) ?
+                { sid: ficha.sesion.sid, item_key: ficha.sesion.item_key } : null,
+            valores: null,
+            estado: null
         };
-        if (ficha.sesion && ficha.sesion.item_key) {
-            // Re-edicion: el item vigente se reusa (mismo item_key/pool).
-            api.sesion = { sid: ficha.sesion.sid, item_key: ficha.sesion.item_key };
-        }
+        var estado = montarCampos(panel, ficha.campos, ficha.valores);
+        api.estado = estado;
+        api.valores = function () { return estado; };
+        // Spec 018 (T002/T003): metodos publicos.
+        api.subirFoto = function (blob, campo) {
+            return subirFoto(blob, campo ? (campo.id || campo) : campo);
+        };
+        api.urlDeSubida = function (id) {
+            var ses = api.sesion || {};
+            return urlDeSubida(ses.sid, ses.item_key, id);
+        };
         global.PMU_API = api;
+        // Spec 018 (T004): montar cargador desde el campo.
+        api.montarCargador = function (el, opts) {
+            opts = opts || {};
+            var campo = opts.campo || {};
+            if (!el || !window.CargadorPMU) {
+                if (typeof console !== 'undefined' && console.warn) {
+                    console.warn('[PMU] CargadorPMU no disponible: el cargador del campo no se monto.');
+                }
+                return null;
+            }
+            var cid = parseInt(campo.id, 10) || 0;
+            // Envoltura del grupo asociado a ESTE PDF (spec 016 F6): la guia del
+            // recorte real. Se resuelve por id desde `PMU_FICHA.campos` porque el
+            // `campo.js` solo conoce `ctx` (id + set).
+            var defCampo = null;
+            (ficha.campos || []).forEach(function (c) {
+                if (c && parseInt(c.id, 10) === cid) { defCampo = c; }
+            });
+            var envoltura = opts.envoltura || (defCampo && defCampo.envoltura) || null;
+            // Re-edicion: los ids ya guardados se resuelven contra el manifest.
+            var idsIniciales = opts.idsIniciales
+                || idsDe((api.estado && api.estado[cid] && api.estado[cid].valor) || null);
+            // El cargador no pisa lo que publico el `campo.js` al montar: toma el
+            // control del `valor` recien con la primera foto (misma regla que el
+            // cargador legacy de `montarCargadores`). Si el campo trae su propio
+            // `onChange`, manda el campo.
+            var mio = false;
+            var cargador = new window.CargadorPMU(el, {
+                ranuras: opts.ranuras || [],
+                envoltura: envoltura,
+                idsIniciales: idsIniciales,
+                urlDe: api.urlDeSubida,
+                subir: function (blob) { return api.subirFoto(blob, cid); },
+                onChange: function (est) {
+                    if (cid < 1) { return; }
+                    if (!api.estado[cid]) { api.estado[cid] = { valor: null, cliente: '' }; }
+                    if (typeof opts.onChange === 'function') {
+                        opts.onChange(est);
+                    } else if (mio || (est.ids && est.ids.length > 0)) {
+                        mio = true;
+                        api.estado[cid].valor = est.ids;
+                    }
+                    // `array` si alguna ranura admite mas de una (FR-034).
+                    api.estado[cid].array = est.array;
+                    api.estado[cid].listo = est.listo;
+                }
+            });
+            // `montar()` se llama UNA sola vez: devuelve el cargador montado o null.
+            return cargador.montar() ? cargador : null;
+        };
         // T006/T007: la validez se re-evalua al instante con cada cambio.
         panel.addEventListener('input', aplicarFiltro);
         panel.addEventListener('change', aplicarFiltro);

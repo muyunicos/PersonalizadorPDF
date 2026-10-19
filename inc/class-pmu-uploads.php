@@ -1532,10 +1532,16 @@ class PMU_Uploads
             'nombre' => $corta(isset($datos['nombre']) ? $datos['nombre'] : '', 200),
             'descripcion' => $corta(isset($datos['descripcion']) ? $datos['descripcion'] : '', 500),
             'titulo_cliente' => $corta(isset($datos['titulo_cliente']) ? $datos['titulo_cliente'] : '', 200),
+            // Spec 018 (D5): `texto_ayuda`, `array` y `protegido` ya no se editan
+            // desde la consola, pero el ALMACEN sigue teniendolos: el llamador
+            // los arrastra con write-through (handle_campo_guardar) para que
+            // editar otro dato no desproteja el campo ni lo vacie.
             'texto_ayuda' => $corta(isset($datos['texto_ayuda']) ? $datos['texto_ayuda'] : '', 500),
             'array' => !empty($datos['array']),
             'protegido' => !empty($datos['protegido']),
             'tipo' => $this->tipo_valida($tipo),
+            // Spec 018 (D3): `cargador` es LEGACY. Se lee si existe y se conserva
+            // tal cual (write-through); no se escribe desde la UI.
             'cargador' => !empty($datos['cargador']) ? $datos['cargador'] : null,
         ];
     }
@@ -1618,7 +1624,7 @@ class PMU_Uploads
      * refresca `meta.{id}.modificado` (el `?v=`). **No toca** el flag `baja`.
      * Lanza motor:editar:campo:inexistente:N si el id no esta en el indice.
      */
-    public function campo_editar($id, array $datos, $htm = '', $css = '', $js = '')
+    public function campo_editar($id, array $datos, $htm = '', $css = '', $js = '', $tipo = null)
     {
         // Puente v1 (spec 012, T005): la tupla de 10 slots como 2do argumento.
         if (isset($datos[1]) && !isset($datos['nombre']) && count($datos) > 3) {
@@ -1639,12 +1645,50 @@ class PMU_Uploads
         if ($fila === null) {
             throw new Exception('motor:editar:campo:inexistente:' . $id);
         }
-        $datos = $this->normalizar_datos_campo($datos, isset($fila['tipo']) ? $fila['tipo'] : '');
+        // Spec 018 (D4/FR-007): el tipo se puede CORREGIR en edicion. Declara,
+        // no enruta (015 D11): se actualiza el indice y `datos.json`, sin
+        // reescribir el HTML/CSS/JS del campo. `null` = no se toca.
+        $tipoActual = isset($fila['tipo']) ? (string) $fila['tipo'] : '';
+        if ($tipo !== null) {
+            $tipoNuevo = $this->tipo_valida($tipo);
+            if ($tipoNuevo !== '' && $tipoNuevo !== $tipoActual) {
+                foreach ($indice['items'] as $i => $f) {
+                    if (isset($f['id']) && (int) $f['id'] === $id) {
+                        $indice['items'][$i]['tipo'] = $tipoNuevo;
+                    }
+                }
+                $tipoActual = $tipoNuevo;
+            }
+        }
+        $datos = $this->datos_con_legacy($id, $datos);
+        $datos = $this->normalizar_datos_campo($datos, $tipoActual);
         $indice = $this->tocar_meta($indice, $id);
         if (!$this->guardar_indice_campos($indice) || !$this->escribir_campo($id, $datos, $htm, $css, $js)) {
             throw new Exception('motor:editar:directorio:no_escribible');
         }
         return true;
+    }
+
+    /**
+     * Spec 018 (D3/D5): `cargador`, `array`, `protegido` y `texto_ayuda` salieron
+     * de la consola, asi que un POST de edicion NO las trae. Si el llamador no
+     * las manda, se arrastran del `datos.json` guardado (write-through) para que
+     * editar otro dato no desproteja el campo, vacie su ayuda ni pierda su
+     * cargador legacy. Si algun dia vuelven a la UI, hay que distinguir "ausente"
+     * de "vacio" (hoy `campo_desde_post` no emite esas claves).
+     */
+    private function datos_con_legacy($id, array $datos)
+    {
+        $previo = $this->leer_campo($id);
+        if ($previo === null || !isset($previo['datos']) || !is_array($previo['datos'])) {
+            return $datos;
+        }
+        foreach (['cargador', 'array', 'protegido', 'texto_ayuda'] as $k) {
+            if (!array_key_exists($k, $datos) && array_key_exists($k, $previo['datos'])) {
+                $datos[$k] = $previo['datos'][$k];
+            }
+        }
+        return $datos;
     }
 
     /**

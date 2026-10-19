@@ -400,6 +400,12 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   UI (D9). La pareja `valor`/`cliente` la publica el `campo.js`
   (`function(ctx, root)`) y, si no hay JS, se lee de los `[data-rol]` del HTML; `cliente` **nunca**
   cae a `valor` (el sistema no traduce nada). Contratos: `specs/012.../contracts/campos.md`.
+  **Spec 018 (implementada 2026-10-19)** cambia este punto: el cargador se declara en el
+  HTML+JS del campo (contenedor `[data-pmu-cargador]` + `PMU_API.montarCargador`), `cargador` pasa a
+  **legacy** (se lee si existe, no se escribe desde la UI y no se pisa al editar:
+  `PMU_Uploads::datos_con_legacy`), el `tipo` se puede corregir en edicion y
+  `array`/`protegido`/`texto_ayuda` salen de la UI (siguen en `datos.json`: lectura y escritura
+  tolerantes). **Sin migracion.**
 - **CSS/JS global del plugin (spec 012)**: `uploads/pmu/campos/global.css` y `global.js`, **uno solo
   para todo el plugin**, editables desde la tarjeta de arriba de la pestana Campos. Se cargan **solo
   en fichas con >=1 campo**; el CSS se inyecta prefijado con `[data-pmu-panel]` y el JS con
@@ -553,6 +559,15 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `specs/010-api-wordpress/` (`spec.md`, `contracts/api.md`); pendiente `plan.md` + `tasks.md`.
   Al implementarla: amendá la constitución (Sync Impact Report), subí `Requires at least` de
   `readme.txt` a **5.6** (Application Passwords) y agregá las fases al arnés `texto_puente.php`.
+- ✅ **Spec 018 `campos-consola-v4` (implementada 2026-10-19)**: el cargador se declara en el campo
+  (contenedor `[data-pmu-cargador]` + `campo.js` que monta `CargadorPMU` con `PMU_API`), con
+  `PMU_API.subirFoto` / `urlDeSubida` / `montarCargador` como contrato público y `PMU_API` creado
+  **antes** de montar los campos. El editor expone el `tipo` como `<select>` (el tipo declara, no
+  enruta; 015 D11) y pierde `array`, `protegido` y `texto_ayuda`; los títulos del drawer/modal usan
+  `.ec-c-nombre-txt`. **Sin migración**: un campo con `cargador` y sin `campo.js` sigue montándose por
+  el sistema (`cargador && !campo.js`); al pegarle la plantilla nueva entra solo. Sostiene **N campos
+  de imagen por producto/PDF**. Artefactos en `specs/018-campos-consola-v4/` (T001-T023 cerradas;
+  pendiente T024: changelog + bump a 4.9.0 y recorrido WP real).
 - ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
   (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
@@ -782,6 +797,10 @@ el numero a mano. El stub `get_file_data` del arnes esta en `tests/texto_puente.
 | Un preset guardado no aparece en otro navegador | — | Resuelto: presets `.txm` en `uploads/pmu/tm-presets/` |
 | Un preset recién guardado no aparece en el selector de un grupo | Página "PDFs" abierta antes de guardar | Recargar: el listado se genera con glob en cada carga |
 | Error del puente tras tener el admin mucho tiempo abierto | Nonce expirado (~12-24 h) | Recargar la página y reintentar |
+| El cargador de un campo nuevo no aparece (nada que subir) y la consola solo avisa por `console.warn` | El `campo.js` del campo monta con `PMU_API.montarCargador` pero pasa `ranuras: []` (o falta `PMU_API`/`CargadorPMU`) | La plantilla "Imagen (cargador)" ya trae `RANURAS` por defecto: revisar que el campo conserve esa lista. `montarCargador` devuelve `null` y avisa; nunca inventa ranuras |
+| Dos cargadores en el mismo contenedor (botones duplicados) | El cargador legacy no se apago: la regla es `cargador && !campo.js` | Si el campo declara su cargador en `campo.js`, el sistema NO debe montar el legacy. Verificado por `node tests/campos-contrato.test.js` (`if (campo.js) { return; }`) |
+| Editar un campo lo desprotege, le borra la ayuda o le pierde el cargador | La consola v4 ya no manda esas claves en el POST y el motor las normalizaba a `false`/`''`/`null` | `PMU_Uploads::datos_con_legacy()` las arrastra del `datos.json` previo (write-through). Lo cubre la fase `campos` (checks "spec 018") |
+| El preview del admin no muestra el cargador del `campo.js` | El stub de `PMU_API` se inyectaba en el `srcdoc` del iframe, pero `campo-montar.js` ejecuta el `campo.js` con `new Function` **en el realm de la pagina del admin** | El stub va en el padre (`admin.js:apiPreview()` + `activarApiPreview()`), no en el srcdoc. Lo cubre `node tests/campos-contrato.test.js` |
 | **SMOKE CON 11 FALLOS** tras tocar `Overlay`/`Motor` | Una spec de imagen **ya es un array** (con su clave `tipo`), así que `is_array($x)` no distingue "una spec" de "lista de specs": `array_values($spec)` devuelve los valores sueltos y el PDF sale roto | Distinguir por la clave `tipo` (`Overlay::esListaDeSpecs()`) y llevar la bandera `$multi` sobre las **rutas** en `Motor` (que no tienen ambigüedad). Nunca sniffear el resultado |
 | El PDF del pedido sale con claves numéricas (`[0, "otro"]`) en vez de nombres de PDF | Un `foreach ($porIdx as $gid => $rutas)` **pisa** la variable de salida `$rutas` en `item_generar_pdfs()` | Nombre distinto en el bucle interno (`$rutasGrupo`). Lo caza la fase `completados` |
 | El guardado de un form con `pmuForm` no sale y no da error | `pmuForm` **registra** el handler: llamarlo desde dentro de otro `submit` lo agrega tarde y el POST nunca se envía | Enlazar con `pmuForm($form, action, nonce, cb)` en **tiempo de enlace**, nunca desde un handler `submit` |

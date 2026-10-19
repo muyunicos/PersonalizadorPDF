@@ -1,7 +1,13 @@
 # Contract: Campos (montaje en la ficha del comprador)
 
-**Feature**: 012-campos-consola | **Version**: 3 (enmienda la v2; la v1 fue la norma 2026-09-17 de la 004)
+**Feature**: 012-campos-consola | **Version**: 4 (spec 018, 2026-10-19)
 
+> **Enmienda v4 (spec 018, 2026-10-19)**: el cargador deja de declararse en `datos.json:cargador` y pasa a
+> **declararse en el campo** (contenedor `[data-pmu-cargador]` + `campo.js` que monta con `PMU_API`).
+> El `tipo` se puede **corregir en edicion** (D4) y salen de la UI `array`, `protegido` y `texto_ayuda`.
+> **Sin migración**: un campo legacy con `cargador` en `datos.json` sigue montándose por el sistema
+> si no tiene `campo.js`; al pegarle la plantilla nueva entra solo (D3).
+>
 > **Enmenda v3 (spec 015, 2026-10-05)**: la v2 decia que el campo **no tenia `tipo`**. La 015 lo
 > agrega de vuelta con otro significado: `tipo` = `texto|imagen|opciones`, **se elige solo al crear**
 > (en edicion manda el del indice) y **declara la intencion, no enruta** (D10/D11): la salida la
@@ -80,7 +86,19 @@ al HTML publico). Son utilissimos para valores por defecto del admin o pruebas i
 **Campos invisibles**: un campo cuyo HTML no muestra nada al comprador sigue publicando su
 ## Cargador de imagenes (`assets/cargador-pmu.js`)
 
-Un campo con `cargador` muestra botones que abren el `CargadorPMU`, uno por **ranura**:
+**Spec 018 (v4, 2026-10-19): el cargador se declara EN EL CAMPO.** El `campo.htm` trae un contenedor
+(`<div data-pmu-cargador></div>`) y el `campo.js` lo monta con
+`PMU_API.montarCargador(el, {campo: ctx, ranuras, onChange})`. Contrato publico de `PMU_API`
+(`assets/tienda.js`): `subirFoto(blob, campo)`, `urlDeSubida(id)` y `montarCargador(el, opts)`.
+`montarCargador` ya llama a `montar()` **una sola vez**, resuelve la `envoltura` del grupo desde
+`PMU_FICHA.campos` y devuelve el cargador montado o `null` (con aviso) si falta el componente.
+
+`datos.json:cargador` queda como **LEGACY**: lo monta el sistema (la ficha y el preview) **solo si el
+campo NO tiene `campo.js`** (regla `cargador && !campo.js`). No se escribe desde la consola y una
+edicion no lo pisa (write-through de `PMU_Uploads::datos_con_legacy`). Las ranuras son las mismas en
+los dos caminos; los campos nuevos las declaran en su `campo.js`:
+
+Un campo con cargador (propio o legacy) muestra botones que abren el `CargadorPMU`, uno por **ranura**:
 
 | Prop | Valor | Significado |
 |---|---|---|

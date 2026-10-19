@@ -3182,26 +3182,12 @@ class Personalizador_PDF_Plugin
             $t = trim(strip_tags((string)$t));
             return function_exists('mb_substr') ? mb_substr($t, 0, $n, 'UTF-8') : substr($t, 0, $n);
         };
-        // Spec 015 D9: las categorias se fueron del formato (el filtro por chips
-        // desaparece con ellas). No hay nada que sanear aca.
-        // El cargador llega como JSON (UI) o como texto con los atajos del admin.
-        $cargador = null;
-        $crudoCargador = $leer('cargador');
-        if (trim($crudoCargador) !== '') {
-            $dec = json_decode($crudoCargador, true);
-            $cargador = is_array($dec) ? $dec : $crudoCargador;
-        }
-        // La validacion fuerte (HTML prohibido, sandbox del JS, tamanos y
-        // cargador) la hace PMU_Uploads::escribir_campo(), dueno de los datos.
+        // Spec 018 (F2): el cargador viene solo del campo.js (legacy: se lee si existe pero no se escribe).
         return [
             'datos' => [
                 'nombre' => $corta($leer('nombre'), 200),
                 'descripcion' => $corta($leer('descripcion'), 500),
                 'titulo_cliente' => $corta($leer('titulo_cliente'), 200),
-                'texto_ayuda' => $corta($leer('texto_ayuda'), 500),
-                'array' => !empty($fuente['array']),
-                'protegido' => !empty($fuente['protegido']),
-                'cargador' => $cargador,
             ],
             // `html` es el nombre nuevo; `contenido` sigue aceptandose (UI v1).
             'htm' => $leer('html') !== '' ? $leer('html') : $leer('contenido'),
@@ -3293,17 +3279,18 @@ class Personalizador_PDF_Plugin
     {
         $this->seguridad('personalizador_pdf_campo');
         $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
-        // El tipo solo aplica al ALTA (llena el formulario con su plantilla por
-        // defecto); en edicion manda el del indice, asi que no se cambia sobre la
-        // marcha. Spec 015 D10.
+        // El tipo: en el ALTA elige la plantilla por defecto; en edicion CORRIGE
+        // el declarado (spec 018 D4). Declara, no enruta (015 D11).
         $tipo = isset($_POST['tipo']) ? (string) $_POST['tipo'] : '';
         try {
-            // wp_unslash: WP aplica add_magic_quotes a $_POST (AGENTS §11). Sin
-            // esto el `cargador` llega con \" y el json_decode falla, asi que
-            // EDITAR un campo con cargador siempre tira motor:campos:cargador:invalido.
+            // wp_unslash: WP aplica add_magic_quotes a $_POST (AGENTS §11).
+            // Las claves que salieron de la consola (`cargador`, `array`,
+            // `protegido`, `texto_ayuda`) las arrastra el motor desde el almacen
+            // (PMU_Uploads::datos_con_legacy): editar otro dato no las destruye.
             $c = $this->campo_desde_post(wp_unslash($_POST));
             if ($id > 0) {
-                $this->pmu_uploads()->campo_editar($id, $c['datos'], $c['htm'], $c['css'], $c['js']);
+                $this->pmu_uploads()->campo_editar($id, $c['datos'], $c['htm'], $c['css'], $c['js'],
+                    $tipo !== '' ? $tipo : null);
             } else {
                 // Alta desde el tipo: si el POST no trae codigo propio, la plantilla
                 // de ese tipo deja el formulario preparado (T015/D5).
@@ -3325,8 +3312,7 @@ class Personalizador_PDF_Plugin
         $this->responder(true, ['id' => $id, 'ec_campo' => $id, 'tab' => 'campos',
             'campo' => $guardado,
             'html' => $guardado ? $this->fila_campo_html($id, $guardado) : '',
-            'form' => $guardado ? $this->form_campo_html($id, $guardado, esc_url(admin_url('admin-post.php')),
-                !empty($guardado['datos']['cargador']) ? wp_json_encode($guardado['datos']['cargador']) : '') : '']);
+            'form' => $guardado ? $this->form_campo_html($id, $guardado, esc_url(admin_url('admin-post.php'))) : '']);
     }
 
     /**
@@ -3440,17 +3426,50 @@ JS;
                 'cargador' => null,
             ];
         case 'imagen':
-            // El cargador lo monta el SISTEMA (tienda.js montarCargadores en la
-            // ficha y el preview del admin) dentro de .pmu-campo-cuerpo: el
-            // htm NO lleva boton propio. Antes traia un boton placeholder que
-            // referenciaba un componente con nombre viejo (que nunca existio)
-            // y avisaba que el cargador faltaba al tocarlo (spec 016,
-            // correccion 4.6.1). cargador sigue declarando las ranuras
-            // por defecto.
+            // Spec 018 (D1): el cargador se declara EN EL CAMPO — un contenedor en
+            // el HTML y un `campo.js` que lo monta con `PMU_API`. La clave
+            // `datos.json:cargador` queda como LEGACY (campos viejos sin
+            // `campo.js`), asi que la plantilla nueva NO la escribe.
+            $htmImagen = <<<'HTML'
+<p class="pmu-et">Subi tu foto</p>
+<div data-pmu-cargador></div>
+HTML;
+            $jsImagen = <<<'JS'
+function (ctx, root) {
+    /* PLANTILLA "Imagen (cargador)" — edita RANURAS a tu medida: una entrada por
+     * foto (`w`, `h`, `forma` = circle|square|rect|fit, `min`, `max`). El
+     * contenedor de arriba (`[data-pmu-cargador]`) es donde se dibuja el boton de
+     * subir; `PMU_API.montarCargador` ya monta el componente y publica los ids. */
+    var RANURAS = [
+        { w: 1000, h: 1000, forma: 'fit', min: 1, max: 1 }
+    ];
+    var cont = root.querySelector('[data-pmu-cargador]');
+    if (!cont || !window.PMU_API || !window.CargadorPMU) {
+        ctx.set(ctx.id, { valor: null, cliente: '' });
+        return;
+    }
+    var cargador = window.PMU_API.montarCargador(cont, {
+        campo: ctx,
+        ranuras: RANURAS,
+        onChange: function (est) {
+            ctx.set(ctx.id, { valor: est.ids || null, cliente: '' });
+        }
+    });
+    if (!cargador) {
+        // Red de seguridad (D8): sin componente montado el campo se declara VACIO
+        // (existe y no tiene fotos), que no es lo mismo que no tener el campo.
+        ctx.set(ctx.id, { valor: null, cliente: '' });
+    }
+}
+JS;
             return [
-                'htm' => '',
+                'htm' => $htmImagen,
                 'css' => '',
-                'js' => '',
+                'js' => $jsImagen,
+                // Red de seguridad (D8): la plantilla deja el cargador LEGACY por
+                // defecto. Si el campo trae su `campo.js`, el sistema lo APAGA
+                // (regla `cargador && !campo.js`); si el admin vacia el JS, el
+                // cargador sigue funcionando sin reconfigurar nada.
                 'cargador' => 'size:1000 max:6',
             ];
     }
@@ -3470,8 +3489,7 @@ JS;
         $guardado = $this->campo_guardado($nuevo);
         $this->responder(true, ['id' => $nuevo, 'campo' => $guardado,
             'html' => $guardado ? $this->fila_campo_html($nuevo, $guardado) : '',
-            'form' => $guardado ? $this->form_campo_html($nuevo, $guardado, esc_url(admin_url('admin-post.php')),
-                !empty($guardado['datos']['cargador']) ? wp_json_encode($guardado['datos']['cargador']) : '') : '']);
+            'form' => $guardado ? $this->form_campo_html($nuevo, $guardado, esc_url(admin_url('admin-post.php'))) : '']);
     }
 
     /**
@@ -3614,7 +3632,7 @@ JS;
      * `form`), para que el navegador inserte exactamente lo mismo que el
      * servidor.
      */
-    public function form_campo_html($cid, array $c, $post, $cargador)
+    public function form_campo_html($cid, array $c, $post)
     {
         $d = $c['datos'];
         $tipo = isset($c['tipo']) ? (string) $c['tipo'] : '';
@@ -3629,12 +3647,13 @@ JS;
                         <table class="form-table">
                                 <tr><th><label>Tipo</label></th>
                                     <td>
-                                        <?php // Solo lectura (spec 015 D10): el tipo se elige
-                                              // al crear y define la plantilla con la que se
-                                              // lleno el formulario. Cambiarlo despues dejaria
-                                              // el HTML y el cargador fuera de lo que el tipo
-                                              // dice. ?>
-                                        <strong><?php echo esc_html($tipo !== '' ? $tipo : 'sin tipo'); ?></strong>
+                                        <?php // Spec 018 (F2): tipo editable en edicion; declara, no enruta. ?>
+                                        <select name="tipo" class="regular-text">
+                                            <option value="">Sin tipo</option>
+                                            <option value="texto" <?php selected($tipo, 'texto'); ?>>Texto</option>
+                                            <option value="imagen" <?php selected($tipo, 'imagen'); ?>>Imagen</option>
+                                            <option value="opciones" <?php selected($tipo, 'opciones'); ?>>Opciones (Overrides)</option>
+                                        </select>
                                         <?php if ($tipo !== '') : ?>
                                             <span class="description"><?php echo esc_html($etiquetas[$tipo] ?? $tipo); ?>.
                                                 <?php
@@ -3658,11 +3677,6 @@ JS;
                                 <tr><th><label>Descripcion</label></th>
                                     <td><input name="descripcion" class="regular-text" value="<?php echo esc_attr($d['descripcion']); ?>">
                                         <p class="description">Nota interna; no la ve el comprador.</p></td></tr>
-                                <tr><th>Opciones</th>
-                                    <td>
-                                        <label><input type="checkbox" name="array" value="1" <?php checked(!empty($d['array']), true); ?>> Array (un valor por instancia)</label><br>
-                                        <label><input type="checkbox" name="protegido" value="1" <?php checked(!empty($d['protegido']), true); ?>> Protegido (nunca va al comprador)</label>
-                                    </td></tr>
                                 <tr><th><label>HTML</label></th>
                                     <td><textarea name="html" rows="6" class="large-text code"><?php echo esc_textarea($c['htm']); ?></textarea>
                                         <p class="description">Lo que ve el comprador. <code>data-rol="valor"</code> marca el control que publica el valor.</p></td></tr>
@@ -3672,11 +3686,6 @@ JS;
                                 <tr><th><label>JS propio</label></th>
                                     <td><textarea name="js" rows="6" class="large-text code"><?php echo esc_textarea($c['js']); ?></textarea>
                                         <p class="description"><code>function(ctx, root){ ... }</code>. <code>ctx.set(id, {valor, cliente})</code> publica.</p></td></tr>
-                                <tr><th>Cargador de imagenes</th>
-                                    <td><textarea name="cargador" rows="3" class="large-text code" placeholder="size:1000 max:6"><?php echo esc_textarea($cargador); ?></textarea>
-                                        <p class="description">Atajos: <code>canvas:circle size:1000</code> ·
-                                            <code>size:2000 max:6</code> ·
-                                            <code>1_size:1000 1_canvas:circle 2_size:1024x768 2_min:2 2_max:2</code>. Vacio = sin cargador.</p></td></tr>
                             </table>
                         <div class="ec-form-acciones">
                             <button type="submit" class="button button-primary">Guardar cambios</button>
@@ -3701,8 +3710,7 @@ JS;
     {
         $salida = '';
         foreach ($campos as $cid => $c) {
-            $salida .= $this->form_campo_html($cid, $c, $post,
-                !empty($c['datos']['cargador']) ? wp_json_encode($c['datos']['cargador']) : '');
+            $salida .= $this->form_campo_html($cid, $c, $post);
         }
         return $salida;
     }
