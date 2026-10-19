@@ -568,6 +568,15 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   el sistema (`cargador && !campo.js`); al pegarle la plantilla nueva entra solo. Sostiene **N campos
   de imagen por producto/PDF**. Artefactos en `specs/018-campos-consola-v4/` (T001-T023 cerradas;
   pendiente T024: changelog + bump a 4.9.0 y recorrido WP real).
+- ✅ **Spec 019 `ranura-adaptativa` (en especificación, SIN implementar)**: la ranura del cargador
+  puede **tomar el tamaño del hueco** con `phsize: 0|1|2` (0 = default, el comportamiento actual;
+  1 = tamaño del grupo; 2 = x2, acotado por `PH_MAX=3000`), resuelto por `PMU_API.montarCargador`
+  (no por el `campo.js`), y el sistema **avisa** `se amplia Nx` cuando la foto es más chica que la
+  ranura (informativo, nunca bloquea). Requiere publicar `grupo_w`/`grupo_h`/`grupo_gid` en
+  `PMU_FICHA.campos[]` (el servidor ya tiene el dato en `panel_ficha`) y que `validar_cargador()`
+  conserve `phsize`. **`escala: 'sin-ampliar'` queda fuera** (no ampliar la foto exige tocar
+  `engine/Imagen.php` + `tienda.js:rasterizar`, o el Motor re-amplía): va como spec aparte.
+  Artefactos en `specs/019-ranura-adaptativa/` (D1-D9, FR-001..009, T001-T016); versión objetivo 4.10.0.
 - ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
   (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
@@ -801,6 +810,7 @@ el numero a mano. El stub `get_file_data` del arnes esta en `tests/texto_puente.
 | Dos cargadores en el mismo contenedor (botones duplicados) | El cargador legacy no se apago: la regla es `cargador && !campo.js` | Si el campo declara su cargador en `campo.js`, el sistema NO debe montar el legacy. Verificado por `node tests/campos-contrato.test.js` (`if (campo.js) { return; }`) |
 | Editar un campo lo desprotege, le borra la ayuda o le pierde el cargador | La consola v4 ya no manda esas claves en el POST y el motor las normalizaba a `false`/`''`/`null` | `PMU_Uploads::datos_con_legacy()` las arrastra del `datos.json` previo (write-through). Lo cubre la fase `campos` (checks "spec 018") |
 | El preview del admin no muestra el cargador del `campo.js` | El stub de `PMU_API` se inyectaba en el `srcdoc` del iframe, pero `campo-montar.js` ejecuta el `campo.js` con `new Function` **en el realm de la pagina del admin** | El stub va en el padre (`admin.js:apiPreview()` + `activarApiPreview()`), no en el srcdoc. Lo cubre `node tests/campos-contrato.test.js` |
+| El modal de recorte (`spmu-modal`) aparece **por debajo** del drawer o del preview de la consola | El modal se cuelga del `body` del documento donde corre el script (en el admin, el de la consola) y tenia `z-index: 100000`, menor que el drawer (160000) y el preview (170000) | Escala de capas documentada en `admin.css` ("Escala de capas de la consola"): 160000 drawer < 170000 preview < 180000 modales (conflicto/bonus/recorte) < 190000 overlay de render. El `.spmu-modal` subio a 180000 en `selector-pmu.js` |
 | **SMOKE CON 11 FALLOS** tras tocar `Overlay`/`Motor` | Una spec de imagen **ya es un array** (con su clave `tipo`), así que `is_array($x)` no distingue "una spec" de "lista de specs": `array_values($spec)` devuelve los valores sueltos y el PDF sale roto | Distinguir por la clave `tipo` (`Overlay::esListaDeSpecs()`) y llevar la bandera `$multi` sobre las **rutas** en `Motor` (que no tienen ambigüedad). Nunca sniffear el resultado |
 | El PDF del pedido sale con claves numéricas (`[0, "otro"]`) en vez de nombres de PDF | Un `foreach ($porIdx as $gid => $rutas)` **pisa** la variable de salida `$rutas` en `item_generar_pdfs()` | Nombre distinto en el bucle interno (`$rutasGrupo`). Lo caza la fase `completados` |
 | El guardado de un form con `pmuForm` no sale y no da error | `pmuForm` **registra** el handler: llamarlo desde dentro de otro `submit` lo agrega tarde y el POST nunca se envía | Enlazar con `pmuForm($form, action, nonce, cb)` en **tiempo de enlace**, nunca desde un handler `submit` |

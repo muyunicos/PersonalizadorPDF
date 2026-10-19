@@ -1,7 +1,7 @@
 # Indice de specs — Personalizador PDF
 
 > Jerarquia: `constitution` (.specify/memory/constitution.md) > `AGENTS.md` > resto.
-> Ultima actualizacion: 2026-10-19 (spec 018 `campos-consola-v4` **implementada**; v4.8.0 vigente, release 4.9.0 pendiente).
+> Ultima actualizacion: 2026-10-19 (spec 018 `campos-consola-v4` **implementada**; spec 019 `ranura-adaptativa` en especificacion; v4.8.0 vigente, release pendiente).
 
 ## Activos (codigo completo, falta solo manual WP real)
 | Spec | Codigo | Pendiente manual | Docs normativos |
@@ -26,6 +26,7 @@ Recorrido manual unico (cubre T030 + T012 + T017 + T029 + T051 en una sesion):
 |------|--------|-----------------|
 | [009-galerias-sprite-unificado](./009-galerias-sprite-unificado/) | spec + clarificaciones (2026-09-30), checklist 16/16, `plan.md` + `tasks.md` (2026-10-01); pendiente implementacion | spec + plan + data-model + contracts/ + quickstart + tasks (continua el contrato de 006: certificacion de hoja para los 3 ambitos, generacion automatica de huecos, Google Fonts por familia unica) |
 | [010-api-wordpress](./010-api-wordpress/) | spec + contrato + `plan.md` (2026-10-01), decisiones D1-D5 cerradas; pendiente `data-model.md` + `quickstart.md` + `tasks.md` | spec + plan + contracts/api.md (endpoint unico `admin_post_pmu_api` con `op=`; raster por grupo, Application Passwords, `uploads/pmu/api/{job_id}/` con TTL 7 dias, sincrono; enmienda de constitucion 2.0.1 -> 2.1.0 declarada) |
+| [019-ranura-adaptativa](./019-ranura-adaptativa/) | spec + plan + tasks (2026-10-19, D1-D9, FR-001..FR-009, T001-T016); pendiente implementacion | spec + plan + tasks (la ranura del cargador toma el tamano del hueco con `phsize: 0\|1\|2` — opt-in, default 0 = comportamiento actual — resuelto por `PMU_API.montarCargador`; aviso informativo "se amplia Nx"; `escala: sin-ampliar` **fuera de alcance** porque toca el Motor; sin cambios en `engine/`) |
 
 ## Archivados (trazabilidad, no implementar)
 | Ruta | Que es |
