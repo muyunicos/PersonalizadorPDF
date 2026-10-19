@@ -359,19 +359,20 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   la expresion `validez` se evalua SOLO en el navegador, PHP nunca evalua JS),
   `envolturas{gid:{forma:k}}` (contrato v4: forma representativa del grupo dentro de
   `envolturas.json`; 0/ausente = la mas usada; el campo sale en la cabecera del grupo),
-  `campos_envoltura{campo_id: gid}` (contrato v4: guia del cargador del comprador por
-  asociacion PDFxcampo — el campo se reutiliza en N PDFs), `placeholders[id]` con
-  `tipo`/`preset`/`value`/`settings`, `bonus[]` (4.7.0: archivos extra 0..N
+  `placeholders[id]` con
+  `tipo`/`preset`/`value`/`settings` (la guia de envoltura del cargador **se deduce** del
+  cableado: spec 019 F2; `campos_envoltura` dejo de usarse), `bonus[]` (4.7.0: archivos extra 0..N
   de la **biblioteca global compartida** `uploads/pmu/bonus/` con catalogo
   `bonus.json`; filas `{archivo, titulo}` (biblioteca; `titulo` vacio =
   titulo por defecto DINAMICO del catalogo, o nombre sin extension) o
   `{url, titulo}` (externa); el archivo se elige por modal, se puede
   reemplazar (conserva referencias) y borrar con escaneo de uso; al comprar
   se congelan en la meta `_pmu_bonus` del line item con el titulo resuelto.
-  Migracion one-shot desde el layout viejo `pdfs/{nombre}/bonus/`).
-  **Spec 011 (contrato de capa)**: `capas[].ref` lleva **namespace** — `pdf:{archivo}`
-  (foto del PDF) o `img:{id}` (id numerico del catálogo `img`); un `ref` plano se lee
-  como `pdf:` (compatibilidad con los mockups previos). `capas[].filtros` admite
+  **Spec 020 (B5): sin migracion** del layout viejo `pdfs/{nombre}/bonus/`; una `url`
+  relativa en `config.json` se descarta (la biblioteca se referencia con `archivo`).
+  **Spec 011 (contrato de capa)**: `capas[].ref` lleva **namespace obligatorio** — `pdf:{archivo}`
+  (foto del PDF) o `mock:{id}` (id numerico del catalogo); un `ref` plano ya **no** se
+  acepta en el cliente (el servidor lo normaliza al leer, una sola vez). `capas[].filtros` admite
   `brillo`/`gama`/`contraste`/`saturacion` 0..200, `opacidad` 0..100, `desenfoque` 0..20 y
   `tono` -180..180; el valor igual al default **no se persiste**. `capas[].modo` es
   `normal`|`multiply`. Todo es opcional: ausente = comportamiento actual.
@@ -386,9 +387,8 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   la lista vive en `config.json:bonus[]` como `{archivo, titulo}` o
   `{url, titulo}` (externa) y se congela por pedido en `_pmu_bonus`.
 - **Campos reutilizables (specs 012 + 015, formato v3)**: `uploads/pmu/campos/campos.json` es
-  **solo el indice** (RC4.6.11: vive junto al codigo de los campos, dentro de
-  `uploads/pmu/campos/`; con migracion one-shot automatica desde el layout
-  anterior en la raiz de `pmu/`)
+  **solo el indice** (vive junto al codigo de los campos, dentro de `uploads/pmu/campos/`;
+  **spec 020 B5: sin migracion** desde el layout viejo en la raiz de `pmu/`)
   (`{version:3, items:[{id,tipo,baja}], meta:{id:{creado,modificado}}}`) y cada campo es una carpeta
   `uploads/pmu/campos/{id}/` con `datos.json` + `campo.htm` + `campo.css` + `campo.js`. El `id` se
   reutiliza en N PDFs y **nunca se recicla**: una baja deja `baja:true` (tombstone) y conserva los
@@ -585,15 +585,14 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   fuera** (no ampliar la foto exige tocar `engine/Imagen.php` + `tienda.js:rasterizar`, o el Motor
   re-amplía): va como spec aparte. Artefactos en `specs/019-ranura-adaptativa/` (D1-D9,
   FR-001..009, T001-T015 cerradas; pendiente T016: release 4.10.0 + recorrido WP real).
-- ✅ **Spec 020 `limpieza-legacy` (en especificación, SIN implementar)**: regla del negocio — **en
-  desarrollo no hay migraciones ni retrocompatibilidad** (el admin borra los campos viejos y regenera
-  los PDFs). Se eliminan: `protegido` (feature completa, D1), `array` del almacén (D2),
-  `texto_ayuda` (D3), el **cargador legacy** (`datos.json:cargador` + regla `cargador && !campo.js` +
-  red de seguridad de la plantilla + `validar_cargador()`, D4), `datos_con_legacy` (D5), los puentes
-  de **tupla v1** (D6) y los formatos muertos (filtro `'Array'`, `envolturas.json` v1, `ref` plano de
-  mockups, migración de `bonus`, D7). **NO** toca la norma ex-008 ni las features (D8). Se hace **por
-  bloques**, con la batería en verde en cada uno (D10). Artefactos en `specs/020-limpieza-legacy/`
-  (D1-D10, T001-T022); versión objetivo 4.11.0.
+- ✅ **Spec 020 `limpieza-legacy` (B1-B5 implementados 2026-10-19; pendiente B6)**: regla del
+  negocio — **en desarrollo no hay migraciones ni retrocompatibilidad** (el admin borra los campos
+  viejos y regenera los PDFs). Se eliminaron: `protegido` (feature completa, D1), `array` del
+  almacén (D2), `texto_ayuda` (D3), el **cargador legacy** (D4), `datos_con_legacy` (D5), los
+  puentes de **tupla v1** (D6) y los formatos muertos: filtro `'Array'`, `envolturas.json` v1,
+  `ref` plano de mockups, migración de `bonus` y migración del índice de campos (D7). **NO** toca la
+  norma ex-008 ni las features (D8). Artefactos en `specs/020-limpieza-legacy/` (D1-D10,
+  T001-T022; 20/22); **B6** = docs finales + release **4.11.0**.
 - ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
   (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,

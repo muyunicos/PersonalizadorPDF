@@ -281,9 +281,8 @@ console.log('\n== spec 018: el cargador NUNCA es mudo + plantilla recargable =='
     admin18.indexOf("$(document).on('click', '.ec-c-plantilla'") !== -1
     && admin18.indexOf("textarea[name=js]').val(pl.js") !== -1);
 }
-check('idsDe filtra el id fantasma "Array" (legado 4.6.6)',
-  tienda.indexOf("x !== 'Array'") !== -1
-  && tienda.indexOf('nunca es un id real') !== -1);
+check('idsDe ya no filtra el fantasma "Array" (spec 020 B5)',
+  tienda.indexOf("x !== 'Array'") === -1);
 check('omisible muestra la vista previa igual (solo no bloquea el carrito)',
   tienda.indexOf('bloquearCarrito(!ficha.preview_omisible)') !== -1
   && tienda.indexOf('omisible = sin boton de vistas') === -1);

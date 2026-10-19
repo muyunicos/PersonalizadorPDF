@@ -511,19 +511,13 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('normaliza v2: archivo con titulo vacio es valido', in_array('guia.pdf', $archNorm, true)
                 && array_search('guia.pdf', $archNorm, true) !== false
                 && ($normBonus[array_search('guia.pdf', $archNorm, true)]['titulo'] ?? 'x') === '');
-            check('normaliza v2: url externa y legado relativa -> archivo',
+            check('normaliza v2: url externa se conserva; la relativa vieja se descarta (B5)',
                 in_array('https://ejemplo.com/recurso.zip', $urlsNorm, true)
-                && in_array('guia-legacy.pdf', $archNorm, true));
+                && !in_array('guia-legacy.pdf', $archNorm, true));
             check('normaliza v2: descarta allowlist y filas inutiles',
                 !in_array('no-valido.txt', $archNorm, true)
                 && !in_array('Sin nada', array_column($normBonus, 'titulo'), true)
-                && count($normBonus) === 3);
-            $mig = isset($GLOBALS['test_bonus_migr']) ? $GLOBALS['test_bonus_migr'] : null;
-            check('migracion: archivo movido a la libreria global', is_array($mig) && !empty($mig['movido']));
-            check('migracion: config relativa reescrita a archivo', is_array($mig)
-                && (($mig['muestra'][0]['archivo'] ?? '') === 'legado.zip'));
-            check('migracion: config absoluta vieja reescrita', is_array($mig)
-                && (($mig['otro'][0]['archivo'] ?? '') === 'legado.zip'));
+                && count($normBonus) === 2);
             $listaB = isset($GLOBALS['test_bonus_lista']) ? (array)$GLOBALS['test_bonus_lista'] : [];
             check('lista: titulo efectivo del catalogo (dinamico)', (($listaB['legado.zip']['titulo'] ?? '') === 'Guia de corte'));
             check('lista: sin catalogo el default es nombre sin extension', (($listaB['simple.pdf']['titulo'] ?? '') === 'simple'));
@@ -3115,24 +3109,16 @@ switch ($fase) {
             'no-es-array',
         ]);
 
-        // (2) Migracion one-shot: sembrar el layout viejo con configs CRUDOS
-        // (sin pasar por guardar_config, que ya normalizaria) y dispararla.
-        $dirViejoB = $motor_b->dir_ambito('pdfs', true) . DIRECTORY_SEPARATOR . 'muestra' . DIRECTORY_SEPARATOR . 'bonus';
-        wp_mkdir_p($dirViejoB);
-        file_put_contents($dirViejoB . DIRECTORY_SEPARATOR . 'legado.zip', 'zip-viejo');
+        // (2) Spec 020 (B5): sin migracion del layout viejo. El archivo de la
+        // libreria se siembra directo (es el que usan los pasos siguientes).
+        $dirLibB = $motor_b->dir_bonus(true);
+        wp_mkdir_p($motor_b->dir_ambito('pdfs', true) . DIRECTORY_SEPARATOR . 'muestra');
         wp_mkdir_p($motor_b->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . 'otro');
-        file_put_contents($motor_b->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . 'muestra' . DIRECTORY_SEPARATOR . 'config.json', json_encode([
-            'bonus' => [['titulo' => 'Legado relativa', 'url' => 'legado.zip']],
-        ]));
+        file_put_contents($dirLibB . DIRECTORY_SEPARATOR . 'legado.zip', 'zip-nuevo');
+        // `otro` referencia el archivo de la libreria (escaneo de uso del paso 5).
         file_put_contents($motor_b->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . 'otro' . DIRECTORY_SEPARATOR . 'config.json', json_encode([
-            'bonus' => [['titulo' => 'Legado absoluta', 'url' => 'https://ejemplo.com/wp-content/uploads/pmu/pdfs/muestra/bonus/legado.zip']],
+            'bonus' => [['archivo' => 'legado.zip', 'titulo' => 'Guia (otro PDF)']],
         ]));
-        $motor_b->dir_bonus(true); // dispara bonus_migrar_legado()
-        $GLOBALS['test_bonus_migr'] = [
-            'movido' => is_file($motor_b->ruta_bonus('legado.zip')) && !is_file($dirViejoB . '/legado.zip'),
-            'muestra' => $motor_b->leer_config('muestra')['bonus'],
-            'otro' => $motor_b->leer_config('otro')['bonus'],
-        ];
 
         // (3) Catalogo de titulos + segundo archivo SIN catalogo (default).
         file_put_contents($motor_b->ruta_bonus('simple.pdf'), '%PDF-falso');

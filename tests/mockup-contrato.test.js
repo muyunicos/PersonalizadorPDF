@@ -408,7 +408,7 @@ pruebas.push(function () {
         imagenes: [{ id: 3, url: 'u3' }],
         grupos: [{ id: '0000FF', cont: 2 }]
     };
-    check('urlDeImagen: ref plano legado = foto del PDF', R.urlDeImagen('a.png', ctx) === 'u1');
+    check('urlDeImagen: ref plano ya NO se acepta (spec 020 B5)', R.urlDeImagen('a.png', ctx) === '');
     check('urlDeImagen: namespace pdf:', R.urlDeImagen('pdf:a.png', ctx) === 'u1');
     check('urlDeImagen: namespace mock: por id', R.urlDeImagen('mock:3', ctx) === 'u3');
     check('urlDeImagen: id inexistente', R.urlDeImagen('img:9', ctx) === '');

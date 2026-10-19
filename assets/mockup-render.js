@@ -169,20 +169,18 @@
     }
 
     /**
-     * URL del recurso de una capa `img`, resolviendo el namespace `pdf:` /
-     * `img:`. Un `ref` plano se lee como `pdf:` (compatibilidad con los
-     * mockups anteriores a esta spec).
+     * URL del recurso de una capa `img`. El namespace es **obligatorio**:
+     * `pdf:{archivo}` (foto del PDF) o `mock:{id}` (id numerico del catalogo).
+     * Spec 020 (B5): un `ref` plano ya NO se lee como `pdf:` (el editor siempre
+     * escribe el namespace); un ref invalido devuelve '' y la capa no se dibuja.
      */
     function urlDeImagen(ref, contexto) {
         var refCrudo = String(ref || '');
         if (refCrudo === '') { return ''; }
-        var ambito = 'pdf';
-        var valor = refCrudo;
         var corte = refCrudo.indexOf(':');
-        if (corte > 0) {
-            ambito = refCrudo.slice(0, corte);
-            valor = refCrudo.slice(corte + 1);
-        }
+        if (corte < 1) { return ''; }
+        var ambito = refCrudo.slice(0, corte);
+        var valor = refCrudo.slice(corte + 1);
         var ctx = contexto || {};
         if (ambito === 'mock') {
             var id = parseInt(valor, 10);

@@ -470,9 +470,7 @@
         }
         if (!Array.isArray(lista)) { return null; }
         return lista.map(function (x) { return String(x); }).filter(function (x) {
-            // El literal "Array" es el residuo del bug legado (4.6.6) que
-            // guardaba (string) de la lista de ids; nunca es un id real.
-            return x !== '' && x !== 'Array';
+            return x !== '';
         });
     }
 

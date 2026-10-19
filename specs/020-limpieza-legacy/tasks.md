@@ -1,7 +1,7 @@
 # Tareas — 020 Limpieza de legacy
 
-> Regla: **no marcar `[X]` por aproximacion**. Estado: **B1-B4 implementados** (2026-10-19,
-> 16/22). Pendiente: **B5** (formatos muertos) y **B6** (docs/cierre).
+> Regla: **no marcar `[X]` por aproximacion**. Estado: **B1-B5 implementados** (2026-10-19,
+> 20/22). Pendiente: **B6** (docs/cierre + release 4.11.0).
 > Version objetivo: 4.11.0. Un bloque = un commit con la bateria en verde (D10).
 
 ## B1 — Las 3 claves que salieron de la consola (D1-D3)
@@ -43,12 +43,13 @@
 
 ## B5 — Formatos muertos del cliente y de datos (D7)
 
-- [ ] **T017** `assets/tienda.js`: fuera el filtro del id fantasma `'Array'` de `idsDe()`.
-- [ ] **T018** `PMU_Uploads`: fuera la lectura de `envolturas.json` v1 (solo v2).
-- [ ] **T019** `assets/mockup-render.js`: fuera el `ref` plano (namespace obligatorio `pdf:`/`mock:`)
-  y su check en `mockup-contrato`.
-- [ ] **T020** `PMU_Uploads`/`admin/pdfs.php`: fuera la migracion del layout viejo de `bonus`
-  (`pdfs/{nombre}/bonus/` -> `uploads/pmu/bonus/`).
+- [X] **T017** `assets/tienda.js`: fuera el filtro del id fantasma `'Array'` de `idsDe()`.
+- [X] **T018** `PMU_Uploads`: fuera la lectura de `envolturas.json` v1 (solo v2).
+- [X] **T019** `assets/mockup-render.js`: fuera el `ref` plano (namespace obligatorio `pdf:`/`mock:`)
+  y su check en `mockup-contrato`. El **servidor** sigue normalizando al leer (una sola vez).
+- [X] **T020** `PMU_Uploads`/`admin/pdfs.php`: fuera la migracion del layout viejo de `bonus`
+  (`pdfs/{nombre}/bonus/` -> `uploads/pmu/bonus/`) **y** la migracion del indice de campos
+  desde la raiz de `pmu/` (`ruta_campos_legado` + `migrar_indice_campos`).
 
 ## B6 — Docs y cierre
 

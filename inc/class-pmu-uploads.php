@@ -47,7 +47,7 @@ class PMU_Uploads
 
     private $galeria;
     /** Migracion one-shot de la libreria bonus (4.7.0) ya ejecutada en este request. */
-    private $bonus_migrado = false;
+    private $bonus_migrado = false; // (spec 020 B5: sin migracion)
 
     private function get_galeria()
     {
@@ -215,18 +215,8 @@ class PMU_Uploads
                 $grupos[$gid] = ['formas' => $formas, 'defecto' => $defecto, 'mapa' => $mapa];
                 continue;
             }
-            // v1: {n: {par, subs}} -> dedup en memoria (una sola implementacion).
-            if (!class_exists('\\ExtractCorel\\Engine\\Metadata')) {
-                require_once dirname(__DIR__) . '/engine/Metadata.php';
-            }
-            $porN = [];
-            foreach ($valor as $n => $e) {
-                $porN[(string)(int)$n] = is_array($e) ? $e : null;
-            }
-            $g = \ExtractCorel\Engine\Metadata::agruparFormas($porN);
-            if ($g !== null) {
-                $grupos[$gid] = $g;
-            }
+            // Spec 020 (B5): solo v2 (formas deduplicadas). Un archivo v1 se
+            // descarta: Re-analizar lo regenera.
         }
         return [
             'version' => 2,
@@ -388,10 +378,6 @@ class PMU_Uploads
         $dir = $this->dir_ambito('bonus', $crear);
         if ($crear && !is_dir($dir)) {
             wp_mkdir_p($dir);
-        }
-        if (!$this->bonus_migrado) {
-            $this->bonus_migrado = true;
-            $this->bonus_migrar_legado();
         }
         return $dir;
     }
@@ -601,92 +587,6 @@ class PMU_Uploads
     }
 
     /**
-     * Migracion one-shot del layout viejo `pdfs/{pdf}/bonus/` (4.6.18-4.6.20)
-     * a la libreria global: mueve los archivos fisicos y reescribe las filas
-     * de cada config (url relativa o absoluta vieja -> `archivo`).
-     * Idempotente: sin carpetas viejas no hace nada; un archivo ya global no
-     * se pisa (el viejo queda con sufijo -migr-N).
-     *
-     * LIMPIEZA 2026-10-14: a retirar cuando no queden sitios en 4.6.18-4.6.20
-     * (el one-shot ya cumplio en los migrados; los nuevos nunca generan el
-     * layout viejo). Al retirarla, quitar tambien `$bonus_migrado`, la llamada
-     * en `dir_bonus()`, la rama legado de `congelar_bonus_item()` y la siembra
-     * legado de la fase `bonus` del arnes.
-     */
-    private function bonus_migrar_legado()
-    {
-        $viejas = (array)glob($this->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . '*' . DIRECTORY_SEPARATOR . 'bonus' . DIRECTORY_SEPARATOR . '*.*');
-        $movidos = []; // "{pdf}/{archivo_viejo}" => "archivo_global"
-        foreach ($viejas as $ruta) {
-            $file = basename($ruta);
-            if (!$this->bonus_ext_valida($file)) {
-                continue;
-            }
-            $pdf = basename(dirname(dirname($ruta)));
-            try {
-                $destino = $this->ruta_bonus($file);
-            } catch (\Throwable $e) {
-                continue;
-            }
-            if (is_file($destino)) {
-                $k = 2;
-                $base = (string)pathinfo($file, PATHINFO_FILENAME);
-                $ext = (string)pathinfo($file, PATHINFO_EXTENSION);
-                do {
-                    $destino = $this->dir_bonus() . DIRECTORY_SEPARATOR . $base . '-migr-' . $k++ . '.' . $ext;
-                } while (is_file($destino));
-            }
-            if (@rename($ruta, $destino)) {
-                $movidos[$pdf . '/' . $file] = basename($destino);
-            }
-        }
-        if (!$movidos) {
-            return;
-        }
-        foreach ((array)glob($this->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . '*' . DIRECTORY_SEPARATOR . 'config.json') as $cfg) {
-            $pdf = basename(dirname($cfg));
-            $datos = $this->leer_json($cfg);
-            if (!is_array($datos) || !isset($datos['bonus']) || !is_array($datos['bonus'])) {
-                continue;
-            }
-            $cambio = false;
-            $filas = [];
-            foreach ($datos['bonus'] as $b) {
-                if (!is_array($b)) {
-                    $filas[] = $b;
-                    continue;
-                }
-                $u = (string)($b['url'] ?? '');
-                $nuevo = null;
-                if ($u !== '' && !preg_match('#^https?://#i', $u)) {
-                    // Relativa: era de la carpeta del propio PDF.
-                    $ref = basename(str_replace('\\', '/', $u));
-                    if (isset($movidos[$pdf . '/' . $ref])) {
-                        $nuevo = $movidos[$pdf . '/' . $ref];
-                    }
-                } elseif (preg_match('~[^/]/pdfs/([^/]+)/bonus/([^/?#]+)$~i', $u, $mm)) {
-                    // Absoluta al layout viejo.
-                    $ref = rawurldecode($mm[2]);
-                    if (isset($movidos[rawurldecode($mm[1]) . '/' . $ref])) {
-                        $nuevo = $movidos[rawurldecode($mm[1]) . '/' . $ref];
-                    }
-                }
-                if ($nuevo !== null) {
-                    $filas[] = ['archivo' => $nuevo, 'titulo' => (string)($b['titulo'] ?? '')];
-                    $cambio = true;
-                } else {
-                    $filas[] = $b;
-                }
-            }
-            if ($cambio) {
-                $this->guardar_config($pdf, ['bonus' => $filas]);
-            }
-        }
-    }
-
-
-
-    /**
      * Carpeta del codigo de los campos: uploads/pmu/campos/ (spec 012, T002).
      * Aqui viven las carpetas {id}/ de cada campo, los dos globales y, desde
      * RC4.6.11, tambien el INDICE (campos.json) del catalogo de campos.
@@ -713,43 +613,8 @@ class PMU_Uploads
         return $this->dir_campos() . DIRECTORY_SEPARATOR . 'campos.json';
     }
 
-    /**
-     * Ruta LEGADO del indice de campos: uploads/pmu/campos.json (hasta 4.6.10).
-     * Solo existe para la migracion one-shot de `migrar_indice_campos()`.
-     */
-    public function ruta_campos_legado()
-    {
-        return $this->dir_pmu() . DIRECTORY_SEPARATOR . 'campos.json';
-    }
-
-    /**
-     * Migracion one-shot del indice de campos: si el archivo sigue en la raiz
-     * de pmu/ (layout anterior a RC4.6.11) y la ruta nueva no existe, se mueve
-     * con rename(). Idempotente y tolerante: si el rename falla, la lectura
-     * sigue funcionando sobre la ruta legado (ningun dato se pierde) y la
-     * proxima llamada reintenta. La escritura SIEMPRE va a la ruta nueva.
-     *
-     * @return string Ruta efectiva del indice (nueva, o legado si no se pudo mover).
-     */
-    public function migrar_indice_campos()
-    {
-        $nueva = $this->ruta_campos();
-        if (is_file($nueva)) {
-            return $nueva;
-        }
-        $legado = $this->ruta_campos_legado();
-        if (!is_file($legado)) {
-            return $nueva; // nada que migrar; los lectores devuelven vacio
-        }
-        $dir = $this->dir_campos(true);
-        if (!is_dir($dir) || !wp_is_writable($dir)) {
-            return $legado; // sin permisos: se sigue leyendo el legado
-        }
-        if (!@rename($legado, $nueva)) {
-            return $legado; // rename fallo: lectura tolerante sobre el legado
-        }
-        return $nueva;
-    }
+    // (spec 020 B5) `ruta_campos_legado()` y `migrar_indice_campos()` se
+    // eliminaron: el indice vive SOLO en `uploads/pmu/campos/campos.json`.
 
     /**
      * Id de campo saneado: entero >= 1 (nunca 0; los dados de baja conservan
@@ -1335,7 +1200,7 @@ class PMU_Uploads
      */
     public function indice_campos()
     {
-        $ruta = $this->migrar_indice_campos();
+        $ruta = $this->ruta_campos();
         $vacio = ['version' => 3, 'items' => [], 'meta' => []];
         if (!is_file($ruta)) {
             return $vacio;
@@ -1358,13 +1223,11 @@ class PMU_Uploads
     /**
      * Guarda el indice (atomico). Devuelve true/false.
      * v3 (spec 015): `items[].tipo` en vez de `plantilla`, y `meta` sin
-     * categorias. El LECTOR sigue aceptando `>= 2` a proposito: un indice v2
-     * que quedara por ahi se lee normal y sus campos salen sin tipo (''), en vez
-     * de disparar la migracion de v1 sobre una estructura que ya no lo es.
+     * categorias. El LECTOR acepta `>= 2` a proposito: un indice v2 que quedara
+     * por ahi se lee normal y sus campos salen sin tipo ('') en vez de fallar.
      */
     public function guardar_indice_campos(array $indice)
     {
-        $this->migrar_indice_campos(); // asegura el layout nuevo antes de escribir
         return $this->escribir_json($this->ruta_campos(), [
             'version' => 3,
             'items' => array_values($indice['items']),
@@ -1947,9 +1810,7 @@ class PMU_Uploads
      *   catalogo (bonus.json).
      * - {url, titulo}       -> URL externa (http/https); con titulo vacio el
      *   congelado usa el nombre del archivo de la URL.
-     * Legado 4.6.18-4.6.20: url relativa a la carpeta bonus/ del PDF se
-     * reinterpreta como `archivo` de la libreria. Las filas invalidas se
-     * descartan en silencio (lectura tolerante).
+     * Las filas invalidas se descartan en silencio (lectura tolerante).
      */
     private function config_bonus($valor)
     {
@@ -1970,14 +1831,9 @@ class PMU_Uploads
             }
             if (preg_match('#^https?://#i', $url)) {
                 $out[] = ['url' => substr($url, 0, 500), 'titulo' => $titulo];
-                continue;
             }
-            // Legado: ruta relativa -> nombre de archivo de la libreria.
-            $base = basename($url);
-            if ($base === '' || $base === '.' || $base === '..' || !$this->bonus_ext_valida($base)) {
-                continue;
-            }
-            $out[] = ['archivo' => substr($base, 0, 128), 'titulo' => $titulo];
+            // Spec 020 (B5): una url relativa (layout viejo 4.6.18-4.6.20) se
+            // descarta; la libreria global se referencia con `archivo`.
         }
         return array_values($out);
     }

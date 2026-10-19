@@ -90,8 +90,6 @@ check('leer_campo de id inexistente = null', $m->leer_campo(99) === null);
 // --- Rutas: el indice vive en pmu/campos/ junto al codigo (RC4.6.11) ---
 check('ruta_campos dentro de campos/', basename(dirname($ruta)) === 'campos' && basename($ruta) === 'campos.json');
 check('dir_campos = pmu/campos/', basename($m->dir_campos()) === 'campos');
-check('ruta_campos_legado = raiz de pmu/', basename(dirname($m->ruta_campos_legado())) === 'pmu'
-    && basename($m->ruta_campos_legado()) === 'campos.json');
 check('ruta_global_css', basename($m->ruta_global_css()) === 'global.css');
 check('ruta_global_js', basename($m->ruta_global_js()) === 'global.js');
 check('ruta_campo_global rechaza otro nombre', lanza(function () use ($m) { $m->ruta_campo_global('otro.css'); }) !== false);
@@ -100,27 +98,9 @@ check('ruta_campo SANEA el traversal (basename)', strpos($rp, '..') === false);
 check('ruta_campo rechaza nombre vacio', lanza(function () use ($m) { $m->ruta_campo(1, ''); }) !== false);
 check('campo_id_seguro rechaza 0', lanza(function () use ($m) { $m->campo_id_seguro(0); }) !== false);
 
-// --- Migracion one-shot del indice: de la raiz de pmu/ a pmu/campos/ (RC4.6.11) ---
-// Siembra el archivo en la ruta LEGADO (layout anterior) y exige que la proxima
-// lectura lo MOVA a la nueva sin perder contenido, idempotente.
-$legado = $m->ruta_campos_legado();
-$crudoIndice = file_get_contents($ruta);
-@unlink($m->ruta_campos());          // vuelve al layout anterior
-if (!is_dir(dirname($legado))) { mkdir(dirname($legado), 0777, true); }
-if ($crudoIndice === false || file_put_contents($legado, $crudoIndice) === false) {
-    check('siembra del indice legado', false);
-} else {
-    $leido = $m->indice_campos();
-    check('la lectura MUEVE el indice legado a campos/ (one-shot)',
-        is_file($m->ruta_campos()) && !is_file($legado));
-    check('el indice migrado conserva sus items',
-        count($leido['items']) === 3 && (int)$leido['version'] === 3);
-    check('migracion idempotente (segunda lectura igual)',
-        is_file($m->ruta_campos()) && !is_file($legado)
-        && count($m->indice_campos()['items']) === 3);
-}
-check('escribir despues de migrar va a la ruta nueva',
-    $m->guardar_indice_campos($m->indice_campos()) && is_file($m->ruta_campos()) && !is_file($legado));
+// --- (spec 020 B5) Sin migracion del indice: vive SOLO en pmu/campos/ ---
+check('escribir va a la ruta nueva',
+    $m->guardar_indice_campos($m->indice_campos()) && is_file($m->ruta_campos()));
 
 // --- Cargador: (spec 020 D4) sin atajos de texto ni validacion en el servidor ---
 // `validar_cargador()`/`cargador_desde_texto()` se eliminaron: el cargador vive en
