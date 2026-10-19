@@ -166,7 +166,7 @@ console.log('\n== spec 018: la plantilla de imagen y el preview ==');
     plugin.indexOf('window.PMU_API.montarCargador(cont, {') !== -1);
   check('la plantilla imagen declara RANURAS por defecto (no monta en vacio)',
     plugin.indexOf('var RANURAS = [') !== -1
-    && plugin.indexOf("{ w: 1000, h: 1000, forma: 'fit', min: 1, max: 1 }") !== -1);
+    && plugin.indexOf("{ w: 1000, h: 1000, forma: 'fit', min: 1, max: 1, phsize: 0 }") !== -1);
   check('la plantilla NO vuelve a llamar montar() (montarCargador ya monta)',
     plugin.indexOf('cargador && cargador.montar()') === -1);
   // El preview del admin corre el mismo campo.js con un stub de PMU_API (D9).
@@ -193,6 +193,61 @@ console.log('\n== spec 018: la plantilla de imagen y el preview ==');
     && uploads.indexOf("foreach (['cargador', 'array', 'protegido', 'texto_ayuda'] as $k)") !== -1);
   check('campo_editar acepta el tipo (D4)',
     uploads.indexOf('public function campo_editar($id, array $datos, $htm = \'\', $css = \'\', $js = \'\', $tipo = null)') !== -1);
+}
+
+console.log('\n== spec 019: ranura adaptativa (phsize + aviso) ==');
+{
+  // La funcion pura vive en tienda.js: se carga en un sandbox minimo (sin DOM
+  // real) para ejecutarla de verdad, no solo leer su fuente.
+  const doc019 = {
+    readyState: 'loading',
+    addEventListener: () => {},
+    createElement: (t) => new FakeEl(t),
+    querySelector: () => null,
+    querySelectorAll: () => []
+  };
+  const sb019 = { console, document: doc019, setTimeout, Promise, Date };
+  sb019.window = sb019;
+  sb019.globalThis = sb019;
+  vm.createContext(sb019);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'assets', 'tienda.js'), 'utf8'),
+    sb019, { filename: 'tienda.js' });
+  const puro019 = (sb019.PMU_Tienda && sb019.PMU_Tienda.puro) || {};
+  const nr = puro019.normalizarRanura;
+  check('tienda.js expone PURO.normalizarRanura', typeof nr === 'function');
+  if (typeof nr === 'function') {
+    const grupo = { grupo_w: 1000, grupo_h: 500 };
+    const r0 = nr({ w: 800, h: 600, forma: 'fit', min: 1, max: 1 }, grupo);
+    check('phsize 0 (default) usa lo declarado', r0.w === 800 && r0.h === 600 && r0.aviso === '',
+      r0.w + 'x' + r0.h);
+    const r1 = nr({ w: 1, h: 1, phsize: 1 }, grupo);
+    check('phsize 1 toma el tamano del grupo', r1.w === 1000 && r1.h === 500, r1.w + 'x' + r1.h);
+    const r2 = nr({ w: 1, h: 1, phsize: 2 }, grupo);
+    check('phsize 2 duplica el grupo', r2.w === 2000 && r2.h === 1000, r2.w + 'x' + r2.h);
+    const rsin = nr({ w: 300, h: 200, phsize: 1 }, null);
+    check('phsize sin grupo degrada a lo declarado y avisa',
+      rsin.w === 300 && rsin.h === 200 && rsin.aviso.indexOf('sin grupo asociado') !== -1, rsin.aviso);
+    const rcap = nr({ w: 1, h: 1, phsize: 2 }, { grupo_w: 2000, grupo_h: 1600 });
+    check('PH_MAX acota y avisa', rcap.w <= 3000 && rcap.h <= 3000
+      && rcap.aviso.indexOf('PH_MAX') !== -1, rcap.w + 'x' + rcap.h);
+    const rform = nr({ w: 10, h: 10, forma: 'circle', phsize: 1 }, grupo);
+    check('circle explicito gana sobre el aspecto del grupo',
+      rform.forma === 'circle' && rform.w === 1000, rform.forma);
+    const rfit = nr({ w: 10, h: 10, forma: 'fit', phsize: 1 }, grupo);
+    check('fit se respeta con phsize (encaje completo)', rfit.forma === 'fit' && rfit.w === 1000);
+    const rmin = nr({ w: 10, h: 10, min: 0, max: 0 }, null);
+    check('min/max se normalizan a >= 1', rmin.min === 1 && rmin.max === 1);
+  }
+  const tienda019 = fs.readFileSync(path.join(__dirname, '..', 'assets', 'tienda.js'), 'utf8');
+  check('montarCargador normaliza las ranuras antes de montar',
+    tienda019.indexOf('PURO.normalizarRanura(r, defCampo)') !== -1);
+  const selector019 = fs.readFileSync(path.join(__dirname, '..', 'assets', 'selector-pmu.js'), 'utf8');
+  check('el selector avisa la ampliacion (informativo)',
+    selector019.indexOf('_factorAmpliacion = function') !== -1
+    && selector019.indexOf("' · se amplia '") !== -1
+    && selector019.indexOf('_factorAmpliacion()') !== -1);
+  const cargador019 = fs.readFileSync(path.join(__dirname, '..', 'assets', 'cargador-pmu.js'), 'utf8');
+  check('la tira muestra el aviso de la ranura', cargador019.indexOf('cpmu-aviso') !== -1);
 }
 check('idsDe filtra el id fantasma "Array" (legado 4.6.6)',
   tienda.indexOf("x !== 'Array'") !== -1

@@ -1,7 +1,9 @@
 # 019 — Ranura adaptativa: `phsize` y aviso de ampliacion
 
-> Estado: **en especificacion** (sin implementar). Origen: consulta del 2026-10-19 sobre
-> el cargador de imagenes en la consola de PDFs. Version objetivo: **4.10.0**.
+> Estado: **implementada 2026-10-19** (F1-F4 cerradas: `phsize` resuelto por
+> `PMU_API.montarCargador`, `grupo_w`/`grupo_h` publicados, `validar_cargador` conserva `phsize`,
+> aviso `se amplia Nx` en el selector y aviso de ranura en la tira). Pendiente: **T016** (release
+> 4.10.0 + recorrido en WP real). Version objetivo: **4.10.0**.
 >
 > Idea del negocio: que la ranura del cargador pueda **adaptarse al hueco** del grupo
 > (`phsize: 0|1|2`) en vez de llevar el tamano escrito a mano, y que el sistema **avise**
@@ -31,7 +33,7 @@
 | **D1** | **`phsize` es una propiedad de la RANURA** (no del campo): `0` = se usan los `w`/`h` declarados (**default**, comportamiento actual); `1` = se usa el tamano del grupo (placeholder base); `2` = el tamano del grupo **x2** (densidad/impresion). |
 | **D2** | **Lo resuelve el sistema, no el `campo.js`.** `PMU_API.montarCargador()` traduce `phsize` a `w/h` finales **antes** de instanciar `CargadorPMU` (ahi ya resuelve la `envoltura` y los `idsIniciales`). El `campo.js` solo declara la intencion. |
 | **D3** | **El tamano del grupo viaja en `PMU_FICHA.campos[]`** (`grupo_w`, `grupo_h`, `grupo_gid`) **solo si el campo tiene envoltura asociada en ese PDF** (`config.json:campos_envoltura`). Sin asociacion, `phsize > 0` **degrada a los `w`/`h` declarados** y avisa por `console.warn` (nunca inventa un tamano). |
-| **D4** | **Precedencia de la forma**: una `forma` explicita (`circle`/`square`) **gana**; `rect`/`fit` se derivan del hueco (`rect` con el aspecto del grupo). Con `phsize: 0` no cambia nada. |
+| **D4** | **Precedencia de la forma**: una `forma` explicita (`circle`/`square`) **gana**; `rect` y `fit` toman el aspecto del grupo porque el tamano ya sale de el (`fit` sigue significando "encajar completo": el tamano del grupo define el lienzo de salida). Con `phsize: 0` no cambia nada. |
 | **D5** | **Cap de seguridad** por lado (`PH_MAX = 3000` px): si `phsize: 2` excede el cap, el tamano se **acota** y se avisa en la consola. Evita PNGs de varios MB por foto (ya tuvimos `post_max_size`). |
 | **D6** | **Aviso de ampliacion** (informativo, **nunca bloquea**): cuando la imagen elegida es menor que el tamano final de la ranura, el selector y la tira del cargador muestran `se amplia Nx`. El admin lo ve al probar; el comprador entiende por que su foto se ve blanda. |
 | **D7** | **`escala: 'sin-ampliar'` FUERA DE ALCANCE**: no ampliar la imagen (300x300 -> salida 300x150) exige tocar **tambien el Motor** (`engine/Imagen.php:184` y `tienda.js:rasterizar` amplian hoy), o el Motor re-amplia al encajar. Va como spec aparte, con su puerta. |
@@ -66,8 +68,11 @@
 - **FR-005** `PH_MAX = 3000`: un tamano final mayor se acota y se avisa (una sola vez por
   ranura).
 - **FR-006** El **aviso de ampliacion** aparece cuando la imagen elegida es menor que el
-  tamano final de la ranura: se muestra como `se amplia Nx` (una decimal) en el selector y
-  en la tira. Es **informativo**: no deshabilita "Aceptar" ni "Listo".
+  tamano final de la ranura: el **selector** lo muestra en su badge
+  (`Salida WxH px · zoom xN · se amplia Nx`, una decimal, tolerancia 1.05) y es
+  **informativo**: no deshabilita "Aceptar". La **tira** del cargador muestra el aviso de la
+  **ranura** (phsize degradado o tamano acotado por `PH_MAX`), que es informacion de
+  configuracion.
 - **FR-007** `validar_cargador()` conserva `phsize` (D9) al normalizar ranuras legacy.
 - **FR-008** Cero regresion: un `campo.js` (o un `cargador` legacy) sin `phsize` se comporta
   **exactamente** como hoy; el hash del pool (`valor|preset|settings|WxH`) ya incluye el

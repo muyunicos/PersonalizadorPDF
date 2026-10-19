@@ -1285,6 +1285,10 @@ class PMU_Uploads
                 'forma' => $forma,
                 'min' => $min,
                 'max' => $max,
+                // Spec 019 (D9/FR-007): `phsize` (0|1|2) se CONSERVA al normalizar,
+                // para que un `cargador` legacy que lo declare no lo pierda al
+                // editarse. 0 = tamano declarado (comportamiento historico).
+                'phsize' => isset($r['phsize']) ? max(0, min(2, (int)$r['phsize'])) : 0,
             ];
         }
         return $ranuras;

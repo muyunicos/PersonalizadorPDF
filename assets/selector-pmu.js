@@ -554,6 +554,25 @@
         if (this.cropper) { this.cropper.rotate(90); this._badge(); }
     };
 
+    /**
+     * Spec 019 (FR-006): factor de ampliacion del recorte actual (>= 1 = la
+     * imagen se amplia). INFORMATIVO: nunca bloquea "Aceptar".
+     */
+    SelectorPMU.prototype._factorAmpliacion = function () {
+        var w = this.config.finalW;
+        var h = this.config.finalH;
+        if (!this.imagen || w < 1 || h < 1) { return 1; }
+        if (this._conCropper() && this.cropper) {
+            var d = this.cropper.getData();
+            var aw = (d && d.width > 0) ? d.width : (this.imagen.naturalWidth || 1);
+            var ah = (d && d.height > 0) ? d.height : (this.imagen.naturalHeight || 1);
+            return Math.max(w / aw, h / ah);
+        }
+        var iw = this.imagen.naturalWidth || 1;
+        var ih = this.imagen.naturalHeight || 1;
+        return Math.min(w / iw, h / ih);
+    };
+
     /** FR-013: badge en vivo "Origen WxH px" + "Salida WxH px · zoom xN". */
     SelectorPMU.prototype._badge = function () {
         if (this.txtOrigen && this.imagen) {
@@ -567,8 +586,12 @@
         } else {
             z = this.zoom;
         }
+        // Spec 019 (FR-006): aviso informativo de ampliacion (tolerancia 1.05
+        // para no molestar con redondeos).
+        var f = this._factorAmpliacion();
+        var amplia = (f > 1.05) ? ' · se amplia ' + f.toFixed(1) + 'x' : '';
         this.txtSalida.textContent =
-            'Salida ' + this.config.finalW + 'x' + this.config.finalH + ' px · zoom x' + z.toFixed(1);
+            'Salida ' + this.config.finalW + 'x' + this.config.finalH + ' px · zoom x' + z.toFixed(1) + amplia;
     };
 
     /** FR-005: el foco cicla dentro del dialogo (Tab / Shift+Tab). */

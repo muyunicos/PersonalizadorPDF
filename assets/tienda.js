@@ -19,7 +19,53 @@
 
     /* ==================== Logica pura (testeable en Node) ==================== */
 
+    /** Spec 019 (FR-005): cap por lado del tamano final de una ranura. */
+    var PH_MAX = 3000;
+
     var PURO = {
+        /**
+         * Spec 019 (FR-002/004/005): tamano final de una ranura del cargador.
+         * `phsize`: 0 = `w`/`h` declarados (default, comportamiento historico);
+         * 1 = tamano del grupo base del PDF; 2 = el doble. Sin grupo asociado
+         * degrada a lo declarado y devuelve `aviso` (nunca inventa un tamano).
+         * `circle`/`square` explicitos ganan; `rect`/`fit` toman el aspecto del
+         * grupo porque el tamano ya sale de el. Puro: sin DOM.
+         */
+        normalizarRanura: function (ranura, defCampo) {
+            var r = ranura || {};
+            var w = Math.max(1, parseInt(r.w, 10) || 0);
+            var h = Math.max(1, parseInt(r.h, 10) || 0);
+            var forma = (r.forma === 'circle' || r.forma === 'square'
+                || r.forma === 'rect' || r.forma === 'fit') ? r.forma : 'rect';
+            var phsize = Math.max(0, Math.min(2, parseInt(r.phsize, 10) || 0));
+            var aviso = '';
+            if (phsize > 0) {
+                var gw = defCampo ? (parseInt(defCampo.grupo_w, 10) || 0) : 0;
+                var gh = defCampo ? (parseInt(defCampo.grupo_h, 10) || 0) : 0;
+                if (gw > 0 && gh > 0) {
+                    var k = phsize === 2 ? 2 : 1;
+                    w = gw * k;
+                    h = gh * k;
+                } else {
+                    aviso = 'phsize:' + phsize + ' sin grupo asociado en este PDF'
+                        + ' (se usan ' + w + 'x' + h + ' declarados)';
+                }
+            }
+            if (w > PH_MAX || h > PH_MAX) {
+                var esc = Math.min(PH_MAX / w, PH_MAX / h);
+                w = Math.max(1, Math.round(w * esc));
+                h = Math.max(1, Math.round(h * esc));
+                aviso = (aviso ? aviso + '; ' : '') + 'acotado a ' + w + 'x' + h + ' (PH_MAX)';
+            }
+            return {
+                etiqueta: r.etiqueta || '',
+                w: w, h: h, forma: forma,
+                min: Math.max(1, parseInt(r.min, 10) || 1),
+                max: Math.max(1, parseInt(r.max, 10) || 1),
+                phsize: phsize,
+                aviso: aviso
+            };
+        },
         /**
          * Sustituye [campoN] por el valor del campo. Con `idx`, los valores
          * array entregan su elemento i-esimo (loop por instancia, T014b).
@@ -1246,9 +1292,19 @@
             // control del `valor` recien con la primera foto (misma regla que el
             // cargador legacy de `montarCargadores`). Si el campo trae su propio
             // `onChange`, manda el campo.
+            // Spec 019 (FR-002/003): el tamano final de cada ranura se resuelve ACA
+            // (el `campo.js` solo declara `phsize`); con aviso si degrada o se acota.
+            var ranuras = [];
+            (opts.ranuras || []).forEach(function (r) {
+                var nr = PURO.normalizarRanura(r, defCampo);
+                if (nr.aviso && typeof console !== 'undefined' && console.warn) {
+                    console.warn('[PMU] ranura ' + (nr.etiqueta || '') + ': ' + nr.aviso);
+                }
+                ranuras.push(nr);
+            });
             var mio = false;
             var cargador = new window.CargadorPMU(el, {
-                ranuras: opts.ranuras || [],
+                ranuras: ranuras,
                 envoltura: envoltura,
                 idsIniciales: idsIniciales,
                 urlDe: api.urlDeSubida,

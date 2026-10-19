@@ -788,6 +788,28 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('cargador con guia de envoltura (opcion b)', is_array($GLOBALS['test_ficha_env'] ?? null)
                 && !empty($GLOBALS['test_ficha_env']['campos'][$GLOBALS['test_ficha_cid']]['envoltura']['subs'])
                 && ($GLOBALS['test_ficha_env']['campos'][$GLOBALS['test_ficha_cid']]['envoltura_gid'] ?? '') === '0000FF');
+            // Spec 019 (FR-001): el tamano del grupo base viaja al navegador para
+            // que la ranura pueda adaptarse (`phsize`). Se compara contra el
+            // analisis real del PDF de prueba (no contra un numero fijo).
+            $fg19 = isset($GLOBALS['test_ficha_grupo']) ? $GLOBALS['test_ficha_grupo'] : [];
+            // El serializado (`PMU_FICHA.campos[]`) es lo que ve el navegador: ahi
+            // las claves se llaman grupo_w/grupo_h/grupo_gid (el panel crudo usa
+            // envoltura_gid).
+            $pf19 = isset($GLOBALS['test_ficha_localizados']['personalizador-pdf-tienda#PMU_FICHA'])
+                ? $GLOBALS['test_ficha_localizados']['personalizador-pdf-tienda#PMU_FICHA'] : [];
+            $cpf19 = isset($pf19['campos'][0]) ? $pf19['campos'][0] : [];
+            check('spec 019: grupo_w/grupo_h del grupo asociado viajan al navegador',
+                (int)($fg19['w'] ?? -1) === (int)($fg19['gw'] ?? -2)
+                && (int)($fg19['h'] ?? -1) === (int)($fg19['gh'] ?? -2)
+                && (int)($cpf19['grupo_w'] ?? -1) === (int)($fg19['gw'] ?? -2)
+                && (int)($cpf19['grupo_h'] ?? -1) === (int)($fg19['gh'] ?? -2)
+                && (string)($cpf19['grupo_gid'] ?? '') === '0000FF',
+                json_encode([$fg19['w'] ?? null, $fg19['h'] ?? null, $cpf19['grupo_gid'] ?? null]));
+            $cs19 = isset($GLOBALS['test_ficha_cp_sin']) ? $GLOBALS['test_ficha_cp_sin'] : [];
+            check('spec 019: sin envoltura asociada, grupo_w/h/gid son null',
+                array_key_exists('grupo_w', $cs19) && array_key_exists('grupo_h', $cs19)
+                && array_key_exists('grupo_gid', $cs19)
+                && $cs19['grupo_w'] === null && $cs19['grupo_h'] === null && $cs19['grupo_gid'] === null);
             // T016: HTML real del panel (hook Woo y shortcode pintan esto).
             // T016: HTML real del panel (hook Woo y shortcode pintan esto).
             $html = isset($GLOBALS['test_ficha_html1']) ? (string)$GLOBALS['test_ficha_html1'] : '';
@@ -1228,6 +1250,12 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 is_array($v4) && !empty($v4['array']));
             check('spec 018: el nombre si se actualiza', is_array($v4) && $v4['nombre'] === 'Foto editada',
                 is_array($v4) ? $v4['nombre'] : '');
+            // Spec 019 (FR-007).
+            $ph19 = isset($GLOBALS['test_campos_phsize']) ? $GLOBALS['test_campos_phsize'] : ['ok' => -1, 'cap' => -1];
+            check('spec 019: validar_cargador conserva phsize',
+                (int)$ph19['ok'] === 2, (string)$ph19['ok']);
+            check('spec 019: phsize fuera de rango se acota a 2',
+                (int)$ph19['cap'] === 2, (string)$ph19['cap']);
             break;
             check('handler responde JSON success (ya migrado)', is_array($json) && $json['success'] === true
                 && ($json['data']['motivo'] ?? '') === 'ya migrado');
@@ -1541,6 +1569,34 @@ switch ($fase) {
         $GLOBALS['test_ficha_html1'] = $p->shortcode_panel_render(['pdf' => 'muestra']);
         $GLOBALS['test_ficha_html2'] = $p->shortcode_panel_render(['pdf' => 'muestra']);
         $GLOBALS['test_ficha_localizados'] = isset($GLOBALS['test_localizados']) ? $GLOBALS['test_localizados'] : [];
+        // Spec 019 (FR-001): el tamano del grupo base viaja al navegador para que
+        // la ranura pueda adaptarse (`phsize`). Se lee contra el analisis REAL del
+        // PDF de prueba, no contra un numero fijo.
+        $campos19 = isset($GLOBALS['test_ficha']['campos']) ? $GLOBALS['test_ficha']['campos'] : [];
+        $fila19 = isset($campos19[$cid_f]) ? $campos19[$cid_f] : [];
+        $ana19 = json_decode((string)@file_get_contents($motor_f->ruta_analisis('muestra')), true);
+        // `analisis.json` guarda `grupos` como LISTA: se busca por id.
+        $g19 = [];
+        foreach ((array)($ana19['grupos'] ?? []) as $gg19) {
+            if (isset($gg19['id']) && (string)$gg19['id'] === '0000FF') {
+                $g19 = $gg19;
+                break;
+            }
+        }
+        $GLOBALS['test_ficha_grupo'] = [
+            'w' => $fila19['grupo_w'] ?? null,
+            'h' => $fila19['grupo_h'] ?? null,
+            'gid' => $fila19['grupo_gid'] ?? null,
+            'gw' => $g19['w'] ?? null,
+            'gh' => $g19['h'] ?? null,
+        ];
+        // Sin envoltura asociada: las tres claves quedan null (la ranura usa sus w/h).
+        $cpSin19 = $p->campos_panel([7 => [
+            'id' => 7, 'tipo' => 'texto',
+            'datos' => ['nombre' => 'Sin env', 'titulo_cliente' => ''],
+            'htm' => '', 'css' => '', 'js' => '',
+        ]]);
+        $GLOBALS['test_ficha_cp_sin'] = isset($cpSin19[0]) ? $cpSin19[0] : [];
         break;
 
     case 'vista_previa':
@@ -3413,6 +3469,13 @@ switch ($fase) {
                 'cargador' => !empty($d3['cargador']['ranuras']) ? 1 : 0,
                 'array' => !empty($d3['array']) ? 1 : 0,
                 'nombre' => isset($d3['nombre']) ? (string) $d3['nombre'] : '',
+            ];
+            // Spec 019 (FR-007): `phsize` se CONSERVA al normalizar (y se acota a 0..2).
+            $r19c = $motor_c->validar_cargador([['w' => 100, 'h' => 100, 'phsize' => 2]]);
+            $r19x = $motor_c->validar_cargador([['w' => 100, 'h' => 100, 'phsize' => 9]]);
+            $GLOBALS['test_campos_phsize'] = [
+                'ok' => isset($r19c[0]['phsize']) ? (int)$r19c[0]['phsize'] : -1,
+                'cap' => isset($r19x[0]['phsize']) ? (int)$r19x[0]['phsize'] : -1,
             ];
             $res_c = ['aviso' => null];
             $ids_c = [];

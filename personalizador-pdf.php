@@ -439,6 +439,12 @@ class Personalizador_PDF_Plugin
                 // en este PDF (opcion b). Solo lectura; el corte real lo hace
                 // el clip del PDF, esto es la pista visual del comprador.
                 'envoltura' => isset($c['envoltura']) && is_array($c['envoltura']) ? $c['envoltura'] : null,
+                // Spec 019 (FR-001): tamano del grupo base de ESTE PDF, para que la
+                // ranura pueda adaptarse (`phsize: 1|2`). null = el campo no tiene
+                // envoltura asociada en este PDF (la ranura usa sus w/h).
+                'grupo_gid' => isset($c['envoltura_gid']) ? (string)$c['envoltura_gid'] : null,
+                'grupo_w' => isset($c['grupo_w']) ? (int)$c['grupo_w'] : null,
+                'grupo_h' => isset($c['grupo_h']) ? (int)$c['grupo_h'] : null,
             ];
         }
         return $out;
@@ -571,6 +577,21 @@ class Personalizador_PDF_Plugin
                 if (!empty($def['envoltura'])) {
                     $fila['envoltura'] = $def['envoltura'];
                     $fila['envoltura_gid'] = $gid;
+                    // Spec 019 (FR-001): el tamano del grupo base viaja al navegador
+                    // para que la ranura pueda adaptarse (`phsize`). El dato ya esta
+                    // en analisis.json, donde `grupos` es una LISTA (no un dict):
+                    // se busca por `id`. Sin grupo no se publica nada.
+                    $g = null;
+                    foreach ((array)($analisis['grupos'] ?? []) as $gg) {
+                        if (isset($gg['id']) && (string)$gg['id'] === $gid) {
+                            $g = $gg;
+                            break;
+                        }
+                    }
+                    if ($g !== null) {
+                        $fila['grupo_w'] = (int)($g['w'] ?? 0);
+                        $fila['grupo_h'] = (int)($g['h'] ?? 0);
+                    }
                 }
             }
             $elegidos[$cid] = $fila;
@@ -3439,9 +3460,15 @@ function (ctx, root) {
     /* PLANTILLA "Imagen (cargador)" — edita RANURAS a tu medida: una entrada por
      * foto (`w`, `h`, `forma` = circle|square|rect|fit, `min`, `max`). El
      * contenedor de arriba (`[data-pmu-cargador]`) es donde se dibuja el boton de
-     * subir; `PMU_API.montarCargador` ya monta el componente y publica los ids. */
+     * subir; `PMU_API.montarCargador` ya monta el componente y publica los ids.
+     *
+     * TAMANO (spec 019, opcional): `phsize: 1` toma el tamano del hueco del grupo
+     * asociado en el PDF y `phsize: 2` el doble (acotado a 3000 px). Con
+     * `phsize: 0` (default) se usan los `w`/`h` de abajo. Requiere asociar el
+     * campo a un grupo en "Envoltura del cargador"; sin asociacion avisa y usa
+     * los `w`/`h`. */
     var RANURAS = [
-        { w: 1000, h: 1000, forma: 'fit', min: 1, max: 1 }
+        { w: 1000, h: 1000, forma: 'fit', min: 1, max: 1, phsize: 0 }
     ];
     var cont = root.querySelector('[data-pmu-cargador]');
     if (!cont || !window.PMU_API || !window.CargadorPMU) {

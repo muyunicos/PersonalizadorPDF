@@ -20,6 +20,11 @@ sel.open() / sel.close() / sel.destroy()
 
 - `finalW`/`finalH` siguen siendo **obligatorios** y los define el campo/PDF.
 - La salida sigue siendo **PNG** de exactamente `finalW x finalH` px.
+- **Spec 019 (aditivo)**: el badge en vivo agrega `· se amplia Nx` (una decimal, tolerancia
+  1.05) cuando el recorte amplia la imagen (`finalW/ancho_origen` o `finalH/alto_origen` > 1,
+  o el `contain` del modo `fit`). Es **informativo**: no deshabilita "Aceptar" ni cambia la
+  salida. Con `phsize` el tamaño final puede venir del grupo del PDF (spec 019), asi que el
+  aviso tambien cubre ese caso sin cambios en el selector.
 - Los tipos aceptados y los codigos de error (`INVALID_TYPE`, `CROP_ABORTED`,
   `UPLOAD_FAILED`) siguen vigentes. Sin `SIZE_EXCEEDED`.
 

@@ -114,6 +114,9 @@
             '.cpmu{margin:0 0 12px}'
             + '.cpmu-ranura{border:1px solid #dcdcde;border-radius:6px;padding:10px;margin:0 0 10px}'
             + '.cpmu-titulo{margin:0 0 8px;font-size:12px;color:#50575e}'
+            // Spec 019 (FR-006): aviso informativo de la ranura (nunca bloquea).
+            + '.cpmu-aviso{margin:0 0 8px;font-size:11.5px;color:#8a6116;background:#fcf9e8;'
+            + 'border:1px solid #f0e6c0;border-radius:4px;padding:4px 6px}'
             + '.cpmu-guia{display:inline-block;margin:0 0 8px;padding:6px 8px;border:1px dashed #c3c4c7;border-radius:4px}'
             + '.cpmu-guia-tit{margin:0 0 4px;font-size:11.5px;color:#646970}'
             + '.cpmu-guia-canvas{display:block;background:#fff}'
@@ -255,6 +258,15 @@
         tit.textContent = r.w + 'x' + r.h + ' px - ' + r.forma
             + ' - min ' + r.min + (r.max > 1 ? ' - hasta ' + r.max : '');
         div.appendChild(tit);
+
+        // Spec 019 (FR-006): aviso de la ranura (phsize sin grupo asociado, o
+        // tamano acotado por PH_MAX). Informativo: la ranura funciona igual.
+        if (r.aviso) {
+            var avi = doc.createElement('p');
+            avi.className = 'cpmu-aviso';
+            avi.textContent = r.aviso;
+            div.appendChild(avi);
+        }
 
         // Guia visual de la envoltura (PowerClip) del grupo: el comprador ve
         // la forma en la que su foto quedara cortada. Solo PISTA: el PNG se

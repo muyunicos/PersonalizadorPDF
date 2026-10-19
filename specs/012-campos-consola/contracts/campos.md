@@ -102,9 +102,14 @@ Un campo con cargador (propio o legacy) muestra botones que abren el `CargadorPM
 
 | Prop | Valor | Significado |
 |---|---|---|
-| `w`, `h` | int >= 1 | tamano final en px del recorte |
+| `w`, `h` | int >= 1 | tamano final en px del recorte (**cuando `phsize` es 0**) |
 | `forma` | `circle` \| `square` \| `rect` \| `fit` | recorte circular, cuadrado, rectangulo o encajar |
 | `min`, `max` | int >= 1 | cuantas imagenes admite esa ranura |
+| **`phsize`** | `0` \| `1` \| `2` | **spec 019**: `0` = tamano declarado (default, historico); `1` = tamano del grupo del PDF; `2` = el doble (acotado por `PH_MAX = 3000`). Lo resuelve `PMU_API.montarCargador` desde `PMU_FICHA.campos[].grupo_w/grupo_h`; sin envoltura asociada degrada a `w`/`h` y avisa |
+
+**`phsize` no reemplaza a `w`/`h`**: los complementa y los usa como respaldo. Una `forma`
+explicita (`circle`/`square`) gana sobre el aspecto del grupo; `rect` y `fit` lo toman porque el
+tamano ya sale de el. El aviso `se amplia Nx` (informativo) lo muestra el selector al recortar.
 
 Flujo (FR-030…FR-035, D14, D16):
 1. El comprador toca el boton -> se abre el modal de `SelectorPMU` (canvas `w x h`, zoom,

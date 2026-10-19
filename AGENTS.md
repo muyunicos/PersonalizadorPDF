@@ -414,7 +414,14 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 - **Guia de envoltura en el cargador (contrato v4 de la 011 + spec 016 F6)**: por **campo**
   (`config.json:campos_envoltura{campo_id: gid}`, opcion b: un campo se reutiliza en N PDFs),
   `panel_ficha` resuelve la forma por defecto del grupo y la publica en el campo (`envoltura` +
-  `envoltura_gid`). `cargador-pmu.js` dibuja una guia por ranura (`_guia`) y el **modal
+  `envoltura_gid`). **Spec 019**: ademas publica **`grupo_w`/`grupo_h`/`grupo_gid`** (el tamaño
+  del grupo base; `analisis.json:grupos` es una **lista**, se busca por `id`) para que la ranura
+  pueda adaptarse con **`phsize: 0|1|2`** (0 = default = los `w`/`h` declarados; 1 = el grupo;
+  2 = x2, acotado por `PH_MAX=3000`), resuelto por `PMU_API.montarCargador`
+  (`PURO.normalizarRanura`, pura y testeada) y no por el `campo.js`. Sin asociacion las tres
+  claves van `null` y `phsize>0` degrada con aviso. El selector avisa `se amplia Nx` cuando el
+  recorte amplia (informativo, nunca bloquea). `cargador-pmu.js` dibuja una guia por ranura
+  (`_guia`) y el **modal
   `selector-pmu.js`** la superpone en un canvas **separado** (`pointer-events:none`,
   `aria-hidden`): oscurece fuera de la forma y dibuja el contorno, reusando
   `PMUMockup.comandosEnvoltura`. **NUNCA** premascara el PNG (el clip lo aplica el PDF); el
@@ -568,15 +575,16 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   el sistema (`cargador && !campo.js`); al pegarle la plantilla nueva entra solo. Sostiene **N campos
   de imagen por producto/PDF**. Artefactos en `specs/018-campos-consola-v4/` (T001-T023 cerradas;
   pendiente T024: changelog + bump a 4.9.0 y recorrido WP real).
-- ✅ **Spec 019 `ranura-adaptativa` (en especificación, SIN implementar)**: la ranura del cargador
-  puede **tomar el tamaño del hueco** con `phsize: 0|1|2` (0 = default, el comportamiento actual;
+- ✅ **Spec 019 `ranura-adaptativa` (implementada 2026-10-19)**: la ranura del cargador puede
+  **tomar el tamaño del hueco** con `phsize: 0|1|2` (0 = default, el comportamiento actual;
   1 = tamaño del grupo; 2 = x2, acotado por `PH_MAX=3000`), resuelto por `PMU_API.montarCargador`
-  (no por el `campo.js`), y el sistema **avisa** `se amplia Nx` cuando la foto es más chica que la
-  ranura (informativo, nunca bloquea). Requiere publicar `grupo_w`/`grupo_h`/`grupo_gid` en
-  `PMU_FICHA.campos[]` (el servidor ya tiene el dato en `panel_ficha`) y que `validar_cargador()`
-  conserve `phsize`. **`escala: 'sin-ampliar'` queda fuera** (no ampliar la foto exige tocar
-  `engine/Imagen.php` + `tienda.js:rasterizar`, o el Motor re-amplía): va como spec aparte.
-  Artefactos en `specs/019-ranura-adaptativa/` (D1-D9, FR-001..009, T001-T016); versión objetivo 4.10.0.
+  (`PURO.normalizarRanura`, pura y testeada) y no por el `campo.js`, y el selector **avisa**
+  `se amplia Nx` cuando el recorte amplía (informativo, nunca bloquea). `panel_ficha` publica
+  `grupo_w`/`grupo_h`/`grupo_gid` en `PMU_FICHA.campos[]` (buscando el grupo por `id` en la lista
+  de `analisis.json`) y `validar_cargador()` conserva `phsize`. **`escala: 'sin-ampliar'` sigue
+  fuera** (no ampliar la foto exige tocar `engine/Imagen.php` + `tienda.js:rasterizar`, o el Motor
+  re-amplía): va como spec aparte. Artefactos en `specs/019-ranura-adaptativa/` (D1-D9,
+  FR-001..009, T001-T015 cerradas; pendiente T016: release 4.10.0 + recorrido WP real).
 - ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
   (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
@@ -811,6 +819,7 @@ el numero a mano. El stub `get_file_data` del arnes esta en `tests/texto_puente.
 | Editar un campo lo desprotege, le borra la ayuda o le pierde el cargador | La consola v4 ya no manda esas claves en el POST y el motor las normalizaba a `false`/`''`/`null` | `PMU_Uploads::datos_con_legacy()` las arrastra del `datos.json` previo (write-through). Lo cubre la fase `campos` (checks "spec 018") |
 | El preview del admin no muestra el cargador del `campo.js` | El stub de `PMU_API` se inyectaba en el `srcdoc` del iframe, pero `campo-montar.js` ejecuta el `campo.js` con `new Function` **en el realm de la pagina del admin** | El stub va en el padre (`admin.js:apiPreview()` + `activarApiPreview()`), no en el srcdoc. Lo cubre `node tests/campos-contrato.test.js` |
 | El modal de recorte (`spmu-modal`) aparece **por debajo** del drawer o del preview de la consola | El modal se cuelga del `body` del documento donde corre el script (en el admin, el de la consola) y tenia `z-index: 100000`, menor que el drawer (160000) y el preview (170000) | Escala de capas documentada en `admin.css` ("Escala de capas de la consola"): 160000 drawer < 170000 preview < 180000 modales (conflicto/bonus/recorte) < 190000 overlay de render. El `.spmu-modal` subio a 180000 en `selector-pmu.js` |
+| La ranura del cargador pide un tamaño que ya no coincide con el hueco (PDF re-analizado o campo reutilizado en otro PDF) | El `w`/`h` de la ranura se escribe a mano y no sigue al grupo; el Motor encaja igual, asi que el error es invisible | Declarar `phsize: 1` (o `2`) en la ranura: `PMU_API.montarCargador` toma `grupo_w`/`grupo_h` del PDF en runtime (spec 019). Sin envoltura asociada degrada a `w`/`h` y avisa por `console.warn` |
 | **SMOKE CON 11 FALLOS** tras tocar `Overlay`/`Motor` | Una spec de imagen **ya es un array** (con su clave `tipo`), así que `is_array($x)` no distingue "una spec" de "lista de specs": `array_values($spec)` devuelve los valores sueltos y el PDF sale roto | Distinguir por la clave `tipo` (`Overlay::esListaDeSpecs()`) y llevar la bandera `$multi` sobre las **rutas** en `Motor` (que no tienen ambigüedad). Nunca sniffear el resultado |
 | El PDF del pedido sale con claves numéricas (`[0, "otro"]`) en vez de nombres de PDF | Un `foreach ($porIdx as $gid => $rutas)` **pisa** la variable de salida `$rutas` en `item_generar_pdfs()` | Nombre distinto en el bucle interno (`$rutasGrupo`). Lo caza la fase `completados` |
 | El guardado de un form con `pmuForm` no sale y no da error | `pmuForm` **registra** el handler: llamarlo desde dentro de otro `submit` lo agrega tarde y el POST nunca se envía | Enlazar con `pmuForm($form, action, nonce, cb)` en **tiempo de enlace**, nunca desde un handler `submit` |
