@@ -1439,12 +1439,20 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('capas 1,2,5 (limpieza)', is_array($mm) && count($mm['cfg']['mockups'][0]['capas']) === 3);
             // Spec 011: `ref` con namespace, campos nuevos con default y
             // filtros con allowlist ampliada (clamp 200 para brillo).
+            // El contrato de capa puede ganar claves opcionales (p.ej. `envoltura`,
+            // PowerClip): se comparan SOLO las claves declaradas aca, asi una clave
+            // aditiva no rompe el check. La presencia de `envoltura` y su valor por
+            // tipo se cubren en la fase `mockup_capas`.
+            $capa_esp_mc = [
+                'tipo' => 'img', 'ref' => 'pdf:marco', 'x' => 90, 'y' => 54, 'w' => 122, 'h' => 192,
+                'rot' => 360.0, 'sesgo' => 1.0, 'filtros' => ['brillo' => 200],
+                'modo' => 'normal', 'nombre' => '', 'oculta' => false, 'bloqueada' => false,
+            ];
+            $capa_mc = (array)($mm['cfg']['mockups'][0]['capas'][2] ?? []);
+            ksort($capa_mc);
+            ksort($capa_esp_mc);
             check('clamp de filtros/rot/sesgo + contrato ampliado', is_array($mm)
-                && $mm['cfg']['mockups'][0]['capas'][2] === [
-                    'tipo' => 'img', 'ref' => 'pdf:marco', 'x' => 90, 'y' => 54, 'w' => 122, 'h' => 192,
-                    'rot' => 360.0, 'sesgo' => 1.0, 'filtros' => ['brillo' => 200],
-                    'modo' => 'normal', 'nombre' => '', 'oculta' => false, 'bloqueada' => false,
-                ]);
+                && array_intersect_key($capa_mc, $capa_esp_mc) === $capa_esp_mc);
             check('refs planos legados con namespace pdf:', is_array($mm)
                 && $mm['cfg']['mockups'][0]['capas'][0]['ref'] === 'pdf:fondo'
                 && $mm['cfg']['mockups'][0]['capas'][1]['ref'] === '0000FF#0');
