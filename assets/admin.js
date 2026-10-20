@@ -1544,8 +1544,9 @@ jQuery(function ($) {
         fd.append('url', url);
         fd.append('ancho', ancho);
         fd.append('alto', alto);
+        fd.append('modo', $('#ec-redimensionar-pc-modo-foto').prop('checked') ? 'foto' : 'anime');
         fd.append('imagen', archivo[0], archivo[0].name);
-        $estado.text('Enviando a la PC y esperando el PNG...');
+        $estado.text('Enviando la imagen a la PC para superresolucion IA...');
         pmuPost('personalizador_pdf_redimensionar_pc', fd, $(this).data('nonce') || '')
             .then(function (res) {
                 var d = res.data || {};
@@ -1557,7 +1558,7 @@ jQuery(function ($) {
                 $estado.addClass('ec-ok').text(d.detalle || 'PNG recibido desde la PC.');
             })
             .catch(function (err) {
-                $estado.addClass('ec-error').text((err && err.message) || 'No se pudo redimensionar la imagen.');
+                $estado.addClass('ec-error').text((err && err.message) || 'No se pudo mejorar la imagen con IA.');
             })
             .then(function () { $btn.prop('disabled', false); });
     });

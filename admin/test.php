@@ -69,10 +69,18 @@ $pendiente = $this->smoke_pendiente();
         <span class="ec-conexion-pc-estado" aria-live="polite"></span>
     </p>
     <hr>
-    <h3>Redimensionar una imagen en la PC</h3>
-    <p class="description">La PC devuelve un PNG transparente de exactamente W × H px. La imagen se centra y contiene, sin deformarse ni recortarse.</p>
+    <h3>Mejorar una imagen con IA en la PC</h3>
+    <p class="description">La PC aplica superresolucion y devuelve un PNG transparente de exactamente W × H px. La imagen se centra y contiene, sin deformarse ni recortarse; el aumento con IA se limita a x4.</p>
+    <p class="description">La primera prueba de cada modo carga el modelo y puede tardar mas. Usa solo imagenes de prueba no sensibles.</p>
     <p>
         <input type="file" id="ec-redimensionar-pc-imagen" accept="image/png,image/jpeg,image/gif,image/webp">
+    </p>
+    <p>
+        <label>
+            <input type="checkbox" id="ec-redimensionar-pc-modo-foto" checked>
+            Modo Foto real
+        </label>
+        <span class="description">Activado: realesr-general-x4v3. Desactivado: RealESRGAN_x4plus_anime_6B (anime/ilustracion).</span>
     </p>
     <p>
         <label>Ancho <input type="number" id="ec-redimensionar-pc-ancho" min="1" max="3000" value="500"> px</label>
@@ -81,7 +89,7 @@ $pendiente = $this->smoke_pendiente();
     <p>
         <button type="button" class="button ec-redimensionar-pc-probar"
                 data-nonce="<?php echo esc_attr(wp_create_nonce('personalizador_pdf_redimensionar_pc')); ?>">
-            Probar redimensionado en la PC
+            Probar superresolucion en la PC
         </button>
         <span class="ec-redimensionar-pc-estado" aria-live="polite"></span>
     </p>
