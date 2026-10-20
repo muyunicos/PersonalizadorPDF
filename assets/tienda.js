@@ -473,7 +473,11 @@
         fd.append('sid', ses.sid || '');
         fd.append('item_key', ses.item_key || '');
         fd.append('pdf', (global.PMU_FICHA && global.PMU_FICHA.pdf) || '');
-        fd.append('imagen', blob, 'campo-' + campo + '.png');
+        // Spec 026 (D2/D10): el nombre refleja el tipo REAL del blob (no un
+        // '.png' fijo). El servidor deducira el formato por la FIRMA de los
+        // bytes de todas formas: esto es solo coherencia del form.
+        var extSubida = (blob && blob.size >= 12 && blob.type === 'image/webp') ? 'webp' : 'png';
+        fd.append('imagen', blob, 'campo-' + campo + '.' + extSubida);
         return postAjax(fd).then(function (json) {
             if (!json || !json.success) {
                 throw new Error((json && json.data) || 'motor:subida:falla');
@@ -602,7 +606,7 @@
             .then(function (r) { return r.json(); });
     }
     /** Sube un PNG del pool (limpiar solo en el primer envio de cada grupo). */
-    function subirPool(sid, itemKey, pdf, gid, blob, params, limpiar) {
+    function subirPool(sid, itemKey, pdf, gid, blob, params, limpiar, tipo) {
         var fd = new FormData();
         fd.append('action', 'personalizador_pdf_pool');
         fd.append('_wpnonce', cfg.nonceVistaPrevia || '');
@@ -617,7 +621,13 @@
         fd.append('w', String(params.w));
         fd.append('h', String(params.h));
         if (limpiar) { fd.append('limpiar', '1'); }
-        fd.append('png', blob, gid + '.png');
+        // Spec 026 (D2/D3): el nombre y el flag salen del tipo REAL del blob.
+        // El servidor valida por FIRMA de los bytes, asi que el nombre es solo
+        // una pista: si el navegador no soporta WebP, viaja `png` y el
+        // servidor lo convierte (o lo deja igual, si no hay GD).
+        var ext = (tipo === 'webp') ? 'webp' : 'png';
+        fd.append('webp', ext === 'webp' ? '1' : '0');
+        fd.append('png', blob, gid + '.' + ext);
         return postAjax(fd).then(function (json) {
             if (!json || !json.success) {
                 throw new Error((json && json.data) || 'motor:pool:falla');
@@ -977,14 +987,15 @@
         var subirUna = function (f, limpiar) {
             return urlDeSubida(sid, itemKey, f.id).then(function (url) {
                 if (!url) { return null; }
-                return rasterizar(url, f.g.w, f.g.h).then(function (blob) {
-                    if (!blob) { return null; }
+                return rasterizar(url, f.g.w, f.g.h).then(function (r) {
+                    if (!r || !r.blob) { return null; }
+                    var blob = r.blob;
                     // El blob se devuelve junto al grupo/instancia para que la
                     // composicion del mockup lo dibuje (bug: las fotos iban al
                     // pool pero nunca entraban a pngsPorGrupo -> caja neutra).
                     return subirPool(sid, itemKey, pdfDatos.pdf, f.gid, blob, {
                         valor: f.id, preset: '', settings: '', w: f.g.w, h: f.g.h
-                    }, limpiar).then(function () {
+                    }, limpiar, r.tipo).then(function () {
                         return { gid: f.gid, i: f.i, blob: blob };
                     });
                 });
@@ -1034,6 +1045,10 @@
      * se capa a 1 y el canvas mide lo que ocupa la foto (acotado por w/h). Asi
      * el pool no guarda pixeles inventados; la ampliacion final la hace el
      * Motor al encajar en el PDF.
+     *
+     * Spec 026 (D1/D4): se codifica en **WebP q0.92** (el texto renderizado
+     * tiene bordes con antialias: no debe degradarse). Si el navegador no
+     * codifica WebP, cae a PNG en silencio y se entrega tal cual (D2).
      */
     function rasterizar(url, w, h) {
         return new Promise(function (resolve) {
@@ -1049,12 +1064,27 @@
                 c.height = Math.min(H, dh);
                 var ctx2 = c.getContext('2d');
                 ctx2.drawImage(img, Math.round((c.width - dw) / 2), Math.round((c.height - dh) / 2), dw, dh);
-                if (c.toBlob) { c.toBlob(function (b) { resolve(b); }, 'image/png'); }
-                else { resolve(null); }
+                if (c.toBlob) {
+                    // Spec 026: WebP con fallback por firma (D2), y solo si el
+                    // SERVIDOR puede leerlo (D3).
+                    var mimeR = (global.PMU_FICHA && global.PMU_FICHA.webp_soportado === false)
+                        ? 'image/png' : 'image/webp';
+                    c.toBlob(function (b) { resolve(b ? { blob: b, tipo: tipoDeBlob(b) } : null); }, mimeR, 0.92);
+                } else { resolve(null); }
             };
             img.onerror = function () { resolve(null); };
             img.src = url;
         });
+    }
+
+    /**
+     * Spec 026 (D2): el tipo REAL de un blob, por su firma. `toBlob('image/webp')`
+     * cae a PNG **en silencio** si el navegador no sabe codificar WebP: nunca
+     * se inventa el formato.
+     */
+    function tipoDeBlob(blob) {
+        if (!blob) { return ''; }
+        return (blob.size >= 12 && blob.type === 'image/webp') ? 'webp' : 'png';
     }
 
     function generarPdf(pdfDatos, sid, itemKey, vista, previo) {
@@ -1150,7 +1180,7 @@
                     // FR-005 (T016): el MISMO string que entro al hash del
                     // cliente; el servidor lo concatena igual en hash_pool().
                     ovClave: item.p.ovClave
-                }, limpiar);
+                }, limpiar, tipoDeBlob(item.blob));
             };
             var subidas = Object.keys(porGrupo).map(function (gid) {
                 var lista = porGrupo[gid];

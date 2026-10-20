@@ -31,7 +31,10 @@ orders/{order_id}/{item_key}/         <- rename al confirmarse el pago (entregab
 | `promover($sid, $draft, $cart_item_key)` | string | `rename()` a `{cart_item_key}` (mismo sid) |
 | `leer_manifest($sid, $item_key)` | array | lectura tolerante (aviso + estado vacio) |
 | `guardar_manifest($sid, $item_key, array $m)` | string | `.tmp` + `rename` |
-| `guardar_png($sid, $item_key, $pdf, $grupo, $bytes)` | array | devuelve `{indice, file, hash}` y anota en `archivos[]` |
+| `guardar_imagen($sid, $item_key, $pdf, $grupo, $bytes)` | array | **nombre vigente (spec 026 D6)**: la extension sale de la **firma** de los bytes (WebP si el servidor puede convertir, si no el original); devuelve `{indice, file, hash}` y anota en `archivos[]` |
+| `guardar_png(...)` | array | **alias** de `guardar_imagen()` (spec 026): conserva el nombre viejo para los llamadores existentes |
+| `convertir_webp($bytes, $q = 92)` | array | **spec 026**: WebP pasa tal cual; PNG -> WebP con GD (`q` por contenido); sin GD -> el original. Preserva el **alfa**. Lanza `motor:imagen:webp:no_soportado` si llega un WebP ilegible |
+| `servidor_lee_webp()` | bool | **spec 026**: GD + `imagecreatefromwebp` (sin eso el Motor no podria leer WebP) |
 | `congelar_webp($sid, $item_key, $mockup_id, $bytes)` | string | `mockup-{id}.webp` (300x300) |
 | `estado_preview($sid, $item_key)` | string | `ok` / `sin_vista` / `omisible` |
 | `borrar_item($sid, $item_key)` | void | borrado quirurgico (al quitar del carrito) |
@@ -41,9 +44,12 @@ orders/{order_id}/{item_key}/         <- rename al confirmarse el pago (entregab
 
 ## Nomenclatura del pool
 
-`img/{pdf}-{id}-{n}.png`:
+`img/{pdf}-{id}-{n}.{ext}` (spec 026: la extension sale de la **firma**, no de un nombre fijo):
 - `{pdf}` nombre saneado del PDF; `{id}` grupo (hex sin `#`); `{n}` 1..N (numerado cuando el
-  grupo necesita varios PNGs).
+  grupo necesita varias imagenes); `{ext}` `webp` (tras la conversion del servidor), o `png` si
+  el servidor no tiene GD. Los items viejos conservan sus `.png` y se siguen leyendo.
+- **La numeracion cuenta todos los formatos** (`siguiente_n()`): si solo mirara los `.png`, un
+  WebP y un PNG del mismo grupo se pisarian.
 - Pool DEDICADO al item: sin deduplicacion entre items (evita colisiones y borrados ajenos).
 - `hash = sha1(valor + preset + settings + WxH)` se guarda por fila para la regeneracion
   parcial (solo se re-renderiza lo cambiado).

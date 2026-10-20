@@ -405,6 +405,12 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   en fichas con >=1 campo**; el CSS se inyecta prefijado con `[data-pmu-panel]` y el JS con
   `wp_add_inline_script(..., 'before')` sobre `campo-montar` (unico orden prometido). En el preview de
   la consola viaja como portador `<script type="text/css" id="pmu-campo-global-css">`.
+- **Transparencia del recorte (spec 027)**: la ranura puede declarar `transp: 'si'|'no'`
+  (ausente = actual). `transp:'no'` -> el fondo **nunca** es transparente (boton "damero"
+  oculto; el "auto" cae a blanco puro o al color solido de los bordes). `transp:'si'` -> se
+  respeta la transparencia **real** de la foto (alfa en toda la imagen, no solo en el perimetro).
+  El color elegido a mano por el comprador siempre gana (sale opaca). Contrato:
+  `specs/027-transparencia-campo/contracts/transparencia.md`.
 - **Guia de envoltura en el cargador (contrato v4 de la 011 + spec 016 F6)**: **Spec 019 (F2)** la guia
   se **DEDUCE** del **cableado del hueco** (`[campoN]` en `value`/`settings` del grupo con envoltura;
   `campos_envoltura_deducida()`) y, si el PDF tiene **un solo** grupo con envoltura y el campo declara
@@ -426,7 +432,10 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 - **Fotos del comprador (spec 012)**: `tmp/sesion-{sid}/{item_key}/subidas/{id}.{ext}` con fila en
   `manifest.subidas[]` (`id`, `file`, `mime`, `bytes`). El `{id}` lo genera el **servidor** y el
   formato sale de la **firma de los bytes** (webp/png/jpg/gif), nunca del nombre que manda el
-  cliente. La carpeta viaja sola al pedido porque las tres mudanzas mueven el arbol entero del item.
+  cliente. **Spec 026 (D3)**: si llega un PNG y hay GD, `convertir_webp()` lo convierte a WebP
+  (**q0.85**: la foto del comprador es unseen, el ahorro es ~10x) y **el alfa se preserva**;
+  sin GD se guarda el original tal cual. La carpeta viaja sola al pedido porque las tres mudanzas
+  mueven el arbol entero del item.
 - Catálogo global de campos (formato v1, ya migrado a v3): ver la entrada de arriba.
   `id` auto no reutilizable, `titulo_cliente`, `tipo`, `array`, valor dual
   `valor`(sistema)/`cliente`(etiqueta); detalle en `specs/004.../contracts/campos.md`).
@@ -444,7 +453,9 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   borradores legacy en `tmp/cart/{linea}/` (`manifest.json` con `pdf`, personalizacion
   canonica, `pmu_hash`, cantidad, `creado`, motor) + unidad vigente ex-008 en
   `tmp/sesion-{sid}/{item_key}/` por ITEM (`manifest.json` + pool `img/` DEDICADO
-  (`img/{pdf}-{id}-{n}.png`, numerados si hay varios por `id`; sin deduplicacion global
+  (`img/{pdf}-{id}-{n}.{ext}`, numerados si hay varios por `id`; la extension sale de
+  la FIRMA de los bytes — **spec 026**: `webp` tras la conversion del servidor, `png`
+  si no hay GD; los items viejos conservan sus `.png` y se siguen leyendo; sin deduplicacion global
   entre items) + `mockup-{id}.webp` congelados 300x300; `draft-{uuid}` →
   `cart_item_key`; mockup obligatorio en ficha antes del add-to-cart, salvo
   `config.json:preview_omisible=true`); `preview_estado` en meta (`ok`|`sin_vista`|`omisible`);
@@ -665,6 +676,33 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   queda como etapa futura). Caso real: 1100×901 en un hueco de 463 (`phsize: 1`) → PNG **463×463**
   en vez de 1000×1000. Puerta: 6 checks con los ejemplos del negocio (E1-E6) + "ningún modo supera el
   lado mayor de la foto".
+- ✅ **Spec 027 `transparencia-campo` (implementada 2026-10-20, v4.17.0)**: **la politica de
+  transparencia la declara el `campo.js`** (no el comprador). La ranura acepta `transp: 'si'|'no'`
+  (**ausente = comportamiento actual**: el cliente decide con el boton "damero"). Con `transp:'no'`
+  el boton "damero" **se oculta** y el fondo **nunca** es transparente (el "auto" cae a **blanco
+  puro** `#ffffff`, o al color solido que propongan los bordes); con `transp:'si'` se aplica la
+  cadena completa y **solo si se cumplen todas** las condiciones se sube con alfa: (a) el archivo
+  soporta transparencia (PNG/WebP; JPEG no), (b) hay una **capa de alfa real** (cualquier pixel
+  con `a < 250` en **toda** la imagen, no solo en el perimetro), (c) el "auto" resuelve a
+  transparente, (d) el fondo final es transparente (si el comprador elige un color a mano, la
+  imagen sale **opaca**). La logica vive en la funcion **pura** `SelectorPMU.puro.resolverFondo()`
+  (testeable en Node). **Sin migracion** y **sin tocar el servidor** (spec 020 D4: el cargador ya
+  no se valida en PHP; constitution §III). **Ortogonal a la 026** (`imagenes-webp`): el alfa
+  viaja igual en PNG y en WebP.
+- ✅ **Spec 026 `imagenes-webp` (implementada 2026-10-20, v4.18.0)**: **las imagenes se guardan en
+  WebP** (antes todo PNG: la foto del comprador pesaba ~1.3 MB; ahora ~120 KB). El **cliente**
+  emite WebP con `canvas.toBlob('image/webp', q)`: **q0.85** para las fotos del comprador y
+  **q0.92** para el pool (el texto renderizado tiene bordes con antialias). El **servidor**
+  (`PMU_Sesion::convertir_webp()`) convierte como red de seguridad si el cliente mando PNG, y
+  **nunca** recomprime un WebP que ya viene listo. El formato se decide **siempre por la firma de
+  los bytes** (`firma_imagen()`), nunca por el nombre. **Defensa en profundidad**: el cliente solo
+  envia WebP si `PMU_FICHA.webp_soportado` (`PMU_Sesion::servidor_lee_webp()`, GD +
+  `imagecreatefromwebp`) lo permite, y si llega un WebP ilegible se rechaza con
+  `motor:imagen:webp:no_soportado` (sin GD el Motor no podria decodificarlo y el PDF saldria
+  roto). **Sin migracion**: `guardar_png()` sigue existiendo como alias de `guardar_imagen()`
+  (la extension sale de la firma) y `siguiente_n()`/`limpiar_grupo()` cuentan/borran **todos** los
+  formatos. **El Motor no cambio** (ya leia WebP) y **el PDF final es estructuralmente identico**
+  (smoke: WebP con alfa -> raster + SMask igual).
 - ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
   (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,

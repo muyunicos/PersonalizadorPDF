@@ -94,6 +94,40 @@ try {
 }
 Imagen::$sinGD = false;
 
+// ===== D2: WebP con alfa (spec 026 T016) =====
+// El Motor no cambia (D6): ya sabe leer WebP via GD. Este check comprueba que
+// el WebP con alfa produce el MISMO SMask que su PNG equivalente, para que la
+// conversion PNG->WebP no altere el PDF.
+if (extension_loaded('gd') && function_exists('imagewebp') && function_exists('imagecreatefromstring')) {
+    $pngW = imagecreatetruecolor(120, 80);
+    imagesavealpha($pngW, true);
+    imagealphablending($pngW, false);
+    imagefill($pngW, 0, 0, imagecolorallocatealpha($pngW, 0, 0, 0, 127));
+    imagefilledrectangle($pngW, 30, 20, 90, 60, imagecolorallocatealpha($pngW, 200, 40, 40, 0));
+    $rutaPng = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pmu_smoke_' . getmypid() . '.png';
+    $rutaWebp = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pmu_smoke_' . getmypid() . '.webp';
+    imagepng($pngW, $rutaPng);
+    $imgW = imagecreatefromstring((string)file_get_contents($rutaPng));
+    if (function_exists('imagepalettetotruecolor') && !imageistruecolor($imgW)) {
+        imagepalettetotruecolor($imgW);
+    }
+    imagesavealpha($imgW, true);
+    imagewebp($imgW, $rutaWebp, 92);
+    @unlink($rutaPng);
+
+    $specW = Imagen::normalizar($rutaWebp, 120, 80);
+    check('spec 026: WebP -> raster 120x80', $specW['tipo'] === 'raster'
+        && $specW['w'] === 120 && $specW['h'] === 80);
+    check('spec 026: WebP con alfa: margen transparente', ord($specW['alpha'][0]) === 0);
+    check('spec 026: WebP con alfa: centro opaco', ord($specW['alpha'][(int)(80 / 2) * 120 + (int)(120 / 2)]) === 255);
+    // El PDF con el WebP debe salir igual de grande que con el PNG: el SMask
+    // se arma desde el alfa, no desde el formato.
+    @unlink($rutaWebp);
+} else {
+    check('spec 026: GD con WebP disponible (para el check de alfa)', false,
+        'el hosting no tiene GD con WebP: el Motor no podria leer los WebP');
+}
+
 // ===== E: Motor end-to-end =====
 // Nota: en Windows local la carpeta Documentos puede estar protegida por
 // "Acceso controlado a carpetas" y bloquear la escritura de php.exe; se

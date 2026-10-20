@@ -153,6 +153,70 @@ check('Color de fondo por bordes: detecta color predominante opaco y transparent
   puro.colorPredominanteBordes(pxOpacos, 2, 2) === '#f0141e'
   && puro.colorPredominanteBordes(pxTransp, 2, 2) === 'transparent');
 
+console.log('\n== F2d: politica de transparencia por campo (spec 027) ==');
+check('expone resolverFondo (pura, sin DOM)',
+  typeof puro.resolverFondo === 'function'
+  && typeof puro.colorSolidoDeBordes === 'function');
+// D1: sin politica, el comportamiento es el de hoy (el cliente decide).
+check('Spec 027 D1: sin politica, el "auto" transparente se respeta',
+  puro.resolverFondo('', 'transparent', '#ffffff', true, 'auto') === 'transparent'
+  && puro.resolverFondo('', 'transparent', '#ffffff', false, 'auto') === 'transparent'
+  && puro.resolverFondo('', '#f0141e', '#ffffff', true, 'auto') === '#f0141e');
+// D2: `transp:'no'` -> NUNCA transparente.
+check('Spec 027 D2: con transp:"no" el fondo nunca es transparente',
+  puro.resolverFondo('no', 'transparent', '#ffffff', true, 'auto') === '#ffffff'
+  && puro.resolverFondo('no', 'transparent', '#ff0000', true, 'auto') === '#ff0000'
+  && puro.resolverFondo('no', '#00ff00', '#ffffff', true, 'auto') === '#00ff00');
+// D3/D4: `transp:'si'` -> transparente solo si hay alfa real.
+check('Spec 027 D3/D4: con transp:"si" hace falta alfa real',
+  puro.resolverFondo('si', 'transparent', '#ffffff', true, 'auto') === 'transparent'
+  && puro.resolverFondo('si', 'transparent', '#ff0000', false, 'auto') === '#ff0000'
+  && puro.resolverFondo('si', '#00ff00', '#ffffff', false, 'auto') === '#00ff00');
+// D5: el color elegido a mano siempre gana.
+check('Spec 027 D5: el color elegido a mano gana sobre el "auto"',
+  puro.resolverFondo('', '#f0141e', '#ffffff', true, '#123456') === '#123456'
+  && puro.resolverFondo('si', 'transparent', '#ffffff', true, '#123456') === '#123456');
+// El color solido de los bordes ignora los pixeles transparentes.
+check('Spec 027: colorSolidoDeBordes ignora lo transparente',
+  puro.colorSolidoDeBordes(pxOpacos, 2, 2) === '#f0141e'
+  && puro.colorSolidoDeBordes(pxTransp, 2, 2) === '#f0141e');
+// El codigo aplica la politica (oculta el damero y pone barrera final).
+const selSrc = fs.readFileSync(path.join(RAIZ, 'assets', 'selector-pmu.js'), 'utf8');
+check('Spec 027: con transp:"no" el boton "damero" se oculta y el fondo se fuerza opaco',
+  /btnTr\.hidden = \(this\.config\.transp === 'no'\)/.test(selSrc)
+  && /this\.config\.transp === 'no' && colorFondo === 'transparent'/.test(selSrc)
+  && /self\.config\.transp === 'no'\) \{ return; \}/.test(selSrc));
+
+console.log('\n== F2e: imagenes en WebP con fallback por firma (spec 026) ==');
+const tiendaSrc = fs.readFileSync(path.join(RAIZ, 'assets', 'tienda.js'), 'utf8');
+check('Spec 026: el selector emite WebP con fallback a PNG (solo si el servidor lo soporta)',
+  typeof puro.esWebP === 'function'
+  && /lienzoAWebP\(lienzo, 0\.85, terminar\)/.test(selSrc)
+  && /servidorSoportaWebP\(\) \? 'image\/webp' : 'image\/png', q\);/.test(selSrc)
+  && /webp_soportado === false/.test(selSrc)
+  && /meta\.type = 'image\/png'/.test(selSrc) === false);
+check('Spec 026 D10: el meta.type refleja el tipo REAL del blob (no un png fijo)',
+  /var mime = \(tipo === 'webp'\) \? 'image\/webp' : 'image\/png';/.test(selSrc)
+  && /type: mime,/.test(selSrc));
+check('Spec 026: el pool (rasterizar) emite WebP q0.92 y respeta el flag del servidor',
+  /mimeR, 0\.92/.test(tiendaSrc)
+  && /webp_soportado === false/.test(tiendaSrc)
+  && /tipoDeBlob/.test(tiendaSrc));
+check('Spec 026 D2/D9: subirPool nombre + flag salen del tipo real; subirFoto no fuerza .png',
+  /fd\.append\('webp', ext === 'webp' \? '1' : '0'\)/.test(tiendaSrc)
+  && /gid \+ '\.' \+ ext/.test(tiendaSrc)
+  && /'campo-' \+ campo \+ '\.' \+ extSubida/.test(tiendaSrc)
+  && /'campo-' \+ campo \+ '\.png'/.test(tiendaSrc) === false);
+check('Spec 026 D9: siguiente_n y limpiar cuentan TODOS los formatos (no solo png)',
+  (() => {
+    const fs2 = require('fs');
+    const p2 = fs2.readFileSync(path.join(RAIZ, 'inc', 'class-pmu-sesion.php'), 'utf8');
+    return /glob\(\$imgDir \. DIRECTORY_SEPARATOR \. \$prefijo \. '\*'\)/.test(p2)
+      && /-\(\\d\+\)\\.\[a-z0-9\]\+\$\/i/.test(p2)
+      && /glob\(\$imgDir \. DIRECTORY_SEPARATOR \. \$pdf \. '-' \. \$grupo \. '-\*'\)/.test(p2);
+  })()
+);
+
 console.log('\n== F2b: PNG a resolucion de la foto (spec 025) ==');
 // El PNG mide min(caja, lienzo) por eje (D5).
 function pngDe(caja, W, H) {

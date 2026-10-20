@@ -165,6 +165,8 @@ console.log('\n== spec 018: la plantilla de imagen y el preview ==');
   const plugin = fs.readFileSync(path.join(__dirname, '..', 'personalizador-pdf.php'), 'utf8');
   const adminJs = fs.readFileSync(path.join(__dirname, '..', 'assets', 'admin.js'), 'utf8');
   const uploads = fs.readFileSync(path.join(__dirname, '..', 'inc', 'class-pmu-uploads.php'), 'utf8');
+  const cargador = fs.readFileSync(path.join(__dirname, '..', 'assets', 'cargador-pmu.js'), 'utf8');
+  const selector = fs.readFileSync(path.join(__dirname, '..', 'assets', 'selector-pmu.js'), 'utf8');
   // La plantilla declara el cargador EN EL CAMPO (D1).
   check('la plantilla imagen trae el contenedor [data-pmu-cargador]',
     plugin.indexOf('<div data-pmu-cargador></div>') !== -1);
@@ -172,7 +174,18 @@ console.log('\n== spec 018: la plantilla de imagen y el preview ==');
     plugin.indexOf('window.PMU_API.montarCargador(cont, {') !== -1);
   check('la plantilla imagen declara RANURAS por defecto (sigue al hueco, spec 025)',
     plugin.indexOf('var RANURAS = [') !== -1
-    && plugin.indexOf("{ w: 1000, h: 1000, forma: 'auto', min: 1, max: 1, phsize: 1, r: 0 }") !== -1);
+    && /\{ w: 1000, h: 1000, forma: 'auto', min: 1, max: 1, phsize: 1, r: 0(, transp: '(si|no)')? \}/.test(plugin));
+  // Spec 027: la plantilla declara la politica de transparencia del campo.
+  check('Spec 027: la plantilla imagen declara la politica de transparencia',
+    plugin.indexOf("transp: 'no'") !== -1
+    && plugin.indexOf('TRANSPARENCIA (spec 027') !== -1);
+  check('Spec 027: el cargador normaliza y pasa la politica al selector',
+    cargador.indexOf("var transp = (r.transp === 'si')") !== -1
+    && cargador.indexOf('transp: r.transp') !== -1);
+  check('Spec 027: el selector aplica la politica (oculta el damero y fuerza opaco)',
+    selector.indexOf("this.config.transp === 'no'") !== -1
+    && selector.indexOf('btnTr.hidden = (this.config.transp ===') !== -1
+    && selector.indexOf('tieneAlfaReal') !== -1);
   check('la plantilla NO vuelve a llamar montar() (montarCargador ya monta)',
     plugin.indexOf('cargador && cargador.montar()') === -1);
   // El preview del admin corre el mismo campo.js con un stub de PMU_API (D9).

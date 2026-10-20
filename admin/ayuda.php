@@ -77,6 +77,13 @@ if (!defined('ABSPATH')) {
             <strong>resolucion real</strong> de la foto, acotada por el hueco (si la foto es mas chica se guarda
             tal cual, y el resto del marco queda con el color de fondo que elija). La unica ampliacion, si
             hace falta, la hace el servidor al insertarla en el PDF.</li>
+        <li><strong>Fondo transparente (spec 027):</strong> la ranura puede declarar <code>transp</code>:
+            <code>'no'</code> = el fondo <strong>nunca</strong> es transparente (se oculta el boton de fondo
+            transparente y, si la foto lo tiene, se usa <strong>blanco puro</strong> o el color solido de sus
+            bordes); <code>'si'</code> = se respeta la transparencia <strong>real</strong> de la foto (se
+            detecta en toda la imagen, no solo en el borde). <strong>Sin <code>transp</code></strong> el
+            comprador decide (comportamiento actual). La plantilla "Imagen (cargador)" viene con
+            <code>transp: 'no'</code>.</li>
         <li><strong>Tipo:</strong> el tipo (Texto, Opciones o Imagenes) solo deja el formulario preparado
             y declara para que sirve el <code>valor</code>; despues editas el HTML a tu medida. Se
             puede <strong>corregir en el editor</strong> y el boton <strong>"Cargar la plantilla de este

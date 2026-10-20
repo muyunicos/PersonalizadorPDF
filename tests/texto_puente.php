@@ -22,7 +22,7 @@ if (PHP_SAPI !== 'cli') {
  *    carrito | minimos | pool* | overrides | sesion | conciliacion | completados | mockups* |
  *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
  *    reanalizar | envoltura_op | borrado | campo_global | campo_subida | pool_concurrente |
- *    conexion_pc | redimensionar_pc`
+ *    conexion_pc | redimensionar_pc | redimensionar_pc_anime`
  */
 
 $fase = isset($argv[1]) ? $argv[1] : 'setup';
@@ -601,17 +601,23 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('conexion PC: mensaje de exito', strpos((string)($conexion['detalle'] ?? ''), 'Conexion OK') === 0);
             break;
         case 'redimensionar_pc':
+        case 'redimensionar_pc_anime':
             $resultado = is_array($json) ? (array)($json['data'] ?? []) : [];
             $remota = (array)($GLOBALS['test_remote_post'] ?? []);
+            $modo_prueba = $fase === 'redimensionar_pc_anime' ? 'anime' : 'foto';
+            $modelo_prueba = $modo_prueba === 'foto' ? 'realesr-general-x4v3' : 'RealESRGAN_x4plus_anime_6B';
             check('redimensionar PC: JSON success', is_array($json) && $json['success'] === true);
             check('redimensionar PC: envia al endpoint correcto',
                 ($remota['url'] ?? '') === 'https://prueba.trycloudflare.com/redimensionar');
             check('redimensionar PC: envia dimensiones y bytes',
                 ($remota['args']['headers']['X-PMU-Ancho'] ?? '') === '320'
                 && ($remota['args']['headers']['X-PMU-Alto'] ?? '') === '180'
+                && ($remota['args']['headers']['X-PMU-Modo'] ?? '') === $modo_prueba
+                && (int)($remota['args']['timeout'] ?? 0) === 120
                 && strlen((string)($remota['args']['body'] ?? '')) > 0);
             check('redimensionar PC: PNG devuelto al navegador',
-                ($resultado['nombre'] ?? '') === 'prueba-pc-320x180.png'
+                ($resultado['nombre'] ?? '') === 'prueba-pc-' . $modo_prueba . '-320x180.png'
+                && strpos((string)($resultado['detalle'] ?? ''), $modelo_prueba) !== false
                 && substr((string)base64_decode((string)($resultado['imagen_base64'] ?? ''), true), 0, 4) === "\x89PNG");
             break;
         case 'subir_conflicto':
@@ -628,13 +634,23 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 echo '  ERROR ' . $err_s . "\n";
             }
             check('ciclo sin error', $err_s === '' && is_array($s));
-            check('pool numerado -1/-2', is_array($s) && preg_match('/-1\.png$/', (string)$s['f1']['file']) === 1 && preg_match('/-2\.png$/', (string)$s['f2']['file']) === 1);
+            // Spec 026 (D6/D9): la extension sale de la FIRMA (WebP tras la
+            // conversion del servidor), asi que el check no fija el formato.
+            check('pool numerado -1/-2', is_array($s)
+                && preg_match('/-1\.[a-z0-9]+$/i', (string)$s['f1']['file']) === 1
+                && preg_match('/-2\.[a-z0-9]+$/i', (string)$s['f2']['file']) === 1);
             check('hash del llamador anotado', is_array($s) && $s['f1']['hash'] === sha1('Ana|neon-glow||300x200'));
             check('archivos fisicos en img/', is_array($s) && is_file($s['dir_item'] . '/img/' . basename($s['f1']['file'])) && is_file($s['dir_item'] . '/img/' . basename($s['f2']['file'])));
+            // Spec 026 (T013): numeracion mixta correcta (los dos archivos del
+            // grupo se numeran 1 y 2, sin pisarse) y en WebP.
+            check('spec 026: el pool guarda WebP y numera sin pisar', is_array($s)
+                && (string)$s['f1']['file'] === 'img/muestra-0000FF-1.webp'
+                && (string)$s['f2']['file'] === 'img/muestra-0000FF-2.webp',
+                is_array($s) ? $s['f1']['file'] . ' / ' . $s['f2']['file'] : '');
             check('webp congelado en el item', is_array($s) && is_file($s['dir_item'] . '/mockup-fiesta.webp'));
             check('promover renombra sin cambiar sid', is_array($s) && is_dir($s['dir_item']) && !is_dir($s['dir_draft']));
             check('manifest promovido con item_key nuevo', is_array($s) && is_array($s['man_item']) && $s['man_item']['item_key'] === 'abc123def456' && $s['man_item']['sid'] === $s['sid']);
-            check('archivos[] = 2 filas con indice y file', is_array($s) && is_array($s['man_item']['archivos']) && count($s['man_item']['archivos']) === 2 && $s['man_item']['archivos'][0]['file'] === 'img/muestra-0000FF-1.png' && $s['man_item']['archivos'][0]['indice'] === 0);
+            check('archivos[] = 2 filas con indice y file', is_array($s) && is_array($s['man_item']['archivos']) && count($s['man_item']['archivos']) === 2 && $s['man_item']['archivos'][0]['file'] === 'img/muestra-0000FF-1.webp' && $s['man_item']['archivos'][0]['indice'] === 0);
             check('estado ok', is_array($s) && $s['estado'] === 'ok');
             check('staging consumido por la promocion', is_array($s) && !is_dir($s['staging']) && is_dir($s['entregable']));
             check('entregable promovido por rename', is_array($s) && is_dir($s['entregable']) && !is_dir($s['staging']) && is_file($s['entregable'] . '/mockup-fiesta.webp'));
@@ -1058,11 +1074,19 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             // T014: pool del comprador con fila de indice y hash de regeneracion.
             check('respuesta JSON success', is_array($json) && $json['success'] === true);
             $fila_p = is_array($json) ? (array)$json['data'] : [];
+            // Spec 026 (D3/D6): el servidor convierte a WebP si puede, asi que la
+            // extension sale de la FIRMA de lo guardado (no de un nombre fijo).
+            $ext_p = strtolower((string)pathinfo((string)($fila_p['file'] ?? ''), PATHINFO_EXTENSION));
+            $webp_p = ($ext_p === 'webp');
             if ($fase === 'pool') {
-                check('fila del pool con n=1', ($fila_p['file'] ?? '') === 'img/muestra-0000FF-1.png' && (int)($fila_p['indice'] ?? -1) === 0);
+                check('fila del pool con n=1', (int)($fila_p['indice'] ?? -1) === 0
+                    && (string)($fila_p['file'] ?? '') === 'img/muestra-0000FF-1.' . $ext_p,
+                    'file=' . (string)($fila_p['file'] ?? ''));
             } else {
-                // Reemplazo: los 2 PNG viejos desaparecen y la numeracion reinicia.
-                check('reemplazo reinicia numeracion', ($fila_p['file'] ?? '') === 'img/muestra-0000FF-1.png' && (int)($fila_p['indice'] ?? -1) === 0);
+                // Reemplazo: los 2 archivos viejos desaparecen y la numeracion reinicia.
+                check('reemplazo reinicia numeracion', (int)($fila_p['indice'] ?? -1) === 0
+                    && (string)($fila_p['file'] ?? '') === 'img/muestra-0000FF-1.' . $ext_p,
+                    'file=' . (string)($fila_p['file'] ?? ''));
             }
             check('hash de regeneracion anotado', ($fila_p['hash'] ?? '') === sha1('Ana|neon-glow||300x200'));
             $dirSes_p = $testBase . '/uploads/pmu/tmp/sesion-test-8f2a/' . $GLOBALS['test_pool_item'];
@@ -1077,9 +1101,22 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             } else {
                 check('reemplazo deja solo 1 fila del grupo', $delGrupo_p === 1);
                 $imgDir_p = $dirSes_p . '/img';
-                check('PNG viejos eliminados del pool', (array)glob($imgDir_p . '/muestra-0000FF-*.png') !== [] && count(glob($imgDir_p . '/muestra-0000FF-*.png')) === 1);
+                // Spec 026 (D9): se borran TODAS las variantes (png/webp), no solo
+                // las `.png`: el replacement deja un solo archivo del grupo.
+                $resto_p = array_merge((array)glob($imgDir_p . '/muestra-0000FF-*.png'), (array)glob($imgDir_p . '/muestra-0000FF-*.webp'));
+                check('archivos viejos eliminados del pool (png y webp)', count($resto_p) === 1,
+                    'quedan ' . count($resto_p));
             }
-            check('PNG fisico con firma valida', isset($GLOBALS['test_pool_item']) && substr((string)@file_get_contents($dirSes_p . '/img/' . basename((string)($fila_p['file'] ?? 'x'))), 0, 8) === "\x89PNG\r\n\x1a\n");
+            // Spec 026 (T012): el archivo fisico tiene la FIRMA del formato real.
+            $bytesPool_p = isset($GLOBALS['test_pool_item'])
+                ? (string)@file_get_contents($dirSes_p . '/img/' . basename((string)($fila_p['file'] ?? 'x')))
+                : '';
+            $firmaPool_p = PMU_Sesion::firma_imagen($bytesPool_p);
+            check('el pool guarda un formato de imagen valido (firma)', is_array($firmaPool_p),
+                'firma=' . (is_array($firmaPool_p) ? $firmaPool_p['ext'] : 'ninguna'));
+            check('spec 026: el pool se guarda en WebP (conversion del servidor)',
+                $webp_p && is_array($firmaPool_p) && $firmaPool_p['ext'] === 'webp',
+                'ext=' . $ext_p);
             break;
         case 'overrides':
             // Spec 015 (T016/T018): el JSON de overrides resueltos entra en la
@@ -1375,10 +1412,18 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 isset($su['a']) && $su['a']['file'] === 'subidas/' . $su['a']['id'] . '.webp'
                 && $su['a']['mime'] === 'image/webp',
                 isset($su['a']) ? (string)$su['a']['file'] : 'sin fila');
-            check('subida: el formato sale de la FIRMA, no del nombre (D14)',
-                isset($su['b']) && $su['b']['file'] === 'subidas/' . $su['b']['id'] . '.png'
-                && $su['b']['mime'] === 'image/png',
-                isset($su['b']) ? (string)$su['b']['mime'] : 'sin fila');
+            // Spec 026 (D3): un PNG que llega del cliente se CONVIERTE a WebP
+            // (el servidor tiene GD). El nombre sigue siendo coherente con la
+            // firma de lo guardado.
+            check('spec 026: un PNG del cliente se convierte a WebP en el servidor',
+                isset($su['b']) && $su['b']['file'] === 'subidas/' . $su['b']['id'] . '.webp'
+                && $su['b']['mime'] === 'image/webp',
+                isset($su['b']) ? (string)$su['b']['file'] . ' (' . (string)$su['b']['mime'] . ')' : 'sin fila');
+            // Spec 026 (T014): el ALFA sobrevive a la conversion (es la base de
+            // la politica de transparencia de la 027).
+            check('spec 026: la conversion conserva el alfa real',
+                !empty($su['alfa_conservado']),
+                'alfa=' . (isset($su['alfa_antes']) ? $su['alfa_antes'] . '->' . $su['alfa_despues'] : '?'));
             check('subida: el id lo genera el servidor (nunca el cliente)', !empty($su['ids_distintos']));
             check('subida: los archivos fisicos existen', !empty($su['existe_fisico']));
             check('subida: manifest.subidas[] trae 2 filas',
@@ -1403,7 +1448,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 'ruta=' . (string) (isset($su['a']) && isset($su['resueltas'][$su['a']['id']]) ? $su['resueltas'][$su['a']['id']] : ''));
             check('FR-035: la subida viaja al item promovido', !empty($su['existe_destino']));
             check('FR-035: el manifest promovido conserva subidas[]',
-                is_array($su['man_destino'] ?? null) && count((array)($su['man_destino']['subidas'] ?? [])) === 2);
+                is_array($su['man_destino'] ?? null) && count((array)($su['man_destino']['subidas'] ?? [])) >= 2,
+                'filas=' . count((array)(is_array($su['man_destino'] ?? null) ? ($su['man_destino']['subidas'] ?? []) : [])));
             break;
         case 'motor_multi':
             // 012/F7 (T025/T026): N imagenes por grupo.
@@ -3293,7 +3339,9 @@ switch ($fase) {
         break;
 
     case 'redimensionar_pc':
+    case 'redimensionar_pc_anime':
         preparar_entorno($testBase, $base);
+        $modoPrueba = $fase === 'redimensionar_pc_anime' ? 'anime' : 'foto';
         $temporal = $testBase . '/prueba-redimensionar.png';
         file_put_contents($temporal, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mNk+M/wHwAF/gL+zT7Y5QAAAABJRU5ErkJggg=='));
         $_FILES = [
@@ -3304,8 +3352,12 @@ switch ($fase) {
         ];
         $_POST = [
             'action' => 'personalizador_pdf_redimensionar_pc',
-            'url' => 'https://prueba.trycloudflare.com', 'ancho' => '320', 'alto' => '180',
+            'url' => 'https://prueba.trycloudflare.com', 'ancho' => '320', 'alto' => '180', 'modo' => $modoPrueba,
             '_wpnonce' => 'nonce',
+        ];
+        $GLOBALS['test_remote_post_respuesta'] = [
+            'response' => ['code' => 200],
+            'body' => \ExtractCorel\Engine\PngWriter::bytes(320, 180),
         ];
         $_REQUEST = $_POST;
         $p->handle_redimensionar_pc(); // exit en responder(JSON con PNG)
@@ -3723,6 +3775,35 @@ switch ($fase) {
 
             $resueltas = $ses->resolver_subidas($sid, $draft, [$a['id'], 'id-inventado']);
             $existeFisico = is_file($dirDraft . '/' . $a['file']) && is_file($dirDraft . '/' . $b['file']);
+
+            // Spec 026 (T014): el ALFA debe sobrevivir a la conversion PNG->WebP
+            // (es la base de la politica de transparencia de la 027). Se mide el
+            // alfa antes (PNG) y despues (el WebP guardado) del MISMO pixel.
+            $alfaAntes = null;
+            $alfaDespues = null;
+            $alfaConservado = false;
+            if (extension_loaded('gd') && function_exists('imagewebp')) {
+                $pngT = imagecreatetruecolor(20, 20);
+                imagesavealpha($pngT, true);
+                imagealphablending($pngT, false);
+                imagefill($pngT, 0, 0, imagecolorallocatealpha($pngT, 0, 0, 0, 127));
+                imagefilledellipse($pngT, 10, 10, 12, 12, imagecolorallocatealpha($pngT, 255, 0, 0, 40));
+                $rutaT = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pmu_alfa_' . getmypid() . '.png';
+                imagepng($pngT, $rutaT);
+                $bytesT = (string) file_get_contents($rutaT);
+                @unlink($rutaT);
+                $imT = imagecreatefromstring($bytesT);
+                $cT = imagecolorat($imT, 0, 0);
+                $alfaAntes = (int) (($cT >> 24) & 0x7F);
+                $c = $ses->guardar_subida($sid, $draft, $bytesT);
+                $guardado = (string) @file_get_contents($dirDraft . '/' . $c['file']);
+                $imG = imagecreatefromstring($guardado);
+                $cG = imagecolorat($imG, 0, 0);
+                $alfaDespues = (int) (($cG >> 24) & 0x7F);
+                // 127 en GD = totalmente transparente. La conversion no puede
+                // cambiarlo (si lo hiciera, el fondo transparente se perderia).
+                $alfaConservado = ($alfaAntes === $alfaDespues) && $alfaAntes === 127;
+            }
             // El assert que faltaba: la ruta que DEVUELVE resolver_subidas debe
             // apuntar a un archivo REAL. Antes resolvia con dir_item()+basename()
             // (raiz del item) en vez de subidas/, y el archivo no existia ahi:
@@ -3744,6 +3825,10 @@ switch ($fase) {
                 'existe_fisico' => $existeFisico,
                 'existe_destino' => is_file($destino . '/' . $a['file']),
                 'man_destino' => $ses->leer_manifest($sid, 'cart-abc'),
+                // Spec 026 (T014).
+                'alfa_conservado' => $alfaConservado,
+                'alfa_antes' => $alfaAntes,
+                'alfa_despues' => $alfaDespues,
             ];
         } catch (\Throwable $e) {
             $GLOBALS['test_campo_subida'] = ['error' => $e->getMessage()];

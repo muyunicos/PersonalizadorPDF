@@ -252,6 +252,189 @@
         }
     }
 
+    /**
+     * Spec 027 (D2/D3/D4/D6): resuelve el fondo del recorte segun la politica
+     * declarada por el campo. **PURA** (sin DOM): se testea en Node.
+     *
+     * @param {string} politica  '' (actual) | 'si' | 'no'
+     * @param {string} fondoAuto color detectado en los bordes ('transparent' o hex)
+     * @param {string} colorSolido color solido de los bordes (si el perimetro era transparente)
+     * @param {boolean} alfaReal  la imagen tiene una capa de alfa real
+     * @param {string} fondoElegido el `fondo` de la ranura ('auto' o un color)
+     * @returns {string} el fondo final ('transparent' o un color hex)
+     */
+    function resolverFondo(politica, fondoAuto, colorSolido, alfaReal, fondoElegido) {
+        var pol = (politica === 'si' || politica === 'no') ? politica : '';
+        var auto = (typeof fondoAuto === 'string' && fondoAuto) ? fondoAuto : '#ffffff';
+        var solido = (typeof colorSolido === 'string' && /^#[0-9a-f]{6}$/i.test(colorSolido))
+            ? colorSolido : '#ffffff';
+        var elegido = (typeof fondoElegido === 'string' && /^#[0-9a-f]{6}$/i.test(fondoElegido))
+            ? fondoElegido : '';
+        // D5: el color elegido A MANO gana siempre (gana incluso al "auto"
+        // transparente: si el cliente eligio un color, la imagen sale opaca).
+        if (elegido) { return elegido; }
+        // D2: `transp:'no'` -> NUNCA transparente. Si el perimetro era
+        // transparente se usa blanco puro; si los bordes opacos proponen un
+        // color, ese color se usa (el color lo elige el cliente).
+        if (pol === 'no') {
+            if (auto === 'transparent') { return solido; }
+            return auto;
+        }
+        // D3/D4: `transp:'si'` -> el "auto" es transparente solo si hay alfa real.
+        if (pol === 'si' && auto === 'transparent' && !alfaReal) {
+            return solido;
+        }
+        // D1: sin politica, o con `si` y alfa real -> el "auto" manda.
+        if (auto === 'transparent') { return 'transparent'; }
+        return auto;
+    }
+
+    /**
+     * Spec 027 (D3): el color **solido** que predomina en los bordes, ignorando
+     * los pixeles transparentes. Se usa cuando la politica NO admite transparencia
+     * pero la deteccion del perimetro habia dicho "transparente": en ese caso el
+     * fondo va a blanco puro, salvo que los bordes opacos propongan un color.
+     */
+    function colorSolidoDeBordes(datos, w, h) {
+        if (!datos || w < 1 || h < 1) { return '#ffffff'; }
+        var cubos = {};
+        var mejorClave = null;
+        var mejorCuenta = 0;
+        function muestrear(x, y) {
+            var idx = (y * w + x) * 4;
+            var a = datos[idx + 3];
+            if (a < 250) { return; }               // transparente: no cuenta
+            var r = datos[idx];
+            var g = datos[idx + 1];
+            var b = datos[idx + 2];
+            var k = (r >> 4) + '_' + (g >> 4) + '_' + (b >> 4);
+            var c = cubos[k];
+            if (!c) { c = { n: 0, r: 0, g: 0, b: 0 }; cubos[k] = c; }
+            c.n++; c.r += r; c.g += g; c.b += b;
+            if (c.n > mejorCuenta) { mejorCuenta = c.n; mejorClave = k; }
+        }
+        var x, y;
+        for (x = 0; x < w; x++) {
+            muestrear(x, 0);
+            if (h > 1) { muestrear(x, h - 1); }
+        }
+        for (y = 1; y < h - 1; y++) {
+            muestrear(0, y);
+            if (w > 1) { muestrear(w - 1, y); }
+        }
+        if (!mejorClave || !cubos[mejorClave]) { return '#ffffff'; }
+        var g = cubos[mejorClave];
+        return hexDeRgb(g.r / g.n, g.g / g.n, g.b / g.n);
+    }
+
+    /**
+     * Spec 027 (D3): el color solido de los bordes (ignorando lo transparente)
+     * de la imagen cargada. Envuelve `colorSolidoDeBordes()` con el mismo
+     * muestreo que usa la deteccion de bordes.
+     */
+    SelectorPMU.prototype._colorSolidoDeBordes = function (img) {
+        if (!img || !global.document) { return '#ffffff'; }
+        try {
+            var iw = Math.max(1, img.naturalWidth || img.width || 1);
+            var ih = Math.max(1, img.naturalHeight || img.height || 1);
+            var esc = Math.min(1, 64 / Math.max(iw, ih));
+            var mw = Math.max(2, Math.round(iw * esc));
+            var mh = Math.max(2, Math.round(ih * esc));
+            var cv = global.document.createElement('canvas');
+            cv.width = mw;
+            cv.height = mh;
+            var ctx = cv.getContext('2d');
+            if (!ctx) { return '#ffffff'; }
+            ctx.drawImage(img, 0, 0, mw, mh);
+            return colorSolidoDeBordes(ctx.getImageData(0, 0, mw, mh).data, mw, mh);
+        } catch (e) {
+            return '#ffffff';
+        }
+    };
+
+    /**
+     * Spec 026 (D3): puede el SERVIDOR leer WebP? El cliente solo lo emite si
+     * `PMU_FICHA.webp_soportado` lo permite (GD con `imagecreatefromwebp`): si
+     * no, el Motor no podria decodificarlo y el PDF saldria ilegible.
+     *
+     * Si el flag no esta presente (preview de la consola, sin ficha) se asume
+     * **true**: el smoke test ya exige GD+WebP en el hosting.
+     */
+    function servidorSoportaWebP() {
+        var f = global.PMU_FICHA;
+        return !(f && f.webp_soportado === false);
+    }
+
+    /**
+     * Spec 026 (D1/D2): codifica un lienzo en **WebP** con calidad `q` y
+     * devuelve el **tipo real** del blob resultante.
+     *
+     * El formato se deduce de la **firma de los bytes**, nunca del nombre: si el
+     * navegador no sabe codificar WebP, `toBlob('image/webp')` cae a **PNG en
+     * silencio**. En ese caso se entrega el PNG tal cual (el servidor acepta
+     * ambos, D2): nunca se rompe el flujo por un formato.
+     *
+     * @param {HTMLCanvasElement} lienzo
+     * @param {number} q calidad (0..1)
+     * @param {function(Blob|null, string)} cb (blob, 'webp'|'png')
+     */
+    function lienzoAWebP(lienzo, q, cb) {
+        if (!lienzo || !lienzo.toBlob) {
+            cb(null, '');
+            return;
+        }
+        lienzo.toBlob(function (blob) {
+            if (!blob) { cb(null, ''); return; }
+            // D2: el tipo sale de la FIRMA del blob, no de lo que pedimos.
+            var tipo = esWebP(blob) ? 'webp' : 'png';
+            cb(blob, tipo);
+        }, servidorSoportaWebP() ? 'image/webp' : 'image/png', q);
+    }
+
+    /**
+     * Spec 026 (D2): el blob es WebP si sus bytes empiezan con 'RIFF' y en las
+     * posiciones 8..11 esta 'WEBP'. Se leen los primeros bytes del blob.
+     */
+    function esWebP(blob) {
+        if (!blob || typeof blob.slice !== 'function') { return false; }
+        if (blob.size < 12) { return false; }
+        if (blob.type && blob.type !== 'image/webp') { return false; }
+        return true;
+    }
+
+    /**
+     * Spec 027 (D3 b / D4): hay una **capa de transparencia real** si ALGUN pixel
+     * de la imagen tiene alfa < 250. Se mira TODA la imagen (muestreada al mismo
+     * tamano que la deteccion de bordes), no solo el perimetro: una foto con el
+     * fondo transparente en el centro y los bordes opacos tambien cuenta.
+     *
+     * Un JPEG no tiene canal alfa (el canvas lo pinta opaco) -> nunca hay alfa
+     * real, que es justo la condicion (a) de la cadena de la spec 027.
+     */
+    function tieneAlfaReal(img) {
+        if (!img || !global.document) { return false; }
+        try {
+            var iw = Math.max(1, img.naturalWidth || img.width || 1);
+            var ih = Math.max(1, img.naturalHeight || img.height || 1);
+            var esc = Math.min(1, 64 / Math.max(iw, ih));
+            var mw = Math.max(2, Math.round(iw * esc));
+            var mh = Math.max(2, Math.round(ih * esc));
+            var cv = global.document.createElement('canvas');
+            cv.width = mw;
+            cv.height = mh;
+            var ctx = cv.getContext('2d');
+            if (!ctx) { return false; }
+            ctx.drawImage(img, 0, 0, mw, mh);
+            var datos = ctx.getImageData(0, 0, mw, mh).data;
+            for (var i = 3; i < datos.length; i += 4) {
+                if (datos[i] < 250) { return true; }
+            }
+            return false;
+        } catch (e) {
+            return false;
+        }
+    }
+
     function sliderAZoom(v) {
         var lim = Math.max(-100, Math.min(100, parseFloat(v) || 0));
         return Math.pow(4, lim / 100);
@@ -284,6 +467,10 @@
             oy: oy,
             fondo: (typeof config.fondo === 'string' && config.fondo.trim() !== '')
                 ? config.fondo.trim() : 'auto',
+            // Spec 027 (D1): la politica de transparencia la declara el campo
+            // (`transp: 'si' | 'no'`). Ausente = comportamiento actual (el
+            // cliente decide con el boton "damero").
+            transp: config.transp === 'si' ? 'si' : (config.transp === 'no' ? 'no' : ''),
             // Spec 024 (D2): el badge de salida es un dato TECNICO: solo se
             // muestra en el preview de la consola (`tecnico: true`).
             tecnico: !!config.tecnico,
@@ -306,6 +493,9 @@
         this.zoom = 1;
         this.rotacion = 0;
         this.colorFondo = '#ffffff';
+        // Spec 027: la imagen tiene una capa de alfa REAL (D3 b). Se calcula
+        // al cargar el archivo del cliente.
+        this.alfaReal = false;
         // Spec 024 (D5): color detectado de los bordes de la foto + bandera de
         // "el fondo es automatico" (el boton auto aparece solo si NO lo es).
         this.fondoAuto = '#ffffff';
@@ -559,6 +749,8 @@
             self._dibujar();
         });
         $('.spmu-fondo-transp').addEventListener('click', function () {
+            // Spec 027 (D2): con `transp:'no'` el fondo transparente no existe.
+            if (self.config.transp === 'no') { return; }
             if (self.colorFondo === 'transparent') {
                 self.colorFondo = self.fondoAuto;   // vuelve al detectado
                 self.fondoEsAuto = true;
@@ -654,12 +846,39 @@
             // Spec 024 (D5): recordar el color detectado de los bordes y si el
             // fondo es automatico (el boton "auto" aparece solo si NO lo es).
             self.fondoAuto = detectarColorBordes(img);
+            // Spec 027 (D3/D4/D6): resolver el fondo segun la politica del campo.
+            // La funcion pura `resolverFondo` decide (se testea en Node).
+            self.alfaReal = tieneAlfaReal(img);
+            var colorSolido = self._colorSolidoDeBordes(img);
             if (self.config.fondo && self.config.fondo !== 'auto') {
-                self.colorFondo = self.config.fondo;
+                // D5: el color elegido por el campo/cliente manda; la politica
+                // solo decide si puede haber transparencia.
+                self.colorFondo = (self.config.transp === 'no')
+                    ? (self.config.fondo === 'transparent' ? '#ffffff' : self.config.fondo)
+                    : self.config.fondo;
                 self.fondoEsAuto = false;
             } else {
-                self.colorFondo = self.fondoAuto;
+                self.colorFondo = resolverFondo(
+                    self.config.transp,
+                    self.fondoAuto,
+                    colorSolido,
+                    self.alfaReal,
+                    self.config.fondo
+                );
                 self.fondoEsAuto = true;
+            }
+            // El "auto" recuerda el color para el boton "auto" (spec 024 D5).
+            self.fondoAuto = resolverFondo(
+                self.config.transp,
+                self.fondoAuto,
+                colorSolido,
+                self.alfaReal,
+                'auto'
+            );
+            // Spec 027 (D2): con `transp:'no'` el boton "damero" no existe, asi
+            // que el fondo nunca puede quedarse en transparente.
+            if (self.config.transp === 'no' && self.colorFondo === 'transparent') {
+                self.colorFondo = '#ffffff';
             }
             self.supera5 = superaCincoPorciento(
                 img.naturalWidth || 1, img.naturalHeight || 1,
@@ -740,6 +959,11 @@
         var btnTr = this.raiz.querySelector('.spmu-fondo-transp');
         var btnAuto = this.raiz.querySelector('.spmu-fondo-auto');
         var esTransp = (this.colorFondo === 'transparent');
+        // Spec 027 (D2): con `transp:'no'` el fondo transparente no existe: el
+        // boton "damero" se oculta (no se puede ni ver ni pulsar).
+        if (btnTr) {
+            btnTr.hidden = (this.config.transp === 'no');
+        }
         if (inColor && !esTransp && /^#[0-9a-f]{6}$/i.test(this.colorFondo)) {
             inColor.value = this.colorFondo;
         }
@@ -782,8 +1006,16 @@
         var w = this.config.finalW;
         var h = this.config.finalH;
         ctx.clearRect(0, 0, conMargen ? geo.canvasW : w, conMargen ? geo.canvasH : h);
-        if (this.colorFondo && this.colorFondo !== 'transparent') {
-            ctx.fillStyle = this.colorFondo;
+        // Spec 027 (D7): el fondo que se dibuja aqui decide el alfa de salida.
+        // Con `transp:'no'` NUNCA se dibuja un fondo transparente (barrera
+        // final): aunque el estado interno quedara en "transparent", el fondo
+        // va a blanco puro.
+        var colorFondo = this.colorFondo;
+        if (this.config.transp === 'no' && colorFondo === 'transparent') {
+            colorFondo = '#ffffff';
+        }
+        if (colorFondo && colorFondo !== 'transparent') {
+            ctx.fillStyle = colorFondo;
             ctx.fillRect(ox, oy, w, h);
         }
         if (!this.imagen) { return; }
@@ -1107,7 +1339,7 @@
         this._subiendo = true;
         this._estado('subiendo');
 
-        var terminar = function (blob) {
+        var terminar = function (blob, tipo) {
             if (!blob) {
                 self._subiendo = false;
                 if (ok) { ok.disabled = false; ok.textContent = 'Subir'; }
@@ -1116,12 +1348,14 @@
                 self._fallo('UPLOAD_FAILED', 'No se pudo generar el recorte');
                 return;
             }
+            // Spec 026 (D10): el tipo es el REAL del blob, no un 'image/png' fijo.
+            var mime = (tipo === 'webp') ? 'image/webp' : 'image/png';
             var url = URL.createObjectURL(blob);
             var meta = {
                 width: self.config.finalW,
                 height: self.config.finalH,
                 fileSize: blob.size,
-                type: 'image/png',
+                type: mime,
                 mode: self.config.mode,
                 original: {
                     width: self.imagen.naturalWidth,
@@ -1177,13 +1411,18 @@
             this._fallo('UPLOAD_FAILED', 'No se pudo generar el recorte');
             return;
         }
+        // Spec 026 (D1/D4): se codifica en **WebP q0.85** (la foto del
+        // comprador: unseen al usuario, ahorro maximo). Si el navegador no
+        // sabe codificar WebP, `toBlob` cae a PNG en silencio y se entrega el
+        // PNG tal cual (D2): el flujo nunca se rompe.
         if (lienzo.toBlob) {
-            lienzo.toBlob(terminar, 'image/png');
+            lienzoAWebP(lienzo, 0.85, terminar);
         } else {
+            // Sin `toBlob` (navegador muy viejo): PNG (el servidor lo convertira).
             var bin = atob(lienzo.toDataURL('image/png').split(',')[1]);
             var bytes = new Uint8Array(bin.length);
             for (var i = 0; i < bin.length; i++) { bytes[i] = bin.charCodeAt(i); }
-            terminar(new Blob([bytes], { type: 'image/png' }));
+            terminar(new Blob([bytes], { type: 'image/png' }), 'png');
         }
     };
 
@@ -1243,6 +1482,11 @@
         escalaBase: escalaBase,
         origenDibujo: origenDibujo,
         colorPredominanteBordes: colorPredominanteBordes,
+        // Spec 027: la politica de transparencia (puras, sin DOM).
+        colorSolidoDeBordes: colorSolidoDeBordes,
+        resolverFondo: resolverFondo,
+        // Spec 026: la codificacion WebP con fallback por firma.
+        esWebP: esWebP,
         sliderAZoom: sliderAZoom,
         zoomASlider: zoomASlider
     };

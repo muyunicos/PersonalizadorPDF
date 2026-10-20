@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.16.3
+ * Version: 4.18.0
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -502,6 +502,16 @@ class Personalizador_PDF_Plugin
             'preview_omisible' => !empty($panel['preview_omisible']),
             'valores' => $valores,
             'sesion' => $itemEdicion !== '' ? ['sid' => $sid, 'item_key' => $itemEdicion] : null,
+            // Spec 026 (D3): el cliente solo envia **WebP** si el servidor puede
+            // leerlo (GD con `imagecreatefromwebp`); si no, el Motor no podria
+            // decodificarlo y el PDF saldria ilegible. La clase se carga aqui
+            // (no via `sesion()`: no queremos instanciar nada en la ficha).
+            'webp_soportado' => call_user_func(function () {
+                if (!class_exists('PMU_Sesion', false)) {
+                    require_once __DIR__ . '/inc/class-pmu-sesion.php';
+                }
+                return PMU_Sesion::servidor_lee_webp();
+            }),
         ]);
         $html = '<div class="pmu-panel" data-pmu-panel data-pdf="' . esc_attr($slugs[0]) . '">';
         $html .= '<p class="pmu-panel-titulo"><strong>Personaliza tu diseno</strong></p>';
@@ -1602,7 +1612,12 @@ class Personalizador_PDF_Plugin
                     $bytes = is_string($bin) ? $bin : '';
                 }
             }
-            if (substr($bytes, 0, 8) !== "\x89PNG\r\n\x1a\n") {
+            // Spec 026 (D2): se valida por la **FIRMA** de los bytes, no por el
+            // nombre del fichero. Se aceptan PNG **y** WebP (y GIF/JPEG, que el
+            // Motor tambien sabe leer); el formato que se guarde lo decide la
+            // conversion del servidor (D3).
+            $firma = PMU_Sesion::firma_imagen($bytes);
+            if ($firma === null) {
                 throw new \RuntimeException('motor:pool:png:invalido');
             }
             if (!empty($_POST['limpiar'])) {
@@ -1620,7 +1635,7 @@ class Personalizador_PDF_Plugin
                 (int) ($_POST['h'] ?? 0),
                 $ov
             );
-            $fila = $sesion->guardar_png($sid, $item, $pdf, $grupo, $bytes, $hash);
+            $fila = $sesion->guardar_imagen($sid, $item, $pdf, $grupo, $bytes, $hash);
         } catch (\Throwable $e) {
             wp_send_json_error($e->getMessage());
         }
@@ -2784,16 +2799,18 @@ class Personalizador_PDF_Plugin
         return 'https://' . $host;
     }
 
-    /** Prueba de envio a la PC: imagen temporal -> PNG devuelto, sin persistir datos. */
+    /** Prueba de superresolucion local: imagen temporal -> PNG, sin persistir datos. */
     public function handle_redimensionar_pc()
     {
         $this->seguridad('personalizador_pdf_redimensionar_pc');
         $base = $this->base_tunel_prueba(isset($_POST['url']) ? (string)wp_unslash($_POST['url']) : '');
         $ancho = isset($_POST['ancho']) ? (int)$_POST['ancho'] : 0;
         $alto = isset($_POST['alto']) ? (int)$_POST['alto'] : 0;
+        $modo = isset($_POST['modo']) ? sanitize_key((string)wp_unslash($_POST['modo'])) : '';
         $archivo = $_FILES['imagen'] ?? null;
-        if ($base === '' || $ancho < 1 || $alto < 1 || $ancho > 3000 || $alto > 3000) {
-            $this->responder(false, [], 'URL o dimensiones invalidas (cada lado debe ser 1..3000 px).');
+        if ($base === '' || $ancho < 1 || $alto < 1 || $ancho > 3000 || $alto > 3000
+            || !in_array($modo, ['foto', 'anime'], true)) {
+            $this->responder(false, [], 'URL, modo o dimensiones invalidas (cada lado debe ser 1..3000 px).');
         }
         $temporal = is_array($archivo) ? (string)($archivo['tmp_name'] ?? '') : '';
         $esSubida = $temporal !== '' && (is_uploaded_file($temporal) || (PHP_SAPI === 'cli' && is_file($temporal)));
@@ -2813,30 +2830,46 @@ class Personalizador_PDF_Plugin
             $this->responder(false, [], 'No se pudo leer la imagen subida.');
         }
         $respuesta = wp_remote_post($base . '/redimensionar', [
-            'timeout' => 35,
+            'timeout' => 120,
             'redirection' => 0,
             'headers' => [
                 'Accept' => 'image/png',
                 'Content-Type' => $mime,
                 'X-PMU-Ancho' => (string)$ancho,
                 'X-PMU-Alto' => (string)$alto,
+                'X-PMU-Modo' => $modo,
             ],
             'body' => $bytes,
+            'limit_response_size' => 8 * 1024 * 1024,
         ]);
         if (is_wp_error($respuesta)) {
             $this->responder(false, [], 'No se pudo conectar con la PC: ' . $respuesta->get_error_message());
         }
+        $codigo = (int)wp_remote_retrieve_response_code($respuesta);
         $salida = (string)wp_remote_retrieve_body($respuesta);
-        if ((int)wp_remote_retrieve_response_code($respuesta) !== 200 || substr($salida, 0, 8) !== "\x89PNG\r\n\x1a\n") {
-            $this->responder(false, [], 'La PC no devolvio un PNG valido.');
+        if ($codigo !== 200) {
+            $errorRemoto = json_decode($salida, true);
+            $detalle = is_array($errorRemoto) ? sanitize_text_field((string)($errorRemoto['error'] ?? '')) : '';
+            $this->responder(false, [], $detalle !== ''
+                ? 'La PC no pudo procesar la imagen: ' . $detalle
+                : 'La PC no pudo procesar la imagen (HTTP ' . $codigo . ').');
+        }
+        $infoSalida = $salida !== '' ? @getimagesizefromstring($salida) : false;
+        if (substr($salida, 0, 8) !== "\x89PNG\r\n\x1a\n"
+            || !is_array($infoSalida)
+            || (int)($infoSalida[0] ?? 0) !== $ancho
+            || (int)($infoSalida[1] ?? 0) !== $alto) {
+            $this->responder(false, [], 'La PC no devolvio un PNG valido con las dimensiones solicitadas.');
         }
         if (strlen($salida) > 8 * 1024 * 1024) {
             $this->responder(false, [], 'El PNG devuelto supera el limite de 8 MB para esta prueba.');
         }
+        $nombreModo = $modo === 'foto' ? 'foto' : 'anime';
+        $modelo = $modo === 'foto' ? 'realesr-general-x4v3' : 'RealESRGAN_x4plus_anime_6B';
         $this->responder(true, [
             'imagen_base64' => base64_encode($salida),
-            'nombre' => 'prueba-pc-' . $ancho . 'x' . $alto . '.png',
-            'detalle' => 'PNG recibido desde la PC: ' . $ancho . ' x ' . $alto . ' px.',
+            'nombre' => 'prueba-pc-' . $nombreModo . '-' . $ancho . 'x' . $alto . '.png',
+            'detalle' => 'Superresolucion ' . $modelo . ' recibida: ' . $ancho . ' x ' . $alto . ' px.',
         ]);
     }
 
@@ -3669,9 +3702,15 @@ function (ctx, root) {
      *
      * TAMANO (spec 019, opcional): `phsize: 1` toma el tamano del hueco del grupo
      * asociado en el PDF y `phsize: 2` el doble (acotado a 3000 px). Con
-     * `phsize: 0` (default) se usan los `w`/`h` de abajo. */
+     * `phsize: 0` (default) se usan los `w`/`h` de abajo.
+     *
+     * TRANSPARENCIA (spec 027, opcional): `transp: 'no'` = el fondo del recorte
+     * NUNCA es transparente (se usa blanco puro o el color que elija el
+     * comprador). `transp: 'si'` = se respeta la transparencia de la foto
+     * (solo si la imagen la tiene de verdad). SIN `transp` = el comprador
+     * decide con el boton "damero" (comportamiento actual). */
     var RANURAS = [
-        { w: 1000, h: 1000, forma: 'auto', min: 1, max: 1, phsize: 1, r: 0 }
+        { w: 1000, h: 1000, forma: 'auto', min: 1, max: 1, phsize: 1, r: 0, transp: 'no' }
     ];
     var cont = root.querySelector('[data-pmu-cargador]');
     if (!cont) {

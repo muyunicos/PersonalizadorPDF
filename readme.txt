@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.16.1
+Stable tag: 4.18.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,18 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.18.0 =
+* **Las imagenes se guardan en WebP (spec 026)**: antes todo era PNG, que es enorme (una foto del comprador podia pesar **1,3 MB** y el pool de una sesion unos **19 MB**). Ahora el navegador emite WebP directamente: la foto del comprador baja a **~120 KB** (casi 10 veces menos) y se envia menos por la red. Si el navegador no sabe codificar WebP, se usa el PNG igual que antes (nunca se rompe el flujo).
+* **El servidor tambien convierte (red de seguridad)**: si llega un PNG (navegador sin soporte WebP), el servidor lo convierte a WebP con GD. Sin GD, se guarda el original tal cual. El **formato sale siempre de la firma de los bytes**, no del nombre del archivo.
+* **El PDF final no cambia**: el Motor ya sabia leer WebP (GD) y arma el mismo SMask. La unica diferencia es el peso que viaja por la red y se guarda en disco.
+* **Sin migracion**: los items ya generados (en PNG) se siguen leyendo normal; el pool numerado no se pisa porque ahora se cuentan todos los formatos.
+* **Documentacion**: contrato nuevo en `specs/026-imagenes-webp/`.
+
+= 4.17.0 =
+* **La transparencia la decide el campo, no el comprador (spec 027)**: la ranura del cargador acepta `transp: 'si' | 'no'`. Con `transp: 'no'` el fondo **nunca** es transparente: el boton de fondo transparente se oculta y, si la foto tiene el fondo transparente, se usa **blanco puro** (o el color solido que propongan sus bordes). Con `transp: 'si'` se respeta la transparencia **real** de la foto (se detecta en toda la imagen, no solo en el borde) y solo si el comprador no elige un color a mano.
+* **Sin cambios para los campos actuales**: si la ranura no declara `transp`, se comporta exactamente como antes (el comprador decide). No hay migracion ni cambios en el servidor.
+* **Documentacion**: contrato nuevo en `specs/027-transparencia-campo/` y Ayuda del admin para el campo de imagen.
 
 = 4.16.1 =
 * **Limpieza de la implementacion**: se retiro el calculo de **ampliacion** del selector (`_factorAmpliacion`), que quedo inalcanzable cuando la spec 025 hizo que el cargador nunca agrande la foto; el badge tecnico queda solo con los datos de la foto y el encuadre.

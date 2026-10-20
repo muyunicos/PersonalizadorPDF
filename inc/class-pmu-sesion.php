@@ -11,8 +11,9 @@ if (!defined('ABSPATH')) {
  * sid no cambia). Las rutas las entrega PMU_Uploads (Const. II): esta clase
  * no arma rutas por su cuenta.
  *
- * Pool dedicado por item (sin deduplicacion global): img/{pdf}-{id}-{n}.png
- * con fila en manifest.archivos[] {pdf, grupo_id, indice, file, hash}.
+ * Pool dedicado por item (sin deduplicacion global): img/{pdf}-{id}-{n}.{ext}
+ * (la extension sale de la firma: spec 026) con fila en
+ * manifest.archivos[] {pdf, grupo_id, indice, file, hash}.
  * Mockups congelados: mockup-{id}.webp (300x300, al agregar).
  * Errores con causa motor:sesion:<causa>.
  */
@@ -272,15 +273,21 @@ class PMU_Sesion
 
     /* ==================== Pool e imagenes congeladas ==================== */
 
-    /** Siguiente numero disponible para el pool del grupo: {pdf}-{id}-{n}.png. */
+    /**
+     * Siguiente numero disponible para el pool del grupo: {pdf}-{id}-{n}.{ext}.
+     *
+     * Spec 026 (D9): cuenta **todos** los formatos (png/webp/jpg/gif). Si solo
+     * mirara los `.png`, un WebP y un PNG del mismo grupo se pisarian (el `n`
+     * volveria a 1).
+     */
     private function siguiente_n($imgDir, $pdf, $grupo)
     {
         // Mismo casing con el que se escribe el archivo (pdf saneado + grupo hex).
         $prefijo = $pdf . '-' . $grupo . '-';
         $n = 1;
-        foreach ((array)glob($imgDir . DIRECTORY_SEPARATOR . $prefijo . '*.png') as $ruta) {
+        foreach ((array)glob($imgDir . DIRECTORY_SEPARATOR . $prefijo . '*') as $ruta) {
             $base = basename($ruta);
-            if (preg_match('/\-' . preg_quote($grupo, '/') . '\-(\d+)\.png$/i', $base, $m)) {
+            if (preg_match('/\-' . preg_quote($grupo, '/') . '\-(\d+)\.[a-z0-9]+$/i', $base, $m)) {
                 $n = max($n, (int)$m[1] + 1);
             }
         }
@@ -288,14 +295,18 @@ class PMU_Sesion
     }
 
     /**
-     * Guarda un PNG en el pool del item y anota la fila en manifest.archivos[].
+     * Guarda una imagen en el pool del item y anota la fila en manifest.archivos[].
      * $hash opcional: sha1(valor + preset + settings + WxH) que calcula el
      * llamador para la regeneracion parcial (fallback: sha1 de los bytes).
+     *
+     * Spec 026 (D6/D9): la **extension sale de la FIRMA** de los bytes (no del
+     * nombre): `{pdf}-{id}-{n}.{ext}`. Los items viejos (PNG) se siguen leyendo
+     * igual: el Motor acepta ambos formatos.
      * Devuelve {indice, file, hash}.
      */
-    public function guardar_png($sid, $item_key, $pdf, $grupo, $bytes, $hash = null)
+    public function guardar_imagen($sid, $item_key, $pdf, $grupo, $bytes, $hash = null)
     {
-        $pdf = $this->motor->nombre_seguro($pdf, 'sesion:guardar_png');
+        $pdf = $this->motor->nombre_seguro($pdf, 'sesion:guardar_imagen');
         $grupo = strtoupper((string)$grupo);
         if (!preg_match('/^[0-9A-F]{6}$/', $grupo)) {
             throw new Exception('motor:sesion:grupo:invalido');
@@ -303,11 +314,21 @@ class PMU_Sesion
         if ($bytes === null || $bytes === '') {
             throw new Exception('motor:sesion:png:vacio');
         }
+        $firma = self::firma_imagen((string)$bytes);
+        if ($firma === null) {
+            throw new Exception('motor:sesion:png:invalido');
+        }
+        // Spec 026 (D3): el servidor convierte a WebP si puede. El pool lleva
+        // el texto renderizado: calidad 0.92 (D4, los bordes con antialias no
+        // deben degradarse).
+        $img = self::convertir_webp((string)$bytes, 92);
+        $bytes = $img['bytes'];
+        $ext = $img['ext'];
         $fila = null;
-        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $pdf, $grupo, $bytes, $hash, &$fila) {
+        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $pdf, $grupo, $bytes, $ext, $hash, &$fila) {
             $imgDir = $this->motor->dir_sesion_item_img($sid, $item_key, true);
             $n = $this->siguiente_n($imgDir, $pdf, $grupo);
-            $file = 'img/' . $pdf . '-' . $grupo . '-' . $n . '.png';
+            $file = 'img/' . $pdf . '-' . $grupo . '-' . $n . '.' . $ext;
             if (@file_put_contents($imgDir . DIRECTORY_SEPARATOR . basename($file), $bytes) === false) {
                 throw new Exception('motor:sesion:directorio:no_escribible');
             }
@@ -327,6 +348,16 @@ class PMU_Sesion
     }
 
     /**
+     * Escribe una imagen en el pool del item. `guardar_imagen()` es el nombre
+     * vigente (spec 026 D6); este alias conserva el nombre viejo para los
+     * llamadores que aun lo usan.
+     */
+    public function guardar_png($sid, $item_key, $pdf, $grupo, $bytes, $hash = null)
+    {
+        return $this->guardar_imagen($sid, $item_key, $pdf, $grupo, $bytes, $hash);
+    }
+
+    /**
      * Reemplazo idempotente (T014): quita los PNG previos del grupo en el pool
      * del item y sus filas del manifest; la regeneracion renumera desde 1.
      */
@@ -340,8 +371,12 @@ class PMU_Sesion
         $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $pdf, $grupo) {
             $imgDir = $this->motor->dir_sesion_item_img($sid, $item_key, false);
             if (is_dir($imgDir)) {
-                foreach ((array)glob($imgDir . DIRECTORY_SEPARATOR . $pdf . '-' . $grupo . '-*.png') as $ruta) {
-                    @unlink($ruta);
+                // Spec 026 (D9): se borran TODAS las variantes del grupo
+                // (png/webp/jpg/gif), no solo los `.png`.
+                foreach ((array)glob($imgDir . DIRECTORY_SEPARATOR . $pdf . '-' . $grupo . '-*') as $ruta) {
+                    if (is_file($ruta)) {
+                        @unlink($ruta);
+                    }
                 }
             }
             $resto = [];
@@ -415,13 +450,105 @@ class PMU_Sesion
     }
 
     /**
+     * Spec 026 (D3): puede el servidor **leer** WebP? El Motor (`Imagen::normalizar`)
+     * solo decodifica WebP si hay GD con `imagecreatefromwebp`; sin GD, un WebP
+     * seria un PDF ilegible. Es el mismo requisito que ya exige el smoke test
+     * ("GD + WebP (cargador de imagenes)").
+     *
+     * @return bool
+     */
+    public static function servidor_lee_webp()
+    {
+        return extension_loaded('gd')
+            && function_exists('imagecreatefromwebp')
+            && function_exists('imagewebp');
+    }
+
+    /**
+     * Spec 026 (D3): convierte los bytes de una imagen a **WebP** si el
+     * servidor puede (GD con `imagewebp`). Es la **red de seguridad** para el
+     * cliente que no sabe codificar WebP (`toBlob` cae a PNG en silencio).
+     *
+     * - Si los bytes **ya son** WebP -> se devuelven tal cual (D2: nunca se
+     *   recomprime lo que ya viene comprimido).
+     * - Si no hay GD o no hay `imagewebp` -> se devuelve el **original**
+     *   (fail-safe: el flujo nunca se rompe).
+     * - El **alfa se preserva** (`imagesavealpha` + `imagepalettetotruecolor`):
+     *   verificado con GD (alfa 127 y 40 sobreviven la conversion).
+     *
+     * @param string $bytes
+     * @param int $q calidad (0..100)
+     * @return array{bytes:string,mime:string,ext:string,convertido:bool}
+     */
+    public static function convertir_webp($bytes, $q = 92)
+    {
+        $bytes = (string)$bytes;
+        $firma = self::firma_imagen($bytes);
+        if ($firma === null) {
+            throw new Exception('motor:subida:formato:invalido');
+        }
+        $salida = [
+            'bytes' => $bytes,
+            'mime' => $firma['mime'],
+            'ext' => $firma['ext'],
+            'convertido' => false,
+        ];
+        if ($firma['ext'] === 'webp') {
+            // Ya es WebP... pero si el servidor NO sabe leerlo, el Motor no
+            // podria decodificarlo y el PDF saldria ILEGIBLE (D3, defensa en
+            // profundidad). Mejor rechazar con una causa clara que guardar
+            // roto. El cliente solo envia WebP si el servidor lo soporta
+            // (`webp_soportado` en PMU_FICHA), asi que este caso es raro.
+            if (!self::servidor_lee_webp()) {
+                throw new Exception('motor:imagen:webp:no_soportado');
+            }
+            return $salida;
+        }
+        // Sin GD (o sin WebP): se guarda el original (D3, fail-safe).
+        if (!self::servidor_lee_webp() || !function_exists('imagecreatefromstring')) {
+            return $salida;
+        }
+        // El JPEG no tiene alfa: convertirlo a WebP perderia la transparencia
+        // (D5). Se deja como esta.
+        if ($firma['ext'] === 'jpg') {
+            return $salida;
+        }
+        $img = @imagecreatefromstring($bytes);
+        if (!$img) {
+            return $salida;
+        }
+        if (function_exists('imagepalettetotruecolor') && !imageistruecolor($img)) {
+            imagepalettetotruecolor($img);
+        }
+        // El alfa DEBE sobrevivir: sin esto el SMask del PDF se pierde.
+        imagesavealpha($img, true);
+        $tmp = tempnam(sys_get_temp_dir(), 'pmu_webp_');
+        if ($tmp === false) {
+            return $salida;
+        }
+        $ok = @imagewebp($img, $tmp, (int)max(1, min(100, (int)$q)));
+        if ($ok) {
+            $nuevo = @file_get_contents($tmp);
+            if (is_string($nuevo) && $nuevo !== '') {
+                $salida['bytes'] = $nuevo;
+                $salida['mime'] = 'image/webp';
+                $salida['ext'] = 'webp';
+                $salida['convertido'] = true;
+            }
+        }
+        @unlink($tmp);
+        return $salida;
+    }
+
+    /**
      * Guarda una foto del comprador en `{item}/subidas/{id}.{ext}` y agrega su
      * fila a `manifest.subidas[]` (spec 012, T021, D14).
      *
      * El `id` lo genera el **servidor** (uuid corto): el cliente jamas propone
      * uno, asi que no puede elegir nombre ni salir de la carpeta. El formato sale
      * de la firma de los bytes (webp es el esperado; png/jpg/gif tambien valen,
-     * ver `firma_imagen()`). Devuelve ['id','file','mime','bytes'].
+     * ver `firma_imagen()`) y se convierte a WebP si el servidor puede (spec 026
+     * D3). Devuelve ['id','file','mime','bytes'].
      */
     public function guardar_subida($sid, $item_key, $bytes)
     {
@@ -433,6 +560,11 @@ class PMU_Sesion
         if ($firma === null) {
             throw new Exception('motor:subida:formato:invalido');
         }
+        // Spec 026 (D3): el servidor convierte a WebP si puede. La foto del
+        // comprador es unseen: calidad 0.85 (D4).
+        $img = self::convertir_webp($bytes, 85);
+        $bytes = $img['bytes'];
+        $firma = ['ext' => $img['ext'], 'mime' => $img['mime']];
         $salida = null;
         $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $bytes, $firma, &$salida) {
             if ((string)($manifest['item_key'] ?? '') !== (string)$item_key) {

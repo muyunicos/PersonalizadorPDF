@@ -70,6 +70,9 @@
             if (!isFinite(oy)) { oy = 0; }
             var fondo = (typeof r.fondo === 'string' && r.fondo.trim() !== '')
                 ? r.fondo.trim() : 'auto';
+            // Spec 027 (D1/D6): la politica de transparencia la declara el
+            // campo. `''` = ausente = comportamiento actual (el cliente decide).
+            var transp = (r.transp === 'si') ? 'si' : ((r.transp === 'no') ? 'no' : '');
             out.push({
                 etiqueta: r.etiqueta || '',
                 w: w, h: h,
@@ -80,6 +83,7 @@
                 ox: ox,
                 oy: oy,
                 fondo: fondo,
+                transp: transp,
                 aviso: r.aviso || ''
             });
         });
@@ -354,6 +358,8 @@
                 ox: r.ox,
                 oy: r.oy,
                 fondo: r.fondo,
+                // Spec 027 (D3/D6): la politica de transparencia del campo.
+                transp: r.transp,
                 // Spec 024 (D2): el badge tecnico solo se ve en la consola.
                 tecnico: this.config.tecnico,
                 envoltura: this.config.envoltura || null,
