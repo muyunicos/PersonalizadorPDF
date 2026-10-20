@@ -766,27 +766,13 @@ class Personalizador_PDF_Plugin
             PERSONALIZADOR_PDF_VERSION,
             true
         );
-        // Spec 016 (F0): Cropper.js 1.6.2 vendoreado (assets/vendor/cropper/).
-        // Es el motor de recorte del editor visual de selector-pmu. UMD sin
-        // dependencias, servido desde el plugin (nunca CDN). La hoja del marco
-        // viaja con el script y ambos se encolan ANTES que selector-pmu.
-        wp_enqueue_style(
-            'personalizador-pdf-cropper',
-            PERSONALIZADOR_PDF_URL . 'assets/vendor/cropper/cropper.min.css',
-            [],
-            PERSONALIZADOR_PDF_VERSION
-        );
-        wp_enqueue_script(
-            'personalizador-pdf-cropper',
-            PERSONALIZADOR_PDF_URL . 'assets/vendor/cropper/cropper.min.js',
-            [],
-            PERSONALIZADOR_PDF_VERSION,
-            true
-        );
+        // Spec 021: el recorte lo hace el propio selector con Canvas 2D (3 modos,
+        // margen del 10% y doble guia). Cropper.js se retiro: era el motor de la
+        // spec 016 y quedo sin uso (42 KB menos por ficha).
         wp_enqueue_script(
             'personalizador-pdf-selector',
             PERSONALIZADOR_PDF_URL . 'assets/selector-pmu.js',
-            ['personalizador-pdf-cropper'],
+            [],
             PERSONALIZADOR_PDF_VERSION,
             true
         );
@@ -4363,26 +4349,12 @@ JS;
             true
         );
         // Spec 016 (4.6.3): el preview del admin monta el cargador TAL CUAL lo
-        // ve el comprador (boton Agregar imagen + selector real). Cropper y
-        // selector-pmu viajan tambien a la consola por eso (mismos handles
-        // que la ficha; nunca CDN).
-        wp_enqueue_style(
-            'personalizador-pdf-cropper',
-            PERSONALIZADOR_PDF_URL . 'assets/vendor/cropper/cropper.min.css',
-            [],
-            PERSONALIZADOR_PDF_VERSION
-        );
-        wp_enqueue_script(
-            'personalizador-pdf-cropper',
-            PERSONALIZADOR_PDF_URL . 'assets/vendor/cropper/cropper.min.js',
-            [],
-            PERSONALIZADOR_PDF_VERSION,
-            true
-        );
+        // ve el comprador (boton Agregar imagen + selector real). selector-pmu
+        // viaja tambien a la consola por eso (mismo handle que la ficha).
         wp_enqueue_script(
             'personalizador-pdf-selector',
             PERSONALIZADOR_PDF_URL . 'assets/selector-pmu.js',
-            ['personalizador-pdf-cropper'],
+            [],
             PERSONALIZADOR_PDF_VERSION,
             true
         );

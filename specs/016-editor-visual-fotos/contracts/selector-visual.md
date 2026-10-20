@@ -39,13 +39,13 @@ sel.open() / sel.close() / sel.destroy()
 
 | Punto | Regla |
 |---|---|
-| `mode: 'crop'` | el interior usa **Cropper.js 1.6.2 vendoreado** (`assets/vendor/cropper/`): pan, pinch-zoom 1x-8x, doble tap, rotar 90°, guia de tercios, marco con tiradores. La salida sale de `getCroppedCanvas(finalW, finalH)` -> `toBlob('image/png')` |
-| `mode: 'fit'` | **sin cambios**: conserva el canvas actual (contain con margenes transparentes). Cropper no tiene modo contain y no se lo fuerza |
+| `mode: 'crop'` | **SUPERADO por la spec 021**: hoy el interior es el motor propio de Canvas 2D de `selector-pmu.js` (3 modos `Rellenar`/`Ajustar`/`Estirar`, margen del 10%, doble guia). Cropper.js y su encolado se **retiraron** |
+| `mode: 'fit'` | **SUPERADO por la spec 021**: equivale al modo `ajustar` (contain con color de fondo o margenes transparentes) |
 | config `ajustes` | **reservado** (array vacio hoy): pipeline futuro de ajustes (filtros). Un llamador que lo envie no rompe nada |
-| config `envoltura` | **opcional** `{par, subs}` (geometria normalizada 0..1, la que publica `campo.envoltura`; spec 011 FR-049). El modal la dibuja como **GUIA** en un canvas separado (`pointer-events:none`, `aria-hidden`): en `crop` sobre la caja de preview (opcion `preview` de Cropper), en `fit`/degradacion encima del canvas de salida. Sin `envoltura` no se agrega DOM; sin `PMUMockup` se omite sin lanzar. **Nunca** altera el recorte ni el PNG |
-| Degradacion | si `window.Cropper` no esta (no encolado, navegador viejo), el modal DEBE comportarse como el de la 004 (canvas + slider + select) y avisar por `onError`. Nunca un error de JS |
-| Dependencia de carga | el plugin DEBE encolar `personalizador-pdf-cropper` (script + estilo) ANTES que `personalizador-pdf-selector` (dependencia declarada) |
-| Shell | el modal es full-screen en movil (<768px) con camara/drop zone, dialogo amplio en escritorio, focus trap y Escape (detalle: spec 016, FR-001..FR-006) |
+| config `envoltura` | **opcional** `{par, subs}` (geometria normalizada 0..1, la que publica `campo.envoltura`; spec 011 FR-049). El modal la dibuja como **GUIA** en un canvas separado (`pointer-events:none`, `aria-hidden`). Sin `envoltura` no se agrega DOM; sin `PMUMockup` se omite sin lanzar. **Nunca** altera el recorte ni el PNG |
+| Degradacion | **retirada en la spec 021**: ya no hay dependencia externa que pueda faltar (el motor es propio). Se conserva el aviso por `onError` ante un fallo de generacion |
+| Dependencia de carga | **retirada en la spec 021**: `selector-pmu` se encola sin dependencias (Cropper.js y su encolado se eliminaron; lo congela la fase F0 de `tests/selector-contrato.test.js`) |
+| Shell | el modal es full-screen en movil (<768px) con drop zone, dialogo amplio en escritorio, focus trap y Escape (detalle: specs 016 FR-001..FR-006 y 021) |
 
 ## Reglas que NO cambian
 
@@ -64,7 +64,8 @@ sel.open() / sel.close() / sel.destroy()
 - `CargadorPMU` y `tienda.js` funcionan sin cambios con el componente nuevo.
 - Un recorte hecho en movil (dedos) da el mismo PNG que el mismo ajuste con
   mouse.
-- Sin `window.Cropper`, el flujo sigue completo por el camino viejo.
+- El PNG entregado a `onSelect` mide **exactamente** `finalW x finalH` y **no**
+  lleva las guias de la escena (spec 021 D1).
 - Con `envoltura`, el PNG de `obtenerBlob()` es **identico** al de una corrida sin
   `envoltura` (misma imagen, mismas dimensiones, sin mascara).
 - Puerta: `node tests/selector-contrato.test.js` en verde (F0-F5).

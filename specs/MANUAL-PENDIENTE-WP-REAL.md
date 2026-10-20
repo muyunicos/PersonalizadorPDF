@@ -145,26 +145,33 @@ Detalle completo por spec: [004/quickstart.md §1](./004-woocommerce-pdf-persona
 9. Verificar en el PDF descargable: cada hueco lleva **su** foto (no la misma repetida).
    (Origen: [012/quickstart.md](./012-campos-consola/quickstart.md).)
 
-## 6c. Editor visual de fotos (016 T022)
+## 6c. Cargador de fotos del comprador (016 T022 + 021)
 
-> Se activa cuando F1-F5 esten implementadas (hoy F0: vendor + encolado + puerta).
-> Probar con DevTools en modo movil emulado y en escritorio.
+> Spec 021: el motor de recorte es el **canvas unificado** de `selector-pmu.js`
+> (Cropper.js se retiro). Probar en movil (uso principal) y en escritorio.
 
 1. **Ficha con un campo de imagen** (plantilla "Imagen (cargador)", ranura con `min=1`):
-   tocar una ranura -> modal full-screen en movil / dialogo amplio en escritorio.
-2. Cargar una foto por **camara** (movil), por **soltar** sobre el modal y por clic.
-   El badge muestra "Origen WxH px".
-3. Ajustar con **dedos**: pan (1 dedo), pinch (2 dedos, 1x-8x), doble tap (alterna
-   encajar/100%), rotar 90° por boton y gesto. El badge muestra "Salida WxH px · zoom xN"
-   en vivo. Repetir el mismo ajuste con **mouse**: el PNG final debe ser identico en tamaño.
-4. **Tira**: la miniatura es la foto (mascara de la forma de la ranura); tocarla ->
-   quitar / **cambiar** (reemplaza sin sumar). `min`/`max` y "Listo" intactos.
-5. Agregar al carrito y **"Editar"**: las fotos ya cargadas aparecen en las ranuras
+   tocar la ranura o el boton -> **se abre directo la galeria/archivos** del dispositivo.
+2. Elegir la foto: el modal muestra la escena con **10% de margen** alrededor del
+   placeholder y las dos guias (marco secundario = donde se corta el PNG; marco
+   principal = forma/envoltura). El boton pasa a decir **"Cambiar imagen"**.
+3. **3 modos**: con una foto que no coincide con el hueco aparecen **Rellenar /
+   Ajustar / Estirar** y **Girar** (solo si la ranura trae `{ r: 1 }`). Con una foto que
+   difiere <=5% en aspecto queda **solo Estirar** y sin Girar.
+4. **Reducir / Ampliar**: el slider al medio (`0`) es el encaje base; a la izquierda
+   reduce (se ve el **color de fondo**, autodetectado de los bordes de la foto o
+   transparente) y a la derecha amplia. El boton **`↺`** vuelve al medio y centra.
+5. Tocar **"Subir"**: avisa **"Subiendo imagen..."** (no se puede tocar dos veces) y, si
+   quedan espacios en la ranura, pregunta **"¿Queres subir otra imagen?"** (abre directo
+   la galeria). El boton "Listo" y `min`/`max` siguen mandando.
+6. **Mini galeria**: tocar una miniatura subida abre el visor fullscreen con **flechas**
+   (y swipe/teclado), **Eliminar** y **Reemplazar**. Reemplazar avisa que imagen se
+   reemplaza; si se cancela, vuelve al visor con la foto actual.
+7. Agregar al carrito y **"Editar"**: las fotos ya cargadas aparecen en las ranuras
    (restauracion por `personalizador_pdf_subida_url`).
-6. **Degradacion** (FR-006): bloquear `cropper.min.js` en DevTools -> el modal vuelve al
-   comportamiento viejo (canvas + slider) y avisa; la ficha no se rompe.
-7. Vista previa + PDF final: la foto ajustada llega al hueco correcto (flujo 012 intacto).
-   (Origen: [016/quickstart.md](./016-editor-visual-fotos/quickstart.md).)
+8. Vista previa + PDF final: la foto ajustada llega al hueco correcto (flujo 012 intacto).
+   (Origen: [016/quickstart.md](./016-editor-visual-fotos/quickstart.md),
+   [021/spec.md](./021-cargador-visor-cliente/spec.md).)
 
 ## 6d. Campos v4 + ranura adaptativa (018 T021/T022 + 019 T016)
 

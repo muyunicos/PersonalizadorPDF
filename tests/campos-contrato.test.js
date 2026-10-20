@@ -415,12 +415,11 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
   const cargadorJs = fs.readFileSync(path.join(__dirname, '..', 'assets', 'cargador-pmu.js'), 'utf8');
   const adm = fs.readFileSync(path.join(__dirname, '..', 'assets', 'admin.js'), 'utf8');
   const plug = fs.readFileSync(path.join(__dirname, '..', 'personalizador-pdf.php'), 'utf8');
-  // Spec 016 (v4.6.2): la consola encola cropper + selector para el preview,
-  // y el aviso de migracion SOLO aparece con items v1 reales (indice vacio
-  // de desarrollo = silencio).
-  check('la consola encola cropper y selector (preview del cargador)',
-    (plug.match(/assets\/vendor\/cropper\/cropper\.min\.js/g) || []).length >= 2
-    && (plug.match(/assets\/selector-pmu\.js/g) || []).length >= 2);
+  // Spec 021: el selector viaja a la consola para el preview del cargador.
+  // Cropper se retiro (el recorte lo hace el canvas unificado del selector).
+  check('la consola encola el selector (preview del cargador) y ya no cropper',
+    (plug.match(/assets\/selector-pmu\.js/g) || []).length >= 2
+    && plug.indexOf('personalizador-pdf-cropper') === -1);
   check('el plugin ya no emite el aviso de migracion v1',
     plug.indexOf('motor:campos:migrar:pendiente') === -1);
   // Spec 016 (4.6.3): la v1 se retiro; el aviso de migracion NO debe volver.

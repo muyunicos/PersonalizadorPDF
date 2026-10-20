@@ -122,10 +122,7 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   │                          sobre SelectorPMU; valida `min` y sube la foto al item
 │   ├── selector-pmu.js      ← Cliente de subida/recorte de imágenes de campos (spec 004,
 │   │                          contrato `specs/004.../contracts/selector-pmu.md`; editor visual
-│   │                          spec 016: Cropper.js en `crop`, canvas en `fit`)
-│   ├── vendor/cropper/      ← Cropper.js 1.6.2 vendoreado (min.js + min.css + LICENSE +
-│   │                          ORIGEN.md con hash; handle `personalizador-pdf-cropper`;
-│   │                          nunca CDN, nunca editar el minificado)
+│   │                          spec 016; spec 021: motor propio Canvas 2D sin dependencias)
 │   └── miniaturas.js        ← ThumbEngine: miniaturas `.webp` y sprites por ámbito; único
 │                              cliente de `op=sprite`/`op=miniatura` (envía `firma`; nunca
 │                              escribe catálogos). Se encola en admin y su URL viaja al iframe
@@ -695,8 +692,9 @@ npx --yes jscpd@4 --config .jscpd.json .    # Bloques clonados PHP/JS -> docs/js
 php tests/inventario_repo.php               # Archivos/pesos/dependencias -> docs/inventario-repo.md
 ```
 - `/vendor/` (composer, anclado a la raiz) y `composer.phar` estan en `.gitignore`
-  (jamas se despliegan); `assets/vendor/cropper/` (Cropper.js 1.6.2, spec 016) SI
-  se versiona. `composer.json`,
+  (jamas se despliegan). `assets/vendor/` quedo **vacio y retirado** en la spec 021
+  (Cropper.js 1.6.2 era el motor de la 016 y el selector ya no lo usa; lo congela
+  la fase F0 de `tests/selector-contrato.test.js`). `composer.json`,
   `composer.lock`, `phpstan.neon` y `.jscpd.json` si se versionan.
 - Los FP estructurales estan ignorados **con comentario** en `phpstan.neon` (includes de
   `admin/*.php` dentro de metodos de la clase, constantes del plugin, funciones `wc_*`) y
