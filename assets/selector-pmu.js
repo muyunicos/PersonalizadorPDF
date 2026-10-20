@@ -114,6 +114,34 @@
         return diffH > UMBRAL_ASPECTO && diffV > UMBRAL_ASPECTO;
     }
 
+    /**
+     * Spec 023 (D2): caja de dibujo de la imagen segun el modo (sin el zoom).
+     * Con `sinAmpliar` la escala NUNCA supera 1: si la foto es mas grande que
+     * el lienzo **reduce igual** (min(1, ...) no toca una reduccion); si es
+     * mas chica, ocupa su **tamano natural** y el resto del lienzo queda para
+     * el fondo. El lienzo sigue midiendo W x H, asi que el Motor no cambia.
+     */
+    function escalaBase(modo, iw, ih, W, H, sinAmpliar) {
+        var w = Math.max(1, parseFloat(W) || 1);
+        var h = Math.max(1, parseFloat(H) || 1);
+        var aw = Math.max(1, parseFloat(iw) || 1);
+        var ah = Math.max(1, parseFloat(ih) || 1);
+        var ex, ey;
+        if (modo === 'estirar') {
+            ex = w / aw;
+            ey = h / ah;
+        } else if (modo === 'ajustar') {
+            ex = ey = Math.min(w / aw, h / ah);
+        } else { // rellenar
+            ex = ey = Math.max(w / aw, h / ah);
+        }
+        if (sinAmpliar) {
+            ex = Math.min(1, ex);
+            ey = Math.min(1, ey);
+        }
+        return { dw: aw * ex, dh: ah * ey };
+    }
+
     function hexDeRgb(r, g, b) {
         function h2(n) {
             var s = Math.max(0, Math.min(255, Math.round(n))).toString(16);
@@ -214,6 +242,9 @@
             oy: oy,
             fondo: (typeof config.fondo === 'string' && config.fondo.trim() !== '')
                 ? config.fondo.trim() : 'auto',
+            // Spec 023 (D1): 'sin-ampliar' = la foto nunca se agranda. Sin la
+            // clave el comportamiento es el de siempre ('ampliar').
+            escala: config.escala === 'sin-ampliar' ? 'sin-ampliar' : 'ampliar',
             category: config.category || '',
             ajustes: Array.isArray(config.ajustes) ? config.ajustes : [],
             envoltura: envolturaValida(config.envoltura),
@@ -305,7 +336,8 @@
             '<button type="button" class="button spmu-modo-btn" data-modo="estirar">Estirar</button>' +
             '</div>' +
             '<label class="spmu-lb-zoom">Reducir / Ampliar ' +
-            '<input type="range" class="spmu-zoom" min="-100" max="100" step="1" value="0">' +
+            '<input type="range" class="spmu-zoom" min="-100" max="' +
+            (this.config.escala === 'sin-ampliar' ? '0' : '100') + '" step="1" value="0">' +
             '<button type="button" class="spmu-zoom-reset" title="Restablecer al centro" aria-label="Restablecer">&#8634;</button>' +
             '</label>' +
             '<label class="spmu-lb-fondo">Fondo ' +
@@ -350,15 +382,11 @@
             if (f) { self._cargar(f); }
         });
         $('.spmu-zoom').addEventListener('input', function () {
-            self.zoom = sliderAZoom(this.value);
-            self._dibujar();
+            self._setZoom(sliderAZoom(this.value));
         });
         $('.spmu-zoom-reset').addEventListener('click', function () {
-            self.zoom = 1;
             self.desplazamiento = { x: 0, y: 0 };
-            var zIn = $('.spmu-zoom');
-            if (zIn) { zIn.value = '0'; }
-            self._dibujar();
+            self._setZoom(1);
         });
         this._enlazarEventosDialogo($);
         this._montarEscena();
@@ -533,7 +561,11 @@
                 img.naturalWidth || 1, img.naturalHeight || 1,
                 self.config.finalW, self.config.finalH
             );
-            self.config.mode = self.supera5 ? 'rellenar' : 'estirar';
+            // Spec 023 (D4): con `sin-ampliar` el modo es Ajustar (contain):
+            // Rellenar y Estirar ampliarian por definicion.
+            self.config.mode = (self.config.escala === 'sin-ampliar')
+                ? 'ajustar'
+                : (self.supera5 ? 'rellenar' : 'estirar');
             if (self.raiz) {
                 var rango = self.raiz.querySelector('.spmu-zoom');
                 if (rango) { rango.value = '0'; }
@@ -585,7 +617,11 @@
         var modosEl = this.raiz.querySelector('.spmu-modos');
         var rotarEl = this.raiz.querySelector('.spmu-rotar');
         var tieneImg = !!this.imagen;
+        var sinAmpliar = this.config.escala === 'sin-ampliar';
         if (modosEl) {
+            // Spec 023 (D4): con `sin-ampliar` el modo queda en Ajustar
+            // (Rellenar y Estirar ampliarian por definicion) y no se muestran.
+            if (sinAmpliar) { modosEl.hidden = true; }
             [].slice.call(modosEl.querySelectorAll('.spmu-modo-btn')).forEach(function (btn) {
                 var m = btn.getAttribute('data-modo');
                 btn.hidden = (tieneImg && !self.supera5 && m !== 'estirar');
@@ -593,7 +629,7 @@
             });
         }
         if (rotarEl) {
-            rotarEl.hidden = !(tieneImg && this.supera5 && this.config.rotar);
+            rotarEl.hidden = sinAmpliar || !(tieneImg && this.supera5 && this.config.rotar);
         }
     };
 
@@ -608,24 +644,29 @@
         if (btnTr) { btnTr.classList.toggle('is-active', esTransp); }
     };
 
+    /**
+     * Spec 023 (D5): fija el zoom respetando el tope de `sin-ampliar` (nunca
+     * mas de 1x: la foto no se agranda). Mantiene el slider sincronizado.
+     */
+    SelectorPMU.prototype._setZoom = function (z) {
+        var max = this.config.escala === 'sin-ampliar' ? 1 : 4;
+        var v = parseFloat(z);
+        if (!isFinite(v)) { v = 1; }
+        this.zoom = Math.max(0.25, Math.min(max, v));
+        var zIn = this.raiz ? this.raiz.querySelector('.spmu-zoom') : null;
+        if (zIn) { zIn.value = String(zoomASlider(this.zoom)); }
+        this._dibujar();
+        return this.zoom;
+    };
+
     SelectorPMU.prototype._cajaImagenModo = function () {
-        var w = this.config.finalW;
-        var h = this.config.finalH;
         var dim = this._dimensionesImagen();
-        var baseW, baseH;
-        if (this.config.mode === 'ajustar') {
-            var escMin = Math.min(w / dim.w, h / dim.h);
-            baseW = dim.w * escMin;
-            baseH = dim.h * escMin;
-        } else if (this.config.mode === 'estirar') {
-            baseW = w;
-            baseH = h;
-        } else {
-            var escMax = Math.max(w / dim.w, h / dim.h);
-            baseW = dim.w * escMax;
-            baseH = dim.h * escMax;
-        }
-        return { dw: baseW * this.zoom, dh: baseH * this.zoom };
+        var base = escalaBase(
+            this.config.mode, dim.w, dim.h,
+            this.config.finalW, this.config.finalH,
+            this.config.escala === 'sin-ampliar'
+        );
+        return { dw: base.dw * this.zoom, dh: base.dh * this.zoom };
     };
 
     SelectorPMU.prototype._pintarImagenEnContexto = function (ctx, conMargen) {
@@ -722,10 +763,7 @@
                 var p1 = self._punteros[ids[0]];
                 var p2 = self._punteros[ids[1]];
                 var d = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
-                self.zoom = Math.max(0.25, Math.min(4, self._pinch.zoom * (d / self._pinch.dist)));
-                var zIn = self.raiz ? self.raiz.querySelector('.spmu-zoom') : null;
-                if (zIn) { zIn.value = String(zoomASlider(self.zoom)); }
-                self._dibujar();
+                self._setZoom(self._pinch.zoom * (d / self._pinch.dist));
                 return;
             }
             if (!self._arrastrando || !self.canvas) { return; }
@@ -748,10 +786,7 @@
             if (!self.imagen || self._subiendo) { return; }
             e.preventDefault();
             var delta = e.deltaY < 0 ? 0.08 : -0.08;
-            self.zoom = Math.max(0.25, Math.min(4, self.zoom * (1 + delta)));
-            var zIn = self.raiz ? self.raiz.querySelector('.spmu-zoom') : null;
-            if (zIn) { zIn.value = String(zoomASlider(self.zoom)); }
-            self._dibujar();
+            self._setZoom(self.zoom * (1 + delta));
         }, { passive: false });
     };
 
@@ -848,7 +883,10 @@
         if (!this.txtSalida) { return; }
         var z = this.zoom || 1;
         var f = this._factorAmpliacion();
-        var amplia = (this.imagen && f > 1.05) ? ' · se amplia ' + f.toFixed(1) + 'x' : '';
+        var sinAmpliar = this.config.escala === 'sin-ampliar';
+        var amplia = sinAmpliar
+            ? (this.imagen ? ' · sin ampliar' : '')
+            : ((this.imagen && f > 1.05) ? ' · se amplia ' + f.toFixed(1) + 'x' : '');
         this.txtSalida.textContent =
             'Salida ' + this.config.finalW + 'x' + this.config.finalH + ' px · zoom x' + z.toFixed(2) + amplia;
     };
@@ -1029,6 +1067,7 @@
         geometriaEscena: geometriaEscena,
         calcularCajaEscena: calcularCajaEscena,
         superaCincoPorciento: superaCincoPorciento,
+        escalaBase: escalaBase,
         colorPredominanteBordes: colorPredominanteBordes,
         sliderAZoom: sliderAZoom,
         zoomASlider: zoomASlider

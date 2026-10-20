@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.13.0
+Stable tag: 4.14.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,11 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.14.0 =
+* **`escala: 'sin-ampliar'` (spec 023)**: una ranura puede pedir que **la foto nunca se agrande**. Hoy, si la foto es mas chica que el hueco, se amplia para encajar (300x300 en un hueco 1000x500 se estiraba a 500x500, borrosa). Con `escala: 'sin-ampliar'` la foto ocupa su **tamano natural** (300x300), centrada, y el resto del marco queda con el color de fondo elegido. Una foto mas grande que el hueco **reduce igual**.
+* **En el editor**: con `sin-ampliar` se ocultan los 3 modos y Girar (el encaje queda en "Ajustar"), el control Reducir/Ampliar **no deja pasar de 1x** (solo reduce) y el badge avisa **`sin ampliar`**. Sin la clave, todo funciona **exactamente** como antes.
+* **Sin cambios en el Motor**: el PNG sigue midiendo el tamano del hueco (la foto ocupa menos adentro), asi que el servidor encaja 1:1 y no vuelve a ampliar.
 
 = 4.13.0 =
 * **El minimo de fotos FRENA la compra (spec 022)**: el `min` de las ranuras se informaba pero **no bloqueaba nada** (el boton "Listo" de la 012 era decorativo y `carrito_validar()` no contaba las fotos), asi que se podia agregar al carrito **sin subir ninguna imagen**. Ahora hay **doble red**: el boton "Agregar al carrito" queda **deshabilitado** mientras falten fotos, con un unico aviso en la ficha (`Faltan N foto(s) por cargar.`), y el **servidor rechaza** el add-to-cart si falta alguna.

@@ -82,6 +82,9 @@
             var max = Math.max(min, parseInt(r.max, 10) || 1);
             var fondo = (typeof r.fondo === 'string' && r.fondo.trim() !== '')
                 ? r.fondo.trim() : 'auto';
+            // Spec 023 (D1/D7): 'sin-ampliar' = la foto nunca se agranda.
+            // Sin la clave el comportamiento es el de siempre ('ampliar').
+            var escala = r.escala === 'sin-ampliar' ? 'sin-ampliar' : 'ampliar';
             return {
                 etiqueta: r.etiqueta || '',
                 w: w, h: h, forma: forma,
@@ -93,6 +96,7 @@
                 ox: ox,
                 oy: oy,
                 fondo: fondo,
+                escala: escala,
                 aviso: aviso
             };
         },

@@ -620,6 +620,16 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   fase **`minimos`** (6 checks: rechazo real, fail-safe, conteo real, id fantasma, saneo/cap) +
   `minTotal` en `campos-contrato`. Límite aceptado (D7): es regla de **calidad del pedido**, no
   anti-fraude; una regla infalsificable exigiría duplicar las ranuras en `datos.json`.
+- ✅ **Spec 023 `escala-sin-ampliar` (implementada 2026-10-19, v4.14.0)**: la ranura puede declarar
+  **`escala: 'ampliar' | 'sin-ampliar'`** (default `'ampliar'` = histórico). Con `'sin-ampliar'` la
+  foto **nunca se escala hacia arriba**: ocupa su **tamaño natural** dentro del lienzo `W x H`,
+  centrada, y el resto queda para el color de fondo. En el modal se ocultan los **3 modos** y
+  **Girar** (el modo queda en `ajustar`), el slider **capa a `1x`** (solo reduce) y el badge dice
+  **`sin ampliar`**. **Clave del alcance**: la 019 decía que había que tocar el Motor, pero **no
+  hace falta** — el PNG sigue midiendo `W x H` (la foto ocupa menos adentro), así que
+  `Imagen::normalizar` encaja **1:1** y no re-amplía. Un PNG **menor** que el hueco sigue fuera
+  (eso sí exigiría `engine/Imagen.php` + Overlay + contrato del pool). Función pura
+  `SelectorPMU.puro.escalaBase()` (cap a 1) con 4 checks en `selector-contrato`.
 - ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
   (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,

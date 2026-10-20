@@ -36,7 +36,7 @@
 | **D4** | **Precedencia de la forma**: una `forma` explicita (`circle`/`square`) **gana**; `rect` y `fit` toman el aspecto del grupo porque el tamano ya sale de el (`fit` sigue significando "encajar completo": el tamano del grupo define el lienzo de salida). Con `phsize: 0` no cambia nada. |
 | **D5** | **Cap de seguridad** por lado (`PH_MAX = 3000` px): si `phsize: 2` excede el cap, el tamano se **acota** y se avisa en la consola. Evita PNGs de varios MB por foto (ya tuvimos `post_max_size`). |
 | **D6** | **Aviso de ampliacion** (informativo, **nunca bloquea**): cuando la imagen elegida es menor que el tamano final de la ranura, el selector y la tira del cargador muestran `se amplia Nx`. El admin lo ve al probar; el comprador entiende por que su foto se ve blanda. |
-| **D7** | **`escala: 'sin-ampliar'` FUERA DE ALCANCE**: no ampliar la imagen (300x300 -> salida 300x150) exige tocar **tambien el Motor** (`engine/Imagen.php:184` y `tienda.js:rasterizar` amplian hoy), o el Motor re-amplia al encajar. Va como spec aparte, con su puerta. |
+| **D7** | **`escala: 'sin-ampliar'` — CERRADO por la spec 023** (`specs/023-escala-sin-ampliar/`): la ranura declara `escala: 'ampliar'|'sin-ampliar'` y el selector capa la escala a `1x`. **No hizo falta tocar el Motor**: el lienzo/PNG sigue midiendo `W x H` (la foto ocupa su tamano natural adentro), asi que `Imagen::normalizar` encaja 1:1. Un PNG **menor** que el hueco sigue fuera de alcance (eso si exigiria Motor + Overlay + contrato del pool). |
 | **D8** | **Sin cambios en `engine/` ni `modules/textmuy/`.** Esta spec es del cargador (consola + ficha). |
 | **D9** | **`validar_cargador()` conserva `phsize`**: el validador del servidor arma las ranuras con claves nombradas y hoy descartaria la clave nueva, perdiendola en campos legacy. Se agrega a la lista de claves conservadas (1 linea) para que un `cargador` viejo que declare `phsize` no lo pierda al editarse. |
 
@@ -123,7 +123,8 @@ puede seguir declarando solo `w`/`h` (compatibilidad total) o pedir el hueco y u
 
 ## Fuera de alcance
 
-- **`escala: 'sin-ampliar'`** (D7): no ampliar la foto; toca el Motor y va en su propia spec.
+- **`escala: 'sin-ampliar'`** (D7): **implementada en la spec 023** (el PNG sigue midiendo
+  `W x H`, asi que el Motor no se toca). Lo que sigue fuera es un PNG **menor** que el hueco.
 - **Tamano por instancia**: el grupo tiene N instancias de tamanos distintos; `phsize` usa
   el **base** (la figura mas grande). Elegir una instancia concreta no entra.
 - **Editor visual de ranuras** en la consola: sigue fuera (spec 018 D1).

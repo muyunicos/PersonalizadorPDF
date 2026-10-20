@@ -73,7 +73,7 @@ check('boton Subir (antes Aceptar) + modal para subir otra imagen si quedan espa
   && /spmu-otra-modal/.test(selector) && /spmu-otra-si/.test(selector));
 check('control Reducir / Ampliar con reset al medio (0)',
   /Reducir \/ Ampliar/.test(selector) && /spmu-zoom-reset/.test(selector)
-  && /min="-100" max="100"/.test(selector));
+  && /min="-100" max="/.test(selector) && /'0' : '100'/.test(selector));
 check('3 botones de modo: Rellenar, Ajustar, Estirar',
   /data-modo="rellenar">Rellenar/.test(selector)
   && /data-modo="ajustar">Ajustar/.test(selector)
@@ -138,11 +138,39 @@ check('Color de fondo por bordes: detecta color predominante opaco y transparent
   puro.colorPredominanteBordes(pxOpacos, 2, 2) === '#f0141e'
   && puro.colorPredominanteBordes(pxTransp, 2, 2) === 'transparent');
 
+console.log('\n== F2b: escala sin-ampliar (spec 023) ==');
+// Con `ampliar` (default) la foto chica se agranda para encajar (hoy).
+const sinCap = puro.escalaBase('ajustar', 300, 300, 1000, 500, false);
+check('escala ampliar: foto 300x300 en hueco 1000x500 se agranda a 500x500',
+  Math.round(sinCap.dw) === 500 && Math.round(sinCap.dh) === 500,
+  sinCap.dw + 'x' + sinCap.dh);
+// Con `sin-ampliar` la foto conserva su tamano natural.
+const conCap = puro.escalaBase('ajustar', 300, 300, 1000, 500, true);
+check('escala sin-ampliar: foto 300x300 en hueco 1000x500 queda 300x300',
+  Math.round(conCap.dw) === 300 && Math.round(conCap.dh) === 300,
+  conCap.dw + 'x' + conCap.dh);
+// Una foto grande REDUCE igual (min(1, ...) no toca una reduccion).
+const reduce = puro.escalaBase('ajustar', 2000, 2000, 1000, 500, true);
+check('escala sin-ampliar: foto 2000x2000 en hueco 1000x500 reduce a 500x500',
+  Math.round(reduce.dw) === 500 && Math.round(reduce.dh) === 500,
+  reduce.dw + 'x' + reduce.dh);
+// Rellenar/Estirar tampoco pueden agrandar con el cap activo.
+const rell = puro.escalaBase('rellenar', 300, 300, 1000, 500, true);
+const est = puro.escalaBase('estirar', 300, 300, 1000, 500, true);
+check('escala sin-ampliar: Rellenar y Estirar tampoco superan el tamano natural',
+  Math.round(rell.dw) === 300 && Math.round(rell.dh) === 300
+  && Math.round(est.dw) === 300 && Math.round(est.dh) === 300);
+check('modal: con sin-ampliar los modos y Girar se ocultan y el slider capa a 0',
+  /if \(sinAmpliar\) \{ modosEl\.hidden = true; \}/.test(selector)
+  && /rotarEl\.hidden = sinAmpliar \|\|/.test(selector)
+  && /escala === 'sin-ampliar' \? '0' : '100'/.test(selector));
+check('el cargador pasa escala al selector (spec 023)', /escala: r\.escala/.test(cargador));
+
 console.log('\n== F3: badge en vivo y guias (US3) ==');
 check('badge Origen + Salida con zoom en vivo', /spmu-badge/.test(selector)
   && /Origen /.test(selector) && /Salida /.test(selector) && /toFixed\(/.test(selector));
 check('Girar solo disponible cuando supera 5% Y ranura tiene r:1',
-  /rotarEl\.hidden = !\(tieneImg && this\.supera5 && this\.config\.rotar\)/.test(selector));
+  /rotarEl\.hidden = sinAmpliar \|\| !\(tieneImg && this\.supera5 && this\.config\.rotar\)/.test(selector));
 
 console.log('\n== F4: tira visual y mini galeria del cargador (spec 021 D9) ==');
 const cargador16 = fs.readFileSync(path.join(RAIZ, 'assets', 'cargador-pmu.js'), 'utf8');

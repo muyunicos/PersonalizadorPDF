@@ -109,13 +109,19 @@ Un campo con cargador (propio o legacy) muestra botones que abren el `CargadorPM
 | Prop | Valor | Significado |
 |---|---|---|
 | `w`, `h` | int >= 1 | tamano final en px del recorte (**cuando `phsize` es 0**) |
-| `forma` | `circle` \| `square` \| `rect` \| `fit` | recorte circular, cuadrado, rectangulo o encajar |
-| `min`, `max` | int >= 1 | cuantas imagenes admite esa ranura |
+| `forma` | `auto` \| `rectangulo` \| `circulo` \| `cuadrado` \| `ovalo` | **spec 021** (alias `rect`/`circle`/`square`/`fit`): guia del recorte. `auto` usa la envoltura del placeholder si existe; si no, `rectangulo`. **Nunca** corta el PNG: el clip real lo aplica el PDF |
+| `min`, `max` | int >= 1 | cuantas imagenes admite esa ranura. **`min` FRENA la compra** (spec 022) |
 | **`phsize`** | `0` \| `1` \| `2` | **spec 019**: `0` = tamano declarado (default, historico); `1` = tamano del grupo del PDF; `2` = el doble (acotado por `PH_MAX = 3000`). Lo resuelve `PMU_API.montarCargador` desde `PMU_FICHA.campos[].grupo_w/grupo_h`; sin envoltura asociada degrada a `w`/`h` y avisa |
+| **`r`** | `0` \| `1` | **spec 021**: habilita **Girar** (solo si la foto ademas supera el 5% de diferencia de aspecto) |
+| **`size`** | number > 0 | **spec 021**: escala de la guia principal dentro del placeholder (`1` = 100%, default) |
+| **`ox`**, **`oy`** | number (%) | **spec 021**: desplazamiento de la guia principal (`0` = centrada, default) |
+| **`fondo`** | `auto` \| `transparent` \| `#rrggbb` | **spec 021**: color de fondo del lienzo. `auto` (default) lo detecta de los **bordes de la foto** (o transparente si hay transparencia); el comprador puede cambiarlo |
+| **`escala`** | `ampliar` \| `sin-ampliar` | **spec 023**: `ampliar` (default, historico) agranda la foto para encajar; `sin-ampliar` **nunca la agranda** (ocupa su tamano natural, centrada, y el resto del lienzo queda para el fondo). El PNG sigue midiendo `w x h`, asi que el Motor no cambia |
 
 **`phsize` no reemplaza a `w`/`h`**: los complementa y los usa como respaldo. Una `forma`
-explicita (`circle`/`square`) gana sobre el aspecto del grupo; `rect` y `fit` lo toman porque el
-tamano ya sale de el. El aviso `se amplia Nx` (informativo) lo muestra el selector al recortar.
+explicita gana sobre el aspecto del grupo; `auto` lo toma porque el tamano ya sale de el.
+El aviso `se amplia Nx` (informativo) lo muestra el selector al recortar; con
+`escala: 'sin-ampliar'` el badge dice `sin ampliar` y el zoom no pasa de `1x`.
 
 Flujo (FR-030…FR-035, D14, D16):
 1. El comprador toca el boton -> se abre el modal de `SelectorPMU` (canvas `w x h`, zoom,
