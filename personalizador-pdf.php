@@ -4349,7 +4349,7 @@ JS;
             true
         );
         // Spec 016 (4.6.3): el preview del admin monta el cargador TAL CUAL lo
-        // ve el comprador (boton Agregar imagen + selector real). selector-pmu
+        // ve el comprador (boton "Cargar imagen" + selector real). selector-pmu
         // viaja tambien a la consola por eso (mismo handle que la ficha).
         wp_enqueue_script(
             'personalizador-pdf-selector',

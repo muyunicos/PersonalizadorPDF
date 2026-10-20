@@ -171,6 +171,10 @@ check('tienda.js pasa idsIniciales y urlDe (endpoint de la 012)',
   && /urlDeSubida\(ses\.sid, ses\.item_key, id\)/.test(tienda16));
 check('idsDe normaliza array, string unico y JSON de ids', /function idsDe\(v\)/.test(tienda16)
   && /JSON\.parse\(s\)/.test(tienda16));
+check('Spec 021: la tira de la ficha queda limpia (lo tecnico solo con `tecnico`)',
+  /if \(this\.config\.tecnico\) \{/.test(cargador16)
+  && cargador16.indexOf('cpmu-guia') === -1
+  && cargador16.indexOf('cpmu-listo') === -1);
 
 console.log('\n== F5: doble guia de recorte y envoltura del PDF (spec 016 F6 + spec 021) ==');
 check('config.envoltura es opcional y se valida',
@@ -196,8 +200,10 @@ check('close() remueve el listener de resize (sin fugas)',
 check('T027: el cargador pasa la envoltura, forma, r, size, ox, oy al selector',
   /envoltura: this\.config\.envoltura \|\| null/.test(cargador)
   && /forma: r\.forma/.test(cargador) && /size: r\.size/.test(cargador));
-check('la tira y el modal comparten la misma geometria',
-  /_guia = function/.test(cargador) && /comandosEnvoltura/.test(cargador));
+check('Spec 021: la guia de la tira se retiro (la geometria vive en el modal)',
+  /_guia = function/.test(cargador) === false
+  && /comandosEnvoltura/.test(cargador) === false
+  && /comandosEnvoltura\(/.test(selector));
 
 console.log('');
 if (fallos) {

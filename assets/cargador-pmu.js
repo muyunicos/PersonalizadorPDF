@@ -1,25 +1,31 @@
 /**
- * cargador-pmu - Cargador de imagenes del comprador (spec 012, T023/T024, US6).
+ * cargador-pmu - Cargador de imagenes del comprador (spec 012, T023/T024, US6;
+ * spec 021, experiencia intuitiva + visor de coleccion).
  *
  * Un campo con `cargador` muestra uno por bloque sus **ranuras** (D7). Cada
- * ranura abre un `SelectorPMU` (el componente ya escrito de la 004, cuyo
- * contrato NO se toca) y sube el recorte al item del comprador. Este componente
- * NO manda nada al Motor: solo al item, antes de la vista previa.
+ * ranura abre un `SelectorPMU` y sube el recorte al item del comprador. Este
+ * componente NO manda nada al Motor: solo al item, antes de la vista previa.
  *
- * Ranura: `{w, h, forma: 'circle'|'square'|'rect'|'fit', min, max}`.
- * - `forma` decide el recorte: `fit` encaja la imagen completa; las otras
- *   recortan al marco y solo cambian la presentacion (circle/square/redondeado).
- * - `min` es la VALIDACION REAL (D16/T023b): el boton de "Listo" queda
- *   deshabilitado hasta que todas las ranuras tengan al menos `min`. Sin esto el
- *   comprador deja el item a medias.
- * - `max` es el tope por ranura: al llegar, el boton de agregar se apaga.
+ * Ranura (spec 021): `{w, h, forma, min, max, r, size, ox, oy, fondo}`.
+ * - `forma` (`auto`|`rectangulo`|`circulo`|`cuadrado`|`ovalo`) es la GUIA del
+ *   recorte: el PNG sale rectangular `w x h` y el clip real lo aplica el PDF.
+ * - `min`/`max`: cuantas imagenes admite la ranura. `completo()` es la logica
+ *   pura que informa `{listo, faltan}` (lo publica `estadoActual()`).
+ * - `max` es el tope: al llegar, el boton de cargar se apaga.
+ *
+ * UI: la FICHA queda limpia (sin medidas, sin causas internas ni botones
+ * muertos): solo el boton "Cargar imagen", las miniaturas y, si falta alguna
+ * foto, un aviso. Los datos tecnicos (medidas/forma/min y los avisos de
+ * configuracion de la spec 019) se muestran solo con `tecnico: true`, que es
+ * lo que pasa el preview de la consola del admin.
  *
  * Config:
  *   new CargadorPMU(elemento, {
  *     ranuras: [...],
  *     subir: function(blob, ctx) { return Promise<{id:string}> },  // lo da tienda.js
  *     onChange: function(estado) {},
- *     onError: function(mensaje) {}
+ *     onError: function(mensaje) {},
+ *     tecnico: false   // true = muestra medidas/forma/min y avisos (consola)
  *   })
  *
  * Sin dependencias (JS puro). Exporta tambien en Node (`module`) para poder
@@ -140,9 +146,6 @@
             + '.cpmu-ranura{border:1px solid #dcdcde;border-radius:6px;padding:10px;margin:0 0 10px}'
             + '.cpmu-titulo{margin:0 0 8px;font-size:12px;color:#50575e}'
             + '.cpmu-aviso{margin:0 0 8px;font-size:11.5px;color:#8a6116;background:#fcf9e8;border:1px solid #f0e6c0;border-radius:4px;padding:4px 6px}'
-            + '.cpmu-guia{display:inline-block;margin:0 0 8px;padding:6px 8px;border:1px dashed #c3c4c7;border-radius:4px}'
-            + '.cpmu-guia-tit{margin:0 0 4px;font-size:11.5px;color:#646970}'
-            + '.cpmu-guia-canvas{display:block;background:#fff}'
             + '.cpmu-tiras{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}'
             + '.cpmu-mini{width:56px;height:56px;border:1px solid #2271b1;background:#f0f6fc;color:#2271b1;font:600 15px/1 system-ui,sans-serif;cursor:pointer;border-radius:4px;position:relative;overflow:hidden;padding:0}'
             + '.cpmu-mini img{width:100%;height:100%;object-fit:cover;display:block;border-radius:inherit}'
@@ -150,9 +153,8 @@
             + '.cpmu-zona{border:2px dashed #c3c4c7;border-radius:6px;padding:14px;text-align:center;color:#50575e;font-size:13px;cursor:pointer}'
             + '.cpmu-zona-sobre{border-color:#2271b1;background:#f0f6fc}'
             + '.cpmu-zona-llena{opacity:.75}'
-            + '.cpmu-pie{display:flex;align-items:center;gap:10px;margin-top:6px}'
-            + '.cpmu-estado{font-size:12px;color:#50575e}'
-            + '.cpmu-listo[disabled]{opacity:.6;cursor:not-allowed}'
+            + '.cpmu-falta{margin:6px 0 0;font-size:12.5px;color:#8a6116}'
+            + '.cpmu-falta[hidden]{display:none}'
             + '.cpmu-visor{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:180000;display:flex;flex-direction:column;justify-content:space-between;color:#fff;padding:calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));box-sizing:border-box}'
             + '.cpmu-visor-top{display:flex;align-items:center;justify-content:space-between;gap:12px}'
             + '.cpmu-visor-contador{font-size:14px;font-weight:600}'
@@ -177,6 +179,9 @@
             onError: typeof config.onError === 'function' ? config.onError : null,
             urlDe: typeof config.urlDe === 'function' ? config.urlDe : null,
             preview: !!config.preview,
+            // `tecnico`: muestra medidas/forma/min y avisos de configuracion.
+            // Lo pasa el preview de la consola; la ficha del comprador NO.
+            tecnico: !!config.tecnico,
             envoltura: envolturaValida(config.envoltura)
         };
         this.estado = estadoInicial(this.config.ranuras);
@@ -209,91 +214,43 @@
             raiz.appendChild(self._bloque(r, i, doc));
         });
 
-        var pie = doc.createElement('div');
-        pie.className = 'cpmu-pie';
-        var listo = doc.createElement('button');
-        listo.type = 'button';
-        listo.className = 'button cpmu-listo';
-        listo.disabled = true;           // D16: nace deshabilitado
-        listo.textContent = 'Listo';
-        var estado = doc.createElement('span');
-        estado.className = 'cpmu-estado';
-        pie.appendChild(listo);
-        pie.appendChild(estado);
-        raiz.appendChild(pie);
+        // Aviso de faltantes: aparece SOLO si a alguna ranura le falta una foto
+        // (con todo completo no hay nada que decir). Reemplaza al viejo boton
+        // "Listo", que era decorativo: no tenia handler y no bloqueaba nada.
+        var falta = doc.createElement('p');
+        falta.className = 'cpmu-falta';
+        falta.hidden = true;
+        raiz.appendChild(falta);
 
         this.elemento.appendChild(raiz);
         this.raiz = raiz;
-        this.btnListo = listo;
-        this.txtEstado = estado;
-        if (this.config.preview) {
-            listo.style.display = 'none';   // en el preview no se "cierra" nada
-        }
+        this.txtFalta = falta;
         this._pintar();
         return true;
     }
 
-    /** Guia visual: la forma de la envoltura escalada a la ranura. */
-    CargadorPMU.prototype._guia = function (doc, r) {
-        var max = Math.max(1, Math.max(r.w, r.h));
-        var w = Math.max(40, Math.round(120 * (r.w / max)));
-        var h = Math.max(40, Math.round(120 * (r.h / max)));
-        var caja = doc.createElement('div');
-        caja.className = 'cpmu-guia';
-        var tit = doc.createElement('p');
-        tit.className = 'cpmu-guia-tit';
-        tit.textContent = 'Guia de la envoltura (' + r.w + 'x' + r.h + ' px)';
-        caja.appendChild(tit);
-        var cv = doc.createElement('canvas');
-        cv.width = w;
-        cv.height = h;
-        cv.className = 'cpmu-guia-canvas';
-        var ctx = cv.getContext('2d');
-        var env = this.config.envoltura;
-        var comandos = (global.PMUMockup && global.PMUMockup.comandosEnvoltura)
-            ? global.PMUMockup.comandosEnvoltura(env, { x: 0, y: 0, w: w, h: h })
-            : [];
-        ctx.fillStyle = 'rgba(34, 113, 177, .08)';
-        ctx.strokeStyle = '#2271b1';
-        ctx.lineWidth = 1.5;
-        if (comandos.length && global.PMUMockup.trazarEnvoltura) {
-            global.PMUMockup.trazarEnvoltura(ctx, comandos);
-            ctx.fill(env.par ? 'evenodd' : 'nonzero');
-            ctx.stroke();
-        } else {
-            ctx.strokeRect(0.75, 0.75, w - 1.5, h - 1.5);
-        }
-        caja.appendChild(cv);
-        return caja;
-    };
-
-    /** Un bloque por ranura: encabezado, miniaturas, zona de arrastrar. */
+    /** Un bloque por ranura: encabezado tecnico (solo admin), miniaturas, zona. */
     CargadorPMU.prototype._bloque = function (r, i, doc) {
         var self = this;
         var div = doc.createElement('div');
         div.className = 'cpmu-ranura';
         div.setAttribute('data-ranura', String(i));
 
-        var tit = doc.createElement('p');
-        tit.className = 'cpmu-titulo';
-        tit.textContent = r.w + 'x' + r.h + ' px - ' + r.forma
-            + ' - min ' + r.min + (r.max > 1 ? ' - hasta ' + r.max : '');
-        div.appendChild(tit);
-
-        // Spec 019 (FR-006): aviso de la ranura (phsize sin grupo asociado, o
-        // tamano acotado por PH_MAX). Informativo: la ranura funciona igual.
-        if (r.aviso) {
-            var avi = doc.createElement('p');
-            avi.className = 'cpmu-aviso';
-            avi.textContent = r.aviso;
-            div.appendChild(avi);
-        }
-
-        // Guia visual de la envoltura (PowerClip) del grupo: el comprador ve
-        // la forma en la que su foto quedara cortada. Solo PISTA: el PNG se
-        // guarda sin cortar y el clip real lo aplica el PDF.
-        if (this.config.envoltura) {
-            div.appendChild(this._guia(doc, r));
+        // Medidas, forma, min/max y avisos de configuracion (spec 019): SOLO
+        // con `tecnico` (el preview de la consola). La ficha del comprador
+        // queda limpia: no necesita datos internos ni causas de configuracion.
+        if (this.config.tecnico) {
+            var tit = doc.createElement('p');
+            tit.className = 'cpmu-titulo';
+            tit.textContent = r.w + 'x' + r.h + ' px - ' + r.forma
+                + ' - min ' + r.min + (r.max > 1 ? ' - hasta ' + r.max : '');
+            div.appendChild(tit);
+            if (r.aviso) {
+                var avi = doc.createElement('p');
+                avi.className = 'cpmu-aviso';
+                avi.textContent = r.aviso;
+                div.appendChild(avi);
+            }
         }
 
         var tira = doc.createElement('div');
@@ -307,13 +264,13 @@
             // cuantos exige) pero no se puede subir nada.
             zona.classList.add('cpmu-zona-preview');
             zona.textContent = 'Vista previa: ' + r.min + ' imagen(es) de ' + r.max + '.';
-        } else {
-            zona.textContent = 'Suelta la imagen o hace clic';
         }
+        // En la ficha la zona es solo el area de carga: el boton la nombra.
+        // El arrastrar-y-soltar sigue funcionando aunque no haya cartel.
         var boton = doc.createElement('button');
         boton.type = 'button';
         boton.className = 'button cpmu-agregar';
-        boton.textContent = 'Agregar imagen';
+        boton.textContent = 'Cargar imagen';
         if (!this.config.preview) {
             zona.appendChild(boton);   // en el preview no queda un boton muerto
         }
@@ -484,11 +441,15 @@
             slot.boton.disabled = n >= r.max;
             slot.zona.classList.toggle('cpmu-zona-llena', n > 0);
         });
+        // Aviso SOLO si falta algo: con todo completo no se dice nada (antes
+        // decia "Listo: N imagen(es)." y hacia ruido).
         var est = completo(this.config.ranuras, this.estado);
-        this.btnListo.disabled = !est.listo;
-        this.txtEstado.textContent = est.listo
-            ? 'Listo: ' + idsPlanos(this.estado).length + ' imagen(es).'
-            : 'Faltan ' + est.faltan + ' imagen(es).';
+        if (this.txtFalta) {
+            this.txtFalta.hidden = est.listo;
+            this.txtFalta.textContent = est.listo
+                ? ''
+                : 'Faltan ' + est.faltan + ' imagen(es) por cargar.';
+        }
         if (this.config.onChange) {
             this.config.onChange(this.estadoActual());
         }
@@ -648,8 +609,9 @@
     };
 
     CargadorPMU.prototype._error = function (mensaje) {
-        if (this.txtEstado) {
-            this.txtEstado.textContent = mensaje;
+        if (this.txtFalta) {
+            this.txtFalta.hidden = false;
+            this.txtFalta.textContent = mensaje;
         }
         if (this.config.onError) {
             this.config.onError(mensaje);

@@ -181,9 +181,11 @@ Detalle completo por spec: [004/quickstart.md §1](./004-woocommerce-pdf-persona
 1. **El cargador es del campo** (018): crear un campo desde la plantilla **Imagen (cargador)**.
    El drawer muestra **HTML** con `<div data-pmu-cargador></div>` y un **JS** con `RANURAS` +
    `PMU_API.montarCargador`. Ya **no** existe la fila "Cargador de imagenes".
-2. **Preview fiel** (018 D9): "Probar" dibuja la ranura; al tocar "Agregar imagen" abre el recorte
+2. **Preview fiel** (018 D9): "Probar" dibuja la ranura; al tocar "Cargar imagen" abre el recorte
    y al subir una foto la miniatura aparece al instante. En DevTools → Network: **cero** POST a
-   `admin-post.php` (la subida es simulada).
+   `admin-post.php` (la subida es simulada). El preview es el UNICO lugar donde la ranura
+   muestra sus datos tecnicos (medidas, forma, min/max) y los avisos de configuracion
+   (spec 021, `tecnico: true`); la ficha del comprador va limpia.
 3. **El recorte se ve** (fix de capas): con el **drawer abierto** y tambien desde el preview,
    el modal de recorte queda **encima** (antes lo tapaba el drawer).
 4. **Legacy intacto** (018 D3): un campo viejo con `cargador` en `datos.json` y **sin** `campo.js`

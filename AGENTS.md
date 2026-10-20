@@ -602,6 +602,12 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   **Subir** con aviso `"Subiendo imagen..."` y pregunta `"¿Querés subir otra imagen?"` si quedan
   espacios, y **mini galería fullscreen (`cpmu-visor`)** al tocar las miniaturas subidas (flechas,
   Eliminar y Reemplazar con retorno al visor si cancela).
+  **Limpieza de la tira**: se retiraron el botón **"Listo"** (decorativo: sin acción y sin bloquear
+  nada), el texto `"Listo: N imagen(es)."`, el encabezado técnico de la ranura y la guía de la
+  envoltura de la tira; el botón de cargar dice **"Cargar imagen"** y el aviso de faltantes aparece
+  **solo si falta** alguna foto. Los datos técnicos (medidas/forma/min y avisos de configuración)
+  se muestran **solo con `tecnico: true`**, que es lo que pasa el preview de la consola
+  (`assets/admin.js:apiPreview`).
 - ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
   (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,

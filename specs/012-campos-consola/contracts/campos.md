@@ -127,8 +127,11 @@ Flujo (FR-030…FR-035, D14, D16):
 4. El campo publica `valor = [id1, id2, ...]` (o `valor = id1` si `max = 1`).
 5. Si `max > 1`, el campo es `array` y publica una lista (un valor por instancia del placeholder).
 
-**`min` es la validacion real (D16)**: "Aceptar" permanece **deshabilitado** hasta que la ranura
-tenga al menos `min` imagenes. El comprador no puede dejar el item a medias.
+**`min` es la validacion real (D16)**: el sistema informa cuantas imagenes faltan
+(`completo()` -> `{listo, faltan}`, publicado en `estadoActual()`). La **ficha** muestra un unico
+aviso cuando falta alguna foto y **nada** cuando esta completo; el boton **"Listo"** que la 012
+habia previsto se **retiro en la spec 021** (era decorativo: no tenia accion y no bloqueaba nada).
+El tope `max` sigue apagando el boton de cargar al llegar.
 
 El componente **no envia nada al Motor**: solo al item del comprador, antes de la vista previa.
 

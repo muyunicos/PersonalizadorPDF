@@ -1254,7 +1254,11 @@ jQuery(function ($) {
                         idsIniciales: opts.idsIniciales || null,
                         subir: subir,
                         urlDe: function (id) { return Promise.resolve(blobs[id] || null); },
-                        onChange: opts.onChange || function () {}
+                        onChange: opts.onChange || function () {},
+                        // Spec 021: la consola SI muestra los datos tecnicos de
+                        // la ranura (medidas, forma, min/max) y los avisos de
+                        // configuracion; la ficha del comprador no.
+                        tecnico: true
                     });
                     return cargador.montar() ? cargador : null;
                 }

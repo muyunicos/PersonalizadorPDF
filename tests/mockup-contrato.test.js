@@ -215,10 +215,14 @@ check('la ficha lleva la guia del cargador al campo (deducida, spec 019)',
     pluginPhp.indexOf('envoltura_defecto($nombre, $gid)') !== -1
         && pluginPhp.indexOf("'envoltura' => isset($c['envoltura'])") !== -1
         && leer('assets/tienda.js').indexOf('envoltura: envoltura,') !== -1);
-check('el cargador dibuja la guia SIN cortar el PNG', (function () {
+check('el cargador pasa la envoltura al modal y NO dibuja geometria (spec 021)', (function () {
     var cargador = leer('assets/cargador-pmu.js');
-    return cargador.indexOf('_guia = function') !== -1
-        && cargador.indexOf('comandosEnvoltura') !== -1
+    // Spec 021: la guia de la tira (que dibujaba la envoltura en un canvas
+    // chico) se retiro. La forma/envoltura se ve en el MODAL (selector-pmu),
+    // que es guia visual: nunca corta el PNG.
+    return cargador.indexOf('_guia = function') === -1
+        && cargador.indexOf('comandosEnvoltura') === -1
+        && cargador.indexOf('envoltura: this.config.envoltura || null') !== -1
         && cargador.indexOf('envolturaValida') !== -1;
 })());
 

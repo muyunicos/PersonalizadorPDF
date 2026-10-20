@@ -440,6 +440,21 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
     && adm.indexOf('urlDe: function (id)') !== -1);
   check('el preview no pinta un boton de agregar muerto',
     /if \(!this\.config\.preview\) \{\s*zona\.appendChild\(boton\)/.test(cargadorJs));
+  // Spec 021 (limpieza de la tira): la ficha queda limpia y lo tecnico va a la consola.
+  check('la tira dice "Cargar imagen" (no "Agregar imagen")',
+    cargadorJs.indexOf("boton.textContent = 'Cargar imagen'") !== -1
+    && cargadorJs.indexOf("'Agregar imagen'") === -1);
+  check('sin boton "Listo" ni texto de estado (era decorativo)',
+    cargadorJs.indexOf('cpmu-listo') === -1 && cargadorJs.indexOf('cpmu-estado') === -1
+    && cargadorJs.indexOf("'Listo'") === -1);
+  check('sin guia de la tira (cpmu-guia)',
+    cargadorJs.indexOf('cpmu-guia') === -1 && cargadorJs.indexOf('_guia') === -1);
+  check('el aviso de faltantes solo aparece si falta algo (cpmu-falta)',
+    cargadorJs.indexOf('cpmu-falta') !== -1
+    && cargadorJs.indexOf('por cargar.') !== -1);
+  check('los datos tecnicos van SOLO con `tecnico` (preview de la consola)',
+    /if \(this\.config\.tecnico\) \{/.test(cargadorJs)
+    && adm.indexOf('tecnico: true') !== -1);
 }
 
 console.log('\n' + (fallos === 0 ? 'CAMPOS CONTRATO OK' : 'CAMPOS CONTRATO FALLA: ' + fallos));
