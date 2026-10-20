@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.15.3
+Stable tag: 4.16.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,12 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.16.0 =
+* **El cargador NUNCA agranda la foto (spec 025)**: paso de ser una opcion por ranura a ser **regla general** del sistema. El PNG que se sube mide **`min(recorte, hueco)`**: nunca tiene mas pixeles que la foto ni mas que el hueco. Con una foto de 1100x901 en un hueco de 463 el PNG sale de **463x463** (antes 1000x1000 si la ranura lo pedia): menos tiempo de subida, menos procesamiento y menos disco.
+* **Los 3 modos con la nueva regla**: **Rellenar** recorta al aspecto del lienzo **sin ampliar**; **Ajustar** encaja sin recortar (natural o reducido); **Estirar** conserva el **lado mayor** y adapta el otro al aspecto. El control **Escala** solo **reduce** (1x = tamano natural).
+* **Una sola ampliacion, en el Motor**: al no ampliarse en el navegador, la unica ampliacion posible la hace el servidor al encajar en el PDF (un solo paso, y a futuro con un metodo de calidad). El Motor **no** tuvo que cambiar.
+* **El pool tampoco amplia**: la rasterizacion de la vista previa usa la misma regla (cap a 1x).
 
 = 4.15.3 =
 * **El zoom ya no se corre al arrastrar la foto**: el ancla ahora es de verdad el **centro de la envoltura**. El desplazamiento del comprador se **escala con el zoom** (si moviste la foto 50 px y amplias 2x, la imagen se posiciona a 100 px), asi el punto de la foto que esta bajo el centro de la forma **se queda quieto** en todo el rango de Escala. Con la foto sin mover, el resultado es identico al anterior.

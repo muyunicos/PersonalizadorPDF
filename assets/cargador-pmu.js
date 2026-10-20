@@ -70,9 +70,6 @@
             if (!isFinite(oy)) { oy = 0; }
             var fondo = (typeof r.fondo === 'string' && r.fondo.trim() !== '')
                 ? r.fondo.trim() : 'auto';
-            // Spec 023 (D1): 'sin-ampliar' = la foto nunca se agranda. Default
-            // 'ampliar' (comportamiento historico); un valor raro cae ahi.
-            var escala = r.escala === 'sin-ampliar' ? 'sin-ampliar' : 'ampliar';
             out.push({
                 etiqueta: r.etiqueta || '',
                 w: w, h: h,
@@ -83,7 +80,6 @@
                 ox: ox,
                 oy: oy,
                 fondo: fondo,
-                escala: escala,
                 aviso: r.aviso || ''
             });
         });
@@ -358,8 +354,6 @@
                 ox: r.ox,
                 oy: r.oy,
                 fondo: r.fondo,
-                // Spec 023 (D1): 'sin-ampliar' viaja al modal (cap de escala).
-                escala: r.escala,
                 // Spec 024 (D2): el badge tecnico solo se ve en la consola.
                 tecnico: this.config.tecnico,
                 envoltura: this.config.envoltura || null,

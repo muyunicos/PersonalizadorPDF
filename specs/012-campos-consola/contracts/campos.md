@@ -116,12 +116,15 @@ Un campo con cargador (propio o legacy) muestra botones que abren el `CargadorPM
 | **`size`** | number > 0 | **spec 021**: escala de la guia principal dentro del placeholder (`1` = 100%, default) |
 | **`ox`**, **`oy`** | number (%) | **spec 021**: desplazamiento de la guia principal (`0` = centrada, default) |
 | **`fondo`** | `auto` \| `transparent` \| `#rrggbb` | **spec 021**: color de fondo del lienzo. `auto` (default) lo detecta de los **bordes de la foto** (o transparente si hay transparencia); el comprador puede cambiarlo |
-| **`escala`** | `ampliar` \| `sin-ampliar` | **spec 023**: `ampliar` (default, historico) agranda la foto para encajar; `sin-ampliar` **nunca la agranda** (ocupa su tamano natural, centrada, y el resto del lienzo queda para el fondo). El PNG sigue midiendo `w x h`, asi que el Motor no cambia |
+| ~~`escala`~~ | — | **eliminada en la spec 025**: el cap a `1x` es **regla general** del sistema (el cargador **nunca** agranda la foto), no una propiedad de ranura |
 
 **`phsize` no reemplaza a `w`/`h`**: los complementa y los usa como respaldo. Una `forma`
 explicita gana sobre el aspecto del grupo; `auto` lo toma porque el tamano ya sale de el.
-El aviso `se amplia Nx` (informativo) lo muestra el selector al recortar; con
-`escala: 'sin-ampliar'` el badge dice `sin ampliar` y el zoom no pasa de `1x`.
+**Spec 025 (regla general, no por ranura)**: el cargador **nunca agranda** la foto. **Rellenar** recorta
+al aspecto del lienzo sin ampliar, **Ajustar** encaja sin recortar (natural o reducido) y **Estirar**
+conserva el **lado mayor** adaptando el otro al aspecto. El PNG mide `min(recorte, hueco)`: nunca se
+guardan más píxeles que los de la foto ni más que el hueco, y el control **Escala** solo reduce
+(`1x` = tamaño natural). La única ampliación posible la hace el Motor al encajar en el PDF.
 
 Flujo (FR-030…FR-035, D14, D16):
 1. El comprador toca el boton -> se abre el modal de `SelectorPMU` (canvas `w x h`, zoom,

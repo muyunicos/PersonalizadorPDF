@@ -82,9 +82,6 @@
             var max = Math.max(min, parseInt(r.max, 10) || 1);
             var fondo = (typeof r.fondo === 'string' && r.fondo.trim() !== '')
                 ? r.fondo.trim() : 'auto';
-            // Spec 023 (D1/D7): 'sin-ampliar' = la foto nunca se agranda.
-            // Sin la clave el comportamiento es el de siempre ('ampliar').
-            var escala = r.escala === 'sin-ampliar' ? 'sin-ampliar' : 'ampliar';
             return {
                 etiqueta: r.etiqueta || '',
                 w: w, h: h, forma: forma,
@@ -96,7 +93,6 @@
                 ox: ox,
                 oy: oy,
                 fondo: fondo,
-                escala: escala,
                 aviso: aviso
             };
         },
@@ -1033,20 +1029,25 @@
             .catch(function () { return null; });
     }
 
-    /** Rasteriza una imagen a WxH exacto, en PNG, con "contain" y centrado. */
+    /**
+     * Rasteriza una imagen al hueco **sin ampliarla** (spec 025 D7): la escala
+     * se capa a 1 y el canvas mide lo que ocupa la foto (acotado por w/h). Asi
+     * el pool no guarda pixeles inventados; la ampliacion final la hace el
+     * Motor al encajar en el PDF.
+     */
     function rasterizar(url, w, h) {
         return new Promise(function (resolve) {
             var img = new Image();
             img.onload = function () {
-                var c = document.createElement('canvas');
-                c.width = Math.max(1, parseInt(w, 10) || 1);
-                c.height = Math.max(1, parseInt(h, 10) || 1);
-                var ctx2 = c.getContext('2d');
-                // "contain": la imagen entra entera y centrada; los margenes
-                // sobrantes quedan transparentes (misma regla que el Motor).
-                var esc = Math.min(c.width / img.width, c.height / img.height);
+                var W = Math.max(1, parseInt(w, 10) || 1);
+                var H = Math.max(1, parseInt(h, 10) || 1);
+                var esc = Math.min(1, Math.min(W / img.width, H / img.height));
                 var dw = Math.max(1, Math.round(img.width * esc));
                 var dh = Math.max(1, Math.round(img.height * esc));
+                var c = document.createElement('canvas');
+                c.width = Math.min(W, dw);
+                c.height = Math.min(H, dh);
+                var ctx2 = c.getContext('2d');
                 ctx2.drawImage(img, Math.round((c.width - dw) / 2), Math.round((c.height - dh) / 2), dw, dh);
                 if (c.toBlob) { c.toBlob(function (b) { resolve(b); }, 'image/png'); }
                 else { resolve(null); }

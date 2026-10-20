@@ -1,7 +1,8 @@
 # 023 — `escala: 'sin-ampliar'` (no agrandar la foto del comprador)
 
-> Estado: **en implementacion (2026-10-19)** — cierra el pendiente que la spec 019 dejo fuera de
-> alcance (D7: *"no ampliar la imagen exige tocar tambien el Motor"*).
+> Estado: **SUPERADA por la spec 025** (`specs/025-png-resolucion-foto/`) — `escala` dejo de ser una
+> propiedad de ranura: el cap a `1x` paso a ser **regla general** del sistema y el PNG pasa a medir
+> `min(recorte, hueco)`. Se conserva como registro del primer intento (2026-10-20).
 
 ## Problema
 

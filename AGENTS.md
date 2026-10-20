@@ -620,7 +620,7 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   fase **`minimos`** (6 checks: rechazo real, fail-safe, conteo real, id fantasma, saneo/cap) +
   `minTotal` en `campos-contrato`. Límite aceptado (D7): es regla de **calidad del pedido**, no
   anti-fraude; una regla infalsificable exigiría duplicar las ranuras en `datos.json`.
-- ✅ **Spec 023 `escala-sin-ampliar` (implementada 2026-10-19, v4.14.0)**: la ranura puede declarar
+- ⚠️ **Spec 023 `escala-sin-ampliar` (implementada 2026-10-19, v4.14.0; SUPERADA por la 025)**: la ranura podia declarar
   **`escala: 'ampliar' | 'sin-ampliar'`** (default `'ampliar'` = histórico). Con `'sin-ampliar'` la
   foto **nunca se escala hacia arriba**: ocupa su **tamaño natural** dentro del lienzo `W x H`,
   centrada, y el resto queda para el color de fondo. En el modal se ocultan los **3 modos** y
@@ -654,6 +654,17 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   **Fix 4.15.3**: el desplazamiento del comprador se **escala por el zoom** (`desp * zoom`) dentro de
   `origenDibujo`: sin eso el punto fijo seguía siendo el **centro de la imagen**, y al arrastrar y
   ampliar el contenido bajo el centro de la forma se corría (el check de invariancia da `-50 / -50 / -50`).
+- ✅ **Spec 025 `png-resolucion-foto` (implementada 2026-10-20, v4.16.0)**: **el cargador nunca agranda
+  la foto**, y eso es **regla general**, no una propiedad de ranura (se **eliminó** `escala` del
+  contrato). El PNG mide **`min(recorte, hueco)`** por eje: nunca tiene más píxeles que la foto ni
+  más que el hueco. Los 3 modos se redefinieron: **Rellenar** = recorte al aspecto del lienzo **sin
+  ampliar**; **Ajustar** = contain (natural o reducido); **Estirar** = conserva el **lado mayor** y
+  adapta el otro al aspecto. El control **Escala** solo reduce (`1x` = tamaño natural) y **el pool
+  tampoco amplía** (`rasterizar` capado). **El Motor no cambia**: al no ampliarse en el navegador, la
+  única ampliación posible la hace `Imagen::normalizar` al encajar en el PDF (un solo paso; Lanczos
+  queda como etapa futura). Caso real: 1100×901 en un hueco de 463 (`phsize: 1`) → PNG **463×463**
+  en vez de 1000×1000. Puerta: 6 checks con los ejemplos del negocio (E1-E6) + "ningún modo supera el
+  lado mayor de la foto".
 - ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
   (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,

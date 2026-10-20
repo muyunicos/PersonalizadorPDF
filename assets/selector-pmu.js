@@ -126,31 +126,39 @@
     }
 
     /**
-     * Spec 023 (D2): caja de dibujo de la imagen segun el modo (sin el zoom).
-     * Con `sinAmpliar` la escala NUNCA supera 1: si la foto es mas grande que
-     * el lienzo **reduce igual** (min(1, ...) no toca una reduccion); si es
-     * mas chica, ocupa su **tamano natural** y el resto del lienzo queda para
-     * el fondo. El lienzo sigue midiendo W x H, asi que el Motor no cambia.
+     * Spec 025 (D1-D4): caja de dibujo de la imagen segun el modo, **sin ampliar
+     * nunca** (regla general; ya no es una propiedad de ranura).
+     *
+     * - `rellenar` (D3): recorta al aspecto del lienzo **sin ampliar**
+     *   (`rw = min(aw, ah·ratio)`, `rh = min(ah, aw/ratio)`).
+     * - `ajustar` (D4): contain capado a 1 (la foto entera, natural o reducida).
+     * - `estirar` (D2): mantiene el **lado mayor** de la foto y adapta el otro
+     *   al aspecto del lienzo.
+     *
+     * El PNG final mide `min(lienzo, caja)` por eje (D5), asi que nunca se
+     * guardan mas pixeles que los que hay ni mas que los que pide el hueco.
      */
-    function escalaBase(modo, iw, ih, W, H, sinAmpliar) {
+    function escalaBase(modo, iw, ih, W, H) {
         var w = Math.max(1, parseFloat(W) || 1);
         var h = Math.max(1, parseFloat(H) || 1);
         var aw = Math.max(1, parseFloat(iw) || 1);
         var ah = Math.max(1, parseFloat(ih) || 1);
-        var ex, ey;
+        var ratio = w / h;
         if (modo === 'estirar') {
-            ex = w / aw;
-            ey = h / ah;
-        } else if (modo === 'ajustar') {
-            ex = ey = Math.min(w / aw, h / ah);
-        } else { // rellenar
-            ex = ey = Math.max(w / aw, h / ah);
+            // D2: "el lado que no se estira" = el mayor. El resultado conserva
+            // ese lado y toma el aspecto del lienzo.
+            var lado = Math.max(aw, ah);
+            return (ratio >= 1)
+                ? { dw: lado, dh: lado / ratio }
+                : { dw: lado * ratio, dh: lado };
         }
-        if (sinAmpliar) {
-            ex = Math.min(1, ex);
-            ey = Math.min(1, ey);
+        if (modo === 'ajustar') {
+            var e = Math.min(w / aw, h / ah, 1);
+            return { dw: aw * e, dh: ah * e };
         }
-        return { dw: aw * ex, dh: ah * ey };
+        // rellenar: mayor rectangulo con el aspecto del lienzo que cabe en la
+        // foto (nunca supera el tamano de la foto en ninguno de los dos ejes).
+        return { dw: Math.min(aw, ah * ratio), dh: Math.min(ah, aw / ratio) };
     }
 
     /**
@@ -276,9 +284,6 @@
             oy: oy,
             fondo: (typeof config.fondo === 'string' && config.fondo.trim() !== '')
                 ? config.fondo.trim() : 'auto',
-            // Spec 023 (D1): 'sin-ampliar' = la foto nunca se agranda. Sin la
-            // clave el comportamiento es el de siempre ('ampliar').
-            escala: config.escala === 'sin-ampliar' ? 'sin-ampliar' : 'ampliar',
             // Spec 024 (D2): el badge de salida es un dato TECNICO: solo se
             // muestra en el preview de la consola (`tecnico: true`).
             tecnico: !!config.tecnico,
@@ -387,10 +392,11 @@
             '</div>' +
             '</div>' +
             // Fila 2 (D3): Escala al 100% del ancho, sin boton de reset.
+            // Spec 025 (D1): el sistema NUNCA amplia, asi que el control solo
+            // reduce (max 0 = 1x).
             '<div class="spmu-fila-escala">' +
             '<span class="spmu-lb-zoom">Escala</span>' +
-            '<input type="range" class="spmu-zoom" aria-label="Escala" min="-100" max="' +
-            (this.config.escala === 'sin-ampliar' ? '0' : '100') + '" step="1" value="0">' +
+            '<input type="range" class="spmu-zoom" aria-label="Escala" min="-100" max="0" step="1" value="0">' +
             '</div>' +
             // Fila 3 (D5/D6): fondo (color + damero + auto) y Girar.
             '<div class="spmu-fila-extra">' +
@@ -496,7 +502,7 @@
             '.spmu-ojo[hidden]{display:none}' +
             '.spmu-badge{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:6px 0 0;color:#50575e;font-size:12px}' +
             '.spmu-controles{display:flex;flex-direction:column;gap:8px;margin:8px 0 0}' +
-            '.spmu-fila-mod{display:flex}' +
+            '.spmu-fila-mod{display:flex;justify-content: center}' +
             '.spmu-modos{display:inline-flex;background:#f0f0f1;border:1px solid #dcdcde;border-radius:6px;overflow:hidden}' +
             '.spmu-modos[hidden]{display:none}' +
             '.spmu-modo-btn{flex:1 1 0;min-width:88px;border:0;border-right:1px solid #dcdcde;border-radius:0;background:transparent}' +
@@ -659,11 +665,9 @@
                 img.naturalWidth || 1, img.naturalHeight || 1,
                 self.config.finalW, self.config.finalH
             );
-            // Spec 023 (D4): con `sin-ampliar` el modo es Ajustar (contain):
-            // Rellenar y Estirar ampliarian por definicion.
-            self.config.mode = (self.config.escala === 'sin-ampliar')
-                ? 'ajustar'
-                : (self.supera5 ? 'rellenar' : 'estirar');
+            // Spec 025: el modo lo decide solo la regla del 5% (el cap a 1x es
+            // general, no cambia el modo).
+            self.config.mode = self.supera5 ? 'rellenar' : 'estirar';
             if (self.raiz) {
                 var rango = self.raiz.querySelector('.spmu-zoom');
                 if (rango) { rango.value = '0'; }
@@ -715,11 +719,7 @@
         var modosEl = this.raiz.querySelector('.spmu-modos');
         var rotarEl = this.raiz.querySelector('.spmu-rotar');
         var tieneImg = !!this.imagen;
-        var sinAmpliar = this.config.escala === 'sin-ampliar';
         if (modosEl) {
-            // Spec 023 (D4): con `sin-ampliar` el modo queda en Ajustar
-            // (Rellenar y Estirar ampliarian por definicion) y no se muestran.
-            if (sinAmpliar) { modosEl.hidden = true; }
             [].slice.call(modosEl.querySelectorAll('.spmu-modo-btn')).forEach(function (btn) {
                 var m = btn.getAttribute('data-modo');
                 btn.hidden = (tieneImg && !self.supera5 && m !== 'estirar');
@@ -729,7 +729,7 @@
         if (rotarEl) {
             // Fix 4.15.1 (D6): Girar solo si el admin lo habilita (`r: 1`) Y el
             // lienzo NO es cuadrado (en 1:1 girar no cambia la cobertura).
-            rotarEl.hidden = sinAmpliar || !(tieneImg && this.config.rotar
+            rotarEl.hidden = !(tieneImg && this.config.rotar
                 && this.config.finalW !== this.config.finalH);
         }
     };
@@ -752,14 +752,13 @@
     };
 
     /**
-     * Spec 023 (D5): fija el zoom respetando el tope de `sin-ampliar` (nunca
-     * mas de 1x: la foto no se agranda). Mantiene el slider sincronizado.
+     * Spec 025 (D1): fija el zoom. Como el sistema **nunca amplia**, el tope es
+     * siempre `1x` (el control solo reduce). Mantiene el slider sincronizado.
      */
     SelectorPMU.prototype._setZoom = function (z) {
-        var max = this.config.escala === 'sin-ampliar' ? 1 : 4;
         var v = parseFloat(z);
         if (!isFinite(v)) { v = 1; }
-        this.zoom = Math.max(0.25, Math.min(max, v));
+        this.zoom = Math.max(0.25, Math.min(1, v));
         var zIn = this.raiz ? this.raiz.querySelector('.spmu-zoom') : null;
         if (zIn) { zIn.value = String(zoomASlider(this.zoom)); }
         this._dibujar();
@@ -770,8 +769,7 @@
         var dim = this._dimensionesImagen();
         var base = escalaBase(
             this.config.mode, dim.w, dim.h,
-            this.config.finalW, this.config.finalH,
-            this.config.escala === 'sin-ampliar'
+            this.config.finalW, this.config.finalH
         );
         return { dw: base.dw * this.zoom, dh: base.dh * this.zoom };
     };
@@ -1055,10 +1053,9 @@
         if (!this.txtSalida) { return; }
         var z = this.zoom || 1;
         var f = this._factorAmpliacion();
-        var sinAmpliar = this.config.escala === 'sin-ampliar';
-        var amplia = sinAmpliar
-            ? (this.imagen ? ' · sin ampliar' : '')
-            : ((this.imagen && f > 1.05) ? ' · se amplia ' + f.toFixed(1) + 'x' : '');
+        // Spec 025: con el cap a 1x la foto nunca se amplia, asi que este aviso
+        // solo puede aparecer si algo cambia en el futuro.
+        var amplia = (this.imagen && f > 1.05) ? ' · se amplia ' + f.toFixed(1) + 'x' : '';
         this.txtSalida.textContent =
             'Salida ' + this.config.finalW + 'x' + this.config.finalH + ' px · zoom x' + z.toFixed(2) + amplia;
     };
@@ -1082,13 +1079,27 @@
         else if (activo === primero && e.shiftKey) { e.preventDefault(); ultimo.focus(); }
     };
 
+    /**
+     * Genera el lienzo del PNG con la **resolucion de la foto, acotada por el
+     * hueco** (spec 025 D5): el canvas mide `min(caja, lienzo)` por eje y el
+     * dibujo se escala por `k = ow / dw` con las mismas coordenadas del lienzo.
+     * Asi el navegador **nunca amplia** y nunca guarda mas pixeles que el hueco;
+     * la unica ampliacion posible la hace el Motor al encajar en el PDF.
+     */
     SelectorPMU.prototype._generarLienzoSalida = function () {
         if (!global.document) { return this.canvas || null; }
+        var w = this.config.finalW;
+        var h = this.config.finalH;
+        var caja = this._cajaImagenModo();
+        var ow = Math.max(1, Math.min(Math.round(caja.dw) || 1, w));
+        var oh = Math.max(1, Math.min(Math.round(caja.dh) || 1, h));
+        var k = caja.dw > 0 ? ow / caja.dw : 1;
         var cv = global.document.createElement('canvas');
-        cv.width = this.config.finalW;
-        cv.height = this.config.finalH;
+        cv.width = ow;
+        cv.height = oh;
         var ctx = cv.getContext('2d');
         if (!ctx) { return null; }
+        ctx.setTransform(k, 0, 0, k, 0, 0);
         this._pintarImagenEnContexto(ctx, false);
         return cv;
     };

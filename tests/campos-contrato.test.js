@@ -243,11 +243,9 @@ console.log('\n== spec 019: ranura adaptativa (phsize + aviso) ==');
       rauto.forma === 'auto' && rauto.w === 1000 && rauto.r === 1 && rauto.size === 0.9 && rauto.ox === 5 && rauto.oy === -5);
     const rmin = nr({ w: 10, h: 10, min: 0, max: 0 }, null);
     check('min/max se normalizan a >= 1', rmin.min === 1 && rmin.max === 1);
-    // Spec 023: escala (default ampliar; desconocida cae en ampliar).
-    check('escala sin-ampliar se normaliza y el default es ampliar (spec 023)',
-      nr({ w: 10, h: 10, escala: 'sin-ampliar' }, null).escala === 'sin-ampliar'
-      && nr({ w: 10, h: 10 }, null).escala === 'ampliar'
-      && nr({ w: 10, h: 10, escala: 'raro' }, null).escala === 'ampliar');
+    // Spec 025: `escala` dejo de existir (el cap a 1x es regla general).
+    check('la ranura ya no lleva `escala` (spec 025 D1)',
+      nr({ w: 10, h: 10 }, null).escala === undefined);
   }
   const tienda019 = fs.readFileSync(path.join(__dirname, '..', 'assets', 'tienda.js'), 'utf8');
   check('montarCargador normaliza las ranuras antes de montar',
@@ -396,9 +394,8 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
   check('cargador: minTotal suma los min de las ranuras (spec 022)',
     Carg.minTotal(Carg.normalizarRanuras([{ w: 10, h: 10, min: 2 }, { w: 10, h: 10, min: 1 }])) === 3
     && Carg.minTotal([]) === 0);
-  check('cargador: escala se normaliza (spec 023)',
-    Carg.normalizarRanuras([{ w: 10, h: 10, escala: 'sin-ampliar' }])[0].escala === 'sin-ampliar'
-    && Carg.normalizarRanuras([{ w: 10, h: 10 }])[0].escala === 'ampliar');
+  check('cargador: escala ya no se normaliza (spec 025 D1)',
+    Carg.normalizarRanuras([{ w: 10, h: 10 }])[0].escala === undefined);
 
   // Cableado: el cargador viaja a la ficha antes que tienda.js.
   const plugin2 = fs.readFileSync(path.join(__dirname, '..', 'personalizador-pdf.php'), 'utf8');

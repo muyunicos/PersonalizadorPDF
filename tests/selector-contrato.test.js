@@ -153,33 +153,55 @@ check('Color de fondo por bordes: detecta color predominante opaco y transparent
   puro.colorPredominanteBordes(pxOpacos, 2, 2) === '#f0141e'
   && puro.colorPredominanteBordes(pxTransp, 2, 2) === 'transparent');
 
-console.log('\n== F2b: escala sin-ampliar (spec 023) ==');
-// Con `ampliar` (default) la foto chica se agranda para encajar (hoy).
-const sinCap = puro.escalaBase('ajustar', 300, 300, 1000, 500, false);
-check('escala ampliar: foto 300x300 en hueco 1000x500 se agranda a 500x500',
-  Math.round(sinCap.dw) === 500 && Math.round(sinCap.dh) === 500,
-  sinCap.dw + 'x' + sinCap.dh);
-// Con `sin-ampliar` la foto conserva su tamano natural.
-const conCap = puro.escalaBase('ajustar', 300, 300, 1000, 500, true);
-check('escala sin-ampliar: foto 300x300 en hueco 1000x500 queda 300x300',
-  Math.round(conCap.dw) === 300 && Math.round(conCap.dh) === 300,
-  conCap.dw + 'x' + conCap.dh);
-// Una foto grande REDUCE igual (min(1, ...) no toca una reduccion).
-const reduce = puro.escalaBase('ajustar', 2000, 2000, 1000, 500, true);
-check('escala sin-ampliar: foto 2000x2000 en hueco 1000x500 reduce a 500x500',
-  Math.round(reduce.dw) === 500 && Math.round(reduce.dh) === 500,
-  reduce.dw + 'x' + reduce.dh);
-// Rellenar/Estirar tampoco pueden agrandar con el cap activo.
-const rell = puro.escalaBase('rellenar', 300, 300, 1000, 500, true);
-const est = puro.escalaBase('estirar', 300, 300, 1000, 500, true);
-check('escala sin-ampliar: Rellenar y Estirar tampoco superan el tamano natural',
-  Math.round(rell.dw) === 300 && Math.round(rell.dh) === 300
-  && Math.round(est.dw) === 300 && Math.round(est.dh) === 300);
-check('modal: con sin-ampliar los modos y Girar se ocultan y el slider capa a 0',
-  /if \(sinAmpliar\) \{ modosEl\.hidden = true; \}/.test(selector)
-  && /rotarEl\.hidden = sinAmpliar \|\|/.test(selector)
-  && /escala === 'sin-ampliar' \? '0' : '100'/.test(selector));
-check('el cargador pasa escala al selector (spec 023)', /escala: r\.escala/.test(cargador));
+console.log('\n== F2b: PNG a resolucion de la foto (spec 025) ==');
+// El PNG mide min(caja, lienzo) por eje (D5).
+function pngDe(caja, W, H) {
+  return { w: Math.min(Math.round(caja.dw), W), h: Math.min(Math.round(caja.dh), H) };
+}
+// E1: 200x300 en 1000x1000 con Estirar -> 300x300 (lado mayor, D2).
+const e1 = pngDe(puro.escalaBase('estirar', 200, 300, 1000, 1000), 1000, 1000);
+check('E1: 200x300 + Estirar en 1000x1000 -> PNG 300x300 (lado mayor)',
+  e1.w === 300 && e1.h === 300, e1.w + 'x' + e1.h);
+// E2: 600x400 en 600x300 con Rellenar -> 600x300 (recorte al aspecto, D3).
+const e2 = pngDe(puro.escalaBase('rellenar', 600, 400, 600, 300), 600, 300);
+check('E2: 600x400 + Rellenar en 600x300 -> PNG 600x300', e2.w === 600 && e2.h === 300,
+  e2.w + 'x' + e2.h);
+// E3: foto rotada (2000x1000) en 1000x2000 con Rellenar -> 500x1000.
+const e3 = pngDe(puro.escalaBase('rellenar', 2000, 1000, 1000, 2000), 1000, 2000);
+check('E3: 2000x1000 (rotada) + Rellenar en 1000x2000 -> PNG 500x1000',
+  e3.w === 500 && e3.h === 1000, e3.w + 'x' + e3.h);
+// E4: 300x200 en 500x500 con Rellenar -> 200x200.
+const e4 = pngDe(puro.escalaBase('rellenar', 300, 200, 500, 500), 500, 500);
+check('E4: 300x200 + Rellenar en 500x500 -> PNG 200x200', e4.w === 200 && e4.h === 200,
+  e4.w + 'x' + e4.h);
+// E5: foto enorme 4000x2000 en 1000x500 -> acotada al hueco.
+const e5 = pngDe(puro.escalaBase('rellenar', 4000, 2000, 1000, 500), 1000, 500);
+check('E5: 4000x2000 + Rellenar en 1000x500 -> PNG 1000x500 (acotado)',
+  e5.w === 1000 && e5.h === 500, e5.w + 'x' + e5.h);
+// E6: el caso real (1100x901 en un hueco de 463 con phsize 1) -> 463x463.
+const e6 = pngDe(puro.escalaBase('rellenar', 1100, 901, 463, 463), 463, 463);
+check('E6: 1100x901 + Rellenar en 463x463 -> PNG 463x463', e6.w === 463 && e6.h === 463,
+  e6.w + 'x' + e6.h);
+// Ningun modo supera el lado mayor de la foto (D1: el cargador nunca amplia).
+let ampliaAlguno = false;
+['rellenar', 'ajustar', 'estirar'].forEach(function (m) {
+  [[300, 200, 1000, 1000], [200, 300, 1000, 500], [1100, 901, 463, 463], [3000, 3000, 200, 200]]
+    .forEach(function (c) {
+      var caja = puro.escalaBase(m, c[0], c[1], c[2], c[3]);
+      if (Math.max(caja.dw, caja.dh) > Math.max(c[0], c[1]) + 0.001) { ampliaAlguno = true; }
+    });
+});
+check('Spec 025 D1: ningun modo supera el lado mayor de la foto', !ampliaAlguno);
+check('Spec 025: el slider solo reduce y `escala` ya no es propiedad de ranura',
+  /min="-100" max="0"/.test(selector) && selector.indexOf('config.escala') === -1
+  && cargador.indexOf('escala: r.escala') === -1);
+check('Spec 025 D5: el PNG se genera con min(caja, lienzo)',
+  /var ow = Math\.max\(1, Math\.min\(Math\.round\(caja\.dw\) \|\| 1, w\)\)/.test(selector)
+  && /ctx\.setTransform\(k, 0, 0, k, 0, 0\)/.test(selector));
+check('Spec 025 D7: el pool (rasterizar) tambien capa a 1',
+  /var esc = Math\.min\(1, Math\.min\(W \/ img\.width, H \/ img\.height\)\)/.test(
+    fs.readFileSync(path.join(RAIZ, 'assets', 'tienda.js'), 'utf8')
+  ));
 
 console.log('\n== F2c: zoom desde la envoltura y click del ojito (spec 024, 4.15.2/4.15.3) ==');
 // Forma centrada (size 1, ox/oy 0): el origen es EXACTAMENTE el de antes.
@@ -228,8 +250,8 @@ console.log('\n== F3: badge en vivo y guias (US3) ==');
 check('badge Origen + Salida con zoom en vivo', /spmu-badge/.test(selector)
   && /Origen /.test(selector) && /Salida /.test(selector) && /toFixed\(/.test(selector));
 check('Spec 024 fix 4.15.1: Girar solo con r:1 Y lienzo NO cuadrado (sin el 5%)',
-  /sinAmpliar \|\| !\(tieneImg && this\.config\.rotar/.test(selector)
-  && /&& this\.config\.finalW !== this\.config\.finalH\)/.test(selector)
+  /rotarEl\.hidden = !\(tieneImg && this\.config\.rotar/.test(selector)
+  && /this\.config\.finalW !== this\.config\.finalH\)/.test(selector)
   && selector.indexOf('tieneImg && this.supera5 && this.config.rotar') === -1);
 check('Spec 024 fix 4.15.1: al girar se recalcula el 5% (no deforma en Estirar)',
   /this\.supera5 = superaCincoPorciento\(dim\.w, dim\.h/.test(selector)
