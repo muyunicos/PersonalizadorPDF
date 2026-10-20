@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.14.0
+Stable tag: 4.15.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,12 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.15.0 =
+* **Modal de ajuste mas limpio (spec 024)**: el titulo pasa a **"Ajuste la imagen"** (sin medidas) y el dato tecnico `Salida WxH px · zoom xN` **deja de mostrarse al comprador** (queda solo en el preview de la consola).
+* **Controles en tres filas**: los 3 modos (**Rellenar / Ajustar / Estirar**) a la izquierda, los tres del mismo ancho, y **al tocarlos la escala vuelve al medio**; el control ahora se llama **Escala**, ocupa **todo el ancho** y **perdio el boton de reset**; el **fondo** usa un **icono de damero** (transparente) mas un **icono `auto`** que aparece solo si el fondo no es automatico (vuelve al color detectado de los bordes de la foto); **Girar** se movio a esa misma fila.
+* **Acciones separadas**: **"Cargar imagen"** abajo a la izquierda y **"Cancelar" + "Subir"** abajo a la derecha.
+* **La guia ya no oscurece la foto**: se quitaron los dos velos negros, asi que la zona fuera del recorte queda **transparente** y solo se ven los contornos. Un **ojito** dentro de la escena permite alternar una **mascara blanca** para ver **solo el recorte final** (aparece unicamente cuando la forma recorta). El PNG que se sube y el PDF **no cambian**.
 
 = 4.14.0 =
 * **`escala: 'sin-ampliar'` (spec 023)**: una ranura puede pedir que **la foto nunca se agrande**. Hoy, si la foto es mas chica que el hueco, se amplia para encajar (300x300 en un hueco 1000x500 se estiraba a 500x500, borrosa). Con `escala: 'sin-ampliar'` la foto ocupa su **tamano natural** (300x300), centrada, y el resto del marco queda con el color de fondo elegido. Una foto mas grande que el hueco **reduce igual**.

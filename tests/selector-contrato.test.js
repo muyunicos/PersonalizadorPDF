@@ -71,9 +71,24 @@ check('boton Cargar imagen que cambia a Cambiar imagen cuando hay imagen',
 check('boton Subir (antes Aceptar) + modal para subir otra imagen si quedan espacios',
   />Subir<\/button>/.test(selector) && /Subiendo\.\.\./.test(selector)
   && /spmu-otra-modal/.test(selector) && /spmu-otra-si/.test(selector));
-check('control Reducir / Ampliar con reset al medio (0)',
-  /Reducir \/ Ampliar/.test(selector) && /spmu-zoom-reset/.test(selector)
-  && /min="-100" max="/.test(selector) && /'0' : '100'/.test(selector));
+check('Spec 024 D3: control "Escala" al 100% y SIN boton de reset',
+  /<span class="spmu-lb-zoom">Escala<\/span>/.test(selector)
+  && /class="spmu-zoom"[^>]*min="-100" max="/.test(selector)
+  && selector.indexOf('spmu-zoom-reset') === -1
+  && !/Reducir \/ Ampliar/.test(selector));
+check('Spec 024 D1/D2: titulo sin medidas y badge solo con `tecnico`',
+  /: 'Ajuste la imagen';/.test(selector)
+  && /\(this\.config\.tecnico/.test(selector)
+  && /spmu-badge/.test(selector));
+check('Spec 024 D4/D5/D6/D7: modos resetean Escala, fondo auto, Girar y acciones separadas',
+  /self\._setZoom\(1\);/.test(selector)
+  && /spmu-fondo-auto/.test(selector)
+  && /fondoEsAuto = true/.test(selector)
+  && /class="spmu-acciones-izq"/.test(selector)
+  && /class="spmu-acciones-der"/.test(selector)
+  && selector.indexOf('spmu-fila-extra') < selector.indexOf('spmu-rotar')
+  && selector.indexOf('spmu-rotar') < selector.indexOf('class="spmu-acciones"')
+  && selector.indexOf('spmu-cancelar') < selector.indexOf('button button-primary spmu-ok'));
 check('3 botones de modo: Rellenar, Ajustar, Estirar',
   /data-modo="rellenar">Rellenar/.test(selector)
   && /data-modo="ajustar">Ajustar/.test(selector)
@@ -213,10 +228,16 @@ check('la guia es un canvas SEPARADO (pointer-events:none + aria-hidden)',
   && /<canvas class="spmu-envoltura"/.test(selector) && /aria-hidden="true"><\/canvas>/.test(selector));
 check('reusa la geometria del nucleo (una sola fuente)',
   /core\.comandosEnvoltura\(/.test(selector) && /core\.trazarEnvoltura\(/.test(selector));
-check('oscurece fuera del recorte principal (destination-out) y el margen exterior del 10%',
-  /destination-out/.test(selector)
-  && /fill\(regla\)/.test(selector)
-  && /fill\('evenodd'\)/.test(selector));
+check('Spec 024 D8: la guia NO oscurece (sin velos; zona libre transparente)',
+  /Spec 024 \(D9\): con la mascara de inspeccion/.test(selector)
+  && !/rgba\(0, 0, 0, 0\.35\)/.test(selector)
+  && !/rgba\(0, 0, 0, 0\.32\)/.test(selector)
+  && !/fill\('evenodd'\)/.test(selector));
+check('Spec 024 D9: ojito con mascara blanca pura, solo si la forma recorta',
+  /spmu-ojo/.test(selector) && /_mascaraRecorte/.test(selector)
+  && /ctx\.fillStyle = '#ffffff'/.test(selector)
+  && /var recorta = \(prin\.w < sec\.w - 0\.5\) \|\| \(prin\.h < sec\.h - 0\.5\)/.test(selector)
+  && /ojo\.hidden = !recorta/.test(selector));
 check('el PNG de salida sale de _generarLienzoSalida(finalW, finalH) sin tocar el overlay',
   /_generarLienzoSalida = function/.test(selector)
   && /this\._pintarImagenEnContexto\(ctx, false\)/.test(selector)

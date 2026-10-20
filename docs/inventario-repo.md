@@ -3,7 +3,7 @@
 > **GENERADO automaticamente** por `php tests/inventario_repo.php` — NO editar a mano.
 > La semantica (responsabilidad de cada archivo) vive en `AGENTS.md` seccion 2 y en
 > `modules/LEEME.md`; este reporte aporta los NUMEROS: peso, LOC, dependencias
-> cruzadas y candidatos a codigo muerto. Generado: 2026-10-20 01:28.
+> cruzadas y candidatos a codigo muerto. Generado: 2026-10-20 01:39.
 
 ## 1. Resumen por tipo
 
@@ -11,9 +11,9 @@
 |---|---:|---:|
 | CSS | 2 | 76,3 |
 | HTML | 2 | 132,2 |
-| JS assets | 9 | 376,0 |
+| JS assets | 9 | 383,0 |
 | JS modulo textmuy | 14 | 643,3 |
-| JS test | 6 | 102,9 |
+| JS test | 6 | 104,1 |
 | JS test modulo | 46 | 291,6 |
 | PHP admin | 7 | 87,6 |
 | PHP entry (plugin WP) | 1 | 246,8 |
@@ -21,11 +21,11 @@
 | PHP motor | 7 | 134,7 |
 | PHP test CLI | 11 | 315,2 |
 | config | 6 | 13,4 |
-| doc | 141 | 1.368,7 |
+| doc | 143 | 1.378,4 |
 | otro | 10 | 12,7 |
-| **TOTAL** | **265** | **3.941,1** |
+| **TOTAL** | **267** | **3.959,1** |
 
-Codigo fuente (php/js/css/html): **108 archivos, 2.546,3 KB**. Docs (md/txt): 141. Config: 6.
+Codigo fuente (php/js/css/html): **108 archivos, 2.554,5 KB**. Docs (md/txt): 143. Config: 6.
 
 ## 2. Archivos de codigo mas pesados (top 15)
 
@@ -41,8 +41,8 @@ Codigo fuente (php/js/css/html): **108 archivos, 2.546,3 KB**. Docs (md/txt): 14
 | 8 | 73,6 | `assets/mockups.js` | JS assets |
 | 9 | 69,2 | `assets/tienda.js` | JS assets |
 | 10 | 57,1 | `modules/textmuy/js/fonts.js` | JS modulo textmuy |
-| 11 | 52,7 | `admin/pdfs.php` | PHP admin |
-| 12 | 47,7 | `assets/selector-pmu.js` | JS assets |
+| 11 | 54,6 | `assets/selector-pmu.js` | JS assets |
+| 12 | 52,7 | `admin/pdfs.php` | PHP admin |
 | 13 | 45,9 | `modules/textmuy/css/style.css` | CSS |
 | 14 | 40,1 | `modules/textmuy/js/api.js` | JS modulo textmuy |
 | 15 | 37,7 | `tests/mockup-contrato.test.js` | JS test |
@@ -65,12 +65,12 @@ enqueue, `<script src>`, etc.).
 | `assets/admin.css` | CSS | 30,4 | 828 | - | - | - | 1 | OK |
 | `assets/admin.js` | JS assets | 98,4 | 1580 | - | - | - | 4 | OK |
 | `assets/campo-montar.js` | JS assets | 6,7 | 115 | - | - | - | 4 | OK |
-| `assets/cargador-pmu.js` | JS assets | 30,1 | 549 | - | - | - | 5 | OK |
+| `assets/cargador-pmu.js` | JS assets | 30,2 | 550 | - | - | - | 5 | OK |
 | `assets/miniaturas.js` | JS assets | 16,1 | 320 | - | - | - | 1 | OK |
 | `assets/mockup-geometria.js` | JS assets | 15,9 | 281 | - | - | - | 4 | OK |
 | `assets/mockup-render.js` | JS assets | 18,2 | 298 | - | - | - | 3 | OK |
 | `assets/mockups.js` | JS assets | 73,6 | 1425 | - | - | - | 6 | OK |
-| `assets/selector-pmu.js` | JS assets | 47,7 | 970 | - | - | - | 4 | OK |
+| `assets/selector-pmu.js` | JS assets | 54,6 | 1049 | - | - | - | 4 | OK |
 | `assets/tienda.js` | JS assets | 69,2 | 1054 | - | - | - | 6 | OK |
 | `engine/Detector.php` | PHP motor | 35,5 | 923 | 38 | - | <br>personalizador-pdf.php<br>tests/envolturas.php<br>tests/motor_smoke.php<br>tests/parity.php | 4 | OK |
 | `engine/Imagen.php` | PHP motor | 15,0 | 325 | 12 | - | <br>personalizador-pdf.php<br>tests/motor_smoke.php | 2 | OK |
@@ -159,7 +159,7 @@ enqueue, `<script src>`, etc.).
 | `tests/motor_smoke.php` | PHP test CLI | 14,6 | 255 | 2 | <br>engine/Pdf.php<br>engine/Detector.php<br>engine/PngWriter.php<br>engine/Metadata.php<br>engine/Imagen.php<br>engine/Overlay.php<br>engine/Motor.php | - | 0 | ENTRADA CLI test |
 | `tests/parity.php` | PHP test CLI | 5,7 | 141 | 1 | <br>engine/Pdf.php<br>engine/Detector.php | - | 0 | ENTRADA CLI test |
 | `tests/phpstan/simbolos.php` | PHP test CLI | 0,8 | 9 | - | - | - | 0 | ENTRADA CLI test |
-| `tests/selector-contrato.test.js` | JS test | 14,4 | 208 | - | - | - | 0 | ENTRADA CLI test |
+| `tests/selector-contrato.test.js` | JS test | 15,6 | 229 | - | - | - | 0 | ENTRADA CLI test |
 | `tests/sin_lectura.php` | PHP test CLI | 4,6 | 95 | 8 | <br>inc/class-pmu-galeria.php<br>inc/class-pmu-uploads.php | - | 0 | ENTRADA CLI test |
 | `tests/texto_puente.php` | PHP test CLI | 229,0 | 2950 | 84 | <br>admin/pdfs.php<br>admin/pedidos.php<br>inc/class-pmu-galeria.php<br>inc/class-pmu-uploads.php<br>inc/class-pmu-sesion.php | - | 0 | ENTRADA CLI test |
 | `tests/validez.js` | JS test | 2,5 | 30 | - | - | - | 0 | ENTRADA CLI test |
@@ -190,7 +190,7 @@ _Ninguno._
 
 ## 7. Documentacion y configuracion (fuera de la tabla de codigo)
 
-- Docs (md/txt): **141** archivos, 1.368,7 KB.
+- Docs (md/txt): **143** archivos, 1.378,4 KB.
 - Config: **6** archivos (json/neon/lock).
 - Otros (10): .gitattributes, .gitignore, modules/.gitignore, modules/.gitkeep, modules/textmuy/.editorconfig, modules/textmuy/.gitattributes, modules/textmuy/.gitignore, tests/fixtures/exacto_b.jpg, tests/fixtures/foto_a.png, tests/fixtures/paleta_b.png
 

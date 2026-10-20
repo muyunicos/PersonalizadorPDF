@@ -16,6 +16,17 @@
     var MARGEN_ESCENA = 0.10; // 10% en cada borde => escena = 1.2x del placeholder
     var UMBRAL_ASPECTO = 0.05; // 5% de tolerancia en relacion de aspecto
 
+    // Spec 024 (D9): iconos del ojito de inspeccion (SVG inline, sin dependencias).
+    var ICO_OJO = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">'
+        + '<path fill="currentColor" d="M12 4.5C6.7 4.5 2.4 7.7.4 11.4a1 1 0 0 0 0 .9C2.4 16 6.7 19.2 12 19.2'
+        + 's9.6-3.2 11.6-6.9a1 1 0 0 0 0-.9C21.6 7.7 17.3 4.5 12 4.5Zm0 12.3a5.1 5.1 0 1 1 0-10.2 5.1 5.1 0 0 1 0 10.2Z"/>'
+        + '</svg>';
+    var ICO_OJO_TACHADO = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">'
+        + '<path fill="currentColor" d="M12 4.5C6.7 4.5 2.4 7.7.4 11.4a1 1 0 0 0 0 .9C2.4 16 6.7 19.2 12 19.2'
+        + 's9.6-3.2 11.6-6.9a1 1 0 0 0 0-.9C21.6 7.7 17.3 4.5 12 4.5Zm0 12.3a5.1 5.1 0 1 1 0-10.2 5.1 5.1 0 0 1 0 10.2Z"/>'
+        + '<path fill="currentColor" d="M3.7 2.3 2.3 3.7l18 18 1.4-1.4-18-18Z"/>'
+        + '</svg>';
+
     var MAPA_FORMAS = {
         rectangulo: 'rectangulo', rect: 'rectangulo',
         circulo: 'circulo', circle: 'circulo',
@@ -245,6 +256,9 @@
             // Spec 023 (D1): 'sin-ampliar' = la foto nunca se agranda. Sin la
             // clave el comportamiento es el de siempre ('ampliar').
             escala: config.escala === 'sin-ampliar' ? 'sin-ampliar' : 'ampliar',
+            // Spec 024 (D2): el badge de salida es un dato TECNICO: solo se
+            // muestra en el preview de la consola (`tecnico: true`).
+            tecnico: !!config.tecnico,
             category: config.category || '',
             ajustes: Array.isArray(config.ajustes) ? config.ajustes : [],
             envoltura: envolturaValida(config.envoltura),
@@ -264,6 +278,12 @@
         this.zoom = 1;
         this.rotacion = 0;
         this.colorFondo = '#ffffff';
+        // Spec 024 (D5): color detectado de los bordes de la foto + bandera de
+        // "el fondo es automatico" (el boton auto aparece solo si NO lo es).
+        this.fondoAuto = '#ffffff';
+        this.fondoEsAuto = true;
+        // Spec 024 (D9): mascara de inspeccion (blanco opaco fuera de la forma).
+        this._mascaraRecorte = false;
         this.supera5 = false;
         this._arrastrando = null;
         this._pinch = null;
@@ -319,39 +339,55 @@
         this.raiz = document.createElement('div');
         this.raiz.className = 'spmu-modal';
         var tituloTxt = this._contextoReemplazo
-            ? this._contextoReemplazo + ' (' + this.config.finalW + 'x' + this.config.finalH + ' px)'
-            : 'Ajusta la imagen (' + this.config.finalW + 'x' + this.config.finalH + ' px)';
+            ? this._contextoReemplazo
+            : 'Ajuste la imagen';
         this.raiz.innerHTML =
-            '<div class="spmu-caja" role="dialog" aria-modal="true" aria-label="Ajustar imagen">' +
+            '<div class="spmu-caja" role="dialog" aria-modal="true" aria-label="Ajuste de imagen">' +
             '<div class="spmu-cabecera">' +
             '<p class="spmu-titulo">' + tituloTxt + '</p>' +
             '<button type="button" class="spmu-x" aria-label="Cerrar">&#10005;</button>' +
             '</div>' +
             '<div class="spmu-escena-wrap"><div class="spmu-escena"></div></div>' +
-            '<p class="spmu-badge"><span class="spmu-origen"></span><span class="spmu-salida"></span></p>' +
+            // Spec 024 (D2): el badge de salida es tecnico: solo en la consola.
+            (this.config.tecnico
+                ? '<p class="spmu-badge"><span class="spmu-origen"></span><span class="spmu-salida"></span></p>'
+                : '') +
             '<div class="spmu-controles">' +
+            // Fila 1 (D4): los 3 modos a la izquierda, los tres del mismo ancho.
+            '<div class="spmu-fila-mod">' +
             '<div class="spmu-modos" role="group" aria-label="Modo de encaje">' +
             '<button type="button" class="button spmu-modo-btn" data-modo="rellenar">Rellenar</button>' +
             '<button type="button" class="button spmu-modo-btn" data-modo="ajustar">Ajustar</button>' +
             '<button type="button" class="button spmu-modo-btn" data-modo="estirar">Estirar</button>' +
             '</div>' +
-            '<label class="spmu-lb-zoom">Reducir / Ampliar ' +
-            '<input type="range" class="spmu-zoom" min="-100" max="' +
-            (this.config.escala === 'sin-ampliar' ? '0' : '100') + '" step="1" value="0">' +
-            '<button type="button" class="spmu-zoom-reset" title="Restablecer al centro" aria-label="Restablecer">&#8634;</button>' +
-            '</label>' +
-            '<label class="spmu-lb-fondo">Fondo ' +
-            '<input type="color" class="spmu-fondo-color" value="#ffffff">' +
-            '<button type="button" class="button spmu-fondo-transp">Transparente</button>' +
-            '</label>' +
             '</div>' +
-            '<p class="spmu-acciones">' +
+            // Fila 2 (D3): Escala al 100% del ancho, sin boton de reset.
+            '<div class="spmu-fila-escala">' +
+            '<span class="spmu-lb-zoom">Escala</span>' +
+            '<input type="range" class="spmu-zoom" aria-label="Escala" min="-100" max="' +
+            (this.config.escala === 'sin-ampliar' ? '0' : '100') + '" step="1" value="0">' +
+            '</div>' +
+            // Fila 3 (D5/D6): fondo (color + damero + auto) y Girar.
+            '<div class="spmu-fila-extra">' +
+            '<span class="spmu-lb-fondo">Fondo ' +
+            '<input type="color" class="spmu-fondo-color" value="#ffffff" aria-label="Color de fondo">' +
+            '<button type="button" class="button spmu-fondo-transp" aria-pressed="false" title="Fondo transparente" aria-label="Fondo transparente"><span class="spmu-ico-damero" aria-hidden="true"></span></button>' +
+            '<button type="button" class="button spmu-fondo-auto" hidden title="Volver al fondo automatico (segun los bordes de la foto)">auto</button>' +
+            '</span>' +
+            '<button type="button" class="button spmu-rotar" hidden>Girar</button>' +
+            '</div>' +
+            '</div>' +
+            // Acciones (D7): cargar a la izquierda; Cancelar + Subir a la derecha.
+            '<div class="spmu-acciones">' +
+            '<div class="spmu-acciones-izq">' +
             '<input type="file" class="spmu-file" accept="' + ACEPTA + '" hidden>' +
             '<button type="button" class="button spmu-elegir">Cargar imagen</button>' +
-            '<button type="button" class="button spmu-rotar" hidden>Girar</button>' +
-            '<button type="button" class="button button-primary spmu-ok" disabled>Subir</button>' +
+            '</div>' +
+            '<div class="spmu-acciones-der">' +
             '<button type="button" class="button-link spmu-cancelar">Cancelar</button>' +
-            '</p>' +
+            '<button type="button" class="button button-primary spmu-ok" disabled>Subir</button>' +
+            '</div>' +
+            '</div>' +
             '<p class="spmu-status" role="status" aria-live="polite"></p>' +
             '<div class="spmu-otra-modal" hidden>' +
             '<p class="spmu-otra-txt">Imagen subida correctamente. ¿Queres subir otra imagen?</p>' +
@@ -383,10 +419,6 @@
         });
         $('.spmu-zoom').addEventListener('input', function () {
             self._setZoom(sliderAZoom(this.value));
-        });
-        $('.spmu-zoom-reset').addEventListener('click', function () {
-            self.desplazamiento = { x: 0, y: 0 };
-            self._setZoom(1);
         });
         this._enlazarEventosDialogo($);
         this._montarEscena();
@@ -428,18 +460,32 @@
             '.spmu-escena:active{cursor:grabbing}' +
             '.spmu-canvas{width:100%;height:100%;display:block}' +
             '.spmu-envoltura{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:block}' +
+            // Spec 024 (D9): ojito de inspeccion dentro de la escena.
+            '.spmu-ojo{position:absolute;top:8px;right:8px;z-index:2;width:36px;height:36px;padding:0;border:0;border-radius:8px;background:rgba(0,0,0,.55);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}' +
+            '.spmu-ojo:hover{background:rgba(0,0,0,.78)}' +
+            '.spmu-ojo[aria-pressed="true"]{background:#2271b1}' +
+            '.spmu-ojo[hidden]{display:none}' +
             '.spmu-badge{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:6px 0 0;color:#50575e;font-size:12px}' +
-            '.spmu-controles{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:8px 0}' +
-            '.spmu-modos{display:inline-flex;gap:4px;background:#f0f0f1;padding:3px;border-radius:6px}' +
+            '.spmu-controles{display:flex;flex-direction:column;gap:8px;margin:8px 0 0}' +
+            '.spmu-fila-mod{display:flex}' +
+            '.spmu-modos{display:inline-flex;background:#f0f0f1;border:1px solid #dcdcde;border-radius:6px;overflow:hidden}' +
             '.spmu-modos[hidden]{display:none}' +
+            '.spmu-modo-btn{flex:1 1 0;min-width:88px;border:0;border-right:1px solid #dcdcde;border-radius:0;background:transparent}' +
+            '.spmu-modo-btn:last-child{border-right:0}' +
             '.spmu-modo-btn.is-active{background:#2271b1;color:#fff;border-color:#2271b1}' +
-            '.spmu-lb-zoom{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500}' +
-            '.spmu-zoom{width:140px;margin:0}' +
-            '.spmu-zoom-reset{border:1px solid #c3c4c7;background:#f6f7f7;border-radius:4px;cursor:pointer;padding:2px 7px;font-size:14px;line-height:1.2;min-height:28px}' +
+            '.spmu-fila-escala{display:flex;align-items:center;gap:10px}' +
+            '.spmu-lb-zoom{font-size:13px;font-weight:600;white-space:nowrap}' +
+            '.spmu-zoom{flex:1 1 auto;width:100%;min-width:0;margin:0}' +
+            '.spmu-fila-extra{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}' +
             '.spmu-lb-fondo{display:inline-flex;align-items:center;gap:6px;font-size:13px}' +
-            '.spmu-fondo-color{width:30px;height:28px;padding:0;border:1px solid #c3c4c7;border-radius:4px;cursor:pointer;background:none}' +
-            '.spmu-fondo-transp.is-active{background:#2271b1;color:#fff;border-color:#2271b1}' +
-            '.spmu-acciones{display:flex;gap:8px;align-items:center;margin:8px 0 0;flex-wrap:wrap}' +
+            '.spmu-fondo-color{width:32px;height:30px;padding:0;border:1px solid #c3c4c7;border-radius:4px;cursor:pointer;background:none}' +
+            '.spmu-fondo-transp{width:32px;height:30px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:4px}' +
+            '.spmu-ico-damero{display:block;width:16px;height:16px;border-radius:2px;border:1px solid #8c8f94;background:repeating-conic-gradient(#fff 0 25%,#bbb 0 50%) 0 0/8px 8px}' +
+            '.spmu-fondo-auto{min-height:30px;padding:0 8px;font-size:12px;border-radius:4px}' +
+            '.spmu-fondo-auto[hidden]{display:none}' +
+            '.spmu-fondo-transp.is-active{background:#2271b1;border-color:#2271b1}' +
+            '.spmu-acciones{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:10px 0 0;flex-wrap:wrap}' +
+            '.spmu-acciones-izq,.spmu-acciones-der{display:flex;align-items:center;gap:8px;flex-wrap:wrap}' +
             '.spmu-status{margin:6px 0 0;color:#1d2327;font-size:13px;font-weight:500;min-height:18px}' +
             '.spmu-otra-modal{position:absolute;inset:0;background:rgba(255,255,255,.96);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;z-index:5;border-radius:10px}' +
             '.spmu-otra-modal[hidden]{display:none}' +
@@ -466,19 +512,32 @@
                     self.config.mode = m;
                     self.desplazamiento = { x: 0, y: 0 };
                     self._actualizarControlesModo();
-                    self._dibujar();
+                    // Spec 024 (D4): al cambiar de modo, la Escala vuelve al medio.
+                    self._setZoom(1);
                 }
             });
         });
         $('.spmu-fondo-color').addEventListener('input', function () {
             self.colorFondo = this.value || '#ffffff';
+            self.fondoEsAuto = false;   // Spec 024 (D5): deja de ser automatico.
             self._actualizarControlesFondo();
             self._dibujar();
         });
         $('.spmu-fondo-transp').addEventListener('click', function () {
-            self.colorFondo = (self.colorFondo === 'transparent')
-                ? ($('.spmu-fondo-color').value || '#ffffff')
-                : 'transparent';
+            if (self.colorFondo === 'transparent') {
+                self.colorFondo = self.fondoAuto;   // vuelve al detectado
+                self.fondoEsAuto = true;
+            } else {
+                self.colorFondo = 'transparent';
+                self.fondoEsAuto = false;
+            }
+            self._actualizarControlesFondo();
+            self._dibujar();
+        });
+        // Spec 024 (D5): volver al fondo automatico (bordes de la foto).
+        $('.spmu-fondo-auto').addEventListener('click', function () {
+            self.colorFondo = self.fondoAuto;
+            self.fondoEsAuto = true;
             self._actualizarControlesFondo();
             self._dibujar();
         });
@@ -524,6 +583,8 @@
         this.desplazamiento = { x: 0, y: 0 };
         this.zoom = 1;
         this.rotacion = 0;
+        // Spec 024 (D9): una carga nueva arranca sin la mascara de inspeccion.
+        this._mascaraRecorte = false;
         if (!this.raiz) { return; }
         var elegir = this.raiz.querySelector('.spmu-elegir');
         if (elegir) { elegir.textContent = 'Cargar imagen'; }
@@ -555,8 +616,16 @@
             self.desplazamiento = { x: 0, y: 0 };
             self.zoom = 1;
             self.rotacion = 0;
-            self.colorFondo = (self.config.fondo && self.config.fondo !== 'auto')
-                ? self.config.fondo : detectarColorBordes(img);
+            // Spec 024 (D5): recordar el color detectado de los bordes y si el
+            // fondo es automatico (el boton "auto" aparece solo si NO lo es).
+            self.fondoAuto = detectarColorBordes(img);
+            if (self.config.fondo && self.config.fondo !== 'auto') {
+                self.colorFondo = self.config.fondo;
+                self.fondoEsAuto = false;
+            } else {
+                self.colorFondo = self.fondoAuto;
+                self.fondoEsAuto = true;
+            }
             self.supera5 = superaCincoPorciento(
                 img.naturalWidth || 1, img.naturalHeight || 1,
                 self.config.finalW, self.config.finalH
@@ -637,11 +706,17 @@
         if (!this.raiz) { return; }
         var inColor = this.raiz.querySelector('.spmu-fondo-color');
         var btnTr = this.raiz.querySelector('.spmu-fondo-transp');
+        var btnAuto = this.raiz.querySelector('.spmu-fondo-auto');
         var esTransp = (this.colorFondo === 'transparent');
         if (inColor && !esTransp && /^#[0-9a-f]{6}$/i.test(this.colorFondo)) {
             inColor.value = this.colorFondo;
         }
-        if (btnTr) { btnTr.classList.toggle('is-active', esTransp); }
+        if (btnTr) {
+            btnTr.classList.toggle('is-active', esTransp);
+            btnTr.setAttribute('aria-pressed', esTransp ? 'true' : 'false');
+        }
+        // Spec 024 (D5): "auto" solo esta disponible si el fondo NO lo es.
+        if (btnAuto) { btnAuto.hidden = this.fondoEsAuto; }
     };
 
     /**
@@ -718,16 +793,53 @@
         this.geo = geometriaEscena(this.config.finalW, this.config.finalH, this.config);
         this.escena.innerHTML =
             '<canvas class="spmu-canvas" width="' + this.geo.canvasW + '" height="' + this.geo.canvasH + '"></canvas>' +
-            '<canvas class="spmu-envoltura" width="' + this.geo.canvasW + '" height="' + this.geo.canvasH + '" aria-hidden="true"></canvas>';
+            '<canvas class="spmu-envoltura" width="' + this.geo.canvasW + '" height="' + this.geo.canvasH + '" aria-hidden="true"></canvas>' +
+            // Spec 024 (D9): ojito de inspeccion (arriba a la derecha).
+            '<button type="button" class="spmu-ojo" hidden aria-pressed="false" title="Ver solo el recorte" aria-label="Ver solo el recorte">' + ICO_OJO + '</button>';
         this.canvas = this.escena.querySelector('.spmu-canvas');
         this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
         this.cvEnvoltura = this.escena.querySelector('.spmu-envoltura');
         this.ctxEnvoltura = this.cvEnvoltura ? this.cvEnvoltura.getContext('2d') : null;
         this._ajustarCajaEscena();
         this._enlazarGestosEscena();
+        this._enlazarOjo();
         this._actualizarControlesModo();
         this._actualizarControlesFondo();
+        this._actualizarOjo();
         this._dibujar();
+    };
+
+    /** Spec 024 (D9): el ojito alterna la mascara de inspeccion. */
+    SelectorPMU.prototype._enlazarOjo = function () {
+        var self = this;
+        var ojo = this.escena ? this.escena.querySelector('.spmu-ojo') : null;
+        if (!ojo) { return; }
+        ojo.addEventListener('click', function (e) {
+            e.stopPropagation();
+            self._mascaraRecorte = !self._mascaraRecorte;
+            self._actualizarOjo();
+            self._pintarEnvoltura();
+        });
+    };
+
+    /**
+     * Spec 024 (D9): el ojito solo tiene sentido si la forma **recorta** (deja
+     * zona afuera). Si cubre todo el placeholder no se muestra: seria un boton
+     * muerto. Refleja el estado en `aria-pressed` y cambia el icono.
+     */
+    SelectorPMU.prototype._actualizarOjo = function () {
+        var ojo = this.escena ? this.escena.querySelector('.spmu-ojo') : null;
+        if (!ojo) { return; }
+        var geo = this.geo || geometriaEscena(this.config.finalW, this.config.finalH, this.config);
+        var sec = geo.secundario;
+        var prin = geo.principal;
+        var recorta = (prin.w < sec.w - 0.5) || (prin.h < sec.h - 0.5);
+        if (!recorta) { this._mascaraRecorte = false; }
+        ojo.hidden = !recorta;
+        ojo.setAttribute('aria-pressed', this._mascaraRecorte ? 'true' : 'false');
+        ojo.innerHTML = this._mascaraRecorte ? ICO_OJO_TACHADO : ICO_OJO;
+        ojo.title = this._mascaraRecorte ? 'Ver la foto completa' : 'Ver solo el recorte';
+        ojo.setAttribute('aria-label', ojo.title);
     };
 
     SelectorPMU.prototype._enlazarGestosEscena = function () {
@@ -826,24 +938,25 @@
         var prin = geo.principal;
 
         ctx.clearRect(0, 0, cw, ch);
-        ctx.save();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.fillRect(0, 0, cw, ch);
-        ctx.globalCompositeOperation = 'destination-out';
-        var regla = this._trazarPrincipal(ctx, prin);
-        ctx.fill(regla);
-        ctx.restore();
 
-        ctx.save();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
-        ctx.beginPath();
-        ctx.rect(0, 0, cw, ch);
-        ctx.rect(sec.x, sec.y, sec.w, sec.h);
-        ctx.fill('evenodd');
-        ctx.restore();
+        // Spec 024 (D9): con la mascara de inspeccion, TODO lo que queda fuera
+        // de la forma se pinta blanco OPACO: se ve solo el recorte final.
+        // Sin mascara no hay relleno: la zona libre queda TRANSPARENTE (D8),
+        // solo con los contornos (antes se oscurecia la foto con dos velos).
+        if (this._mascaraRecorte) {
+            ctx.save();
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, cw, ch);
+            ctx.globalCompositeOperation = 'destination-out';
+            var regla = this._trazarPrincipal(ctx, prin);
+            ctx.fill(regla);
+            ctx.restore();
+        }
 
+        // Contorno del recorte secundario (placeholder WxH): blanco sobre la
+        // foto, GRIS sobre la mascara blanca (si no, no se veria).
         ctx.save();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.strokeStyle = this._mascaraRecorte ? 'rgba(0, 0, 0, 0.28)' : 'rgba(255, 255, 255, 0.85)';
         ctx.lineWidth = Math.max(1, Math.round(Math.max(cw, ch) / 300));
         ctx.strokeRect(sec.x + 0.5, sec.y + 0.5, sec.w - 1, sec.h - 1);
         ctx.restore();

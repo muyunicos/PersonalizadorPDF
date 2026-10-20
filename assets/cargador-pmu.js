@@ -360,6 +360,8 @@
                 fondo: r.fondo,
                 // Spec 023 (D1): 'sin-ampliar' viaja al modal (cap de escala).
                 escala: r.escala,
+                // Spec 024 (D2): el badge tecnico solo se ve en la consola.
+                tecnico: this.config.tecnico,
                 envoltura: this.config.envoltura || null,
                 subirAsync: function (blob) {
                     var reemplazo = self._reemplazo;

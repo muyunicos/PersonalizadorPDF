@@ -2,6 +2,12 @@
 
 **Feature**: 016-editor-visual-fotos + 021-cargador-visor-cliente | **Fecha**: 2026-10-19
 
+> **Enmienda v4 (spec 024, 2026-10-20)**: pulido de los controles y de la guia.
+> - **Controles en 3 filas**: (1) los 3 modos a la izquierda, los tres del mismo ancho, y **al tocarlos la `Escala` vuelve al medio**; (2) **`Escala`** al 100% del ancho **sin boton de reset**; (3) `Fondo` con **icono damero** (transparente) + **icono `auto`** (visible solo si el fondo no es automatico) y **`Girar`** a la derecha.
+> - **Acciones**: `Cargar imagen` a la izquierda; `Cancelar` + `Subir` a la derecha.
+> - **Titulo** `Ajuste la imagen` (sin medidas) y **badge de salida solo con `tecnico: true`**.
+> - **Guia sin velos**: la zona libre queda **transparente** (solo contornos). Un **ojito** dentro de la escena alterna una **mascara blanca pura** fuera de la forma para ver **solo el recorte**; el ojito solo aparece si la forma **recorta**.
+>
 > **Enmienda v3 (spec 021, 2026-10-19)**: motor unificado Canvas 2D con:
 > - `spmu-escena` de hasta `1000x1000 px` con la relacion de aspecto exacta del placeholder (`finalW : finalH`) y **10% de margen interno** en cada borde (`canvasW = 1.2 * finalW`, `canvasH = 1.2 * finalH`).
 > - **Doble guia de recorte**: recorte secundario (`finalW x finalH`, donde realmente se corta el PNG exportado) y recorte principal (`forma`: `'rectangulo'|'circulo'|'cuadrado'|'ovalo'|'auto'`, posicionado con `size`, `ox`, `oy`).

@@ -630,6 +630,17 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `Imagen::normalizar` encaja **1:1** y no re-amplía. Un PNG **menor** que el hueco sigue fuera
   (eso sí exigiría `engine/Imagen.php` + Overlay + contrato del pool). Función pura
   `SelectorPMU.puro.escalaBase()` (cap a 1) con 4 checks en `selector-contrato`.
+- ✅ **Spec 024 `ajustes-modal-selector` (implementada 2026-10-20, v4.15.0)**: pulido del modal.
+  **Controles en 3 filas**: los **3 modos** a la izquierda (mismo ancho, **resetean la `Escala`**),
+  **`Escala`** al 100% **sin botón de reset**, y `Fondo` con **icono damero** + **icono `auto`**
+  (visible solo si el fondo no es automático, vuelve al color detectado por bordes) con **`Girar`**
+  a la derecha. **Acciones** separadas (`Cargar imagen` izquierda; `Cancelar` + `Subir` derecha).
+  **Título** `Ajuste la imagen` sin medidas y **badge de salida solo con `tecnico: true`**.
+  **Guía sin velos**: se eliminaron los dos rellenos negros (35% + 32%), así que la zona libre
+  queda **transparente** y solo se dibujan los contornos; un **ojito** dentro de la escena alterna
+  una **máscara blanca pura `#fff`** fuera de la forma para ver **solo el recorte** (con el contorno
+  del placeholder en gris), y **solo aparece si la forma recorta**. La máscara vive **solo** en el
+  canvas guía: **el PNG de salida y el Motor no cambian**. Estado del ojito: arranca apagado.
 - ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
   (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
