@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.15.0
+Stable tag: 4.15.1
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,11 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.15.1 =
+* **Correcciones del modal (spec 024)**: el **ojito ya aparece** cuando la forma recorta (el criterio comparaba las cajas y un circulo de 1000x1000 dentro de un hueco 1000x1000 se tomaba como "cubre todo"; ahora decide por **tipo de forma**).
+* **`auto` y `Girar` ya no se ven cuando estan ocultos**: WordPress fuerza `display` a los `.button` y le ganaba al atributo `hidden`; una regla del modal (`.spmu-caja [hidden]`) lo resuelve para todos los controles.
+* **`Girar` aparece solo si el admin lo habilita (`{ r: 1 }`) y el lienzo NO es cuadrado**: en un lienzo 1:1 girar no cambia la cobertura. Al girar se recalcula la regla del 5%, asi que una foto que encajaba no se deforma (pasa a "Rellenar" si hace falta).
 
 = 4.15.0 =
 * **Modal de ajuste mas limpio (spec 024)**: el titulo pasa a **"Ajuste la imagen"** (sin medidas) y el dato tecnico `Salida WxH px · zoom xN` **deja de mostrarse al comprador** (queda solo en el preview de la consola).

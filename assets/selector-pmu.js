@@ -455,9 +455,13 @@
             '.spmu-cabecera{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px}' +
             '.spmu-titulo{margin:0;font-weight:600;font-size:15px}' +
             '.spmu-x{border:0;background:none;font-size:18px;line-height:1;cursor:pointer;padding:8px;min-width:44px;min-height:44px;color:#50575e}' +
-            '.spmu-escena-wrap{display:flex;justify-content:center;align-items:center;width:100%;min-height:200px;max-height:min(58vh,1000px);overflow:hidden;background:#1d2327;border-radius:6px;padding:6px;box-sizing:border-box}' +
-            '.spmu-escena{position:relative;display:flex;justify-content:center;align-items:center;touch-action:none;cursor:grab;user-select:none;background:repeating-conic-gradient(#e0e0e0 0 25%,#ffffff 0 50%) 0/20px 20px;max-width:1000px;max-height:1000px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.4)}' +
+            '.spmu-escena-wrap{display:flex;justify-content:center;align-items:center;width:100%;min-height:200px;max-height:min(58vh,1000px);overflow:hidden;padding:6px;box-sizing:border-box}' +
+            '.spmu-escena{position:relative;display:flex;justify-content:center;align-items:center;touch-action:none;cursor:grab;user-select:none;background:repeating-conic-gradient(#e0e0e0 0 25%,#ffffff 0 50%) 0/20px 20px;max-width:1000px;max-height:1000px;overflow:hidden}' +
             '.spmu-escena:active{cursor:grabbing}' +
+            // Fix 4.15.1: WordPress fuerza `display` a `.button`, que le gana a
+            // `[hidden]{display:none}` del navegador (AGENTS §11). Con esto se
+            // ocultan de verdad el ojito, `auto`, Girar y los modos.
+            '.spmu-caja [hidden]{display:none !important}' +
             '.spmu-canvas{width:100%;height:100%;display:block}' +
             '.spmu-envoltura{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:block}' +
             // Spec 024 (D9): ojito de inspeccion dentro de la escena.
@@ -698,7 +702,10 @@
             });
         }
         if (rotarEl) {
-            rotarEl.hidden = sinAmpliar || !(tieneImg && this.supera5 && this.config.rotar);
+            // Fix 4.15.1 (D6): Girar solo si el admin lo habilita (`r: 1`) Y el
+            // lienzo NO es cuadrado (en 1:1 girar no cambia la cobertura).
+            rotarEl.hidden = sinAmpliar || !(tieneImg && this.config.rotar
+                && this.config.finalW !== this.config.finalH);
         }
     };
 
@@ -823,17 +830,21 @@
     };
 
     /**
-     * Spec 024 (D9): el ojito solo tiene sentido si la forma **recorta** (deja
-     * zona afuera). Si cubre todo el placeholder no se muestra: seria un boton
-     * muerto. Refleja el estado en `aria-pressed` y cambia el icono.
+     * Spec 024 (D9, fix 4.15.1): el ojito solo tiene sentido si la forma
+     * **recorta**. El criterio es por TIPO de forma, NO por la caja: un circulo
+     * de 1000x1000 dentro de un cuadrado de 1000x1000 recorta las esquinas
+     * aunque su caja coincida con el placeholder (comparar cajas lo ocultaba
+     * siempre). Si cubre todo (rectangulo 100% centrado) no se muestra: seria un
+     * boton muerto.
      */
     SelectorPMU.prototype._actualizarOjo = function () {
         var ojo = this.escena ? this.escena.querySelector('.spmu-ojo') : null;
         if (!ojo) { return; }
         var geo = this.geo || geometriaEscena(this.config.finalW, this.config.finalH, this.config);
-        var sec = geo.secundario;
-        var prin = geo.principal;
-        var recorta = (prin.w < sec.w - 0.5) || (prin.h < sec.h - 0.5);
+        var recorta = geo.principal.tipo !== 'rectangulo'
+            || this.config.size < 1
+            || this.config.ox !== 0
+            || this.config.oy !== 0;
         if (!recorta) { this._mascaraRecorte = false; }
         ojo.hidden = !recorta;
         ojo.setAttribute('aria-pressed', this._mascaraRecorte ? 'true' : 'false');
@@ -971,10 +982,20 @@
         ctx.restore();
     };
 
-    /** Spec 021 (D6): boton Girar 90 grados. */
+    /** Spec 021 (D6) + fix 4.15.1: Girar 90 grados (solo si el lienzo no es 1:1). */
     SelectorPMU.prototype._rotar = function () {
-        if (!this.imagen || !this.supera5 || !this.config.rotar) { return; }
+        if (!this.imagen || !this.config.rotar) { return; }
+        if (this.config.finalW === this.config.finalH) { return; }
         this.rotacion = (this.rotacion + 90) % 360;
+        // Fix 4.15.1: al girar cambia la relacion de aspecto de la foto, asi que
+        // se recalcula la regla del 5%. Si ahora supera, el modo pasa a Rellenar
+        // para no DEFORMAR la foto si estaba en Estirar.
+        var dim = this._dimensionesImagen();
+        this.supera5 = superaCincoPorciento(dim.w, dim.h, this.config.finalW, this.config.finalH);
+        if (this.supera5 && this.config.mode === 'estirar') {
+            this.config.mode = 'rellenar';
+            this._actualizarControlesModo();
+        }
         this._dibujar();
     };
 

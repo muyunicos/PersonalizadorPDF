@@ -30,12 +30,20 @@ Y en la escena, la guia `spmu-envoltura` **oscurecia la foto**: dos velos negros
 | **D3** | El control pasa a llamarse **`Escala`**, ocupa **una sola fila al 100%** del ancho y **pierde el boton de reset** (`↺`), que nadie usaba (los modos ya resetean). |
 | **D4** | Los **3 modos** (`Rellenar`/`Ajustar`/`Estirar`) van **a la izquierda**, los tres **del mismo ancho**, y al tocarlos **resetean `Escala`** (vuelve a `1x`) y centran la imagen. |
 | **D5** | **Fondo** con **icono damero** (transparente) en vez de texto, y **icono `auto`** que **aparece solo si el fondo no es automatico**: vuelve al **color detectado de los bordes** de la foto. Para eso se recuerda `fondoAuto` (detectado) y `fondoEsAuto` (bool). |
-| **D6** | **Girar** se mueve a la fila del fondo. Conserva sus dos condiciones (ranura `{ r: 1 }` **y** >5% de diferencia de aspecto) y sigue oculto con `escala: 'sin-ampliar'`. |
+| **D6** | **Girar** se mueve a la fila del fondo. Visible solo si la ranura lo habilita (`{ r: 1 }`) **y el lienzo NO es cuadrado** (`finalW !== finalH`: en 1:1 girar no cambia la cobertura). Sigue oculto con `escala: 'sin-ampliar'`. |
 | **D7** | **Acciones separadas**: `Cargar imagen` **abajo a la izquierda**; `Cancelar` (secundario) + `Subir` (`button-primary`) **abajo a la derecha**. Se invierte el orden previo (Subir iba antes de Cancelar). |
 | **D8** | **`spmu-envoltura` sin velo**: se eliminan los dos rellenos negros. La zona libre queda **totalmente transparente**; solo se dibujan los **contornos** (blanco punteado = placeholder `W x H`; azul punteado = forma/envoltura). |
-| **D9** | **Ojito de inspeccion** dentro de `spmu-escena` (arriba a la derecha, `aria-pressed`, ojo abierto/tachado en SVG inline): alterna una **mascara blanca pura `#fff`** fuera de la forma principal para ver **solo el recorte**. El contorno del placeholder pasa a **gris** con la mascara activa (sobre blanco no se veria). **El ojito se muestra solo si la forma recorta** (si cubre todo el placeholder, no hay nada que ocultar y no se pinta un boton muerto). La mascara vive **solo** en el canvas guia: **el PNG de salida y el PDF no cambian**. |
+| **D9** | **Ojito de inspeccion** dentro de `spmu-escena` (arriba a la derecha, `aria-pressed`, ojo abierto/tachado en SVG inline): alterna una **mascara blanca pura `#fff`** fuera de la forma principal para ver **solo el recorte**. El contorno del placeholder pasa a **gris** con la mascara activa (sobre blanco no se veria). **El ojito se muestra solo si la forma recorta** — decidido por **tipo de forma** (`tipo !== 'rectangulo'` o `size < 1` o `ox`/`oy` distintos de 0), **nunca comparando cajas**: un circulo de 1000x1000 dentro de un cuadrado de 1000x1000 recorta las esquinas aunque su caja coincida. La mascara vive **solo** en el canvas guia: **el PNG de salida y el PDF no cambian**. |
 
 El estado del ojito **arranca siempre apagado** (una apertura nueva no hereda el modo inspeccion).
+
+## Correccion 4.15.1 (bugs detectados al probar en la ficha)
+
+| # | Sintoma | Causa | Fix |
+|---|---|---|---|
+| **F1** | **El ojito no aparecia nunca** | `recorta` comparaba **cajas** (`prin.w < sec.w`): un `circulo` de 1000x1000 en un hueco 1000x1000 daba "cubre todo" | Criterio por **tipo de forma** (D9) |
+| **F2** | `auto` y **Girar** se veian aunque estuvieran `hidden` | WordPress fuerza `display` a `.button`, que **le gana** a `[hidden]` (AGENTS §11) | `.spmu-caja [hidden]{display:none !important}` |
+| **F3** | Girar aparecia en lienzos 1:1 | La regla era `r:1` + 5%, sin mirar la forma del lienzo | `r:1` **y** `finalW !== finalH` (D6) + `_rotar()` recalcula el 5% para no deformar en `Estirar` |
 
 ## Alcance
 

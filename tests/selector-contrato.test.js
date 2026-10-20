@@ -184,8 +184,13 @@ check('el cargador pasa escala al selector (spec 023)', /escala: r\.escala/.test
 console.log('\n== F3: badge en vivo y guias (US3) ==');
 check('badge Origen + Salida con zoom en vivo', /spmu-badge/.test(selector)
   && /Origen /.test(selector) && /Salida /.test(selector) && /toFixed\(/.test(selector));
-check('Girar solo disponible cuando supera 5% Y ranura tiene r:1',
-  /rotarEl\.hidden = sinAmpliar \|\| !\(tieneImg && this\.supera5 && this\.config\.rotar\)/.test(selector));
+check('Spec 024 fix 4.15.1: Girar solo con r:1 Y lienzo NO cuadrado (sin el 5%)',
+  /sinAmpliar \|\| !\(tieneImg && this\.config\.rotar/.test(selector)
+  && /&& this\.config\.finalW !== this\.config\.finalH\)/.test(selector)
+  && selector.indexOf('tieneImg && this.supera5 && this.config.rotar') === -1);
+check('Spec 024 fix 4.15.1: al girar se recalcula el 5% (no deforma en Estirar)',
+  /this\.supera5 = superaCincoPorciento\(dim\.w, dim\.h/.test(selector)
+  && /if \(this\.supera5 && this\.config\.mode === 'estirar'\)/.test(selector));
 
 console.log('\n== F4: tira visual y mini galeria del cargador (spec 021 D9) ==');
 const cargador16 = fs.readFileSync(path.join(RAIZ, 'assets', 'cargador-pmu.js'), 'utf8');
@@ -236,8 +241,15 @@ check('Spec 024 D8: la guia NO oscurece (sin velos; zona libre transparente)',
 check('Spec 024 D9: ojito con mascara blanca pura, solo si la forma recorta',
   /spmu-ojo/.test(selector) && /_mascaraRecorte/.test(selector)
   && /ctx\.fillStyle = '#ffffff'/.test(selector)
-  && /var recorta = \(prin\.w < sec\.w - 0\.5\) \|\| \(prin\.h < sec\.h - 0\.5\)/.test(selector)
   && /ojo\.hidden = !recorta/.test(selector));
+check('Spec 024 fix 4.15.1: el ojito decide por TIPO de forma (no por la caja)',
+  /var recorta = geo\.principal\.tipo !== 'rectangulo'/.test(selector)
+  && /this\.config\.size < 1/.test(selector)
+  && /this\.config\.ox !== 0/.test(selector)
+  && /this\.config\.oy !== 0/.test(selector)
+  && !/prin\.w < sec\.w - 0\.5/.test(selector));
+check('Spec 024 fix 4.15.1: `hidden` gana al .button de WordPress',
+  /\.spmu-caja \[hidden\]\{display:none !important\}/.test(selector));
 check('el PNG de salida sale de _generarLienzoSalida(finalW, finalH) sin tocar el overlay',
   /_generarLienzoSalida = function/.test(selector)
   && /this\._pintarImagenEnContexto\(ctx, false\)/.test(selector)
