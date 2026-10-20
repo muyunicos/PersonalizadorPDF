@@ -386,6 +386,11 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
     Carg.esArray(ranuras) === true);
   check('cargador: `array` false si todas son de una sola',
     Carg.esArray(Carg.normalizarRanuras([{ w: 10, h: 10, max: 1 }])) === false);
+  // Spec 022 (D1/D3): minTotal = suma de los `min` de las ranuras (lo que el
+  // navegador declara al carrito para que el servidor lo valide).
+  check('cargador: minTotal suma los min de las ranuras (spec 022)',
+    Carg.minTotal(Carg.normalizarRanuras([{ w: 10, h: 10, min: 2 }, { w: 10, h: 10, min: 1 }])) === 3
+    && Carg.minTotal([]) === 0);
 
   // Cableado: el cargador viaja a la ficha antes que tienda.js.
   const plugin2 = fs.readFileSync(path.join(__dirname, '..', 'personalizador-pdf.php'), 'utf8');

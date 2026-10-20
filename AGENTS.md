@@ -608,6 +608,18 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   **solo si falta** alguna foto. Los datos técnicos (medidas/forma/min y avisos de configuración)
   se muestran **solo con `tecnico: true`**, que es lo que pasa el preview de la consola
   (`assets/admin.js:apiPreview`).
+- ✅ **Spec 022 `minimo-fotos-obligatorio` (implementada 2026-10-19, v4.13.0)**: el **`min` de las
+  ranuras frena la compra**. Hallazgo: el botón "Listo" de la 012 era decorativo y
+  `carrito_validar()` no contaba las fotos, así que se podía comprar **sin subir ninguna imagen**.
+  Doble red: (a) la **ficha** deshabilita "Agregar al carrito" y muestra un único aviso
+  (`Faltan N foto(s) por cargar.`); (b) el **servidor** rechaza el add-to-cart. Como el servidor
+  **no puede leer las ranuras** (viven en el `campo.js` y PHP nunca evalúa JS, constitution §III),
+  el navegador declara `pmu_minimos = {campo: minTotal}` (`CargadorPMU.estadoActual().minTotal`) y
+  el servidor **cuenta los archivos REALES** del item (`manifest.subidas[]`; un id sin archivo no
+  cuenta), con **cap 50** y **fail-safe sin declaración** (flujo sin JS intacto). Puerta nueva:
+  fase **`minimos`** (6 checks: rechazo real, fail-safe, conteo real, id fantasma, saneo/cap) +
+  `minTotal` en `campos-contrato`. Límite aceptado (D7): es regla de **calidad del pedido**, no
+  anti-fraude; una regla infalsificable exigiría duplicar las ranuras en `datos.json`.
 - ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
   (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,

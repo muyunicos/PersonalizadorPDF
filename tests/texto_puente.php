@@ -19,7 +19,7 @@ if (PHP_SAPI !== 'cli') {
  *    subir_conflicto | imagen_adjunto [mal] | placeholder | admin |
  *    linea | campos | config | tienda | pedido | migracion | nonce [cap] |
  *    validez | validez_admin | validez_admin_mal | ficha* | vista_previa* |
- *    carrito | pool* | overrides | sesion | conciliacion | completados | mockups* |
+ *    carrito | minimos | pool* | overrides | sesion | conciliacion | completados | mockups* |
  *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
  *    reanalizar | envoltura_op | borrado | campo_global | campo_subida | pool_concurrente`
  */
@@ -997,6 +997,23 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('checkout copia _pmu_sid al line item (scan)', ($c['r17_meta_sid'] ?? '') !== '');
             check('pago promueve a orders/{id}/{nombre_real}/', !empty($c['r17_orders_ok']));
             check('no se promueve al nombre del hash de Woo', !empty($c['r17_orders_hash_woo_ok']));
+            break;
+        case 'minimos':
+            // Spec 022: el `min` FRENA la compra (declarado por el navegador y
+            // confirmado contando los archivos REALES del item).
+            $mi = isset($GLOBALS['test_minimos']) ? $GLOBALS['test_minimos'] : [];
+            check('minimos: declara 2 y el item nace sin archivos -> RECHAZA',
+                !empty($mi['rechaza']));
+            check('minimos: sin declaracion no bloquea (fail-safe, flujo sin JS)',
+                !empty($mi['sin_declaracion']));
+            check('minimos: conteo REAL de archivos (1 de 2 -> falta 1)',
+                !empty($mi['faltan_1']));
+            check('minimos: con los 2 archivos reales no falta nada',
+                !empty($mi['faltan_0']));
+            check('minimos: un id sin archivo NO cuenta (nunca foto fantasma)',
+                !empty($mi['id_sin_archivo']));
+            check('minimos: saneo (0 y basura se ignoran; el cap acota a 50)',
+                !empty($mi['declarados']));
             break;
         case 'pool':
         case 'pool_reem':
@@ -2029,6 +2046,56 @@ switch ($fase) {
         // Se restaura el carrito para el borrado quirurgico (carrito_quitar).
         $GLOBALS['test_wc']->cart->cart_contents['abc123def456'] = ['pmu_sid' => $sid_c, 'pmu_item_key' => 'abc123def456'];
         $p->carrito_quitar('abc123def456');
+        break;
+
+    case 'minimos':
+        // Spec 022: el `min` de las ranuras FRENA la compra. El navegador
+        // declara el total exigido (`pmu_minimos`) y el servidor cuenta los
+        // archivos REALES del item (nunca el conteo que declara el cliente).
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $GLOBALS['test_postmeta'][4242]['_pmu_pdf_slugs'] = ['muestra'];
+        $motor_m = new PMU_Uploads();
+        $cid_m = campo_v2($motor_m, 'imagen', 'Fotos');
+        $motor_m->guardar_config('muestra', [
+            'activo' => true,
+            'campos_ids' => [$cid_m],
+            'preview_omisible' => true,
+            'mockups' => [['id' => 'm1', 'titulo' => 'Vista', 'capas' => [['tipo' => 'placeholder', 'ref' => '0000FF', 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300, 'rot' => 0, 'sesgo' => 0, 'filtros' => []]]]],
+            'placeholders' => ['0000FF' => ['tipo' => 'imagen', 'preset' => '', 'value' => '[campo1]', 'settings' => '', 'repetir' => false]],
+        ]);
+        $fotoM = 'abcdef123456';
+        // (A) Declara 2 exigidas: el item omisible nace SIN archivos -> RECHAZA.
+        $_POST = [
+            'pmu_valores' => json_encode([$cid_m => ['valor' => [$fotoM], 'cliente' => '']]),
+            'pmu_minimos' => json_encode([$cid_m => 2]),
+        ];
+        $_REQUEST = $_POST;
+        $GLOBALS['test_minimos']['rechaza'] = $p->carrito_validar(true, 4242, 1, 0) === false;
+        // (B) Sin declaracion no bloquea (D5: fail-safe, flujo sin JS).
+        $_POST = ['pmu_valores' => json_encode([$cid_m => ['valor' => [$fotoM], 'cliente' => '']])];
+        $_REQUEST = $_POST;
+        $GLOBALS['test_minimos']['sin_declaracion'] = $p->carrito_validar(true, 4242, 1, 0) === true;
+        // (C) Conteo REAL (D4): solo cuentan los ids con archivo en el item.
+        $refF = new \ReflectionMethod($p, 'minimos_faltantes');
+        $refF->setAccessible(true);
+        $refD = new \ReflectionMethod($p, 'minimos_declarados');
+        $refD->setAccessible(true);
+        $manM = [
+            'valores' => [(string)$cid_m => ['valor' => [$fotoM, 'bbbbbbbbbbbb']]],
+            'subidas' => [['id' => $fotoM, 'file' => 'a.webp', 'mime' => 'image/webp', 'bytes' => 10]],
+        ];
+        $GLOBALS['test_minimos']['faltan_1'] = $refF->invoke($p, $manM, [$cid_m => 2]) === 1;
+        $manM['subidas'][] = ['id' => 'bbbbbbbbbbbb', 'file' => 'b.webp', 'mime' => 'image/webp', 'bytes' => 10];
+        $GLOBALS['test_minimos']['faltan_0'] = $refF->invoke($p, $manM, [$cid_m => 2]) === 0;
+        // Un id en `valores` SIN archivo no cuenta (nunca una foto fantasma).
+        $manM['valores'][(string)$cid_m]['valor'][] = 'cccccccccccc';
+        $GLOBALS['test_minimos']['id_sin_archivo'] = $refF->invoke($p, $manM, [$cid_m => 3]) === 1;
+        // (D) Saneo (D3): 0 no exige, la basura se ignora y el cap acota.
+        $_POST = ['pmu_minimos' => json_encode([$cid_m => 999, '0' => 5, 'x' => 3, 7 => 0])];
+        $GLOBALS['test_minimos']['declarados'] = $refD->invoke($p) === [$cid_m => 50];
         break;
 
     case 'pool':

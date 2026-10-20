@@ -129,6 +129,21 @@
     function esArray(ranuras) {
         return ranuras.some(function (r) { return r.max > 1; });
     }
+
+    /**
+     * Spec 022 (D1/D3): total EXIGIDO por el campo = suma de los `min` de sus
+     * ranuras. Es lo que el navegador declara al agregar al carrito
+     * (`pmu_minimos`) para que el servidor lo valide contra los archivos
+     * reales del item (el servidor no puede leer las ranuras: viven en el
+     * `campo.js` y PHP no evalua JS).
+     */
+    function minTotal(ranuras) {
+        var total = 0;
+        (ranuras || []).forEach(function (r) {
+            total += Math.max(0, parseInt(r && r.min, 10) || 0);
+        });
+        return total;
+    }
 /**
      * Estilos del cargador. Se inyectan desde el componente (igual que
      * `selector-pmu.js`): asi el cargador no depende de que el tema traiga una
@@ -629,6 +644,8 @@
             ids: this.ids(),
             listo: est.listo,
             faltan: est.faltan,
+            // Spec 022 (D3): total exigido por el campo (suma de los `min`).
+            minTotal: minTotal(this.config.ranuras),
             array: esArray(this.config.ranuras),
             ranuras: this.config.ranuras.length
         };
@@ -651,6 +668,7 @@
         normalizarRanuras: normalizarRanuras,
         estadoInicial: estadoInicial,
         completo: completo,
+        minTotal: minTotal,
         idsPlanos: idsPlanos,
         esArray: esArray,
         FORMAS: FORMAS

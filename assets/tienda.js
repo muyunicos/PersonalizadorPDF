@@ -425,7 +425,12 @@
     var ficha = null;
     var galeriaActual = null;
     var filtroActual = null;
-    var bloqueos = { vistas: false, validez: false };
+    var bloqueos = { vistas: false, validez: false, minimos: false };
+    // Spec 022: el `min` de las ranuras bloquea la compra. `minimos` es lo que
+    // el navegador DECLARA al servidor ({campo: total exigido}) y `faltanFoto`
+    // lo que falta ahora mismo por campo ({campo: N}).
+    var minimos = {};
+    var faltanFoto = {};
     // Cola del pool por grupo (clave pdf|gid): serializa limpiar+subidas de un
     // mismo grupo entre instancias Y entre vistas (RC4.6.11). La carrera
     // anterior dejaba el pool sin filas y la capa del mockup gris.
@@ -790,10 +795,44 @@
         refrescarCarrito();
     }
 
-    /** Spec 005 (T008): el boton combina vistas pendientes + validez/bloqueo. */
+    /** Spec 005 (T008) + spec 022 (D2): el boton combina todo lo que bloquea. */
     function refrescarCarrito() {
         var b = botonWoo();
-        if (b) { b.disabled = !!(bloqueos.vistas || bloqueos.validez); }
+        if (b) { b.disabled = !!(bloqueos.vistas || bloqueos.validez || bloqueos.minimos); }
+    }
+
+    /**
+     * Spec 022 (D2/D6): bloquea el carrito y avisa en la ficha mientras falten
+     * fotos (`min` de las ranuras). Con todo completo no dice nada. La
+     * declaracion (`minimos`) viaja al servidor, que la valida contando los
+     * archivos REALES del item (el servidor no puede leer las ranuras: viven
+     * en el `campo.js` y PHP no evalua JS).
+     */
+    function refrescarMinimos() {
+        var faltan = 0;
+        Object.keys(faltanFoto).forEach(function (cid) {
+            faltan += Math.max(0, parseInt(faltanFoto[cid], 10) || 0);
+        });
+        bloqueos.minimos = faltan > 0;
+        var panel = raiz();
+        if (panel) {
+            var aviso = panel.querySelector('.pmu-minimos-aviso');
+            if (!aviso) {
+                aviso = document.createElement('p');
+                aviso.className = 'pmu-minimos-aviso pmu-aviso';
+                aviso.setAttribute('role', 'alert');
+                panel.appendChild(aviso);
+            }
+            if (faltan > 0) {
+                aviso.textContent = 'Faltan ' + faltan + ' foto(s) por cargar.';
+                aviso.style.display = '';
+            } else {
+                aviso.textContent = '';
+                aviso.style.display = 'none';
+            }
+        }
+        refrescarCarrito();
+        return faltan;
     }
 
     /**
@@ -877,6 +916,9 @@
             // US3 (T018/T019): sin sesion (omisible sin vistas) se envian los
             // valores del panel y el SERVIDOR crea el item omisible.
             inyectar(form, 'pmu_valores', JSON.stringify(global.PMU_API.valores()));
+            // Spec 022 (D3): total exigido por campo (suma de los `min` de las
+            // ranuras). El servidor lo valida contando los archivos reales.
+            inyectar(form, 'pmu_minimos', JSON.stringify(minimos));
             if (!global.PMU_API.sesion) { return; }
             var webps = {};
             (galeriaActual && galeriaActual.vistas || []).forEach(function (v) {
@@ -1328,6 +1370,11 @@
                     }
                     // `array` si alguna ranura admite mas de una (FR-034).
                     api.estado[cid].listo = est.listo;
+                    // Spec 022 (D2/D3/D6): el `min` de las ranuras bloquea la
+                    // compra y se declara al servidor en el add-to-cart.
+                    minimos[cid] = parseInt(est.minTotal, 10) || 0;
+                    faltanFoto[cid] = parseInt(est.faltan, 10) || 0;
+                    refrescarMinimos();
                 }
             });
             // `montar()` se llama UNA sola vez: devuelve el cargador montado o null.

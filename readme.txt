@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.12.0
+Stable tag: 4.13.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,10 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.13.0 =
+* **El minimo de fotos FRENA la compra (spec 022)**: el `min` de las ranuras se informaba pero **no bloqueaba nada** (el boton "Listo" de la 012 era decorativo y `carrito_validar()` no contaba las fotos), asi que se podia agregar al carrito **sin subir ninguna imagen**. Ahora hay **doble red**: el boton "Agregar al carrito" queda **deshabilitado** mientras falten fotos, con un unico aviso en la ficha (`Faltan N foto(s) por cargar.`), y el **servidor rechaza** el add-to-cart si falta alguna.
+* **El servidor no confia en el conteo del cliente**: el navegador declara el total exigido por campo (`pmu_minimos = {campo: minTotal}`, con `minTotal` = suma de los `min` de las ranuras) y el servidor **cuenta los archivos REALES** del item (`manifest.subidas[]`): un id sin archivo no cuenta. Un valor absurdo se acota (cap 50) y sin declaracion no se bloquea (fail-safe, flujo sin JS).
 
 = 4.12.0 =
 * **Cargador de imagenes intuitivo en movil y PC (spec 021)**: al abrir el cargador se dispara directamente la seleccion de archivo; el boton de archivo dice **"Cargar imagen"** y cambia a **"Cambiar imagen"** cuando ya hay una cargada. Se quitaron los botones **Camara** y **Reintentar**.

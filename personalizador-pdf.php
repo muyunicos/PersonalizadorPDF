@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.12.0
+ * Version: 4.13.0
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -1789,6 +1789,16 @@ class Personalizador_PDF_Plugin
                         $manifest['preview_estado'] = PMU_Sesion::ESTADO_OMISIBLE;
                         $manifest['pdfs_descartados'] = $snapshot['descartados'];
                         $sesion->guardar_manifest($sid, $item, $manifest);
+                        // Spec 022 (D2/D4): el `min` de las ranuras manda tambien
+                        // en el camino omisible (sin vista previa): se valida
+                        // contra los archivos REALES del item.
+                        $errMin = $this->minimos_error($manifest);
+                        if ($errMin !== '') {
+                            if (function_exists('wc_add_notice')) {
+                                wc_add_notice($errMin, 'error');
+                            }
+                            return false;
+                        }
                     }
                     $_POST['pmu_sid'] = $sid;
                     $_POST['pmu_item_key'] = $item;
@@ -1834,6 +1844,19 @@ class Personalizador_PDF_Plugin
                 $sesion->guardar_manifest($sid, $item, $manifest);
                 $sesion->pool_filtrar_pdfs($sid, $item, $snapshot['pdfs']);
             }
+            // Spec 022 (D2/D4): el `min` de las ranuras FRENA la compra. El
+            // navegador declara el total exigido por campo (`pmu_minimos`) y aca
+            // se cuenta lo REAL: los ids del campo que tienen archivo en el
+            // item. El servidor no puede leer las ranuras (viven en el
+            // `campo.js` y PHP no evalua JS), asi que no confia en "cuantas
+            // subi": confia en el `min` y cuenta los archivos.
+            $errMin = $this->minimos_error($manifest);
+            if ($errMin !== '') {
+                if (function_exists('wc_add_notice')) {
+                    wc_add_notice($errMin, 'error');
+                }
+                return false;
+            }
             $this->item_draft_valido = ['sid' => $sid, 'item_key' => $item];
         } catch (\Throwable $e) {
             if (function_exists('wc_add_notice') && strpos($e->getMessage(), 'motor:sesion:item:ausente') === false) {
@@ -1842,6 +1865,85 @@ class Personalizador_PDF_Plugin
             return false;
         }
         return true;
+    }
+
+    /**
+     * Spec 022 (D3): total exigido por campo declarado por el navegador
+     * (`pmu_minimos = {campo_id: min_total}`). Se sanea y acota: un valor
+     * absurdo no puede bloquear la venta para siempre. Sin declaracion (o sin
+     * JS) devuelve [] y no se bloquea nada (D5).
+     */
+    private function minimos_declarados()
+    {
+        if (!isset($_POST['pmu_minimos'])) {
+            return [];
+        }
+        $crudos = json_decode(wp_unslash((string)$_POST['pmu_minimos']), true);
+        if (!is_array($crudos)) {
+            return [];
+        }
+        $out = [];
+        foreach ($crudos as $cid => $n) {
+            $cid = (int)$cid;
+            $n = (int)$n;
+            if ($cid < 1 || $n < 1) {
+                continue;   // 0 = el campo no exige nada
+            }
+            $out[$cid] = min($n, 50);   // cap: 50 fotos por campo
+        }
+        return $out;
+    }
+
+    /**
+     * Spec 022 (D4): cuantas fotos FALTAN de verdad. Cuenta los ids del campo
+     * (`manifest.valores[cid].valor`) que tienen archivo REAL en el item
+     * (`manifest.subidas[]`): un id sin archivo no cuenta. Asi el servidor
+     * nunca depende del conteo que declara el navegador.
+     */
+    private function minimos_faltantes(array $manifest, array $minimos)
+    {
+        $subidas = [];
+        foreach ((array)($manifest['subidas'] ?? []) as $fila) {
+            if (is_array($fila) && isset($fila['id'])) {
+                $subidas[(string)$fila['id']] = true;
+            }
+        }
+        $valores = isset($manifest['valores']) && is_array($manifest['valores']) ? $manifest['valores'] : [];
+        $faltan = 0;
+        foreach ($minimos as $cid => $exigido) {
+            $par = $valores[(string)$cid] ?? $valores[(int)$cid] ?? null;
+            $ids = is_array($par) && isset($par['valor']) ? $par['valor'] : [];
+            if (!is_array($ids)) {
+                $ids = $ids === '' || $ids === null ? [] : [$ids];
+            }
+            $reales = 0;
+            foreach ($ids as $id) {
+                if (isset($subidas[(string)$id])) {
+                    $reales++;
+                }
+            }
+            if ($reales < $exigido) {
+                $faltan += ($exigido - $reales);
+            }
+        }
+        return $faltan;
+    }
+
+    /**
+     * Spec 022 (D2): mensaje de error del `min` (o '' si esta completo). Usa la
+     * declaracion del navegador + el conteo real de archivos del item.
+     */
+    private function minimos_error(array $manifest)
+    {
+        $minimos = $this->minimos_declarados();
+        if (!$minimos) {
+            return '';
+        }
+        $faltan = $this->minimos_faltantes($manifest, $minimos);
+        if ($faltan < 1) {
+            return '';
+        }
+        return 'Faltan ' . (int)$faltan . ' foto(s) en tu personalizacion: cargalas antes de continuar.';
     }
 
     /**
