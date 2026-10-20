@@ -1336,9 +1336,8 @@
                     || (api.estado && api.estado[cid] && api.estado[cid].valor) || null);
             }
             // El cargador no pisa lo que publico el `campo.js` al montar: toma el
-            // control del `valor` recien con la primera foto (misma regla que el
-            // cargador legacy de `montarCargadores`). Si el campo trae su propio
-            // `onChange`, manda el campo.
+            // control del `valor` recien con la primera foto. Si el campo trae su
+            // propio `onChange`, manda el campo.
             // Spec 019 (FR-002/003): el tamano final de cada ranura se resuelve ACA
             // (el `campo.js` solo declara `phsize`); con aviso si degrada o se acota.
             var ranuras = [];

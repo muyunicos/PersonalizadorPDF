@@ -170,9 +170,9 @@ console.log('\n== spec 018: la plantilla de imagen y el preview ==');
     plugin.indexOf('<div data-pmu-cargador></div>') !== -1);
   check('la plantilla imagen monta con PMU_API.montarCargador',
     plugin.indexOf('window.PMU_API.montarCargador(cont, {') !== -1);
-  check('la plantilla imagen declara RANURAS por defecto (no monta en vacio)',
+  check('la plantilla imagen declara RANURAS por defecto (sigue al hueco, spec 025)',
     plugin.indexOf('var RANURAS = [') !== -1
-    && plugin.indexOf("{ w: 1000, h: 1000, forma: 'auto', min: 1, max: 1, phsize: 0, r: 0 }") !== -1);
+    && plugin.indexOf("{ w: 1000, h: 1000, forma: 'auto', min: 1, max: 1, phsize: 1, r: 0 }") !== -1);
   check('la plantilla NO vuelve a llamar montar() (montarCargador ya monta)',
     plugin.indexOf('cargador && cargador.montar()') === -1);
   // El preview del admin corre el mismo campo.js con un stub de PMU_API (D9).
@@ -251,10 +251,9 @@ console.log('\n== spec 019: ranura adaptativa (phsize + aviso) ==');
   check('montarCargador normaliza las ranuras antes de montar',
     tienda019.indexOf('PURO.normalizarRanura(r, defCampo)') !== -1);
   const selector019 = fs.readFileSync(path.join(__dirname, '..', 'assets', 'selector-pmu.js'), 'utf8');
-  check('el selector avisa la ampliacion (informativo)',
-    selector019.indexOf('_factorAmpliacion = function') !== -1
-    && selector019.indexOf("' · se amplia '") !== -1
-    && selector019.indexOf('_factorAmpliacion()') !== -1);
+  check('el selector ya no calcula ampliacion (spec 025: nunca amplia)',
+    selector019.indexOf('_factorAmpliacion') === -1
+    && selector019.indexOf("' · se amplia '") === -1);
   const cargador019 = fs.readFileSync(path.join(__dirname, '..', 'assets', 'cargador-pmu.js'), 'utf8');
   check('la tira muestra el aviso de la ranura', cargador019.indexOf('cpmu-aviso') !== -1);
 }
@@ -396,6 +395,35 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
     && Carg.minTotal([]) === 0);
   check('cargador: escala ya no se normaliza (spec 025 D1)',
     Carg.normalizarRanuras([{ w: 10, h: 10 }])[0].escala === undefined);
+
+  // Spec 025 (C2): los DOS normalizadores deben coincidir. La spec 021 tuvo que
+  // tocar los dos lados a mano; este check evita que vuelvan a divergir.
+  check('cargador y tienda normalizan las ranuras IGUAL (anti-divergencia)', (() => {
+    const puroT = require(path.join(__dirname, '..', 'assets', 'tienda.js'));
+    const nrT = puroT.normalizarRanura;
+    const casos = [
+      { w: 10, h: 20 },
+      { w: 10, h: 20, forma: 'circulo', min: 2, max: 3 },
+      { w: 10, h: 20, forma: 'circle' },
+      { w: 10, h: 20, forma: 'ovalo', r: 1, size: 0.75, ox: 12, oy: -8 },
+      { w: 10, h: 20, forma: 'fit', fondo: '#aabbcc' },
+      { w: 10, h: 20, forma: 'triangulo', min: 0, max: 0 },
+      { w: 10, h: 20, phsize: 0 }
+    ];
+    const grupos = [null, { grupo_w: 100, grupo_h: 50 }];
+    const claves = ['w', 'h', 'forma', 'min', 'max', 'r', 'size', 'ox', 'oy', 'fondo'];
+    let iguales = true;
+    casos.forEach(function (c) {
+      grupos.forEach(function (g) {
+        const a = Carg.normalizarRanuras([c])[0];
+        const b = nrT(c, g);
+        claves.forEach(function (k) {
+          if (String(a[k]) !== String(b[k])) { iguales = false; }
+        });
+      });
+    });
+    return iguales;
+  })());
 
   // Cableado: el cargador viaja a la ficha antes que tienda.js.
   const plugin2 = fs.readFileSync(path.join(__dirname, '..', 'personalizador-pdf.php'), 'utf8');

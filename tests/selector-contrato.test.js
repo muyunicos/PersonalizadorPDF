@@ -1,5 +1,5 @@
 /**
- * Puerta Node del contrato del selector visual (spec 016 + spec 021).
+ * Puerta Node del contrato del selector visual (specs 016 a 025).
  *
  * F0 (Cropper RETIRADO): la spec 021 reemplazo el motor de recorte por el
  * canvas unificado de `selector-pmu.js` (3 modos, margen del 10%, doble guia),

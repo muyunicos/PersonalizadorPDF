@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.16.0
+ * Version: 4.16.1
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -2164,8 +2164,10 @@ class Personalizador_PDF_Plugin
                             $titulo = $lib[$archivo]['titulo'];
                         }
                     } elseif ($url !== '' && !preg_match('#^https?://#i', $url)) {
-                        // Legado 4.6.18-4.6.20: relativa a bonus/ del PDF.
-                        // LIMPIEZA 2026-10-14: retirar con bonus_migrar_legado().
+                        // Spec 020 (B5): el layout viejo `pdfs/{nombre}/bonus/` ya
+                        // NO se migra. Una `url` relativa se resuelve por el nombre
+                        // de archivo contra la biblioteca global; si el archivo no
+                        // esta, la fila se descarta.
                         if ($lib === null) {
                             $lib = $this->pmu_uploads()->bonus_lista();
                         }
@@ -3409,10 +3411,8 @@ class Personalizador_PDF_Plugin
         // el declarado (spec 018 D4). Declara, no enruta (015 D11).
         $tipo = isset($_POST['tipo']) ? (string) $_POST['tipo'] : '';
         try {
-            // wp_unslash: WP aplica add_magic_quotes a $_POST (AGENTS §11).
-            // Las claves que salieron de la consola (`cargador`, `array`,
-            // `protegido`, `texto_ayuda`) las arrastra el motor desde el almacen
-            // (PMU_Uploads::datos_con_legacy): editar otro dato no las destruye.
+            // wp_unslash: WP aplica add_magic_quotes a $_POST (AGENTS §11); sin
+            // esto el JSON del campo llega escapado y el guardado falla.
             $c = $this->campo_desde_post(wp_unslash($_POST));
             if ($id > 0) {
                 $this->pmu_uploads()->campo_editar($id, $c['datos'], $c['htm'], $c['css'], $c['js'],
@@ -3567,7 +3567,7 @@ function (ctx, root) {
      * asociado en el PDF y `phsize: 2` el doble (acotado a 3000 px). Con
      * `phsize: 0` (default) se usan los `w`/`h` de abajo. */
     var RANURAS = [
-        { w: 1000, h: 1000, forma: 'auto', min: 1, max: 1, phsize: 0, r: 0 }
+        { w: 1000, h: 1000, forma: 'auto', min: 1, max: 1, phsize: 1, r: 0 }
     ];
     var cont = root.querySelector('[data-pmu-cargador]');
     if (!cont) {

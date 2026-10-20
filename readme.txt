@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.16.0
+Stable tag: 4.16.1
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -31,7 +31,9 @@ A diferencia de la version original (Flask + Python), esta es **100% PHP puro** 
 * Extension zlib (casi siempre disponible)
 * La extension GD es opcional: sin GD el motor procesa imagenes PNG (8 bits, sin entrelazar) con su decodificador propio; para JPEG/GIF/WebP se necesita GD (o un JPEG cuyo tamano coincida exactamente con el del grupo)
 
-**Datos guardados** (detalle canonico en `AGENTS.md` §5): cada PDF vive en `wp-content/uploads/pmu/pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` inmutable + `config.json` editable con `activo`/`productos`/`campos_ids`/`placeholders[id]`); las pruebas del panel (imagenes aplicadas, salida de muestra) van a `wp-content/uploads/pmu/tmp/muestras/{nombre}/` (se sobrescriben en cada Procesar); ciclo comprador en `tmp/cart/{linea}/` (legacy) + `tmp/sesion-{sid}/{item_key}/` (vigente plan 008, preview obligatoria), staging en `tmp/orders/{order_id}/` y resultados confirmados en `orders/{order_id}/{pdf}/`; datos TextMuy en `wp-content/uploads/pmu/{fonts,img,tm-presets}/` (catalogos `fonts.json`/`img.json`/`presets.json` + fisicos + `.txm` + `thumbs.webp` por ambito). La carpeta del plugin queda 100% de solo lectura.
+**Datos guardados** (detalle canonico en `AGENTS.md` §5): cada PDF vive en `wp-content/uploads/pmu/pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` inmutable + `config.json` editable con `activo`/`productos`/`campos_ids`/`placeholders[id]`); las pruebas del panel (imagenes aplicadas, salida de muestra) van a `wp-content/uploads/pmu/tmp/muestras/{nombre}/` (se sobrescriben en cada Procesar); ciclo comprador en `tmp/sesion-{sid}/{item_key}/` (un item por compra; la vista previa es obligatoria **salvo `preview_omisible`**), staging en `tmp/orders/{order_id}/` y resultados confirmados en `orders/{order_id}/{item_key}/`; datos TextMuy en `wp-content/uploads/pmu/{fonts,img,tm-presets}/` (catalogos `fonts.json`/`img.json`/`presets.json` + fisicos + `.txm` + `thumbs.webp` por ambito). La carpeta del plugin queda 100% de solo lectura.
+
+**Experiencia del comprador**: en la ficha del producto los campos del admin se montan tal cual (texto, opciones y **cargador de fotos**). Cada foto se ajusta en un editor visual (encuadre, **escala**, **color de fondo** y **recorte por forma de la envoltura**) con un **visor de coleccion** para revisar, eliminar o reemplazar; el **minimo de fotos configurado frena la compra** (en la ficha y en el servidor), y el cargador **nunca agranda** la imagen: guarda la resolucion real de la foto acotada por el hueco.
 
 **Modulo TextMuy (integrado desde 4.2)**: el editor de estilos de texto ya viene incluido en `wp-content/plugins/personalizador-pdf/modules/textmuy/` (detalle en `modules/LEEME.md`; canonico tecnico en `AGENTS.md` §2.1). Sin el modulo, el resto del plugin funciona con normalidad.
 
@@ -64,6 +66,12 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.16.1 =
+* **Limpieza de la implementacion**: se retiro el calculo de **ampliacion** del selector (`_factorAmpliacion`), que quedo inalcanzable cuando la spec 025 hizo que el cargador nunca agrande la foto; el badge tecnico queda solo con los datos de la foto y el encuadre.
+* **La plantilla "Imagen (cargador)" ahora usa `phsize: 1`**: el campo nuevo toma el **tamano del hueco** del PDF en vez de un `1000x1000` fijo (era la causa de los PNG sobredimensionados). Si el campo no esta asociado a ningun grupo, degrada a los `w`/`h` declarados y avisa.
+* **Puerta nueva anti-divergencia**: un check compara los **dos normalizadores** de ranura (`cargador-pmu` y `tienda`) en 14 combinaciones; si algun dia vuelven a diferenciarse, falla el arnes.
+* **Documentacion**: la Ayuda del admin explica **`phsize`** y la regla de que el cargador **nunca agranda**; la descripcion del plugin corrige el ciclo del comprador (`preview_omisible`, `orders/{order_id}/{item_key}/`) y resume el editor, el visor y el minimo obligatorio.
 
 = 4.16.0 =
 * **El cargador NUNCA agranda la foto (spec 025)**: paso de ser una opcion por ranura a ser **regla general** del sistema. El PNG que se sube mide **`min(recorte, hueco)`**: nunca tiene mas pixeles que la foto ni mas que el hueco. Con una foto de 1100x901 en un hueco de 463 el PNG sale de **463x463** (antes 1000x1000 si la ranura lo pedia): menos tiempo de subida, menos procesamiento y menos disco.

@@ -1292,9 +1292,10 @@ class PMU_Uploads
     }
 
     /**
-     * Alta de campo v2. `$datos` son los slots de `datos.json` (opcionales):
-     * nombre, descripcion, titulo_cliente, texto_ayuda, array, protegido,
-     * cargador. `$tipo` declara para que se usa el `valor` (texto|imagen|opciones).
+     * Alta de campo v3. `$datos` son los slots de `datos.json` (opcionales):
+     * nombre, descripcion, titulo_cliente y tipo (spec 020: sin `texto_ayuda`,
+     * `array`, `protegido` ni `cargador`). `$tipo` declara para que se usa el
+     * `valor` (texto|imagen|opciones).
      * El **id es el hueco mas bajo libre** y los ids dados de baja NUNCA se
      * reutilizan (quedan en el indice con baja:true). Devuelve el id.
      */

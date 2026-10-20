@@ -67,6 +67,16 @@ if (!defined('ABSPATH')) {
         <li><strong>Probar:</strong> el boton "Probar" muestra el campo tal cual lo vera el comprador,
             con el CSS del tema y los estilos globales. Si el campo monta un cargador (su
             <code>campo.js</code>), dibuja las ranuras sin subir nada.</li>
+        <li><strong>Ranuras del cargador (tamano):</strong> cada foto se declara en el <code>RANURAS</code>
+            del <code>campo.js</code>. Con <code>phsize: 1</code> la ranura toma el <strong>tamano del hueco</strong>
+            del PDF (y <code>2</code> el doble, acotado a 3000 px); con <code>phsize: 0</code> usa los
+            <code>w</code>/<code>h</code> escritos a mano. <strong>Conviene <code>phsize: 1</code></strong>: si el
+            PDF se re-analiza o el campo se reutiliza en otro PDF, el tamano sigue al hueco solo. La
+            plantilla "Imagen (cargador)" ya viene asi.</li>
+        <li><strong>El cargador nunca agranda la foto:</strong> el PNG que sube el comprador se guarda con la
+            <strong>resolucion real</strong> de la foto, acotada por el hueco (si la foto es mas chica se guarda
+            tal cual, y el resto del marco queda con el color de fondo que elija). La unica ampliacion, si
+            hace falta, la hace el servidor al insertarla en el PDF.</li>
         <li><strong>Tipo:</strong> el tipo (Texto, Opciones o Imagenes) solo deja el formulario preparado
             y declara para que sirve el <code>valor</code>; despues editas el HTML a tu medida. Se
             puede <strong>corregir en el editor</strong> y el boton <strong>"Cargar la plantilla de este

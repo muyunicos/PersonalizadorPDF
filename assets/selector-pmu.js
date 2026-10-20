@@ -1035,15 +1035,6 @@
         this._dibujar();
     };
 
-    SelectorPMU.prototype._factorAmpliacion = function () {
-        var w = this.config.finalW;
-        var h = this.config.finalH;
-        if (!this.imagen || w < 1 || h < 1) { return 1; }
-        var dim = this._dimensionesImagen();
-        var caja = this._cajaImagenModo();
-        return Math.max(caja.dw / dim.w, caja.dh / dim.h);
-    };
-
     SelectorPMU.prototype._badge = function () {
         if (this.txtOrigen) {
             this.txtOrigen.textContent = this.imagen
@@ -1052,12 +1043,10 @@
         }
         if (!this.txtSalida) { return; }
         var z = this.zoom || 1;
-        var f = this._factorAmpliacion();
-        // Spec 025: con el cap a 1x la foto nunca se amplia, asi que este aviso
-        // solo puede aparecer si algo cambia en el futuro.
-        var amplia = (this.imagen && f > 1.05) ? ' · se amplia ' + f.toFixed(1) + 'x' : '';
+        // Spec 025: el cargador nunca amplia, asi que el badge ya no calcula ni
+        // avisa ampliacion (solo datos de la foto y del encuadre).
         this.txtSalida.textContent =
-            'Salida ' + this.config.finalW + 'x' + this.config.finalH + ' px · zoom x' + z.toFixed(2) + amplia;
+            'Salida ' + this.config.finalW + 'x' + this.config.finalH + ' px · zoom x' + z.toFixed(2);
     };
 
     SelectorPMU.prototype._trampaFoco = function (e) {
