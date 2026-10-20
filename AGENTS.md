@@ -646,6 +646,11 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   **Fix 4.15.1**: `.spmu-caja [hidden]{display:none !important}` (WordPress pisaba `hidden` con
   `.button`, y por eso `auto`/`Girar` se veían siempre); al girar se recalcula el 5% para no deformar
   en `Estirar`.
+  **Fix 4.15.2**: el **ojito responde al click** (el `pointerdown` de la escena arrancaba el arrastre
+  y hacía `setPointerCapture`, así que el `click` no llegaba al botón: solo funcionaba con Espacio;
+  se corta con `stopPropagation` + guard `ojo.contains(e.target)`), y el **zoom crece desde el centro
+  de la forma** (`origenDibujo` con `geo.principal.cx/cy`), no del placeholder — con la forma
+  centrada el resultado es idéntico al anterior.
 - ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
   (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,

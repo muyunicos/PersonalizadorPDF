@@ -34,6 +34,7 @@ Y en la escena, la guia `spmu-envoltura` **oscurecia la foto**: dos velos negros
 | **D7** | **Acciones separadas**: `Cargar imagen` **abajo a la izquierda**; `Cancelar` (secundario) + `Subir` (`button-primary`) **abajo a la derecha**. Se invierte el orden previo (Subir iba antes de Cancelar). |
 | **D8** | **`spmu-envoltura` sin velo**: se eliminan los dos rellenos negros. La zona libre queda **totalmente transparente**; solo se dibujan los **contornos** (blanco punteado = placeholder `W x H`; azul punteado = forma/envoltura). |
 | **D9** | **Ojito de inspeccion** dentro de `spmu-escena` (arriba a la derecha, `aria-pressed`, ojo abierto/tachado en SVG inline): alterna una **mascara blanca pura `#fff`** fuera de la forma principal para ver **solo el recorte**. El contorno del placeholder pasa a **gris** con la mascara activa (sobre blanco no se veria). **El ojito se muestra solo si la forma recorta** — decidido por **tipo de forma** (`tipo !== 'rectangulo'` o `size < 1` o `ox`/`oy` distintos de 0), **nunca comparando cajas**: un circulo de 1000x1000 dentro de un cuadrado de 1000x1000 recorta las esquinas aunque su caja coincida. La mascara vive **solo** en el canvas guia: **el PNG de salida y el PDF no cambian**. |
+| **D10** | **El zoom crece desde el centro de la ENVOLTURA** (la forma/recorte principal), no del placeholder. El origen del dibujo es `geo.principal.cx/cy` (que ya incorpora `size`, `ox`, `oy`) via `origenDibujo(geo, conMargen, desplazamiento)`: asi, al ampliar, lo que esta dentro de la forma **no se corre**. Con la forma centrada (`size: 1`, `ox`/`oy`: 0) el resultado es **identico** al de antes. |
 
 El estado del ojito **arranca siempre apagado** (una apertura nueva no hereda el modo inspeccion).
 
@@ -44,6 +45,13 @@ El estado del ojito **arranca siempre apagado** (una apertura nueva no hereda el
 | **F1** | **El ojito no aparecia nunca** | `recorta` comparaba **cajas** (`prin.w < sec.w`): un `circulo` de 1000x1000 en un hueco 1000x1000 daba "cubre todo" | Criterio por **tipo de forma** (D9) |
 | **F2** | `auto` y **Girar** se veian aunque estuvieran `hidden` | WordPress fuerza `display` a `.button`, que **le gana** a `[hidden]` (AGENTS §11) | `.spmu-caja [hidden]{display:none !important}` |
 | **F3** | Girar aparecia en lienzos 1:1 | La regla era `r:1` + 5%, sin mirar la forma del lienzo | `r:1` **y** `finalW !== finalH` (D6) + `_rotar()` recalcula el 5% para no deformar en `Estirar` |
+
+## Fix 4.15.2
+
+| # | Sintoma | Causa | Fix |
+|---|---|---|---|
+| **F4** | **El ojito no respondia al click** (solo con la barra espaciadora) | El `pointerdown` burbujeaba a `spmu-escena`, que arrancaba el arrastre y hacia `setPointerCapture`: el `pointerup` terminaba en la escena y el navegador **no generaba el `click`** en el boton. Con teclado andaba porque Espacio dispara `click` sin pointer events | `pointerdown` del ojito con `stopPropagation` + guard `self.ojo.contains(e.target)` en la escena (cubre el `<svg>` interno) |
+| **F5** | El zoom crecia desde el centro del placeholder | El origen del dibujo era `margen + W/2` | **D10**: origen = centro de la forma (`origenDibujo`) |
 
 ## Alcance
 

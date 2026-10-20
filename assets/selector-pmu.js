@@ -153,6 +153,26 @@
         return { dw: aw * ex, dh: ah * ey };
     }
 
+    /**
+     * Spec 024 (D10): origen del dibujo (y **punto fijo del zoom**) = centro de
+     * la FORMA principal, no del placeholder. Asi, con `size`/`ox`/`oy`, la foto
+     * crece desde la envoltura y lo que esta dentro de la forma no se corre.
+     * Con la forma centrada (`size: 1`, `ox`/`oy`: 0) el resultado es **identico**
+     * al centro del placeholder. `conMargen` distingue la escena (1.2W x 1.2H)
+     * del PNG de salida (W x H), donde hay que restar el margen.
+     */
+    function origenDibujo(geo, conMargen, desp) {
+        var dx = (desp && isFinite(desp.x)) ? desp.x : 0;
+        var dy = (desp && isFinite(desp.y)) ? desp.y : 0;
+        var prin = (geo && geo.principal) ? geo.principal : { cx: 0, cy: 0 };
+        var margenX = (geo && isFinite(geo.margenX)) ? geo.margenX : 0;
+        var margenY = (geo && isFinite(geo.margenY)) ? geo.margenY : 0;
+        return {
+            x: (conMargen ? prin.cx : prin.cx - margenX) + dx,
+            y: (conMargen ? prin.cy : prin.cy - margenY) + dy
+        };
+    }
+
     function hexDeRgb(r, g, b) {
         function h2(n) {
             var s = Math.max(0, Math.min(255, Math.round(n))).toString(16);
@@ -295,6 +315,8 @@
         this._onResize = null;
         this._subiendo = false;
         this._contextoReemplazo = '';
+        // Fix 4.15.2: referencia al ojito (para que el arrastre lo ignore).
+        this.ojo = null;
     }
 
     SelectorPMU.prototype.on = function (evento, cb) {
@@ -765,10 +787,10 @@
         }
         if (!this.imagen) { return; }
         var caja = this._cajaImagenModo();
-        var cx = ox + (w / 2) + this.desplazamiento.x;
-        var cy = oy + (h / 2) + this.desplazamiento.y;
+        // Spec 024 (D10): el zoom crece desde el centro de la envoltura.
+        var origen = origenDibujo(geo, conMargen, this.desplazamiento);
         ctx.save();
-        ctx.translate(cx, cy);
+        ctx.translate(origen.x, origen.y);
         if (this.rotacion) { ctx.rotate((this.rotacion * Math.PI) / 180); }
         var rot90 = (Math.abs(this.rotacion % 180) === 90);
         var drawW = rot90 ? caja.dh : caja.dw;
@@ -816,11 +838,16 @@
         this._dibujar();
     };
 
-    /** Spec 024 (D9): el ojito alterna la mascara de inspeccion. */
+    /** Spec 024 (D9) + fix 4.15.2: el ojito alterna la mascara de inspeccion. */
     SelectorPMU.prototype._enlazarOjo = function () {
         var self = this;
         var ojo = this.escena ? this.escena.querySelector('.spmu-ojo') : null;
         if (!ojo) { return; }
+        this.ojo = ojo;
+        // Fix 4.15.2: el `pointerdown` de la escena arranca el arrastre y hace
+        // `setPointerCapture`, y entonces el `click` NUNCA llega al boton (por
+        // eso solo funcionaba con la barra espaciadora). El gesto se corta aca.
+        ojo.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
         ojo.addEventListener('click', function (e) {
             e.stopPropagation();
             self._mascaraRecorte = !self._mascaraRecorte;
@@ -860,6 +887,8 @@
 
         this.escena.addEventListener('pointerdown', function (e) {
             if (!self.imagen || self._subiendo) { return; }
+            // Fix 4.15.2: el ojito (y su <svg> interno) NO arrastran la foto.
+            if (self.ojo && self.ojo.contains && self.ojo.contains(e.target)) { return; }
             self._punteros[e.pointerId] = { x: e.clientX, y: e.clientY };
             var ids = Object.keys(self._punteros);
             if (ids.length === 1) {
@@ -1173,6 +1202,7 @@
         this.txtSalida = null;
         this.canvas = null;
         this.ctx = null;
+        this.ojo = null;
         this._punteros = {};
         this._arrastrando = null;
         this._pinch = null;
@@ -1202,6 +1232,7 @@
         calcularCajaEscena: calcularCajaEscena,
         superaCincoPorciento: superaCincoPorciento,
         escalaBase: escalaBase,
+        origenDibujo: origenDibujo,
         colorPredominanteBordes: colorPredominanteBordes,
         sliderAZoom: sliderAZoom,
         zoomASlider: zoomASlider

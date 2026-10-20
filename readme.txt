@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.15.1
+Stable tag: 4.15.2
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,10 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.15.2 =
+* **El ojito responde al toque/clic**: no hacia nada con el mouse porque el `pointerdown` de la escena arrancaba el arrastre y se quedaba con el puntero, asi que el navegador no generaba el `click` en el boton (por eso **solo funcionaba con la barra espaciadora**). Ahora el gesto del ojito no llega a la escena, y el arrastre lo ignora (tambien cuando se toca el icono interno).
+* **El zoom crece desde el centro de la envoltura**: antes el punto fijo era el centro del marco, asi que con una forma desplazada (`size`, `ox`, `oy`) lo que estaba dentro del circulo se corria al ampliar. Ahora la escala se hace desde el centro de la forma. Con la forma centrada el resultado es **identico** al de antes.
 
 = 4.15.1 =
 * **Correcciones del modal (spec 024)**: el **ojito ya aparece** cuando la forma recorta (el criterio comparaba las cajas y un circulo de 1000x1000 dentro de un hueco 1000x1000 se tomaba como "cubre todo"; ahora decide por **tipo de forma**).

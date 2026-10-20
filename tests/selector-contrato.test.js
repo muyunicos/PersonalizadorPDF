@@ -181,6 +181,34 @@ check('modal: con sin-ampliar los modos y Girar se ocultan y el slider capa a 0'
   && /escala === 'sin-ampliar' \? '0' : '100'/.test(selector));
 check('el cargador pasa escala al selector (spec 023)', /escala: r\.escala/.test(cargador));
 
+console.log('\n== F2c: zoom desde la envoltura y click del ojito (spec 024, 4.15.2) ==');
+// Forma centrada (size 1, ox/oy 0): el origen es EXACTAMENTE el de antes.
+const gCentrada = puro.geometriaEscena(1000, 500, { forma: 'rectangulo', size: 1 });
+const oCentro = puro.origenDibujo(gCentrada, true, { x: 0, y: 0 });
+check('origen: forma centrada -> centro del placeholder (comportamiento intacto)',
+  oCentro.x === gCentrada.margenX + 500 && oCentro.y === gCentrada.margenY + 250,
+  oCentro.x + ',' + oCentro.y);
+// En el PNG de salida (sin margen) cae en W/2, H/2.
+const oPng = puro.origenDibujo(gCentrada, false, { x: 0, y: 0 });
+check('origen: en el PNG de salida (sin margen) cae en W/2, H/2',
+  oPng.x === 500 && oPng.y === 250, oPng.x + ',' + oPng.y);
+// Forma desplazada: el origen se corre con ella (zoom desde la envoltura).
+const gDesp = puro.geometriaEscena(1000, 500, { forma: 'rectangulo', size: 1, ox: 20 });
+const oDesp = puro.origenDibujo(gDesp, true, { x: 0, y: 0 });
+check('origen: con ox=20 el centro se corre 20% de W (crece desde la forma)',
+  Math.round(oDesp.x - oCentro.x) === 200, String(Math.round(oDesp.x - oCentro.x)));
+// El arrastre se suma al origen.
+const oDrag = puro.origenDibujo(gCentrada, true, { x: 30, y: -10 });
+check('origen: el arrastre del comprador se suma',
+  oDrag.x === oCentro.x + 30 && oDrag.y === oCentro.y - 10);
+check('el modal dibuja con origenDibujo (ya no con el centro del placeholder)',
+  /var origen = origenDibujo\(geo, conMargen, this\.desplazamiento\)/.test(selector)
+  && !/var cx = ox \+ \(w \/ 2\)/.test(selector));
+check('fix 4.15.2: el pointerdown del ojito no arranca el arrastre',
+  /ojo\.addEventListener\('pointerdown', function \(e\) \{ e\.stopPropagation\(\); \}\)/.test(selector)
+  && /self\.ojo && self\.ojo\.contains/.test(selector)
+  && /self\.ojo\.contains\(e\.target\)/.test(selector));
+
 console.log('\n== F3: badge en vivo y guias (US3) ==');
 check('badge Origen + Salida con zoom en vivo', /spmu-badge/.test(selector)
   && /Origen /.test(selector) && /Salida /.test(selector) && /toFixed\(/.test(selector));
