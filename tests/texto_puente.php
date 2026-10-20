@@ -21,7 +21,8 @@ if (PHP_SAPI !== 'cli') {
  *    validez | validez_admin | validez_admin_mal | ficha* | vista_previa* |
  *    carrito | minimos | pool* | overrides | sesion | conciliacion | completados | mockups* |
  *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
- *    reanalizar | envoltura_op | borrado | campo_global | campo_subida | pool_concurrente`
+ *    reanalizar | envoltura_op | borrado | campo_global | campo_subida | pool_concurrente |
+ *    conexion_pc`
  */
 
 $fase = isset($argv[1]) ? $argv[1] : 'setup';
@@ -127,6 +128,13 @@ function current_user_can($a) { return getenv('PD_PUENTE_SIN_CAP') ? false : tru
 function wp_json_encode($d = null, $f = 0) { return json_encode($d, $f); }
 function wp_is_writable($d) { return is_writable($d); }
 function wp_mkdir_p($d) { return @mkdir($d, 0777, true); }
+function wp_remote_get($url, $args = []) {
+    $GLOBALS['test_remote_get'] = ['url' => $url, 'args' => $args];
+    return $GLOBALS['test_remote_get_respuesta'] ?? ['response' => ['code' => 200], 'body' => '{"ok":true}'];
+}
+function is_wp_error($respuesta) { return false; }
+function wp_remote_retrieve_response_code($respuesta) { return (int)($respuesta['response']['code'] ?? 0); }
+function wp_remote_retrieve_body($respuesta) { return (string)($respuesta['body'] ?? ''); }
 
 /**
  * Spec 020 (B4): alta de campo con la firma REAL del plugin (v2). Antes el arnes
@@ -575,6 +583,15 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('marca de ultima corrida guardada', is_array($GLOBALS['test_options']['personalizador_pdf_smoke_ultimo'] ?? null)
                 && ($GLOBALS['test_options']['personalizador_pdf_smoke_ultimo']['total'] ?? 0) === count($checks_s));
             check('smoke_pendiente false tras correr', $p->smoke_pendiente() === false);
+            break;
+        case 'conexion_pc':
+            $conexion = is_array($json) ? (array)($json['data'] ?? []) : [];
+            $remota = (array)($GLOBALS['test_remote_get'] ?? []);
+            check('conexion PC: JSON success', is_array($json) && $json['success'] === true);
+            check('conexion PC: consulta solo /health del Quick Tunnel',
+                ($remota['url'] ?? '') === 'https://prueba.trycloudflare.com/health');
+            check('conexion PC: timeout acotado', (int)(($remota['args']['timeout'] ?? 0)) === 8);
+            check('conexion PC: mensaje de exito', strpos((string)($conexion['detalle'] ?? ''), 'Conexion OK') === 0);
             break;
         case 'subir_conflicto':
             // D2: unica via JSON (el JS abre su modal con nombre_existente:).
@@ -3241,6 +3258,17 @@ switch ($fase) {
         ];
         $_REQUEST = $_POST;
         $p->handle_smoke_test(); // exit en responder(JSON con checks)
+        break;
+
+    case 'conexion_pc':
+        preparar_entorno($testBase, $base);
+        $_POST = [
+            'action' => 'personalizador_pdf_conexion_pc',
+            'url' => 'https://prueba.trycloudflare.com',
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_conexion_pc(); // exit en responder(JSON con detalle)
         break;
 
     case 'subir_conflicto':

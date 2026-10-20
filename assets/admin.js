@@ -1500,6 +1500,26 @@ jQuery(function ($) {
             .then(function () { $btn.prop('disabled', false); });
     });
 
+    $(document).on('click', '.ec-conexion-pc-probar', function () {
+        var $btn = $(this).prop('disabled', true);
+        var $estado = $('.ec-conexion-pc-estado').removeClass('ec-ok ec-error');
+        var url = $.trim($('#ec-conexion-pc-url').val() || '');
+        if (!url) {
+            $estado.addClass('ec-error').text('Pegá la URL temporal de Cloudflare.');
+            $btn.prop('disabled', false);
+            return;
+        }
+        $estado.text('Probando desde Hostinger...');
+        pmuPost('personalizador_pdf_conexion_pc', {url: url}, $(this).data('nonce') || '')
+            .then(function (res) {
+                $estado.addClass('ec-ok').text((res.data && res.data.detalle) || 'Conexion OK.');
+            })
+            .catch(function (err) {
+                $estado.addClass('ec-error').text((err && err.message) || 'No se pudo conectar con la PC.');
+            })
+            .then(function () { $btn.prop('disabled', false); });
+    });
+
     /* ============ 4. Personalizacion por grupo (estado, guardado y puente TextMuy) ============ */
 
     var RENDER_CORE_URL = (window.PersonalizadorPDF && window.PersonalizadorPDF.renderCoreUrl) || '';

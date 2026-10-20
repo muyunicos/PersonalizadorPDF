@@ -49,3 +49,23 @@ $pendiente = $this->smoke_pendiente();
         </table>
     </div>
 </div>
+
+<div class="card">
+    <h2>Conexion con la PC (prueba)</h2>
+    <p class="description">
+        Comprueba el recorrido Hostinger → Cloudflare Tunnel → esta PC. No procesa ni envia
+        imagenes, no guarda la URL y no modifica ningun dato.
+    </p>
+    <p>
+        <label for="ec-conexion-pc-url">URL temporal de Cloudflare</label><br>
+        <input type="url" class="regular-text" id="ec-conexion-pc-url"
+               placeholder="https://ejemplo.trycloudflare.com" autocomplete="off">
+    </p>
+    <p>
+        <button type="button" class="button ec-conexion-pc-probar"
+                data-nonce="<?php echo esc_attr(wp_create_nonce('personalizador_pdf_conexion_pc')); ?>">
+            Testear conexion con PC
+        </button>
+        <span class="ec-conexion-pc-estado" aria-live="polite"></span>
+    </p>
+</div>

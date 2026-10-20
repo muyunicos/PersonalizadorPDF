@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.16.1
+ * Version: 4.16.2
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -84,6 +84,8 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_bonus', [$this, 'handle_bonus_guardar']);
         // Pestana "Test": smoke test nativo (WP/Woo reales, sin exec).
         add_action('admin_post_personalizador_pdf_smoke', [$this, 'handle_smoke_test']);
+        // Prueba aislada Hostinger -> Cloudflare Tunnel -> PC local.
+        add_action('admin_post_personalizador_pdf_conexion_pc', [$this, 'handle_conexion_pc']);
 
         // Spec 004 (T012): panel del comprador en la ficha del producto.
         // El shortcode expone el mismo panel fuera de Woo (manuales/test).
@@ -2736,6 +2738,44 @@ class Personalizador_PDF_Plugin
         ]);
     }
 
+    /**
+     * Prueba minima del tunel temporal. No guarda la URL ni envia datos del cliente.
+     * Solo acepta Quick Tunnels de Cloudflare para no convertir este check admin en SSRF.
+     */
+    public function handle_conexion_pc()
+    {
+        $this->seguridad('personalizador_pdf_conexion_pc');
+        $entrada = isset($_POST['url']) ? trim((string)wp_unslash($_POST['url'])) : '';
+        $partes = parse_url($entrada);
+        $host = is_array($partes) ? strtolower((string)($partes['host'] ?? '')) : '';
+        $ruta = is_array($partes) ? (string)($partes['path'] ?? '') : '';
+        $esQuickTunnel = $host !== '' && (bool)preg_match('/\A[a-z0-9-]+\.trycloudflare\.com\z/', $host);
+
+        if (!is_array($partes) || ($partes['scheme'] ?? '') !== 'https' || !$esQuickTunnel
+            || isset($partes['user'], $partes['pass'], $partes['port'], $partes['query'], $partes['fragment'])
+            || ($ruta !== '' && $ruta !== '/health')) {
+            $this->responder(false, [], 'Pegá la URL HTTPS temporal de trycloudflare.com, sin ruta ni parametros.');
+        }
+
+        $url = 'https://' . $host . '/health';
+        $respuesta = wp_remote_get($url, [
+            'timeout' => 8,
+            'redirection' => 0,
+            'headers' => ['Accept' => 'application/json'],
+            'user-agent' => 'Personalizador-PDF/health-check',
+        ]);
+        if (is_wp_error($respuesta)) {
+            $this->responder(false, [], 'No se pudo conectar con la PC: ' . $respuesta->get_error_message());
+        }
+
+        $codigo = (int)wp_remote_retrieve_response_code($respuesta);
+        $datos = json_decode((string)wp_remote_retrieve_body($respuesta), true);
+        if ($codigo !== 200 || !is_array($datos) || ($datos['ok'] ?? false) !== true) {
+            $this->responder(false, [], 'La PC no devolvio la respuesta esperada (HTTP ' . $codigo . ').');
+        }
+        $this->responder(true, ['detalle' => 'Conexion OK: Hostinger recibio respuesta de la PC.']);
+    }
+
     /** Ultima corrida del smoke (o null si nunca corrio). */
     public function smoke_ultimo()
     {
@@ -2869,7 +2909,7 @@ class Personalizador_PDF_Plugin
     {
         $acciones = [
             'subir_pdf', 'reanalizar', 'procesar', 'borrar', 'config',
-            'subir_imagen', 'quitar_imagen', 'mockups', 'smoke',
+            'subir_imagen', 'quitar_imagen', 'mockups', 'smoke', 'conexion_pc',
         ];
         $faltan = [];
         foreach ($acciones as $accion) {
