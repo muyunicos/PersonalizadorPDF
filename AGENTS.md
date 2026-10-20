@@ -411,6 +411,19 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   respeta la transparencia **real** de la foto (alfa en toda la imagen, no solo en el perimetro).
   El color elegido a mano por el comprador siempre gana (sale opaca). Contrato:
   `specs/027-transparencia-campo/contracts/transparencia.md`.
+  **Spec 028 (fix)**: `PURO.normalizarRanura()` (`assets/tienda.js`, el normalizador de la
+  **ficha**) debe devolver `transp`: sin eso `CargadorPMU` la recibia vacia y la politica se
+  perdia **en la ficha**. Ojo: hay **dos** normalizadores de la misma ranura (el de la ficha
+  y el del cargador en `cargador-pmu.js`); una clave nueva va en **los dos**.
+- **Modos de encaje y lienzo (spec 028)**: los 3 modos son los `object-fit` del CSS con nombres
+  inequivocos (**Cubrir**=`cover`, **Encajar**=`contain`, **Estirar**=`fill`); los ids viejos
+  (`rellenar`/`ajustar`) son alias en `modoCanonico()`. Lo que separa Cubrir de Encajar **no es
+  "deformar"** (ninguno deforma) sino **que hace con el sobrante**. **El PNG mide SIEMPRE el
+  lienzo** (`W x H` = el hueco que resuelve `phsize`), asi que el encaje del Motor
+  (`Imagen::encajado`, contain+centrado) es **1:1** y **la vista previa es el PDF**. La base la
+  fija el modo y la **Escala** (0.25x-4x) es del comprador; con el aspecto ya encajado (<=5%)
+  queda un unico boton **"Ajustar al marco"**, que **re-encuadra** (modo + Escala 1x + sin
+  desplazamiento). Contrato: `specs/028-modos-lienzo/contracts/modos.md`.
 - **Guia de envoltura en el cargador (contrato v4 de la 011 + spec 016 F6)**: **Spec 019 (F2)** la guia
   se **DEDUCE** del **cableado del hueco** (`[campoN]` en `value`/`settings` del grupo con envoltura;
   `campos_envoltura_deducida()`) y, si el PDF tiene **un solo** grupo con envoltura y el campo declara
@@ -665,17 +678,29 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   **Fix 4.15.3**: el desplazamiento del comprador se **escala por el zoom** (`desp * zoom`) dentro de
   `origenDibujo`: sin eso el punto fijo seguía siendo el **centro de la imagen**, y al arrastrar y
   ampliar el contenido bajo el centro de la forma se corría (el check de invariancia da `-50 / -50 / -50`).
-- ✅ **Spec 025 `png-resolucion-foto` (implementada 2026-10-20, v4.16.0)**: **el cargador nunca agranda
-  la foto**, y eso es **regla general**, no una propiedad de ranura (se **eliminó** `escala` del
-  contrato). El PNG mide **`min(recorte, hueco)`** por eje: nunca tiene más píxeles que la foto ni
-  más que el hueco. Los 3 modos se redefinieron: **Rellenar** = recorte al aspecto del lienzo **sin
-  ampliar**; **Ajustar** = contain (natural o reducido); **Estirar** = conserva el **lado mayor** y
-  adapta el otro al aspecto. El control **Escala** solo reduce (`1x` = tamaño natural) y **el pool
-  tampoco amplía** (`rasterizar` capado). **El Motor no cambia**: al no ampliarse en el navegador, la
-  única ampliación posible la hace `Imagen::normalizar` al encajar en el PDF (un solo paso; Lanczos
-  queda como etapa futura). Caso real: 1100×901 en un hueco de 463 (`phsize: 1`) → PNG **463×463**
-  en vez de 1000×1000. Puerta: 6 checks con los ejemplos del negocio (E1-E6) + "ningún modo supera el
-  lado mayor de la foto".
+- ⚠️ **Spec 025 `png-resolucion-foto` (v4.16.0) — SUPERADA por la 028**: redefinió los 3 modos
+  ("Rellenar = recortar al aspecto **sin ampliar**", "Ajustar = contain capado a 1", "Estirar =
+  lado mayor") y el PNG como `min(caja, lienzo)`. Las palabras eran **ambiguas** y esa lectura quedó
+  **codificada en los tests con ejemplos** (E1–E6): con una foto más chica que el marco Cubrir
+  **dejaba huecos**, y con un lienzo no cuadrado el PNG salía **corrido** (la ventana se centraba en
+  el lienzo, no en sí misma). Se conserva como registro.
+- ✅ **Spec 028 `modos-lienzo` (implementada 2026-10-20, v4.19.0)**: **los 3 modos se anclan a
+  `object-fit`** y se renombran a verbos inequívocos: **Cubrir** (`cover`), **Encajar** (`contain`),
+  **Estirar** (`fill`); los ids viejos (`rellenar`/`ajustar`) y los nombres de CSS son **alias** en
+  `modoCanonico()`. **El invariante que la 025 leyó al revés**: lo que separa Cubrir de Encajar
+  **no es "deformar"** (ninguno deforma) sino **qué hace con el sobrante** — Cubrir **recorta**,
+  Encajar **deja fondo**. Está escrito en la tabla (`contracts/modos.md`, docblock de `escalaBase`)
+  y **verificado por propiedad** (`tests/selector-contrato.test.js` F2b: *Cubrir nunca deja huecos*,
+  *Encajar siempre entra*, *Estirar es el marco exacto*), no por ejemplos. **El PNG mide SIEMPRE el
+  LIENZO (`W x H`)** = el tamaño del hueco (`phsize`), y como `Imagen::encajado` es contain+centrado,
+  el encaje del Motor es **1:1**: **la vista previa es el PDF** (modo, Escala y desplazamiento
+  incluidos). Vuelve la **Escala 0.25x–4x** (la base la fija el modo). La **regla del 5% se
+  conserva**: con el aspecto ya encajado queda **un** botón, **"Ajustar al marco"**, que **no es un
+  modo sino un RE-ENCUADRE** (modo del caso + Escala 1x + sin desplazamiento); con >5% se muestran
+  los 3, con default **`cubrir`** (y `estirar` en el caso ≤5%). Al girar se recalcula el 5% y, si
+  estaba en `estirar`, pasa a `cubrir` (no deformar sin querer). Aviso nuevo: `phsize: 0` con un
+  lienzo distinto del hueco del grupo (el Motor reencajaría la composición). **El Motor y el
+  servidor no se tocan.**
 - ✅ **Spec 027 `transparencia-campo` (implementada 2026-10-20, v4.17.0)**: **la politica de
   transparencia la declara el `campo.js`** (no el comprador). La ranura acepta `transp: 'si'|'no'`
   (**ausente = comportamiento actual**: el cliente decide con el boton "damero"). Con `transp:'no'`
@@ -974,4 +999,6 @@ el numero a mano. El stub `get_file_data` del arnes esta en `tests/texto_puente.
 | La fase `mockups` del arnes sale en rojo por `clamp de filtros/rot/sesgo` aunque el saneo este bien | El check comparaba **la capa normalizada completa** con `===` (13 claves) y el contrato de capa gano una clave aditiva (`envoltura`, PowerClip de la spec 011): 14 claves nunca son iguales a 13 | Comparar por **claves esperadas**: `array_intersect_key($capa, $esperado) === $esperado` con `ksort` a ambos lados (el `===` de PHP tambien es sensible al orden). La presencia y el valor de las claves aditivas se cubren aparte, en la fase `mockup_capas` |
 | El **ojito** del modal no hace nada al tocar/clic (solo funciona con la barra espaciadora) | El `pointerdown` burbujeaba a `spmu-escena`, que arrancaba el arrastre y hacia `setPointerCapture`: el `pointerup` terminaba en la escena y el navegador **no generaba el `click`** en el boton. Con teclado andaba porque Espacio dispara `click` sin pointer events | `pointerdown` del ojito con `stopPropagation` **y** guard `self.ojo.contains(e.target)` en la escena (el evento cae en el `<svg>` interno, no en el boton). Fix 4.15.2 |
 | El **zoom se corre** al arrastrar la foto: el contenido bajo el centro de la forma se desplaza | El punto fijo del zoom es el **centro de la imagen**, y `origenDibujo` sumaba el desplazamiento **sin escalarlo**: el centro quedaba en `forma + desp` para cualquier zoom | `desp * zoom` en `origenDibujo` (el punto bajo el centro de la forma queda **invariante**) y el arrastre se compensa (`delta / zoom`) para seguir 1:1 con el dedo. Fix 4.15.3 |
-| El PNG del comprador mide **mas que el hueco** o sale **ampliado/borroso** | La ranura declaraba `w`/`h` a mano con `phsize: 0`, sin seguir al grupo del PDF: se generaba un PNG enorme que el Motor reducia despues | **`phsize: 1`** en la ranura (toma el tamano del hueco; degrada a `w`/`h` y avisa si no hay grupo). La plantilla "Imagen (cargador)" ya viene asi (spec 025); ademas el cargador **nunca amplia** el PNG |
+| El PNG del comprador mide **mas que el hueco** o sale **ampliado/borroso** | La ranura declaraba `w`/`h` a mano con `phsize: 0`, sin seguir al grupo del PDF: se generaba un PNG enorme que el Motor reducia despues | **`phsize: 1`** en la ranura (toma el tamano del hueco; degrada a `w`/`h` y avisa si no hay grupo). La plantilla \"Imagen (cargador)\" ya viene asi. **Spec 028 D9**: con `phsize: 0` la ficha **avisa** si el lienzo declarado no es el hueco del grupo (el Motor reencajaria la composicion) |
+| Los 3 modos "no hacen lo que dicen" (**Cubrir deja huecos**) o el PDF sale **corrido** respecto de la vista previa | La spec 025 redefinio los modos con palabras ambiguas ("Rellenar" = recortar al aspecto **sin ampliar**) y el PNG se generaba como `min(caja, lienzo)` pero **centrado en el LIENZO**: con un lienzo no cuadrado la ventana y el centro no coincidian, y con una foto mas chica que el marco la caja no lo tapaba | El contrato vigente es la **tabla de la spec 028** (`specs/028-modos-lienzo/contracts/modos.md`): **Cubrir**=`cover`, **Encajar**=`contain`, **Estirar**=`fill`, y **el PNG mide SIEMPRE el lienzo** (`W x H` = el hueco), asi que el Motor encaja 1:1. Los modos se verifican **por propiedad** (`selector-contrato` F2b), no con ejemplos: fue justamente un banco de ejemplos lo que fijo la lectura equivocada |
+| La politica `transp` del campo **se ignora en la ficha** (el comprador ve el boton "damero" igual que siempre) | `PURO.normalizarRanura()` (`assets/tienda.js`) es el normalizador de la **ficha** y **no devolvia `transp`**: `CargadorPMU` la recibia vacia y el selector caia en el comportamiento del cliente. La consola no lo delataba porque su stub (`admin.js`) pasa las ranuras crudas | Devolver `transp` desde `PURO.normalizarRanura` (fix de la spec 028). Lo atrapa `selector-contrato` F2b ("normalizarRanura NO puede perder `transp`"). **Clase de bug**: hay **dos** normalizadores de la misma ranura (el de la ficha en `tienda.js` y el del cargador en `cargador-pmu.js`): una clave nueva hay que agregarla en **los dos** |

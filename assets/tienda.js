@@ -65,6 +65,17 @@
                     aviso = 'phsize:' + phsize + ' sin grupo asociado en este PDF'
                         + ' (se usan ' + w + 'x' + h + ' declarados)';
                 }
+            } else {
+                // Spec 028 (D7): con el lienzo declarado (`phsize: 0`) que NO es
+                // el hueco del grupo, el Motor reencaja la composicion (encaja
+                // con contain): lo que se ve en el modal no es lo que sale en el
+                // PDF. Se avisa en la consola al montar (no bloquea).
+                var gw0 = defCampo ? (parseInt(defCampo.grupo_w, 10) || 0) : 0;
+                var gh0 = defCampo ? (parseInt(defCampo.grupo_h, 10) || 0) : 0;
+                if (gw0 > 0 && gh0 > 0 && (gw0 !== w || gh0 !== h)) {
+                    aviso = 'el lienzo declarado ' + w + 'x' + h + ' no es el hueco del grupo '
+                        + gw0 + 'x' + gh0 + ': la composicion se reencajara (usa phsize: 1)';
+                }
             }
             if (w > PH_MAX || h > PH_MAX) {
                 var esc = Math.min(PH_MAX / w, PH_MAX / h);
@@ -82,6 +93,11 @@
             var max = Math.max(min, parseInt(r.max, 10) || 1);
             var fondo = (typeof r.fondo === 'string' && r.fondo.trim() !== '')
                 ? r.fondo.trim() : 'auto';
+            // Spec 027 (D1/D6): la politica de transparencia la declara el campo
+            // (`transp: 'si' | 'no'`); `''` = ausente = la decide el comprador.
+            // OJO: si este normalizador no la devuelve, `CargadorPMU` la recibe
+            // vacia y la politica del campo se pierde en la ficha.
+            var transp = (r.transp === 'si') ? 'si' : ((r.transp === 'no') ? 'no' : '');
             return {
                 etiqueta: r.etiqueta || '',
                 w: w, h: h, forma: forma,
@@ -93,6 +109,7 @@
                 ox: ox,
                 oy: oy,
                 fondo: fondo,
+                transp: transp,
                 aviso: aviso
             };
         },

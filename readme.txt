@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.18.0
+Stable tag: 4.19.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,16 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.19.0 =
+* **Los 3 modos de encaje, con nombres que no se pueden malinterpretar (spec 028)**: **Cubrir**, **Encajar** y **Estirar** son exactamente los `cover`, `contain` y `fill` del CSS. Cubrir **llena el marco** (recorta lo que sobra) y Encajar **deja entrar la foto entera** (el fondo ocupa el resto): **ninguno de los dos deforma**. Estirar ocupa el marco exacto y si deforma. Ahora los botones traen **icono + nombre**.
+* **Arreglado: Cubrir dejaba huecos** con fotos mas chicas que el marco, y el archivo guardado podia salir **corrido** respecto de la vista previa (el recorte se centraba mal con marcos no cuadrados).
+* **La vista previa es el PDF**: el archivo que se guarda mide **siempre el hueco** del grupo, asi que el motor lo inserta tal cual. Lo que el comprador ve en el modal es lo que sale impreso (modo, Escala y posicion incluidos).
+* **La Escala vuelve a 0,25x–4x** (antes solo permitia reducir), para ajustar el recorte de Cubrir.
+* **Si la foto ya encaja (5% de tolerancia)**, el modal muestra **un solo** boton, **"Ajustar al marco"**, que devuelve la imagen a su encaje por defecto: con el aspecto ya encajado los 3 modos harian casi lo mismo. Si el comprador la movio o la acerco, ese boton la reencuadra.
+* **Aviso nuevo**: si declaras `phsize: 0` y esas medidas no son el hueco del grupo, la consola avisa (el motor reencajaria la composicion). Conviene `phsize: 1`.
+* **Arreglado**: la politica de transparencia del campo (`transp`, de la 4.17.0) no llegaba a la ficha del comprador.
+* **Sin migracion**: nada de lo guardado cambia. El motor y el servidor no se tocan.
 
 = 4.18.0 =
 * **Las imagenes se guardan en WebP (spec 026)**: antes todo era PNG, que es enorme (una foto del comprador podia pesar **1,3 MB** y el pool de una sesion unos **19 MB**). Ahora el navegador emite WebP directamente: la foto del comprador baja a **~120 KB** (casi 10 veces menos) y se envia menos por la red. Si el navegador no sabe codificar WebP, se usa el PNG igual que antes (nunca se rompe el flujo).

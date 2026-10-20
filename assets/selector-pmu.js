@@ -12,6 +12,34 @@
     var TIPOS = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml'];
     var EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'];
     var ACEPTA = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg';
+
+    // Spec 028: los 3 modos (tabla normativa en `escalaBase`). `ICO_MODO` y
+    // `TITULO_MODO` son la cara visible de esa tabla: los tests de vocabulario
+    // los cruzan con los `data-modo` del modal.
+    var MODO_DEF = 'cubrir';
+    var ICO_MODO = {
+        // Imagen que DESBORDA el marco (se recorta): `object-fit: cover`.
+        cubrir: '<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">'
+            + '<rect x="0.5" y="5.5" width="19" height="9" rx="1" fill="currentColor" opacity=".45"/>'
+            + '<rect x="3.5" y="4.5" width="13" height="11" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/>'
+            + '</svg>',
+        // Foto ENTERA dentro del marco, con margenes: `object-fit: contain`.
+        encajar: '<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">'
+            + '<rect x="2.5" y="3.5" width="15" height="13" rx="1" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".5"/>'
+            + '<rect x="6.5" y="6.5" width="7" height="7" rx="1" fill="currentColor"/>'
+            + '</svg>',
+        // Imagen = marco exacto (se estira): `object-fit: fill`.
+        estirar: '<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">'
+            + '<rect x="2.5" y="3.5" width="15" height="13" rx="1" fill="currentColor" opacity=".5"/>'
+            + '<rect x="2.5" y="3.5" width="15" height="13" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/>'
+            + '</svg>'
+    };
+    var TITULO_MODO = {
+        cubrir: 'Cubrir: llena el marco y recorta lo que sobra (no se deforma)',
+        encajar: 'Encajar: entra entera y deja fondo (no se deforma)',
+        estirar: 'Estirar: ocupa el marco exacto (se deforma)'
+    };
+    var TITULO_REENCUADRE = 'Ajustar al marco: devuelve la imagen a su encaje por defecto';
     var ESCENA_MAX = 1000;
     var MARGEN_ESCENA = 0.10; // 10% en cada borde => escena = 1.2x del placeholder
     var UMBRAL_ASPECTO = 0.05; // 5% de tolerancia en relacion de aspecto
@@ -38,6 +66,20 @@
     function formaCanonica(f) {
         if (f === undefined || f === null || f === '') { return 'auto'; }
         return MAPA_FORMAS[String(f)] || 'rectangulo';
+    }
+
+    /**
+     * Spec 028: normaliza el modo de encaje a la tabla normativa
+     * (`cubrir` | `encajar` | `estirar`). Acepta los ids viejos de la spec 025
+     * (`rellenar` | `ajustar`) y los nombres de `object-fit`
+     * (`cover` | `contain` | `fill`) como alias; cualquier otra cosa cae en
+     * `cubrir`, que es el default (el que nunca deja huecos).
+     */
+    function modoCanonico(m) {
+        var v = (m === undefined || m === null) ? '' : String(m);
+        if (v === 'encajar' || v === 'ajustar' || v === 'contain' || v === 'fit') { return 'encajar'; }
+        if (v === 'estirar' || v === 'fill' || v === 'stretch') { return 'estirar'; }
+        return MODO_DEF;
     }
 
     function envolturaValida(e) {
@@ -126,39 +168,48 @@
     }
 
     /**
-     * Spec 025 (D1-D4): caja de dibujo de la imagen segun el modo, **sin ampliar
-     * nunca** (regla general; ya no es una propiedad de ranura).
+     * TABLA NORMATIVA DE LOS 3 MODOS (spec 028) — fuente unica de verdad.
+     * La reflejan cuatro lugares y ninguno puede divergir:
+     *   1. esta funcion,
+     *   2. `specs/028-modos-lienzo/contracts/modos.md`,
+     *   3. los botones/iconos del modal (`ICO_MODO` + `TITULO_MODO`) y
+     *      `admin/ayuda.php`,
+     *   4. los tests POR PROPIEDAD de `tests/selector-contrato.test.js`.
      *
-     * - `rellenar` (D3): recorta al aspecto del lienzo **sin ampliar**
-     *   (`rw = min(aw, ah·ratio)`, `rh = min(ah, aw/ratio)`).
-     * - `ajustar` (D4): contain capado a 1 (la foto entera, natural o reducida).
-     * - `estirar` (D2): mantiene el **lado mayor** de la foto y adapta el otro
-     *   al aspecto del lienzo.
+     * | id        | etiqueta | icono             | object-fit | deforma | deja fondo | recorta |
+     * |-----------|----------|-------------------|------------|---------|------------|---------|
+     * | `cubrir`  | Cubrir   | imagen que desborda| `cover`   | NO      | NO         | SI      |
+     * | `encajar` | Encajar  | foto entera + marco| `contain` | NO      | SI         | NO      |
+     * | `estirar` | Estirar  | imagen = marco     | `fill`    | SI      | NO         | NO      |
      *
-     * El PNG final mide `min(lienzo, caja)` por eje (D5), asi que nunca se
-     * guardan mas pixeles que los que hay ni mas que los que pide el hueco.
+     * OJO (asi se leyo mal en la spec 025): lo que distingue `cubrir` de
+     * `encajar` NO es "deformar" — ninguno de los dos deforma. Es QUE HACE CON
+     * EL SOBRANTE: `cubrir` RECORTA la foto hasta tapar el marco; `encajar`
+     * conserva la foto entera y DEJA FONDO a los costados.
+     *
+     * `caja` = tamano con el que se dibuja la foto. `lienzo` = `W x H` (el
+     * hueco del PDF, resuelto por `phsize`). Ningun modo tiene tope de
+     * ampliacion: el PNG final mide SIEMPRE el lienzo (D4), asi que la
+     * resolucion la acota el hueco y no el modo.
      */
     function escalaBase(modo, iw, ih, W, H) {
         var w = Math.max(1, parseFloat(W) || 1);
         var h = Math.max(1, parseFloat(H) || 1);
         var aw = Math.max(1, parseFloat(iw) || 1);
         var ah = Math.max(1, parseFloat(ih) || 1);
-        var ratio = w / h;
         if (modo === 'estirar') {
-            // D2: "el lado que no se estira" = el mayor. El resultado conserva
-            // ese lado y toma el aspecto del lienzo.
-            var lado = Math.max(aw, ah);
-            return (ratio >= 1)
-                ? { dw: lado, dh: lado / ratio }
-                : { dw: lado * ratio, dh: lado };
+            // `object-fit: fill`. La foto ocupa el marco exacto (se deforma).
+            return { dw: w, dh: h };
         }
-        if (modo === 'ajustar') {
-            var e = Math.min(w / aw, h / ah, 1);
+        if (modo === 'encajar') {
+            // `object-fit: contain`. Entra entera (toca un eje) y deja fondo.
+            var e = Math.min(w / aw, h / ah);
             return { dw: aw * e, dh: ah * e };
         }
-        // rellenar: mayor rectangulo con el aspecto del lienzo que cabe en la
-        // foto (nunca supera el tamano de la foto en ninguno de los dos ejes).
-        return { dw: Math.min(aw, ah * ratio), dh: Math.min(ah, aw / ratio) };
+        // `cubrir` (`object-fit: cover`, default): la menor caja con el aspecto
+        // de la foto que TAPA el marco entero (recorta el sobrante).
+        var ec = Math.max(w / aw, h / ah);
+        return { dw: aw * ec, dh: ah * ec };
     }
 
     /**
@@ -459,8 +510,7 @@
             finalH: parseInt(config.finalH, 10) || 0,
             aspectRatio: config.aspectRatio || null,
             forma: formaCanonica(config.forma || config.mode),
-            mode: config.mode === 'ajustar' || config.mode === 'fit' ? 'ajustar'
-                : (config.mode === 'estirar' ? 'estirar' : 'rellenar'),
+            mode: modoCanonico(config.mode),
             rotar: !!(config.r || config.rotar),
             size: size,
             ox: ox,
@@ -573,20 +623,28 @@
                 ? '<p class="spmu-badge"><span class="spmu-origen"></span><span class="spmu-salida"></span></p>'
                 : '') +
             '<div class="spmu-controles">' +
-            // Fila 1 (D4): los 3 modos a la izquierda, los tres del mismo ancho.
+            // Fila 1 (spec 028 D5): los 3 modos (tabla normativa de
+            // `escalaBase`), con icono + etiqueta. Con el aspecto ya encajado
+            // (<=5%) queda UN boton, "Ajustar al marco", que re-encuadra.
             '<div class="spmu-fila-mod">' +
             '<div class="spmu-modos" role="group" aria-label="Modo de encaje">' +
-            '<button type="button" class="button spmu-modo-btn" data-modo="rellenar">Rellenar</button>' +
-            '<button type="button" class="button spmu-modo-btn" data-modo="ajustar">Ajustar</button>' +
-            '<button type="button" class="button spmu-modo-btn" data-modo="estirar">Estirar</button>' +
+            '<button type="button" class="button spmu-modo-btn" data-modo="cubrir" title="' + TITULO_MODO.cubrir + '">' +
+            '<span class="spmu-ico-modo" aria-hidden="true">' + ICO_MODO.cubrir + '</span>' +
+            '<span class="spmu-modo-txt">Cubrir</span></button>' +
+            '<button type="button" class="button spmu-modo-btn" data-modo="encajar" title="' + TITULO_MODO.encajar + '">' +
+            '<span class="spmu-ico-modo" aria-hidden="true">' + ICO_MODO.encajar + '</span>' +
+            '<span class="spmu-modo-txt">Encajar</span></button>' +
+            '<button type="button" class="button spmu-modo-btn" data-modo="estirar" title="' + TITULO_MODO.estirar + '">' +
+            '<span class="spmu-ico-modo" aria-hidden="true">' + ICO_MODO.estirar + '</span>' +
+            '<span class="spmu-modo-txt">Estirar</span></button>' +
             '</div>' +
             '</div>' +
             // Fila 2 (D3): Escala al 100% del ancho, sin boton de reset.
-            // Spec 025 (D1): el sistema NUNCA amplia, asi que el control solo
-            // reduce (max 0 = 1x).
+            // Spec 028 (D3): vuelve el rango completo 0.25x-4x (la base la fija
+            // el modo; la Escala es del comprador y el fondo tapa los huecos).
             '<div class="spmu-fila-escala">' +
             '<span class="spmu-lb-zoom">Escala</span>' +
-            '<input type="range" class="spmu-zoom" aria-label="Escala" min="-100" max="0" step="1" value="0">' +
+            '<input type="range" class="spmu-zoom" aria-label="Escala" min="-100" max="100" step="1" value="0">' +
             '</div>' +
             // Fila 3 (D5/D6): fondo (color + damero + auto) y Girar.
             '<div class="spmu-fila-extra">' +
@@ -695,7 +753,8 @@
             '.spmu-fila-mod{display:flex;justify-content: center}' +
             '.spmu-modos{display:inline-flex;background:#f0f0f1;border:1px solid #dcdcde;border-radius:6px;overflow:hidden}' +
             '.spmu-modos[hidden]{display:none}' +
-            '.spmu-modo-btn{flex:1 1 0;min-width:88px;border:0;border-right:1px solid #dcdcde;border-radius:0;background:transparent}' +
+            '.spmu-modo-btn{flex:1 1 0;min-width:88px;border:0;border-right:1px solid #dcdcde;border-radius:0;background:transparent;display:inline-flex;align-items:center;justify-content:center;gap:6px}' +
+            '.spmu-ico-modo{display:block;line-height:0}' +
             '.spmu-modo-btn:last-child{border-right:0}' +
             '.spmu-modo-btn.is-active{background:#2271b1;color:#fff;border-color:#2271b1}' +
             '.spmu-fila-escala{display:flex;align-items:center;gap:10px}' +
@@ -728,10 +787,29 @@
         document.head.appendChild(s);
     }
 
+    /**
+     * Spec 028 (D6): devuelve la composicion al encaje por defecto: el modo del
+     * caso (<=5% -> `estirar`), Escala 1x y sin desplazamiento. Lo dispara el
+     * boton unico "Ajustar al marco" (aspecto ya encajado), que no es un modo
+     * sino un RE-ENCUADRE: si el comprador movio o acerco la foto, vuelve al
+     * encaje inicial. La rotacion no se toca (es un control aparte).
+     */
+    SelectorPMU.prototype._reencuadrar = function () {
+        this.config.mode = this.supera5 ? 'cubrir' : 'estirar';
+        this.desplazamiento = { x: 0, y: 0 };
+        this._actualizarControlesModo();
+        this._setZoom(1);
+    };
+
     SelectorPMU.prototype._enlazarEventosDialogo = function ($) {
         var self = this;
         [].slice.call(this.raiz.querySelectorAll('.spmu-modo-btn')).forEach(function (btn) {
             btn.addEventListener('click', function () {
+                // Spec 028 (D6): el boton unico del caso <=5% re-encuadra.
+                if (btn.getAttribute('data-accion') === 'reencuadrar') {
+                    self._reencuadrar();
+                    return;
+                }
                 var m = btn.getAttribute('data-modo');
                 if (m) {
                     self.config.mode = m;
@@ -884,9 +962,10 @@
                 img.naturalWidth || 1, img.naturalHeight || 1,
                 self.config.finalW, self.config.finalH
             );
-            // Spec 025: el modo lo decide solo la regla del 5% (el cap a 1x es
-            // general, no cambia el modo).
-            self.config.mode = self.supera5 ? 'rellenar' : 'estirar';
+            // Spec 028 (D5): default de cada caso. >5% -> `cubrir` (nunca deja
+            // huecos); <=5% -> `estirar` (llena el marco exacto con una
+            // deformacion imperceptible y el boton pasa a ser "Ajustar al marco").
+            self.config.mode = self.supera5 ? 'cubrir' : 'estirar';
             if (self.raiz) {
                 var rango = self.raiz.querySelector('.spmu-zoom');
                 if (rango) { rango.value = '0'; }
@@ -938,11 +1017,41 @@
         var modosEl = this.raiz.querySelector('.spmu-modos');
         var rotarEl = this.raiz.querySelector('.spmu-rotar');
         var tieneImg = !!this.imagen;
+        // Spec 028 (D5/D6): con el aspecto ya encajado (<=5%) los 3 modos hacen
+        // casi lo mismo, asi que no se le dan opciones que no hacen nada: queda
+        // UN boton, "Ajustar al marco", que RE-ENCUADRA. Con >5% se muestran los
+        // 3 (Cubrir / Encajar / Estirar).
+        var soloAjuste = tieneImg && !this.supera5;
         if (modosEl) {
             [].slice.call(modosEl.querySelectorAll('.spmu-modo-btn')).forEach(function (btn) {
                 var m = btn.getAttribute('data-modo');
-                btn.hidden = (tieneImg && !self.supera5 && m !== 'estirar');
-                btn.classList.toggle('is-active', m === self.config.mode);
+                // El boton que persiste en el caso <=5% es el de `estirar`: es
+                // el modo por defecto de ese caso (llena el marco exacto).
+                var esElUnico = (m === 'estirar');
+                btn.hidden = soloAjuste ? !esElUnico : false;
+                var txt = btn.querySelector('.spmu-modo-txt');
+                if (esElUnico) {
+                    if (soloAjuste) {
+                        btn.setAttribute('data-accion', 'reencuadrar');
+                        btn.title = TITULO_REENCUADRE;
+                        if (txt) { txt.textContent = 'Ajustar al marco'; }
+                    } else {
+                        btn.removeAttribute('data-accion');
+                        btn.title = TITULO_MODO.estirar;
+                        if (txt) { txt.textContent = 'Estirar'; }
+                    }
+                }
+                var activo;
+                if (esElUnico && soloAjuste) {
+                    // Activo = la composicion ya esta en el encaje por defecto.
+                    activo = (self.config.mode === 'estirar')
+                        && (!self.desplazamiento || (!self.desplazamiento.x && !self.desplazamiento.y))
+                        && Math.abs((self.zoom || 1) - 1) < 0.001;
+                } else {
+                    activo = (m === self.config.mode);
+                }
+                btn.classList.toggle('is-active', activo);
+                btn.setAttribute('aria-pressed', activo ? 'true' : 'false');
             });
         }
         if (rotarEl) {
@@ -976,13 +1085,15 @@
     };
 
     /**
-     * Spec 025 (D1): fija el zoom. Como el sistema **nunca amplia**, el tope es
-     * siempre `1x` (el control solo reduce). Mantiene el slider sincronizado.
+     * Spec 028 (D3): fija la Escala (0.25x-4x). La base la define el modo
+     * (`escalaBase`) y la Escala es del comprador: acercar recorta mas fino y
+     * alejar deja ver el fondo (por eso existe el control Fondo). Mantiene el
+     * slider sincronizado.
      */
     SelectorPMU.prototype._setZoom = function (z) {
         var v = parseFloat(z);
         if (!isFinite(v)) { v = 1; }
-        this.zoom = Math.max(0.25, Math.min(1, v));
+        this.zoom = Math.max(0.25, Math.min(4, v));
         var zIn = this.raiz ? this.raiz.querySelector('.spmu-zoom') : null;
         if (zIn) { zIn.value = String(zoomASlider(this.zoom)); }
         this._dibujar();
@@ -1255,15 +1366,17 @@
         if (!this.imagen || !this.config.rotar) { return; }
         if (this.config.finalW === this.config.finalH) { return; }
         this.rotacion = (this.rotacion + 90) % 360;
-        // Fix 4.15.1: al girar cambia la relacion de aspecto de la foto, asi que
-        // se recalcula la regla del 5%. Si ahora supera, el modo pasa a Rellenar
-        // para no DEFORMAR la foto si estaba en Estirar.
+        // Fix 4.15.1 + spec 028: al girar cambia la relacion de aspecto de la
+        // foto, asi que se recalcula la regla del 5% (puede pasar de "Ajustar al
+        // marco" a los 3 modos, y al reves). Si la foto estaba en `estirar`
+        // (que deforma) y ahora el aspecto difiere, pasa a `cubrir` para no
+        // deformarla sin querer.
         var dim = this._dimensionesImagen();
         this.supera5 = superaCincoPorciento(dim.w, dim.h, this.config.finalW, this.config.finalH);
         if (this.supera5 && this.config.mode === 'estirar') {
-            this.config.mode = 'rellenar';
-            this._actualizarControlesModo();
+            this.config.mode = 'cubrir';
         }
+        this._actualizarControlesModo();
         this._dibujar();
     };
 
@@ -1275,10 +1388,11 @@
         }
         if (!this.txtSalida) { return; }
         var z = this.zoom || 1;
-        // Spec 025: el cargador nunca amplia, asi que el badge ya no calcula ni
-        // avisa ampliacion (solo datos de la foto y del encuadre).
+        // Spec 028: el badge muestra el lienzo (el hueco), el modo vigente y la
+        // Escala. Sin datos de ampliacion: la resolucion la acota el hueco.
         this.txtSalida.textContent =
-            'Salida ' + this.config.finalW + 'x' + this.config.finalH + ' px · zoom x' + z.toFixed(2);
+            'Salida ' + this.config.finalW + 'x' + this.config.finalH + ' px · '
+            + this.config.mode + ' · zoom x' + z.toFixed(2);
     };
 
     SelectorPMU.prototype._trampaFoco = function (e) {
@@ -1301,26 +1415,23 @@
     };
 
     /**
-     * Genera el lienzo del PNG con la **resolucion de la foto, acotada por el
-     * hueco** (spec 025 D5): el canvas mide `min(caja, lienzo)` por eje y el
-     * dibujo se escala por `k = ow / dw` con las mismas coordenadas del lienzo.
-     * Asi el navegador **nunca amplia** y nunca guarda mas pixeles que el hueco;
-     * la unica ampliacion posible la hace el Motor al encajar en el PDF.
+     * Spec 028 (D4): el PNG mide SIEMPRE el lienzo (`W x H`), que es el tamano
+     * del hueco del PDF (resuelto por `phsize`). El Motor encaja con
+     * contain+centrado (`Imagen::encajado`), asi que un PNG del tamano exacto
+     * del hueco pasa **1:1**: la vista previa es identica al PDF, con el modo,
+     * la Escala y el desplazamiento incluidos.
+     *
+     * Antes (spec 025 D5) el PNG media `min(caja, lienzo)` y el dibujo se
+     * centraba en el LIENZO: con un lienzo no cuadrado la ventana y el centro no
+     * coincidian, el recorte salia corrido y el Motor lo reencajaba.
      */
     SelectorPMU.prototype._generarLienzoSalida = function () {
         if (!global.document) { return this.canvas || null; }
-        var w = this.config.finalW;
-        var h = this.config.finalH;
-        var caja = this._cajaImagenModo();
-        var ow = Math.max(1, Math.min(Math.round(caja.dw) || 1, w));
-        var oh = Math.max(1, Math.min(Math.round(caja.dh) || 1, h));
-        var k = caja.dw > 0 ? ow / caja.dw : 1;
         var cv = global.document.createElement('canvas');
-        cv.width = ow;
-        cv.height = oh;
+        cv.width = Math.max(1, parseInt(this.config.finalW, 10) || 1);
+        cv.height = Math.max(1, parseInt(this.config.finalH, 10) || 1);
         var ctx = cv.getContext('2d');
         if (!ctx) { return null; }
-        ctx.setTransform(k, 0, 0, k, 0, 0);
         this._pintarImagenEnContexto(ctx, false);
         return cv;
     };
@@ -1476,6 +1587,9 @@
 
     SelectorPMU.puro = {
         formaCanonica: formaCanonica,
+        modoCanonico: modoCanonico,
+        ICO_MODO: ICO_MODO,
+        TITULO_MODO: TITULO_MODO,
         geometriaEscena: geometriaEscena,
         calcularCajaEscena: calcularCajaEscena,
         superaCincoPorciento: superaCincoPorciento,

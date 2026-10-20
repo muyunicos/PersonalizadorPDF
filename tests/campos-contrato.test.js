@@ -236,8 +236,16 @@ console.log('\n== spec 019: ranura adaptativa (phsize + aviso) ==');
   if (typeof nr === 'function') {
     const grupo = { grupo_w: 1000, grupo_h: 500 };
     const r0 = nr({ w: 800, h: 600, forma: 'fit', min: 1, max: 1 }, grupo);
-    check('phsize 0 (default) usa lo declarado', r0.w === 800 && r0.h === 600 && r0.aviso === '',
+    check('phsize 0 (default) usa lo declarado', r0.w === 800 && r0.h === 600,
       r0.w + 'x' + r0.h);
+    // Spec 028 (D7): con `phsize: 0`, si lo declarado NO es el hueco del grupo
+    // hay que AVISAR (el Motor reencaja la composicion: lo que se ve no es lo
+    // que sale). Si coincide con el hueco, no dice nada.
+    check('phsize 0 avisa si lo declarado no es el hueco del grupo',
+      r0.aviso.indexOf('no es el hueco del grupo') !== -1
+      && nr({ w: 1000, h: 500 }, grupo).aviso === ''
+      && nr({ w: 800, h: 600 }, null).aviso === '',
+      r0.aviso);
     const r1 = nr({ w: 1, h: 1, phsize: 1 }, grupo);
     check('phsize 1 toma el tamano del grupo', r1.w === 1000 && r1.h === 500, r1.w + 'x' + r1.h);
     const r2 = nr({ w: 1, h: 1, phsize: 2 }, grupo);

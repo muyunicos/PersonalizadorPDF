@@ -73,10 +73,27 @@ if (!defined('ABSPATH')) {
             <code>w</code>/<code>h</code> escritos a mano. <strong>Conviene <code>phsize: 1</code></strong>: si el
             PDF se re-analiza o el campo se reutiliza en otro PDF, el tamano sigue al hueco solo. La
             plantilla "Imagen (cargador)" ya viene asi.</li>
-        <li><strong>El cargador nunca agranda la foto:</strong> el PNG que sube el comprador se guarda con la
-            <strong>resolucion real</strong> de la foto, acotada por el hueco (si la foto es mas chica se guarda
-            tal cual, y el resto del marco queda con el color de fondo que elija). La unica ampliacion, si
-            hace falta, la hace el servidor al insertarla en el PDF.</li>
+        <li><strong>Los 3 modos de encaje (spec 028):</strong> al ajustar una foto, los botones
+            <em>Cubrir</em>, <em>Encajar</em> y <em>Estirar</em> hacen lo mismo que en cualquier editor
+            (los <code>cover</code>, <code>contain</code> y <code>fill</code> del CSS):
+            <table class="widefat striped" style="margin:8px 0;max-width:620px">
+                <thead><tr><th>Modo</th><th>Deforma</th><th>Deja fondo</th><th>Recorta</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>Cubrir</strong></td><td>No</td><td><strong>No</strong> (llena el marco)</td><td>Si</td></tr>
+                    <tr><td><strong>Encajar</strong></td><td>No</td><td>Si (la foto entra entera)</td><td><strong>No</strong></td></tr>
+                    <tr><td><strong>Estirar</strong></td><td><strong>Si</strong></td><td>No</td><td>No</td></tr>
+                </tbody>
+            </table>
+            <strong>Cubrir y Encajar nunca deforman</strong>: la diferencia es que hace cada uno con lo
+            que sobra (uno recorta la foto, el otro deja el fondo). Si el aspecto de la foto ya coincide
+            con el marco (5% de tolerancia), el modal muestra <strong>un solo</strong> boton,
+            <em>Ajustar al marco</em>, que devuelve la imagen a su encaje por defecto: con el aspecto ya
+            encajado los 3 modos harian casi lo mismo. La <em>Escala</em> va de 0,25x a 4x.</li>
+        <li><strong>La vista previa es el PDF:</strong> el archivo que se guarda mide <strong>siempre el
+            hueco</strong> del grupo (la razon por la que conviene <code>phsize: 1</code>), asi que el motor
+            lo inserta tal cual y lo que el comprador ve en el modal es lo que sale en el PDF (modo, Escala
+            y posicion incluidos). Si declaras <code>phsize: 0</code> y esas medidas no coinciden con el
+            hueco, el sistema avisa en la consola del navegador.</li>
         <li><strong>Fondo transparente (spec 027):</strong> la ranura puede declarar <code>transp</code>:
             <code>'no'</code> = el fondo <strong>nunca</strong> es transparente (se oculta el boton de fondo
             transparente y, si la foto lo tiene, se usa <strong>blanco puro</strong> o el color solido de sus

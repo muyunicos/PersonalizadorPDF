@@ -1,5 +1,5 @@
 /**
- * Puerta Node del contrato del selector visual (specs 016 a 025).
+ * Puerta Node del contrato del selector visual (specs 016 a 028).
  *
  * F0 (Cropper RETIRADO): la spec 021 reemplazo el motor de recorte por el
  * canvas unificado de `selector-pmu.js` (3 modos, margen del 10%, doble guia),
@@ -89,10 +89,12 @@ check('Spec 024 D4/D5/D6/D7: modos resetean Escala, fondo auto, Girar y acciones
   && selector.indexOf('spmu-fila-extra') < selector.indexOf('spmu-rotar')
   && selector.indexOf('spmu-rotar') < selector.indexOf('class="spmu-acciones"')
   && selector.indexOf('spmu-cancelar') < selector.indexOf('button button-primary spmu-ok'));
-check('3 botones de modo: Rellenar, Ajustar, Estirar',
-  /data-modo="rellenar">Rellenar/.test(selector)
-  && /data-modo="ajustar">Ajustar/.test(selector)
-  && /data-modo="estirar">Estirar/.test(selector));
+check('Spec 028: 3 botones de modo con icono + etiqueta: Cubrir, Encajar, Estirar',
+  /data-modo="cubrir"/.test(selector) && />Cubrir<\/span><\/button>/.test(selector)
+  && /data-modo="encajar"/.test(selector) && />Encajar<\/span><\/button>/.test(selector)
+  && /data-modo="estirar"/.test(selector) && />Estirar<\/span><\/button>/.test(selector)
+  && /spmu-ico-modo/.test(selector) && !/data-modo="rellenar"/.test(selector)
+  && !/data-modo="ajustar"/.test(selector));
 check('focus trap con Tab/Shift+Tab y restauracion del foco',
   /_trampaFoco/.test(selector) && /e\.key === 'Tab'/.test(selector)
   && /_focoPrevio/.test(selector));
@@ -217,55 +219,123 @@ check('Spec 026 D9: siguiente_n y limpiar cuentan TODOS los formatos (no solo pn
   })()
 );
 
-console.log('\n== F2b: PNG a resolucion de la foto (spec 025) ==');
-// El PNG mide min(caja, lienzo) por eje (D5).
-function pngDe(caja, W, H) {
-  return { w: Math.min(Math.round(caja.dw), W), h: Math.min(Math.round(caja.dh), H) };
-}
-// E1: 200x300 en 1000x1000 con Estirar -> 300x300 (lado mayor, D2).
-const e1 = pngDe(puro.escalaBase('estirar', 200, 300, 1000, 1000), 1000, 1000);
-check('E1: 200x300 + Estirar en 1000x1000 -> PNG 300x300 (lado mayor)',
-  e1.w === 300 && e1.h === 300, e1.w + 'x' + e1.h);
-// E2: 600x400 en 600x300 con Rellenar -> 600x300 (recorte al aspecto, D3).
-const e2 = pngDe(puro.escalaBase('rellenar', 600, 400, 600, 300), 600, 300);
-check('E2: 600x400 + Rellenar en 600x300 -> PNG 600x300', e2.w === 600 && e2.h === 300,
-  e2.w + 'x' + e2.h);
-// E3: foto rotada (2000x1000) en 1000x2000 con Rellenar -> 500x1000.
-const e3 = pngDe(puro.escalaBase('rellenar', 2000, 1000, 1000, 2000), 1000, 2000);
-check('E3: 2000x1000 (rotada) + Rellenar en 1000x2000 -> PNG 500x1000',
-  e3.w === 500 && e3.h === 1000, e3.w + 'x' + e3.h);
-// E4: 300x200 en 500x500 con Rellenar -> 200x200.
-const e4 = pngDe(puro.escalaBase('rellenar', 300, 200, 500, 500), 500, 500);
-check('E4: 300x200 + Rellenar en 500x500 -> PNG 200x200', e4.w === 200 && e4.h === 200,
-  e4.w + 'x' + e4.h);
-// E5: foto enorme 4000x2000 en 1000x500 -> acotada al hueco.
-const e5 = pngDe(puro.escalaBase('rellenar', 4000, 2000, 1000, 500), 1000, 500);
-check('E5: 4000x2000 + Rellenar en 1000x500 -> PNG 1000x500 (acotado)',
-  e5.w === 1000 && e5.h === 500, e5.w + 'x' + e5.h);
-// E6: el caso real (1100x901 en un hueco de 463 con phsize 1) -> 463x463.
-const e6 = pngDe(puro.escalaBase('rellenar', 1100, 901, 463, 463), 463, 463);
-check('E6: 1100x901 + Rellenar en 463x463 -> PNG 463x463', e6.w === 463 && e6.h === 463,
-  e6.w + 'x' + e6.h);
-// Ningun modo supera el lado mayor de la foto (D1: el cargador nunca amplia).
-let ampliaAlguno = false;
-['rellenar', 'ajustar', 'estirar'].forEach(function (m) {
-  [[300, 200, 1000, 1000], [200, 300, 1000, 500], [1100, 901, 463, 463], [3000, 3000, 200, 200]]
-    .forEach(function (c) {
-      var caja = puro.escalaBase(m, c[0], c[1], c[2], c[3]);
-      if (Math.max(caja.dw, caja.dh) > Math.max(c[0], c[1]) + 0.001) { ampliaAlguno = true; }
-    });
+console.log('\n== F2b: los 3 modos y el lienzo (spec 028) ==');
+// La tabla normativa vive en el docblock de `escalaBase` (fuente unica de
+// verdad). Estas son PROPIEDADES, no ejemplos: la spec 025 se valido con
+// ejemplos (E1-E6) que CODIFICABAN una lectura equivocada de las palabras
+// ("Rellenar" leido como "recortar al aspecto sin ampliar"), asi que pasarlos
+// no probaba nada. Si alguien vuelve a leer mal un modo, falla la propiedad.
+// Anclaje al estandar: cubrir = `object-fit: cover`, encajar = `contain`,
+// estirar = `fill`.
+const CASOS = [
+  [300, 200, 1000, 1000], [200, 300, 1000, 500], [1100, 901, 463, 463],
+  [3000, 3000, 200, 200], [4000, 2000, 1000, 500], [600, 400, 600, 300],
+  [900, 1000, 1100, 1100], [463, 463, 463, 463]
+];
+const casi = (a, b) => Math.abs(a - b) <= 0.01;
+const tocaEje = (caja, W, H) => casi(caja.dw, W) || casi(caja.dh, H);
+
+// Cubrir (cover): NO deja huecos (nunca mas chica que el marco), NO deforma y
+// es la MENOR que cubre (toca un eje).
+let cubrirOk = true;
+CASOS.forEach(function (c) {
+  const caja = puro.escalaBase('cubrir', c[0], c[1], c[2], c[3]);
+  const sinHuecos = caja.dw >= c[2] - 0.01 && caja.dh >= c[3] - 0.01;
+  const sinDeformar = casi(caja.dw / caja.dh, c[0] / c[1]);
+  if (!(sinHuecos && sinDeformar && tocaEje(caja, c[2], c[3]))) { cubrirOk = false; }
 });
-check('Spec 025 D1: ningun modo supera el lado mayor de la foto', !ampliaAlguno);
-check('Spec 025: el slider solo reduce y `escala` ya no es propiedad de ranura',
-  /min="-100" max="0"/.test(selector) && selector.indexOf('config.escala') === -1
-  && cargador.indexOf('escala: r.escala') === -1);
-check('Spec 025 D5: el PNG se genera con min(caja, lienzo)',
-  /var ow = Math\.max\(1, Math\.min\(Math\.round\(caja\.dw\) \|\| 1, w\)\)/.test(selector)
-  && /ctx\.setTransform\(k, 0, 0, k, 0, 0\)/.test(selector));
-check('Spec 025 D7: el pool (rasterizar) tambien capa a 1',
-  /var esc = Math\.min\(1, Math\.min\(W \/ img\.width, H \/ img\.height\)\)/.test(
-    fs.readFileSync(path.join(RAIZ, 'assets', 'tienda.js'), 'utf8')
-  ));
+check('Cubrir (cover): nunca deja huecos, no deforma y es la menor que cubre', cubrirOk);
+
+// Encajar (contain): entra SIEMPRE (nunca mas grande que el marco), no deforma
+// y toca un eje (no queda flotando en el medio).
+let encajarOk = true;
+CASOS.forEach(function (c) {
+  const caja = puro.escalaBase('encajar', c[0], c[1], c[2], c[3]);
+  const entra = caja.dw <= c[2] + 0.01 && caja.dh <= c[3] + 0.01;
+  const sinDeformar = casi(caja.dw / caja.dh, c[0] / c[1]);
+  if (!(entra && sinDeformar && tocaEje(caja, c[2], c[3]))) { encajarOk = false; }
+});
+check('Encajar (contain): siempre entra, no deforma y toca un eje', encajarOk);
+
+// Estirar (fill): la caja ES el marco (deforma).
+let estirarOk = true;
+CASOS.forEach(function (c) {
+  const caja = puro.escalaBase('estirar', c[0], c[1], c[2], c[3]);
+  if (!(casi(caja.dw, c[2]) && casi(caja.dh, c[3]))) { estirarOk = false; }
+});
+check('Estirar (fill): la caja es el marco exacto (se deforma)', estirarOk);
+
+// EL INVARIANTE que se leyo mal en la 025: lo que distingue Cubrir de Encajar
+// NO es "deformar" (ninguno de los dos deforma): es QUE HACE CON EL SOBRANTE.
+const cCubrirPr = puro.escalaBase('cubrir', 300, 200, 500, 500);
+const cEncajarPr = puro.escalaBase('encajar', 300, 200, 500, 500);
+check('el invariante: Cubrir RECORTA (desborda el marco), Encajar DEJA FONDO',
+  cCubrirPr.dw >= 500 && cCubrirPr.dh >= 500
+  && (cCubrirPr.dw > 500 || cCubrirPr.dh > 500)
+  && casi(cEncajarPr.dw, 500) && cEncajarPr.dh < 500,
+  'cubrir ' + cCubrirPr.dw + 'x' + cCubrirPr.dh
+  + ' / encajar ' + cEncajarPr.dw + 'x' + cEncajarPr.dh);
+
+// Casos del negocio (el hueco lo fija `phsize`, no el `w`/`h` declarado).
+const casoCubrir = puro.escalaBase('cubrir', 300, 200, 463, 463);
+const casoEncajar = puro.escalaBase('encajar', 300, 200, 463, 463);
+const casoEstirar = puro.escalaBase('estirar', 300, 200, 463, 463);
+check('E1: 300x200 en 463x463 -> Cubrir 694x463 / Encajar 463x309 / Estirar 463x463',
+  casi(casoCubrir.dw, 694.5) && casi(casoCubrir.dh, 463)
+  && casi(casoEncajar.dw, 463) && casi(casoEncajar.dh, 308.67)
+  && casi(casoEstirar.dw, 463) && casi(casoEstirar.dh, 463),
+  [casoCubrir.dw, casoCubrir.dh, casoEncajar.dw, casoEncajar.dh].join(' '));
+const casoReal = puro.escalaBase('cubrir', 1100, 901, 463, 463);
+check('E2: 1100x901 en el hueco real de 463 -> Cubrir 565.26x463 (tapa el marco)',
+  casi(casoReal.dw, 565.26) && casi(casoReal.dh, 463),
+  casoReal.dw + 'x' + casoReal.dh);
+// Encajar NO tiene tope de ampliacion: si la foto es mas chica que el marco,
+// amplia hasta tocar un eje (es el `contain` puro del estandar).
+const casoChica = puro.escalaBase('encajar', 100, 100, 1000, 500);
+check('Encajar amplia si hace falta (contain sin tope): 100x100 en 1000x500 -> 500x500',
+  casi(casoChica.dw, 500) && casi(casoChica.dh, 500),
+  casoChica.dw + 'x' + casoChica.dh);
+// El PNG mide SIEMPRE el lienzo (D4): el Motor encaja con contain 1:1 (`encajado`)
+// y la vista previa es el PDF. La ventana `min(caja, lienzo)` de la 025 se
+// retiro: con un lienzo no cuadrado el recorte salia corrido.
+check('Spec 028 D4: el PNG mide el lienzo (W x H), sin la ventana de la 025',
+  /cv\.width = Math\.max\(1, parseInt\(this\.config\.finalW, 10\) \|\| 1\)/.test(selector)
+  && /cv\.height = Math\.max\(1, parseInt\(this\.config\.finalH, 10\) \|\| 1\)/.test(selector)
+  && selector.indexOf('ctx.setTransform(k, 0, 0, k, 0, 0)') === -1
+  && selector.indexOf('var ow = Math.max(1, Math.min(Math.round(caja.dw)') === -1);
+check('Spec 028 D3: la Escala vuelve al rango completo 0.25x-4x (no solo reduce)',
+  /min="-100" max="100"/.test(selector)
+  && /this\.zoom = Math\.max\(0\.25, Math\.min\(4, v\)\)/.test(selector));
+check('Spec 028: `escala` sigue fuera del contrato de ranura',
+  selector.indexOf('config.escala') === -1 && cargador.indexOf('escala: r.escala') === -1);
+const tienda028 = fs.readFileSync(path.join(RAIZ, 'assets', 'tienda.js'), 'utf8');
+check('Spec 028 D7: la ficha avisa si el lienzo declarado no es el hueco del grupo',
+  /la composicion se reencajara \(usa phsize: 1\)/.test(tienda028));
+check('Spec 027 (fix 028): normalizarRanura NO puede perder `transp` (politica del campo)',
+  /var transp = \(r\.transp === 'si'\)/.test(tienda028) && /transp: transp,/.test(tienda028));
+
+console.log('\n== F2f: vocabulario de los 3 modos (spec 028) ==');
+check('modoCanonico: ids canonicos + alias (los de la 025 y los de object-fit)',
+  puro.modoCanonico('cubrir') === 'cubrir' && puro.modoCanonico('encajar') === 'encajar'
+  && puro.modoCanonico('estirar') === 'estirar'
+  && puro.modoCanonico('rellenar') === 'cubrir' && puro.modoCanonico('ajustar') === 'encajar'
+  && puro.modoCanonico('cover') === 'cubrir' && puro.modoCanonico('contain') === 'encajar'
+  && puro.modoCanonico('fill') === 'estirar'
+  && puro.modoCanonico(undefined) === 'cubrir' && puro.modoCanonico('otra') === 'cubrir');
+check('la UI usa los 3 ids canonicos con etiqueta, icono y tooltip',
+  ['cubrir', 'encajar', 'estirar'].every(function (m) {
+    return selector.indexOf('data-modo="' + m + '"') !== -1
+      && selector.indexOf('ICO_MODO.' + m) !== -1
+      && selector.indexOf('TITULO_MODO.' + m) !== -1
+      && selector.indexOf('>' + m.charAt(0).toUpperCase() + m.slice(1) + '</span></button>') !== -1;
+  }));
+check('Spec 028 D5: el default es por caso (>5% Cubrir; <=5% Estirar)',
+  (selector.match(/\? 'cubrir' : 'estirar'/g) || []).length >= 2);
+check('Spec 028 D6: con el aspecto encajado (<=5%) queda UN boton "Ajustar al marco"',
+  /var soloAjuste = tieneImg && !this\.supera5/.test(selector)
+  && /txt\.textContent = 'Ajustar al marco'/.test(selector)
+  && /SelectorPMU\.prototype\._reencuadrar = function/.test(selector)
+  && /btn\.getAttribute\('data-accion'\) === 'reencuadrar'/.test(selector));
 
 console.log('\n== F2c: zoom desde la envoltura y click del ojito (spec 024, 4.15.2/4.15.3) ==');
 // Forma centrada (size 1, ox/oy 0): el origen es EXACTAMENTE el de antes.
