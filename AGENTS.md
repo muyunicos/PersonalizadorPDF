@@ -585,14 +585,26 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   fuera** (no ampliar la foto exige tocar `engine/Imagen.php` + `tienda.js:rasterizar`, o el Motor
   re-amplía): va como spec aparte. Artefactos en `specs/019-ranura-adaptativa/` (D1-D9,
   FR-001..009, T001-T015 cerradas; pendiente T016: release 4.10.0 + recorrido WP real).
-- ✅ **Spec 020 `limpieza-legacy` (B1-B5 implementados 2026-10-19; pendiente B6)**: regla del
+- ✅ **Spec 020 `limpieza-legacy` (implementada 2026-10-19, v4.11.0)**: regla del
   negocio — **en desarrollo no hay migraciones ni retrocompatibilidad** (el admin borra los campos
   viejos y regenera los PDFs). Se eliminaron: `protegido` (feature completa, D1), `array` del
   almacén (D2), `texto_ayuda` (D3), el **cargador legacy** (D4), `datos_con_legacy` (D5), los
   puentes de **tupla v1** (D6) y los formatos muertos: filtro `'Array'`, `envolturas.json` v1,
   `ref` plano de mockups, migración de `bonus` y migración del índice de campos (D7). **NO** toca la
   norma ex-008 ni las features (D8). Artefactos en `specs/020-limpieza-legacy/` (D1-D10,
-  T001-T022; 20/22); **B6** = docs finales + release **4.11.0**.
+  T001-T022).
+- ✅ **Spec 021 `cargador-visor-cliente` (implementada 2026-10-19, v4.12.0)**: experiencia móvil y PC
+  del cargador de imágenes (`assets/selector-pmu.js`, `assets/cargador-pmu.js`, `assets/tienda.js`):
+  apertura directa del selector de archivos, `spmu-escena` hasta `1000x1000 px` con relación de
+  aspecto fija y **10% de margen interno** (`1.2W x 1.2H`), doble guía (**recorte secundario** =
+  placeholder `W x H` donde se corta el PNG; **recorte principal** = forma `'rectangulo'|'circulo'|'cuadrado'|'ovalo'|'auto'`
+  o envoltura posicionada con `size`, `ox`, `oy`), **3 modos** (`Rellenar`/`Ajustar`/`Estirar`) con
+  **regla del 5%** (<=5% muestra solo `Estirar` y oculta `Girar`; >5% muestra los 3 modos y `Girar`
+  si la ranura declara `{ r: 1 }`), control **Reducir / Ampliar** con reset al centro (`0`), color
+  de fondo autodetectado por los bordes de la imagen (o transparente si hay transparencia), botón
+  **Subir** con aviso `"Subiendo imagen..."` y pregunta `"¿Querés subir otra imagen?"` si quedan
+  espacios, y **mini galería fullscreen (`cpmu-visor`)** al tocar las miniaturas subidas (flechas,
+  Eliminar y Reemplazar con retorno al visor si cancela).
 - ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
   (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,

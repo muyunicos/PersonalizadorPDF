@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.11.0
+ * Version: 4.12.0
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -3470,17 +3470,16 @@ HTML;
             $jsImagen = <<<'JS'
 function (ctx, root) {
     /* PLANTILLA "Imagen (cargador)" — edita RANURAS a tu medida: una entrada por
-     * foto (`w`, `h`, `forma` = circle|square|rect|fit, `min`, `max`). El
+     * foto (`w`, `h`, `forma` = auto|rectangulo|circulo|cuadrado|ovalo, `min`,
+     * `max`, `r` = 0|1 para girar, `size` = 1, `ox` = 0, `oy` = 0). El
      * contenedor de arriba (`[data-pmu-cargador]`) es donde se dibuja el boton de
      * subir; `PMU_API.montarCargador` ya monta el componente y publica los ids.
      *
      * TAMANO (spec 019, opcional): `phsize: 1` toma el tamano del hueco del grupo
      * asociado en el PDF y `phsize: 2` el doble (acotado a 3000 px). Con
-     * `phsize: 0` (default) se usan los `w`/`h` de abajo. Requiere asociar el
-     * campo a un grupo en "Envoltura del cargador"; sin asociacion avisa y usa
-     * los `w`/`h`. */
+     * `phsize: 0` (default) se usan los `w`/`h` de abajo. */
     var RANURAS = [
-        { w: 1000, h: 1000, forma: 'fit', min: 1, max: 1, phsize: 0 }
+        { w: 1000, h: 1000, forma: 'auto', min: 1, max: 1, phsize: 0, r: 0 }
     ];
     var cont = root.querySelector('[data-pmu-cargador]');
     if (!cont) {

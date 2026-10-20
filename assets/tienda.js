@@ -24,19 +24,34 @@
 
     var PURO = {
         /**
-         * Spec 019 (FR-002/004/005): tamano final de una ranura del cargador.
-         * `phsize`: 0 = `w`/`h` declarados (default, comportamiento historico);
-         * 1 = tamano del grupo base del PDF; 2 = el doble. Sin grupo asociado
-         * degrada a lo declarado y devuelve `aviso` (nunca inventa un tamano).
-         * `circle`/`square` explicitos ganan; `rect`/`fit` toman el aspecto del
-         * grupo porque el tamano ya sale de el. Puro: sin DOM.
+         * Spec 019 (FR-002/004/005) + Spec 021 (D4/D6): tamano final y guia de
+         * una ranura del cargador.
+         * - `phsize`: 0 = `w`/`h` declarados (default); 1 = tamano del grupo
+         *   base del PDF; 2 = el doble. Sin grupo asociado degrada a lo
+         *   declarado y devuelve `aviso`.
+         * - `forma`: `'rectangulo'` | `'circulo'` | `'cuadrado'` | `'ovalo'` |
+         *   `'auto'` (alias aceptados: rect->rectangulo, circle->circulo,
+         *   square->cuadrado, fit->auto; desconocida cae en `'rectangulo'`).
+         * - `r`: 0|1 (habilita el boton Girar cuando el aspecto supera el 5%).
+         * - `size`: escala de la guia principal dentro del placeholder (1 = 100%).
+         * - `ox`, `oy`: offsets en porcentaje (-100..100, default 0).
+         * - `fondo`: `'auto'` (detecta por bordes) | `'transparent'` | `'#rrggbb'`.
+         * Puro: sin DOM.
          */
         normalizarRanura: function (ranura, defCampo) {
             var r = ranura || {};
             var w = Math.max(1, parseInt(r.w, 10) || 0);
             var h = Math.max(1, parseInt(r.h, 10) || 0);
-            var forma = (r.forma === 'circle' || r.forma === 'square'
-                || r.forma === 'rect' || r.forma === 'fit') ? r.forma : 'rect';
+            var mapaForma = {
+                rectangulo: 'rectangulo', rect: 'rectangulo',
+                circulo: 'circulo', circle: 'circulo',
+                cuadrado: 'cuadrado', square: 'cuadrado',
+                ovalo: 'ovalo',
+                auto: 'auto', fit: 'auto'
+            };
+            var fCruda = r.forma === undefined || r.forma === null || r.forma === ''
+                ? 'auto' : String(r.forma);
+            var forma = mapaForma[fCruda] || 'rectangulo';
             var phsize = Math.max(0, Math.min(2, parseInt(r.phsize, 10) || 0));
             var aviso = '';
             if (phsize > 0) {
@@ -57,12 +72,27 @@
                 h = Math.max(1, Math.round(h * esc));
                 aviso = (aviso ? aviso + '; ' : '') + 'acotado a ' + w + 'x' + h + ' (PH_MAX)';
             }
+            var size = parseFloat(r.size);
+            if (!isFinite(size) || size <= 0) { size = 1; }
+            var ox = parseFloat(r.ox);
+            if (!isFinite(ox)) { ox = 0; }
+            var oy = parseFloat(r.oy);
+            if (!isFinite(oy)) { oy = 0; }
+            var min = Math.max(1, parseInt(r.min, 10) || 1);
+            var max = Math.max(min, parseInt(r.max, 10) || 1);
+            var fondo = (typeof r.fondo === 'string' && r.fondo.trim() !== '')
+                ? r.fondo.trim() : 'auto';
             return {
                 etiqueta: r.etiqueta || '',
                 w: w, h: h, forma: forma,
-                min: Math.max(1, parseInt(r.min, 10) || 1),
-                max: Math.max(1, parseInt(r.max, 10) || 1),
+                min: min,
+                max: max,
                 phsize: phsize,
+                r: r.r ? 1 : 0,
+                size: size,
+                ox: ox,
+                oy: oy,
+                fondo: fondo,
                 aviso: aviso
             };
         },

@@ -65,49 +65,99 @@ check('cargador-pmu sigue instanciando por la superficie publica (sin tocar el c
   && /new global\.SelectorPMU\(null, \{/.test(cargador)
   && /finalW: r\.w/.test(cargador));
 
-console.log('\n== F1: shell del modal (US1) ==');
+console.log('\n== F1: shell del modal y controles intuitivos (spec 021) ==');
 check('drop zone (soltar el archivo sobre el modal)',
   /dragover/.test(selector) && /dataTransfer\s*&&\s*e\.dataTransfer\.files/.test(selector));
-check('camara en movil (input con capture)', /spmu-camara-file/.test(selector)
-  && /capture="environment"/.test(selector));
+check('al abrir dispara directo la apertura de archivo',
+  /opciones\.abrirArchivo !== false/.test(selector) && /\$\('\.spmu-file'\)\.click\(\)/.test(selector));
 check('full-screen movil con safe-area', /max-width:767px/.test(selector)
   && /env\(safe-area-inset-top\)/.test(selector) && /100dvh/.test(selector));
 check('scroll de fondo bloqueado mientras esta abierto', /spmu-bloqueado/.test(selector)
   && /classList\.add\('spmu-bloqueado'\)/.test(selector)
   && /classList\.remove\('spmu-bloqueado'\)/.test(selector));
-check('estado de carga con spinner y error con reintento',
-  /spmu-cargando/.test(selector) && /spmu-reintentar/.test(selector)
-  && /Cargando imagen/.test(selector));
+check('estado de carga y de subida con spinner (sin boton Reintentar ni Camara)',
+  /spmu-cargando/.test(selector) && /Cargando imagen/.test(selector)
+  && /Subiendo imagen/.test(selector)
+  && !/spmu-reintentar/.test(selector) && !/spmu-camara/.test(selector));
+check('boton Cargar imagen que cambia a Cambiar imagen cuando hay imagen',
+  /Cargar imagen/.test(selector) && /Cambiar imagen/.test(selector));
+check('boton Subir (antes Aceptar) + modal para subir otra imagen si quedan espacios',
+  />Subir<\/button>/.test(selector) && /Subiendo\.\.\./.test(selector)
+  && /spmu-otra-modal/.test(selector) && /spmu-otra-si/.test(selector));
+check('control Reducir / Ampliar con reset al medio (0)',
+  /Reducir \/ Ampliar/.test(selector) && /spmu-zoom-reset/.test(selector)
+  && /min="-100" max="100"/.test(selector));
+check('3 botones de modo: Rellenar, Ajustar, Estirar',
+  /data-modo="rellenar">Rellenar/.test(selector)
+  && /data-modo="ajustar">Ajustar/.test(selector)
+  && /data-modo="estirar">Estirar/.test(selector));
 check('focus trap con Tab/Shift+Tab y restauracion del foco',
   /_trampaFoco/.test(selector) && /e\.key === 'Tab'/.test(selector)
   && /_focoPrevio/.test(selector));
-check('FR-006: degrada sin window.Cropper (canvas + slider intactos)',
-  /typeof global\.Cropper === 'function'/.test(selector)
-  && /spmu-zoom/.test(selector) && /spmu-modo/.test(selector));
 
-console.log('\n== F2: Cropper en el modo crop (US2) ==');
-check('config de Cropper: viewMode, aspectRatio, tercios, doble tap, rotable',
-  /viewMode: 1/.test(selector) && /aspectRatio: this\.config\.aspectRatio \|\| NaN/.test(selector)
-  && /guides: true/.test(selector) && /dblclick: true/.test(selector) && /rotatable: true/.test(selector));
-check('la salida sale de getCroppedCanvas(finalW, finalH)',
-  /getCroppedCanvas\(\{/.test(selector) && /width: this\.config\.finalW/.test(selector)
-  && /height: this\.config\.finalH/.test(selector) && /imageSmoothingQuality: 'high'/.test(selector));
-check('rotar 90 por boton (FR-010)', /cropper\.rotate\(90\)/.test(selector));
-check('rotacion por gesto de 2 dedos (FR-010)', /rotateTo\(/.test(selector)
-  && /atan2\(/.test(selector) && /originalEvent\.touches/.test(selector));
-check('T012: cropper.destroy() al cerrar (sin fugas)', /cropper\.destroy\(\)/.test(selector)
-  && /_destruirCropper/.test(selector));
-check('el modo fit conserva el canvas original (D9)',
-  /mode === 'fit'/.test(selector) && /Math\.min\(w \/ iw, h \/ ih\)/.test(selector)
-  && /spmu-canvas/.test(selector));
+console.log('\n== F2: Geometria de escena 10%, 3 modos, regla del 5% y fondo por bordes (spec 021) ==');
+const SelectorMod = require(path.join(RAIZ, 'assets', 'selector-pmu.js'));
+const puro = SelectorMod.puro || {};
+check('expone SelectorPMU.puro con las funciones puras',
+  typeof puro.geometriaEscena === 'function'
+  && typeof puro.calcularCajaEscena === 'function'
+  && typeof puro.superaCincoPorciento === 'function'
+  && typeof puro.colorPredominanteBordes === 'function');
+
+const ej1 = puro.geometriaEscena(20, 30, { forma: 'circulo' });
+check('Ejemplo 1: placeholder 20x30 -> spmu-canvas 24x36, secundario 20x30, principal circulo 20x20',
+  ej1.canvasW === 24 && ej1.canvasH === 36
+  && ej1.secundario.w === 20 && ej1.secundario.h === 30 && ej1.secundario.x === 2 && ej1.secundario.y === 3
+  && ej1.principal.tipo === 'circulo' && ej1.principal.w === 20 && ej1.principal.h === 20);
+
+const envDummy = { par: 0, subs: [{ m: [0, 0], s: [['l', 1, 0], ['l', 1, 1]], c: 1 }] };
+const ej2 = puro.geometriaEscena(500, 500, { forma: 'auto', envoltura: envDummy, size: 0.8, ox: 10, oy: -5 });
+check('Ejemplo 2: placeholder 500x500 -> spmu-canvas 600x600, secundario 500x500, principal envoltura posicionado',
+  ej2.canvasW === 600 && ej2.canvasH === 600
+  && ej2.secundario.w === 500 && ej2.secundario.h === 500 && ej2.secundario.x === 50 && ej2.secundario.y === 50
+  && ej2.principal.tipo === 'envoltura' && ej2.principal.w === 400 && ej2.principal.h === 400
+  && ej2.principal.ox === 10 && ej2.principal.oy === -5);
+
+const fCuad = puro.geometriaEscena(100, 200, { forma: 'cuadrado' });
+const fOvalo = puro.geometriaEscena(100, 200, { forma: 'ovalo' });
+const fAutoSin = puro.geometriaEscena(100, 200, { forma: 'auto', envoltura: null });
+check('Formas cuadrado (100x100), ovalo (100x200) y auto sin envoltura (-> rectangulo)',
+  fCuad.principal.tipo === 'cuadrado' && fCuad.principal.w === 100 && fCuad.principal.h === 100
+  && fOvalo.principal.tipo === 'ovalo' && fOvalo.principal.w === 100 && fOvalo.principal.h === 200
+  && fAutoSin.principal.tipo === 'rectangulo');
+
+const cajaGrande = puro.calcularCajaEscena(2000, 1000, 1400, 1200);
+const cajaMovil = puro.calcularCajaEscena(500, 1000, 320, 600);
+check('spmu-escena ocupa hasta 1000x1000 y se achica sin perder relacion de aspecto',
+  cajaGrande.w === 1000 && cajaGrande.h === 500
+  && cajaMovil.w === 300 && cajaMovil.h === 600);
+
+check('Regla del 5%: hasta 5% devuelve false (solo modo Estirar); >5% devuelve true (3 modos)',
+  puro.superaCincoPorciento(1000, 1000, 1000, 1000) === false
+  && puro.superaCincoPorciento(1040, 1000, 1000, 1000) === false
+  && puro.superaCincoPorciento(1000, 1040, 1000, 1000) === false
+  && puro.superaCincoPorciento(1200, 1000, 1000, 1000) === true
+  && puro.superaCincoPorciento(1000, 1300, 1000, 1000) === true);
+
+const pxOpacos = new Uint8ClampedArray([
+  240, 20, 30, 255,  240, 20, 30, 255,
+  240, 20, 30, 255,  240, 20, 30, 255
+]);
+const pxTransp = new Uint8ClampedArray([
+  240, 20, 30, 0,    240, 20, 30, 0,
+  240, 20, 30, 255,  240, 20, 30, 255
+]);
+check('Color de fondo por bordes: detecta color predominante opaco y transparente si hay alfa bajo',
+  puro.colorPredominanteBordes(pxOpacos, 2, 2) === '#f0141e'
+  && puro.colorPredominanteBordes(pxTransp, 2, 2) === 'transparent');
 
 console.log('\n== F3: badge en vivo y guias (US3) ==');
 check('badge Origen + Salida con zoom en vivo', /spmu-badge/.test(selector)
-  && /Origen /.test(selector) && /Salida /.test(selector) && /toFixed\(1\)/.test(selector));
-check('el zoom del badge sale de Cropper (getImageData)', /getImageData\(\)/.test(selector)
-  && /scaleX/.test(selector));
+  && /Origen /.test(selector) && /Salida /.test(selector) && /toFixed\(/.test(selector));
+check('Girar solo disponible cuando supera 5% Y ranura tiene r:1',
+  /rotarEl\.hidden = !\(tieneImg && this\.supera5 && this\.config\.rotar\)/.test(selector));
 
-console.log('\n== F4: tira visual del cargador (US4) ==');
+console.log('\n== F4: tira visual y mini galeria del cargador (spec 021 D9) ==');
 const cargador16 = fs.readFileSync(path.join(RAIZ, 'assets', 'cargador-pmu.js'), 'utf8');
 const tienda16 = fs.readFileSync(path.join(RAIZ, 'assets', 'tienda.js'), 'utf8');
 check('miniaturas reales: la mini pinta un <img> con la URL resuelta',
@@ -115,12 +165,18 @@ check('miniaturas reales: la mini pinta un <img> con la URL resuelta',
   && /object-fit:cover/.test(cargador16));
 check('el cargador NO conoce el endpoint (urlDe lo resuelve el llamador)',
   /urlDe: typeof config\.urlDe/.test(cargador16) && /config\.urlDe\(id\)/.test(cargador16));
-check('FR-016: tocar marca para confirmar y la 2da tocada quita',
-  /cpmu-mini-alto/.test(cargador16) && /_miniTocar/.test(cargador16)
-  && /this\._quitar\(indice, posicion\)/.test(cargador16));
-check('FR-016: "Cambiar" reabre el editor y reemplaza sin sumar',
-  /_cambiar/.test(cargador16) && /_reemplazo = \{ indice: indice, posicion: posicion \}/.test(cargador16)
+check('Spec 021 D9: tocar una miniatura abre la mini galeria fullscreen (cpmu-visor)',
+  /_miniTocar/.test(cargador16) && /this\._abrirVisor\(indice, posicion\)/.test(cargador16)
+  && /cpmu-visor/.test(cargador16) && /cpmu-visor-prev/.test(cargador16)
+  && /cpmu-visor-next/.test(cargador16));
+check('Spec 021 D9: el visor permite Reemplazar (avisando que imagen reemplaza) y Eliminar',
+  /cpmu-visor-reemplazar/.test(cargador16) && /cpmu-visor-eliminar/.test(cargador16)
+  && /Reemplazando imagen #/.test(cargador16)
   && /ids\[posicion\] = String\(id\)/.test(cargador16));
+check('Spec 021 D9: cancelar el reemplazo vuelve a la galeria con la foto actual',
+  /err\.code === 'CROP_ABORTED'/.test(cargador16)
+  && /reemp && reemp\.desdeVisor/.test(cargador16)
+  && /self\._abrirVisor\(reemp\.indice, reemp\.posicion\)/.test(cargador16));
 check('FR-017: restauracion de ids al montar (acotada por max)',
   /idsIniciales/.test(cargador16) && /slice\(0, this\.config\.ranuras\[i\]\.max\)/.test(cargador16));
 check('tienda.js pasa idsIniciales y urlDe (endpoint de la 012)',
@@ -129,37 +185,30 @@ check('tienda.js pasa idsIniciales y urlDe (endpoint de la 012)',
 check('idsDe normaliza array, string unico y JSON de ids', /function idsDe\(v\)/.test(tienda16)
   && /JSON\.parse\(s\)/.test(tienda16));
 
-console.log('\n== F5: envoltura del PDF como guia (spec 016 F6) ==');
+console.log('\n== F5: doble guia de recorte y envoltura del PDF (spec 016 F6 + spec 021) ==');
 check('config.envoltura es opcional y se valida',
   /function envolturaValida\(e\)/.test(selector)
   && /envoltura: envolturaValida\(config\.envoltura\)/.test(selector));
-check('sin envoltura no se agrega DOM',
-  /if \(!this\.config\.envoltura\) \{ return ''; \}/.test(selector)
-  && /if \(!this\.config\.envoltura\) \{ return; \}/.test(selector));
 check('la guia es un canvas SEPARADO (pointer-events:none + aria-hidden)',
-  /\.spmu-envoltura\{position:absolute;pointer-events:none/.test(selector)
-  && /<canvas class="spmu-envoltura" aria-hidden="true"><\/canvas>/.test(selector));
+  /\.spmu-envoltura\{position:absolute;inset:0;width:100%;height:100%;pointer-events:none/.test(selector)
+  && /<canvas class="spmu-envoltura"/.test(selector) && /aria-hidden="true"><\/canvas>/.test(selector));
 check('reusa la geometria del nucleo (una sola fuente)',
   /core\.comandosEnvoltura\(/.test(selector) && /core\.trazarEnvoltura\(/.test(selector));
-check('oscurece SOLO fuera de la forma (destination-out y restaura)',
+check('oscurece fuera del recorte principal (destination-out) y el margen exterior del 10%',
   /destination-out/.test(selector)
-  && /globalCompositeOperation = 'source-over'/.test(selector)
-  && /fill\(env\.par \? 'evenodd' : 'nonzero'\)/.test(selector));
-check('el PNG de salida NO pasa por el overlay (getCroppedCanvas intacto)',
-  /getCroppedCanvas\(/.test(selector)
-  && !/getCroppedCanvas[\s\S]{0,200}env(oltura)?/.test(selector)
+  && /fill\(regla\)/.test(selector)
+  && /fill\('evenodd'\)/.test(selector));
+check('el PNG de salida sale de _generarLienzoSalida(finalW, finalH) sin tocar el overlay',
+  /_generarLienzoSalida = function/.test(selector)
+  && /this\._pintarImagenEnContexto\(ctx, false\)/.test(selector)
   && /this\.ctxEnvoltura/.test(selector));
-check('crop: caja de preview en vivo via la opcion preview de Cropper',
-  /opciones\.preview = prev/.test(selector) && /spmu-preview-caja/.test(selector));
-check('fit/degradacion: overlay medido sobre el canvas de salida',
-  /_cajaEnvoltura = function/.test(selector)
-  && /getBoundingClientRect\(\)/.test(selector));
 check('sin PMUMockup degrada sin lanzar',
-  /typeof core\.comandosEnvoltura !== 'function'/.test(selector));
+  /typeof core\.comandosEnvoltura === 'function'/.test(selector));
 check('close() remueve el listener de resize (sin fugas)',
   /removeEventListener\('resize', this\._onResize\)/.test(selector));
-check('T027: el cargador pasa la envoltura al selector',
-  /envoltura: this\.config\.envoltura \|\| null/.test(cargador));
+check('T027: el cargador pasa la envoltura, forma, r, size, ox, oy al selector',
+  /envoltura: this\.config\.envoltura \|\| null/.test(cargador)
+  && /forma: r\.forma/.test(cargador) && /size: r\.size/.test(cargador));
 check('la tira y el modal comparten la misma geometria',
   /_guia = function/.test(cargador) && /comandosEnvoltura/.test(cargador));
 

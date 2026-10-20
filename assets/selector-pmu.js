@@ -1,29 +1,10 @@
 /**
  * selector-pmu - Componente cliente para subir, ajustar y recortar imagenes
- * de campos de personalizacion (spec 004, contrato contracts/selector-pmu.md;
- * editor visual spec 016, contrato contracts/selector-visual.md).
+ * de campos de personalizacion (spec 004, spec 016, spec 021).
  *
- * El TAMANO FINAL en px lo define el campo/PDF (`finalW`/`finalH`): el cliente
- * carga la imagen para editarla y al aceptar el ajuste al marco se genera la
- * version recortada a ese tamano (sin limite de peso de origen).
- *
- * spec 016 (F1-F3): el modo `crop` usa Cropper.js 1.6.2 vendoreado
- * (`assets/vendor/cropper/`, handle `personalizador-pdf-cropper`) cuando esta
- * cargado: pan, pinch-zoom 1x-8x, doble tap, rotar 90 (boton y gesto de 2
- * dedos), guia de tercios y zona fuera atenuada; la salida sale de
- * `getCroppedCanvas(finalW, finalH)` con la rotacion aplicada. SIN Cropper
- * degrada al editor original (canvas + slider + select). El modo `fit`
- * conserva SIEMPRE el canvas original (Cropper no tiene contain, D9).
- *
- * Sin dependencias (JS puro; Cropper es opcional y solo se usa si esta).
- * El componente NO sube nada: entrega el blob recortado al llamador (que lo
- * envia al item del comprador).
- *
- * Uso:
- *   var sel = new SelectorPMU('#campo33', {finalW:500, finalH:500, aspectRatio:1});
- *   sel.onSelect(function (url, meta) { ... });   // url = objectURL del recorte
- *   sel.on('error', function (e) { ... });        // {code, message}
- *   sel.open();
+ * El PNG exportado SIEMPRE se corta al rectangulo del placeholder (`finalW x finalH`),
+ * mientras `spmu-escena` muestra un margen interno del 10% (`1.2W x 1.2H`) con
+ * el recorte secundario (placeholder) y el recorte principal (forma/envoltura).
  */
 (function (global) {
     'use strict';
@@ -31,32 +12,213 @@
     var TIPOS = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml'];
     var EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'];
     var ACEPTA = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg';
-    var ZOOM_MIN = 1;
-    var ZOOM_MAX = 8;
+    var ESCENA_MAX = 1000;
+    var MARGEN_ESCENA = 0.10; // 10% en cada borde => escena = 1.2x del placeholder
+    var UMBRAL_ASPECTO = 0.05; // 5% de tolerancia en relacion de aspecto
 
-    /**
-     * Envoltura valida `{par, subs}` (normalizada 0..1) o null. Es una GUIA
-     * visual del recorte final (PowerClip del PDF): NUNCA se dibuja en el
-     * lienzo de salida; el clip real lo aplica el PDF al procesar.
-     */
+    var MAPA_FORMAS = {
+        rectangulo: 'rectangulo', rect: 'rectangulo',
+        circulo: 'circulo', circle: 'circulo',
+        cuadrado: 'cuadrado', square: 'cuadrado',
+        ovalo: 'ovalo',
+        auto: 'auto', fit: 'auto'
+    };
+
+    function formaCanonica(f) {
+        if (f === undefined || f === null || f === '') { return 'auto'; }
+        return MAPA_FORMAS[String(f)] || 'rectangulo';
+    }
+
     function envolturaValida(e) {
         if (!e || !e.subs || !e.subs.length) { return null; }
         return { par: e.par ? 1 : 0, subs: e.subs };
     }
 
+    /**
+     * Spec 021 (D2/D3/D4): geometria de `spmu-canvas` (10% de margen en cada
+     * borde), del recorte secundario (placeholder WxH) y del recorte principal
+     * (forma/envoltura posicionada con `size`, `ox`, `oy`).
+     */
+    function geometriaEscena(finalW, finalH, opts) {
+        opts = opts || {};
+        var w = Math.max(1, parseInt(finalW, 10) || 1);
+        var h = Math.max(1, parseInt(finalH, 10) || 1);
+        var cw = Math.max(w + 2, Math.round(w * (1 + 2 * MARGEN_ESCENA)));
+        var ch = Math.max(h + 2, Math.round(h * (1 + 2 * MARGEN_ESCENA)));
+        var mx = (cw - w) / 2;
+        var my = (ch - h) / 2;
+        var forma = formaCanonica(opts.forma);
+        var env = envolturaValida(opts.envoltura);
+        var size = parseFloat(opts.size);
+        if (!isFinite(size) || size <= 0) { size = 1; }
+        var ox = parseFloat(opts.ox);
+        if (!isFinite(ox)) { ox = 0; }
+        var oy = parseFloat(opts.oy);
+        if (!isFinite(oy)) { oy = 0; }
+
+        var cx = mx + (w / 2) + (ox / 100) * w;
+        var cy = my + (h / 2) + (oy / 100) * h;
+        var tipoPrincipal = forma === 'auto' ? (env ? 'envoltura' : 'rectangulo') : forma;
+        var pw = w * size;
+        var ph = h * size;
+        if (tipoPrincipal === 'circulo' || tipoPrincipal === 'cuadrado') {
+            var lado = Math.min(w, h) * size;
+            pw = lado;
+            ph = lado;
+        }
+        return {
+            canvasW: cw,
+            canvasH: ch,
+            margenX: mx,
+            margenY: my,
+            secundario: { x: mx, y: my, w: w, h: h },
+            principal: {
+                tipo: tipoPrincipal,
+                x: cx - pw / 2,
+                y: cy - ph / 2,
+                w: pw,
+                h: ph,
+                cx: cx,
+                cy: cy,
+                rx: pw / 2,
+                ry: ph / 2,
+                size: size,
+                ox: ox,
+                oy: oy
+            }
+        };
+    }
+
+    function calcularCajaEscena(finalW, finalH, dispW, dispH) {
+        var w = Math.max(1, parseInt(finalW, 10) || 1);
+        var h = Math.max(1, parseInt(finalH, 10) || 1);
+        var maxW = Math.min(ESCENA_MAX, Math.max(120, parseInt(dispW, 10) || ESCENA_MAX));
+        var maxH = Math.min(ESCENA_MAX, Math.max(120, parseInt(dispH, 10) || ESCENA_MAX));
+        var esc = Math.min(maxW / w, maxH / h);
+        return {
+            w: Math.max(1, Math.round(w * esc)),
+            h: Math.max(1, Math.round(h * esc)),
+            aspectRatio: w / h
+        };
+    }
+
+    function superaCincoPorciento(imgW, imgH, finalW, finalH) {
+        var iw = Math.max(1, parseFloat(imgW) || 1);
+        var ih = Math.max(1, parseFloat(imgH) || 1);
+        var w = Math.max(1, parseFloat(finalW) || 1);
+        var h = Math.max(1, parseFloat(finalH) || 1);
+        var rImg = iw / ih;
+        var rLienzo = w / h;
+        var diffH = Math.abs(rImg - rLienzo) / rLienzo;
+        var diffV = Math.abs(rLienzo - rImg) / rImg;
+        return diffH > UMBRAL_ASPECTO && diffV > UMBRAL_ASPECTO;
+    }
+
+    function hexDeRgb(r, g, b) {
+        function h2(n) {
+            var s = Math.max(0, Math.min(255, Math.round(n))).toString(16);
+            return s.length < 2 ? '0' + s : s;
+        }
+        return '#' + h2(r) + h2(g) + h2(b);
+    }
+
+    /** Spec 021 (D7): color predominante de los 4 bordes o `'transparent'`. */
+    function colorPredominanteBordes(datos, w, h) {
+        if (!datos || w < 1 || h < 1) { return '#ffffff'; }
+        var totalBorde = 0;
+        var transp = 0;
+        var cubos = {};
+        var mejorClave = null;
+        var mejorCuenta = 0;
+
+        function muestrear(x, y) {
+            var idx = (y * w + x) * 4;
+            var r = datos[idx];
+            var g = datos[idx + 1];
+            var b = datos[idx + 2];
+            var a = datos[idx + 3];
+            totalBorde++;
+            if (a < 240) { transp++; return; }
+            var k = (r >> 4) + '_' + (g >> 4) + '_' + (b >> 4);
+            var c = cubos[k];
+            if (!c) { c = { n: 0, r: 0, g: 0, b: 0 }; cubos[k] = c; }
+            c.n++; c.r += r; c.g += g; c.b += b;
+            if (c.n > mejorCuenta) { mejorCuenta = c.n; mejorClave = k; }
+        }
+
+        var x, y;
+        for (x = 0; x < w; x++) {
+            muestrear(x, 0);
+            if (h > 1) { muestrear(x, h - 1); }
+        }
+        for (y = 1; y < h - 1; y++) {
+            muestrear(0, y);
+            if (w > 1) { muestrear(w - 1, y); }
+        }
+        if (totalBorde > 0 && (transp / totalBorde) >= 0.05) { return 'transparent'; }
+        if (!mejorClave || !cubos[mejorClave]) { return '#ffffff'; }
+        var g = cubos[mejorClave];
+        return hexDeRgb(g.r / g.n, g.g / g.n, g.b / g.n);
+    }
+
+    function detectarColorBordes(img) {
+        if (!img || !global.document) { return '#ffffff'; }
+        try {
+            var iw = Math.max(1, img.naturalWidth || img.width || 1);
+            var ih = Math.max(1, img.naturalHeight || img.height || 1);
+            var esc = Math.min(1, 64 / Math.max(iw, ih));
+            var mw = Math.max(2, Math.round(iw * esc));
+            var mh = Math.max(2, Math.round(ih * esc));
+            var cv = global.document.createElement('canvas');
+            cv.width = mw;
+            cv.height = mh;
+            var ctx = cv.getContext('2d');
+            if (!ctx) { return '#ffffff'; }
+            ctx.drawImage(img, 0, 0, mw, mh);
+            var imgData = ctx.getImageData(0, 0, mw, mh);
+            return colorPredominanteBordes(imgData.data, mw, mh);
+        } catch (e) {
+            return '#ffffff';
+        }
+    }
+
+    function sliderAZoom(v) {
+        var lim = Math.max(-100, Math.min(100, parseFloat(v) || 0));
+        return Math.pow(4, lim / 100);
+    }
+
+    function zoomASlider(z) {
+        var lim = Math.max(0.25, Math.min(4, parseFloat(z) || 1));
+        return Math.round((Math.log(lim) / Math.log(4)) * 100);
+    }
+
     function SelectorPMU(elemento, config) {
         config = config || {};
         this.elemento = elemento || null;
+        var size = parseFloat(config.size);
+        if (!isFinite(size) || size <= 0) { size = 1; }
+        var ox = parseFloat(config.ox);
+        if (!isFinite(ox)) { ox = 0; }
+        var oy = parseFloat(config.oy);
+        if (!isFinite(oy)) { oy = 0; }
         this.config = {
             finalW: parseInt(config.finalW, 10) || 0,
             finalH: parseInt(config.finalH, 10) || 0,
             aspectRatio: config.aspectRatio || null,
-            mode: config.mode === 'fit' ? 'fit' : 'crop',
+            forma: formaCanonica(config.forma || config.mode),
+            mode: config.mode === 'ajustar' || config.mode === 'fit' ? 'ajustar'
+                : (config.mode === 'estirar' ? 'estirar' : 'rellenar'),
+            rotar: !!(config.r || config.rotar),
+            size: size,
+            ox: ox,
+            oy: oy,
+            fondo: (typeof config.fondo === 'string' && config.fondo.trim() !== '')
+                ? config.fondo.trim() : 'auto',
             category: config.category || '',
-            // D4: pipeline de ajustes futuro (hoy vacio; nadie lo consume).
             ajustes: Array.isArray(config.ajustes) ? config.ajustes : [],
-            // Envoltura (PowerClip del PDF, spec 011 FR-049): guia opcional.
-            envoltura: envolturaValida(config.envoltura)
+            envoltura: envolturaValida(config.envoltura),
+            subirAsync: typeof config.subirAsync === 'function' ? config.subirAsync : null,
+            quedanEspacios: typeof config.quedanEspacios === 'function' ? config.quedanEspacios : null
         };
         if (this.config.finalW < 1 || this.config.finalH < 1) {
             throw new Error('selector-pmu: finalW/finalH son obligatorios (los define el campo/PDF).');
@@ -69,14 +231,19 @@
         this.archivoOrigen = null;
         this.desplazamiento = { x: 0, y: 0 };
         this.zoom = 1;
+        this.rotacion = 0;
+        this.colorFondo = '#ffffff';
+        this.supera5 = false;
         this._arrastrando = null;
+        this._pinch = null;
+        this._punteros = {};
         this._onKey = null;
-        this.cropper = null;
-        this._gesto = null;        // rotacion por gesto de 2 dedos (FR-010)
-        this._focoPrevio = null;   // focus trap (FR-005)
-        this.cvEnvoltura = null;   // overlay de la guia (canvas SEPARADO)
+        this._focoPrevio = null;
+        this.cvEnvoltura = null;
         this.ctxEnvoltura = null;
-        this._onResize = null;     // re-mide la guia (DPR/movil)
+        this._onResize = null;
+        this._subiendo = false;
+        this._contextoReemplazo = '';
     }
 
     SelectorPMU.prototype.on = function (evento, cb) {
@@ -105,71 +272,201 @@
         this._emitir('error', e);
     };
 
-    /** Abre el editor (canvas final = finalW x finalH; crop con Cropper si esta). */
-    SelectorPMU.prototype.open = function () {
+    /**
+     * Abre el editor visual. Al abrirse dispara directamente el selector de
+     * archivos (`abrirArchivo !== false`), salvo que se pase un archivo
+     * precargado. `opciones.tituloContexto` muestra que imagen se reemplaza.
+     */
+    SelectorPMU.prototype.open = function (opciones) {
         var self = this;
+        opciones = opciones || {};
         if (this.raiz) { return; }
         inyectarEstilos();
         this._focoPrevio = document.activeElement || null;
+        this._contextoReemplazo = opciones.tituloContexto ? String(opciones.tituloContexto) : '';
+        this._subiendo = false;
         this.raiz = document.createElement('div');
         this.raiz.className = 'spmu-modal';
+        var tituloTxt = this._contextoReemplazo
+            ? this._contextoReemplazo + ' (' + this.config.finalW + 'x' + this.config.finalH + ' px)'
+            : 'Ajusta la imagen (' + this.config.finalW + 'x' + this.config.finalH + ' px)';
         this.raiz.innerHTML =
             '<div class="spmu-caja" role="dialog" aria-modal="true" aria-label="Ajustar imagen">' +
             '<div class="spmu-cabecera">' +
-            '<p class="spmu-titulo">Ajusta la imagen al marco ' + this.config.finalW + 'x' + this.config.finalH + ' px</p>' +
+            '<p class="spmu-titulo">' + tituloTxt + '</p>' +
             '<button type="button" class="spmu-x" aria-label="Cerrar">&#10005;</button>' +
             '</div>' +
-            '<div class="spmu-escena"></div>' +
-            '<div class="spmu-guia-host"></div>' +
+            '<div class="spmu-escena-wrap"><div class="spmu-escena"></div></div>' +
             '<p class="spmu-badge"><span class="spmu-origen"></span><span class="spmu-salida"></span></p>' +
-            '<p class="spmu-controles">' +
-            '<label class="spmu-lb-zoom">Zoom <input type="range" class="spmu-zoom" min="' + ZOOM_MIN + '" max="' + ZOOM_MAX + '" step="0.01" value="1"></label>' +
-            '<label>Modo <select class="spmu-modo">' +
-            '<option value="crop"' + (this.config.mode === 'crop' ? ' selected' : '') + '>Recortar al marco</option>' +
-            '<option value="fit"' + (this.config.mode === 'fit' ? ' selected' : '') + '>Encajar completo</option>' +
-            '</select></label>' +
-            '</p>' +
+            '<div class="spmu-controles">' +
+            '<div class="spmu-modos" role="group" aria-label="Modo de encaje">' +
+            '<button type="button" class="button spmu-modo-btn" data-modo="rellenar">Rellenar</button>' +
+            '<button type="button" class="button spmu-modo-btn" data-modo="ajustar">Ajustar</button>' +
+            '<button type="button" class="button spmu-modo-btn" data-modo="estirar">Estirar</button>' +
+            '</div>' +
+            '<label class="spmu-lb-zoom">Reducir / Ampliar ' +
+            '<input type="range" class="spmu-zoom" min="-100" max="100" step="1" value="0">' +
+            '<button type="button" class="spmu-zoom-reset" title="Restablecer al centro" aria-label="Restablecer">&#8634;</button>' +
+            '</label>' +
+            '<label class="spmu-lb-fondo">Fondo ' +
+            '<input type="color" class="spmu-fondo-color" value="#ffffff">' +
+            '<button type="button" class="button spmu-fondo-transp">Transparente</button>' +
+            '</label>' +
+            '</div>' +
             '<p class="spmu-acciones">' +
             '<input type="file" class="spmu-file" accept="' + ACEPTA + '" hidden>' +
-            '<input type="file" class="spmu-camara-file" accept="' + ACEPTA + '" capture="environment" hidden>' +
-            '<button type="button" class="button spmu-elegir">Elegir imagen</button>' +
-            '<button type="button" class="button spmu-camara">Camara</button>' +
-            '<button type="button" class="button spmu-rotar" hidden>Rotar</button>' +
-            '<button type="button" class="button button-primary spmu-ok" disabled>Aceptar</button>' +
+            '<button type="button" class="button spmu-elegir">Cargar imagen</button>' +
+            '<button type="button" class="button spmu-rotar" hidden>Girar</button>' +
+            '<button type="button" class="button button-primary spmu-ok" disabled>Subir</button>' +
             '<button type="button" class="button-link spmu-cancelar">Cancelar</button>' +
             '</p>' +
-            '<p class="spmu-status" role="status"><button type="button" class="button spmu-reintentar" hidden>Reintentar</button></p>' +
+            '<p class="spmu-status" role="status" aria-live="polite"></p>' +
+            '<div class="spmu-otra-modal" hidden>' +
+            '<p class="spmu-otra-txt">Imagen subida correctamente. ¿Queres subir otra imagen?</p>' +
+            '<div class="spmu-otra-botones">' +
+            '<button type="button" class="button button-primary spmu-otra-si">Si, subir otra</button>' +
+            '<button type="button" class="button spmu-otra-no">No, terminar</button>' +
+            '</div>' +
+            '</div>' +
             '</div>';
         document.body.appendChild(this.raiz);
         document.body.classList.add('spmu-bloqueado');
 
-        var $ = function (sel) { return self.raiz.querySelector(sel); };
+        var $ = function (sel) { return self.raiz ? self.raiz.querySelector(sel) : null; };
+        this.escenaWrap = $('.spmu-escena-wrap');
         this.escena = $('.spmu-escena');
-        // Host de la guia en `crop` (caja de preview debajo del recorte): si
-        // estuviera dentro del escena, seria un segundo flex-item y lo aplastaria.
-        this.guiaHost = $('.spmu-guia-host');
         this.txtOrigen = $('.spmu-origen');
         this.txtSalida = $('.spmu-salida');
 
-        $('.spmu-x').addEventListener('click', function () { self._cancelar(); });
-        $('.spmu-elegir').addEventListener('click', function () { $('.spmu-file').click(); });
-        $('.spmu-camara').addEventListener('click', function () { $('.spmu-camara-file').click(); });
-        $('.spmu-reintentar').addEventListener('click', function () { $('.spmu-file').click(); });
-        $('.spmu-file').addEventListener('change', function () { self._cargar(this.files && this.files[0]); });
-        $('.spmu-camara-file').addEventListener('change', function () { self._cargar(this.files && this.files[0]); });
-        $('.spmu-zoom').addEventListener('input', function () {
-            self.zoom = parseFloat(this.value) || 1;
-            if (!self._conCropper()) { self._dibujar(); }
+        $('.spmu-x').addEventListener('click', function () {
+            if (!self._subiendo) { self._cancelar(); }
         });
-        $('.spmu-modo').addEventListener('change', function () {
-            self.config.mode = this.value === 'fit' ? 'fit' : 'crop';
-            self._montarEscena();
+        $('.spmu-elegir').addEventListener('click', function () {
+            if (!self._subiendo) { $('.spmu-file').click(); }
+        });
+        $('.spmu-file').addEventListener('change', function () {
+            var f = this.files && this.files[0];
+            this.value = '';
+            if (f) { self._cargar(f); }
+        });
+        $('.spmu-zoom').addEventListener('input', function () {
+            self.zoom = sliderAZoom(this.value);
+            self._dibujar();
+        });
+        $('.spmu-zoom-reset').addEventListener('click', function () {
+            self.zoom = 1;
+            self.desplazamiento = { x: 0, y: 0 };
+            var zIn = $('.spmu-zoom');
+            if (zIn) { zIn.value = '0'; }
+            self._dibujar();
+        });
+        this._enlazarEventosDialogo($);
+        this._montarEscena();
+        this._onResize = function () {
+            self._ajustarCajaEscena();
+            self._pintarEnvoltura();
+        };
+        global.addEventListener('resize', this._onResize);
+
+        if (opciones.archivo) {
+            this._cargar(opciones.archivo);
+        } else if (opciones.abrirArchivo !== false) {
+            try { $('.spmu-file').click(); } catch (e) { /* entorno sin click programatico */ }
+        }
+    };
+
+    /** Cierra por cancelacion: misma via que el boton Cancelar. */
+    SelectorPMU.prototype._cancelar = function () {
+        this.close();
+        this._fallo('CROP_ABORTED', 'Cancelado por el usuario');
+    };
+
+    /** Estilos del dialogo (idempotente, sin archivo CSS extra). */
+    var ESTILO_ID = 'spmu-estilos';
+    function inyectarEstilos() {
+        if (document.getElementById(ESTILO_ID)) { return; }
+        var s = document.createElement('style');
+        s.id = ESTILO_ID;
+        s.textContent =
+            '.spmu-modal{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:180000;display:flex;align-items:center;justify-content:center;padding:12px}' +
+            '.spmu-bloqueado{overflow:hidden}' +
+            '.spmu-caja{box-sizing:border-box;background:#fff;width:min(96vw,760px);max-height:94vh;overflow:auto;padding:16px;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.35);position:relative;display:flex;flex-direction:column}' +
+            '.spmu-sobre{outline:3px dashed #2271b1;outline-offset:-6px}' +
+            '.spmu-cabecera{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px}' +
+            '.spmu-titulo{margin:0;font-weight:600;font-size:15px}' +
+            '.spmu-x{border:0;background:none;font-size:18px;line-height:1;cursor:pointer;padding:8px;min-width:44px;min-height:44px;color:#50575e}' +
+            '.spmu-escena-wrap{display:flex;justify-content:center;align-items:center;width:100%;min-height:200px;max-height:min(58vh,1000px);overflow:hidden;background:#1d2327;border-radius:6px;padding:6px;box-sizing:border-box}' +
+            '.spmu-escena{position:relative;display:flex;justify-content:center;align-items:center;touch-action:none;cursor:grab;user-select:none;background:repeating-conic-gradient(#e0e0e0 0 25%,#ffffff 0 50%) 0/20px 20px;max-width:1000px;max-height:1000px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.4)}' +
+            '.spmu-escena:active{cursor:grabbing}' +
+            '.spmu-canvas{width:100%;height:100%;display:block}' +
+            '.spmu-envoltura{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:block}' +
+            '.spmu-badge{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:6px 0 0;color:#50575e;font-size:12px}' +
+            '.spmu-controles{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:8px 0}' +
+            '.spmu-modos{display:inline-flex;gap:4px;background:#f0f0f1;padding:3px;border-radius:6px}' +
+            '.spmu-modos[hidden]{display:none}' +
+            '.spmu-modo-btn.is-active{background:#2271b1;color:#fff;border-color:#2271b1}' +
+            '.spmu-lb-zoom{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500}' +
+            '.spmu-zoom{width:140px;margin:0}' +
+            '.spmu-zoom-reset{border:1px solid #c3c4c7;background:#f6f7f7;border-radius:4px;cursor:pointer;padding:2px 7px;font-size:14px;line-height:1.2;min-height:28px}' +
+            '.spmu-lb-fondo{display:inline-flex;align-items:center;gap:6px;font-size:13px}' +
+            '.spmu-fondo-color{width:30px;height:28px;padding:0;border:1px solid #c3c4c7;border-radius:4px;cursor:pointer;background:none}' +
+            '.spmu-fondo-transp.is-active{background:#2271b1;color:#fff;border-color:#2271b1}' +
+            '.spmu-acciones{display:flex;gap:8px;align-items:center;margin:8px 0 0;flex-wrap:wrap}' +
+            '.spmu-status{margin:6px 0 0;color:#1d2327;font-size:13px;font-weight:500;min-height:18px}' +
+            '.spmu-otra-modal{position:absolute;inset:0;background:rgba(255,255,255,.96);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;z-index:5;border-radius:10px}' +
+            '.spmu-otra-modal[hidden]{display:none}' +
+            '.spmu-otra-txt{font-size:16px;font-weight:600;margin:0 0 16px;color:#1d2327}' +
+            '.spmu-otra-botones{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}' +
+            '.spmu-cargando .spmu-escena{opacity:.45}' +
+            '.spmu-cargando .spmu-escena::after{content:"";position:absolute;inset:0;margin:auto;width:36px;height:36px;border:4px solid #c3c4c7;border-top-color:#2271b1;border-radius:50%;animation:spmu-giro 1s linear infinite}' +
+            '@keyframes spmu-giro{to{transform:rotate(360deg)}}' +
+            '@media (max-width:767px){' +
+            '.spmu-modal{padding:0;align-items:stretch}' +
+            '.spmu-caja{max-width:none;width:100%;height:100vh;height:100dvh;max-height:none;border-radius:0;padding:calc(10px + env(safe-area-inset-top)) 12px calc(10px + env(safe-area-inset-bottom))}' +
+            '.spmu-escena-wrap{flex:1;min-height:180px;max-height:none}' +
+            '.spmu-acciones .button,.spmu-acciones .button-link{min-height:44px}' +
+            '}';
+        document.head.appendChild(s);
+    }
+
+    SelectorPMU.prototype._enlazarEventosDialogo = function ($) {
+        var self = this;
+        [].slice.call(this.raiz.querySelectorAll('.spmu-modo-btn')).forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var m = btn.getAttribute('data-modo');
+                if (m) {
+                    self.config.mode = m;
+                    self.desplazamiento = { x: 0, y: 0 };
+                    self._actualizarControlesModo();
+                    self._dibujar();
+                }
+            });
+        });
+        $('.spmu-fondo-color').addEventListener('input', function () {
+            self.colorFondo = this.value || '#ffffff';
+            self._actualizarControlesFondo();
+            self._dibujar();
+        });
+        $('.spmu-fondo-transp').addEventListener('click', function () {
+            self.colorFondo = (self.colorFondo === 'transparent')
+                ? ($('.spmu-fondo-color').value || '#ffffff')
+                : 'transparent';
+            self._actualizarControlesFondo();
+            self._dibujar();
         });
         $('.spmu-rotar').addEventListener('click', function () { self._rotar(); });
         $('.spmu-ok').addEventListener('click', function () { self._aceptar(); });
-        $('.spmu-cancelar').addEventListener('click', function () { self._cancelar(); });
+        $('.spmu-cancelar').addEventListener('click', function () {
+            if (!self._subiendo) { self._cancelar(); }
+        });
+        $('.spmu-otra-si').addEventListener('click', function () {
+            var mOtra = $('.spmu-otra-modal');
+            if (mOtra) { mOtra.hidden = true; }
+            self._prepararNuevaCarga();
+            $('.spmu-file').click();
+        });
+        $('.spmu-otra-no').addEventListener('click', function () { self.close(); });
 
-        // FR-003: soltar el archivo sobre el modal (drop zone).
         var caja = $('.spmu-caja');
         caja.addEventListener('dragover', function (e) {
             e.preventDefault();
@@ -180,89 +477,36 @@
             e.preventDefault();
             caja.classList.remove('spmu-sobre');
             var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-            if (f) { self._cargar(f); }
+            if (f && !self._subiendo) { self._cargar(f); }
         });
-        // Clic fuera del dialogo cierra (comodo en movil).
         this.raiz.addEventListener('click', function (e) {
-            if (e.target === self.raiz) { self._cancelar(); }
+            if (e.target === self.raiz && !self._subiendo) { self._cancelar(); }
         });
-
         this._onKey = function (e) {
-            if (e.key === 'Escape') { self._cancelar(); return; }
+            if (e.key === 'Escape' && !self._subiendo) { self._cancelar(); return; }
             if (e.key === 'Tab' && self.raiz) { self._trampaFoco(e); }
         };
         document.addEventListener('keydown', this._onKey);
-
-        this._montarEscena();
-        // La guia se re-mide con el layout (DPR y movil): un listener por
-        // apertura, removido en close(). Sin envoltura no se registra nada.
-        if (this.config.envoltura) {
-            this._onResize = function () { self._pintarEnvoltura(); };
-            global.addEventListener('resize', this._onResize);
-        }
     };
 
-    /** Cierra por cancelacion: misma via que el boton Cancelar. */
-    SelectorPMU.prototype._cancelar = function () {
-        this.close();
-        this._fallo('CROP_ABORTED', 'Cancelado por el usuario');
+    SelectorPMU.prototype._prepararNuevaCarga = function () {
+        if (this.imagen && this.imagen.src) { URL.revokeObjectURL(this.imagen.src); }
+        this.imagen = null;
+        this.archivoOrigen = null;
+        this.desplazamiento = { x: 0, y: 0 };
+        this.zoom = 1;
+        this.rotacion = 0;
+        if (!this.raiz) { return; }
+        var elegir = this.raiz.querySelector('.spmu-elegir');
+        if (elegir) { elegir.textContent = 'Cargar imagen'; }
+        var ok = this.raiz.querySelector('.spmu-ok');
+        if (ok) { ok.disabled = true; ok.textContent = 'Subir'; }
+        var zIn = this.raiz.querySelector('.spmu-zoom');
+        if (zIn) { zIn.value = '0'; }
+        this._estado(null);
+        this._dibujar();
     };
 
-    /** Con Cropper: modo crop y la libreria cargada (FR-006 degrada sin ella). */
-    SelectorPMU.prototype._conCropper = function () {
-        return this.config.mode === 'crop' && typeof global.Cropper === 'function';
-    };
-
-    /** Estilos del dialogo (idempotente, sin archivo CSS extra). */
-    var ESTILO_ID = 'spmu-estilos';
-    function inyectarEstilos() {
-        if (document.getElementById(ESTILO_ID)) { return; }
-        var s = document.createElement('style');
-        s.id = ESTILO_ID;
-        s.textContent =
-            // z-index 180000: POR ENCIMA del drawer (160000) y del preview (170000)
-            // de la consola. El modal se cuelga del `body` del documento donde corre
-            // el script, y en el admin ese documento es el de la consola: con 100000
-            // el drawer lo tapaba y el recorte no se podia usar.
-            '.spmu-modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:180000;display:flex;align-items:center;justify-content:center;padding:16px}' +
-            '.spmu-bloqueado{overflow:hidden}' +
-            '.spmu-caja{box-sizing:border-box;background:#fff;max-width:min(92vw,640px);max-height:92vh;overflow:auto;padding:16px;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.35);position:relative}' +
-            '.spmu-sobre{outline:3px dashed #2271b1;outline-offset:-6px}' +
-            '.spmu-cabecera{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px}' +
-            '.spmu-titulo{margin:0;font-weight:600}' +
-            '.spmu-x{border:0;background:none;font-size:18px;line-height:1;cursor:pointer;padding:8px;min-width:44px;min-height:44px;color:#50575e}' +
-            '.spmu-escena{position:relative;display:flex;justify-content:center;align-items:center;touch-action:none;cursor:move;background:repeating-conic-gradient(#eee 0 25%,#fff 0 50%) 0/24px 24px;height:min(52vh,440px);min-height:200px;overflow:hidden}' +
-            '.spmu-canvas{max-width:100%;max-height:100%;height:auto;display:block}' +
-            '.spmu-envoltura{position:absolute;pointer-events:none;display:block}' +
-            '.spmu-guia-host{text-align:center}' +
-            '.spmu-guia-caja{margin:8px 0 0;text-align:center}' +
-            '.spmu-preview-caja{position:relative;display:inline-block;overflow:hidden;border:1px solid #c3c4c7;border-radius:4px;background:#fff}' +
-            '.spmu-preview{position:absolute;inset:0;overflow:hidden}' +
-            '.spmu-guia-leyenda{margin:4px 0 0;font-size:12px;color:#646970}' +
-            '.spmu-crop{width:100%;height:100%}' +
-            '.spmu-crop img{display:block;max-width:100%}' +
-            '.spmu-badge{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:6px 0 0;color:#50575e;font-size:12px}' +
-            '.spmu-controles{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:8px 0}' +
-            '.spmu-acciones{display:flex;gap:8px;align-items:center;margin:8px 0 0;flex-wrap:wrap}' +
-            '.spmu-camara{display:none}' +
-            '.spmu-status{margin:8px 0 0;color:#555;font-size:12px;min-height:16px}' +
-            '.spmu-reintentar{margin-left:8px}' +
-            '.spmu-cargando .spmu-escena{opacity:.45}' +
-            '.spmu-cargando .spmu-escena::after{content:"";position:absolute;inset:0;margin:auto;width:36px;height:36px;border:4px solid #c3c4c7;border-top-color:#2271b1;border-radius:50%;animation:spmu-giro 1s linear infinite}' +
-            '@keyframes spmu-giro{to{transform:rotate(360deg)}}' +
-            '@media (max-width:767px){' +
-            '.spmu-modal{padding:0;align-items:stretch}' +
-            '.spmu-caja{max-width:none;width:100%;height:100vh;height:100dvh;max-height:none;border-radius:0;padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));display:flex;flex-direction:column}' +
-            '.spmu-escena{flex:1;height:auto;min-height:0}' +
-            '.spmu-crop{height:100%}' +
-            '.spmu-camara{display:inline-block}' +
-            '.spmu-acciones .button,.spmu-acciones .button-link{min-height:44px}' +
-            '}' +
-            '@media (min-width:768px){.spmu-camara{display:none}}';
-        document.head.appendChild(s);
-    }
-
-    /** Carga el archivo elegido validando tipo (allowlist real del contrato). */
     SelectorPMU.prototype._cargar = function (archivo) {
         var self = this;
         if (!archivo) { return; }
@@ -282,17 +526,26 @@
             self.archivoOrigen = archivo;
             self.desplazamiento = { x: 0, y: 0 };
             self.zoom = 1;
-            var rango = self.raiz ? self.raiz.querySelector('.spmu-zoom') : null;
-            if (rango) { rango.value = '1'; }
-            var ok = self.raiz ? self.raiz.querySelector('.spmu-ok') : null;
-            if (ok) { ok.disabled = false; }
-            self._estado(null);
-            if (self._conCropper()) {
-                self._montarCropper();
-            } else {
-                self._dibujar();
+            self.rotacion = 0;
+            self.colorFondo = (self.config.fondo && self.config.fondo !== 'auto')
+                ? self.config.fondo : detectarColorBordes(img);
+            self.supera5 = superaCincoPorciento(
+                img.naturalWidth || 1, img.naturalHeight || 1,
+                self.config.finalW, self.config.finalH
+            );
+            self.config.mode = self.supera5 ? 'rellenar' : 'estirar';
+            if (self.raiz) {
+                var rango = self.raiz.querySelector('.spmu-zoom');
+                if (rango) { rango.value = '0'; }
+                var elegir = self.raiz.querySelector('.spmu-elegir');
+                if (elegir) { elegir.textContent = 'Cambiar imagen'; }
+                var ok = self.raiz.querySelector('.spmu-ok');
+                if (ok) { ok.disabled = false; ok.textContent = 'Subir'; }
             }
-            self._badge();
+            self._estado(null);
+            self._actualizarControlesModo();
+            self._actualizarControlesFondo();
+            self._dibujar();
             self._emitir('progress', { percentage: 100 });
         };
         img.onerror = function () {
@@ -303,298 +556,303 @@
         img.src = url;
     };
 
-    /**
-     * FR-004: estado de carga/error en la barra de estado (nunca un modal en
-     * blanco). 'cargando' pinta el spinner; 'error' muestra el reintento.
-     */
     SelectorPMU.prototype._estado = function (estado) {
         if (!this.raiz) { return; }
         var st = this.raiz.querySelector('.spmu-status');
         var caja = this.raiz.querySelector('.spmu-caja');
-        var re = this.raiz.querySelector('.spmu-reintentar');
-        if (caja) { caja.classList.toggle('spmu-cargando', estado === 'cargando'); }
+        if (caja) { caja.classList.toggle('spmu-cargando', estado === 'cargando' || estado === 'subiendo'); }
         if (estado === 'cargando') {
             if (st) { st.textContent = 'Cargando imagen...'; }
-            if (re) { re.hidden = true; }
+        } else if (estado === 'subiendo') {
+            if (st) { st.textContent = 'Subiendo imagen, espera un momento...'; }
         } else if (estado === 'error') {
             if (st) { st.textContent = 'No se pudo leer la imagen.'; }
-            if (re) { re.hidden = false; }
         } else {
             if (st) { st.textContent = ''; }
-            if (re) { re.hidden = true; }
         }
     };
 
-    /** Dibuja el encuadre actual en el canvas final (finalW x finalH). */
-    SelectorPMU.prototype._dibujar = function () {
-        if (!this.ctx) { return; }
+    SelectorPMU.prototype._dimensionesImagen = function () {
+        if (!this.imagen) { return { w: 1, h: 1 }; }
+        var iw = Math.max(1, this.imagen.naturalWidth || this.imagen.width || 1);
+        var ih = Math.max(1, this.imagen.naturalHeight || this.imagen.height || 1);
+        return (Math.abs(this.rotacion % 180) === 90) ? { w: ih, h: iw } : { w: iw, h: ih };
+    };
+
+    SelectorPMU.prototype._actualizarControlesModo = function () {
+        if (!this.raiz) { return; }
+        var self = this;
+        var modosEl = this.raiz.querySelector('.spmu-modos');
+        var rotarEl = this.raiz.querySelector('.spmu-rotar');
+        var tieneImg = !!this.imagen;
+        if (modosEl) {
+            [].slice.call(modosEl.querySelectorAll('.spmu-modo-btn')).forEach(function (btn) {
+                var m = btn.getAttribute('data-modo');
+                btn.hidden = (tieneImg && !self.supera5 && m !== 'estirar');
+                btn.classList.toggle('is-active', m === self.config.mode);
+            });
+        }
+        if (rotarEl) {
+            rotarEl.hidden = !(tieneImg && this.supera5 && this.config.rotar);
+        }
+    };
+
+    SelectorPMU.prototype._actualizarControlesFondo = function () {
+        if (!this.raiz) { return; }
+        var inColor = this.raiz.querySelector('.spmu-fondo-color');
+        var btnTr = this.raiz.querySelector('.spmu-fondo-transp');
+        var esTransp = (this.colorFondo === 'transparent');
+        if (inColor && !esTransp && /^#[0-9a-f]{6}$/i.test(this.colorFondo)) {
+            inColor.value = this.colorFondo;
+        }
+        if (btnTr) { btnTr.classList.toggle('is-active', esTransp); }
+    };
+
+    SelectorPMU.prototype._cajaImagenModo = function () {
         var w = this.config.finalW;
         var h = this.config.finalH;
-        this.ctx.clearRect(0, 0, w, h);
+        var dim = this._dimensionesImagen();
+        var baseW, baseH;
+        if (this.config.mode === 'ajustar') {
+            var escMin = Math.min(w / dim.w, h / dim.h);
+            baseW = dim.w * escMin;
+            baseH = dim.h * escMin;
+        } else if (this.config.mode === 'estirar') {
+            baseW = w;
+            baseH = h;
+        } else {
+            var escMax = Math.max(w / dim.w, h / dim.h);
+            baseW = dim.w * escMax;
+            baseH = dim.h * escMax;
+        }
+        return { dw: baseW * this.zoom, dh: baseH * this.zoom };
+    };
+
+    SelectorPMU.prototype._pintarImagenEnContexto = function (ctx, conMargen) {
+        if (!ctx) { return; }
+        var geo = this.geo || geometriaEscena(this.config.finalW, this.config.finalH, this.config);
+        var ox = conMargen ? geo.margenX : 0;
+        var oy = conMargen ? geo.margenY : 0;
+        var w = this.config.finalW;
+        var h = this.config.finalH;
+        ctx.clearRect(0, 0, conMargen ? geo.canvasW : w, conMargen ? geo.canvasH : h);
+        if (this.colorFondo && this.colorFondo !== 'transparent') {
+            ctx.fillStyle = this.colorFondo;
+            ctx.fillRect(ox, oy, w, h);
+        }
         if (!this.imagen) { return; }
-        var iw = this.imagen.naturalWidth || 1;
-        var ih = this.imagen.naturalHeight || 1;
-        var escala = (this.config.mode === 'fit')
-            ? Math.min(w / iw, h / ih) * this.zoom
-            : Math.max(w / iw, h / ih) * this.zoom;
-        var dw = iw * escala;
-        var dh = ih * escala;
-        var dx = (w - dw) / 2 + (this.config.mode === 'crop' ? this.desplazamiento.x : 0);
-        var dy = (h - dh) / 2 + (this.config.mode === 'crop' ? this.desplazamiento.y : 0);
-        this.ctx.drawImage(this.imagen, dx, dy, dw, dh);
+        var caja = this._cajaImagenModo();
+        var cx = ox + (w / 2) + this.desplazamiento.x;
+        var cy = oy + (h / 2) + this.desplazamiento.y;
+        ctx.save();
+        ctx.translate(cx, cy);
+        if (this.rotacion) { ctx.rotate((this.rotacion * Math.PI) / 180); }
+        var rot90 = (Math.abs(this.rotacion % 180) === 90);
+        var drawW = rot90 ? caja.dh : caja.dw;
+        var drawH = rot90 ? caja.dw : caja.dh;
+        ctx.drawImage(this.imagen, -drawW / 2, -drawH / 2, drawW, drawH);
+        ctx.restore();
+    };
+
+    SelectorPMU.prototype._dibujar = function () {
+        if (!this.ctx) { return; }
+        this._pintarImagenEnContexto(this.ctx, true);
+        this._pintarEnvoltura();
         this._badge();
     };
 
-    /**
-     * Arma la escena segun la rama: Cropper (crop + libreria) o el canvas
-     * original (fit o degradacion). Se llama al abrir y al cambiar de modo.
-     */
+    SelectorPMU.prototype._ajustarCajaEscena = function () {
+        if (!this.escena) { return; }
+        var wrap = this.escenaWrap || this.escena.parentNode;
+        var dispW = (wrap && wrap.clientWidth > 20) ? (wrap.clientWidth - 12) : 640;
+        var dispH = (wrap && wrap.clientHeight > 20) ? (wrap.clientHeight - 12) : 480;
+        var med = calcularCajaEscena(this.config.finalW, this.config.finalH, dispW, dispH);
+        this.escena.style.width = med.w + 'px';
+        this.escena.style.height = med.h + 'px';
+        this.escena.style.aspectRatio = this.config.finalW + ' / ' + this.config.finalH;
+    };
+
     SelectorPMU.prototype._montarEscena = function () {
-        var self = this;
         if (!this.raiz || !this.escena) { return; }
-        this._destruirCropper();
-        this.escena.innerHTML = '';
-        var rotar = this.raiz.querySelector('.spmu-rotar');
-        var lbZoom = this.raiz.querySelector('.spmu-lb-zoom');
-        if (rotar) { rotar.hidden = !this._conCropper(); }
-        if (lbZoom) { lbZoom.hidden = this._conCropper(); }
-        if (this._conCropper()) {
-            this.escena.innerHTML = '<div class="spmu-crop"><img class="spmu-img" alt=""></div>';
-            if (this.guiaHost) {
-                this.guiaHost.innerHTML = this._htmlGuiaEnvoltura();
-            }
-            if (this.imagen) { this._montarCropper(); }
-            this._badge();
-            this._montarEnvoltura();
-            return;
-        }
-        if (this.guiaHost) { this.guiaHost.innerHTML = ''; }
+        this.geo = geometriaEscena(this.config.finalW, this.config.finalH, this.config);
         this.escena.innerHTML =
-            '<canvas class="spmu-canvas" width="' + this.config.finalW + '" height="' + this.config.finalH + '"></canvas>'
-            + (this.config.envoltura
-                ? '<canvas class="spmu-envoltura" aria-hidden="true"></canvas>'
-                : '');
+            '<canvas class="spmu-canvas" width="' + this.geo.canvasW + '" height="' + this.geo.canvasH + '"></canvas>' +
+            '<canvas class="spmu-envoltura" width="' + this.geo.canvasW + '" height="' + this.geo.canvasH + '" aria-hidden="true"></canvas>';
         this.canvas = this.escena.querySelector('.spmu-canvas');
-        this.ctx = this.canvas.getContext('2d');
-        // Arrastre original (fit y degradacion): pointer events con captura.
+        this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
+        this.cvEnvoltura = this.escena.querySelector('.spmu-envoltura');
+        this.ctxEnvoltura = this.cvEnvoltura ? this.cvEnvoltura.getContext('2d') : null;
+        this._ajustarCajaEscena();
+        this._enlazarGestosEscena();
+        this._actualizarControlesModo();
+        this._actualizarControlesFondo();
+        this._dibujar();
+    };
+
+    SelectorPMU.prototype._enlazarGestosEscena = function () {
+        var self = this;
+        if (!this.escena || this.escena._pmuGestos) { return; }
+        this.escena._pmuGestos = true;
+
         this.escena.addEventListener('pointerdown', function (e) {
-            if (self.config.mode !== 'crop') { return; }
-            self._arrastrando = { x: e.clientX, y: e.clientY, dx: self.desplazamiento.x, dy: self.desplazamiento.y };
-            if (self.escena.setPointerCapture) { self.escena.setPointerCapture(e.pointerId); }
+            if (!self.imagen || self._subiendo) { return; }
+            self._punteros[e.pointerId] = { x: e.clientX, y: e.clientY };
+            var ids = Object.keys(self._punteros);
+            if (ids.length === 1) {
+                self._arrastrando = {
+                    x: e.clientX, y: e.clientY,
+                    dx: self.desplazamiento.x, dy: self.desplazamiento.y
+                };
+            } else if (ids.length === 2) {
+                self._arrastrando = null;
+                var p1 = self._punteros[ids[0]];
+                var p2 = self._punteros[ids[1]];
+                self._pinch = { dist: Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1, zoom: self.zoom };
+            }
+            if (self.escena.setPointerCapture) {
+                try { self.escena.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+            }
         });
+
         this.escena.addEventListener('pointermove', function (e) {
-            if (!self._arrastrando) { return; }
+            if (!self._punteros[e.pointerId]) { return; }
+            self._punteros[e.pointerId] = { x: e.clientX, y: e.clientY };
+            var ids = Object.keys(self._punteros);
+            if (ids.length === 2 && self._pinch) {
+                var p1 = self._punteros[ids[0]];
+                var p2 = self._punteros[ids[1]];
+                var d = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
+                self.zoom = Math.max(0.25, Math.min(4, self._pinch.zoom * (d / self._pinch.dist)));
+                var zIn = self.raiz ? self.raiz.querySelector('.spmu-zoom') : null;
+                if (zIn) { zIn.value = String(zoomASlider(self.zoom)); }
+                self._dibujar();
+                return;
+            }
+            if (!self._arrastrando || !self.canvas) { return; }
             var caja = self.canvas.getBoundingClientRect();
             var escala = caja.width > 0 ? self.canvas.width / caja.width : 1;
             self.desplazamiento.x = self._arrastrando.dx + (e.clientX - self._arrastrando.x) * escala;
             self.desplazamiento.y = self._arrastrando.dy + (e.clientY - self._arrastrando.y) * escala;
             self._dibujar();
         });
-        this.escena.addEventListener('pointerup', function () { self._arrastrando = null; });
-        this._dibujar();
-        this._montarEnvoltura();
+
+        function finPuntero(e) {
+            delete self._punteros[e.pointerId];
+            if (Object.keys(self._punteros).length < 2) { self._pinch = null; }
+            if (Object.keys(self._punteros).length === 0) { self._arrastrando = null; }
+        }
+        this.escena.addEventListener('pointerup', finPuntero);
+        this.escena.addEventListener('pointercancel', finPuntero);
+
+        this.escena.addEventListener('wheel', function (e) {
+            if (!self.imagen || self._subiendo) { return; }
+            e.preventDefault();
+            var delta = e.deltaY < 0 ? 0.08 : -0.08;
+            self.zoom = Math.max(0.25, Math.min(4, self.zoom * (1 + delta)));
+            var zIn = self.raiz ? self.raiz.querySelector('.spmu-zoom') : null;
+            if (zIn) { zIn.value = String(zoomASlider(self.zoom)); }
+            self._dibujar();
+        }, { passive: false });
     };
 
-    /**
-     * HTML de la guia (solo con envoltura): en `crop` es una CAJA DE PREVIEW en
-     * vivo (Cropper pinta ahi el recorte) con el overlay como HERMANO, para que
-     * Cropper no lo toque. Sin envoltura no agrega nada al DOM (FR-022).
-     */
-    SelectorPMU.prototype._htmlGuiaEnvoltura = function () {
-        if (!this.config.envoltura) { return ''; }
-        var w = this.config.finalW;
-        var h = this.config.finalH;
-        var esc = Math.min(1, 160 / Math.max(1, Math.max(w, h)));
-        var pw = Math.max(40, Math.round(w * esc));
-        var ph = Math.max(40, Math.round(h * esc));
-        return '<div class="spmu-guia-caja">'
-            + '<div class="spmu-preview-caja" style="width:' + pw + 'px;height:' + ph + 'px">'
-            + '<div class="spmu-preview"></div>'
-            + '<canvas class="spmu-envoltura" aria-hidden="true"></canvas>'
-            + '</div>'
-            + '<p class="spmu-guia-leyenda">La forma azul es el recorte final del PDF.</p>'
-            + '</div>';
-    };
-
-    /** Toma el canvas de la guia (si existe) y lo pinta en el proximo frame. */
-    SelectorPMU.prototype._montarEnvoltura = function () {
-        this.cvEnvoltura = null;
-        this.ctxEnvoltura = null;
-        if (!this.config.envoltura) { return; }
-        var cv = this.guiaHost ? this.guiaHost.querySelector('.spmu-envoltura') : null;
-        if (!cv && this.escena) { cv = this.escena.querySelector('.spmu-envoltura'); }
-        if (!cv) { return; }
-        this.cvEnvoltura = cv;
-        this.ctxEnvoltura = cv.getContext('2d');
-        // El layout puede no estar listo (modal recien montado): siguiente frame.
-        var self = this;
-        if (global.requestAnimationFrame) {
-            global.requestAnimationFrame(function () { self._pintarEnvoltura(); });
+    SelectorPMU.prototype._trazarPrincipal = function (ctx, prin) {
+        var env = this.config.envoltura;
+        var core = global.PMUMockup;
+        if (prin.tipo === 'envoltura' && env && core
+            && typeof core.comandosEnvoltura === 'function'
+            && typeof core.trazarEnvoltura === 'function') {
+            var cmds = core.comandosEnvoltura(env, { x: prin.x, y: prin.y, w: prin.w, h: prin.h });
+            if (cmds.length) {
+                core.trazarEnvoltura(ctx, cmds);
+                return env.par ? 'evenodd' : 'nonzero';
+            }
+        }
+        ctx.beginPath();
+        if (prin.tipo === 'circulo' || prin.tipo === 'ovalo') {
+            if (typeof ctx.ellipse === 'function') {
+                ctx.ellipse(prin.cx, prin.cy, Math.max(1, prin.rx), Math.max(1, prin.ry), 0, 0, Math.PI * 2);
+            } else {
+                ctx.arc(prin.cx, prin.cy, Math.max(1, Math.min(prin.rx, prin.ry)), 0, Math.PI * 2);
+            }
         } else {
-            this._pintarEnvoltura();
+            ctx.rect(prin.x, prin.y, prin.w, prin.h);
         }
+        return 'nonzero';
     };
 
-    /**
-     * Rect (CSS px) del area de RESULTADO dentro del escena: la caja de preview
-     * en `crop` o el canvas de salida en `fit`/degradacion.
-     */
-    SelectorPMU.prototype._cajaEnvoltura = function () {
-        // `crop`: la caja de preview (padre del overlay). `fit`: el canvas.
-        var pc = this.cvEnvoltura ? this.cvEnvoltura.parentNode : null;
-        if (pc && pc.classList && pc.classList.contains('spmu-preview-caja')) {
-            return { x: 0, y: 0, w: pc.clientWidth, h: pc.clientHeight };
-        }
-        if (!this.escena || !this.canvas) { return null; }
-        var r = this.canvas.getBoundingClientRect();
-        var e = this.escena.getBoundingClientRect();
-        return { x: r.left - e.left, y: r.top - e.top, w: r.width, h: r.height };
-    };
-
-    /**
-     * Pinta la guia: oscurece SOLO lo que queda fuera de la forma (relleno +
-     * destination-out) y dibuja su contorno. Reusa la geometria del nucleo
-     * (`comandosEnvoltura`/`trazarEnvoltura`: una sola fuente). No toca el
-     * lienzo de salida (FR-023).
-     */
     SelectorPMU.prototype._pintarEnvoltura = function () {
         var cv = this.cvEnvoltura;
         var ctx = this.ctxEnvoltura;
-        var env = this.config.envoltura;
-        if (!cv || !ctx || !env) { return; }
-        var core = global.PMUMockup;
-        if (!core || typeof core.comandosEnvoltura !== 'function'
-            || typeof core.trazarEnvoltura !== 'function') {
-            cv.width = 0;   // sin nucleo: sin guia (degrada, nunca lanza)
-            cv.height = 0;
-            return;
-        }
-        var caja = this._cajaEnvoltura();
-        if (!caja || caja.w < 1 || caja.h < 1) { return; }   // layout no listo
-        var dpr = global.devicePixelRatio || 1;
-        cv.style.left = (caja.x || 0) + 'px';
-        cv.style.top = (caja.y || 0) + 'px';
-        cv.style.width = caja.w + 'px';
-        cv.style.height = caja.h + 'px';
-        cv.width = Math.max(1, Math.round(caja.w * dpr));
-        cv.height = Math.max(1, Math.round(caja.h * dpr));
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.clearRect(0, 0, caja.w, caja.h);
-        var cmds = core.comandosEnvoltura(env, { x: 0, y: 0, w: caja.w, h: caja.h });
-        if (!cmds.length) { return; }
-        ctx.fillStyle = 'rgba(0,0,0,.38)';
-        ctx.fillRect(0, 0, caja.w, caja.h);
+        if (!cv || !ctx) { return; }
+        var geo = this.geo || geometriaEscena(this.config.finalW, this.config.finalH, this.config);
+        var cw = geo.canvasW;
+        var ch = geo.canvasH;
+        var sec = geo.secundario;
+        var prin = geo.principal;
+
+        ctx.clearRect(0, 0, cw, ch);
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.fillRect(0, 0, cw, ch);
         ctx.globalCompositeOperation = 'destination-out';
-        core.trazarEnvoltura(ctx, cmds);
-        ctx.fill(env.par ? 'evenodd' : 'nonzero');
-        ctx.globalCompositeOperation = 'source-over';
-        core.trazarEnvoltura(ctx, cmds);
+        var regla = this._trazarPrincipal(ctx, prin);
+        ctx.fill(regla);
+        ctx.restore();
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+        ctx.beginPath();
+        ctx.rect(0, 0, cw, ch);
+        ctx.rect(sec.x, sec.y, sec.w, sec.h);
+        ctx.fill('evenodd');
+        ctx.restore();
+
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.lineWidth = Math.max(1, Math.round(Math.max(cw, ch) / 300));
+        ctx.strokeRect(sec.x + 0.5, sec.y + 0.5, sec.w - 1, sec.h - 1);
+        ctx.restore();
+
+        ctx.save();
+        this._trazarPrincipal(ctx, prin);
         ctx.strokeStyle = '#2271b1';
-        ctx.lineWidth = 1.5;
-        if (ctx.setLineDash) { ctx.setLineDash([5, 4]); }
+        ctx.lineWidth = Math.max(1.5, Math.round(Math.max(cw, ch) / 220));
+        if (ctx.setLineDash) { ctx.setLineDash([6, 4]); }
         ctx.stroke();
         if (ctx.setLineDash) { ctx.setLineDash([]); }
+        ctx.restore();
     };
 
-    /** Instancia Cropper sobre la imagen cargada (FR-007..FR-012). */
-    SelectorPMU.prototype._montarCropper = function () {
-        var self = this;
-        var img = this.escena.querySelector('.spmu-img');
-        if (!img || !this.imagen) { return; }
-        this._destruirCropper();
-        img.src = this.imagen.src;
-        var opciones = {
-            viewMode: 1,
-            aspectRatio: this.config.aspectRatio || NaN,
-            autoCropArea: 1,
-            rotatable: true,
-            zoomable: true,
-            zoomOnWheel: true,
-            zoomOnTouch: true,
-            responsive: true,
-            guides: true,
-            background: true,
-            checkOrientation: true,
-            dblclick: true,        // FR-009: doble tap/clic alterna encuadre/100%
-            wheelZoomRatio: 0.05
-        };
-        // FR-022: con envoltura, el recorte se ve EN VIVO en la caja de preview
-        // (la guia va encima, en un canvas hermano).
-        var prev = this.escena.querySelector('.spmu-preview');
-        if (prev) { opciones.preview = prev; }
-        this.cropper = new global.Cropper(img, opciones);
-        if (img._pmuSelCableado) { return; }
-        img._pmuSelCableado = true;
-        img.addEventListener('cropmove', function (ev) { self._gestoRotar(ev); self._badge(); });
-        img.addEventListener('cropend', function () { self._gesto = null; });
-        img.addEventListener('zoom', function () { self._badge(); });
-        img.addEventListener('ready', function () { self._badge(); });
-    };
-
-    /**
-     * FR-010: rotacion por gesto de 2 dedos. Cropper trata el pinch como zoom;
-     * el MISMO touchmove con 2 dedos sirve para rotar: se calcula el angulo
-     * entre los dedos y el delta se aplica con rotateTo(). Zoom y rotacion
-     * conviven (como en las apps de fotos).
-     */
-    SelectorPMU.prototype._gestoRotar = function (ev) {
-        if (!this.cropper || !ev || !ev.detail || !ev.detail.originalEvent) { return; }
-        var t = ev.detail.originalEvent.touches;
-        if (!t || t.length !== 2) { this._gesto = null; return; }
-        var angulo = Math.atan2(t[1].clientY - t[0].clientY, t[1].clientX - t[0].clientX);
-        if (this._gesto === null) { this._gesto = angulo; return; }
-        var delta = (angulo - this._gesto) * 180 / Math.PI;
-        if (Math.abs(delta) < 1) { return; }   // umbral anti-ruido
-        this._gesto = angulo;
-        this.cropper.rotateTo((this.cropper.getData().rotate || 0) + delta);
-    };
-
-    /** FR-010: boton Rotar 90 grados. */
+    /** Spec 021 (D6): boton Girar 90 grados. */
     SelectorPMU.prototype._rotar = function () {
-        if (this.cropper) { this.cropper.rotate(90); this._badge(); }
+        if (!this.imagen || !this.supera5 || !this.config.rotar) { return; }
+        this.rotacion = (this.rotacion + 90) % 360;
+        this._dibujar();
     };
 
-    /**
-     * Spec 019 (FR-006): factor de ampliacion del recorte actual (>= 1 = la
-     * imagen se amplia). INFORMATIVO: nunca bloquea "Aceptar".
-     */
     SelectorPMU.prototype._factorAmpliacion = function () {
         var w = this.config.finalW;
         var h = this.config.finalH;
         if (!this.imagen || w < 1 || h < 1) { return 1; }
-        if (this._conCropper() && this.cropper) {
-            var d = this.cropper.getData();
-            var aw = (d && d.width > 0) ? d.width : (this.imagen.naturalWidth || 1);
-            var ah = (d && d.height > 0) ? d.height : (this.imagen.naturalHeight || 1);
-            return Math.max(w / aw, h / ah);
-        }
-        var iw = this.imagen.naturalWidth || 1;
-        var ih = this.imagen.naturalHeight || 1;
-        return Math.min(w / iw, h / ih);
+        var dim = this._dimensionesImagen();
+        var caja = this._cajaImagenModo();
+        return Math.max(caja.dw / dim.w, caja.dh / dim.h);
     };
 
-    /** FR-013: badge en vivo "Origen WxH px" + "Salida WxH px · zoom xN". */
     SelectorPMU.prototype._badge = function () {
-        if (this.txtOrigen && this.imagen) {
-            this.txtOrigen.textContent = 'Origen ' + this.imagen.naturalWidth + 'x' + this.imagen.naturalHeight + ' px';
+        if (this.txtOrigen) {
+            this.txtOrigen.textContent = this.imagen
+                ? ('Origen ' + this.imagen.naturalWidth + 'x' + this.imagen.naturalHeight + ' px')
+                : '';
         }
         if (!this.txtSalida) { return; }
-        var z;
-        if (this._conCropper() && this.cropper) {
-            var d = this.cropper.getImageData();
-            z = (d && d.scaleX > 0) ? d.scaleX : 1;
-        } else {
-            z = this.zoom;
-        }
-        // Spec 019 (FR-006): aviso informativo de ampliacion (tolerancia 1.05
-        // para no molestar con redondeos).
+        var z = this.zoom || 1;
         var f = this._factorAmpliacion();
-        var amplia = (f > 1.05) ? ' · se amplia ' + f.toFixed(1) + 'x' : '';
+        var amplia = (this.imagen && f > 1.05) ? ' · se amplia ' + f.toFixed(1) + 'x' : '';
         this.txtSalida.textContent =
-            'Salida ' + this.config.finalW + 'x' + this.config.finalH + ' px · zoom x' + z.toFixed(1) + amplia;
+            'Salida ' + this.config.finalW + 'x' + this.config.finalH + ' px · zoom x' + z.toFixed(2) + amplia;
     };
 
-    /** FR-005: el foco cicla dentro del dialogo (Tab / Shift+Tab). */
     SelectorPMU.prototype._trampaFoco = function (e) {
         var caja = this.raiz ? this.raiz.querySelector('.spmu-caja') : null;
         if (!caja) { return; }
@@ -614,18 +872,37 @@
         else if (activo === primero && e.shiftKey) { e.preventDefault(); ultimo.focus(); }
     };
 
-    /** Genera el blob recortado al tamano final y lo entrega al llamador. */
+    SelectorPMU.prototype._generarLienzoSalida = function () {
+        if (!global.document) { return this.canvas || null; }
+        var cv = global.document.createElement('canvas');
+        cv.width = this.config.finalW;
+        cv.height = this.config.finalH;
+        var ctx = cv.getContext('2d');
+        if (!ctx) { return null; }
+        this._pintarImagenEnContexto(ctx, false);
+        return cv;
+    };
+
+    /** Genera el blob recortado al tamano del placeholder y gestiona la subida. */
     SelectorPMU.prototype._aceptar = function () {
         var self = this;
-        if (!this.imagen) {
-            this._fallo('UPLOAD_FAILED', 'No hay imagen para guardar');
+        if (!this.imagen || this._subiendo) {
+            if (!this.imagen) { this._fallo('UPLOAD_FAILED', 'No hay imagen para subir'); }
             return;
         }
         var ok = this.raiz ? this.raiz.querySelector('.spmu-ok') : null;
-        if (ok) { ok.disabled = true; }
+        var elegir = this.raiz ? this.raiz.querySelector('.spmu-elegir') : null;
+        if (ok) { ok.disabled = true; ok.textContent = 'Subiendo...'; }
+        if (elegir) { elegir.disabled = true; }
+        this._subiendo = true;
+        this._estado('subiendo');
+
         var terminar = function (blob) {
             if (!blob) {
-                if (ok) { ok.disabled = false; }
+                self._subiendo = false;
+                if (ok) { ok.disabled = false; ok.textContent = 'Subir'; }
+                if (elegir) { elegir.disabled = false; }
+                self._estado(null);
                 self._fallo('UPLOAD_FAILED', 'No se pudo generar el recorte');
                 return;
             }
@@ -644,30 +921,55 @@
             };
             self.ultimoBlob = blob;
             self.ultimaUrl = url;
+
+            var finalizarExito = function () {
+                self._subiendo = false;
+                if (elegir) { elegir.disabled = false; }
+                self._estado(null);
+                self._emitir('success', { url: url, width: meta.width, height: meta.height, fileSize: meta.fileSize });
+                var quedan = (!self._contextoReemplazo && self.config.quedanEspacios)
+                    ? !!self.config.quedanEspacios()
+                    : false;
+                if (quedan && self.raiz) {
+                    var mOtra = self.raiz.querySelector('.spmu-otra-modal');
+                    if (mOtra) {
+                        mOtra.hidden = false;
+                        return;
+                    }
+                }
+                self.close();
+            };
+
+            if (typeof self.config.subirAsync === 'function') {
+                Promise.resolve(self.config.subirAsync(blob, meta)).then(function () {
+                    if (typeof self.onSelectCallback === 'function') { self.onSelectCallback(url, meta); }
+                    finalizarExito();
+                }, function (err) {
+                    self._subiendo = false;
+                    if (ok) { ok.disabled = false; ok.textContent = 'Subir'; }
+                    if (elegir) { elegir.disabled = false; }
+                    self._estado(null);
+                    self._fallo('UPLOAD_FAILED', (err && err.message) || 'No se pudo subir la imagen');
+                });
+                return;
+            }
+
             if (typeof self.onSelectCallback === 'function') { self.onSelectCallback(url, meta); }
-            self._emitir('success', { url: url, width: meta.width, height: meta.height, fileSize: meta.fileSize });
-            self.close();
+            finalizarExito();
         };
-        // FR-011: con Cropper la salida sale de getCroppedCanvas al tamano
-        // EXACTO (rotacion aplicada). Sin Cropper (fit o degradacion), el
-        // canvas original.
-        var lienzo = this.canvas || null;
-        if (this._conCropper() && this.cropper) {
-            lienzo = this.cropper.getCroppedCanvas({
-                width: this.config.finalW,
-                height: this.config.finalH,
-                imageSmoothingQuality: 'high'
-            });
-        }
+
+        var lienzo = this._generarLienzoSalida();
         if (!lienzo) {
-            if (ok) { ok.disabled = false; }
+            this._subiendo = false;
+            if (ok) { ok.disabled = false; ok.textContent = 'Subir'; }
+            if (elegir) { elegir.disabled = false; }
+            this._estado(null);
             this._fallo('UPLOAD_FAILED', 'No se pudo generar el recorte');
             return;
         }
         if (lienzo.toBlob) {
             lienzo.toBlob(terminar, 'image/png');
         } else {
-            // Fallback sin toBlob: dataURL -> blob.
             var bin = atob(lienzo.toDataURL('image/png').split(',')[1]);
             var bytes = new Uint8Array(bin.length);
             for (var i = 0; i < bin.length; i++) { bytes[i] = bin.charCodeAt(i); }
@@ -691,30 +993,25 @@
         }
         if (this.raiz && this.raiz.parentNode) { this.raiz.parentNode.removeChild(this.raiz); }
         this.raiz = null;
+        this.escenaWrap = null;
         this.escena = null;
-        this.guiaHost = null;
         this.cvEnvoltura = null;
         this.ctxEnvoltura = null;
         this.txtOrigen = null;
         this.txtSalida = null;
         this.canvas = null;
         this.ctx = null;
-        // T012: el cropper se destruye al cerrar (sin fugas al reabrir).
-        this._destruirCropper();
-        document.body.classList.remove('spmu-bloqueado');
+        this._punteros = {};
+        this._arrastrando = null;
+        this._pinch = null;
+        this._subiendo = false;
+        if (global.document && global.document.body) {
+            global.document.body.classList.remove('spmu-bloqueado');
+        }
         if (this._focoPrevio && typeof this._focoPrevio.focus === 'function') {
             try { this._focoPrevio.focus(); } catch (e) { /* el foco previo pudo desaparecer */ }
         }
         this._focoPrevio = null;
-    };
-
-    /** Destruye la instancia de Cropper si existe (idempotente). */
-    SelectorPMU.prototype._destruirCropper = function () {
-        if (this.cropper) {
-            try { this.cropper.destroy(); } catch (e) { /* ya destruido */ }
-            this.cropper = null;
-        }
-        this._gesto = null;
     };
 
     SelectorPMU.prototype.destroy = function () {
@@ -727,5 +1024,18 @@
         this.ultimoBlob = null;
     };
 
+    SelectorPMU.puro = {
+        formaCanonica: formaCanonica,
+        geometriaEscena: geometriaEscena,
+        calcularCajaEscena: calcularCajaEscena,
+        superaCincoPorciento: superaCincoPorciento,
+        colorPredominanteBordes: colorPredominanteBordes,
+        sliderAZoom: sliderAZoom,
+        zoomASlider: zoomASlider
+    };
+
     global.SelectorPMU = SelectorPMU;
-})(window);
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = SelectorPMU;
+    }
+})(typeof window !== 'undefined' ? window : globalThis);

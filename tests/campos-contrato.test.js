@@ -172,7 +172,7 @@ console.log('\n== spec 018: la plantilla de imagen y el preview ==');
     plugin.indexOf('window.PMU_API.montarCargador(cont, {') !== -1);
   check('la plantilla imagen declara RANURAS por defecto (no monta en vacio)',
     plugin.indexOf('var RANURAS = [') !== -1
-    && plugin.indexOf("{ w: 1000, h: 1000, forma: 'fit', min: 1, max: 1, phsize: 0 }") !== -1);
+    && plugin.indexOf("{ w: 1000, h: 1000, forma: 'auto', min: 1, max: 1, phsize: 0, r: 0 }") !== -1);
   check('la plantilla NO vuelve a llamar montar() (montarCargador ya monta)',
     plugin.indexOf('cargador && cargador.montar()') === -1);
   // El preview del admin corre el mismo campo.js con un stub de PMU_API (D9).
@@ -235,11 +235,12 @@ console.log('\n== spec 019: ranura adaptativa (phsize + aviso) ==');
     const rcap = nr({ w: 1, h: 1, phsize: 2 }, { grupo_w: 2000, grupo_h: 1600 });
     check('PH_MAX acota y avisa', rcap.w <= 3000 && rcap.h <= 3000
       && rcap.aviso.indexOf('PH_MAX') !== -1, rcap.w + 'x' + rcap.h);
-    const rform = nr({ w: 10, h: 10, forma: 'circle', phsize: 1 }, grupo);
-    check('circle explicito gana sobre el aspecto del grupo',
-      rform.forma === 'circle' && rform.w === 1000, rform.forma);
-    const rfit = nr({ w: 10, h: 10, forma: 'fit', phsize: 1 }, grupo);
-    check('fit se respeta con phsize (encaje completo)', rfit.forma === 'fit' && rfit.w === 1000);
+    const rform = nr({ w: 10, h: 10, forma: 'circulo', phsize: 1 }, grupo);
+    check('circulo explicito gana sobre el aspecto del grupo',
+      rform.forma === 'circulo' && rform.w === 1000, rform.forma);
+    const rauto = nr({ w: 10, h: 10, forma: 'auto', phsize: 1, r: 1, size: 0.9, ox: 5, oy: -5 }, grupo);
+    check('auto + r + size + ox + oy se normalizan con phsize',
+      rauto.forma === 'auto' && rauto.w === 1000 && rauto.r === 1 && rauto.size === 0.9 && rauto.ox === 5 && rauto.oy === -5);
     const rmin = nr({ w: 10, h: 10, min: 0, max: 0 }, null);
     check('min/max se normalizan a >= 1', rmin.min === 1 && rmin.max === 1);
   }
@@ -353,10 +354,13 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
     const r = Carg.normalizarRanuras([{ w: 10, h: 10, min: 3, max: 1 }])[0];
     return r.min === 3 && r.max === 3;   // max nunca queda por debajo de min
   })());
-  check('cargador: forma desconocida cae en rect',
-    Carg.normalizarRanuras([{ w: 10, h: 10, forma: 'triangulo' }])[0].forma === 'rect');
-  check('cargador: forma conocida se respeta',
-    Carg.normalizarRanuras([{ w: 10, h: 10, forma: 'circle' }])[0].forma === 'circle');
+  check('cargador: forma desconocida cae en rectangulo',
+    Carg.normalizarRanuras([{ w: 10, h: 10, forma: 'triangulo' }])[0].forma === 'rectangulo');
+  check('cargador: formas nuevas (circulo, cuadrado, ovalo, auto, rectangulo) y alias se respetan',
+    Carg.normalizarRanuras([{ w: 10, h: 10, forma: 'circulo' }])[0].forma === 'circulo'
+    && Carg.normalizarRanuras([{ w: 10, h: 10, forma: 'ovalo' }])[0].forma === 'ovalo'
+    && Carg.normalizarRanuras([{ w: 10, h: 10, forma: 'cuadrado' }])[0].forma === 'cuadrado'
+    && Carg.normalizarRanuras([{ w: 10, h: 10, forma: 'auto', r: 1, size: 0.75, ox: 12, oy: -8 }])[0].r === 1);
 
   // D16/T023b: `min` es la validacion real.
   const ranuras = Carg.normalizarRanuras([

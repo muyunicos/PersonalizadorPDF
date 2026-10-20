@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.11.0
+Stable tag: 4.12.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,15 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.12.0 =
+* **Cargador de imagenes intuitivo en movil y PC (spec 021)**: al abrir el cargador se dispara directamente la seleccion de archivo; el boton de archivo dice **"Cargar imagen"** y cambia a **"Cambiar imagen"** cuando ya hay una cargada. Se quitaron los botones **Camara** y **Reintentar**.
+* **Escena con relacion de aspecto fija, margen del 10% y doble guia de recorte**: `spmu-escena` conserva siempre la relacion de aspecto del placeholder (`W : H`), ocupa hasta `1000x1000 px` adaptandose al espacio disponible, y agrega un **10% de margen interno** en cada borde (`1.2W x 1.2H`) mostrando el **recorte secundario** (placeholder `W x H`, donde realmente se corta el PNG exportado) y el **recorte principal** (forma/envoltura posicionada con `size`, `ox`, `oy`).
+* **Nuevas formas de ranura**: `'rectangulo'`, `'circulo'`, `'cuadrado'`, `'ovalo'` y `'auto'` (usa el rectangulo mientras no tenga asignada una `envoltura` de placeholder).
+* **3 modos (`Rellenar` / `Ajustar` / `Estirar`) y regla del 5%**: si la imagen encaja perfecto o estirando hasta un **5%** horizontal o vertical, se muestra solo el modo **Estirar** y se oculta **Girar**; cuando supera el 5%, se muestran los 3 modos y **Girar** (solo si ademas la ranura habilita `{ r: 1 }`).
+* **Reducir / Ampliar + Color de fondo inteligente**: control **Reducir / Ampliar** con boton de reset al medio (`0`), arrastre libre y autodeteccion del **color de fondo** tomando el color predominante de los bordes de la imagen (o **transparente** si los bordes tienen transparencia).
+* **Subida con aviso y encadenado**: el boton **"Subir"** avisa que esta subiendo para evitar toques repetidos y, si quedan espacios en la ranura, pregunta si desea subir otra imagen (abriendo directo la galeria al elegir "Si").
+* **Mini galeria fullscreen (`cpmu-visor`)**: al hacer click en cualquier imagen subida se abre el visor modal con flechas para recorrer la coleccion, **Eliminar** y **Reemplazar** (avisando que imagen reemplaza y volviendo a la galeria con la foto actual si cancela).
 
 = 4.11.0 =
 * **Limpieza de legacy (spec 020): el codigo deja de cargar compatibilidad que nadie usa.** Regla del negocio: en desarrollo no hay migraciones ni retrocompatibilidad (el admin borra los campos viejos y regenera los PDFs). Esto **no** toca el formato vigente (`analisis.json`, `config.json`, `campos/campos.json` v3, `bonus/bonus.json`) ni el ciclo compra->pedido.

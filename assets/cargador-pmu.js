@@ -28,12 +28,19 @@
 (function (global) {
     'use strict';
 
-    var FORMAS = ['circle', 'square', 'rect', 'fit'];
+    var FORMAS = ['rectangulo', 'circulo', 'cuadrado', 'ovalo', 'auto'];
+    var MAPA_FORMAS = {
+        rectangulo: 'rectangulo', rect: 'rectangulo',
+        circulo: 'circulo', circle: 'circulo',
+        cuadrado: 'cuadrado', square: 'cuadrado',
+        ovalo: 'ovalo',
+        auto: 'auto', fit: 'auto'
+    };
 
     /**
-     * Normaliza las ranuras que llegan del campo. Una ranura invalida (sin w/h)
-     * se descarta; si no queda ninguna, la lista es vacia y el campo no monta
-     * cargador (no inventa medidas).
+     * Normaliza las ranuras que llegan del campo (spec 012 + spec 021).
+     * Una ranura invalida (sin w/h) se descarta; si no queda ninguna, la lista
+     * es vacia y el campo no monta cargador (no inventa medidas).
      */
     function normalizarRanuras(ranuras) {
         var out = [];
@@ -46,10 +53,28 @@
             var max = parseInt(r.max, 10) || 1;
             if (min < 1) { min = 1; }
             if (max < min) { max = min; }
+            var fCruda = (r.forma === undefined || r.forma === null || r.forma === '')
+                ? 'auto' : String(r.forma);
+            var forma = MAPA_FORMAS[fCruda] || 'rectangulo';
+            var size = parseFloat(r.size);
+            if (!isFinite(size) || size <= 0) { size = 1; }
+            var ox = parseFloat(r.ox);
+            if (!isFinite(ox)) { ox = 0; }
+            var oy = parseFloat(r.oy);
+            if (!isFinite(oy)) { oy = 0; }
+            var fondo = (typeof r.fondo === 'string' && r.fondo.trim() !== '')
+                ? r.fondo.trim() : 'auto';
             out.push({
+                etiqueta: r.etiqueta || '',
                 w: w, h: h,
-                forma: FORMAS.indexOf(r.forma) !== -1 ? r.forma : 'rect',
-                min: min, max: max
+                forma: forma,
+                min: min, max: max,
+                r: r.r ? 1 : 0,
+                size: size,
+                ox: ox,
+                oy: oy,
+                fondo: fondo,
+                aviso: r.aviso || ''
             });
         });
         return out;
@@ -114,27 +139,31 @@
             '.cpmu{margin:0 0 12px}'
             + '.cpmu-ranura{border:1px solid #dcdcde;border-radius:6px;padding:10px;margin:0 0 10px}'
             + '.cpmu-titulo{margin:0 0 8px;font-size:12px;color:#50575e}'
-            // Spec 019 (FR-006): aviso informativo de la ranura (nunca bloquea).
-            + '.cpmu-aviso{margin:0 0 8px;font-size:11.5px;color:#8a6116;background:#fcf9e8;'
-            + 'border:1px solid #f0e6c0;border-radius:4px;padding:4px 6px}'
+            + '.cpmu-aviso{margin:0 0 8px;font-size:11.5px;color:#8a6116;background:#fcf9e8;border:1px solid #f0e6c0;border-radius:4px;padding:4px 6px}'
             + '.cpmu-guia{display:inline-block;margin:0 0 8px;padding:6px 8px;border:1px dashed #c3c4c7;border-radius:4px}'
             + '.cpmu-guia-tit{margin:0 0 4px;font-size:11.5px;color:#646970}'
             + '.cpmu-guia-canvas{display:block;background:#fff}'
             + '.cpmu-tiras{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}'
-            + '.cpmu-mini{width:56px;height:56px;border:1px solid #2271b1;background:#f0f6fc;'
-            + 'color:#2271b1;font:600 15px/1 system-ui,sans-serif;cursor:pointer;border-radius:4px;'
-            + 'position:relative;overflow:hidden;padding:0}'
+            + '.cpmu-mini{width:56px;height:56px;border:1px solid #2271b1;background:#f0f6fc;color:#2271b1;font:600 15px/1 system-ui,sans-serif;cursor:pointer;border-radius:4px;position:relative;overflow:hidden;padding:0}'
             + '.cpmu-mini img{width:100%;height:100%;object-fit:cover;display:block;border-radius:inherit}'
-            + '.cpmu-mini-alto{outline:3px solid #d63638;outline-offset:1px}'
-            + '.cpmu-mini-cambiar{font-size:11px;min-height:28px;padding:2px 8px}'
-            + '.cpmu-mini-circle{border-radius:50%}'
-            + '.cpmu-zona{border:2px dashed #c3c4c7;border-radius:6px;padding:14px;text-align:center;'
-            + 'color:#50575e;font-size:13px;cursor:pointer}'
+            + '.cpmu-mini-circulo,.cpmu-mini-circle{border-radius:50%}'
+            + '.cpmu-zona{border:2px dashed #c3c4c7;border-radius:6px;padding:14px;text-align:center;color:#50575e;font-size:13px;cursor:pointer}'
             + '.cpmu-zona-sobre{border-color:#2271b1;background:#f0f6fc}'
             + '.cpmu-zona-llena{opacity:.75}'
             + '.cpmu-pie{display:flex;align-items:center;gap:10px;margin-top:6px}'
             + '.cpmu-estado{font-size:12px;color:#50575e}'
-            + '.cpmu-listo[disabled]{opacity:.6;cursor:not-allowed}';
+            + '.cpmu-listo[disabled]{opacity:.6;cursor:not-allowed}'
+            + '.cpmu-visor{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:180000;display:flex;flex-direction:column;justify-content:space-between;color:#fff;padding:calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));box-sizing:border-box}'
+            + '.cpmu-visor-top{display:flex;align-items:center;justify-content:space-between;gap:12px}'
+            + '.cpmu-visor-contador{font-size:14px;font-weight:600}'
+            + '.cpmu-visor-cerrar{border:0;background:rgba(255,255,255,.15);color:#fff;border-radius:50%;width:40px;height:40px;font-size:18px;cursor:pointer}'
+            + '.cpmu-visor-cuerpo{flex:1;display:flex;align-items:center;justify-content:center;position:relative;min-height:0;gap:12px;margin:10px 0}'
+            + '.cpmu-visor-img{max-width:min(86vw,900px);max-height:70vh;object-fit:contain;border-radius:6px;box-shadow:0 8px 32px rgba(0,0,0,.6);background:repeating-conic-gradient(#333 0 25%,#444 0 50%) 0/20px 20px}'
+            + '.cpmu-visor-nav{border:0;background:rgba(255,255,255,.18);color:#fff;border-radius:50%;width:44px;height:44px;font-size:24px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}'
+            + '.cpmu-visor-nav[hidden]{display:none}'
+            + '.cpmu-visor-acciones{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}'
+            + '.cpmu-visor-acciones .button{min-height:42px;padding:6px 18px;font-size:14px}'
+            + '.cpmu-visor-eliminar{background:#d63638 !important;border-color:#d63638 !important;color:#fff !important}';
         (doc.head || doc.documentElement).appendChild(st);
     }
 
@@ -146,20 +175,11 @@
             subir: typeof config.subir === 'function' ? config.subir : null,
             onChange: typeof config.onChange === 'function' ? config.onChange : null,
             onError: typeof config.onError === 'function' ? config.onError : null,
-            // Spec 016 (FR-015): el llamador resuelve la URL de cada id (el
-            // componente no conoce el endpoint). Sin urlDe, la mini queda con
-            // el numero (fallback, nunca una mini rota).
             urlDe: typeof config.urlDe === 'function' ? config.urlDe : null,
-            // Spec 012 (T011b/FR-009): en el preview de la consola se DIBUJAN las
-            // ranuras sin subir nada (ni boton, ni arrastre, ni endpoint).
             preview: !!config.preview,
-            // Guia del cargador (envoltura del grupo, opcion b): pista visual
-            // del recorte que aplicara el clip del PDF.
             envoltura: envolturaValida(config.envoltura)
         };
         this.estado = estadoInicial(this.config.ranuras);
-        // FR-017: al re-editar, los ids guardados se restauran en sus ranuras
-        // (uno por ranura, acotado por `max`). idsIniciales = [[ids]...].
         if (Array.isArray(config.idsIniciales)) {
             config.idsIniciales.forEach(function (ids, i) {
                 if (this.estado[i] && Array.isArray(ids) && this.config.ranuras[i]) {
@@ -167,10 +187,11 @@
                 }
             }, this);
         }
-        this.selectores = []; // un SelectorPMU por ranura
+        this.selectores = [];
         this.raiz = null;
-        this._reemplazo = null;   // FR-016: {indice, posicion} al "cambiar"
-        this._temporizador = null;
+        this._reemplazo = null;
+        this.visor = null;
+        this._onKeyVisor = null;
     }
 
     CargadorPMU.prototype.montar = function () {
@@ -302,7 +323,13 @@
             this.selectores[i] = { boton: boton, tira: tira, zona: zona, sel: null };
             return div;
         }
-        boton.addEventListener('click', function () { self._abrir(i, null); });
+        boton.addEventListener('click', function (e) {
+            e.stopPropagation();
+            self._abrir(i, null);
+        });
+        zona.addEventListener('click', function () {
+            if (!boton.disabled) { self._abrir(i, null); }
+        });
         ['dragenter', 'dragover'].forEach(function (ev) {
             zona.addEventListener(ev, function (e) {
                 e.preventDefault();
@@ -339,8 +366,6 @@
         var r = this.config.ranuras[indice];
         var slot = this.selectores[indice];
         if (!r || !slot) { return; }
-        // FR-016: "Cambiar" reabre con la ranura llena (reemplaza); subir de
-        // cero sigue respetando el tope `max`.
         if (!this._reemplazo && slot.tira.querySelectorAll('.cpmu-mini').length >= r.max) { return; }
 
         if (!slot.sel && typeof global.SelectorPMU !== 'function') {
@@ -351,41 +376,57 @@
             slot.sel = new global.SelectorPMU(null, {
                 finalW: r.w,
                 finalH: r.h,
-                aspectRatio: (r.forma === 'fit' ? null : r.w / r.h),
-                mode: (r.forma === 'fit' ? 'fit' : 'crop'),
-                // Guia de la envoltura dentro del modal (spec 016 F6): misma
-                // geometria que la tira, nunca premascara el PNG.
-                envoltura: this.config.envoltura || null
+                aspectRatio: r.w / r.h,
+                forma: r.forma,
+                r: r.r,
+                size: r.size,
+                ox: r.ox,
+                oy: r.oy,
+                fondo: r.fondo,
+                envoltura: this.config.envoltura || null,
+                subirAsync: function (blob) {
+                    var reemplazo = self._reemplazo;
+                    self._reemplazo = null;
+                    var pos = reemplazo ? reemplazo.posicion : null;
+                    return self._subir(indice, blob, pos).then(function (id) {
+                        if (reemplazo && reemplazo.desdeVisor) {
+                            self._abrirVisor(indice, pos);
+                        }
+                        return id;
+                    });
+                },
+                quedanEspacios: function () {
+                    return self.estado[indice].ids.length < r.max;
+                }
             });
         }
         slot.sel.onSelect(function () {
-            var blob = slot.sel.obtenerBlob();
-            if (!blob) {
-                self._error('No se pudo generar el recorte.');
+            if (!slot.sel.config.subirAsync) {
+                var blob = slot.sel.obtenerBlob();
+                if (!blob) { self._error('No se pudo generar el recorte.'); return; }
+                var reemplazo = self._reemplazo;
+                self._reemplazo = null;
+                self._subir(indice, blob, reemplazo ? reemplazo.posicion : null);
+            }
+        });
+        slot.sel.onError(function (mensaje, err) {
+            if (err && err.code === 'CROP_ABORTED') {
+                var reemp = self._reemplazo;
+                self._reemplazo = null;
+                if (reemp && reemp.desdeVisor) {
+                    self._abrirVisor(reemp.indice, reemp.posicion);
+                }
                 return;
             }
-            var reemplazo = self._reemplazo;
-            self._reemplazo = null;
-            self._subir(indice, blob, reemplazo ? reemplazo.posicion : null);
+            self._error(mensaje);
         });
-        slot.sel.onError(function (mensaje) { self._error(mensaje); });
-        slot.sel.open();
-
-        if (archivo) {
-            try {
-                var doc = this.raiz.ownerDocument || global.document;
-                var input = doc.querySelector('.spmu-file');
-                if (input) {
-                    var dt = new global.DataTransfer();
-                    dt.items.add(archivo);
-                    input.files = dt.files;
-                    input.dispatchEvent(new global.Event('change', { bubbles: true }));
-                }
-            } catch (e) {
-                // Sin DataTransfer (navegador viejo): el modal queda abierto y
-                // el comprador elige el archivo con el boton. No es un error.
-            }
-        }
+        var tituloContexto = this._reemplazo
+            ? ('Reemplazando imagen #' + (this._reemplazo.posicion + 1))
+            : '';
+        slot.sel.open({
+            archivo: archivo || null,
+            tituloContexto: tituloContexto
+        });
     };
 
     /** Sube el blob al item y, si el servidor devuelve id, lo anota. */
@@ -393,38 +434,37 @@
         var self = this;
         if (!this.config.subir) {
             this._error('No hay donde subir la imagen.');
-            return;
+            return Promise.reject(new Error('No hay donde subir la imagen.'));
         }
         var r = this.config.ranuras[indice];
         var btn = this.selectores[indice].boton;
         btn.disabled = true;
-        Promise.resolve(this.config.subir(blob, {
+        return Promise.resolve(this.config.subir(blob, {
             ranura: indice, w: r.w, h: r.h, forma: r.forma
         })).then(function (res) {
             btn.disabled = false;
             var id = res && res.id;
             if (!id) {
                 self._error('El servidor no devolvio la imagen.');
-                return;
+                throw new Error('El servidor no devolvio la imagen.');
             }
-            // FR-016: con `posicion` la foto REEMPLAZA (no suma); sin el,
-            // se agrega al final (flujo de siempre).
             if (posicion === null || posicion === undefined || posicion >= self.estado[indice].ids.length) {
                 self.estado[indice].ids.push(String(id));
             } else {
                 self.estado[indice].ids[posicion] = String(id);
             }
-            self._limpiarAlto();
             self._pintar();
+            return id;
         }, function (err) {
             btn.disabled = false;
-            self._error((err && err.message) || 'No se pudo subir la imagen.');
+            var msg = (err && err.message) || 'No se pudo subir la imagen.';
+            self._error(msg);
+            throw err || new Error(msg);
         });
     };
-/** Repinta miniaturas, contadores y el boton de "Listo" (D16). */
+    /** Repinta miniaturas, contadores y el boton de "Listo" (D16). */
     CargadorPMU.prototype._pintar = function () {
         var self = this;
-        this._limpiarAlto();
         this.config.ranuras.forEach(function (r, i) {
             var slot = self.selectores[i];
             if (!slot) { return; }
@@ -436,9 +476,7 @@
                 mini.type = 'button';
                 mini.className = 'cpmu-mini cpmu-mini-' + r.forma;
                 mini.setAttribute('data-id', id);
-                mini.title = 'Tocar para quitar o cambiar';
-                // FR-015: miniatura real (la foto); el numero es el fallback
-                // mientras la URL se resuelve (o si no hay urlDe).
+                mini.title = 'Ver imagen #' + (k + 1);
                 mini.textContent = String(k + 1);
                 self._pintarMini(mini, id);
                 mini.addEventListener('click', function () { self._miniTocar(i, k, mini); });
@@ -457,14 +495,8 @@
         }
     };
 
-    /**
-     * FR-015: pinta la foto real en la mini. `urlDe(id)` la resuelve (el
-     * componente no conoce el endpoint); si falla, queda el numero (nunca una
-     * mini rota).
-     */
     CargadorPMU.prototype._pintarMini = function (mini, id) {
         if (!this.config.urlDe || mini._pmuMiniImg) { return; }
-        var self = this;
         Promise.resolve(this.config.urlDe(id)).then(function (url) {
             if (!url || mini._pmuMiniImg) { return; }
             var doc = mini.ownerDocument || global.document;
@@ -477,48 +509,138 @@
         }).catch(function () { /* queda el numero */ });
     };
 
-    /** FR-016: la 1era tocada marca para confirmar; la 2da quita. Ofrece Cambiar. */
-    CargadorPMU.prototype._miniTocar = function (indice, posicion, mini) {
+    /** Spec 021 (D9): tocar una miniatura abre la mini galeria / visor fullscreen. */
+    CargadorPMU.prototype._miniTocar = function (indice, posicion) {
+        this._abrirVisor(indice, posicion);
+    };
+
+    /**
+     * Spec 021 (D9): mini galeria fullscreen (`cpmu-visor`) para revisar la
+     * coleccion de imagenes subidas con flechas, Eliminar y Reemplazar.
+     */
+    CargadorPMU.prototype._abrirVisor = function (indice, posicion) {
         var self = this;
-        if (mini.classList.contains('cpmu-mini-alto')) {
-            this._quitar(indice, posicion);
-            return;
-        }
-        this._limpiarAlto();
-        mini.classList.add('cpmu-mini-alto');
-        var doc = mini.ownerDocument || global.document;
-        var cambiar = doc.createElement('button');
-        cambiar.type = 'button';
-        cambiar.className = 'cpmu-mini-cambiar';
-        cambiar.textContent = 'Cambiar';
-        cambiar.addEventListener('click', function (e) {
-            e.stopPropagation();
-            self._cambiar(indice, posicion);
-        });
-        mini.parentNode.insertBefore(cambiar, mini.nextSibling);
-        mini._pmuBtnCambiar = cambiar;
-        if (this._temporizador) { clearTimeout(this._temporizador); }
-        this._temporizador = setTimeout(function () { self._limpiarAlto(); }, 3000);
+        this._cerrarVisor();
+        var ids = (this.estado[indice] && this.estado[indice].ids) || [];
+        if (!ids.length) { return; }
+        var pos = Math.max(0, Math.min(ids.length - 1, parseInt(posicion, 10) || 0));
+        var doc = (this.raiz && this.raiz.ownerDocument) || global.document;
+        if (!doc || !doc.body) { return; }
+
+        var modal = doc.createElement('div');
+        modal.className = 'cpmu-visor';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-label', 'Galeria de imagenes subidas');
+        modal.innerHTML =
+            '<div class="cpmu-visor-top">' +
+            '<span class="cpmu-visor-contador"></span>' +
+            '<button type="button" class="cpmu-visor-cerrar" aria-label="Cerrar">&#10005;</button>' +
+            '</div>' +
+            '<div class="cpmu-visor-cuerpo">' +
+            '<button type="button" class="cpmu-visor-nav cpmu-visor-prev" aria-label="Anterior">&#8249;</button>' +
+            '<img class="cpmu-visor-img" alt="">' +
+            '<button type="button" class="cpmu-visor-nav cpmu-visor-next" aria-label="Siguiente">&#8250;</button>' +
+            '</div>' +
+            '<div class="cpmu-visor-acciones">' +
+            '<button type="button" class="button button-primary cpmu-visor-reemplazar">Reemplazar</button>' +
+            '<button type="button" class="button cpmu-visor-eliminar">Eliminar</button>' +
+            '</div>';
+        doc.body.appendChild(modal);
+        this.visor = modal;
+        this._cablearVisor(modal, doc, indice, pos);
     };
 
-    /** FR-016: "Cambiar" reabre el editor y REEMPLAZA la foto (no suma). */
-    CargadorPMU.prototype._cambiar = function (indice, posicion) {
-        this._reemplazo = { indice: indice, posicion: posicion };
-        this._limpiarAlto();
-        this._abrir(indice, null);
-    };
+    CargadorPMU.prototype._cablearVisor = function (modal, doc, indice, pos) {
+        var self = this;
+        var elCont = modal.querySelector('.cpmu-visor-contador');
+        var elImg = modal.querySelector('.cpmu-visor-img');
+        var btnPrev = modal.querySelector('.cpmu-visor-prev');
+        var btnNext = modal.querySelector('.cpmu-visor-next');
+        var btnReemp = modal.querySelector('.cpmu-visor-reemplazar');
+        var btnElim = modal.querySelector('.cpmu-visor-eliminar');
+        var btnCerrar = modal.querySelector('.cpmu-visor-cerrar');
 
-    /** Saca el estado "confirmado" de todas las minis (y su boton Cambiar). */
-    CargadorPMU.prototype._limpiarAlto = function () {
-        if (!this.raiz) { return; }
-        var minis = this.raiz.querySelectorAll('.cpmu-mini-alto');
-        [].slice.call(minis).forEach(function (m) {
-            m.classList.remove('cpmu-mini-alto');
-            if (m._pmuBtnCambiar && m._pmuBtnCambiar.parentNode) {
-                m._pmuBtnCambiar.parentNode.removeChild(m._pmuBtnCambiar);
+        function renderizar() {
+            var lista = (self.estado[indice] && self.estado[indice].ids) || [];
+            if (!lista.length) { self._cerrarVisor(); return; }
+            if (pos >= lista.length) { pos = lista.length - 1; }
+            if (pos < 0) { pos = 0; }
+            elCont.textContent = 'Imagen ' + (pos + 1) + ' de ' + lista.length;
+            btnPrev.hidden = lista.length <= 1;
+            btnNext.hidden = lista.length <= 1;
+            var idActual = lista[pos];
+            elImg.src = '';
+            if (self.config.urlDe) {
+                Promise.resolve(self.config.urlDe(idActual)).then(function (url) {
+                    if (url && self.visor === modal) { elImg.src = url; }
+                }).catch(function () {});
             }
-            m._pmuBtnCambiar = null;
+        }
+
+        function ir(delta) {
+            var lista = (self.estado[indice] && self.estado[indice].ids) || [];
+            if (lista.length <= 1) { return; }
+            pos = (pos + delta + lista.length) % lista.length;
+            renderizar();
+        }
+
+        btnPrev.addEventListener('click', function () { ir(-1); });
+        btnNext.addEventListener('click', function () { ir(1); });
+        btnCerrar.addEventListener('click', function () { self._cerrarVisor(); });
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal || e.target.classList.contains('cpmu-visor-cuerpo')) {
+                self._cerrarVisor();
+            }
         });
+        btnReemp.addEventListener('click', function () {
+            self._cerrarVisor();
+            self._cambiar(indice, pos, true);
+        });
+        btnElim.addEventListener('click', function () {
+            self._quitar(indice, pos);
+            var lista = (self.estado[indice] && self.estado[indice].ids) || [];
+            if (!lista.length) { self._cerrarVisor(); return; }
+            if (pos >= lista.length) { pos = lista.length - 1; }
+            renderizar();
+        });
+
+        var touchX = null;
+        modal.addEventListener('touchstart', function (e) {
+            if (e.touches && e.touches.length === 1) { touchX = e.touches[0].clientX; }
+        }, { passive: true });
+        modal.addEventListener('touchend', function (e) {
+            if (touchX === null || !e.changedTouches || !e.changedTouches.length) { return; }
+            var dx = e.changedTouches[0].clientX - touchX;
+            touchX = null;
+            if (Math.abs(dx) > 40) { ir(dx < 0 ? 1 : -1); }
+        }, { passive: true });
+
+        this._onKeyVisor = function (e) {
+            if (e.key === 'Escape') { self._cerrarVisor(); }
+            else if (e.key === 'ArrowLeft') { ir(-1); }
+            else if (e.key === 'ArrowRight') { ir(1); }
+        };
+        doc.addEventListener('keydown', this._onKeyVisor);
+        renderizar();
+    };
+
+    CargadorPMU.prototype._cerrarVisor = function () {
+        var doc = (this.raiz && this.raiz.ownerDocument) || global.document;
+        if (this._onKeyVisor && doc) {
+            doc.removeEventListener('keydown', this._onKeyVisor);
+            this._onKeyVisor = null;
+        }
+        if (this.visor && this.visor.parentNode) {
+            this.visor.parentNode.removeChild(this.visor);
+        }
+        this.visor = null;
+    };
+
+    /** FR-016 + Spec 021 (D9): "Reemplazar" abre el cargador y reemplaza la foto. */
+    CargadorPMU.prototype._cambiar = function (indice, posicion, desdeVisor) {
+        this._reemplazo = { indice: indice, posicion: posicion, desdeVisor: !!desdeVisor };
+        this._abrir(indice, null);
     };
 
     CargadorPMU.prototype._quitar = function (indice, posicion) {
@@ -552,7 +674,7 @@
     };
 
     CargadorPMU.prototype.destruir = function () {
-        if (this._temporizador) { clearTimeout(this._temporizador); this._temporizador = null; }
+        this._cerrarVisor();
         this.config.ranuras.forEach(function (r, i) {
             var s = this.selectores[i];
             if (s && s.sel && s.sel.destroy) { s.sel.destroy(); }

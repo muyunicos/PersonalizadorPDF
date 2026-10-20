@@ -1,7 +1,14 @@
 # Contract: selector-visual (enmienda de selector-pmu)
 
-**Feature**: 016-editor-visual-fotos | **Fecha**: 2026-10-10
+**Feature**: 016-editor-visual-fotos + 021-cargador-visor-cliente | **Fecha**: 2026-10-19
 
+> **Enmienda v3 (spec 021, 2026-10-19)**: motor unificado Canvas 2D con:
+> - `spmu-escena` de hasta `1000x1000 px` con la relacion de aspecto exacta del placeholder (`finalW : finalH`) y **10% de margen interno** en cada borde (`canvasW = 1.2 * finalW`, `canvasH = 1.2 * finalH`).
+> - **Doble guia de recorte**: recorte secundario (`finalW x finalH`, donde realmente se corta el PNG exportado) y recorte principal (`forma`: `'rectangulo'|'circulo'|'cuadrado'|'ovalo'|'auto'`, posicionado con `size`, `ox`, `oy`).
+> - **3 modos (`rellenar` / `ajustar` / `estirar`) y regla del 5%**: si la imagen no difiere mas del 5% en relacion de aspecto respecto al lienzo, se usa solo **Modo 3 — Estirar** y se oculta **Girar**; si supera el 5%, se muestran los 3 botones y **Girar** (solo si ademas la ranura declara `{ r: 1 }`).
+> - Control **Reducir / Ampliar** con reset al centro (`0`), arrastre/pinch y **color de fondo** autodetectado por los bordes de la imagen (o `'transparent'` si los bordes tienen transparencia).
+> - Apertura directa del selector de archivos, boton `"Cargar imagen"` / `"Cambiar imagen"`, sin botones `"Camara"` ni `"Reintentar"`, boton `"Subir"` con aviso `"Subiendo imagen..."` y pregunta `"¿Queres subir otra imagen?"` si quedan espacios, mas **mini galeria fullscreen (`cpmu-visor`)** al tocar las miniaturas subidas.
+>
 > **Enmienda aditiva** del contrato `specs/004-woocommerce-pdf-personalization/contracts/selector-pmu.md`.
 > La interfaz publica NO cambia: lo que cambia es el interior del modal. Quien
 > consuma el contrato viejo sigue funcionando sin tocar una linea.
