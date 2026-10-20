@@ -68,4 +68,22 @@ $pendiente = $this->smoke_pendiente();
         </button>
         <span class="ec-conexion-pc-estado" aria-live="polite"></span>
     </p>
+    <hr>
+    <h3>Redimensionar una imagen en la PC</h3>
+    <p class="description">La PC devuelve un PNG transparente de exactamente W × H px. La imagen se centra y contiene, sin deformarse ni recortarse.</p>
+    <p>
+        <input type="file" id="ec-redimensionar-pc-imagen" accept="image/png,image/jpeg,image/gif,image/webp">
+    </p>
+    <p>
+        <label>Ancho <input type="number" id="ec-redimensionar-pc-ancho" min="1" max="3000" value="500"> px</label>
+        <label>Alto <input type="number" id="ec-redimensionar-pc-alto" min="1" max="3000" value="500"> px</label>
+    </p>
+    <p>
+        <button type="button" class="button ec-redimensionar-pc-probar"
+                data-nonce="<?php echo esc_attr(wp_create_nonce('personalizador_pdf_redimensionar_pc')); ?>">
+            Probar redimensionado en la PC
+        </button>
+        <span class="ec-redimensionar-pc-estado" aria-live="polite"></span>
+    </p>
+    <p class="ec-redimensionar-pc-descarga" hidden></p>
 </div>

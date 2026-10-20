@@ -22,7 +22,7 @@ if (PHP_SAPI !== 'cli') {
  *    carrito | minimos | pool* | overrides | sesion | conciliacion | completados | mockups* |
  *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
  *    reanalizar | envoltura_op | borrado | campo_global | campo_subida | pool_concurrente |
- *    conexion_pc`
+ *    conexion_pc | redimensionar_pc`
  */
 
 $fase = isset($argv[1]) ? $argv[1] : 'setup';
@@ -131,6 +131,13 @@ function wp_mkdir_p($d) { return @mkdir($d, 0777, true); }
 function wp_remote_get($url, $args = []) {
     $GLOBALS['test_remote_get'] = ['url' => $url, 'args' => $args];
     return $GLOBALS['test_remote_get_respuesta'] ?? ['response' => ['code' => 200], 'body' => '{"ok":true}'];
+}
+function wp_remote_post($url, $args = []) {
+    $GLOBALS['test_remote_post'] = ['url' => $url, 'args' => $args];
+    return $GLOBALS['test_remote_post_respuesta'] ?? [
+        'response' => ['code' => 200],
+        'body' => base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mNk+M/wHwAF/gL+zT7Y5QAAAABJRU5ErkJggg=='),
+    ];
 }
 function is_wp_error($respuesta) { return false; }
 function wp_remote_retrieve_response_code($respuesta) { return (int)($respuesta['response']['code'] ?? 0); }
@@ -592,6 +599,20 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 ($remota['url'] ?? '') === 'https://prueba.trycloudflare.com/health');
             check('conexion PC: timeout acotado', (int)(($remota['args']['timeout'] ?? 0)) === 8);
             check('conexion PC: mensaje de exito', strpos((string)($conexion['detalle'] ?? ''), 'Conexion OK') === 0);
+            break;
+        case 'redimensionar_pc':
+            $resultado = is_array($json) ? (array)($json['data'] ?? []) : [];
+            $remota = (array)($GLOBALS['test_remote_post'] ?? []);
+            check('redimensionar PC: JSON success', is_array($json) && $json['success'] === true);
+            check('redimensionar PC: envia al endpoint correcto',
+                ($remota['url'] ?? '') === 'https://prueba.trycloudflare.com/redimensionar');
+            check('redimensionar PC: envia dimensiones y bytes',
+                ($remota['args']['headers']['X-PMU-Ancho'] ?? '') === '320'
+                && ($remota['args']['headers']['X-PMU-Alto'] ?? '') === '180'
+                && strlen((string)($remota['args']['body'] ?? '')) > 0);
+            check('redimensionar PC: PNG devuelto al navegador',
+                ($resultado['nombre'] ?? '') === 'prueba-pc-320x180.png'
+                && substr((string)base64_decode((string)($resultado['imagen_base64'] ?? ''), true), 0, 4) === "\x89PNG");
             break;
         case 'subir_conflicto':
             // D2: unica via JSON (el JS abre su modal con nombre_existente:).
@@ -3269,6 +3290,25 @@ switch ($fase) {
         ];
         $_REQUEST = $_POST;
         $p->handle_conexion_pc(); // exit en responder(JSON con detalle)
+        break;
+
+    case 'redimensionar_pc':
+        preparar_entorno($testBase, $base);
+        $temporal = $testBase . '/prueba-redimensionar.png';
+        file_put_contents($temporal, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mNk+M/wHwAF/gL+zT7Y5QAAAABJRU5ErkJggg=='));
+        $_FILES = [
+            'imagen' => [
+                'name' => 'prueba.png', 'type' => 'image/png', 'tmp_name' => $temporal,
+                'error' => UPLOAD_ERR_OK, 'size' => filesize($temporal),
+            ],
+        ];
+        $_POST = [
+            'action' => 'personalizador_pdf_redimensionar_pc',
+            'url' => 'https://prueba.trycloudflare.com', 'ancho' => '320', 'alto' => '180',
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_redimensionar_pc(); // exit en responder(JSON con PNG)
         break;
 
     case 'subir_conflicto':

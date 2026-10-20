@@ -1520,6 +1520,48 @@ jQuery(function ($) {
             .then(function () { $btn.prop('disabled', false); });
     });
 
+    function blobDesdeBase64(base64) {
+        var binario = window.atob(base64);
+        var bytes = new Uint8Array(binario.length);
+        for (var i = 0; i < binario.length; i++) { bytes[i] = binario.charCodeAt(i); }
+        return new Blob([bytes], {type: 'image/png'});
+    }
+
+    $(document).on('click', '.ec-redimensionar-pc-probar', function () {
+        var $btn = $(this).prop('disabled', true);
+        var $estado = $('.ec-redimensionar-pc-estado').removeClass('ec-ok ec-error');
+        var $descarga = $('.ec-redimensionar-pc-descarga').attr('hidden', true).empty();
+        var archivo = ($('#ec-redimensionar-pc-imagen')[0] || {}).files;
+        var ancho = parseInt($('#ec-redimensionar-pc-ancho').val(), 10);
+        var alto = parseInt($('#ec-redimensionar-pc-alto').val(), 10);
+        var url = $.trim($('#ec-conexion-pc-url').val() || '');
+        if (!archivo || !archivo[0] || !url || !ancho || !alto) {
+            $estado.addClass('ec-error').text('Indicá la URL, una imagen y las dimensiones.');
+            $btn.prop('disabled', false);
+            return;
+        }
+        var fd = new FormData();
+        fd.append('url', url);
+        fd.append('ancho', ancho);
+        fd.append('alto', alto);
+        fd.append('imagen', archivo[0], archivo[0].name);
+        $estado.text('Enviando a la PC y esperando el PNG...');
+        pmuPost('personalizador_pdf_redimensionar_pc', fd, $(this).data('nonce') || '')
+            .then(function (res) {
+                var d = res.data || {};
+                if (!d.imagen_base64) { throw new Error('La PC no devolvio la imagen.'); }
+                var enlace = $('<a class="button button-primary">Descargar resultado</a>')
+                    .attr('href', URL.createObjectURL(blobDesdeBase64(d.imagen_base64)))
+                    .attr('download', d.nombre || 'prueba-pc.png');
+                $descarga.append(enlace).removeAttr('hidden');
+                $estado.addClass('ec-ok').text(d.detalle || 'PNG recibido desde la PC.');
+            })
+            .catch(function (err) {
+                $estado.addClass('ec-error').text((err && err.message) || 'No se pudo redimensionar la imagen.');
+            })
+            .then(function () { $btn.prop('disabled', false); });
+    });
+
     /* ============ 4. Personalizacion por grupo (estado, guardado y puente TextMuy) ============ */
 
     var RENDER_CORE_URL = (window.PersonalizadorPDF && window.PersonalizadorPDF.renderCoreUrl) || '';

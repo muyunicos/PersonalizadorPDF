@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.16.2
+ * Version: 4.16.3
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -86,6 +86,7 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_smoke', [$this, 'handle_smoke_test']);
         // Prueba aislada Hostinger -> Cloudflare Tunnel -> PC local.
         add_action('admin_post_personalizador_pdf_conexion_pc', [$this, 'handle_conexion_pc']);
+        add_action('admin_post_personalizador_pdf_redimensionar_pc', [$this, 'handle_redimensionar_pc']);
 
         // Spec 004 (T012): panel del comprador en la ficha del producto.
         // El shortcode expone el mismo panel fuera de Woo (manuales/test).
@@ -2745,19 +2746,11 @@ class Personalizador_PDF_Plugin
     public function handle_conexion_pc()
     {
         $this->seguridad('personalizador_pdf_conexion_pc');
-        $entrada = isset($_POST['url']) ? trim((string)wp_unslash($_POST['url'])) : '';
-        $partes = parse_url($entrada);
-        $host = is_array($partes) ? strtolower((string)($partes['host'] ?? '')) : '';
-        $ruta = is_array($partes) ? (string)($partes['path'] ?? '') : '';
-        $esQuickTunnel = $host !== '' && (bool)preg_match('/\A[a-z0-9-]+\.trycloudflare\.com\z/', $host);
-
-        if (!is_array($partes) || ($partes['scheme'] ?? '') !== 'https' || !$esQuickTunnel
-            || isset($partes['user'], $partes['pass'], $partes['port'], $partes['query'], $partes['fragment'])
-            || ($ruta !== '' && $ruta !== '/health')) {
+        $base = $this->base_tunel_prueba(isset($_POST['url']) ? (string)wp_unslash($_POST['url']) : '');
+        if ($base === '') {
             $this->responder(false, [], 'Pegá la URL HTTPS temporal de trycloudflare.com, sin ruta ni parametros.');
         }
-
-        $url = 'https://' . $host . '/health';
+        $url = $base . '/health';
         $respuesta = wp_remote_get($url, [
             'timeout' => 8,
             'redirection' => 0,
@@ -2774,6 +2767,77 @@ class Personalizador_PDF_Plugin
             $this->responder(false, [], 'La PC no devolvio la respuesta esperada (HTTP ' . $codigo . ').');
         }
         $this->responder(true, ['detalle' => 'Conexion OK: Hostinger recibio respuesta de la PC.']);
+    }
+
+    /** Base valida de un Quick Tunnel, sin ruta ni parametros (defensa SSRF). */
+    private function base_tunel_prueba($entrada)
+    {
+        $partes = parse_url(trim((string)$entrada));
+        $host = is_array($partes) ? strtolower((string)($partes['host'] ?? '')) : '';
+        $ruta = is_array($partes) ? (string)($partes['path'] ?? '') : '';
+        $esQuickTunnel = $host !== '' && (bool)preg_match('/\A[a-z0-9-]+\.trycloudflare\.com\z/', $host);
+        if (!is_array($partes) || ($partes['scheme'] ?? '') !== 'https' || !$esQuickTunnel
+            || isset($partes['user'], $partes['pass'], $partes['port'], $partes['query'], $partes['fragment'])
+            || ($ruta !== '' && $ruta !== '/')) {
+            return '';
+        }
+        return 'https://' . $host;
+    }
+
+    /** Prueba de envio a la PC: imagen temporal -> PNG devuelto, sin persistir datos. */
+    public function handle_redimensionar_pc()
+    {
+        $this->seguridad('personalizador_pdf_redimensionar_pc');
+        $base = $this->base_tunel_prueba(isset($_POST['url']) ? (string)wp_unslash($_POST['url']) : '');
+        $ancho = isset($_POST['ancho']) ? (int)$_POST['ancho'] : 0;
+        $alto = isset($_POST['alto']) ? (int)$_POST['alto'] : 0;
+        $archivo = $_FILES['imagen'] ?? null;
+        if ($base === '' || $ancho < 1 || $alto < 1 || $ancho > 3000 || $alto > 3000) {
+            $this->responder(false, [], 'URL o dimensiones invalidas (cada lado debe ser 1..3000 px).');
+        }
+        $temporal = is_array($archivo) ? (string)($archivo['tmp_name'] ?? '') : '';
+        $esSubida = $temporal !== '' && (is_uploaded_file($temporal) || (PHP_SAPI === 'cli' && is_file($temporal)));
+        if (!is_array($archivo) || (int)($archivo['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !$esSubida) {
+            $this->responder(false, [], 'Elegí una imagen valida para probar.');
+        }
+        if ((int)($archivo['size'] ?? 0) < 1 || (int)$archivo['size'] > 10 * 1024 * 1024) {
+            $this->responder(false, [], 'La imagen debe pesar entre 1 byte y 10 MB.');
+        }
+        $info = @getimagesize((string)$archivo['tmp_name']);
+        $mime = is_array($info) ? (string)($info['mime'] ?? '') : '';
+        if (!in_array($mime, ['image/png', 'image/jpeg', 'image/gif', 'image/webp'], true)) {
+            $this->responder(false, [], 'El archivo debe ser una imagen PNG, JPG, GIF o WebP valida.');
+        }
+        $bytes = (string)@file_get_contents((string)$archivo['tmp_name']);
+        if ($bytes === '') {
+            $this->responder(false, [], 'No se pudo leer la imagen subida.');
+        }
+        $respuesta = wp_remote_post($base . '/redimensionar', [
+            'timeout' => 35,
+            'redirection' => 0,
+            'headers' => [
+                'Accept' => 'image/png',
+                'Content-Type' => $mime,
+                'X-PMU-Ancho' => (string)$ancho,
+                'X-PMU-Alto' => (string)$alto,
+            ],
+            'body' => $bytes,
+        ]);
+        if (is_wp_error($respuesta)) {
+            $this->responder(false, [], 'No se pudo conectar con la PC: ' . $respuesta->get_error_message());
+        }
+        $salida = (string)wp_remote_retrieve_body($respuesta);
+        if ((int)wp_remote_retrieve_response_code($respuesta) !== 200 || substr($salida, 0, 8) !== "\x89PNG\r\n\x1a\n") {
+            $this->responder(false, [], 'La PC no devolvio un PNG valido.');
+        }
+        if (strlen($salida) > 8 * 1024 * 1024) {
+            $this->responder(false, [], 'El PNG devuelto supera el limite de 8 MB para esta prueba.');
+        }
+        $this->responder(true, [
+            'imagen_base64' => base64_encode($salida),
+            'nombre' => 'prueba-pc-' . $ancho . 'x' . $alto . '.png',
+            'detalle' => 'PNG recibido desde la PC: ' . $ancho . ' x ' . $alto . ' px.',
+        ]);
     }
 
     /** Ultima corrida del smoke (o null si nunca corrio). */
@@ -2909,7 +2973,7 @@ class Personalizador_PDF_Plugin
     {
         $acciones = [
             'subir_pdf', 'reanalizar', 'procesar', 'borrar', 'config',
-            'subir_imagen', 'quitar_imagen', 'mockups', 'smoke', 'conexion_pc',
+            'subir_imagen', 'quitar_imagen', 'mockups', 'smoke', 'conexion_pc', 'redimensionar_pc',
         ];
         $faltan = [];
         foreach ($acciones as $accion) {
