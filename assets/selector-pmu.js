@@ -154,16 +154,19 @@
     }
 
     /**
-     * Spec 024 (D10): origen del dibujo (y **punto fijo del zoom**) = centro de
-     * la FORMA principal, no del placeholder. Asi, con `size`/`ox`/`oy`, la foto
-     * crece desde la envoltura y lo que esta dentro de la forma no se corre.
-     * Con la forma centrada (`size: 1`, `ox`/`oy`: 0) el resultado es **identico**
-     * al centro del placeholder. `conMargen` distingue la escena (1.2W x 1.2H)
-     * del PNG de salida (W x H), donde hay que restar el margen.
+     * Spec 024 (D10): centro de la IMAGEN = centro de la FORMA principal +
+     * **desplazamiento escalado por el zoom**. Asi el punto fijo del zoom es el
+     * centro de la envoltura: el punto de la foto que esta bajo ese centro se
+     * queda ahi aunque el comprador haya arrastrado la imagen (fix 4.15.3).
+     *
+     * Con `desp` 0 o `zoom` 1 el resultado es el de siempre, y con la forma
+     * centrada (`size: 1`, `ox`/`oy`: 0) coincide con el centro del placeholder.
+     * `conMargen` distingue la escena (1.2W x 1.2H) del PNG de salida (W x H).
      */
-    function origenDibujo(geo, conMargen, desp) {
-        var dx = (desp && isFinite(desp.x)) ? desp.x : 0;
-        var dy = (desp && isFinite(desp.y)) ? desp.y : 0;
+    function origenDibujo(geo, conMargen, desp, zoom) {
+        var z = (isFinite(zoom) && zoom > 0) ? zoom : 1;
+        var dx = (desp && isFinite(desp.x)) ? desp.x * z : 0;
+        var dy = (desp && isFinite(desp.y)) ? desp.y * z : 0;
         var prin = (geo && geo.principal) ? geo.principal : { cx: 0, cy: 0 };
         var margenX = (geo && isFinite(geo.margenX)) ? geo.margenX : 0;
         var margenY = (geo && isFinite(geo.margenY)) ? geo.margenY : 0;
@@ -787,8 +790,10 @@
         }
         if (!this.imagen) { return; }
         var caja = this._cajaImagenModo();
-        // Spec 024 (D10): el zoom crece desde el centro de la envoltura.
-        var origen = origenDibujo(geo, conMargen, this.desplazamiento);
+        // Spec 024 (D10 + fix 4.15.3): el zoom crece desde el centro de la
+        // envoltura; el desplazamiento se escala por el zoom para que el punto
+        // de la foto bajo ese centro no se mueva.
+        var origen = origenDibujo(geo, conMargen, this.desplazamiento, this.zoom);
         ctx.save();
         ctx.translate(origen.x, origen.y);
         if (this.rotacion) { ctx.rotate((this.rotacion * Math.PI) / 180); }
@@ -921,8 +926,12 @@
             if (!self._arrastrando || !self.canvas) { return; }
             var caja = self.canvas.getBoundingClientRect();
             var escala = caja.width > 0 ? self.canvas.width / caja.width : 1;
-            self.desplazamiento.x = self._arrastrando.dx + (e.clientX - self._arrastrando.x) * escala;
-            self.desplazamiento.y = self._arrastrando.dy + (e.clientY - self._arrastrando.y) * escala;
+            // Fix 4.15.3: el desplazamiento se guarda en unidades del lienzo a
+            // zoom 1 (al dibujar se multiplica por el zoom), asi el arrastre
+            // sigue 1:1 con el dedo/mouse en cualquier escala.
+            var k = escala / (self.zoom || 1);
+            self.desplazamiento.x = self._arrastrando.dx + (e.clientX - self._arrastrando.x) * k;
+            self.desplazamiento.y = self._arrastrando.dy + (e.clientY - self._arrastrando.y) * k;
             self._dibujar();
         });
 

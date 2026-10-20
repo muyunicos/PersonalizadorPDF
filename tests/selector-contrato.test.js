@@ -181,29 +181,44 @@ check('modal: con sin-ampliar los modos y Girar se ocultan y el slider capa a 0'
   && /escala === 'sin-ampliar' \? '0' : '100'/.test(selector));
 check('el cargador pasa escala al selector (spec 023)', /escala: r\.escala/.test(cargador));
 
-console.log('\n== F2c: zoom desde la envoltura y click del ojito (spec 024, 4.15.2) ==');
+console.log('\n== F2c: zoom desde la envoltura y click del ojito (spec 024, 4.15.2/4.15.3) ==');
 // Forma centrada (size 1, ox/oy 0): el origen es EXACTAMENTE el de antes.
 const gCentrada = puro.geometriaEscena(1000, 500, { forma: 'rectangulo', size: 1 });
-const oCentro = puro.origenDibujo(gCentrada, true, { x: 0, y: 0 });
+const oCentro = puro.origenDibujo(gCentrada, true, { x: 0, y: 0 }, 1);
 check('origen: forma centrada -> centro del placeholder (comportamiento intacto)',
   oCentro.x === gCentrada.margenX + 500 && oCentro.y === gCentrada.margenY + 250,
   oCentro.x + ',' + oCentro.y);
 // En el PNG de salida (sin margen) cae en W/2, H/2.
-const oPng = puro.origenDibujo(gCentrada, false, { x: 0, y: 0 });
+const oPng = puro.origenDibujo(gCentrada, false, { x: 0, y: 0 }, 1);
 check('origen: en el PNG de salida (sin margen) cae en W/2, H/2',
   oPng.x === 500 && oPng.y === 250, oPng.x + ',' + oPng.y);
 // Forma desplazada: el origen se corre con ella (zoom desde la envoltura).
 const gDesp = puro.geometriaEscena(1000, 500, { forma: 'rectangulo', size: 1, ox: 20 });
-const oDesp = puro.origenDibujo(gDesp, true, { x: 0, y: 0 });
+const oDesp = puro.origenDibujo(gDesp, true, { x: 0, y: 0 }, 1);
 check('origen: con ox=20 el centro se corre 20% de W (crece desde la forma)',
   Math.round(oDesp.x - oCentro.x) === 200, String(Math.round(oDesp.x - oCentro.x)));
-// El arrastre se suma al origen.
-const oDrag = puro.origenDibujo(gCentrada, true, { x: 30, y: -10 });
-check('origen: el arrastre del comprador se suma',
+// Con zoom 1 el arrastre se respeta tal cual.
+const oDrag = puro.origenDibujo(gCentrada, true, { x: 30, y: -10 }, 1);
+check('origen: con zoom 1 el arrastre se suma sin escalar',
   oDrag.x === oCentro.x + 30 && oDrag.y === oCentro.y - 10);
-check('el modal dibuja con origenDibujo (ya no con el centro del placeholder)',
-  /var origen = origenDibujo\(geo, conMargen, this\.desplazamiento\)/.test(selector)
+// Fix 4.15.3: con zoom 2 el desplazamiento se DUPLICA (anclaje en la forma).
+const oZ2 = puro.origenDibujo(gCentrada, true, { x: 30, y: -10 }, 2);
+check('origen: con zoom 2 el desplazamiento se escala (30 -> 60)',
+  oZ2.x === oCentro.x + 60 && oZ2.y === oCentro.y - 20,
+  String(Math.round(oZ2.x - oCentro.x)));
+// LA PRUEBA DEL BUG: el punto de la imagen bajo el centro de la forma NO cambia
+// al cambiar el zoom (u = (centro - centroImagen) / zoom).
+const centro = oCentro.x;
+const u1 = (centro - puro.origenDibujo(gCentrada, true, { x: 50, y: 0 }, 1).x) / 1;
+const u2 = (centro - puro.origenDibujo(gCentrada, true, { x: 50, y: 0 }, 2).x) / 2;
+const u4 = (centro - puro.origenDibujo(gCentrada, true, { x: 50, y: 0 }, 4).x) / 4;
+check('el punto de la foto bajo el centro de la forma es INVARIANTE al zoom',
+  u1 === u2 && u2 === u4, u1 + ' / ' + u2 + ' / ' + u4);
+check('el modal dibuja con origenDibujo y le pasa el zoom (fix 4.15.3)',
+  /var origen = origenDibujo\(geo, conMargen, this\.desplazamiento, this\.zoom\)/.test(selector)
   && !/var cx = ox \+ \(w \/ 2\)/.test(selector));
+check('fix 4.15.3: el arrastre se compensa con el zoom (sigue 1:1 con el dedo)',
+  /var k = escala \/ \(self\.zoom \|\| 1\)/.test(selector));
 check('fix 4.15.2: el pointerdown del ojito no arranca el arrastre',
   /ojo\.addEventListener\('pointerdown', function \(e\) \{ e\.stopPropagation\(\); \}\)/.test(selector)
   && /self\.ojo && self\.ojo\.contains/.test(selector)

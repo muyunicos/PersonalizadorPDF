@@ -3,7 +3,7 @@
 > **GENERADO automaticamente** por `php tests/inventario_repo.php` — NO editar a mano.
 > La semantica (responsabilidad de cada archivo) vive en `AGENTS.md` seccion 2 y en
 > `modules/LEEME.md`; este reporte aporta los NUMEROS: peso, LOC, dependencias
-> cruzadas y candidatos a codigo muerto. Generado: 2026-10-20 02:07.
+> cruzadas y candidatos a codigo muerto. Generado: 2026-10-20 02:19.
 
 ## 1. Resumen por tipo
 
@@ -11,9 +11,9 @@
 |---|---:|---:|
 | CSS | 2 | 76,3 |
 | HTML | 2 | 132,2 |
-| JS assets | 9 | 385,9 |
+| JS assets | 9 | 386,5 |
 | JS modulo textmuy | 14 | 643,3 |
-| JS test | 6 | 106,7 |
+| JS test | 6 | 107,8 |
 | JS test modulo | 46 | 291,6 |
 | PHP admin | 7 | 87,6 |
 | PHP entry (plugin WP) | 1 | 246,8 |
@@ -21,11 +21,11 @@
 | PHP motor | 7 | 134,7 |
 | PHP test CLI | 11 | 315,2 |
 | config | 6 | 13,4 |
-| doc | 143 | 1.382,6 |
+| doc | 143 | 1.384,0 |
 | otro | 10 | 12,7 |
-| **TOTAL** | **267** | **3.968,8** |
+| **TOTAL** | **267** | **3.971,8** |
 
-Codigo fuente (php/js/css/html): **108 archivos, 2.560,1 KB**. Docs (md/txt): 143. Config: 6.
+Codigo fuente (php/js/css/html): **108 archivos, 2.561,7 KB**. Docs (md/txt): 143. Config: 6.
 
 ## 2. Archivos de codigo mas pesados (top 15)
 
@@ -40,7 +40,7 @@ Codigo fuente (php/js/css/html): **108 archivos, 2.560,1 KB**. Docs (md/txt): 14
 | 7 | 98,4 | `assets/admin.js` | JS assets |
 | 8 | 73,6 | `assets/mockups.js` | JS assets |
 | 9 | 69,2 | `assets/tienda.js` | JS assets |
-| 10 | 57,6 | `assets/selector-pmu.js` | JS assets |
+| 10 | 58,1 | `assets/selector-pmu.js` | JS assets |
 | 11 | 57,1 | `modules/textmuy/js/fonts.js` | JS modulo textmuy |
 | 12 | 52,7 | `admin/pdfs.php` | PHP admin |
 | 13 | 45,9 | `modules/textmuy/css/style.css` | CSS |
@@ -70,7 +70,7 @@ enqueue, `<script src>`, etc.).
 | `assets/mockup-geometria.js` | JS assets | 15,9 | 281 | - | - | - | 4 | OK |
 | `assets/mockup-render.js` | JS assets | 18,2 | 298 | - | - | - | 3 | OK |
 | `assets/mockups.js` | JS assets | 73,6 | 1425 | - | - | - | 6 | OK |
-| `assets/selector-pmu.js` | JS assets | 57,6 | 1075 | - | - | - | 4 | OK |
+| `assets/selector-pmu.js` | JS assets | 58,1 | 1077 | - | - | - | 4 | OK |
 | `assets/tienda.js` | JS assets | 69,2 | 1054 | - | - | - | 6 | OK |
 | `engine/Detector.php` | PHP motor | 35,5 | 923 | 38 | - | <br>personalizador-pdf.php<br>tests/envolturas.php<br>tests/motor_smoke.php<br>tests/parity.php | 4 | OK |
 | `engine/Imagen.php` | PHP motor | 15,0 | 325 | 12 | - | <br>personalizador-pdf.php<br>tests/motor_smoke.php | 2 | OK |
@@ -159,7 +159,7 @@ enqueue, `<script src>`, etc.).
 | `tests/motor_smoke.php` | PHP test CLI | 14,6 | 255 | 2 | <br>engine/Pdf.php<br>engine/Detector.php<br>engine/PngWriter.php<br>engine/Metadata.php<br>engine/Imagen.php<br>engine/Overlay.php<br>engine/Motor.php | - | 0 | ENTRADA CLI test |
 | `tests/parity.php` | PHP test CLI | 5,7 | 141 | 1 | <br>engine/Pdf.php<br>engine/Detector.php | - | 0 | ENTRADA CLI test |
 | `tests/phpstan/simbolos.php` | PHP test CLI | 0,8 | 9 | - | - | - | 0 | ENTRADA CLI test |
-| `tests/selector-contrato.test.js` | JS test | 18,2 | 264 | - | - | - | 0 | ENTRADA CLI test |
+| `tests/selector-contrato.test.js` | JS test | 19,2 | 276 | - | - | - | 0 | ENTRADA CLI test |
 | `tests/sin_lectura.php` | PHP test CLI | 4,6 | 95 | 8 | <br>inc/class-pmu-galeria.php<br>inc/class-pmu-uploads.php | - | 0 | ENTRADA CLI test |
 | `tests/texto_puente.php` | PHP test CLI | 229,0 | 2950 | 84 | <br>admin/pdfs.php<br>admin/pedidos.php<br>inc/class-pmu-galeria.php<br>inc/class-pmu-uploads.php<br>inc/class-pmu-sesion.php | - | 0 | ENTRADA CLI test |
 | `tests/validez.js` | JS test | 2,5 | 30 | - | - | - | 0 | ENTRADA CLI test |
@@ -190,7 +190,7 @@ _Ninguno._
 
 ## 7. Documentacion y configuracion (fuera de la tabla de codigo)
 
-- Docs (md/txt): **143** archivos, 1.382,6 KB.
+- Docs (md/txt): **143** archivos, 1.384,0 KB.
 - Config: **6** archivos (json/neon/lock).
 - Otros (10): .gitattributes, .gitignore, modules/.gitignore, modules/.gitkeep, modules/textmuy/.editorconfig, modules/textmuy/.gitattributes, modules/textmuy/.gitignore, tests/fixtures/exacto_b.jpg, tests/fixtures/foto_a.png, tests/fixtures/paleta_b.png
 

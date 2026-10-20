@@ -651,6 +651,9 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   se corta con `stopPropagation` + guard `ojo.contains(e.target)`), y el **zoom crece desde el centro
   de la forma** (`origenDibujo` con `geo.principal.cx/cy`), no del placeholder — con la forma
   centrada el resultado es idéntico al anterior.
+  **Fix 4.15.3**: el desplazamiento del comprador se **escala por el zoom** (`desp * zoom`) dentro de
+  `origenDibujo`: sin eso el punto fijo seguía siendo el **centro de la imagen**, y al arrastrar y
+  ampliar el contenido bajo el centro de la forma se corría (el check de invariancia da `-50 / -50 / -50`).
 - ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
   (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
