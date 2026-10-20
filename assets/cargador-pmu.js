@@ -354,12 +354,11 @@
         this.selectores[i] = { boton: boton, tira: tira, zona: zona, sel: null };
         return div;
     };
-/**
-     * Abre el `SelectorPMU` de la ranura. `archivo` (opcional) precarga el
-     * modal: se hace por la superficie PUBLICA del modal (el input `.spmu-file`
-     * que ya renderiza), sin tocar los internos de `selector-pmu.js`, cuyo
-     * contrato no se modifica. Si la precarga falla, el modal sigue abierto y el
-     * comprador elige el archivo a mano.
+    /**
+     * Abre el `SelectorPMU` de la ranura. `archivo` (opcional) se le pasa al
+     * modal para que lo cargue directo (drop zone); sin el, el modal abre el
+     * dialogo de archivos por si mismo (spec 021 D8). Si viene de un reemplazo
+     * desde la mini galeria, `tituloContexto` avisa que imagen se reemplaza.
      */
     CargadorPMU.prototype._abrir = function (indice, archivo) {
         var self = this;
