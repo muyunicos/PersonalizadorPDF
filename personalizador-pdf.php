@@ -2880,28 +2880,35 @@ class Personalizador_PDF_Plugin
             $this->responder(false, [], 'La configuracion de la cadena esta vacia o supera 8 KB.');
         }
         $configuracion = json_decode($entrada, true);
-        if (is_array($configuracion) && array_key_exists('escalado', $configuracion)) {
-            if (array_diff(array_keys($configuracion), ['escalado', 'quitar_fondo', 'tareas'])
-                || !is_array($configuracion['escalado'])) {
-                $this->responder(false, [], 'La configuracion anidada debe contener escalado, quitar_fondo y tareas.');
-            }
+        $formato_opciones = is_array($configuracion)
+            && !array_key_exists('tareas', $configuracion)
+            && !array_key_exists('predeterminados', $configuracion)
+            && !array_diff(array_keys($configuracion), ['escalado', 'quitar_fondo']);
+        if ($formato_opciones) {
             $anidada = $configuracion;
-            $escalado = $anidada['escalado'];
-            if (array_diff(array_keys($escalado), ['modo', 'ancho', 'alto', 'alfa'])) {
-                $this->responder(false, [], 'escalado contiene opciones desconocidas.');
+            $escalado = $anidada['escalado'] ?? [];
+            if (!is_array($escalado)
+                || array_diff(array_keys($escalado), ['modo', 'ancho', 'alto', 'alfa'])) {
+                $this->responder(false, [], 'escalado contiene opciones desconocidas o no es un objeto.');
             }
             $configuracion = $escalado;
             if (array_key_exists('quitar_fondo', $anidada)) {
                 $configuracion['quitar_fondo'] = $anidada['quitar_fondo'];
             }
-            if (array_key_exists('tareas', $anidada)) {
-                $configuracion['tareas'] = $anidada['tareas'];
-            }
+            $configuracion['tareas'] = [
+                ['tipo' => 'quitar_fondo'],
+                ['tipo' => 'mejorar'],
+            ];
             $entrada_normalizada = wp_json_encode($configuracion);
             if (!is_string($entrada_normalizada)) {
                 $this->responder(false, [], 'No se pudo preparar la configuracion anidada.');
             }
-            return $this->validar_pipeline_pc($entrada_normalizada);
+            $this->validar_pipeline_pc($entrada_normalizada);
+            $salida_opciones = wp_json_encode($anidada);
+            if (!is_string($salida_opciones)) {
+                $this->responder(false, [], 'No se pudo preparar la configuracion anidada.');
+            }
+            return $salida_opciones;
         }
         $claves_raiz = ['modo', 'tareas', 'predeterminados', 'ancho', 'alto', 'alfa', 'quitar_fondo'];
         if (!is_array($configuracion) || array_diff(array_keys($configuracion), $claves_raiz)) {
@@ -3350,6 +3357,9 @@ class Personalizador_PDF_Plugin
         if ($codigo !== 200) {
             $errorRemoto = json_decode($salida, true);
             $detalle = is_array($errorRemoto) ? sanitize_text_field((string)($errorRemoto['error'] ?? '')) : '';
+            if ($codigo === 404 || strpos($detalle, 'solo admite modo, tareas y predeterminados') !== false) {
+                $this->responder(false, [], 'El Servicio IA de la PC esta desactualizado. Reinicialo para cargar el soporte del JSON de opciones.');
+            }
             $this->responder(false, [], $detalle !== ''
                 ? 'La PC no pudo procesar la imagen: ' . $detalle
                 : 'La PC no pudo procesar la imagen (HTTP ' . $codigo . ').');
@@ -3400,11 +3410,17 @@ class Personalizador_PDF_Plugin
             || (array_key_exists('escalado', $documento) && !is_array($documento['escalado']))) {
             $this->responder(false, [], 'El JSON de opciones predeterminadas debe ser un objeto valido.');
         }
-        $documento_validar = array_intersect_key(
-            $documento,
-            array_fill_keys(['escalado', 'quitar_fondo'], true)
-        );
-        $documento_validar['tareas'] = [['tipo' => 'detectar']];
+        if (array_diff(array_keys($documento), ['escalado', 'quitar_fondo'])) {
+            $this->responder(false, [], 'Solo se pueden guardar opciones de la pestaña seleccionada.');
+        }
+        $documento_validar = (array)($documento['escalado'] ?? []);
+        if (array_key_exists('quitar_fondo', $documento)) {
+            $documento_validar['quitar_fondo'] = $documento['quitar_fondo'];
+        }
+        $documento_validar['tareas'] = [
+            ['tipo' => 'quitar_fondo'],
+            ['tipo' => 'mejorar'],
+        ];
         $entrada_validar = wp_json_encode($documento_validar);
         if (!is_string($entrada_validar)) {
             $this->responder(false, [], 'No se pudo validar el JSON de opciones predeterminadas.');
@@ -3444,6 +3460,9 @@ class Personalizador_PDF_Plugin
             $detalle = is_array($resultado)
                 ? sanitize_text_field((string)($resultado['error'] ?? ''))
                 : '';
+            if ($codigo === 404) {
+                $this->responder(false, [], 'El Servicio IA de la PC no reconoce /preferencias. Reinicialo para cargar la version actualizada.');
+            }
             $this->responder(false, [], $detalle !== ''
                 ? 'La PC rechazo las opciones predeterminadas: ' . $detalle
                 : 'La PC no confirmo el guardado de las opciones predeterminadas (HTTP ' . $codigo . ').');

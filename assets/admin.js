@@ -1549,7 +1549,7 @@ jQuery(function ($) {
         var $estado = $('.ec-redimensionar-pc-preferencias');
         if (!$json.length || !$estado.length) { return null; }
 
-        function leer(requerirTareas) {
+        function leer() {
             var texto = $json.val();
             if (typeof texto !== 'string' || texto.length > 8192) {
                 throw new Error('El JSON de la cadena esta vacio o supera 8 KB.');
@@ -1558,39 +1558,53 @@ jQuery(function ($) {
             if (!configuracion || typeof configuracion !== 'object' || Array.isArray(configuracion)) {
                 throw new Error('La configuracion debe ser un objeto JSON.');
             }
-            if (!configuracion.escalado) {
-                var antiguo = {};
+            if (Object.prototype.hasOwnProperty.call(configuracion, 'modo')
+                || Object.prototype.hasOwnProperty.call(configuracion, 'ancho')
+                || Object.prototype.hasOwnProperty.call(configuracion, 'alto')
+                || Object.prototype.hasOwnProperty.call(configuracion, 'alfa')) {
+                configuracion.escalado = configuracion.escalado || {};
                 ['modo', 'ancho', 'alto', 'alfa'].forEach(function (claveConfig) {
                     if (Object.prototype.hasOwnProperty.call(configuracion, claveConfig)) {
-                        antiguo[claveConfig] = configuracion[claveConfig];
+                        configuracion.escalado[claveConfig] = configuracion[claveConfig];
+                        delete configuracion[claveConfig];
                     }
                 });
-                if (Object.keys(antiguo).length) {
-                    configuracion.escalado = antiguo;
-                    delete configuracion.modo;
-                    delete configuracion.ancho;
-                    delete configuracion.alto;
-                    delete configuracion.alfa;
-                }
             }
-            if (typeof configuracion.escalado === 'undefined' || configuracion.escalado === null) {
+            delete configuracion.tareas;
+            delete configuracion.predeterminados;
+            if (!configuracion.escalado) {
                 configuracion.escalado = {};
             }
             if (typeof configuracion.escalado !== 'object' || Array.isArray(configuracion.escalado)) {
                 throw new Error('"escalado" debe ser un objeto JSON.');
             }
-            if (requerirTareas !== false) {
-                if (!Array.isArray(configuracion.tareas) || !configuracion.tareas.length) {
-                    throw new Error('El JSON debe incluir una lista "tareas" no vacia.');
-                }
-                configuracion.tareas.forEach(function (tarea) {
-                    if (!tarea || typeof tarea !== 'object' || Array.isArray(tarea)
-                        || typeof tarea.tipo !== 'string' || !tarea.tipo) {
-                        throw new Error('Cada tarea debe ser un objeto con "tipo".');
-                    }
-                });
+            if (Object.keys(configuracion).some(function (claveConfig) {
+                return ['escalado', 'quitar_fondo'].indexOf(claveConfig) === -1;
+            })) {
+                throw new Error('El JSON solo admite "escalado" y "quitar_fondo".');
+            }
+            if (Object.prototype.hasOwnProperty.call(configuracion, 'quitar_fondo')
+                && (!configuracion.quitar_fondo || typeof configuracion.quitar_fondo !== 'object'
+                    || Array.isArray(configuracion.quitar_fondo))) {
+                throw new Error('"quitar_fondo" debe ser un objeto JSON.');
             }
             return configuracion;
+        }
+
+        function pestanaActiva() {
+            return $('.ec-pc-pestana-activa').data('pestana') || 'escalado';
+        }
+
+        function activarPestana(nombre) {
+            $('.ec-pc-pestana').each(function () {
+                var activa = $(this).data('pestana') === nombre;
+                $(this).toggleClass('ec-pc-pestana-activa', activa)
+                    .attr('aria-selected', activa ? 'true' : 'false')
+                    .attr('tabindex', activa ? '0' : '-1');
+            });
+            $('.ec-pc-panel').each(function () {
+                $(this).prop('hidden', $(this).data('panel') !== nombre);
+            });
         }
 
         function mostrarMotor(motor) {
@@ -1749,11 +1763,15 @@ jQuery(function ($) {
             mostrarMotor($('#ec-redimensionar-pc-motor-fondo').val() || 'birefnet');
             guardar($json.val());
         }
+        activarPestana('escalado');
 
         $(document).on('input', '#ec-redimensionar-pc-json', function () {
             guardar($json.val());
         });
         $(document).on('change', '#ec-redimensionar-pc-json', sincronizarDesdeJson);
+        $(document).on('click', '.ec-pc-pestana', function () {
+            activarPestana($(this).data('pestana'));
+        });
         $(document).on(
             'input change',
             '#ec-redimensionar-pc-modo, #ec-redimensionar-pc-alfa, #ec-redimensionar-pc-motor-fondo, '
@@ -1771,22 +1789,47 @@ jQuery(function ($) {
         return {leer: leer};
     })();
 
+    var urlImagenOriginal = '';
+    var urlImagenResultado = '';
+    $(document).on('change', '#ec-redimensionar-pc-imagen', function () {
+        var archivo = this.files && this.files[0];
+        var $preview = $('.ec-pc-imagen-original');
+        if (urlImagenOriginal) { URL.revokeObjectURL(urlImagenOriginal); }
+        urlImagenOriginal = '';
+        $preview.attr('src', '').prop('hidden', true);
+        if (!archivo) { return; }
+        if (!/^image\/(png|jpeg|gif|webp)$/.test(archivo.type)) {
+            $('.ec-redimensionar-pc-estado').addClass('ec-error')
+                .text('El archivo debe ser una imagen PNG, JPG, GIF o WebP.');
+            return;
+        }
+        urlImagenOriginal = URL.createObjectURL(archivo);
+        $preview.attr('src', urlImagenOriginal).removeAttr('hidden');
+        $('.ec-redimensionar-pc-estado').removeClass('ec-ok ec-error').text('');
+    });
+
     $(document).on('click', '.ec-redimensionar-pc-guardar', function () {
         var $btn = $(this).prop('disabled', true);
         var $estado = $('.ec-redimensionar-pc-preferencias').removeClass('ec-ok ec-error');
-        var pipeline;
+        var opciones;
         try {
             if (!pipelinePc) { throw new Error('El editor JSON no esta disponible.'); }
-            pipelinePc.leer(false);
-            pipeline = $('#ec-redimensionar-pc-json').val();
+            var configuracion = pipelinePc.leer();
+            var seleccion = $('.ec-pc-pestana-activa').data('pestana') || 'escalado';
+            opciones = configuracion[seleccion];
+            if (!opciones || !Object.keys(opciones).length) {
+                throw new Error('La pestaña seleccionada no contiene opciones para guardar.');
+            }
+            opciones = {};
+            opciones[seleccion] = configuracion[seleccion];
         } catch (error) {
             $estado.addClass('ec-error').text((error && error.message) || 'La configuracion JSON no es valida.');
             $btn.prop('disabled', false);
             return;
         }
-        $estado.text('Guardando opciones predeterminadas en la PC...');
+        $estado.text('Guardando las opciones predeterminadas de esta pestaña en la PC...');
         pmuPost('personalizador_pdf_guardar_predeterminados_pc', {
-            pipeline: pipeline
+            pipeline: JSON.stringify(opciones)
         }, $(this).data('nonce') || '')
             .then(function (res) {
                 var data = res.data || {};
@@ -1801,9 +1844,15 @@ jQuery(function ($) {
     $(document).on('click', '.ec-redimensionar-pc-probar', function () {
         var $btn = $(this).prop('disabled', true);
         var $estado = $('.ec-redimensionar-pc-estado').removeClass('ec-ok ec-error');
-        var $descarga = $('.ec-redimensionar-pc-descarga').attr('hidden', true).empty();
+        var $descarga = $('.ec-redimensionar-pc-descarga').attr('hidden', true);
         var archivo = ($('#ec-redimensionar-pc-imagen')[0] || {}).files;
         var pipeline;
+        if (urlImagenResultado) {
+            URL.revokeObjectURL(urlImagenResultado);
+            urlImagenResultado = '';
+        }
+        $descarga.removeAttr('href').removeAttr('download');
+        $descarga.find('img').attr('src', '');
         try {
             if (!pipelinePc) { throw new Error('El editor JSON no esta disponible.'); }
             pipelinePc.leer();
@@ -1831,16 +1880,21 @@ jQuery(function ($) {
             .then(function (res) {
                 var d = res.data || {};
                 if (!d.imagen_base64) { throw new Error('La PC no devolvio el resultado de la cadena.'); }
-                var enlace = $('<a class="button button-primary">Descargar resultado</a>')
-                    .attr('href', URL.createObjectURL(blobDesdeBase64(d.imagen_base64)))
-                    .attr('download', d.nombre || 'prueba-pc-pipeline.png');
-                $descarga.append(enlace).removeAttr('hidden');
+                urlImagenResultado = URL.createObjectURL(blobDesdeBase64(d.imagen_base64));
+                $descarga.attr('href', urlImagenResultado)
+                    .attr('download', d.nombre || 'resultado-pc.png')
+                    .find('img').attr('src', urlImagenResultado);
+                $descarga.removeAttr('hidden');
                 $estado.addClass('ec-ok').text(d.detalle || 'Cadena completada; PNG recibido desde la PC.');
             })
             .catch(function (err) {
                 $estado.addClass('ec-error').text((err && err.message) || 'No se pudo completar la cadena de procesamiento.');
             })
             .then(function () { $btn.prop('disabled', false); });
+    });
+    window.addEventListener('beforeunload', function () {
+        if (urlImagenOriginal) { URL.revokeObjectURL(urlImagenOriginal); }
+        if (urlImagenResultado) { URL.revokeObjectURL(urlImagenResultado); }
     });
 
     /* ============ 4. Personalizacion por grupo (estado, guardado y puente TextMuy) ============ */

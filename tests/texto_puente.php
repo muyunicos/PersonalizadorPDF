@@ -666,7 +666,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                     && ($remota['args']['headers']['X-PMU-Token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef'
                     && (int)($remota['args']['timeout'] ?? 0) === 30
                     && is_array($opciones)
-                    && isset($opciones['escalado'], $opciones['quitar_fondo'])
+                    && isset($opciones['quitar_fondo'])
+                    && !isset($opciones['escalado'])
                     && !isset($opciones['tareas']));
                 break;
             }
@@ -687,23 +688,19 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 $pipeline = json_decode((string)($remota['args']['headers']['X-PMU-Pipeline'] ?? ''), true);
                 check('cadena IA sin predeterminados: conserva valores del servicio',
                     is_array($pipeline)
-                    && !array_key_exists('modo', $pipeline)
-                    && !array_key_exists('predeterminados', $pipeline)
-                    && array_column((array)($pipeline['tareas'] ?? []), 'tipo') === ['quitar_fondo', 'mejorar']
-                    && !array_key_exists('motor', $pipeline['tareas'][0] ?? [])
-                    && !array_key_exists('modelo', $pipeline['tareas'][1] ?? []));
+                    && $pipeline === []);
                 break;
             }
             if ($es_pipeline) {
                 $pipeline = json_decode((string)($remota['args']['headers']['X-PMU-Pipeline'] ?? ''), true);
                 check('cadena IA: envia al endpoint correcto',
                     ($remota['url'] ?? '') === 'https://ai.loc.ar/procesar');
-                check('cadena IA: envia tareas ordenadas, token y bytes',
-                    is_array($pipeline) && ($pipeline['modo'] ?? '') === 'ilustracion'
-                    && array_column((array)($pipeline['tareas'] ?? []), 'tipo') === ['detectar', 'quitar_fondo', 'mejorar']
-                    && ($pipeline['ancho'] ?? 0) === 500
-                    && ($pipeline['alto'] ?? 0) === 500
-                    && ($pipeline['alfa'] ?? '') === 'anime'
+                check('cadena IA: envia opciones sin lista de tareas, token y bytes',
+                    is_array($pipeline) && ($pipeline['escalado']['modo'] ?? '') === 'ilustracion'
+                    && !array_key_exists('tareas', $pipeline)
+                    && ($pipeline['escalado']['ancho'] ?? 0) === 500
+                    && ($pipeline['escalado']['alto'] ?? 0) === 500
+                    && ($pipeline['escalado']['alfa'] ?? '') === 'anime'
                     && ($pipeline['quitar_fondo']['motor'] ?? '') === 'rembg'
                     && ($pipeline['quitar_fondo']['modelo'] ?? '') === 'birefnet-general'
                     && ($pipeline['quitar_fondo']['post_process_mask'] ?? null) === true
@@ -711,8 +708,6 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                     && ($pipeline['quitar_fondo']['alpha_matting_foreground_threshold'] ?? 0) === 230
                     && ($pipeline['quitar_fondo']['alpha_matting_background_threshold'] ?? 0) === 20
                     && ($pipeline['quitar_fondo']['alpha_matting_erode_size'] ?? 0) === 5
-                    && ($pipeline['tareas'][2]['modelo'] ?? '') === ''
-                    && ($pipeline['tareas'][2]['ancho'] ?? 0) === 320
                     && ($remota['args']['headers']['X-PMU-Token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef'
                     && (int)($remota['args']['timeout'] ?? 0) === 180
                     && strlen((string)($remota['args']['body'] ?? '')) > 0);
@@ -3668,13 +3663,7 @@ switch ($fase) {
             'action' => 'personalizador_pdf_guardar_predeterminados_pc',
             '_wpnonce' => 'nonce',
             'pipeline' => json_encode([
-                'escalado' => [
-                    'modo' => 'ilustracion',
-                    'ancho' => 1500,
-                    'alto' => 1500,
-                    'alfa' => 'anime',
-                ],
-                'quitar_fondo' => [
+            'quitar_fondo' => [
                     'motor' => 'rembg',
                     'modelo' => 'silueta',
                     'post_process_mask' => true,
@@ -3718,7 +3707,7 @@ switch ($fase) {
             $_POST['pipeline'] = $pipelineInvalida
                 ? '{"modo":"automatico","tareas":[{"tipo":"quitar_fondo","motor":"desconocido"}]}'
                 : ($fase === 'pipeline_pc_sin_predeterminados'
-                    ? '{"tareas":[{"tipo":"quitar_fondo"},{"tipo":"mejorar"}]}'
+                    ? '{}'
                 : json_encode([
                     'escalado' => [
                         'modo' => 'ilustracion',
@@ -3734,11 +3723,6 @@ switch ($fase) {
                         'alpha_matting_foreground_threshold' => 230,
                         'alpha_matting_background_threshold' => 20,
                         'alpha_matting_erode_size' => 5,
-                    ],
-                    'tareas' => [
-                        ['tipo' => 'detectar'],
-                        ['tipo' => 'quitar_fondo'],
-                        ['tipo' => 'mejorar', 'ancho' => 320, 'alto' => 180],
                     ],
                 ]));
         } else {
