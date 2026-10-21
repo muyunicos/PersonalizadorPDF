@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.20.0
+ * Version: 4.21.0
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -87,6 +87,7 @@ class Personalizador_PDF_Plugin
         // Prueba aislada Hostinger -> Cloudflare Tunnel -> PC local.
         add_action('admin_post_personalizador_pdf_conexion_pc', [$this, 'handle_conexion_pc']);
         add_action('admin_post_personalizador_pdf_redimensionar_pc', [$this, 'handle_redimensionar_pc']);
+        add_action('admin_post_personalizador_pdf_ia_config', [$this, 'handle_ia_config_guardar']);
 
         // Spec 004 (T012): panel del comprador en la ficha del producto.
         // El shortcode expone el mismo panel fuera de Woo (manuales/test).
@@ -2780,15 +2781,18 @@ class Personalizador_PDF_Plugin
     public function handle_conexion_pc()
     {
         $this->seguridad('personalizador_pdf_conexion_pc');
-        $base = $this->base_tunel_prueba(isset($_POST['url']) ? (string)wp_unslash($_POST['url']) : '');
-        if ($base === '') {
-            $this->responder(false, [], 'Pegá la URL HTTPS temporal de trycloudflare.com, sin ruta ni parametros.');
+        $config = $this->ia_config();
+        if ($config['token'] === '') {
+            $this->responder(false, [], 'Guarda primero el token secreto del servicio IA.');
         }
-        $url = $base . '/health';
+        $url = $config['url'] . '/health';
         $respuesta = wp_remote_get($url, [
             'timeout' => 8,
             'redirection' => 0,
-            'headers' => ['Accept' => 'application/json'],
+            'headers' => [
+                'Accept' => 'application/json',
+                'X-PMU-Token' => $config['token'],
+            ],
             'user-agent' => 'Personalizador-PDF/health-check',
         ]);
         if (is_wp_error($respuesta)) {
@@ -2803,15 +2807,65 @@ class Personalizador_PDF_Plugin
         $this->responder(true, ['detalle' => 'Conexion OK: Hostinger recibio respuesta de la PC.']);
     }
 
-    /** Base valida de un Quick Tunnel, sin ruta ni parametros (defensa SSRF). */
-    private function base_tunel_prueba($entrada)
+    /**
+     * Guarda la configuracion del servicio IA. El token solo se acepta por
+     * POST autenticado y nunca se devuelve al navegador al leer la configuracion.
+     */
+    public function handle_ia_config_guardar()
+    {
+        $this->seguridad('personalizador_pdf_ia_config');
+        $urlEntrada = isset($_POST['url']) ? (string)wp_unslash($_POST['url']) : '';
+        $base = $this->base_tunel_ia($urlEntrada);
+        if ($base === '') {
+            $this->responder(false, [], 'Usa https://ai.muyunicos.com o una URL HTTPS de Quick Tunnel de Cloudflare.');
+        }
+        $actual = $this->ia_config();
+        $token = isset($_POST['token']) ? trim((string)wp_unslash($_POST['token'])) : '';
+        $borrar = !empty($_POST['borrar_token']);
+        if ($token !== '' && !preg_match('/\A[A-Za-z0-9._~-]{32,256}\z/', $token)) {
+            $this->responder(false, [], 'El token debe tener entre 32 y 256 caracteres seguros (letras, numeros, punto, guion o guion bajo).');
+        }
+        if ($token === '') {
+            $token = $borrar ? '' : $actual['token'];
+        }
+        update_option('personalizador_pdf_ia_config', [
+            'url' => $base,
+            'token' => $token,
+        ], false);
+        $this->responder(true, [
+            'url' => $base,
+            'token_configurado' => $token !== '',
+            'detalle' => 'Configuracion guardada. El token no se vuelve a mostrar.',
+        ]);
+    }
+
+    /** Configuracion persistente del puente IA; el secreto nunca se expone al HTML/JS. */
+    private function ia_config()
+    {
+        $guardada = get_option('personalizador_pdf_ia_config', []);
+        $guardada = is_array($guardada) ? $guardada : [];
+        $url = $this->base_tunel_ia((string)($guardada['url'] ?? ''));
+        $token = (string)($guardada['token'] ?? '');
+        if (!preg_match('/\A[A-Za-z0-9._~-]{32,256}\z/', $token)) {
+            $token = '';
+        }
+        return [
+            'url' => $url !== '' ? $url : 'https://ai.muyunicos.com',
+            'token' => $token,
+        ];
+    }
+
+    /** URL permitida para evitar SSRF: hostname oficial o Quick Tunnel de Cloudflare. */
+    private function base_tunel_ia($entrada)
     {
         $partes = parse_url(trim((string)$entrada));
         $host = is_array($partes) ? strtolower((string)($partes['host'] ?? '')) : '';
         $ruta = is_array($partes) ? (string)($partes['path'] ?? '') : '';
-        $esQuickTunnel = $host !== '' && (bool)preg_match('/\A[a-z0-9-]+\.trycloudflare\.com\z/', $host);
-        if (!is_array($partes) || ($partes['scheme'] ?? '') !== 'https' || !$esQuickTunnel
-            || isset($partes['user'], $partes['pass'], $partes['port'], $partes['query'], $partes['fragment'])
+        $esPermitido = $host === 'ai.muyunicos.com'
+            || ($host !== '' && (bool)preg_match('/\A[a-z0-9-]+\.trycloudflare\.com\z/', $host));
+        if (!is_array($partes) || strtolower((string)($partes['scheme'] ?? '')) !== 'https' || !$esPermitido
+            || isset($partes['user']) || isset($partes['pass']) || isset($partes['port'])
+            || isset($partes['query']) || isset($partes['fragment'])
             || ($ruta !== '' && $ruta !== '/')) {
             return '';
         }
@@ -2822,14 +2876,15 @@ class Personalizador_PDF_Plugin
     public function handle_redimensionar_pc()
     {
         $this->seguridad('personalizador_pdf_redimensionar_pc');
-        $base = $this->base_tunel_prueba(isset($_POST['url']) ? (string)wp_unslash($_POST['url']) : '');
+        $config = $this->ia_config();
+        $base = $config['url'];
         $ancho = isset($_POST['ancho']) ? (int)$_POST['ancho'] : 0;
         $alto = isset($_POST['alto']) ? (int)$_POST['alto'] : 0;
         $modo = isset($_POST['modo']) ? sanitize_key((string)wp_unslash($_POST['modo'])) : '';
         $archivo = $_FILES['imagen'] ?? null;
-        if ($base === '' || $ancho < 1 || $alto < 1 || $ancho > 3000 || $alto > 3000
+        if ($config['token'] === '' || $ancho < 1 || $alto < 1 || $ancho > 3000 || $alto > 3000
             || !in_array($modo, ['foto', 'anime'], true)) {
-            $this->responder(false, [], 'URL, modo o dimensiones invalidas (cada lado debe ser 1..3000 px).');
+            $this->responder(false, [], 'Falta configurar el token o el modo/dimensiones son invalidos (cada lado debe ser 1..3000 px).');
         }
         $temporal = is_array($archivo) ? (string)($archivo['tmp_name'] ?? '') : '';
         $esSubida = $temporal !== '' && (is_uploaded_file($temporal) || (PHP_SAPI === 'cli' && is_file($temporal)));
@@ -2857,6 +2912,7 @@ class Personalizador_PDF_Plugin
                 'X-PMU-Ancho' => (string)$ancho,
                 'X-PMU-Alto' => (string)$alto,
                 'X-PMU-Modo' => $modo,
+                'X-PMU-Token' => $config['token'],
             ],
             'body' => $bytes,
             'limit_response_size' => 8 * 1024 * 1024,
@@ -3025,7 +3081,7 @@ class Personalizador_PDF_Plugin
     {
         $acciones = [
             'subir_pdf', 'reanalizar', 'procesar', 'borrar', 'config',
-            'subir_imagen', 'quitar_imagen', 'mockups', 'smoke', 'conexion_pc', 'redimensionar_pc',
+            'subir_imagen', 'quitar_imagen', 'mockups', 'smoke', 'conexion_pc', 'redimensionar_pc', 'ia_config',
         ];
         $faltan = [];
         foreach ($acciones as $accion) {

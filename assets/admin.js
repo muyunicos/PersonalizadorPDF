@@ -1500,17 +1500,33 @@ jQuery(function ($) {
             .then(function () { $btn.prop('disabled', false); });
     });
 
+    $(document).on('click', '.ec-ia-config-guardar', function () {
+        var $btn = $(this).prop('disabled', true);
+        var $estado = $('.ec-ia-config-estado').removeClass('ec-ok ec-error').text('Guardando...');
+        pmuPost('personalizador_pdf_ia_config', {
+            url: $.trim($('#ec-ia-url').val() || ''),
+            token: $('#ec-ia-token').val() || '',
+            borrar_token: $('#ec-ia-borrar-token').prop('checked') ? '1' : ''
+        }, $(this).data('nonce') || '')
+            .then(function (res) {
+                var d = res.data || {};
+                $('#ec-ia-token').val('').attr('placeholder',
+                    d.token_configurado ? 'Guardado; dejalo vacio para conservarlo' : 'Pega el mismo token que configurarás en la PC');
+                $('#ec-ia-borrar-token').prop('checked', false);
+                $('.ec-ia-token-estado').text(d.token_configurado ? 'Hay un token guardado.' : 'Aun no hay token guardado.');
+                $estado.addClass('ec-ok').text(d.detalle || 'Configuracion IA guardada.');
+            })
+            .catch(function (err) {
+                $estado.addClass('ec-error').text((err && err.message) || 'No se pudo guardar la configuracion IA.');
+            })
+            .then(function () { $btn.prop('disabled', false); });
+    });
+
     $(document).on('click', '.ec-conexion-pc-probar', function () {
         var $btn = $(this).prop('disabled', true);
         var $estado = $('.ec-conexion-pc-estado').removeClass('ec-ok ec-error');
-        var url = $.trim($('#ec-conexion-pc-url').val() || '');
-        if (!url) {
-            $estado.addClass('ec-error').text('Pegá la URL temporal de Cloudflare.');
-            $btn.prop('disabled', false);
-            return;
-        }
-        $estado.text('Probando desde Hostinger...');
-        pmuPost('personalizador_pdf_conexion_pc', {url: url}, $(this).data('nonce') || '')
+        $estado.text('Probando el endpoint configurado desde WordPress...');
+        pmuPost('personalizador_pdf_conexion_pc', {}, $(this).data('nonce') || '')
             .then(function (res) {
                 $estado.addClass('ec-ok').text((res.data && res.data.detalle) || 'Conexion OK.');
             })
@@ -1534,14 +1550,12 @@ jQuery(function ($) {
         var archivo = ($('#ec-redimensionar-pc-imagen')[0] || {}).files;
         var ancho = parseInt($('#ec-redimensionar-pc-ancho').val(), 10);
         var alto = parseInt($('#ec-redimensionar-pc-alto').val(), 10);
-        var url = $.trim($('#ec-conexion-pc-url').val() || '');
-        if (!archivo || !archivo[0] || !url || !ancho || !alto) {
-            $estado.addClass('ec-error').text('Indicá la URL, una imagen y las dimensiones.');
+        if (!archivo || !archivo[0] || !ancho || !alto) {
+            $estado.addClass('ec-error').text('Selecciona una imagen e indica las dimensiones.');
             $btn.prop('disabled', false);
             return;
         }
         var fd = new FormData();
-        fd.append('url', url);
         fd.append('ancho', ancho);
         fd.append('alto', alto);
         fd.append('modo', $('#ec-redimensionar-pc-modo-foto').prop('checked') ? 'foto' : 'anime');

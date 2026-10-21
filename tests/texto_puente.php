@@ -22,7 +22,7 @@ if (PHP_SAPI !== 'cli') {
  *    carrito | minimos | pool* | overrides | sesion | conciliacion | completados | mockups* |
  *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
  *    reanalizar | envoltura_op | borrado | campo_global | campo_subida | pool_concurrente |
- *    conexion_pc | redimensionar_pc | redimensionar_pc_anime`
+ *    conexion_pc | redimensionar_pc | redimensionar_pc_anime | ia_config | ia_config_invalida`
  */
 
 $fase = isset($argv[1]) ? $argv[1] : 'setup';
@@ -598,11 +598,32 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         case 'conexion_pc':
             $conexion = is_array($json) ? (array)($json['data'] ?? []) : [];
             $remota = (array)($GLOBALS['test_remote_get'] ?? []);
+            $config_ia = (array)($GLOBALS['test_options']['personalizador_pdf_ia_config'] ?? []);
             check('conexion PC: JSON success', is_array($json) && $json['success'] === true);
-            check('conexion PC: consulta solo /health del Quick Tunnel',
-                ($remota['url'] ?? '') === 'https://prueba.trycloudflare.com/health');
+            check('conexion PC: consulta el /health oficial',
+                ($remota['url'] ?? '') === 'https://ai.muyunicos.com/health');
+            check('conexion PC: autentica con token guardado',
+                ($remota['args']['headers']['X-PMU-Token'] ?? '') === ($config_ia['token'] ?? ''));
             check('conexion PC: timeout acotado', (int)(($remota['args']['timeout'] ?? 0)) === 8);
             check('conexion PC: mensaje de exito', strpos((string)($conexion['detalle'] ?? ''), 'Conexion OK') === 0);
+            break;
+        case 'ia_config':
+            $config_ia = (array)($GLOBALS['test_options']['personalizador_pdf_ia_config'] ?? []);
+            $respuesta_ia = json_encode($json);
+            check('configuracion IA: JSON success', is_array($json) && $json['success'] === true);
+            check('configuracion IA: guarda URL oficial y token', ($config_ia['url'] ?? '') === 'https://ai.muyunicos.com'
+                && ($config_ia['token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef');
+            check('configuracion IA: no devuelve el secreto', is_string($respuesta_ia)
+                && strpos($respuesta_ia, 'test-pmu-ai-token-0123456789abcdef0123456789abcdef') === false);
+            check('configuracion IA: confirma solo el estado', !empty($json['data']['token_configurado']));
+            break;
+        case 'ia_config_invalida':
+            $config_ia = (array)($GLOBALS['test_options']['personalizador_pdf_ia_config'] ?? []);
+            check('configuracion IA: rechaza URL fuera de allowlist', is_array($json) && $json['success'] === false
+                && strpos((string)($json['data'] ?? ''), 'https://ai.muyunicos.com') !== false);
+            check('configuracion IA: no pisa configuracion vigente al rechazar',
+                ($config_ia['url'] ?? '') === 'https://ai.muyunicos.com'
+                && ($config_ia['token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef');
             break;
         case 'redimensionar_pc':
         case 'redimensionar_pc_anime':
@@ -612,11 +633,12 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             $modelo_prueba = $modo_prueba === 'foto' ? 'realesr-general-x4v3' : 'RealESRGAN_x4plus_anime_6B';
             check('redimensionar PC: JSON success', is_array($json) && $json['success'] === true);
             check('redimensionar PC: envia al endpoint correcto',
-                ($remota['url'] ?? '') === 'https://prueba.trycloudflare.com/redimensionar');
+                ($remota['url'] ?? '') === 'https://ai.muyunicos.com/redimensionar');
             check('redimensionar PC: envia dimensiones y bytes',
                 ($remota['args']['headers']['X-PMU-Ancho'] ?? '') === '320'
                 && ($remota['args']['headers']['X-PMU-Alto'] ?? '') === '180'
                 && ($remota['args']['headers']['X-PMU-Modo'] ?? '') === $modo_prueba
+                && ($remota['args']['headers']['X-PMU-Token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef'
                 && (int)($remota['args']['timeout'] ?? 0) === 120
                 && strlen((string)($remota['args']['body'] ?? '')) > 0);
             check('redimensionar PC: PNG devuelto al navegador',
@@ -3470,13 +3492,44 @@ switch ($fase) {
 
     case 'conexion_pc':
         preparar_entorno($testBase, $base);
+        $GLOBALS['test_options']['personalizador_pdf_ia_config'] = [
+            'url' => 'https://ai.muyunicos.com',
+            'token' => 'test-pmu-ai-token-0123456789abcdef0123456789abcdef',
+        ];
         $_POST = [
             'action' => 'personalizador_pdf_conexion_pc',
-            'url' => 'https://prueba.trycloudflare.com',
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
         $p->handle_conexion_pc(); // exit en responder(JSON con detalle)
+        break;
+
+    case 'ia_config':
+        preparar_entorno($testBase, $base);
+        $_POST = [
+            'action' => 'personalizador_pdf_ia_config',
+            'url' => 'https://ai.muyunicos.com',
+            'token' => 'test-pmu-ai-token-0123456789abcdef0123456789abcdef',
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_ia_config_guardar();
+        break;
+
+    case 'ia_config_invalida':
+        preparar_entorno($testBase, $base);
+        $GLOBALS['test_options']['personalizador_pdf_ia_config'] = [
+            'url' => 'https://ai.muyunicos.com',
+            'token' => 'test-pmu-ai-token-0123456789abcdef0123456789abcdef',
+        ];
+        $_POST = [
+            'action' => 'personalizador_pdf_ia_config',
+            'url' => 'http://127.0.0.1:8765',
+            'token' => '',
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_ia_config_guardar();
         break;
 
     case 'redimensionar_pc':
@@ -3493,8 +3546,12 @@ switch ($fase) {
         ];
         $_POST = [
             'action' => 'personalizador_pdf_redimensionar_pc',
-            'url' => 'https://prueba.trycloudflare.com', 'ancho' => '320', 'alto' => '180', 'modo' => $modoPrueba,
+            'ancho' => '320', 'alto' => '180', 'modo' => $modoPrueba,
             '_wpnonce' => 'nonce',
+        ];
+        $GLOBALS['test_options']['personalizador_pdf_ia_config'] = [
+            'url' => 'https://ai.muyunicos.com',
+            'token' => 'test-pmu-ai-token-0123456789abcdef0123456789abcdef',
         ];
         $GLOBALS['test_remote_post_respuesta'] = [
             'response' => ['code' => 200],

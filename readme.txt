@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.20.0
+Stable tag: 4.21.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,10 +20,10 @@ La administracion funciona como consola de trabajo con 6 pestanas:
 2. **Campos**: catalogo reutilizable de campos (`campos.json`) para la tienda (spec 004 / plan 008).
 3. **Estilos de Texto**: editor integrado del sistema TextMuy (100% en el navegador, estilo TextStudio) para disenar estilos de texto y guardarlos como presets `.txm` en el servidor (disponibles en todos los navegadores y en el selector de estilo de cada grupo del PDF). Las imagenes para rellenos y fondos se suben a `uploads/pmu/img/` y se reutilizan entre presets.
 4. **Pedidos**: lista de pedidos completados con sus PDFs; permite revisar y **Regenerar PDF** por linea (entrega en `orders/{order_id}/{item_key}/`).
-5. **Test**: smoke test en vivo del sitio (entorno, permisos, catalogos, motor sobre los PDFs subidos, hooks, TextMuy, WooCommerce y render de la consola) con tabla OK/FALLA; avisa si la version instalada cambio desde la ultima corrida.
+5. **Test**: smoke test en vivo del sitio (entorno, permisos, catalogos, motor sobre los PDFs subidos, hooks, TextMuy, WooCommerce y render de la consola) con tabla OK/FALLA; avisa si la version instalada cambio desde la ultima corrida. Tambien permite configurar el endpoint HTTPS y el token del servicio opcional de IA en la PC, probar la conexion autenticada y procesar imagenes de prueba en modo Foto o Anime/ilustracion.
 6. **Ayuda**: documentacion interna (resumen; canonico en `AGENTS.md` §5).
 
-A diferencia de la version original (Flask + Python), esta es **100% PHP puro** en el servidor y se ejecuta directamente en WordPress, por lo que funciona en alojamientos compartidos (Hostinger, etc.) sin Python, Node ni procesos persistentes. El modulo TextMuy corre en el navegador del administrador (Canvas + WebGL); no agrega carga al servidor.
+A diferencia de la version original (Flask + Python), el motor PDF es **100% PHP puro** en el servidor y se ejecuta directamente en WordPress, por lo que funciona en alojamientos compartidos (Hostinger, etc.) sin Python, Node ni procesos persistentes. De forma opcional, la pestana Test puede conectar con un servicio separado de superresolucion IA que corre en una PC; esa prueba no cambia el procesamiento normal del plugin. El modulo TextMuy corre en el navegador del administrador (Canvas + WebGL); no agrega carga al servidor.
 
 **Requisitos del servidor:**
 
@@ -66,6 +66,9 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.21.0 =
+* **Prueba oficial del servicio IA con autenticacion**: la pestana Test permite guardar la URL de `ai.muyunicos.com` y un token compartido, probar la conexion y procesar imagenes de prueba en modo Foto o Anime/ilustracion. El secreto no se muestra de nuevo ni se entrega al navegador; el servicio de la PC exige el mismo token en `X-PMU-Token`.
 
 = 4.20.0 =
 * **La vista previa ya no genera cientos de archivos (spec 029)**: antes, por cada hueco del PDF se guardaba una **copia** de la foto del comprador (y el texto se renderizaba una vez por hueco). Con 100 huecos eso eran **200 archivos** y ~12 MB de subida por la red **para una sola foto**. Ahora **la foto no se copia: se usa la que el comprador ya subio**, y el texto se renderiza **una vez** por grupo.

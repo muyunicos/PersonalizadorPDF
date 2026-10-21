@@ -45,13 +45,18 @@ Integra el sistema **TextMuy** (editor de estilos de texto client-side) en la pe
   vectorial puede llegar rasterizado por el render de TextMuy en el navegador) o activa un
   módulo que la genere (hoy: TextMuy). El motor la inserta en **todas** las instancias del
   grupo.
+- **IA opcional (solo pruebas de admin)**: la pestaña Test puede enviar imágenes a un
+  servicio Real-ESRGAN separado que corre en la PC, pasando por WordPress y HTTPS. El token
+  compartido se guarda en las opciones de WordPress (no cifrado por el plugin) y se manda
+  solo servidor a servidor; la prueba no se usa en la ficha del comprador.
 - **Encajado (contain)**: la imagen **nunca** se deforma ni se recorta; se escala para caber
   entera dentro del placeholder y se centra; los márgenes sobrantes quedan transparentes.
 - **TextMuy**: módulo autocontenido servido en un iframe same-origin. Los grupos del PDF
   pueden llevar "texto + estilo" y TextMuy renderiza la imagen del grupo al pulsar
   Procesar, 100% client-side (Canvas 2D + WebGL).
-- **100% PHP**: el servidor funciona en hosting compartido sin Python ni Node. El código en
-  servidor es PHP; el JS de TextMuy corre solo en el navegador.
+- **Motor PHP**: el plugin procesa PDFs en hosting compartido sin Python ni Node. El servicio
+  IA opcional de la PC es independiente del motor y solo se usa desde Test; el JS de TextMuy
+  corre en el navegador.
 - **API (objetivo de negocio, uso principal a futuro)**: procesar compras de PDFs editados
   mediante una API con WordPress: el sistema recibe el nombre del PDF base y un conjunto de
   imágenes, y devuelve la URL al archivo procesado. **Especificada, sin implementar**:

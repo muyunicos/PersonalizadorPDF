@@ -6,6 +6,10 @@ if (!defined('ABSPATH')) {
 
 $ultimo = $this->smoke_ultimo();
 $pendiente = $this->smoke_pendiente();
+$config_ia = get_option('personalizador_pdf_ia_config', []);
+$config_ia = is_array($config_ia) ? $config_ia : [];
+$url_ia = (string)($config_ia['url'] ?? 'https://ai.muyunicos.com');
+$token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
 ?>
 <h2>Test de instalacion (smoke)</h2>
 
@@ -51,27 +55,60 @@ $pendiente = $this->smoke_pendiente();
 </div>
 
 <div class="card">
-    <h2>Conexion con la PC (prueba)</h2>
+    <h2>Servicio IA oficial</h2>
     <p class="description">
-        Comprueba el recorrido Hostinger → Cloudflare Tunnel → esta PC. No procesa ni envia
-        imagenes, no guarda la URL y no modifica ningun dato.
+        Configura el endpoint de la PC y el token compartido que autentica las llamadas
+        desde WordPress. El token se guarda en la configuracion de WordPress, no se
+        incluye en el navegador y nunca se vuelve a mostrar (la base de datos de WordPress
+        no cifra este valor). La URL solo admite el host
+        oficial o un Quick Tunnel de Cloudflare.
     </p>
     <p>
-        <label for="ec-conexion-pc-url">URL temporal de Cloudflare</label><br>
-        <input type="url" class="regular-text" id="ec-conexion-pc-url"
-               placeholder="https://ejemplo.trycloudflare.com" autocomplete="off">
+        <label for="ec-ia-url">URL HTTPS del servicio</label><br>
+        <input type="url" class="regular-text" id="ec-ia-url"
+               value="<?php echo esc_attr($url_ia); ?>" autocomplete="url">
+    </p>
+    <p>
+        <label for="ec-ia-token">Token secreto del servicio</label><br>
+        <input type="password" class="regular-text" id="ec-ia-token"
+               autocomplete="new-password" spellcheck="false"
+               placeholder="<?php echo $token_ia_configurado ? 'Guardado; dejalo vacio para conservarlo' : 'Pega el mismo token que configurarás en la PC'; ?>">
+        <span class="description ec-ia-token-estado">
+            <?php echo $token_ia_configurado ? 'Hay un token guardado.' : 'Aun no hay token guardado.'; ?>
+        </span>
+    </p>
+    <p>
+        <label>
+            <input type="checkbox" id="ec-ia-borrar-token">
+            Borrar el token guardado
+        </label>
+    </p>
+    <p>
+        <button type="button" class="button button-primary ec-ia-config-guardar"
+                data-nonce="<?php echo esc_attr(wp_create_nonce('personalizador_pdf_ia_config')); ?>">
+            Guardar configuracion IA
+        </button>
+        <span class="ec-ia-config-estado" aria-live="polite"></span>
+    </p>
+</div>
+
+<div class="card">
+    <h2>Conexion con la PC (prueba)</h2>
+    <p class="description">
+        Comprueba el endpoint configurado con su token, sin enviar imagenes.
+        Para el modo oficial usa <code>https://ai.muyunicos.com</code>.
     </p>
     <p>
         <button type="button" class="button ec-conexion-pc-probar"
                 data-nonce="<?php echo esc_attr(wp_create_nonce('personalizador_pdf_conexion_pc')); ?>">
-            Testear conexion con PC
+            Probar conexion con la PC
         </button>
         <span class="ec-conexion-pc-estado" aria-live="polite"></span>
     </p>
     <hr>
     <h3>Mejorar una imagen con IA en la PC</h3>
     <p class="description">La PC aplica superresolucion y devuelve un PNG transparente de exactamente W × H px. La imagen se centra y contiene, sin deformarse ni recortarse; el aumento con IA se limita a x4.</p>
-    <p class="description">La primera prueba de cada modo carga el modelo y puede tardar mas. Usa solo imagenes de prueba no sensibles.</p>
+    <p class="description">La imagen se envia por WordPress al servicio autenticado. La primera prueba de cada modo carga el modelo y puede tardar mas. Usa solo imagenes de prueba no sensibles.</p>
     <p>
         <input type="file" id="ec-redimensionar-pc-imagen" accept="image/png,image/jpeg,image/gif,image/webp">
     </p>
