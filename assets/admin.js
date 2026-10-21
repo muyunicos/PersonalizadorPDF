@@ -1550,29 +1550,59 @@ jQuery(function ($) {
         var archivo = ($('#ec-redimensionar-pc-imagen')[0] || {}).files;
         var ancho = parseInt($('#ec-redimensionar-pc-ancho').val(), 10);
         var alto = parseInt($('#ec-redimensionar-pc-alto').val(), 10);
-        if (!archivo || !archivo[0] || !ancho || !alto) {
-            $estado.addClass('ec-error').text('Selecciona una imagen e indica las dimensiones.');
+        var tareas;
+        try {
+            tareas = JSON.parse($('#ec-redimensionar-pc-tareas').val() || '');
+        } catch (error) {
+            tareas = null;
+        }
+        if (!archivo || !archivo[0] || !Array.isArray(tareas) || !tareas.length) {
+            $estado.addClass('ec-error').text('Selecciona una imagen e indica las tareas como una lista JSON.');
+            $btn.prop('disabled', false);
+            return;
+        }
+        var necesitaDimensiones = tareas.some(function (tarea) {
+            return tarea && tarea.tipo === 'mejorar'
+                && (typeof tarea.ancho === 'undefined' || typeof tarea.alto === 'undefined');
+        });
+        if (necesitaDimensiones && (!Number.isFinite(ancho) || !Number.isFinite(alto)
+            || ancho < 1 || alto < 1 || ancho > 3000 || alto > 3000)) {
+            $estado.addClass('ec-error').text('Indica dimensiones entre 1 y 3000 px para las tareas de mejora.');
+            $btn.prop('disabled', false);
+            return;
+        }
+        tareas = tareas.map(function (tarea) {
+            if (tarea && tarea.tipo === 'mejorar') {
+                if (typeof tarea.ancho === 'undefined') { tarea.ancho = ancho; }
+                if (typeof tarea.alto === 'undefined') { tarea.alto = alto; }
+            }
+            return tarea;
+        });
+        var pipeline = JSON.stringify({
+            modo: $('#ec-redimensionar-pc-modo').val() || 'manual',
+            tareas: tareas
+        });
+        if (pipeline.length > 8192) {
+            $estado.addClass('ec-error').text('La configuracion de tareas supera el limite de 8 KB.');
             $btn.prop('disabled', false);
             return;
         }
         var fd = new FormData();
-        fd.append('ancho', ancho);
-        fd.append('alto', alto);
-        fd.append('modo', $('#ec-redimensionar-pc-modo-foto').prop('checked') ? 'foto' : 'anime');
+        fd.append('pipeline', pipeline);
         fd.append('imagen', archivo[0], archivo[0].name);
-        $estado.text('Enviando la imagen a la PC para superresolucion IA...');
+        $estado.text('Enviando la imagen a la PC para ejecutar la cadena...');
         pmuPost('personalizador_pdf_redimensionar_pc', fd, $(this).data('nonce') || '')
             .then(function (res) {
                 var d = res.data || {};
-                if (!d.imagen_base64) { throw new Error('La PC no devolvio la imagen.'); }
+                if (!d.imagen_base64) { throw new Error('La PC no devolvio el resultado de la cadena.'); }
                 var enlace = $('<a class="button button-primary">Descargar resultado</a>')
                     .attr('href', URL.createObjectURL(blobDesdeBase64(d.imagen_base64)))
-                    .attr('download', d.nombre || 'prueba-pc.png');
+                    .attr('download', d.nombre || 'prueba-pc-pipeline.png');
                 $descarga.append(enlace).removeAttr('hidden');
-                $estado.addClass('ec-ok').text(d.detalle || 'PNG recibido desde la PC.');
+                $estado.addClass('ec-ok').text(d.detalle || 'Cadena completada; PNG recibido desde la PC.');
             })
             .catch(function (err) {
-                $estado.addClass('ec-error').text((err && err.message) || 'No se pudo mejorar la imagen con IA.');
+                $estado.addClass('ec-error').text((err && err.message) || 'No se pudo completar la cadena de procesamiento.');
             })
             .then(function () { $btn.prop('disabled', false); });
     });

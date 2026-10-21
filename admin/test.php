@@ -107,27 +107,33 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
         <span class="ec-conexion-pc-estado" aria-live="polite"></span>
     </p>
     <hr>
-    <h3>Mejorar una imagen con IA en la PC</h3>
-    <p class="description">La PC aplica superresolucion y devuelve un PNG transparente de exactamente W × H px. La imagen se centra y contiene, sin deformarse ni recortarse; el aumento con IA se limita a x4.</p>
-    <p class="description">La imagen se envia por WordPress al servicio autenticado. La primera prueba de cada modo carga el modelo y puede tardar mas. Usa solo imagenes de prueba no sensibles.</p>
+    <h3>Procesar una cadena de tareas en la PC</h3>
+    <p class="description">Puedes encadenar deteccion, mejora de calidad y eliminacion de fondo. En modo automatico, la mejora usa Real-ESRGAN Foto solo para fotografias no ambiguas; preserva graficas y no quita fondos salvo que agregues esa tarea.</p>
+    <p class="description">La primera prueba de cada modelo puede tardar mas al cargarlo. Usa solo imagenes de prueba no sensibles.</p>
     <p>
         <input type="file" id="ec-redimensionar-pc-imagen" accept="image/png,image/jpeg,image/gif,image/webp">
     </p>
     <p>
-        <label>
-            <input type="checkbox" id="ec-redimensionar-pc-modo-foto" checked>
-            Modo Foto real
-        </label>
-        <span class="description">Activado: realesr-general-x4v3. Desactivado: RealESRGAN_x4plus_anime_6B (anime/ilustracion).</span>
+        <label for="ec-redimensionar-pc-modo">Modo de procesamiento</label>
+        <select id="ec-redimensionar-pc-modo">
+            <option value="automatico" selected>Automatico (detecta y aplica la regla segura)</option>
+            <option value="manual">Manual (ejecuta las tareas declaradas)</option>
+        </select>
+    </p>
+    <p>
+        <label for="ec-redimensionar-pc-tareas">Tareas en orden (JSON)</label><br>
+        <textarea id="ec-redimensionar-pc-tareas" class="large-text code" rows="4">[{"tipo":"mejorar","modelo":"automatico"}]</textarea>
+        <span class="description">Tipos: detectar, mejorar (modelo: automatico, foto o anime) y quitar_fondo. Ejemplo detectar -> mejorar -> quitar fondo: [{"tipo":"detectar"},{"tipo":"mejorar","modelo":"automatico"},{"tipo":"quitar_fondo"}].</span>
     </p>
     <p>
         <label>Ancho <input type="number" id="ec-redimensionar-pc-ancho" min="1" max="3000" value="500"> px</label>
         <label>Alto <input type="number" id="ec-redimensionar-pc-alto" min="1" max="3000" value="500"> px</label>
+        <span class="description">Se aplican a cada tarea mejorar que no indique dimensiones propias.</span>
     </p>
     <p>
         <button type="button" class="button ec-redimensionar-pc-probar"
                 data-nonce="<?php echo esc_attr(wp_create_nonce('personalizador_pdf_redimensionar_pc')); ?>">
-            Probar superresolucion en la PC
+            Ejecutar cadena en la PC
         </button>
         <span class="ec-redimensionar-pc-estado" aria-live="polite"></span>
     </p>

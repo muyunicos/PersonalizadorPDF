@@ -22,7 +22,7 @@ if (PHP_SAPI !== 'cli') {
  *    carrito | minimos | pool* | overrides | sesion | conciliacion | completados | mockups* |
  *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
  *    reanalizar | envoltura_op | borrado | campo_global | campo_subida | pool_concurrente |
- *    conexion_pc | redimensionar_pc | redimensionar_pc_anime | ia_config | ia_config_locar | ia_config_invalida`
+ *    conexion_pc | redimensionar_pc | redimensionar_pc_anime | pipeline_pc | pipeline_pc_invalida | ia_config | ia_config_locar | ia_config_invalida`
  */
 
 $fase = isset($argv[1]) ? $argv[1] : 'setup';
@@ -142,6 +142,15 @@ function wp_remote_post($url, $args = []) {
 function is_wp_error($respuesta) { return false; }
 function wp_remote_retrieve_response_code($respuesta) { return (int)($respuesta['response']['code'] ?? 0); }
 function wp_remote_retrieve_body($respuesta) { return (string)($respuesta['body'] ?? ''); }
+function wp_remote_retrieve_header($respuesta, $nombre) {
+    $cabeceras = (array)($respuesta['headers'] ?? []);
+    foreach ($cabeceras as $clave => $valor) {
+        if (strtolower((string)$clave) === strtolower((string)$nombre)) {
+            return $valor;
+        }
+    }
+    return '';
+}
 
 /**
  * Spec 020 (B4): alta de campo con la firma REAL del plugin (v2). Antes el arnes
@@ -635,24 +644,50 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             break;
         case 'redimensionar_pc':
         case 'redimensionar_pc_anime':
+        case 'pipeline_pc':
+        case 'pipeline_pc_invalida':
+            if ($fase === 'pipeline_pc_invalida') {
+                $remota = (array)($GLOBALS['test_remote_post'] ?? []);
+                check('cadena IA invalida: JSON rechazado', is_array($json) && $json['success'] === false);
+                check('cadena IA invalida: no llama al servicio', empty($remota));
+                break;
+            }
             $resultado = is_array($json) ? (array)($json['data'] ?? []) : [];
             $remota = (array)($GLOBALS['test_remote_post'] ?? []);
+            $es_pipeline = $fase === 'pipeline_pc';
             $modo_prueba = $fase === 'redimensionar_pc_anime' ? 'anime' : 'foto';
             $modelo_prueba = $modo_prueba === 'foto' ? 'realesr-general-x4v3' : 'RealESRGAN_x4plus_anime_6B';
             check('redimensionar PC: JSON success', is_array($json) && $json['success'] === true);
-            check('redimensionar PC: envia al endpoint correcto',
-                ($remota['url'] ?? '') === 'https://ai.loc.ar/redimensionar');
-            check('redimensionar PC: envia dimensiones y bytes',
-                ($remota['args']['headers']['X-PMU-Ancho'] ?? '') === '320'
-                && ($remota['args']['headers']['X-PMU-Alto'] ?? '') === '180'
-                && ($remota['args']['headers']['X-PMU-Modo'] ?? '') === $modo_prueba
-                && ($remota['args']['headers']['X-PMU-Token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef'
-                && (int)($remota['args']['timeout'] ?? 0) === 120
-                && strlen((string)($remota['args']['body'] ?? '')) > 0);
-            check('redimensionar PC: PNG devuelto al navegador',
-                ($resultado['nombre'] ?? '') === 'prueba-pc-' . $modo_prueba . '-320x180.png'
-                && strpos((string)($resultado['detalle'] ?? ''), $modelo_prueba) !== false
-                && substr((string)base64_decode((string)($resultado['imagen_base64'] ?? ''), true), 0, 4) === "\x89PNG");
+            if ($es_pipeline) {
+                $pipeline = json_decode((string)($remota['args']['headers']['X-PMU-Pipeline'] ?? ''), true);
+                check('cadena IA: envia al endpoint correcto',
+                    ($remota['url'] ?? '') === 'https://ai.loc.ar/procesar');
+                check('cadena IA: envia tareas ordenadas, token y bytes',
+                    is_array($pipeline) && ($pipeline['modo'] ?? '') === 'automatico'
+                    && array_column((array)($pipeline['tareas'] ?? []), 'tipo') === ['detectar', 'mejorar', 'quitar_fondo']
+                    && ($remota['args']['headers']['X-PMU-Token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef'
+                    && (int)($remota['args']['timeout'] ?? 0) === 180
+                    && strlen((string)($remota['args']['body'] ?? '')) > 0);
+                check('cadena IA: PNG y resumen de resultado al navegador',
+                    ($resultado['nombre'] ?? '') === 'prueba-pc-cadena-320x180.png'
+                    && strpos((string)($resultado['detalle'] ?? ''), 'Detectado: fotografia') !== false
+                    && strpos((string)($resultado['detalle'] ?? ''), 'Eliminacion de fondo aplicada') !== false
+                    && substr((string)base64_decode((string)($resultado['imagen_base64'] ?? ''), true), 0, 4) === "\x89PNG");
+            } else {
+                check('redimensionar PC: envia al endpoint correcto',
+                    ($remota['url'] ?? '') === 'https://ai.loc.ar/redimensionar');
+                check('redimensionar PC: envia dimensiones y bytes',
+                    ($remota['args']['headers']['X-PMU-Ancho'] ?? '') === '320'
+                    && ($remota['args']['headers']['X-PMU-Alto'] ?? '') === '180'
+                    && ($remota['args']['headers']['X-PMU-Modo'] ?? '') === $modo_prueba
+                    && ($remota['args']['headers']['X-PMU-Token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef'
+                    && (int)($remota['args']['timeout'] ?? 0) === 120
+                    && strlen((string)($remota['args']['body'] ?? '')) > 0);
+                check('redimensionar PC: PNG devuelto al navegador',
+                    ($resultado['nombre'] ?? '') === 'prueba-pc-' . $modo_prueba . '-320x180.png'
+                    && strpos((string)($resultado['detalle'] ?? ''), $modelo_prueba) !== false
+                    && substr((string)base64_decode((string)($resultado['imagen_base64'] ?? ''), true), 0, 4) === "\x89PNG");
+            }
             break;
         case 'subir_conflicto':
             // D2: unica via JSON (el JS abre su modal con nombre_existente:).
@@ -3554,7 +3589,11 @@ switch ($fase) {
 
     case 'redimensionar_pc':
     case 'redimensionar_pc_anime':
+    case 'pipeline_pc':
+    case 'pipeline_pc_invalida':
         preparar_entorno($testBase, $base);
+        $esPipeline = in_array($fase, ['pipeline_pc', 'pipeline_pc_invalida'], true);
+        $pipelineInvalida = $fase === 'pipeline_pc_invalida';
         $modoPrueba = $fase === 'redimensionar_pc_anime' ? 'anime' : 'foto';
         $temporal = $testBase . '/prueba-redimensionar.png';
         file_put_contents($temporal, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mNk+M/wHwAF/gL+zT7Y5QAAAABJRU5ErkJggg=='));
@@ -3566,9 +3605,24 @@ switch ($fase) {
         ];
         $_POST = [
             'action' => 'personalizador_pdf_redimensionar_pc',
-            'ancho' => '320', 'alto' => '180', 'modo' => $modoPrueba,
             '_wpnonce' => 'nonce',
         ];
+        if ($esPipeline) {
+            $_POST['pipeline'] = $pipelineInvalida
+                ? '{"modo":"automatico","tareas":[{"tipo":"ejecutar"}]}'
+                : json_encode([
+                    'modo' => 'automatico',
+                    'tareas' => [
+                        ['tipo' => 'detectar'],
+                        ['tipo' => 'mejorar', 'modelo' => 'automatico', 'ancho' => 320, 'alto' => 180],
+                        ['tipo' => 'quitar_fondo'],
+                    ],
+                ]);
+        } else {
+            $_POST['ancho'] = '320';
+            $_POST['alto'] = '180';
+            $_POST['modo'] = $modoPrueba;
+        }
         $GLOBALS['test_options']['personalizador_pdf_ia_config'] = [
             'url' => 'https://ai.loc.ar',
             'token' => 'test-pmu-ai-token-0123456789abcdef0123456789abcdef',
@@ -3576,6 +3630,16 @@ switch ($fase) {
         $GLOBALS['test_remote_post_respuesta'] = [
             'response' => ['code' => 200],
             'body' => \ExtractCorel\Engine\PngWriter::bytes(320, 180),
+            'headers' => $esPipeline ? [
+                'x-pmu-resultado' => json_encode([
+                    'modo' => 'automatico',
+                    'tareas' => [
+                        ['tipo' => 'detectar', 'categoria' => 'fotografia', 'ambiguo' => false],
+                        ['tipo' => 'mejorar', 'estado' => 'aplicada'],
+                        ['tipo' => 'quitar_fondo', 'estado' => 'aplicada'],
+                    ],
+                ]),
+            ] : [],
         ];
         $_REQUEST = $_POST;
         $p->handle_redimensionar_pc(); // exit en responder(JSON con PNG)

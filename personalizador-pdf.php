@@ -2872,18 +2872,120 @@ class Personalizador_PDF_Plugin
         return 'https://' . $host;
     }
 
+    /** Valida la cadena de tareas antes de reenviarla al servicio local. */
+    private function validar_pipeline_pc($entrada)
+    {
+        if ($entrada === '' || strlen($entrada) > 8192) {
+            $this->responder(false, [], 'La configuracion de la cadena esta vacia o supera 8 KB.');
+        }
+        $configuracion = json_decode($entrada, true);
+        if (!is_array($configuracion) || array_diff(array_keys($configuracion), ['modo', 'tareas'])) {
+            $this->responder(false, [], 'La configuracion de la cadena debe ser un objeto JSON con modo y tareas.');
+        }
+        $modo = sanitize_key((string)($configuracion['modo'] ?? ''));
+        $tareas = $configuracion['tareas'] ?? null;
+        if (!in_array($modo, ['manual', 'automatico'], true)
+            || !is_array($tareas) || count($tareas) < 1 || count($tareas) > 8
+            || array_keys($tareas) !== range(0, count($tareas) - 1)) {
+            $this->responder(false, [], 'El modo debe ser manual o automatico y la cadena debe tener entre 1 y 8 tareas.');
+        }
+
+        $normalizadas = [];
+        foreach ($tareas as $tarea) {
+            if (!is_array($tarea)) {
+                $this->responder(false, [], 'Cada tarea de la cadena debe ser un objeto.');
+            }
+            $tipo = sanitize_key((string)($tarea['tipo'] ?? ''));
+            $claves = [
+                'detectar' => ['tipo'],
+                'mejorar' => ['tipo', 'modelo', 'ancho', 'alto', 'si_categoria'],
+                'quitar_fondo' => ['tipo', 'si_categoria'],
+            ];
+            if (!isset($claves[$tipo]) || array_diff(array_keys($tarea), $claves[$tipo])) {
+                $this->responder(false, [], 'La cadena contiene un tipo de tarea u opcion desconocidos.');
+            }
+            $fila = ['tipo' => $tipo];
+            if ($tipo === 'mejorar') {
+                $modelo = sanitize_key((string)($tarea['modelo'] ?? 'foto'));
+                if (!in_array($modelo, ['foto', 'anime', 'automatico'], true)) {
+                    $this->responder(false, [], 'El modelo de mejora debe ser foto, anime o automatico.');
+                }
+                $fila['modelo'] = $modelo;
+                if (isset($tarea['ancho']) !== isset($tarea['alto'])) {
+                    $this->responder(false, [], 'La mejora requiere ancho y alto juntos.');
+                }
+                if (isset($tarea['ancho'])) {
+                    $ancho = $tarea['ancho'];
+                    $alto = $tarea['alto'];
+                    if (!is_int($ancho) || !is_int($alto)
+                        || $ancho < 1 || $alto < 1 || $ancho > 3000 || $alto > 3000) {
+                        $this->responder(false, [], 'Las dimensiones de mejora deben ser enteros de 1 a 3000 px.');
+                    }
+                    $fila['ancho'] = $ancho;
+                    $fila['alto'] = $alto;
+                }
+            }
+            if (isset($tarea['si_categoria'])) {
+                $categoria = sanitize_key((string)$tarea['si_categoria']);
+                if (!in_array($categoria, ['fotografia', 'grafica'], true)) {
+                    $this->responder(false, [], 'si_categoria debe ser fotografia o grafica.');
+                }
+                $fila['si_categoria'] = $categoria;
+            }
+            $normalizadas[] = $fila;
+        }
+
+        $salida = wp_json_encode(['modo' => $modo, 'tareas' => $normalizadas]);
+        if (!is_string($salida)) {
+            $this->responder(false, [], 'No se pudo preparar la configuracion de la cadena.');
+        }
+        return $salida;
+    }
+
+    /** Resume las tareas informadas por el servicio sin exponer datos arbitrarios. */
+    private function detalle_pipeline_pc($resultado, $ancho, $alto)
+    {
+        $partes = [];
+        foreach ((array)($resultado['tareas'] ?? []) as $tarea) {
+            if (!is_array($tarea)) {
+                continue;
+            }
+            $tipo = sanitize_key((string)($tarea['tipo'] ?? ''));
+            $estado = sanitize_key((string)($tarea['estado'] ?? ''));
+            if ($tipo === 'detectar') {
+                $categoria = sanitize_key((string)($tarea['categoria'] ?? ''));
+                if (in_array($categoria, ['fotografia', 'grafica'], true)) {
+                    $partes[] = 'Detectado: ' . ($categoria === 'fotografia' ? 'fotografia' : 'grafica')
+                        . (!empty($tarea['ambiguo']) ? ' (ambiguo)' : '');
+                }
+            } elseif (in_array($tipo, ['mejorar', 'quitar_fondo'], true)) {
+                $nombre = $tipo === 'mejorar' ? 'Mejora' : 'Eliminacion de fondo';
+                $partes[] = $estado === 'omitida' ? $nombre . ' omitida' : $nombre . ' aplicada';
+            }
+            if (!empty($tarea['advertencia'])) {
+                $partes[] = sanitize_text_field((string)$tarea['advertencia']);
+            }
+        }
+        return 'Cadena completada' . ($partes ? ': ' . implode('; ', $partes) : '')
+            . '. Salida: ' . $ancho . ' x ' . $alto . ' px.';
+    }
+
     /** Prueba de superresolucion local: imagen temporal -> PNG, sin persistir datos. */
     public function handle_redimensionar_pc()
     {
         $this->seguridad('personalizador_pdf_redimensionar_pc');
         $config = $this->ia_config();
         $base = $config['url'];
+        $esPipeline = array_key_exists('pipeline', $_POST);
+        $pipeline = $esPipeline
+            ? $this->validar_pipeline_pc((string)wp_unslash($_POST['pipeline']))
+            : '';
         $ancho = isset($_POST['ancho']) ? (int)$_POST['ancho'] : 0;
         $alto = isset($_POST['alto']) ? (int)$_POST['alto'] : 0;
         $modo = isset($_POST['modo']) ? sanitize_key((string)wp_unslash($_POST['modo'])) : '';
         $archivo = $_FILES['imagen'] ?? null;
-        if ($config['token'] === '' || $ancho < 1 || $alto < 1 || $ancho > 3000 || $alto > 3000
-            || !in_array($modo, ['foto', 'anime'], true)) {
+        if ($config['token'] === '' || (!$esPipeline && ($ancho < 1 || $alto < 1 || $ancho > 3000 || $alto > 3000
+            || !in_array($modo, ['foto', 'anime'], true)))) {
             $this->responder(false, [], 'Falta configurar el token o el modo/dimensiones son invalidos (cada lado debe ser 1..3000 px).');
         }
         $temporal = is_array($archivo) ? (string)($archivo['tmp_name'] ?? '') : '';
@@ -2903,17 +3005,22 @@ class Personalizador_PDF_Plugin
         if ($bytes === '') {
             $this->responder(false, [], 'No se pudo leer la imagen subida.');
         }
-        $respuesta = wp_remote_post($base . '/redimensionar', [
-            'timeout' => 120,
+        $headers = [
+            'Accept' => 'image/png',
+            'Content-Type' => $mime,
+            'X-PMU-Token' => $config['token'],
+        ];
+        if ($esPipeline) {
+            $headers['X-PMU-Pipeline'] = $pipeline;
+        } else {
+            $headers['X-PMU-Ancho'] = (string)$ancho;
+            $headers['X-PMU-Alto'] = (string)$alto;
+            $headers['X-PMU-Modo'] = $modo;
+        }
+        $respuesta = wp_remote_post($base . ($esPipeline ? '/procesar' : '/redimensionar'), [
+            'timeout' => $esPipeline ? 180 : 120,
             'redirection' => 0,
-            'headers' => [
-                'Accept' => 'image/png',
-                'Content-Type' => $mime,
-                'X-PMU-Ancho' => (string)$ancho,
-                'X-PMU-Alto' => (string)$alto,
-                'X-PMU-Modo' => $modo,
-                'X-PMU-Token' => $config['token'],
-            ],
+            'headers' => $headers,
             'body' => $bytes,
             'limit_response_size' => 8 * 1024 * 1024,
         ]);
@@ -2930,21 +3037,34 @@ class Personalizador_PDF_Plugin
                 : 'La PC no pudo procesar la imagen (HTTP ' . $codigo . ').');
         }
         $infoSalida = $salida !== '' ? @getimagesizefromstring($salida) : false;
-        if (substr($salida, 0, 8) !== "\x89PNG\r\n\x1a\n"
-            || !is_array($infoSalida)
-            || (int)($infoSalida[0] ?? 0) !== $ancho
-            || (int)($infoSalida[1] ?? 0) !== $alto) {
+        $anchoSalida = is_array($infoSalida) ? (int)($infoSalida[0] ?? 0) : 0;
+        $altoSalida = is_array($infoSalida) ? (int)($infoSalida[1] ?? 0) : 0;
+        if (substr($salida, 0, 8) !== "\x89PNG\r\n\x1a\n" || !is_array($infoSalida)
+            || $anchoSalida < 1 || $altoSalida < 1
+            || ($esPipeline && ($anchoSalida > 3000 || $altoSalida > 3000 || $anchoSalida * $altoSalida > 30000000))
+            || (!$esPipeline && ($anchoSalida !== $ancho || $altoSalida !== $alto))) {
             $this->responder(false, [], 'La PC no devolvio un PNG valido con las dimensiones solicitadas.');
         }
         if (strlen($salida) > 8 * 1024 * 1024) {
             $this->responder(false, [], 'El PNG devuelto supera el limite de 8 MB para esta prueba.');
         }
-        $nombreModo = $modo === 'foto' ? 'foto' : 'anime';
-        $modelo = $modo === 'foto' ? 'realesr-general-x4v3' : 'RealESRGAN_x4plus_anime_6B';
+        if ($esPipeline) {
+            $datosPipeline = json_decode((string)wp_remote_retrieve_header($respuesta, 'x-pmu-resultado'), true);
+            if (!is_array($datosPipeline) || !isset($datosPipeline['tareas']) || !is_array($datosPipeline['tareas'])) {
+                $this->responder(false, [], 'La PC no devolvio los metadatos de la cadena procesada.');
+            }
+            $nombreSalida = 'prueba-pc-cadena-' . $anchoSalida . 'x' . $altoSalida . '.png';
+            $detalle = $this->detalle_pipeline_pc($datosPipeline, $anchoSalida, $altoSalida);
+        } else {
+            $nombreModo = $modo === 'foto' ? 'foto' : 'anime';
+            $modelo = $modo === 'foto' ? 'realesr-general-x4v3' : 'RealESRGAN_x4plus_anime_6B';
+            $nombreSalida = 'prueba-pc-' . $nombreModo . '-' . $ancho . 'x' . $alto . '.png';
+            $detalle = 'Superresolucion ' . $modelo . ' recibida: ' . $ancho . ' x ' . $alto . ' px.';
+        }
         $this->responder(true, [
             'imagen_base64' => base64_encode($salida),
-            'nombre' => 'prueba-pc-' . $nombreModo . '-' . $ancho . 'x' . $alto . '.png',
-            'detalle' => 'Superresolucion ' . $modelo . ' recibida: ' . $ancho . ' x ' . $alto . ' px.',
+            'nombre' => $nombreSalida,
+            'detalle' => $detalle,
         ]);
     }
 
