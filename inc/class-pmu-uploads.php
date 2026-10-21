@@ -161,10 +161,10 @@ class PMU_Uploads
     }
 
     /**
-     * Lectura tolerante de envolturas.json en vista v2 (formas deduplicadas):
-     * array normalizado o null si no existe / no es legible / es invalido.
-     * Un archivo v1 (una entrada por instancia) se deduplica EN MEMORIA con
-     * Metadata::agruparFormas: nada se rompe antes de re-analizar.
+     * Lectura tolerante de `envolturas.json` (formas deduplicadas): el array
+     * normalizado, o null si no existe / no es legible / **no es utilizable**
+     * (asi la consola puede guiar a Re-analizar en vez de mostrar un "sin
+     * envolturas" mudo).
      */
     public function leer_envolturas($pdf)
     {
@@ -177,7 +177,7 @@ class PMU_Uploads
         return $this->envolturas_v2($dec);
     }
 
-    /** Normaliza el contenido de envolturas.json (v1 o v2) a la vista v2. */
+    /** Sanea el contenido de `envolturas.json` a la vista normalizada. */
     private function envolturas_v2($datos)
     {
         if (!is_array($datos) || !isset($datos['grupos']) || !is_array($datos['grupos'])) {
@@ -215,8 +215,15 @@ class PMU_Uploads
                 $grupos[$gid] = ['formas' => $formas, 'defecto' => $defecto, 'mapa' => $mapa];
                 continue;
             }
-            // Spec 020 (B5): solo v2 (formas deduplicadas). Un archivo v1 se
-            // descarta: Re-analizar lo regenera.
+            // Un grupo sin `formas` utilizables se descarta (no se inventa
+            // geometria).
+        }
+        if ($datos['grupos'] && !$grupos) {
+            // El archivo DECLARA grupos pero ninguno es utilizable. Eso NO es
+            // "analizado sin envolturas" (ese caso es `grupos` vacio), asi que
+            // se informa como no disponible para que la consola guie a
+            // Re-analizar en vez de mostrar un "sin envolturas" mudo.
+            return null;
         }
         return [
             'version' => 2,
@@ -281,7 +288,7 @@ class PMU_Uploads
 
     /**
      * Envoltura de `gid#n`: `{archivado, forma, envoltura}`.
-     * `archivado` = existe el archivo; `forma` = indice resuelto (0 = sin
+     * `archivado` = hay envolturas utilizables; `forma` = indice resuelto (0 = sin
      * envoltura); `envoltura` = `{par, subs}` o null.
      */
     public function envoltura_datos($pdf, $gid, $n)

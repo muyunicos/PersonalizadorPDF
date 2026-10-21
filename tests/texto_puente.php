@@ -362,12 +362,16 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('sin archivo: sin geometria',
                 ($GLOBALS['eo_ausente']['datos']['archivado'] ?? true) === false
                 && ($GLOBALS['eo_ausente']['datos']['envoltura'] ?? null) === null);
-            check('v1 se normaliza: 1 forma, defecto 1, sin excepciones',
-                ($GLOBALS['eo_v1']['claves']['formas']['0000FF'] ?? null) === 1
-                && ($GLOBALS['eo_v1']['claves']['defecto']['0000FF'] ?? null) === 1
-                && ($GLOBALS['eo_v1']['claves']['excepciones']['0000FF'] ?? null) === null);
-            check('v1: la geometria se lee igual',
-                !empty($GLOBALS['eo_v1']['datos']['envoltura']['subs']));
+            // Archivo con grupos NO utilizables: se descarta (no se inventa
+            // geometria) y se informa como no disponible, asi la consola guia a
+            // Re-analizar en vez de quedarse en un "sin envolturas" mudo.
+            check('archivo con grupos no utilizables: no inventa formas',
+                ($GLOBALS['eo_inutilizable']['claves']['formas']['0000FF'] ?? null) === null
+                && ($GLOBALS['eo_inutilizable']['claves']['excepciones'] ?? []) === []);
+            check('archivo no utilizable: disponible=false y sin geometria',
+                ($GLOBALS['eo_inutilizable']['claves']['disponible'] ?? true) === false
+                && ($GLOBALS['eo_inutilizable']['datos']['archivado'] ?? true) === false
+                && ($GLOBALS['eo_inutilizable']['datos']['envoltura'] ?? null) === null);
             check('v2: defecto EFECTIVO = override (forma 2)',
                 ($GLOBALS['eo_v2']['claves']['defecto']['0000FF'] ?? null) === 2
                 && ($GLOBALS['eo_v2']['defecto']['forma'] ?? 0) === 2);
@@ -2799,9 +2803,9 @@ switch ($fase) {
         }
         break;
     case 'envoltura_op':
-        // Envolturas v2 (formas deduplicadas) por el endpoint motor:
-        // 1) sin archivo; 2) v1 normalizado en memoria; 3) v2 con default,
-        // excepcion (k=0) y override del admin.
+        // Envolturas (formas deduplicadas) por el endpoint motor:
+        // 1) sin archivo; 2) archivo con grupos no utilizables (se descarta);
+        // 3) archivo valido con default, excepcion (k=0) y override del admin.
         preparar_entorno($testBase, $base);
         if (!class_exists('PMU_Uploads')) {
             require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
@@ -2812,9 +2816,9 @@ switch ($fase) {
             'claves' => $motor_eo->envoltura_claves('muestra'),
             'datos' => $motor_eo->envoltura_datos('muestra', '0000FF', 1),
         ];
-        // v1 (una entrada por instancia) -> se deduplica al leer.
+        // Archivo que DECLARA un grupo pero con una forma ajena al formato
+        // (sin `formas` utilizables): no se normaliza ni se inventa geometria.
         \ExtractCorel\Engine\Metadata::guardar([
-            'version' => 1,
             'pdf' => 'muestra',
             'creado' => '2026-10-17T00:00:00Z',
             'grupos' => ['0000FF' => ['1' => [
@@ -2823,7 +2827,7 @@ switch ($fase) {
                     's' => [['l', 1.0, 1.0], ['l', 1.0, 0.0], ['l', 0.0, 0.0]], 'c' => 1]],
             ]]],
         ], $motor_eo->ruta_envolturas('muestra'));
-        $GLOBALS['eo_v1'] = [
+        $GLOBALS['eo_inutilizable'] = [
             'claves' => $motor_eo->envoltura_claves('muestra'),
             'datos' => $motor_eo->envoltura_datos('muestra', '0000FF', 1),
         ];

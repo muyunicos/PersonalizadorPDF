@@ -131,7 +131,7 @@ class Metadata
      * `{formas, defecto, mapa}`. `formas` = formas DISTINTAS con sus `usos`;
      * `defecto` = la mas usada (empate -> la primera); `mapa` = n -> k para
      * TODAS las instancias (k=0 = sin envoltura). Null si no hay ninguna.
-     * Lo usan el Detector (generarEnvolturas) y la lectura de archivos v1.
+     * Lo usa el Detector al generar el archivo (`generarEnvolturas`).
      */
     public static function agruparFormas(array $porN)
     {

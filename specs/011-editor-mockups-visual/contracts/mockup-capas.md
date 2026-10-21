@@ -180,8 +180,8 @@ Un ajuste nuevo debe estar en los **dos** lados, o el cliente ve distinto a lo q
 - [ ] `PMU_Uploads::config_mockups` (allowlist + clamp) **y** `handle_mockups_guardar` (saneo)
 - [ ] `PMUMockup.filtroCss` (aplicacion unica, compartida por editor y ficha)
 - [ ] envolturas: `Detector` (captura del clip) **y** `Metadata::generarEnvolturas` +
-      `agruparFormas` (dedup, `analizar_y_guardar` escribe `envolturas.json` v2); `PMU_Uploads`
-      (`ruta_envolturas` + `leer_envolturas` v1/v2 + `envoltura_claves`/`envoltura_datos`/
+      `agruparFormas` (dedup: `analizar_y_guardar` escribe `envolturas.json`); `PMU_Uploads`
+      (`ruta_envolturas` + `leer_envolturas` + `envoltura_claves`/`envoltura_datos`/
       `envoltura_defecto` + `op=envoltura`); config `envolturas` y `campos_envoltura` (allowlist);
       `datos_pdf_render` (forma por defecto + excepciones usadas + claves) **y** `PMUMockup.componer`
       (clip via `envolturaDeRef`/`comandosEnvoltura`); `panel_ficha` (guia del cargador) **y**
@@ -202,8 +202,10 @@ Un ajuste nuevo debe estar en los **dos** lados, o el cliente ve distinto a lo q
 - `analisis.json` **nunca** lleva `envs` (formato original intacto); `envolturas.json` con
   `grupos` vacios = analizado sin envolturas (distinto de archivo ausente = Re-analizar).
 - **Dedup**: 60 instancias con el mismo marco -> **1 forma** (`usos: 60`) + `mapa` de 60 entradas
-  (< 4 KB); dos marcos distintos -> 2 formas y `mapa` {1:1, 2:2}. Un archivo v1 se lee igual
-  (dedup en memoria).
+  (< 4 KB); dos marcos distintos -> 2 formas y `mapa` {1:1, 2:2}.
+- Un archivo que declara grupos pero **sin `formas` utilizables** se **descarta** (no se inventa
+  geometria ni se convierte nada): se informa como **no disponible** y la consola guia a
+  **Re-analizar**. `grupos` vacios = analizado sin envolturas (estado valido, sin aviso).
 - La forma por defecto **viaja una vez** por grupo (`env_defecto`): una instancia default no pide
   nada; una excepcion pide su geometria (y nunca cae a la default mientras no llega).
 - El cargador del comprador dibuja la guia de la forma representativa del grupo asociado

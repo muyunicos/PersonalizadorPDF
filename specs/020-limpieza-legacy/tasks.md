@@ -62,6 +62,16 @@
   + `readme.txt`/version **4.11.0** (**hecho**). **Pendiente solo el recorrido manual minimo**: un
   campo nuevo de imagen de punta a punta (ficha -> preview -> PDF).
 
+- [X] **T023** Cierre de la limpieza del **arnes y los textos** (2026-10-20): retirado el **ultimo
+  resto del formato viejo** de `envolturas.json`. La fase `envoltura_op` esperaba que un archivo
+  con el formato viejo se **deduplicara en memoria** (regla que la 020 D7 elimino), asi que sus 2
+  checks quedaron en rojo desde entonces y **3 textos seguian prometiendo** esa compatibilidad (2
+  docblocks en `inc/class-pmu-uploads.php` + `AGENTS.md` §5 + el criterio de `contracts/mockup-capas.md`).
+  Ahora: **no hay camino de compatibilidad** y el arnes prueba el **contrato vigente** (un archivo
+  que declara grupos sin `formas` utilizables se **descarta** y se informa como **no disponible**,
+  para que la consola guie a Re-analizar). `Metadata::agruparFormas` **no era codigo muerto**: es el
+  motor de dedup que **escribe** el archivo (`generarEnvolturas`), solo se corrigio su docblock.
+
 ## Nota
 
 Si al borrar un bloque aparece un consumidor real de la clave, **el bloque se frena** y se decide
