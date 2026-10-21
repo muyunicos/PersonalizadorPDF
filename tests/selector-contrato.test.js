@@ -295,14 +295,50 @@ const casoChica = puro.escalaBase('encajar', 100, 100, 1000, 500);
 check('Encajar amplia si hace falta (contain sin tope): 100x100 en 1000x500 -> 500x500',
   casi(casoChica.dw, 500) && casi(casoChica.dh, 500),
   casoChica.dw + 'x' + casoChica.dh);
-// El PNG mide SIEMPRE el lienzo (D4): el Motor encaja con contain 1:1 (`encajado`)
-// y la vista previa es el PDF. La ventana `min(caja, lienzo)` de la 025 se
-// retiro: con un lienzo no cuadrado el recorte salia corrido.
-check('Spec 028 D4: el PNG mide el lienzo (W x H), sin la ventana de la 025',
-  /cv\.width = Math\.max\(1, parseInt\(this\.config\.finalW, 10\) \|\| 1\)/.test(selector)
-  && /cv\.height = Math\.max\(1, parseInt\(this\.config\.finalH, 10\) \|\| 1\)/.test(selector)
-  && selector.indexOf('ctx.setTransform(k, 0, 0, k, 0, 0)') === -1
+// El PNG mide el LIENZO **acotado a la resolucion de la foto** (D4 + D11): el
+// Motor encaja contain 1:1 en encuadre y la vista previa es el PDF. La ventana
+// `min(caja, lienzo)` de la 025 se retiro (con un lienzo no cuadrado el recorte
+// salia corrido) y el PNG ya no inventa pixeles.
+check('Spec 028 D11: el PNG sale de escalaSalida (lienzo acotado), sin la ventana de la 025',
+  typeof puro.escalaSalida === 'function'
+  && /cv\.width = med\.w/.test(selector) && /cv\.height = med\.h/.test(selector)
+  && /setTransform\(med\.k, 0, 0, med\.k, 0, 0\)/.test(selector)
   && selector.indexOf('var ow = Math.max(1, Math.min(Math.round(caja.dw)') === -1);
+
+// PROPIEDADES del tope (D11), sobre los mismos casos: nunca mas grande que el
+// lienzo, nunca amplia la foto y conserva el ASPECTO del lienzo (por eso el
+// encuadre del Motor es el mismo: su escalado es uniforme).
+let salidaOk = true;
+CASOS.forEach(function (c) {
+  ['cubrir', 'encajar', 'estirar'].forEach(function (m) {
+    const r = puro.escalaSalida(m, c[0], c[1], c[2], c[3]);
+    const cabeEnLienzo = r.w <= c[2] && r.h <= c[3];
+    const noInventa = r.k <= 1;
+    const mismoAspecto = Math.abs((r.w / r.h) / (c[2] / c[3]) - 1) <= 0.02;
+    if (!(cabeEnLienzo && noInventa && mismoAspecto)) { salidaOk = false; }
+  });
+});
+check('D11: el PNG nunca supera el lienzo, nunca amplia la foto y conserva su aspecto', salidaOk);
+
+// Casos del negocio del tope (foto 400x300 en un lienzo de 1000x1000).
+const salCubrir = puro.escalaSalida('cubrir', 400, 300, 1000, 1000);
+const salEncajar = puro.escalaSalida('encajar', 400, 300, 1000, 1000);
+const salEstirar = puro.escalaSalida('estirar', 400, 300, 1000, 1000);
+check('E3: 400x300 en 1000x1000 -> PNG Cubrir 300x300 / Encajar 400x400 / Estirar 400x400',
+  salCubrir.w === 300 && salCubrir.h === 300
+  && salEncajar.w === 400 && salEncajar.h === 400
+  && salEstirar.w === 400 && salEstirar.h === 400,
+  [salCubrir.w + 'x' + salCubrir.h, salEncajar.w + 'x' + salEncajar.h,
+    salEstirar.w + 'x' + salEstirar.h].join(' / '));
+// La Escala multiplica la caja: acercar baja k (menos pixeles, mismo encuadre).
+const salZoom = puro.escalaSalida('cubrir', 400, 300, 1000, 1000, 4);
+check('D11: la Escala acota el PNG (400x300 en 1000x1000 con Cubrir a 4x -> 75x75)',
+  salZoom.w === 75 && salZoom.h === 75, salZoom.w + 'x' + salZoom.h);
+// Foto mas grande que el hueco: k = 1 y el PNG mide el lienzo (lo tipico no cambia).
+const salGrande = puro.escalaSalida('cubrir', 4000, 3000, 1000, 1000);
+check('D11: foto grande -> k=1 y el PNG mide el lienzo (el caso tipico no cambia)',
+  salGrande.k === 1 && salGrande.w === 1000 && salGrande.h === 1000,
+  salGrande.w + 'x' + salGrande.h);
 check('Spec 028 D3: la Escala vuelve al rango completo 0.25x-4x (no solo reduce)',
   /min="-100" max="100"/.test(selector)
   && /this\.zoom = Math\.max\(0\.25, Math\.min\(4, v\)\)/.test(selector));

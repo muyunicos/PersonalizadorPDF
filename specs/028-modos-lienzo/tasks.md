@@ -50,6 +50,18 @@
       `specs/INDICE.md` (025 marcada como **SUPERADA**).
 - [X] **T017** — `AGENTS.md` §5/§7 + `admin/ayuda.php` (seccion de los 3 modos con la tabla).
 - [X] **T018** — Version 4.19.0 (cabecera de `personalizador-pdf.php` + `readme.txt`).
+
+## Tope de resolucion del PNG (D11)
+
+- [X] **T020** — `escalaSalida(modo, iw, ih, W, H, zoom)` (pura, exportada en `puro`):
+      `k = min(1, max(iw,ih)/max(caja))` y el PNG mide `round(W·k) x round(H·k)`.
+- [X] **T021** — `_generarLienzoSalida()`: canvas `med.w x med.h` + `setTransform(med.k, ...)`
+      con la composicion del lienzo entero (sin `k` no se toca el contexto). Sin foto: el lienzo.
+- [X] **T022** — `_badge()`: tamano **real** del PNG + `(N% del hueco)` cuando `k < 1`.
+- [X] **T023** — Puerta: propiedades del tope (nunca supera el lienzo / nunca amplia la foto /
+      conserva el aspecto del lienzo) + los casos del negocio (400x300 en 1000x1000 → 300x300 /
+      400x400 / 400x400), la Escala 4x (75x75) y la foto grande (k=1 → 1000x1000).
+- [X] **T024** — Contrato (`contracts/modos.md`), `AGENTS.md`, `admin/ayuda.php`, changelog e indice.
 - [ ] **T019** — **Recorrido manual en WP real**: ficha con un campo de imagen; foto con aspecto
       distinto (>5%) y foto con aspecto casi igual (<=5%); probar los 3 modos, la Escala hasta 4x,
       el arrastre y "Ajustar al marco"; comprobar que el PDF final es igual a la vista previa.

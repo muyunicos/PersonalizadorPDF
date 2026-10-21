@@ -213,6 +213,47 @@
     }
 
     /**
+     * Spec 028 (D11): factor y tamano REAL del PNG de salida.
+     *
+     * El PNG conserva el **aspecto del lienzo** (es un factor uniforme, asi que
+     * el encaje del Motor sigue siendo 1:1 en encuadre: la vista previa sigue
+     * siendo el PDF) pero se acota a la resolucion que la foto puede justificar:
+     *
+     *     k = min(1, max(iw,ih) / max(caja))     // el lado mayor de la foto no crece
+     *     PNG = round(W*k) x round(H*k)
+     *
+     * - **Nunca supera el lienzo** (`k <= 1`).
+     * - **Nunca amplia la foto**: no inventa pixeles. Si la foto es mas grande
+     *   que la caja, `k = 1` y el PNG mide el lienzo (el caso tipico no cambia).
+     * - La **Escala** multiplica la caja, asi que acercar baja `k` (se usan
+     *   menos pixeles de la foto y el PDF se ve igual que la vista previa).
+     *
+     * @param {string} modo `cubrir` | `encajar` | `estirar`
+     * @param {number} iw ancho de la foto (ya rotada)
+     * @param {number} ih alto de la foto (ya rotada)
+     * @param {number} W ancho del lienzo
+     * @param {number} H alto del lienzo
+     * @param {number} [zoom] Escala del comprador (0.25x-4x)
+     */
+    function escalaSalida(modo, iw, ih, W, H, zoom) {
+        var w = Math.max(1, parseFloat(W) || 1);
+        var h = Math.max(1, parseFloat(H) || 1);
+        var z = (isFinite(zoom) && zoom > 0) ? zoom : 1;
+        var caja = escalaBase(modo, iw, ih, w, h);
+        var mayorCaja = Math.max(caja.dw * z, caja.dh * z);
+        var mayorFoto = Math.max(
+            Math.max(1, parseFloat(iw) || 1),
+            Math.max(1, parseFloat(ih) || 1)
+        );
+        var k = (mayorCaja > 0) ? Math.min(1, mayorFoto / mayorCaja) : 1;
+        return {
+            k: k,
+            w: Math.max(1, Math.round(w * k)),
+            h: Math.max(1, Math.round(h * k))
+        };
+    }
+
+    /**
      * Spec 024 (D10): centro de la IMAGEN = centro de la FORMA principal +
      * **desplazamiento escalado por el zoom**. Asi el punto fijo del zoom es el
      * centro de la envoltura: el punto de la foto que esta bajo ese centro se
@@ -1388,11 +1429,19 @@
         }
         if (!this.txtSalida) { return; }
         var z = this.zoom || 1;
-        // Spec 028: el badge muestra el lienzo (el hueco), el modo vigente y la
-        // Escala. Sin datos de ampliacion: la resolucion la acota el hueco.
+        // Spec 028 (D4/D11): el badge muestra el tamano REAL del PNG (el lienzo
+        // acotado a la resolucion de la foto), el modo vigente y la Escala. Con
+        // `k < 1` se agrega el porcentaje respecto del hueco (es un dato tecnico
+        // de la consola: la ficha no lo ve).
+        var dim = this._dimensionesImagen();
+        var med = escalaSalida(
+            this.config.mode, dim.w, dim.h,
+            this.config.finalW, this.config.finalH, z
+        );
         this.txtSalida.textContent =
-            'Salida ' + this.config.finalW + 'x' + this.config.finalH + ' px · '
-            + this.config.mode + ' · zoom x' + z.toFixed(2);
+            'Salida ' + med.w + 'x' + med.h + ' px'
+            + (med.k < 1 ? ' (' + Math.round(med.k * 100) + '% del hueco)' : '')
+            + ' · ' + this.config.mode + ' · zoom x' + z.toFixed(2);
     };
 
     SelectorPMU.prototype._trampaFoco = function (e) {
@@ -1415,11 +1464,17 @@
     };
 
     /**
-     * Spec 028 (D4): el PNG mide SIEMPRE el lienzo (`W x H`), que es el tamano
-     * del hueco del PDF (resuelto por `phsize`). El Motor encaja con
-     * contain+centrado (`Imagen::encajado`), asi que un PNG del tamano exacto
-     * del hueco pasa **1:1**: la vista previa es identica al PDF, con el modo,
-     * la Escala y el desplazamiento incluidos.
+     * Spec 028 (D4 + D11): el PNG mide el **lienzo acotado a la resolucion de la
+     * foto** (`W·k x H·k`, ver `escalaSalida`). El lienzo es el hueco del PDF
+     * (lo resuelve `phsize`), asi que:
+     *
+     * - con una foto **grande** (lo tipico) `k = 1` y el PNG mide el lienzo: el
+     *   Motor encaja contain+centrado (`Imagen::encajado`) **1:1**;
+     * - con una foto **mas chica que la caja** el PNG se acota (no se inventan
+     *   pixeles): sigue teniendo el **aspecto del lienzo**, asi que el Motor lo
+     *   escala de forma **uniforme** al insertarlo y el **encuadre es el mismo**
+     *   (modo, Escala y desplazamiento intactos). Por eso la vista previa sigue
+     *   siendo el PDF: solo baja la resolucion, que es la que el PDF mostraria.
      *
      * Antes (spec 025 D5) el PNG media `min(caja, lienzo)` y el dibujo se
      * centraba en el LIENZO: con un lienzo no cuadrado la ventana y el centro no
@@ -1427,11 +1482,29 @@
      */
     SelectorPMU.prototype._generarLienzoSalida = function () {
         if (!global.document) { return this.canvas || null; }
+        var med;
+        if (this.imagen) {
+            var dim = this._dimensionesImagen();
+            med = escalaSalida(
+                this.config.mode, dim.w, dim.h,
+                this.config.finalW, this.config.finalH, this.zoom
+            );
+        } else {
+            // Sin foto no hay nada que acotar: el lienzo entero (sin cambios).
+            med = {
+                k: 1,
+                w: Math.max(1, parseInt(this.config.finalW, 10) || 1),
+                h: Math.max(1, parseInt(this.config.finalH, 10) || 1)
+            };
+        }
         var cv = global.document.createElement('canvas');
-        cv.width = Math.max(1, parseInt(this.config.finalW, 10) || 1);
-        cv.height = Math.max(1, parseInt(this.config.finalH, 10) || 1);
+        cv.width = med.w;
+        cv.height = med.h;
         var ctx = cv.getContext('2d');
         if (!ctx) { return null; }
+        // k < 1 = lienzo reducido: se dibuja la composicion normal (lienzo W x H)
+        // encogida de forma uniforme.
+        if (med.k !== 1) { ctx.setTransform(med.k, 0, 0, med.k, 0, 0); }
         this._pintarImagenEnContexto(ctx, false);
         return cv;
     };
@@ -1594,6 +1667,7 @@
         calcularCajaEscena: calcularCajaEscena,
         superaCincoPorciento: superaCincoPorciento,
         escalaBase: escalaBase,
+        escalaSalida: escalaSalida,
         origenDibujo: origenDibujo,
         colorPredominanteBordes: colorPredominanteBordes,
         // Spec 027: la politica de transparencia (puras, sin DOM).

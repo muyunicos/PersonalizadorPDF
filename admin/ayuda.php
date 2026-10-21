@@ -89,11 +89,18 @@ if (!defined('ABSPATH')) {
             con el marco (5% de tolerancia), el modal muestra <strong>un solo</strong> boton,
             <em>Ajustar al marco</em>, que devuelve la imagen a su encaje por defecto: con el aspecto ya
             encajado los 3 modos harian casi lo mismo. La <em>Escala</em> va de 0,25x a 4x.</li>
-        <li><strong>La vista previa es el PDF:</strong> el archivo que se guarda mide <strong>siempre el
-            hueco</strong> del grupo (la razon por la que conviene <code>phsize: 1</code>), asi que el motor
-            lo inserta tal cual y lo que el comprador ve en el modal es lo que sale en el PDF (modo, Escala
-            y posicion incluidos). Si declaras <code>phsize: 0</code> y esas medidas no coinciden con el
-            hueco, el sistema avisa en la consola del navegador.</li>
+        <li><strong>La vista previa es el PDF:</strong> el archivo que se guarda mide <strong>el hueco</strong>
+            del grupo (la razon por la que conviene <code>phsize: 1</code>), asi que el motor lo inserta tal
+            cual y lo que el comprador ve en el modal es lo que sale en el PDF (modo, Escala y posicion
+            incluidos). Si declaras <code>phsize: 0</code> y esas medidas no coinciden con el hueco, el
+            sistema avisa en la consola del navegador.</li>
+        <li><strong>El archivo nunca se agranda de mas:</strong> si la foto que sube el comprador es mas
+            chica que el hueco, el WebP guardado se acota a la <strong>resolucion real</strong> de la foto
+            (una foto de 400x300 en un hueco de 1000x1000 se guarda de <strong>300x300</strong> con Cubrir y
+            de <strong>400x400</strong> con Encajar/Estirar, en vez de 1000x1000): pesa unas 10 veces menos y
+            se ve igual, porque esos pixeles eran inventados. El <strong>encuadre no cambia</strong> (lo que
+            se ve en el modal es lo que sale en el PDF) y si la foto es mas grande que el hueco se guarda el
+            hueco entero, como siempre.</li>
         <li><strong>Fondo transparente (spec 027):</strong> la ranura puede declarar <code>transp</code>:
             <code>'no'</code> = el fondo <strong>nunca</strong> es transparente (se oculta el boton de fondo
             transparente y, si la foto lo tiene, se usa <strong>blanco puro</strong> o el color solido de sus
