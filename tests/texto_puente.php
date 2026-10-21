@@ -22,7 +22,7 @@ if (PHP_SAPI !== 'cli') {
  *    carrito | minimos | pool* | overrides | sesion | conciliacion | completados | mockups* |
  *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
  *    reanalizar | envoltura_op | borrado | campo_global | campo_subida | pool_concurrente |
- *    conexion_pc | redimensionar_pc | redimensionar_pc_anime | ia_config | ia_config_invalida`
+ *    conexion_pc | redimensionar_pc | redimensionar_pc_anime | ia_config | ia_config_locar | ia_config_invalida`
  */
 
 $fase = isset($argv[1]) ? $argv[1] : 'setup';
@@ -601,7 +601,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             $config_ia = (array)($GLOBALS['test_options']['personalizador_pdf_ia_config'] ?? []);
             check('conexion PC: JSON success', is_array($json) && $json['success'] === true);
             check('conexion PC: consulta el /health oficial',
-                ($remota['url'] ?? '') === 'https://ai.muyunicos.com/health');
+                ($remota['url'] ?? '') === 'https://ai.loc.ar/health');
             check('conexion PC: autentica con token guardado',
                 ($remota['args']['headers']['X-PMU-Token'] ?? '') === ($config_ia['token'] ?? ''));
             check('conexion PC: timeout acotado', (int)(($remota['args']['timeout'] ?? 0)) === 8);
@@ -611,18 +611,26 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             $config_ia = (array)($GLOBALS['test_options']['personalizador_pdf_ia_config'] ?? []);
             $respuesta_ia = json_encode($json);
             check('configuracion IA: JSON success', is_array($json) && $json['success'] === true);
-            check('configuracion IA: guarda URL oficial y token', ($config_ia['url'] ?? '') === 'https://ai.muyunicos.com'
+            check('configuracion IA: guarda URL oficial y token', ($config_ia['url'] ?? '') === 'https://ai.loc.ar'
                 && ($config_ia['token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef');
             check('configuracion IA: no devuelve el secreto', is_string($respuesta_ia)
                 && strpos($respuesta_ia, 'test-pmu-ai-token-0123456789abcdef0123456789abcdef') === false);
             check('configuracion IA: confirma solo el estado', !empty($json['data']['token_configurado']));
             break;
+        case 'ia_config_locar':
+            $config_ia = (array)($GLOBALS['test_options']['personalizador_pdf_ia_config'] ?? []);
+            $respuesta_ia = json_encode($json);
+            check('configuracion IA loc.ar: acepta hostname exacto', is_array($json) && $json['success'] === true
+                && ($config_ia['url'] ?? '') === 'https://ai.loc.ar');
+            check('configuracion IA loc.ar: no devuelve el secreto', is_string($respuesta_ia)
+                && strpos($respuesta_ia, 'test-pmu-ai-token-0123456789abcdef0123456789abcdef') === false);
+            break;
         case 'ia_config_invalida':
             $config_ia = (array)($GLOBALS['test_options']['personalizador_pdf_ia_config'] ?? []);
             check('configuracion IA: rechaza URL fuera de allowlist', is_array($json) && $json['success'] === false
-                && strpos((string)($json['data'] ?? ''), 'https://ai.muyunicos.com') !== false);
+                && strpos((string)($json['data'] ?? ''), 'https://ai.loc.ar') !== false);
             check('configuracion IA: no pisa configuracion vigente al rechazar',
-                ($config_ia['url'] ?? '') === 'https://ai.muyunicos.com'
+                ($config_ia['url'] ?? '') === 'https://ai.loc.ar'
                 && ($config_ia['token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef');
             break;
         case 'redimensionar_pc':
@@ -633,7 +641,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             $modelo_prueba = $modo_prueba === 'foto' ? 'realesr-general-x4v3' : 'RealESRGAN_x4plus_anime_6B';
             check('redimensionar PC: JSON success', is_array($json) && $json['success'] === true);
             check('redimensionar PC: envia al endpoint correcto',
-                ($remota['url'] ?? '') === 'https://ai.muyunicos.com/redimensionar');
+                ($remota['url'] ?? '') === 'https://ai.loc.ar/redimensionar');
             check('redimensionar PC: envia dimensiones y bytes',
                 ($remota['args']['headers']['X-PMU-Ancho'] ?? '') === '320'
                 && ($remota['args']['headers']['X-PMU-Alto'] ?? '') === '180'
@@ -3493,7 +3501,7 @@ switch ($fase) {
     case 'conexion_pc':
         preparar_entorno($testBase, $base);
         $GLOBALS['test_options']['personalizador_pdf_ia_config'] = [
-            'url' => 'https://ai.muyunicos.com',
+            'url' => 'https://ai.loc.ar',
             'token' => 'test-pmu-ai-token-0123456789abcdef0123456789abcdef',
         ];
         $_POST = [
@@ -3508,7 +3516,19 @@ switch ($fase) {
         preparar_entorno($testBase, $base);
         $_POST = [
             'action' => 'personalizador_pdf_ia_config',
-            'url' => 'https://ai.muyunicos.com',
+            'url' => 'https://ai.loc.ar',
+            'token' => 'test-pmu-ai-token-0123456789abcdef0123456789abcdef',
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_ia_config_guardar();
+        break;
+
+    case 'ia_config_locar':
+        preparar_entorno($testBase, $base);
+        $_POST = [
+            'action' => 'personalizador_pdf_ia_config',
+            'url' => 'https://ai.loc.ar',
             'token' => 'test-pmu-ai-token-0123456789abcdef0123456789abcdef',
             '_wpnonce' => 'nonce',
         ];
@@ -3519,7 +3539,7 @@ switch ($fase) {
     case 'ia_config_invalida':
         preparar_entorno($testBase, $base);
         $GLOBALS['test_options']['personalizador_pdf_ia_config'] = [
-            'url' => 'https://ai.muyunicos.com',
+            'url' => 'https://ai.loc.ar',
             'token' => 'test-pmu-ai-token-0123456789abcdef0123456789abcdef',
         ];
         $_POST = [
@@ -3550,7 +3570,7 @@ switch ($fase) {
             '_wpnonce' => 'nonce',
         ];
         $GLOBALS['test_options']['personalizador_pdf_ia_config'] = [
-            'url' => 'https://ai.muyunicos.com',
+            'url' => 'https://ai.loc.ar',
             'token' => 'test-pmu-ai-token-0123456789abcdef0123456789abcdef',
         ];
         $GLOBALS['test_remote_post_respuesta'] = [

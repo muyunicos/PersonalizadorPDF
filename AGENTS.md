@@ -48,7 +48,8 @@ Integra el sistema **TextMuy** (editor de estilos de texto client-side) en la pe
 - **IA opcional (solo pruebas de admin)**: la pestaña Test puede enviar imágenes a un
   servicio Real-ESRGAN separado que corre en la PC, pasando por WordPress y HTTPS. El token
   compartido se guarda en las opciones de WordPress (no cifrado por el plugin) y se manda
-  solo servidor a servidor; la prueba no se usa en la ficha del comprador.
+  solo servidor a servidor; la URL oficial prevista es `https://ai.loc.ar` y la prueba no
+  se usa en la ficha del comprador.
 - **Encajado (contain)**: la imagen **nunca** se deforma ni se recorta; se escala para caber
   entera dentro del placeholder y se centra; los márgenes sobrantes quedan transparentes.
 - **TextMuy**: módulo autocontenido servido en un iframe same-origin. Los grupos del PDF

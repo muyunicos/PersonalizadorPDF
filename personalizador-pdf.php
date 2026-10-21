@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.21.0
+ * Version: 4.21.1
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -2817,7 +2817,7 @@ class Personalizador_PDF_Plugin
         $urlEntrada = isset($_POST['url']) ? (string)wp_unslash($_POST['url']) : '';
         $base = $this->base_tunel_ia($urlEntrada);
         if ($base === '') {
-            $this->responder(false, [], 'Usa https://ai.muyunicos.com o una URL HTTPS de Quick Tunnel de Cloudflare.');
+            $this->responder(false, [], 'Usa https://ai.loc.ar, https://ai.muyunicos.com o una URL HTTPS de Quick Tunnel de Cloudflare.');
         }
         $actual = $this->ia_config();
         $token = isset($_POST['token']) ? trim((string)wp_unslash($_POST['token'])) : '';
@@ -2850,18 +2850,18 @@ class Personalizador_PDF_Plugin
             $token = '';
         }
         return [
-            'url' => $url !== '' ? $url : 'https://ai.muyunicos.com',
+            'url' => $url !== '' ? $url : 'https://ai.loc.ar',
             'token' => $token,
         ];
     }
 
-    /** URL permitida para evitar SSRF: hostname oficial o Quick Tunnel de Cloudflare. */
+    /** URL permitida para evitar SSRF: hostnames oficiales o Quick Tunnel de Cloudflare. */
     private function base_tunel_ia($entrada)
     {
         $partes = parse_url(trim((string)$entrada));
         $host = is_array($partes) ? strtolower((string)($partes['host'] ?? '')) : '';
         $ruta = is_array($partes) ? (string)($partes['path'] ?? '') : '';
-        $esPermitido = $host === 'ai.muyunicos.com'
+        $esPermitido = in_array($host, ['ai.loc.ar', 'ai.muyunicos.com'], true)
             || ($host !== '' && (bool)preg_match('/\A[a-z0-9-]+\.trycloudflare\.com\z/', $host));
         if (!is_array($partes) || strtolower((string)($partes['scheme'] ?? '')) !== 'https' || !$esPermitido
             || isset($partes['user']) || isset($partes['pass']) || isset($partes['port'])

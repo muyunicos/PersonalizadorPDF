@@ -8,7 +8,7 @@ $ultimo = $this->smoke_ultimo();
 $pendiente = $this->smoke_pendiente();
 $config_ia = get_option('personalizador_pdf_ia_config', []);
 $config_ia = is_array($config_ia) ? $config_ia : [];
-$url_ia = (string)($config_ia['url'] ?? 'https://ai.muyunicos.com');
+$url_ia = (string)($config_ia['url'] ?? 'https://ai.loc.ar');
 $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
 ?>
 <h2>Test de instalacion (smoke)</h2>
@@ -96,7 +96,8 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
     <h2>Conexion con la PC (prueba)</h2>
     <p class="description">
         Comprueba el endpoint configurado con su token, sin enviar imagenes.
-        Para el modo oficial usa <code>https://ai.muyunicos.com</code>.
+        Hostnames oficiales admitidos: <code>https://ai.loc.ar</code> y
+        <code>https://ai.muyunicos.com</code>.
     </p>
     <p>
         <button type="button" class="button ec-conexion-pc-probar"

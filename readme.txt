@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.21.0
+Stable tag: 4.21.1
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,9 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.21.1 =
+* **Hostname oficial para la prueba IA**: se admite `https://ai.loc.ar` como endpoint predeterminado, ademas del hostname anterior y los Quick Tunnels temporales; se conserva la allowlist exacta para evitar destinos arbitrarios.
 
 = 4.21.0 =
 * **Prueba oficial del servicio IA con autenticacion**: la pestana Test permite guardar la URL de `ai.muyunicos.com` y un token compartido, probar la conexion y procesar imagenes de prueba en modo Foto o Anime/ilustracion. El secreto no se muestra de nuevo ni se entrega al navegador; el servicio de la PC exige el mismo token en `X-PMU-Token`.
