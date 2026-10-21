@@ -22,7 +22,7 @@ if (PHP_SAPI !== 'cli') {
  *    carrito | minimos | pool* | overrides | sesion | conciliacion | completados | mockups* |
  *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
  *    reanalizar | envoltura_op | borrado | campo_global | campo_subida | pool_concurrente |
- *    conexion_pc | redimensionar_pc | redimensionar_pc_anime | pipeline_pc | pipeline_pc_invalida | ia_config | ia_config_locar | ia_config_invalida`
+ *    conexion_pc | redimensionar_pc | redimensionar_pc_anime | pipeline_pc | pipeline_pc_invalida | ia_config | ia_config_locar | ia_config_invalida | ia_config_host_obsoleto`
  */
 
 $fase = isset($argv[1]) ? $argv[1] : 'setup';
@@ -639,6 +639,14 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('configuracion IA: rechaza URL fuera de allowlist', is_array($json) && $json['success'] === false
                 && strpos((string)($json['data'] ?? ''), 'https://ai.loc.ar') !== false);
             check('configuracion IA: no pisa configuracion vigente al rechazar',
+                ($config_ia['url'] ?? '') === 'https://ai.loc.ar'
+                && ($config_ia['token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef');
+            break;
+        case 'ia_config_host_obsoleto':
+            $config_ia = (array)($GLOBALS['test_options']['personalizador_pdf_ia_config'] ?? []);
+            check('configuracion IA: rechaza hostname retirado', is_array($json) && $json['success'] === false
+                && strpos((string)($json['data'] ?? ''), 'https://ai.loc.ar') !== false);
+            check('configuracion IA: conserva el endpoint vigente al rechazar hostname retirado',
                 ($config_ia['url'] ?? '') === 'https://ai.loc.ar'
                 && ($config_ia['token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef');
             break;
@@ -3580,6 +3588,22 @@ switch ($fase) {
         $_POST = [
             'action' => 'personalizador_pdf_ia_config',
             'url' => 'http://127.0.0.1:8765',
+            'token' => '',
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_ia_config_guardar();
+        break;
+
+    case 'ia_config_host_obsoleto':
+        preparar_entorno($testBase, $base);
+        $GLOBALS['test_options']['personalizador_pdf_ia_config'] = [
+            'url' => 'https://ai.loc.ar',
+            'token' => 'test-pmu-ai-token-0123456789abcdef0123456789abcdef',
+        ];
+        $_POST = [
+            'action' => 'personalizador_pdf_ia_config',
+            'url' => 'https://ai.muyunicos.com',
             'token' => '',
             '_wpnonce' => 'nonce',
         ];

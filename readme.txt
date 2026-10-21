@@ -68,10 +68,10 @@ Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}
 == Changelog ==
 
 = 4.21.1 =
-* **Hostname oficial para la prueba IA**: se admite `https://ai.loc.ar` como endpoint predeterminado, ademas del hostname anterior y los Quick Tunnels temporales; se conserva la allowlist exacta para evitar destinos arbitrarios.
+* **Hostname oficial para la prueba IA**: se admite `https://ai.loc.ar` como endpoint predeterminado junto con Quick Tunnels temporales; se conserva la allowlist exacta para evitar destinos arbitrarios.
 
 = 4.21.0 =
-* **Prueba oficial del servicio IA con autenticacion**: la pestana Test permite guardar la URL de `ai.muyunicos.com` y un token compartido, probar la conexion y procesar imagenes de prueba en modo Foto o Anime/ilustracion. El secreto no se muestra de nuevo ni se entrega al navegador; el servicio de la PC exige el mismo token en `X-PMU-Token`.
+* **Prueba oficial del servicio IA con autenticacion**: la pestana Test permite guardar el endpoint oficial del servicio y un token compartido, probar la conexion y procesar imagenes de prueba en modo Foto o Anime/ilustracion. El secreto no se muestra de nuevo ni se entrega al navegador; el servicio de la PC exige el mismo token en `X-PMU-Token`.
 
 = 4.20.0 =
 * **La vista previa ya no genera cientos de archivos (spec 029)**: antes, por cada hueco del PDF se guardaba una **copia** de la foto del comprador (y el texto se renderizaba una vez por hueco). Con 100 huecos eso eran **200 archivos** y ~12 MB de subida por la red **para una sola foto**. Ahora **la foto no se copia: se usa la que el comprador ya subio**, y el texto se renderiza **una vez** por grupo.

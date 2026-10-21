@@ -2817,7 +2817,7 @@ class Personalizador_PDF_Plugin
         $urlEntrada = isset($_POST['url']) ? (string)wp_unslash($_POST['url']) : '';
         $base = $this->base_tunel_ia($urlEntrada);
         if ($base === '') {
-            $this->responder(false, [], 'Usa https://ai.loc.ar, https://ai.muyunicos.com o una URL HTTPS de Quick Tunnel de Cloudflare.');
+            $this->responder(false, [], 'Usa https://ai.loc.ar o una URL HTTPS de Quick Tunnel de Cloudflare.');
         }
         $actual = $this->ia_config();
         $token = isset($_POST['token']) ? trim((string)wp_unslash($_POST['token'])) : '';
@@ -2861,7 +2861,7 @@ class Personalizador_PDF_Plugin
         $partes = parse_url(trim((string)$entrada));
         $host = is_array($partes) ? strtolower((string)($partes['host'] ?? '')) : '';
         $ruta = is_array($partes) ? (string)($partes['path'] ?? '') : '';
-        $esPermitido = in_array($host, ['ai.loc.ar', 'ai.muyunicos.com'], true)
+        $esPermitido = $host === 'ai.loc.ar'
             || ($host !== '' && (bool)preg_match('/\A[a-z0-9-]+\.trycloudflare\.com\z/', $host));
         if (!is_array($partes) || strtolower((string)($partes['scheme'] ?? '')) !== 'https' || !$esPermitido
             || isset($partes['user']) || isset($partes['pass']) || isset($partes['port'])

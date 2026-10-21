@@ -96,8 +96,7 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
     <h2>Conexion con la PC (prueba)</h2>
     <p class="description">
         Comprueba el endpoint configurado con su token, sin enviar imagenes.
-        Hostnames oficiales admitidos: <code>https://ai.loc.ar</code> y
-        <code>https://ai.muyunicos.com</code>.
+        Hostname oficial admitido: <code>https://ai.loc.ar</code>.
     </p>
     <p>
         <button type="button" class="button ec-conexion-pc-probar"
