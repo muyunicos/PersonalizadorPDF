@@ -28,6 +28,25 @@ Sin endpoint (consola o preview) `abrir()` **no dibuja nada** y avisa por `conso
 - Invalidacion: **tras subir o borrar una imagen se vuelve a pedir la lista** al servidor (nunca se parchea a mano).
 - Tope de **10 contenedores** por respuesta (lo aplica el servidor).
 
+## Caché de URLs (`id -> url`)
+
+- La ficha publica `PMU_FICHA.urls = { id: url }` para las fotos **ya cargadas** y `handle_subida` devuelve `url`.
+- El cliente guarda un mapa **id -> url** por pagina (compartido por tiras y visor): la miniatura y la vista grande
+  usan la **misma** URL, asi que el navegador la sirve de su cache y **navegar no hace ningun POST** (D23).
+- Las imagenes se sirven por `op=imagen` (`Cache-Control: private` + `ETag`): una sola politica de acceso (D14).
+
+## Visor compartido (`PMUVisor`, `assets/visor-pmu.js`)
+
+| Miembro | Firma | Que hace |
+|---|---|---|
+| `PMUVisor.abrir` | `({items, indice, acciones, fuente, titulo, tecnico})` -> `void` | abre el visor fullscreen con los `items` (ya con `url`) |
+
+- Navegacion **sin `await`**: la URL ya esta resuelta; reusa el `<img>` (un solo nodo), precarga vecinos y usa
+  `decoding="async"`. Flechas, swipe y teclado como hoy.
+- **Acciones por contexto** (las declara quien abre): `Reemplazar`/`Eliminar` (ranura) y `Elegir`/`Borrar` (biblioteca).
+- **Entradas**: la tira de la ranura (tocar una `cpmu-mini`), con el segmento **En este campo / Mis imagenes**;
+  y el boton **Elegir ya subida** del modal. Es **un solo** componente: `cargador-pmu.js` deja de tener su copia (D28).
+
 ## Tira (`pmu-bib-tira`)
 
 - **Una imagen por familia** (nunca por version): la `base` (el `.webp` que ya existe, servido por `op=imagen`; **sin miniaturas derivadas**), con badge `N versiones` y, si

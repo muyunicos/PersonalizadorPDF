@@ -71,3 +71,12 @@ version, consolidacion con idempotencia, `ref` resuelto en el PDF, `ref` roto, u
 2. Esperado: **una** peticion `op=listar` en **<= 1,5 s**; las aperturas siguientes con `desde=<revision>`
    responden `sin_cambios` y **no** viaja la lista; las imagenes salen del cache del navegador (0 peticiones).
 3. Si se supera el criterio: anotar el numero real y abrir **P2/P4** antes de dar por cerrada US1.
+
+## E9 — Visor compartido y rapido (D28/D23)
+
+1. En la ficha, subir 2 fotos y tocar una `cpmu-mini` de `cpmu-tiras`.
+2. Esperado: abre el **visor compartido** (`PMUVisor`) con el segmento **En este campo / Mis imagenes**; al pasar
+   5 fotos seguidas **no hay ninguna peticion de resolucion** (0 POST) y el cambio es inmediato (imagenes ya en
+   la cache del navegador); `Reemplazar`/`Eliminar` siguen funcionando como siempre.
+3. Abrir la biblioteca desde el modal (`Elegir ya subida`) y comprobar que **es el mismo visor** con las acciones
+   de biblioteca (`Elegir`/`Borrar`) y las **mismas** URLs.

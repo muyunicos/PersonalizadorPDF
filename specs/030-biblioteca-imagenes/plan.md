@@ -103,9 +103,10 @@ inc/class-pmu-uploads.php
 └── dir_comun_order($order_id, $crear)    # NUEVO accesor (mismo ambito orders, sin ambito nuevo)
 
 assets/
-├── biblioteca-pmu.js              # NUEVO: cache por pagina (compartida por campos) + tira (10 fotos via op=imagen) + visor
+├── visor-pmu.js                   # NUEVO: visor fullscreen COMPARTIDO (PMUVisor), extraido de cargador-pmu.js (D28)
+├── biblioteca-pmu.js              # NUEVO: cache por pagina + mapa id->url + tira (10 fotos via op=imagen)
 ├── selector-pmu.js                # contenedor de la tira en el modal + "Elegir" (fuente elegida) vs "Subir"
-├── cargador-pmu.js                # contexto de la ranura (receta del hueco) para etiquetar Elegir/Subir
+├── cargador-pmu.js                # ranura: receta del hueco + usa PMUVisor (deja de duplicar el visor)
 └── tienda.js                      # op=usar (params de composicion) + PMU_FICHA.biblioteca
 
 tests/
@@ -120,8 +121,8 @@ del ambito `orders` ya existente.
 El unico archivo cliente nuevo es `assets/biblioteca-pmu.js` y se justifica: **la cache debe ser unica por
 pagina y compartida por todos los campos** (D23, tu pedido de "por campo con cache y rapido"), y la tira +
 el visor de biblioteca tienen una fuente de datos distinta de la del visor de la ranura (`cpmu-visor`, que
-muestra lo cargado en ese hueco y permite reemplazar). Si al implementar se comprueba que el cascaron del
-visor es identico, se extrae en ese momento (nota para `/speckit-tasks`): la 030 **no** refactoriza `cpmu-visor`.
+muestra lo cargado en ese hueco y permite reemplazar). Con la decision revisada (D28) el visor **si** se extrae: `assets/visor-pmu.js` (`PMUVisor`) lo comparten
+la ranura y la biblioteca, y las URLs se resuelven **una sola vez** (`PMU_FICHA.urls`).
 
 ## Complexity Tracking
 

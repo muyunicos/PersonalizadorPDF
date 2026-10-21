@@ -73,7 +73,7 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 - [ ] T011 [P] [US1] `assets/biblioteca-pmu.js` (NUEVO): `PMUBiblioteca.abrir/cache/invalidar/visor` + cache unica por pagina compartida por campos, invalidada por **re-consulta** tras subir o borrar (D23/R8)
 - [ ] T012 [P] [US1] `assets/biblioteca-pmu.js`: tira `pmu-bib-tira` (**una imagen por familia** desde `op=imagen`, hasta 10 fotos, orden por fecha, badge `N versiones`, `usos`) y visor `pmu-bib-visor` con **Elegir**
-- [ ] T013 [US1] `assets/selector-pmu.js`: montar la tira en `spmu-modal` (D28) y abrir el recorte con la fuente elegida (`onElegir` -> `open({archivo})`)
+- [ ] T013 [US1] `assets/selector-pmu.js`: montar la tira en `spmu-modal` (boton **Elegir ya subida**) y abrir el recorte con la fuente elegida (`onElegir` -> `open({archivo})`); el visor que usa es el **compartido** (T043)
 - [ ] T014 [US1] `assets/cargador-pmu.js`: pasar a la biblioteca la `receta` del hueco (`w,h,forma,modo,escala,dx,dy,fondo,transp,iw,ih`) y el `onElegir`
 - [ ] T015 [US1] `assets/tienda.js`: `api.biblioteca` + `PMU_FICHA.biblioteca = {endpoint, nonce}` (identidad por cookie, D14)
 - [ ] T016 [US1] `personalizador-pdf.php`: `handle_biblioteca()` con `op=listar|imagen|usos|usar`, nonce `personalizador_pdf_vista_previa`, `admin_post_*` + `nopriv` (D19) y encolar `assets/biblioteca-pmu.js` en `assets_ficha()`
@@ -174,6 +174,10 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 - [ ] T039 [P] `.specify/memory/constitution.md`: enmienda §IV (layout `orders/{order_id}/_comun/`, familias `{madre}-{n}` y `origen: ref`) + Sync Impact Report MINOR, sin tocar principios (y nota del cache de cliente: metadatos, nunca bytes)
 - [ ] T040 [P] `specs/INDICE.md` + `readme.txt` (changelog) + bump de version **solo en la cabecera** de `personalizador-pdf.php` -> 4.22.0
 - [ ] T041 `php tests/inventario_repo.php`, `php tests/sin_lectura.php` y `php tests/estado_pmu.php` en verde (leer la galeria no escribe catalogos)
+- [ ] T043 [P] [US1] `assets/visor-pmu.js` (NUEVO, **extraido** de `cargador-pmu.js`): `PMUVisor.abrir({items, indice, acciones, fuente, titulo, tecnico})` con navegacion sin `await`, `<img>` reusado, precarga de vecinos y `decoding="async"` (D28)
+- [ ] T044 [US1] `assets/cargador-pmu.js`: usar `PMUVisor` (eliminar `_abrirVisor`), mandar los `items` con `url` ya resuelta y el segmento **En este campo / Mis imagenes** (D28/D23)
+- [ ] T045 [US1] `personalizador-pdf.php` + `assets/tienda.js`: `handle_subida` devuelve `url`; `PMU_FICHA.urls` publica las URLs de lo cargado; `op=imagen` sirve tambien `item_key`+`id` (D14/D23)
+- [ ] T046 [US1] Puertas del visor: **0 POST por paso** al navegar 5 fotos (la URL sale del mapa `id -> url`), checks en `tests/selector-contrato.test.js` y `tests/campos-contrato.test.js`
 - [ ] T042 Recorrido manual en WP real (quickstart **E1-E8**, incluida la medicion de volumen de E8): 2 productos con la misma foto, compra, `orders/{id}/_comun/`, borrado con aviso y vencimiento de sesiones
 
 ---

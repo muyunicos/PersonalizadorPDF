@@ -9,12 +9,13 @@ del POST. Respuesta JSON. Causas: `api:biblioteca:<motivo>`.
 | op | args | ok | errores |
 |---|---|---|---|
 | `listar` | `desde` (opcional) | `{revision, fotos:[...], totales:{...}}` o `{sin_cambios:true}` | — (lista vacia no es error) |
-| `imagen` | `madre` | bytes del `.webp` **base** de la familia (`image/webp`, `Cache-Control: private`, `ETag`) | `foto:ajena` |
+| `imagen` | `madre` (biblioteca) **o** `item_key` + `id` (ranura) | bytes del `.webp` (`image/webp`, `Cache-Control: private`, `ETag`): **una sola politica de acceso** (D14) | `foto:ajena` |
 | `usos` | `madre` | `{versiones, bytes, carrito:[], pedidos:[]}` **en vivo** para el dialogo de borrado | `foto:ajena` |
 | `usar` | `item_key`, `pdf`, `grupo`, `madre`, `indice`, `params` | `{fila:{...}}` | `foto:ajena`, `madre:invalida`, `params:invalidos` |
 | `borrar` | `madre` | `{madre, borrado:true, versiones:N}` | `foto:ajena` (y **aviso** si esta en carrito o en un pedido) |
 
 - `fotos[]` viene **por fecha de creacion descendente** y **sin filtrar** por el hueco (D27); topes: **10 contenedores** en el escaneo y **10 fotos** en la tira (el visor muestra todas).
+- `handle_subida` devuelve ademas `url` (la fila ya sabe su archivo): el cliente **no** resuelve URLs por POST.
 
 ## Reglas de `usar`
 
