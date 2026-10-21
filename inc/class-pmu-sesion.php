@@ -71,6 +71,78 @@ class PMU_Sesion
         return $sid;
     }
 
+    /* ============ Manifests por DIRECTORIO (spec 030, R3) ============ */
+
+    /**
+     * Lee el manifest de un item por DIRECTORIO (spec 030, R3).
+     *
+     * La consolidacion del pedido trabaja con items que ya no viven bajo la
+     * sesion (`tmp/orders/{order}/` y `orders/{order}/`), asi que las variantes
+     * por `sid` + `item_key` no sirven: estas tres funciones son el mismo patron
+     * (lectura tolerante, escritura atomica y lock `flock`) sobre un `$dir`.
+     */
+    public function leer_manifest_dir($dir)
+    {
+        $ruta = rtrim((string)$dir, '/\\') . DIRECTORY_SEPARATOR . 'manifest.json';
+        if (!is_file($ruta)) {
+            return null;
+        }
+        $datos = json_decode((string)@file_get_contents($ruta), true);
+        return is_array($datos) ? $datos : null;
+    }
+
+    /** Guarda el manifest de un item por DIRECTORIO (.tmp + rename, spec 030 R3). */
+    public function guardar_manifest_dir($dir, array $manifest)
+    {
+        $dir = rtrim((string)$dir, '/\\');
+        if (!is_dir($dir) || !wp_is_writable($dir)) {
+            throw new Exception('motor:sesion:directorio:no_escribible');
+        }
+        $tmp = $dir . DIRECTORY_SEPARATOR . 'manifest.json.tmp';
+        $json = wp_json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($json === false || @file_put_contents($tmp, $json) === false) {
+            throw new Exception('motor:sesion:manifest:invalido');
+        }
+        if (!@rename($tmp, $dir . DIRECTORY_SEPARATOR . 'manifest.json')) {
+            @unlink($tmp);
+            throw new Exception('motor:sesion:manifest:invalido');
+        }
+        return $dir . DIRECTORY_SEPARATOR . 'manifest.json';
+    }
+
+    /**
+     * Mutacion serializada del manifest por DIRECTORIO (spec 030, R3): el mismo
+     * lock por item que `mutar_manifest()`. El callable recibe el manifest POR
+     * REFERENCIA (`function (&$m) {...}`).
+     */
+    public function mutar_manifest_dir($dir, callable $fn)
+    {
+        $dir = rtrim((string)$dir, '/\\');
+        if (!is_dir($dir)) {
+            throw new Exception('motor:sesion:item:ausente');
+        }
+        $lock = @fopen($dir . DIRECTORY_SEPARATOR . '.manifest.lock', 'c');
+        if ($lock === false) {
+            throw new Exception('motor:sesion:manifest:invalido');
+        }
+        if (!@flock($lock, LOCK_EX)) {
+            @fclose($lock);
+            throw new Exception('motor:sesion:manifest:invalido');
+        }
+        try {
+            $manifest = $this->leer_manifest_dir($dir);
+            if (!is_array($manifest)) {
+                throw new Exception('motor:sesion:item:ausente');
+            }
+            $fn($manifest);
+            $this->guardar_manifest_dir($dir, $manifest);
+        } finally {
+            @flock($lock, LOCK_UN);
+            @fclose($lock);
+        }
+        return $manifest;
+    }
+
     /* ==================== Item y manifest ==================== */
 
     /** Carpeta del item (sin crear). */
@@ -954,6 +1026,36 @@ class PMU_Sesion
             }
         }
         return $eliminados;
+    }
+
+    /**
+     * Resuelve una fila `origen: ref` (spec 030, D10/D13).
+     *
+     * El `ref` es **relativo al item** y se valida que quede DENTRO de
+     * `uploads/pmu/`: el item esta a la misma profundidad en
+     * `tmp/sesion-{sid}/{item_key}/` y en `orders/{order_id}/{item_key}/`, asi
+     * que el mismo texto vale antes y despues de promover (cero reescritura).
+     * Devuelve cadena vacia si no resuelve: el llamador deja el hueco
+     * transparente, nunca un PDF roto.
+     */
+    public function resolver_ref($dir_item, $ref)
+    {
+        $ref = trim((string)$ref);
+        if ($ref === '' || strpos($ref, "\0") !== false) {
+            return '';
+        }
+        $raiz = @realpath($this->motor->dir_pmu());
+        $ruta = @realpath(rtrim((string)$dir_item, '/\\') . DIRECTORY_SEPARATOR
+            . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $ref));
+        if ($raiz === false || $ruta === false || !is_file($ruta)) {
+            return '';
+        }
+        // Anti-traversal: la ruta real tiene que quedar dentro de uploads/pmu/.
+        $prefijo = rtrim(str_replace('\\', '/', $raiz), '/') . '/';
+        if (strpos(str_replace('\\', '/', $ruta), $prefijo) !== 0) {
+            return '';
+        }
+        return $ruta;
     }
 
     /* ==================== Ayudantes de arbol ==================== */

@@ -1769,6 +1769,56 @@ class Personalizador_PDF_Plugin
         wp_send_json_success(['id' => $id, 'url' => $this->url_escudo_media($ruta)]);
     }
 
+    /**
+     * Identidad del comprador para la biblioteca (spec 030, D2/D3/R1).
+     *
+     * Invitado: la cookie `pmu_sid` (spec 014). Registrado: la cuenta mas la
+     * lista de sesiones ligadas (`_pmu_sids`), que escribe el hook
+     * `woocommerce_guest_session_to_user_id` (o el fallback `wp_login`).
+     * Devuelve ['clave' => string, 'uid' => int, 'sids' => string[]].
+     */
+    private function biblioteca_identidad()
+    {
+        $sesion = $this->sesion();
+        $sid = $sesion->sid_actual();
+        $uid = function_exists('get_current_user_id') ? (int)get_current_user_id() : 0;
+        $sids = $sid !== '' ? [$sid] : [];
+        if ($uid > 0 && function_exists('get_user_meta')) {
+            foreach ((array)get_user_meta($uid, '_pmu_sids', true) as $s) {
+                $s = (string)$s;
+                if ($s !== '' && !in_array($s, $sids, true) && count($sids) < 20) {
+                    $sids[] = $s;
+                }
+            }
+        }
+        return [
+            'clave' => $uid > 0 ? ('u' . $uid) : ('s' . substr($sid, 0, 8)),
+            'uid' => $uid,
+            'sids' => $sids,
+        ];
+    }
+
+    /**
+     * Sello de vigencia de la biblioteca (spec 030, D23/R5): hash de
+     * `{contenedor}|{item_key}|{mtime}|{size}` de los manifests escaneados. Si el
+     * cliente manda el mismo `desde`, `listar` responde `sin_cambios` y no viaja
+     * la lista.
+     */
+    private function biblioteca_version(array $contenedores)
+    {
+        $partes = [];
+        foreach ($contenedores as $c) {
+            foreach ((array)(isset($c['items']) ? $c['items'] : []) as $it) {
+                $partes[] = (string)(isset($c['clave_interna']) ? $c['clave_interna'] : '')
+                    . '|' . (string)(isset($it['item_key']) ? $it['item_key'] : '')
+                    . '|' . (int)(isset($it['mtime']) ? $it['mtime'] : 0)
+                    . '|' . (int)(isset($it['size']) ? $it['size'] : 0);
+            }
+        }
+        sort($partes, SORT_STRING);
+        return substr(sha1(implode("\n", $partes)), 0, 12);
+    }
+
     /** URL publica de un archivo de `uploads/` (con cache-busting por mtime). */
     private function url_escudo_media($rutaAbsoluto)
     {

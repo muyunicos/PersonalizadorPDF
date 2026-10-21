@@ -957,6 +957,24 @@ class PMU_Uploads
         return $dir;
     }
 
+    /**
+     * Carpeta de archivos compartidos del pedido: orders/{order_id}/_comun/
+     * (spec 030, D11). Vive DENTRO del ambito `orders` (no hay ambito nuevo) y al
+     * mismo nivel que los items, para que las filas `origen: ref` de los items
+     * (`../_comun/...`) sigan valiendo despues de la promocion.
+     */
+    public function dir_comun_order($order_id, $crear = false)
+    {
+        $dir = $this->dir_order($order_id, $crear) . DIRECTORY_SEPARATOR . '_comun';
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        if ($crear && (!is_dir($dir) || !wp_is_writable($dir))) {
+            throw new Exception('motor:dir_comun_order:directorio:no_escribible');
+        }
+        return $dir;
+    }
+
     /** Salida final de una linea: orders/{order_id}/{pdf}/{pdf}_procesado.pdf */
     public function ruta_order_pdf($order_id, $pdf)
     {
