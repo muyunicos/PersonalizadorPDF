@@ -130,6 +130,9 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_item_descargar', [$this, 'handle_item_descargar']);
         add_action('admin_post_nopriv_personalizador_pdf_item_descargar', [$this, 'handle_item_descargar']);
         add_action('admin_post_personalizador_pdf_item_regenerar', [$this, 'handle_item_regenerar']);
+        // Spec 030 (D19): endpoint unico de la biblioteca (op=imagen|listar|usos|usar|borrar).
+        add_action('admin_post_personalizador_pdf_biblioteca', [$this, 'handle_biblioteca']);
+        add_action('admin_post_nopriv_personalizador_pdf_biblioteca', [$this, 'handle_biblioteca']);
         add_action('woocommerce_remove_cart_item', [$this, 'carrito_quitar']);
         add_filter('woocommerce_quantity_input_min', [$this, 'cantidad_fija'], 10, 2);
         add_filter('woocommerce_quantity_input_max', [$this, 'cantidad_fija'], 10, 2);
@@ -480,6 +483,7 @@ class Personalizador_PDF_Plugin
         }
         $camposPanel = $this->campos_panel($panel['campos']);
         $valores = [];
+        $urls = []; // mapa id -> url (spec 030, D23)
         $itemEdicion = '';
         $sid = '';
         try {
@@ -491,6 +495,11 @@ class Personalizador_PDF_Plugin
                 && array_intersect($slugs, array_map('strval', (array)($manifest['pdfs'] ?? [])))) {
                 $itemEdicion = $pedido;
                 $valores = (array)($manifest['valores'] ?? []);
+                foreach ((array)($manifest['subidas'] ?? []) as $filaSub) {
+                    if (is_array($filaSub) && isset($filaSub['id'])) {
+                        $urls[(string)$filaSub['id']] = $this->url_biblioteca_imagen($pedido, (string)$filaSub['id']);
+                    }
+                }
             }
         } catch (\Throwable $e) {
             $itemEdicion = '';
@@ -503,6 +512,7 @@ class Personalizador_PDF_Plugin
             'campos' => $camposPanel,
             'preview_omisible' => !empty($panel['preview_omisible']),
             'valores' => $valores,
+            'urls' => $urls,
             'sesion' => $itemEdicion !== '' ? ['sid' => $sid, 'item_key' => $itemEdicion] : null,
             // Spec 026 (D3): el cliente solo envia **WebP** si el servidor puede
             // leerlo (GD con `imagecreatefromwebp`); si no, el Motor no podria
@@ -1729,6 +1739,8 @@ class Personalizador_PDF_Plugin
             $fila['sid'] = $sid;
             $fila['item_key'] = $item;
             $fila['item_nuevo'] = $creado;
+            // Spec 030 (D14/D23): la URL viaja CON el dato (endpoint protegido).
+            $fila['url'] = $this->url_biblioteca_imagen($item, (string)($fila['id'] ?? ''));
         } catch (\Throwable $e) {
             wp_send_json_error($e->getMessage());
         }
@@ -1817,6 +1829,86 @@ class Personalizador_PDF_Plugin
         }
         sort($partes, SORT_STRING);
         return substr(sha1(implode("\n", $partes)), 0, 12);
+    }
+
+    /**
+     * URL protegida de una imagen (spec 030, D14/D23): endpoint unico con
+     * `op=imagen`, identidad por cookie y nonce. La miniatura y la vista grande
+     * usan la MISMA URL, asi que el navegador la sirve de su cache.
+     */
+    private function url_biblioteca_imagen($item_key, $id)
+    {
+        $item_key = (string)$item_key;
+        $id = (string)$id;
+        if ($item_key === '' || $id === '') {
+            return '';
+        }
+        return add_query_arg([
+            'action' => 'personalizador_pdf_biblioteca',
+            'op' => 'imagen',
+            'item_key' => $item_key,
+            'id' => $id,
+            '_wpnonce' => wp_create_nonce('personalizador_pdf_vista_previa'),
+        ], admin_url('admin-post.php'));
+    }
+
+    /**
+     * Endpoint unico de la biblioteca (spec 030, D19): `op=` con nonce e
+     * identidad por cookie (spec 014). `imagen` es la UNICA via de lectura de una
+     * foto (no hay URLs crudas de `uploads/`).
+     */
+    public function handle_biblioteca()
+    {
+        $nonce = (string)($_REQUEST['_wpnonce'] ?? '');
+        if (!wp_verify_nonce($nonce, 'personalizador_pdf_vista_previa')) {
+            wp_send_json_error('motor:nonce:invalido');
+        }
+        $op = sanitize_key(wp_unslash((string)($_REQUEST['op'] ?? '')));
+        try {
+            $sid = $this->sesion_del_comprador();
+            if ($op === 'imagen') {
+                $this->biblioteca_servir_imagen($sid);
+                return;
+            }
+            throw new \RuntimeException('op:invalido');
+        } catch (\Throwable $e) {
+            wp_send_json_error('api:biblioteca:' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Sirve los bytes de la imagen pedida (spec 030, D14): la subida de la RANURA
+     * (`item_key` + `id`, validada contra el manifest) o la `base` de una FAMILIA
+     * (`madre`, con el escaneo de T008). `Cache-Control: private` + `ETag` para que
+     * el navegador la cachee (por eso navegar el visor no vuelve a descargar).
+     */
+    private function biblioteca_servir_imagen($sid)
+    {
+        $param = static function ($k) {
+            return sanitize_text_field(wp_unslash((string)($_REQUEST[$k] ?? '')));
+        };
+        $ruta = '';
+        $item = $param('item_key');
+        $id = $param('id');
+        $madre = $param('madre');
+        $sesion = $this->sesion();
+        if ($item !== '' && $id !== '') {
+            $rutas = $sesion->resolver_subidas($sid, $item, [$id]);
+            $ruta = isset($rutas[$id]) ? (string)$rutas[$id] : '';
+        } elseif ($madre !== '') {
+            throw new \RuntimeException('madre:sin_escanear');
+        }
+        if ($ruta === '' || !is_file($ruta)) {
+            throw new \RuntimeException('imagen:ausente');
+        }
+        $ext = strtolower((string)pathinfo($ruta, PATHINFO_EXTENSION));
+        $mimes = ['webp' => 'image/webp', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'gif' => 'image/gif'];
+        header('Cache-Control: private, max-age=604800');
+        header('ETag: "' . sha1((string)@filemtime($ruta) . '-' . (int)@filesize($ruta)) . '"');
+        header('Content-Type: ' . (isset($mimes[$ext]) ? $mimes[$ext] : 'application/octet-stream'));
+        header('Content-Length: ' . (int)@filesize($ruta));
+        readfile($ruta);
+        exit;
     }
 
     /** URL publica de un archivo de `uploads/` (con cache-busting por mtime). */
@@ -2736,6 +2828,7 @@ class Personalizador_PDF_Plugin
                 $item = basename($dirItem);
                 $manifest = json_decode((string)@file_get_contents($dirItem . DIRECTORY_SEPARATOR . 'manifest.json'), true);
                 $valores = [];
+        $urls = []; // mapa id -> url (spec 030, D23)
                 foreach ((array)($manifest['valores'] ?? []) as $cid => $par) {
                     $campo = $this->campo_por_id((int)$cid);
                     $nombreCli = (is_array($campo) && isset($campo['datos']['nombre']))
