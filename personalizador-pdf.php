@@ -2899,7 +2899,11 @@ class Personalizador_PDF_Plugin
             $claves = [
                 'detectar' => ['tipo'],
                 'mejorar' => ['tipo', 'modelo', 'ancho', 'alto', 'alfa', 'si_categoria'],
-                'quitar_fondo' => ['tipo', 'motor', 'si_categoria'],
+                'quitar_fondo' => [
+                    'tipo', 'motor', 'modelo', 'post_process_mask', 'alpha_matting',
+                    'alpha_matting_foreground_threshold', 'alpha_matting_background_threshold',
+                    'alpha_matting_erode_size', 'si_categoria',
+                ],
             ];
             if (!isset($claves[$tipo]) || array_diff(array_keys($tarea), $claves[$tipo])) {
                 $this->responder(false, [], 'La cadena contiene un tipo de tarea u opcion desconocidos.');
@@ -2911,6 +2915,39 @@ class Personalizador_PDF_Plugin
                     $this->responder(false, [], 'El motor para quitar el fondo debe ser birefnet o rembg.');
                 }
                 $fila['motor'] = $motor;
+                if ($motor === 'rembg') {
+                    $modelo = sanitize_key((string)($tarea['modelo'] ?? 'isnet-general-use'));
+                    $modelos_rembg = [
+                        'isnet-general-use', 'isnet-anime', 'birefnet-general',
+                        'birefnet-general-lite', 'birefnet-portrait', 'u2net', 'u2netp', 'silueta',
+                    ];
+                    if (!in_array($modelo, $modelos_rembg, true)) {
+                        $this->responder(false, [], 'El modelo rembg no es valido.');
+                    }
+                    $fila['modelo'] = $modelo;
+                    foreach (['post_process_mask', 'alpha_matting'] as $clave_booleana) {
+                        $valor_booleano = $tarea[$clave_booleana] ?? false;
+                        if (!is_bool($valor_booleano)) {
+                            $this->responder(false, [], $clave_booleana . ' debe ser booleano.');
+                        }
+                        $fila[$clave_booleana] = $valor_booleano;
+                    }
+                    $umbrales = [
+                        'alpha_matting_foreground_threshold' => [240, 1, 255],
+                        'alpha_matting_background_threshold' => [10, 0, 254],
+                        'alpha_matting_erode_size' => [10, 1, 100],
+                    ];
+                    foreach ($umbrales as $clave_umbral => $rango) {
+                        $valor_umbral = $tarea[$clave_umbral] ?? $rango[0];
+                        if (!is_int($valor_umbral) || $valor_umbral < $rango[1] || $valor_umbral > $rango[2]) {
+                            $this->responder(false, [], $clave_umbral . ' esta fuera de rango.');
+                        }
+                        $fila[$clave_umbral] = $valor_umbral;
+                    }
+                    if ($fila['alpha_matting_background_threshold'] >= $fila['alpha_matting_foreground_threshold']) {
+                        $this->responder(false, [], 'El umbral de fondo debe ser menor que el umbral de primer plano.');
+                    }
+                }
             }
             if ($tipo === 'mejorar') {
                 $modelo = sanitize_key((string)($tarea['modelo'] ?? 'foto'));
@@ -2977,7 +3014,27 @@ class Personalizador_PDF_Plugin
                     if ($motor === 'birefnet') {
                         $partes[] = 'Motor de fondo: BiRefNet Lite-2K';
                     } elseif ($motor === 'rembg') {
-                        $partes[] = 'Motor de fondo: rembg IS-Net General';
+                        $partes[] = 'Motor de fondo: rembg';
+                        $modelos_rembg = [
+                            'isnet-general-use' => 'IS-Net General',
+                            'isnet-anime' => 'IS-Net Anime',
+                            'birefnet-general' => 'BiRefNet General',
+                            'birefnet-general-lite' => 'BiRefNet General Lite',
+                            'birefnet-portrait' => 'BiRefNet Portrait',
+                            'u2net' => 'U2-Net',
+                            'u2netp' => 'U2-Net pequeno',
+                            'silueta' => 'Silueta',
+                        ];
+                        $modelo_rembg = sanitize_key((string)($tarea['modelo'] ?? ''));
+                        if (isset($modelos_rembg[$modelo_rembg])) {
+                            $partes[] = 'Modelo rembg: ' . $modelos_rembg[$modelo_rembg];
+                        }
+                        if (!empty($tarea['post_process_mask'])) {
+                            $partes[] = 'Postproceso de mascara';
+                        }
+                        if (!empty($tarea['alpha_matting'])) {
+                            $partes[] = 'Alpha matting';
+                        }
                     }
                     $cobertura = $tarea['cobertura_opaca'] ?? null;
                     if (is_numeric($cobertura) && (float)$cobertura >= 0 && (float)$cobertura <= 1) {

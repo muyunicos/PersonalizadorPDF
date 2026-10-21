@@ -1578,6 +1578,20 @@ jQuery(function ($) {
                 tarea.alfa = $('#ec-redimensionar-pc-alfa').val() || 'lanczos';
             } else if (tarea && tarea.tipo === 'quitar_fondo') {
                 tarea.motor = $('#ec-redimensionar-pc-motor-fondo').val() || 'birefnet';
+                if (tarea.motor === 'rembg') {
+                    tarea.modelo = $('#ec-redimensionar-pc-rembg-modelo').val() || 'isnet-general-use';
+                    tarea.post_process_mask = $('#ec-redimensionar-pc-rembg-postproceso').prop('checked');
+                    tarea.alpha_matting = $('#ec-redimensionar-pc-rembg-matting').prop('checked');
+                    tarea.alpha_matting_foreground_threshold = parseInt(
+                        $('#ec-redimensionar-pc-rembg-foreground').val(), 10
+                    );
+                    tarea.alpha_matting_background_threshold = parseInt(
+                        $('#ec-redimensionar-pc-rembg-background').val(), 10
+                    );
+                    tarea.alpha_matting_erode_size = parseInt(
+                        $('#ec-redimensionar-pc-rembg-erode').val(), 10
+                    );
+                }
             }
             return tarea;
         });

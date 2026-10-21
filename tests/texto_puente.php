@@ -674,6 +674,12 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                     is_array($pipeline) && ($pipeline['modo'] ?? '') === 'automatico'
                     && array_column((array)($pipeline['tareas'] ?? []), 'tipo') === ['detectar', 'quitar_fondo', 'mejorar']
                     && ($pipeline['tareas'][1]['motor'] ?? '') === 'rembg'
+                    && ($pipeline['tareas'][1]['modelo'] ?? '') === 'birefnet-general'
+                    && ($pipeline['tareas'][1]['post_process_mask'] ?? null) === true
+                    && ($pipeline['tareas'][1]['alpha_matting'] ?? null) === true
+                    && ($pipeline['tareas'][1]['alpha_matting_foreground_threshold'] ?? 0) === 230
+                    && ($pipeline['tareas'][1]['alpha_matting_background_threshold'] ?? 0) === 20
+                    && ($pipeline['tareas'][1]['alpha_matting_erode_size'] ?? 0) === 5
                     && ($pipeline['tareas'][2]['alfa'] ?? '') === 'anime'
                     && ($remota['args']['headers']['X-PMU-Token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef'
                     && (int)($remota['args']['timeout'] ?? 0) === 180
@@ -681,7 +687,9 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 check('cadena IA: PNG y resumen de resultado al navegador',
                     ($resultado['nombre'] ?? '') === 'prueba-pc-cadena-320x180.png'
                     && strpos((string)($resultado['detalle'] ?? ''), 'Detectado: grafica (ambiguo)') !== false
-                    && strpos((string)($resultado['detalle'] ?? ''), 'Motor de fondo: rembg IS-Net General') !== false
+                    && strpos((string)($resultado['detalle'] ?? ''), 'Modelo rembg: BiRefNet General') !== false
+                    && strpos((string)($resultado['detalle'] ?? ''), 'Postproceso de mascara') !== false
+                    && strpos((string)($resultado['detalle'] ?? ''), 'Alpha matting') !== false
                     && strpos((string)($resultado['detalle'] ?? ''), 'Cobertura: 0,0%') !== false
                     && strpos((string)($resultado['detalle'] ?? ''), 'Mejora aplicada') !== false
                     && strpos((string)($resultado['detalle'] ?? ''), 'Alfa: Anime') !== false
@@ -3645,7 +3653,16 @@ switch ($fase) {
                     'modo' => 'automatico',
                     'tareas' => [
                         ['tipo' => 'detectar'],
-                        ['tipo' => 'quitar_fondo', 'motor' => 'rembg'],
+                        [
+                            'tipo' => 'quitar_fondo',
+                            'motor' => 'rembg',
+                            'modelo' => 'birefnet-general',
+                            'post_process_mask' => true,
+                            'alpha_matting' => true,
+                            'alpha_matting_foreground_threshold' => 230,
+                            'alpha_matting_background_threshold' => 20,
+                            'alpha_matting_erode_size' => 5,
+                        ],
                         ['tipo' => 'mejorar', 'modelo' => 'automatico', 'ancho' => 320, 'alto' => 180, 'alfa' => 'anime'],
                     ],
                 ]);
@@ -3666,8 +3683,16 @@ switch ($fase) {
                     'modo' => 'automatico',
                     'tareas' => [
                         ['tipo' => 'detectar', 'categoria' => 'grafica', 'ambiguo' => true],
-                        ['tipo' => 'quitar_fondo', 'estado' => 'rechazada', 'motor' => 'rembg', 'cobertura_opaca' => 0,
-                            'advertencia' => 'Mascara casi vacia; se conserva la imagen original.'],
+                        [
+                            'tipo' => 'quitar_fondo',
+                            'estado' => 'rechazada',
+                            'motor' => 'rembg',
+                            'modelo' => 'birefnet-general',
+                            'post_process_mask' => true,
+                            'alpha_matting' => true,
+                            'cobertura_opaca' => 0,
+                            'advertencia' => 'Mascara casi vacia; se conserva la imagen original.',
+                        ],
                         ['tipo' => 'mejorar', 'estado' => 'aplicada', 'alfa' => 'anime'],
                     ],
                     'duracion_ms' => 12345,

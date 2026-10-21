@@ -132,14 +132,39 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
         <label for="ec-redimensionar-pc-motor-fondo">Motor para quitar el fondo</label>
         <select id="ec-redimensionar-pc-motor-fondo">
             <option value="birefnet" selected>BiRefNet Lite-2K (GPU)</option>
-            <option value="rembg">rembg - IS-Net General (ONNX)</option>
+            <option value="rembg">rembg (ONNX Runtime)</option>
         </select>
-        <span class="description">rembg descarga su modelo la primera vez que se usa. La seleccion se aplica a cada tarea quitar_fondo.</span>
+        <span class="description">BiRefNet usa la GPU PyTorch. rembg solo usara GPU si ONNX Runtime tiene CUDAExecutionProvider; si no, funcionara en CPU.</span>
+    </p>
+    <p>
+        <label for="ec-redimensionar-pc-rembg-modelo">Modelo rembg</label>
+        <select id="ec-redimensionar-pc-rembg-modelo">
+            <option value="isnet-general-use" selected>IS-Net General (actual)</option>
+            <option value="birefnet-general">BiRefNet General</option>
+            <option value="birefnet-general-lite">BiRefNet General Lite</option>
+            <option value="birefnet-portrait">BiRefNet Portrait</option>
+            <option value="isnet-anime">IS-Net Anime</option>
+            <option value="u2net">U2-Net</option>
+            <option value="u2netp">U2-Net pequeno</option>
+            <option value="silueta">Silueta</option>
+        </select>
+        <span class="description">Se descarga la primera vez que se elige un modelo. Para logos y graficas, compara IS-Net General y BiRefNet General.</span>
+    </p>
+    <p>
+        <label><input type="checkbox" id="ec-redimensionar-pc-rembg-postproceso"> Postprocesar mascara</label>
+        <span class="description">Limpia ruido con operaciones morfologicas, pero puede endurecer o quitar detalles finos.</span>
+        <br>
+        <label><input type="checkbox" id="ec-redimensionar-pc-rembg-matting"> Alpha matting</label>
+        <span class="description">Refina bordes y semitransparencias; puede tardar mas. Se combina con postproceso si ambos estan activados.</span>
+        <br>
+        <label>Umbral primer plano <input type="number" id="ec-redimensionar-pc-rembg-foreground" min="1" max="255" value="240"></label>
+        <label>Umbral fondo <input type="number" id="ec-redimensionar-pc-rembg-background" min="0" max="254" value="10"></label>
+        <label>Erosion <input type="number" id="ec-redimensionar-pc-rembg-erode" min="1" max="100" value="10"></label>
     </p>
     <p>
         <label for="ec-redimensionar-pc-tareas">Tareas en orden (JSON)</label><br>
         <textarea id="ec-redimensionar-pc-tareas" class="large-text code" rows="4">[{"tipo":"quitar_fondo"},{"tipo":"mejorar","modelo":"automatico"}]</textarea>
-        <span class="description">Tipos: detectar, mejorar (modelo: automatico, foto o anime) y quitar_fondo (motor: birefnet o rembg). Ejemplo recomendado: detectar -> quitar fondo -> mejorar: [{"tipo":"detectar"},{"tipo":"quitar_fondo"},{"tipo":"mejorar","modelo":"automatico"}].</span>
+        <span class="description">Tipos: detectar, mejorar (modelo: automatico, foto o anime) y quitar_fondo. Las opciones rembg de arriba se aplican a cada tarea quitar_fondo cuando el motor elegido es rembg.</span>
     </p>
     <p>
         <label>Ancho <input type="number" id="ec-redimensionar-pc-ancho" min="1" max="3000" value="500"> px</label>
