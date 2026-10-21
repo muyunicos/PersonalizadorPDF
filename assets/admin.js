@@ -1810,12 +1810,16 @@ jQuery(function ($) {
 
     $(document).on('click', '.ec-redimensionar-pc-guardar', function () {
         var $btn = $(this).prop('disabled', true);
-        var $estado = $('.ec-redimensionar-pc-preferencias').removeClass('ec-ok ec-error');
+        var $panel = $btn.closest('.ec-pc-panel');
+        var $estado = $panel.find('.ec-redimensionar-pc-preferencias').removeClass('ec-ok ec-error');
         var opciones;
         try {
             if (!pipelinePc) { throw new Error('El editor JSON no esta disponible.'); }
             var configuracion = pipelinePc.leer();
-            var seleccion = $('.ec-pc-pestana-activa').data('pestana') || 'escalado';
+            var seleccion = $panel.data('panel');
+            if (seleccion !== 'escalado' && seleccion !== 'quitar_fondo') {
+                throw new Error('No se pudo identificar la pestaña de opciones.');
+            }
             opciones = configuracion[seleccion];
             if (!opciones || !Object.keys(opciones).length) {
                 throw new Error('La pestaña seleccionada no contiene opciones para guardar.');

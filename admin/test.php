@@ -140,6 +140,13 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
             <label>Ancho <input type="number" id="ec-redimensionar-pc-ancho" min="1" max="3000" value="500"> px</label>
             <label>Alto <input type="number" id="ec-redimensionar-pc-alto" min="1" max="3000" value="500"> px</label>
         </p>
+        <p>
+            <button type="button" class="button ec-redimensionar-pc-guardar"
+                    data-nonce="<?php echo esc_attr(wp_create_nonce('personalizador_pdf_guardar_predeterminados_pc')); ?>">
+                Guardar por defecto
+            </button>
+            <span class="ec-redimensionar-pc-preferencias description" aria-live="polite"></span>
+        </p>
     </section>
     <section class="ec-pc-panel" role="tabpanel" id="ec-pc-panel-quitar-fondo"
              aria-labelledby="ec-pc-tab-quitar-fondo" data-panel="quitar_fondo" hidden>
@@ -186,6 +193,13 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
                 <label>Erosion <input type="number" id="ec-redimensionar-pc-rembg-erode" min="1" max="100" value="10"></label>
             </span>
         </div>
+        <p>
+            <button type="button" class="button ec-redimensionar-pc-guardar"
+                    data-nonce="<?php echo esc_attr(wp_create_nonce('personalizador_pdf_guardar_predeterminados_pc')); ?>">
+                Guardar por defecto
+            </button>
+            <span class="ec-redimensionar-pc-preferencias description" aria-live="polite"></span>
+        </p>
     </section>
     <p>
         <label for="ec-redimensionar-pc-json">Opciones de procesamiento (JSON)</label><br>
@@ -207,13 +221,6 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
   }
 }</textarea>
         <span class="description">El orden es fijo: primero quitar fondo y luego escalar. Si eliminas una opcion, se usa su valor predeterminado guardado en la PC.</span>
-    </p>
-    <p>
-        <button type="button" class="button ec-redimensionar-pc-guardar"
-                data-nonce="<?php echo esc_attr(wp_create_nonce('personalizador_pdf_guardar_predeterminados_pc')); ?>">
-            Guardar por defecto esta pestaña
-        </button>
-        <span class="ec-redimensionar-pc-preferencias description" aria-live="polite"></span>
     </p>
     <p>
         <label for="ec-redimensionar-pc-imagen">Seleccionar archivo de imagen</label><br>
