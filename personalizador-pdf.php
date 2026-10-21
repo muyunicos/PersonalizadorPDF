@@ -1828,17 +1828,173 @@ class Personalizador_PDF_Plugin
     {
         $partes = [];
         foreach ($contenedores as $c) {
-            foreach ((array)(isset($c['items']) ? $c['items'] : []) as $it) {
-                $partes[] = (string)(isset($c['clave_interna']) ? $c['clave_interna'] : '')
-                    . '|' . (string)(isset($it['item_key']) ? $it['item_key'] : '')
-                    . '|' . (int)(isset($it['mtime']) ? $it['mtime'] : 0)
-                    . '|' . (int)(isset($it['size']) ? $it['size'] : 0);
-            }
+            $partes[] = (string)(isset($c['clave_interna']) ? $c['clave_interna'] : '')
+                . '|' . (string)(isset($c['item_key']) ? $c['item_key'] : '')
+                . '|' . (int)(isset($c['mtime']) ? $c['mtime'] : 0)
+                . '|' . (int)(isset($c['size']) ? $c['size'] : 0);
         }
         sort($partes, SORT_STRING);
         return substr(sha1(implode("\n", $partes)), 0, 12);
     }
 
+    /**
+     * Escaneo de la biblioteca (spec 030, D1/D23/R1/R6): sesiones del comprador
+     * (la cookie mas las ligadas a la cuenta) y pedidos suyos, con TOPE de 10
+     * contenedores (los mas recientes). Lectura tolerante: un item roto se omite.
+     */
+    private function biblioteca_contenedores(array $identidad)
+    {
+        $motor = $this->pmu_uploads();
+        $sesion = $this->sesion();
+        $contenedores = [];
+        foreach ((array)$identidad['sids'] as $sid) {
+            $dir = $motor->dir_sesion($sid, false);
+            if (!is_dir($dir)) {
+                continue;
+            }
+            foreach ((array)glob($dir . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirItem) {
+                $item = basename($dirItem);
+                $man = $sesion->leer_manifest($sid, $item);
+                if (!is_array($man)) {
+                    continue;
+                }
+                $manif = $dirItem . DIRECTORY_SEPARATOR . 'manifest.json';
+                $contenedores[] = [
+                    'tipo' => 'sesion',
+                    'clave_interna' => 's:' . $sid,
+                    'item_key' => $item,
+                    'dir' => $dirItem,
+                    'manifest' => $man,
+                    'sid' => (string)$sid,
+                    'order_id' => 0,
+                    'mtime' => (int)@filemtime($manif),
+                    'size' => (int)@filesize($manif),
+                ];
+            }
+        }
+        $mios = [];
+        if ((int)$identidad['uid'] > 0 && function_exists('wc_get_orders')) {
+            $oids = wc_get_orders(['customer_id' => (int)$identidad['uid'], 'limit' => 10,
+                'orderby' => 'date', 'order' => 'DESC', 'return' => 'ids']);
+            foreach ((array)$oids as $oid) {
+                $mios[(int)$oid] = true;
+            }
+        }
+        $raiz = $motor->dir_ambito('orders');
+        foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirOrder) {
+            $oid = (int)basename($dirOrder);
+            if ($oid < 1) {
+                continue;
+            }
+            foreach ((array)glob($dirOrder . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirItem) {
+                $man = $sesion->leer_manifest_dir($dirItem);
+                if (!is_array($man)) {
+                    continue;
+                }
+                $delSid = $man['sid'] !== '' && in_array((string)$man['sid'], (array)$identidad['sids'], true);
+                if (!isset($mios[$oid]) && !$delSid) {
+                    continue;
+                }
+                $manif = $dirItem . DIRECTORY_SEPARATOR . 'manifest.json';
+                $contenedores[] = [
+                    'tipo' => 'pedido',
+                    'clave_interna' => 'p:' . $oid,
+                    'item_key' => basename($dirItem),
+                    'dir' => $dirItem,
+                    'manifest' => $man,
+                    'sid' => (string)$man['sid'],
+                    'order_id' => $oid,
+                    'mtime' => (int)@filemtime($manif),
+                    'size' => (int)@filesize($manif),
+                ];
+            }
+        }
+        usort($contenedores, function ($a, $b) {
+            return (int)$b['mtime'] - (int)$a['mtime'];
+        });
+        return array_slice($contenedores, 0, 10);
+    }
+
+    /**
+     * Agrupa las subidas en FAMILIAS (spec 030, D5/D6/D15): una entrada por
+     * `madre`, con la `base` (mayor area) como portada, sus versiones y los usos
+     * (carrito/pedidos) para el aviso de borrado (R6).
+     */
+    private function biblioteca_familias(array $contenedores)
+    {
+        $familias = [];
+        foreach ($contenedores as $c) {
+            foreach ((array)($c['manifest']['subidas'] ?? []) as $fila) {
+                if (!is_array($fila) || !isset($fila['id'])) {
+                    continue;
+                }
+                $id = (string)$fila['id'];
+                $madre = (string)($fila['madre'] ?? $id);
+                if ($madre === '') {
+                    $madre = $id;
+                }
+                $file = (string)($fila['file'] ?? '' );
+                if ($file === '' ) {
+                    continue;
+                }
+                $ruta = $c['dir'] . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $file);
+                if (!is_file($ruta)) {
+                    continue;
+                }
+                $w = (int)($fila['w'] ?? 0);
+                $h = (int)($fila['h'] ?? 0);
+                if ($w < 1 || $h < 1) {
+                    $dim = @getimagesize($ruta);
+                    $w = is_array($dim) ? (int)$dim[0] : 0;
+                    $h = is_array($dim) ? (int)$dim[1] : 0;
+                }
+                if (!isset($familias[$madre])) {
+                    $familias[$madre] = ['madre' => $madre, 'archivos' => 0, 'w' => 0, 'h' => 0,
+                        'base' => '', 'url' => '', 'creado' => 0, 'bytes' => 0,
+                        'usos' => ['carrito' => [], 'pedidos' => []]];
+                }
+                $familias[$madre]['archivos']++;                $familias[$madre]['bytes'] += (int)@filesize($ruta);
+                $creado = (int)($fila['creado'] ?? 0);
+                if ($creado > $familias[$madre]['creado']) {
+                    $familias[$madre]['creado'] = $creado;
+                }
+                if (($w * $h) > ($familias[$madre]['w'] * $familias[$madre]['h'])) {
+                    $familias[$madre]['w'] = $w;
+                    $familias[$madre]['h'] = $h;
+                    $familias[$madre]['base'] = $id;
+                    $familias[$madre]['url'] = $this->url_biblioteca_imagen_madre($madre);
+                }
+                if ($c['tipo'] === 'sesion') {
+                    if (!in_array($c['item_key'], $familias[$madre]['usos']['carrito'], true)) {
+                        $familias[$madre]['usos']['carrito'][] = (string)$c['item_key'];
+                    }
+                } elseif ((int)$c['order_id'] > 0
+                    && !in_array((int)$c['order_id'], $familias[$madre]['usos']['pedidos'], true)) {
+                    $familias[$madre]['usos']['pedidos'][] = (int)$c['order_id'];
+                }
+            }
+        }
+        $out = array_values($familias);
+        usort($out, function ($a, $b) {
+            return (int)$b['creado'] - (int)$a['creado'];
+        });
+        return $out;
+    }
+
+    /** URL protegida de la base de una familia (spec 030, D14/D27). */
+    private function url_biblioteca_imagen_madre($madre)
+    {
+        $madre = (string)$madre;
+        if ($madre === '') {
+            return '';
+        }
+        return add_query_arg([
+            'action' => 'personalizador_pdf_biblioteca',
+            'op' => 'imagen',
+            'madre' => $madre,
+            '_wpnonce' => wp_create_nonce('personalizador_pdf_vista_previa'),
+        ], admin_url('admin-post.php'));
+    }
     /**
      * URL protegida de una imagen (spec 030, D14/D23): endpoint unico con
      * `op=imagen`, identidad por cookie y nonce. La miniatura y la vista grande
@@ -1877,6 +2033,24 @@ class Personalizador_PDF_Plugin
             if ($op === 'imagen') {
                 $this->biblioteca_servir_imagen($sid);
                 return;
+            }
+            $contenedores = $this->biblioteca_contenedores($this->biblioteca_identidad());
+            if ($op === 'listar') {
+                $revision = $this->biblioteca_version($contenedores);
+                $desde = sanitize_text_field(wp_unslash((string)($_REQUEST['desde'] ?? '')));
+                if ($desde !== '' && hash_equals($revision, $desde)) {
+                    wp_send_json_success(['revision' => $revision, 'sin_cambios' => true, 'fotos' => [],
+                        'totales' => ['fotos' => 0, 'bytes' => 0, 'contenedores' => count($contenedores)]]);
+                }
+                $fotos = [];
+                $bytes = 0;
+                foreach ($this->biblioteca_familias($contenedores) as $f) {
+                    $bytes += (int)$f['bytes'];
+                    $fotos[] = $f;
+                }
+                wp_send_json_success(['revision' => $revision, 'sin_cambios' => false, 'fotos' => $fotos,
+                    'totales' => ['fotos' => count($fotos), 'bytes' => $bytes,
+                        'contenedores' => count($contenedores)]]);
             }
             throw new \RuntimeException('op:invalido');
         } catch (\Throwable $e) {
@@ -3218,11 +3392,6 @@ class Personalizador_PDF_Plugin
             }
             $predeterminados_normalizados[$clave_dimension] = $valor_dimension;
         }
-        if (isset($predeterminados_normalizados['ancho'], $predeterminados_normalizados['alto'])
-            && $predeterminados_normalizados['ancho'] === 0
-            && $predeterminados_normalizados['alto'] === 0) {
-            $this->responder(false, [], 'ancho y alto no pueden ser ambos cero.');
-        }
         if ($predeterminados_normalizados['alpha_matting_background_threshold']
             >= $predeterminados_normalizados['alpha_matting_foreground_threshold']) {
             $this->responder(false, [], 'El umbral de fondo debe ser menor que el umbral de primer plano.');
@@ -3328,9 +3497,8 @@ class Personalizador_PDF_Plugin
                     $ancho = $tarea['ancho'];
                     $alto = $tarea['alto'];
                     if (!is_int($ancho) || !is_int($alto)
-                        || $ancho < 0 || $alto < 0 || $ancho > 3000 || $alto > 3000
-                        || ($ancho === 0 && $alto === 0)) {
-                        $this->responder(false, [], 'Las dimensiones de mejora deben ser enteros de 0 a 3000 px y no pueden ser ambas cero.');
+                        || $ancho < 0 || $alto < 0 || $ancho > 3000 || $alto > 3000) {
+                        $this->responder(false, [], 'Las dimensiones de mejora deben ser enteros de 0 a 3000 px.');
                     }
                     $fila['ancho'] = $ancho;
                     $fila['alto'] = $alto;
