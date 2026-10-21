@@ -1452,6 +1452,10 @@ class Personalizador_PDF_Plugin
                 }
             }
             $manifest = $sesion->leer_manifest($sid, $item);
+            // Spec 029 (D7): los `valores` ya son los frescos, asi que aca se
+            // pueden podar las subidas que no usa nadie (cubre los items sin
+            // grupos de imagen y cualquier resto de una edicion anterior).
+            $sesion->podar_subidas($sid, $item);
         } catch (\Throwable $e) {
             wp_send_json_error($e->getMessage());
         }

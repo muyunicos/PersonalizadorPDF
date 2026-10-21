@@ -71,6 +71,7 @@ Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}
 * **La vista previa ya no genera cientos de archivos (spec 029)**: antes, por cada hueco del PDF se guardaba una **copia** de la foto del comprador (y el texto se renderizaba una vez por hueco). Con 100 huecos eso eran **200 archivos** y ~12 MB de subida por la red **para una sola foto**. Ahora **la foto no se copia: se usa la que el comprador ya subio**, y el texto se renderiza **una vez** por grupo.
 * **Un solo envio por grupo**: el navegador manda los identificadores de las fotos (sin bytes), no las imagenes. Menos datos, menos espera y nada de recompresiones de mas.
 * **Arreglado**: cuando un grupo llevaba dos fotos distintas, el PDF podia **asignarlas en el orden equivocado** (los huecos se numeraban al azar segun cual subia primero).
+* **Ya no quedan fotos viejas**: al reemplazar o quitar una foto, el archivo anterior se borra en la misma vista previa. Solo se conservan las fotos que el pedido usa (lo que se imprime) o que el comprador tiene cargadas en ese momento.
 * **El PDF no cambia**: el motor y el formato del pedido son los mismos; las fotos viajan con el pedido igual que antes.
 
 = 4.19.0 =

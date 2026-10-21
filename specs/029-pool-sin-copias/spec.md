@@ -41,6 +41,7 @@ PDF asignaba la foto equivocada.
 | **D4** | La fila lleva **`origen`**: `'subida'` (referenciada de `subidas/`) o `'texto'` (generada en `img/`). Hace el manifest auto-explicativo (auditoria, inventarios). |
 | **D5** | **Sin compatibilidad**: nada de lo guardado se migra (no hay datos en produccion). Re-registrar un grupo **reemplaza** sus filas (idempotente): no acumula. |
 | **D6** | **El Motor, el servidor de descargas y el formato del pedido no cambian**: el arbol del item viaja entero (`copiar_arbol` + `promover_order` por `rename`), asi que `subidas/` esta en `orders/{id}/{item}/` cuando el PDF se arma. |
+| **D7** | **Poda de subidas huerfanas** (`PMU_Sesion::podar_subidas()`): una subida se **conserva** si la usa **una fila** de `archivos[]` con `origen: 'subida'` (lo que el PDF imprimira) **o** si su id aparece en **algun `valores`** del manifest (lo que muestran las ranuras; la vista previa los acaba de refrescar). Todo lo demas se **borra** (archivo + fila de `subidas[]`). **Sin filas ni valores no borra nada** (una foto recien subida puede no estar en ninguno todavia). Se llama al final de `registrar_fotos()` y en `handle_vista_previa`, asi reemplazar o quitar una foto borra la vieja **en la misma corrida** y la basura no viaja al pedido. |
 
 ## 3. Contrato (fila de `manifest.archivos[]`)
 
@@ -68,6 +69,15 @@ PDF asignaba la foto equivocada.
 El PDF sale **identico**: con `phsize: 1` (lo que trae la plantilla) el lienzo es el
 hueco y el encaje del Motor sigue siendo 1:1.
 
+## 4.b Poda de subidas (D7)
+
+| situacion | resultado |
+|---|---|
+| la foto esta en una **fila** de `archivos[]` | **se conserva** (es lo que el PDF va a usar) |
+| la foto esta solo en los **`valores`** (subida nueva, aun sin registrar) | **se conserva** (es lo que el comprador ve) |
+| no la usa nadie (reemplazada, quitada o subida y descartada) | **se borra**: el archivo y su fila |
+| el item no tiene ni filas ni valores | **no se toca nada** |
+
 ## 5. Puertas
 
 - Arnés `texto_puente.php`, fase **`fotos`** (8 checks): uniforme → 1 fila que apunta
@@ -81,6 +91,9 @@ hueco y el encaje del Motor sigue siendo 1:1.
 
 ## 6. Fuera de alcance
 
-- **Subidas huerfanas**: al reemplazar una foto se crea un id nuevo y el archivo
-  viejo queda. Queda pendiente (limpieza en el reemplazo).
+- **Limpieza por tiempo (TTL) de subidas**: no hace falta. El huerfano se define por
+  **uso** (D7) y al borrar el item se va la carpeta entera. Tampoco se poda en el
+  add-to-cart: la vista previa y los registros ya dejan el estado limpio.
 - **No** se toca el Motor, `item_generar_pdfs` ni los formatos de la 026/027/028.
+- **Sin cambios en el cliente** para D7: el visor "Eliminar" no llama al servidor y no
+  hace falta (la poda lo cubre en la proxima vista previa).

@@ -34,6 +34,17 @@
 - [X] **T009** — `tests/selector-contrato.test.js`: se retiro el check de `rasterizar` (spec 026)
       y entraron los de la 029 (foto registrada, texto colapsado, q0.92 del servidor).
 
+## Poda de subidas (D7)
+
+- [X] **T012** — `PMU_Sesion::podar_subidas()`: conserva lo que usa una **fila** de
+      `archivos[]` (`origen: 'subida'`) o algun **`valores`**, y borra el resto (archivo + fila);
+      **sin filas ni valores no borra nada**. Llamada al final de `registrar_fotos()` y en
+      `handle_vista_previa` (tras guardar `valores`).
+- [X] **T013** — Fase `fotos`: +5 checks de la poda (huerfanas del ciclo anterior y sin uso;
+      se conservan la de la fila y la del valor; el manifest no referencia archivos borrados;
+      idempotente; sin datos no poda).
+- [X] **T014** — Docs de D7 (spec + contrato de sesion + AGENTS §5/§7/§11 + changelog).
+
 ## Docs y release
 
 - [X] **T010** — `specs/029-pool-sin-copias/` + `specs/004.../contracts/sesion-item.md` +

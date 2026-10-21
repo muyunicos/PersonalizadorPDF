@@ -445,7 +445,85 @@ class PMU_Sesion
             }
             $manifest['archivos'] = array_merge($resto, $out);
         });
+        // Spec 029 (D7): con las filas recien reemplazadas y los valores frescos
+        // (los escribio la vista previa), lo que no usa nadie sobra.
+        $this->podar_subidas($sid, $item_key);
         return $out;
+    }
+
+    /**
+     * Spec 029 (D7): borra las subidas HUERFANAS del item.
+     *
+     * Huerfana = no la usa ninguna fila de `archivos[]` con `origen: 'subida'`
+     * (lo que el Motor va a insertar en el PDF) **ni** ningun `valores` del
+     * manifest (lo que muestran las ranuras del cargador, que la vista previa
+     * acaba de refrescar). Se llama al registrar fotos y al abrir la vista
+     * previa: reemplazar o quitar una foto borra el archivo viejo en la misma
+     * corrida, y la basura deja de viajar al pedido (`copiar_arbol` mueve el
+     * arbol entero).
+     *
+     * **Nunca borra con datos vacios**: sin filas ni valores no toca nada, asi
+     * una foto recien subida (que todavia puede no estar en ninguno de los dos)
+     * no se pierde.
+     *
+     * @return array ids borrados
+     */
+    public function podar_subidas($sid, $item_key)
+    {
+        // Sin item no hay nada que podar (y `mutar_manifest` lanzaria).
+        if (!is_array($this->leer_manifest($sid, $item_key))) {
+            return [];
+        }
+        $borrados = [];
+        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, &$borrados) {
+            $filas = (array)($manifest['subidas'] ?? []);
+            if (!$filas) {
+                return;
+            }
+            // En uso por las FILAS: es exactamente lo que el PDF va a usar.
+            $enUso = [];
+            foreach ((array)($manifest['archivos'] ?? []) as $f) {
+                if (is_array($f) && (string)($f['origen'] ?? '') === 'subida') {
+                    $enUso[basename((string)($f['file'] ?? ''))] = true;
+                }
+            }
+            // En uso por los VALORES: es lo que el comprador ve en las ranuras.
+            $texto = '';
+            foreach ((array)($manifest['valores'] ?? []) as $par) {
+                if (!is_array($par)) {
+                    continue;
+                }
+                $v = isset($par['valor']) ? $par['valor'] : '';
+                $texto .= ' ' . (is_array($v) ? implode(' ', array_map('strval', $v)) : (string)$v);
+            }
+            // Nunca con datos VACIOS: sin filas ni valores no hay estado del que
+            // deducir nada (una foto recien subida puede no estar en ninguno de
+            // los dos todavia). Un campo vaciado SI deja rastro (`valor: []`
+            // produce el separador), asi que ese caso si poda.
+            if (!$enUso && $texto === '') {
+                return;
+            }
+            $dir = $this->dir_subidas($sid, $item_key, false);
+            $quedan = [];
+            foreach ($filas as $fila) {
+                if (!is_array($fila) || !isset($fila['id'], $fila['file'])) {
+                    continue;
+                }
+                $id = (string)$fila['id'];
+                $archivo = basename((string)$fila['file']);
+                if (isset($enUso[$archivo]) || ($texto !== '' && strpos($texto, $id) !== false)) {
+                    $quedan[] = $fila;
+                    continue;
+                }
+                $ruta = $dir . DIRECTORY_SEPARATOR . $archivo;
+                if (is_file($ruta)) {
+                    @unlink($ruta);
+                }
+                $borrados[] = $id;
+            }
+            $manifest['subidas'] = $quedan;
+        });
+        return $borrados;
     }
 
     /**

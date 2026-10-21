@@ -455,6 +455,9 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   **Spec 029 (D1)**: la foto **no se copia** al pool: la fila de `archivos[]` la **referencia**
   (`subidas/{id}.{ext}`, `origen: 'subida'`), asi que el cliente no la descarga, no la rasteriza
   y no la vuelve a subir (un POST por grupo, solo ids).
+  **Spec 029 (D7)**: `podar_subidas()` borra las **huerfanas** (ni fila ni `valores`): se llama al
+  registrar fotos y en la vista previa, asi reemplazar o quitar una foto borra la vieja en la misma
+  corrida y la basura no viaja al pedido. Sin filas ni valores **no borra nada**.
 - Catálogo global de campos (formato v1, ya migrado a v3): ver la entrada de arriba.
   `id` auto no reutilizable, `titulo_cliente`, `tipo`, `array`, valor dual
   `valor`(sistema)/`cliente`(etiqueta); detalle en `specs/004.../contracts/campos.md`).
@@ -731,7 +734,12 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   paralelo el PDF podía asignar la foto equivocada). Sin `rasterizar` ya no hay recompresión
   WebP→WebP ni copias: **200 archivos → 2** en el caso real. **El Motor y el formato del pedido
   no cambian** (el árbol del item viaja entero, así que `subidas/` está en `orders/`).
-  Puerta: fase `fotos` del arnés (8 checks) + 3 checks en `selector-contrato`.
+  **D7 (poda)**: `PMU_Sesion::podar_subidas()` conserva una subida si la usa **una fila** de
+  `archivos[]` (`origen: 'subida'`) **o** algún **`valores`** del manifest (el estado vivo que la
+  vista previa acaba de refrescar) y **borra el resto** (archivo + fila); sin filas ni valores
+  **no borra nada**. Se llama al final de `registrar_fotos()` y en `handle_vista_previa`, así que
+  reemplazar o quitar una foto limpia el archivo viejo en la misma corrida.
+  Puerta: fase `fotos` del arnés (14 checks: 9 de D1-D3 + 5 de D7) + 3 checks en `selector-contrato`.
 - ✅ **Spec 027 `transparencia-campo` (implementada 2026-10-20, v4.17.0)**: **la politica de
   transparencia la declara el `campo.js`** (no el comprador). La ranura acepta `transp: 'si'|'no'`
   (**ausente = comportamiento actual**: el cliente decide con el boton "damero"). Con `transp:'no'`
@@ -1037,3 +1045,4 @@ el numero a mano. El stub `get_file_data` del arnes esta en `tests/texto_puente.
 | La vista previa genera **cientos de archivos** en `{item}/img/` y son **copias** de `subidas/` | `PURO.conciliarGrupo()` devuelve una copia del valor unico **por instancia** del grupo y el cliente subia **una imagen por instancia** (bajando y rasterizando la subida cada vez); el texto se renderizaba tambien una vez por instancia | **Spec 029**: las fotos se **registran** (`registrar_fotos` → la fila apunta a `subidas/{id}.{ext}`, `origen: 'subida'`) y el texto uniforme se colapsa a **una** entrada (`dedupPendientes`). El Motor **ya replicaba** una sola fila a todo el grupo (`item_generar_pdfs` pasa escalar): no hacian falta N filas |
 | El PDF asigna **la foto de otra instancia** (dos fotos en el mismo grupo salen cambiadas) | La fila guardaba `indice` = **numero de archivo** (`siguiente_n`, `$n - 1`) y las instancias 2..N de un grupo suben **en paralelo**: el orden de las filas no era el de las instancias | **Spec 029 (D3)**: `indice` = **posicion de instancia** y lo manda el cliente (`indice` en el POST del pool). Lo cubre la fase `fotos` (el caso mixto exige `[0, 1, 2]`) |
 | Un grupo del que se **borran todas las fotos** sigue imprimiendo la foto vieja | El cliente no llamaba a registrar cuando no habia fotos: las filas viejas quedaban en el manifest | **Spec 029**: se registran **todos** los grupos de imagen (aunque vengan vacios) y el servidor **reemplaza** las filas del grupo (vaciarlo las borra). Lo cubre la fase `fotos` ("un grupo vaciado borra sus filas") |
+| En `{item}/subidas/` se **acumulan fotos** que el comprador reemplazo o quito, y viajan al pedido | Nadie borraba la subida vieja: el cliente sube una nueva (id nuevo), descarta la anterior del estado y el archivo quedaba para siempre (`copiar_arbol` mueve el arbol entero) | **Spec 029 (D7)**: `podar_subidas()` conserva lo que usa una **fila** de `archivos[]` o algun **`valores`** y borra el resto (archivo + fila). Se llama al registrar fotos y en la vista previa; **sin filas ni valores no borra nada** (una foto recien subida no se pierde). Lo cubre la fase `fotos` (5 checks de D7) |

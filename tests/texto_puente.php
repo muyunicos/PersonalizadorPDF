@@ -1146,6 +1146,17 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 (int)$GLOBALS['fotos_re_filas'] === 1);
             check('un grupo vaciado borra sus filas (sin fotos fantasma)',
                 (int)$GLOBALS['fotos_vaciado_filas'] === 0);
+            // Spec 029 (D7): poda de subidas huerfanas.
+            check('D7: se podan las huerfanas (resto del ciclo anterior y subida sin uso)',
+                $GLOBALS['fotos_poda_huerfanas'] === true);
+            check('D7: se conservan las que usan una FILA (E) o los VALORES (D)',
+                $GLOBALS['fotos_poda_vivas'] === true);
+            check('D7: el manifest no referencia archivos borrados',
+                (int)$GLOBALS['fotos_poda_filas_subidas'] === 3);
+            check('D7: la poda es idempotente (la segunda pasada no borra nada)',
+                (int)$GLOBALS['fotos_poda_idempotente'] === 0);
+            check('D7: sin datos NO poda (una foto recien subida no se pierde)',
+                (int)$GLOBALS['fotos_poda_vacio'] === 0);
             // Estado final = lo que dejo el ENDPOINT (POST con `fotos` = JSON).
             $dirF = $testBase . '/uploads/pmu/tmp/sesion-test-8f2a/' . (string)$GLOBALS['test_item_fotos'];
             $manF = json_decode((string)@file_get_contents($dirF . '/manifest.json'), true);
@@ -2285,7 +2296,6 @@ switch ($fase) {
         \ExtractCorel\Engine\PngWriter::write($pngFt, 120, 90);
         $bytesFt = (string)file_get_contents($pngFt);
         $subA = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt);
-        $subB = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt);
         // 1) Uniforme: 3 instancias con la MISMA foto -> 1 fila.
         $unif = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF',
             [$subA['id'], $subA['id'], $subA['id']]);
@@ -2298,6 +2308,9 @@ switch ($fase) {
             . basename($GLOBALS['fotos_unif_file'])
         );
         // 2) Mixto: 2 fotos distintas en 3 instancias -> una fila por instancia.
+        //    B se sube ACA: al cerrar el paso 1 la poda (D7) borra lo que no usa
+        //    nadie, asi que una subida que todavia no se registro es huerfana.
+        $subB = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt);
         $mixto = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF',
             [$subA['id'], $subB['id'], $subA['id']]);
         $GLOBALS['fotos_mixto_indices'] = array_map(function ($f) {
@@ -2315,6 +2328,31 @@ switch ($fase) {
         // usando la foto que el comprador saco).
         $vaciado = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', []);
         $GLOBALS['fotos_vaciado_filas'] = count($vaciado);
+        // 5) D7: poda por uso. VALORES = [A, D]; FILAS = E (00FF00) y A (0000FF).
+        //    B (resto del ciclo anterior) y C (nunca usada) sobran.
+        $subC = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt);
+        $subD = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt);
+        $subE = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt);
+        $man_ft = $sesion_ft->leer_manifest($sid_ft, $draft_ft);
+        $man_ft['valores'] = ['1' => ['valor' => [$subA['id'], $subD['id']], 'cliente' => '']];
+        $sesion_ft->guardar_manifest($sid_ft, $draft_ft, $man_ft);
+        // E se registra PRIMERO y NO esta en los valores: la protege la FILA.
+        $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '00FF00', [$subE['id']]);
+        $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', [$subA['id']]);
+        $dirSub_ft = $sesion_ft->dir_subidas($sid_ft, $draft_ft, false);
+        $GLOBALS['fotos_poda_huerfanas'] = !is_file($dirSub_ft . DIRECTORY_SEPARATOR . basename($subB['file']))
+            && !is_file($dirSub_ft . DIRECTORY_SEPARATOR . basename($subC['file']));
+        $GLOBALS['fotos_poda_vivas'] = is_file($dirSub_ft . DIRECTORY_SEPARATOR . basename($subA['file']))
+            && is_file($dirSub_ft . DIRECTORY_SEPARATOR . basename($subD['file']))
+            && is_file($dirSub_ft . DIRECTORY_SEPARATOR . basename($subE['file']));
+        $GLOBALS['fotos_poda_filas_subidas'] = count((array)(
+            $sesion_ft->leer_manifest($sid_ft, $draft_ft)['subidas'] ?? []
+        ));
+        $GLOBALS['fotos_poda_idempotente'] = count($sesion_ft->podar_subidas($sid_ft, $draft_ft));
+        // Sin datos (item nuevo: ni filas ni valores) NO se poda nada.
+        $draft2_ft = $sesion_ft->crear_draft($sid_ft, ['muestra']);
+        $sesion_ft->guardar_subida($sid_ft, $draft2_ft, $bytesFt);
+        $GLOBALS['fotos_poda_vacio'] = count($sesion_ft->podar_subidas($sid_ft, $draft2_ft));
         $GLOBALS['test_item_fotos'] = $draft_ft;
         // 5) Endpoint real: registro uniforme por POST (sin bytes).
         $_POST = [
