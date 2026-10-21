@@ -673,6 +673,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 check('cadena IA: envia tareas ordenadas, token y bytes',
                     is_array($pipeline) && ($pipeline['modo'] ?? '') === 'automatico'
                     && array_column((array)($pipeline['tareas'] ?? []), 'tipo') === ['detectar', 'mejorar', 'quitar_fondo']
+                    && ($pipeline['tareas'][1]['alfa'] ?? '') === 'anime'
                     && ($remota['args']['headers']['X-PMU-Token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef'
                     && (int)($remota['args']['timeout'] ?? 0) === 180
                     && strlen((string)($remota['args']['body'] ?? '')) > 0);
@@ -680,6 +681,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                     ($resultado['nombre'] ?? '') === 'prueba-pc-cadena-320x180.png'
                     && strpos((string)($resultado['detalle'] ?? ''), 'Detectado: grafica (ambiguo)') !== false
                     && strpos((string)($resultado['detalle'] ?? ''), 'Mejora aplicada') !== false
+                    && strpos((string)($resultado['detalle'] ?? ''), 'Alfa: Anime') !== false
                     && strpos((string)($resultado['detalle'] ?? ''), 'Eliminacion de fondo rechazada; se conserva la imagen original') !== false
                     && strpos((string)($resultado['detalle'] ?? ''), 'Tiempo IA: 12,3 s') !== false
                     && substr((string)base64_decode((string)($resultado['imagen_base64'] ?? ''), true), 0, 4) === "\x89PNG");
@@ -3640,7 +3642,7 @@ switch ($fase) {
                     'modo' => 'automatico',
                     'tareas' => [
                         ['tipo' => 'detectar'],
-                        ['tipo' => 'mejorar', 'modelo' => 'automatico', 'ancho' => 320, 'alto' => 180],
+                        ['tipo' => 'mejorar', 'modelo' => 'automatico', 'ancho' => 320, 'alto' => 180, 'alfa' => 'anime'],
                         ['tipo' => 'quitar_fondo'],
                     ],
                 ]);
@@ -3661,7 +3663,7 @@ switch ($fase) {
                     'modo' => 'automatico',
                     'tareas' => [
                         ['tipo' => 'detectar', 'categoria' => 'grafica', 'ambiguo' => true],
-                        ['tipo' => 'mejorar', 'estado' => 'aplicada'],
+                        ['tipo' => 'mejorar', 'estado' => 'aplicada', 'alfa' => 'anime'],
                         [
                             'tipo' => 'quitar_fondo',
                             'estado' => 'rechazada',

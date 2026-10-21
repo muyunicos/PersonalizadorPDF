@@ -1575,6 +1575,7 @@ jQuery(function ($) {
             if (tarea && tarea.tipo === 'mejorar') {
                 if (typeof tarea.ancho === 'undefined') { tarea.ancho = ancho; }
                 if (typeof tarea.alto === 'undefined') { tarea.alto = alto; }
+                tarea.alfa = $('#ec-redimensionar-pc-alfa').val() || 'lanczos';
             }
             return tarea;
         });

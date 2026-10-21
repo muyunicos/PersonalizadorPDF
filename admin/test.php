@@ -109,6 +109,7 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
     <h3>Procesar una cadena de tareas en la PC</h3>
     <p class="description">Puedes encadenar deteccion, mejora de calidad y eliminacion de fondo. En modo automatico, la deteccion es informativa y la mejora siempre usa Real-ESRGAN general, incluso con graficas o clasificaciones ambiguas. El fondo solo se quita si agregas esa tarea; si la mascara queda casi vacia, se conserva la imagen original.</p>
     <p class="description">La primera prueba de cada modelo puede tardar mas al cargarlo. Usa solo imagenes de prueba no sensibles.</p>
+    <p class="description">Si la imagen tiene transparencia, puedes comparar como se amplia el canal alfa. El RGB siempre usa el modelo seleccionado en la tarea mejorar.</p>
     <p>
         <input type="file" id="ec-redimensionar-pc-imagen" accept="image/png,image/jpeg,image/gif,image/webp">
     </p>
@@ -118,6 +119,14 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
             <option value="automatico" selected>Automatico (detecta y siempre mejora)</option>
             <option value="manual">Manual (ejecuta las tareas declaradas)</option>
         </select>
+    </p>
+    <p>
+        <label for="ec-redimensionar-pc-alfa">Ampliacion del canal alfa</label>
+        <select id="ec-redimensionar-pc-alfa">
+            <option value="lanczos" selected>Lanczos (rapido; mascara original)</option>
+            <option value="anime">Real-ESRGAN Anime (mejora la mascara)</option>
+        </select>
+        <span class="description">Se aplica a las tareas mejorar cuando la imagen tiene transparencia y se amplia.</span>
     </p>
     <p>
         <label for="ec-redimensionar-pc-tareas">Tareas en orden (JSON)</label><br>

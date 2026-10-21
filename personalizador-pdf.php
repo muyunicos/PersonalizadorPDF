@@ -2898,7 +2898,7 @@ class Personalizador_PDF_Plugin
             $tipo = sanitize_key((string)($tarea['tipo'] ?? ''));
             $claves = [
                 'detectar' => ['tipo'],
-                'mejorar' => ['tipo', 'modelo', 'ancho', 'alto', 'si_categoria'],
+                'mejorar' => ['tipo', 'modelo', 'ancho', 'alto', 'alfa', 'si_categoria'],
                 'quitar_fondo' => ['tipo', 'si_categoria'],
             ];
             if (!isset($claves[$tipo]) || array_diff(array_keys($tarea), $claves[$tipo])) {
@@ -2911,6 +2911,11 @@ class Personalizador_PDF_Plugin
                     $this->responder(false, [], 'El modelo de mejora debe ser foto, anime o automatico.');
                 }
                 $fila['modelo'] = $modelo;
+                $alfa = sanitize_key((string)($tarea['alfa'] ?? 'lanczos'));
+                if (!in_array($alfa, ['lanczos', 'anime'], true)) {
+                    $this->responder(false, [], 'El tratamiento del alfa debe ser lanczos o anime.');
+                }
+                $fila['alfa'] = $alfa;
                 if (isset($tarea['ancho']) !== isset($tarea['alto'])) {
                     $this->responder(false, [], 'La mejora requiere ancho y alto juntos.');
                 }
@@ -2970,6 +2975,14 @@ class Personalizador_PDF_Plugin
             }
             if (!empty($tarea['advertencia'])) {
                 $partes[] = sanitize_text_field((string)$tarea['advertencia']);
+            }
+            if ($tipo === 'mejorar' && $estado === 'aplicada') {
+                $alfa = sanitize_key((string)($tarea['alfa'] ?? ''));
+                if (in_array($alfa, ['anime', 'lanczos'], true)) {
+                    $partes[] = 'Alfa: ' . ucfirst($alfa);
+                } elseif ($alfa === 'sin_transparencia') {
+                    $partes[] = 'Alfa: imagen opaca';
+                }
             }
         }
         if (isset($resultado['duracion_ms']) && is_numeric($resultado['duracion_ms'])
