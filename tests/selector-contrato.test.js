@@ -200,10 +200,24 @@ check('Spec 026: el selector emite WebP con fallback a PNG (solo si el servidor 
 check('Spec 026 D10: el meta.type refleja el tipo REAL del blob (no un png fijo)',
   /var mime = \(tipo === 'webp'\) \? 'image\/webp' : 'image\/png';/.test(selSrc)
   && /type: mime,/.test(selSrc));
-check('Spec 026: el pool (rasterizar) emite WebP q0.92 y respeta el flag del servidor',
-  /mimeR, 0\.92/.test(tiendaSrc)
-  && /webp_soportado === false/.test(tiendaSrc)
-  && /tipoDeBlob/.test(tiendaSrc));
+// Spec 029 (D1): las fotos ya NO se copian al pool: se REGISTRAN (la fila
+// apunta a `subidas/`), asi que el cliente no las descarga ni las rasteriza.
+check('Spec 029 D1: la foto se REGISTRA (sin copia ni rasterizado en el cliente)',
+  tiendaSrc.indexOf('rasterizar') === -1 && tiendaSrc.indexOf('function subirFotos') === -1
+  && /function registrarFotos/.test(tiendaSrc)
+  && /fd\.append\('fotos', JSON\.stringify\(ids\)\)/.test(tiendaSrc)
+  && /fila_archivo\(/.test(fs.readFileSync(path.join(RAIZ, 'inc', 'class-pmu-sesion.php'), 'utf8')));
+// Spec 029 (D2): el texto del grupo se colapsa a UNA entrada cuando todas las
+// instancias llevan lo mismo (el Motor la replica).
+check('Spec 029 D2: el texto uniforme se renderiza/sube una vez por grupo',
+  /function dedupPendientes/.test(tiendaSrc) && /p\.repite/.test(tiendaSrc)
+  && /item\.p\.repite > 1\) \? 0 : item\.p\.i/.test(tiendaSrc));
+// Spec 026 (D4) sigue vigente en el SERVIDOR: el texto del pool se convierte a
+// WebP q0.92 al guardarlo.
+check('Spec 026 D4/029: el texto del pool lo convierte el servidor a WebP q0.92',
+  /convertir_webp\(\(string\)\$bytes, 92\)/.test(
+    fs.readFileSync(path.join(RAIZ, 'inc', 'class-pmu-sesion.php'), 'utf8')
+  ));
 check('Spec 026 D2/D9: subirPool nombre + flag salen del tipo real; subirFoto no fuerza .png',
   /fd\.append\('webp', ext === 'webp' \? '1' : '0'\)/.test(tiendaSrc)
   && /gid \+ '\.' \+ ext/.test(tiendaSrc)

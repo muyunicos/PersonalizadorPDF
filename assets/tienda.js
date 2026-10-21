@@ -637,6 +637,10 @@
         fd.append('overrides', params.ovClave || '');
         fd.append('w', String(params.w));
         fd.append('h', String(params.h));
+        // Spec 029 (D3): POSICION de la instancia (el Motor la usa como orden).
+        if (params.indice !== undefined && params.indice !== null) {
+            fd.append('indice', String(params.indice));
+        }
         if (limpiar) { fd.append('limpiar', '1'); }
         // Spec 026 (D2/D3): el nombre y el flag salen del tipo REAL del blob.
         // El servidor valida por FIRMA de los bytes, asi que el nombre es solo
@@ -985,50 +989,52 @@
      * pool se RESUELVE con la URL del PNG guardado (sin re-render ni subida).
      */
     /**
-     * Sube al pool las fotos del comprador, una por instancia del hueco
-     * (spec 012, T027, FR-036/FR-038). El `id` se resuelve contra
-     * `manifest.subidas[]`: si no existe, esa instancia NO se dibuja (nunca una
-     * ruta inventada). Cada foto se rasteriza al tamano EXACTO del hueco para que
-     * la vista previa y el PDF usen la misma imagen.
+     * Spec 029 (D1): REGISTRA las fotos del comprador, sin copiarlas. Un POST
+     * por grupo con los ids de subida POR INSTANCIA (`''` = instancia sin
+     * valor); el servidor escribe la fila del manifest apuntando a
+     * `subidas/{id}.{ext}` y valida cada id contra `manifest.subidas[]` (si no
+     * existe, esa instancia no se dibuja: nunca una ruta inventada).
+     *
+     * Antes cada instancia descargaba su subida, la rasterizaba al hueco y la
+     * subia al pool: con 100 instancias y la misma foto eran 100 copias
+     * identicas (red, disco y una recompresion WebP→WebP de mas). La subida ya
+     * ES la imagen compuesta (el selector la rasteriza al lienzo, spec 028 D11).
+     *
+     * Devuelve, por instancia, la URL con la que el mockup dibuja el hueco: se
+     * resuelve UNA vez por id (la misma foto puede estar en varias instancias).
      */
-    function subirFotos(fotos, sid, itemKey, pdfDatos) {
-        if (!fotos || !fotos.length) { return Promise.resolve([]); }
-        // Una foto por instancia; las de un MISMO grupo comparten cola y
-        // limpiar (RC4.6.11): el limpiar va PRIMERO en la cola del grupo y se
-        // espera, y las instancias suben despues en paralelo. Asi el borrado
-        // jamas pisa subidas del propio grupo ni de otra vista.
+    function registrarFotos(fotos, sid, itemKey, pdfDatos, grupos) {
         var porGrupo = {};
-        fotos.forEach(function (f) {
+        // Todos los grupos de imagen se registran, incluso SIN fotos: un grupo
+        // vaciado tiene que BORRAR sus filas (si no, el PDF seguiria usando la
+        // foto que el comprador saco).
+        (grupos || []).forEach(function (gid) { porGrupo[gid] = porGrupo[gid] || []; });
+        (fotos || []).forEach(function (f) {
             (porGrupo[f.gid] = porGrupo[f.gid] || []).push(f);
         });
-        var subirUna = function (f, limpiar) {
-            return urlDeSubida(sid, itemKey, f.id).then(function (url) {
-                if (!url) { return null; }
-                return rasterizar(url, f.g.w, f.g.h).then(function (r) {
-                    if (!r || !r.blob) { return null; }
-                    var blob = r.blob;
-                    // El blob se devuelve junto al grupo/instancia para que la
-                    // composicion del mockup lo dibuje (bug: las fotos iban al
-                    // pool pero nunca entraban a pngsPorGrupo -> caja neutra).
-                    return subirPool(sid, itemKey, pdfDatos.pdf, f.gid, blob, {
-                        valor: f.id, preset: '', settings: '', w: f.g.w, h: f.g.h
-                    }, limpiar, r.tipo).then(function () {
-                        return { gid: f.gid, i: f.i, blob: blob };
-                    });
-                });
-            }).catch(function () { return null; });   // una foto que falla no frena al resto
+        if (!Object.keys(porGrupo).length) { return Promise.resolve([]); }
+        var urls = {};   // id -> promesa de URL (una resolucion por foto)
+        var urlDe = function (id) {
+            if (!urls[id]) { urls[id] = urlDeSubida(sid, itemKey, id); }
+            return urls[id];
         };
         return Promise.all(Object.keys(porGrupo).map(function (gid) {
             var lista = porGrupo[gid];
+            var maxI = 0;
+            lista.forEach(function (f) { if (f.i > maxI) { maxI = f.i; } });
+            var ids = [];
+            for (var i = 0; i <= maxI; i++) { ids.push(''); }
+            lista.forEach(function (f) { ids[f.i] = String(f.id); });
+            // La cola por grupo (RC4.6.11) sigue valiendo: el registro de un
+            // grupo no se cruza con otro trabajo del mismo grupo.
             return PURO.enCola(colasPool, String(pdfDatos.pdf) + '|' + String(gid), function () {
-                var primera = lista[0];
-                return subirUna(primera, true).then(function (prim) {
-                    return Promise.all(lista.slice(1).map(function (f) {
-                        return subirUna(f, false);
-                    })).then(function (resto) {
-                        return [prim].concat(resto);
+                return registrarGrupo(sid, itemKey, pdfDatos.pdf, gid, ids);
+            }).then(function () {
+                return Promise.all(lista.map(function (f) {
+                    return urlDe(String(f.id)).then(function (url) {
+                        return url ? { gid: gid, i: f.i, url: url } : null;
                     });
-                });
+                }));
             });
         })).then(function (porGrupoResultados) {
             var plano = [];
@@ -1037,6 +1043,52 @@
             });
             return plano;
         });
+    }
+
+    /** POST de registro de un grupo (ids por instancia): sin bytes. */
+    function registrarGrupo(sid, itemKey, pdf, gid, ids) {
+        var fd = new FormData();
+        fd.append('action', 'personalizador_pdf_pool');
+        fd.append('_wpnonce', cfg.nonceVistaPrevia || '');
+        fd.append('sid', sid);
+        fd.append('item_key', itemKey);
+        fd.append('pdf', pdf);
+        fd.append('grupo', gid);
+        fd.append('fotos', JSON.stringify(ids));
+        return postAjax(fd).then(function (json) {
+            if (!json || !json.success) {
+                throw new Error((json && json.data) || 'motor:pool:falla');
+            }
+            return json.data;
+        });
+    }
+
+    /**
+     * Spec 029 (D2): colapsa los pendientes de TEXTO de un grupo cuando TODAS
+     * sus instancias tienen el mismo hash (mismo texto, preset y overrides):
+     * queda una entrada con `repite` = cuantas instancias cubre, asi se
+     * renderiza y se sube UNA vez (el Motor la replica a todo el grupo).
+     *
+     * La lista que consume el Motor es POSICIONAL, asi que la dedup es por grupo
+     * y solo si es TOTAL: con textos distintos hace falta una fila por instancia.
+     */
+    function dedupPendientes(pendientes) {
+        var porGrupo = {};
+        (pendientes || []).forEach(function (p) {
+            (porGrupo[p.gid] = porGrupo[p.gid] || []).push(p);
+        });
+        var out = [];
+        Object.keys(porGrupo).forEach(function (gid) {
+            var lista = porGrupo[gid];
+            var iguales = lista.every(function (p) { return p.hash === lista[0].hash; });
+            if (!iguales) {
+                out = out.concat(lista);
+                return;
+            }
+            lista[0].repite = lista.length;
+            out.push(lista[0]);
+        });
+        return out;
     }
 
     /** URL de la foto subida `id` (null si no existe en el manifest). */
@@ -1058,43 +1110,6 @@
     }
 
     /**
-     * Rasteriza una imagen al hueco **sin ampliarla** (spec 025 D7): la escala
-     * se capa a 1 y el canvas mide lo que ocupa la foto (acotado por w/h). Asi
-     * el pool no guarda pixeles inventados; la ampliacion final la hace el
-     * Motor al encajar en el PDF.
-     *
-     * Spec 026 (D1/D4): se codifica en **WebP q0.92** (el texto renderizado
-     * tiene bordes con antialias: no debe degradarse). Si el navegador no
-     * codifica WebP, cae a PNG en silencio y se entrega tal cual (D2).
-     */
-    function rasterizar(url, w, h) {
-        return new Promise(function (resolve) {
-            var img = new Image();
-            img.onload = function () {
-                var W = Math.max(1, parseInt(w, 10) || 1);
-                var H = Math.max(1, parseInt(h, 10) || 1);
-                var esc = Math.min(1, Math.min(W / img.width, H / img.height));
-                var dw = Math.max(1, Math.round(img.width * esc));
-                var dh = Math.max(1, Math.round(img.height * esc));
-                var c = document.createElement('canvas');
-                c.width = Math.min(W, dw);
-                c.height = Math.min(H, dh);
-                var ctx2 = c.getContext('2d');
-                ctx2.drawImage(img, Math.round((c.width - dw) / 2), Math.round((c.height - dh) / 2), dw, dh);
-                if (c.toBlob) {
-                    // Spec 026: WebP con fallback por firma (D2), y solo si el
-                    // SERVIDOR puede leerlo (D3).
-                    var mimeR = (global.PMU_FICHA && global.PMU_FICHA.webp_soportado === false)
-                        ? 'image/png' : 'image/webp';
-                    c.toBlob(function (b) { resolve(b ? { blob: b, tipo: tipoDeBlob(b) } : null); }, mimeR, 0.92);
-                } else { resolve(null); }
-            };
-            img.onerror = function () { resolve(null); };
-            img.src = url;
-        });
-    }
-
-    /**
      * Spec 026 (D2): el tipo REAL de un blob, por su firma. `toBlob('image/webp')`
      * cae a PNG **en silencio** si el navegador no sabe codificar WebP: nunca
      * se inventa el formato.
@@ -1109,9 +1124,11 @@
         var valores = (global.PMU_API && global.PMU_API.valores()) || {};
         var pendientes = [];
         var avisos = [];
-        var fotos = [];       // grupos `imagen`: un blob por instancia (spec 012, T027)
+        var fotos = [];       // grupos `imagen`: una entrada por instancia (spec 012, T027)
+        var gruposImagen = []; // spec 029: TODOS los grupos de imagen (aunque queden sin fotos)
         (pdfDatos.grupos || []).forEach(function (g) {
             if (g.tipo === 'imagen') {
+                gruposImagen.push(g.id);
                 // Foto del comprador: se resuelve el id contra manifest.subidas[]
                 // y se rasteriza al tamano del hueco. Si un id no existe, NO se
                 // inventa nada: esa instancia se omite (D17).
@@ -1144,10 +1161,14 @@
                 });
             });
         });
-        // Las fotos van al pool por su cuenta y se esperan con el texto (T027).
-        var trabajoFotos = subirFotos(fotos, sid, itemKey, pdfDatos);
+        // Spec 029 (D2): el texto se renderiza y se sube UNA vez por grupo cuando
+        // todas sus instancias llevan el mismo (antes: una vez por instancia).
+        pendientes = dedupPendientes(pendientes);
+        // Las fotos se REGISTRAN por su cuenta (sin copiarse) y se esperan junto
+        // al texto.
+        var trabajoFotos = registrarFotos(fotos, sid, itemKey, pdfDatos, gruposImagen);
         if (avisos.length) { mostrarAviso(pdfDatos, avisos.join(' ')); }
-        if (!pendientes.length && !fotos.length) {
+        if (!pendientes.length && !fotos.length && !gruposImagen.length) {
             var esperaBloq = vista.marco.querySelector('.pmu-gal-espera');
             if (esperaBloq) {
                 esperaBloq.textContent = avisos.length ? 'Sin vista previa disponible' : 'Generando vista previa';
@@ -1194,6 +1215,9 @@
             var subirUna = function (item, limpiar) {
                 return subirPool(sid, itemKey, pdfDatos.pdf, item.p.gid, item.blob, {
                     valor: item.p.texto, preset: item.p.g.preset, settings: item.p.g.settings, w: item.p.g.w, h: item.p.g.h,
+                    // Spec 029 (D3): POSICION de la instancia. La entrada que
+                    // colapsa el grupo (D2) va con 0: el Motor la replica.
+                    indice: (item.p.repite > 1) ? 0 : item.p.i,
                     // FR-005 (T016): el MISMO string que entro al hash del
                     // cliente; el servidor lo concatena igual en hash_pool().
                     ovClave: item.p.ovClave
@@ -1222,16 +1246,18 @@
                     var recurso = p.urlGuardada || porId[p.gid + '-' + (p.i + 1)];
                     if (!recurso) { return; }
                     var lista = pngsPorGrupo[p.gid] || [];
-                    lista.push(recurso);
+                    // Spec 029 (D2): la entrada colapsada cubre TODAS las
+                    // instancias del grupo: el mismo recurso se repite (la
+                    // composicion resuelve la capa por indice de instancia).
+                    for (var k = 0; k < (p.repite || 1); k++) { lista.push(recurso); }
                     pngsPorGrupo[p.gid] = lista;
                 });
-                // Bug: los grupos de imagen (fotos del comprador) iban al pool
-                // pero NUNCA entraban a pngsPorGrupo, asi que la capa placeholder
-                // no resolvia y salia una caja neutra gris en vez de la foto.
+                // Spec 029 (D1): las fotos del comprador se dibujan con la URL de
+                // la SUBIDA (no hay copia en el pool): una entrada por instancia.
                 (fotosListas || []).forEach(function (t) {
-                    if (!t || !t.blob) { return; }
+                    if (!t || !t.url) { return; }
                     var listaF = pngsPorGrupo[t.gid] || [];
-                    listaF[t.i] = t.blob;
+                    listaF[t.i] = t.url;
                     pngsPorGrupo[t.gid] = listaF;
                 });
                 return componerMockup(pdfDatos, vista.mockup, pngsPorGrupo).then(function (canvas) {

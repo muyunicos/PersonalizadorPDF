@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.19.0
+ * Version: 4.20.0
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -1598,6 +1598,18 @@ class Personalizador_PDF_Plugin
             if (!$valido || !preg_match('/^[0-9A-F]{6}$/', $grupo)) {
                 throw new \RuntimeException('motor:pool:grupo:invalido');
             }
+            // Spec 029 (D1): las FOTOS se **registran**, no se copian. El cliente
+            // manda los ids de subida POR INSTANCIA (`fotos` = JSON) y el servidor
+            // escribe las filas apuntando a `subidas/{id}.{ext}`: cero bytes por
+            // la red y cero copias en disco (la foto subida YA es la imagen
+            // compuesta: el selector la rasteriza al lienzo, spec 028 D11).
+            if (isset($_POST['fotos'])) {
+                $ids = json_decode((string) wp_unslash($_POST['fotos']), true);
+                if (!is_array($ids)) {
+                    throw new \RuntimeException('motor:pool:fotos:invalido');
+                }
+                wp_send_json_success(['filas' => $sesion->registrar_fotos($sid, $item, $pdf, $grupo, $ids)]);
+            }
             $bytes = '';
             if (isset($_FILES['png']) && is_array($_FILES['png']) && !empty($_FILES['png']['tmp_name'])) {
                 if ((int)$_FILES['png']['size'] > 8388608) {
@@ -1635,7 +1647,10 @@ class Personalizador_PDF_Plugin
                 (int) ($_POST['h'] ?? 0),
                 $ov
             );
-            $fila = $sesion->guardar_imagen($sid, $item, $pdf, $grupo, $bytes, $hash);
+            // Spec 029 (D3): `indice` = POSICION de la instancia (el Motor la usa
+            // como orden); sin el se conserva el numero de archivo.
+            $indice = isset($_POST['indice']) ? (int) $_POST['indice'] : null;
+            $fila = $sesion->guardar_imagen($sid, $item, $pdf, $grupo, $bytes, $hash, $indice);
         } catch (\Throwable $e) {
             wp_send_json_error($e->getMessage());
         }

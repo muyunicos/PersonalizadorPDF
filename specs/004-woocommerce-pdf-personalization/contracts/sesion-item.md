@@ -31,7 +31,8 @@ orders/{order_id}/{item_key}/         <- rename al confirmarse el pago (entregab
 | `promover($sid, $draft, $cart_item_key)` | string | `rename()` a `{cart_item_key}` (mismo sid) |
 | `leer_manifest($sid, $item_key)` | array | lectura tolerante (aviso + estado vacio) |
 | `guardar_manifest($sid, $item_key, array $m)` | string | `.tmp` + `rename` |
-| `guardar_imagen($sid, $item_key, $pdf, $grupo, $bytes)` | array | **nombre vigente (spec 026 D6)**: la extension sale de la **firma** de los bytes (WebP si el servidor puede convertir, si no el original); devuelve `{indice, file, hash}` y anota en `archivos[]` |
+| `guardar_imagen($sid, $item_key, $pdf, $grupo, $bytes, $hash = null, $indice = null)` | array | **nombre vigente (spec 026 D6)**: la extension sale de la **firma** de los bytes (WebP si el servidor puede convertir, si no el original); anota en `archivos[]` con `origen: 'texto'` y `indice` = **posicion de instancia** (spec 029 D3; sin el, el numero de archivo). Devuelve `{indice, file, hash}` |
+| `registrar_fotos($sid, $item_key, $pdf, $grupo, array $ids)` | array | **spec 029 (D1)**: registra las FOTOS sin copiarlas: valida los ids contra `manifest.subidas[]` y escribe filas `origen: 'subida'` apuntando a `subidas/{id}.{ext}`. **Una fila** (indice 0) si la foto es la misma en todo el grupo (el Motor la replica); si difieren, una por instancia con el indice de instancia. Reemplaza las filas del grupo (idempotente). Un id desconocido se **omite** |
 | `guardar_png(...)` | array | **alias** de `guardar_imagen()` (spec 026): conserva el nombre viejo para los llamadores existentes |
 | `convertir_webp($bytes, $q = 92)` | array | **spec 026**: WebP pasa tal cual; PNG -> WebP con GD (`q` por contenido); sin GD -> el original. Preserva el **alfa**. Lanza `motor:imagen:webp:no_soportado` si llega un WebP ilegible |
 | `servidor_lee_webp()` | bool | **spec 026**: GD + `imagecreatefromwebp` (sin eso el Motor no podria leer WebP) |
@@ -44,6 +45,9 @@ orders/{order_id}/{item_key}/         <- rename al confirmarse el pago (entregab
 
 ## Nomenclatura del pool
 
+**El pool guarda solo lo que se GENERA** (spec 029 D2): el texto que renderiza TextMuy en el
+navegador. Las **fotos del comprador no se copian**: se referencian desde `subidas/` (D1).
+
 `img/{pdf}-{id}-{n}.{ext}` (spec 026: la extension sale de la **firma**, no de un nombre fijo):
 - `{pdf}` nombre saneado del PDF; `{id}` grupo (hex sin `#`); `{n}` 1..N (numerado cuando el
   grupo necesita varias imagenes); `{ext}` `webp` (tras la conversion del servidor), o `png` si
@@ -51,6 +55,8 @@ orders/{order_id}/{item_key}/         <- rename al confirmarse el pago (entregab
 - **La numeracion cuenta todos los formatos** (`siguiente_n()`): si solo mirara los `.png`, un
   WebP y un PNG del mismo grupo se pisarian.
 - Pool DEDICADO al item: sin deduplicacion entre items (evita colisiones y borrados ajenos).
+- **Una sola fila cuando alcanza**: si todo el grupo lleva el mismo texto (mismo `hash`) se
+  renderiza y sube **una vez** y la fila va con `indice` 0; el Motor la replica.
 - `hash = sha1(valor + preset + settings + WxH)` se guarda por fila para la regeneracion
   parcial (solo se re-renderiza lo cambiado).
 
@@ -62,9 +68,15 @@ orders/{order_id}/{item_key}/         <- rename al confirmarse el pago (entregab
   "sid": "8f2a",
   "pdfs": ["dia-madre-1"],
   "valores": {"1": {"valor": "Abuela Ana", "cliente": "Abuela Ana"}},
+  "subidas": [
+    {"id": "9f2c41ab0d7e", "file": "subidas/9f2c41ab0d7e.webp",
+     "mime": "image/webp", "bytes": 118402, "creado": 1776000000}
+  ],
   "archivos": [
     {"pdf": "dia-madre-1", "grupo_id": "0000FF", "indice": 0,
-     "file": "img/dia-madre-1-0000FF-1.png", "hash": "3f9c2a1b"}
+     "file": "subidas/9f2c41ab0d7e.webp", "hash": "", "origen": "subida"},
+    {"pdf": "dia-madre-1", "grupo_id": "00FF00", "indice": 0,
+     "file": "img/dia-madre-1-00FF00-1.webp", "hash": "3f9c2a1b", "origen": "texto"}
   ],
   "mockup_vistas": ["fiesta"],
   "mockup_visto": "fiesta",
@@ -76,6 +88,10 @@ orders/{order_id}/{item_key}/         <- rename al confirmarse el pago (entregab
 
 Reglas:
 - `archivos[]` es el indice que lee el Motor: nunca adivina por nombre.
+- **`origen`** (spec 029 D4): `subida` (la foto del comprador, **referenciada** desde
+  `subidas/`: no hay copia) o `texto` (el render de TextMuy, en el pool `img/`).
+- `indice` = **posicion de instancia** del grupo (spec 029 D3). **Una sola fila** (indice 0)
+  cuando todo el grupo lleva lo mismo: el Motor la replica (`item_generar_pdfs` pasa escalar).
 - `preview_estado`: `ok` (vistas + pool completos), `sin_vista` (fallo de render, venta
   habilitada), `omisible` (decision del admin).
 - `valores` siempre dual: `valor` (sistema) + `cliente` (etiqueta).

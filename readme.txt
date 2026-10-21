@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.19.0
+Stable tag: 4.20.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,12 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.20.0 =
+* **La vista previa ya no genera cientos de archivos (spec 029)**: antes, por cada hueco del PDF se guardaba una **copia** de la foto del comprador (y el texto se renderizaba una vez por hueco). Con 100 huecos eso eran **200 archivos** y ~12 MB de subida por la red **para una sola foto**. Ahora **la foto no se copia: se usa la que el comprador ya subio**, y el texto se renderiza **una vez** por grupo.
+* **Un solo envio por grupo**: el navegador manda los identificadores de las fotos (sin bytes), no las imagenes. Menos datos, menos espera y nada de recompresiones de mas.
+* **Arreglado**: cuando un grupo llevaba dos fotos distintas, el PDF podia **asignarlas en el orden equivocado** (los huecos se numeraban al azar segun cual subia primero).
+* **El PDF no cambia**: el motor y el formato del pedido son los mismos; las fotos viajan con el pedido igual que antes.
 
 = 4.19.0 =
 * **Los 3 modos de encaje, con nombres que no se pueden malinterpretar (spec 028)**: **Cubrir**, **Encajar** y **Estirar** son exactamente los `cover`, `contain` y `fill` del CSS. Cubrir **llena el marco** (recorta lo que sobra) y Encajar **deja entrar la foto entera** (el fondo ocupa el resto): **ninguno de los dos deforma**. Estirar ocupa el marco exacto y si deforma. Ahora los botones traen **icono + nombre**.

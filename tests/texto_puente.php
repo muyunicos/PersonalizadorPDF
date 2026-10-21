@@ -1122,6 +1122,45 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 $webp_p && is_array($firmaPool_p) && $firmaPool_p['ext'] === 'webp',
                 'ext=' . $ext_p);
             break;
+        case 'fotos':
+            // Spec 029 (D1/D2/D3): las fotos del comprador se REGISTRAN (la fila
+            // apunta a `subidas/`), no se copian al pool; y cuando todas las
+            // instancias usan la misma foto queda UNA fila (el Motor la replica
+            // a todo el grupo).
+            check('uniforme: UNA fila para todo el grupo',
+                (int)$GLOBALS['fotos_unif_filas'] === 1,
+                'filas=' . (int)$GLOBALS['fotos_unif_filas']);
+            check('la fila apunta a la SUBIDA y el pool `img/` queda sin archivos',
+                preg_match('#^subidas/[A-Za-z0-9._-]+\.(webp|png)$#', (string)$GLOBALS['fotos_unif_file']) === 1
+                && (int)$GLOBALS['fotos_img_archivos'] === 0,
+                'file=' . (string)$GLOBALS['fotos_unif_file']
+                . ' img=' . (int)$GLOBALS['fotos_img_archivos']);
+            check('el archivo referenciado EXISTE en el item (sin copia)',
+                $GLOBALS['fotos_ref_existe'] === true);
+            check('mixto (2 fotos en 3 instancias): una fila por instancia con el indice de instancia',
+                $GLOBALS['fotos_mixto_indices'] === [0, 1, 2],
+                'indices=' . implode(',', (array)$GLOBALS['fotos_mixto_indices']));
+            check('id desconocido: se omite (no se inventa la ruta)',
+                (int)$GLOBALS['fotos_desconocido_filas'] === 1);
+            check('re-registrar el grupo reemplaza (idempotente)',
+                (int)$GLOBALS['fotos_re_filas'] === 1);
+            check('un grupo vaciado borra sus filas (sin fotos fantasma)',
+                (int)$GLOBALS['fotos_vaciado_filas'] === 0);
+            // Estado final = lo que dejo el ENDPOINT (POST con `fotos` = JSON).
+            $dirF = $testBase . '/uploads/pmu/tmp/sesion-test-8f2a/' . (string)$GLOBALS['test_item_fotos'];
+            $manF = json_decode((string)@file_get_contents($dirF . '/manifest.json'), true);
+            $filasF = [];
+            foreach ((array)(is_array($manF) ? ($manF['archivos'] ?? []) : []) as $ff) {
+                if (is_array($ff) && (string)($ff['grupo_id'] ?? '') === '0000FF') { $filasF[] = $ff; }
+            }
+            check('endpoint (`fotos`=JSON): registra 1 fila con origen subida',
+                count($filasF) === 1
+                && (string)($filasF[0]['origen'] ?? '') === 'subida'
+                && preg_match('#^subidas/#', (string)($filasF[0]['file'] ?? '')) === 1,
+                'filas=' . count($filasF));
+            check('el Motor recibe una RUTA real (el PDF no depende de una copia)',
+                count($filasF) === 1 && is_file($dirF . '/' . (string)$filasF[0]['file']));
+            break;
         case 'overrides':
             // Spec 015 (T016/T018): el JSON de overrides resueltos entra en la
             // clave del pool. Sin overrides la cadena vieja queda INTACTA
@@ -2228,6 +2267,66 @@ switch ($fase) {
         $_REQUEST = $_POST;
         $GLOBALS['test_pool_item'] = $draft_p;
         $p->handle_pool_png(); // exit en wp_send_json_*
+        break;
+
+    case 'fotos':
+        // Spec 029 (D1/D2/D3): registro de las fotos del comprador SIN copiarlas
+        // al pool (`subidas/` es el original y el Motor lo lee de ahi).
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $motor_ft = $p->motor_para_tests();
+        $sesion_ft = new PMU_Sesion($motor_ft);
+        $sid_ft = 'test-8f2a';
+        $draft_ft = $sesion_ft->crear_draft($sid_ft, ['muestra']);
+        $_COOKIE[PMU_Sesion::COOKIE] = $sid_ft;
+        $pngFt = sys_get_temp_dir() . '/pd_puente_fotos_' . getmypid() . '.png';
+        \ExtractCorel\Engine\PngWriter::write($pngFt, 120, 90);
+        $bytesFt = (string)file_get_contents($pngFt);
+        $subA = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt);
+        $subB = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt);
+        // 1) Uniforme: 3 instancias con la MISMA foto -> 1 fila.
+        $unif = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF',
+            [$subA['id'], $subA['id'], $subA['id']]);
+        $GLOBALS['fotos_unif_filas'] = count($unif);
+        $GLOBALS['fotos_unif_file'] = isset($unif[0]['file']) ? (string)$unif[0]['file'] : '';
+        $imgFt = $motor_ft->dir_sesion_item_img($sid_ft, $draft_ft, false);
+        $GLOBALS['fotos_img_archivos'] = is_dir($imgFt) ? count((array)glob($imgFt . '/*')) : 0;
+        $GLOBALS['fotos_ref_existe'] = $GLOBALS['fotos_unif_file'] !== '' && is_file(
+            $sesion_ft->dir_subidas($sid_ft, $draft_ft, false) . DIRECTORY_SEPARATOR
+            . basename($GLOBALS['fotos_unif_file'])
+        );
+        // 2) Mixto: 2 fotos distintas en 3 instancias -> una fila por instancia.
+        $mixto = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF',
+            [$subA['id'], $subB['id'], $subA['id']]);
+        $GLOBALS['fotos_mixto_indices'] = array_map(function ($f) {
+            return (int)$f['indice'];
+        }, $mixto);
+        // 3) Un id desconocido se omite (esa instancia queda transparente).
+        $desc = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF',
+            [$subA['id'], 'no-existe-999']);
+        $GLOBALS['fotos_desconocido_filas'] = count($desc);
+        // 4) Re-registrar el grupo reemplaza (no acumula filas).
+        $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', [$subA['id']]);
+        $re = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', [$subA['id']]);
+        $GLOBALS['fotos_re_filas'] = count($re);
+        // 4b) Un grupo VACIADO tiene que borrar sus filas (si no, el PDF seguiria
+        // usando la foto que el comprador saco).
+        $vaciado = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', []);
+        $GLOBALS['fotos_vaciado_filas'] = count($vaciado);
+        $GLOBALS['test_item_fotos'] = $draft_ft;
+        // 5) Endpoint real: registro uniforme por POST (sin bytes).
+        $_POST = [
+            'action' => 'personalizador_pdf_pool',
+            'item_key' => $draft_ft,
+            'pdf' => 'muestra',
+            'grupo' => '0000FF',
+            'fotos' => json_encode([$subA['id'], $subA['id'], $subA['id']]),
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_pool_png(); // exit en wp_send_json_* -> checks del shutdown
         break;
 
     case 'overrides':

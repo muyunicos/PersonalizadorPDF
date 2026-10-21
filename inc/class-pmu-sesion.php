@@ -302,9 +302,14 @@ class PMU_Sesion
      * Spec 026 (D6/D9): la **extension sale de la FIRMA** de los bytes (no del
      * nombre): `{pdf}-{id}-{n}.{ext}`. Los items viejos (PNG) se siguen leyendo
      * igual: el Motor acepta ambos formatos.
+     *
+     * Spec 029 (D3): el pool guarda **solo lo que se genera** (el texto). `$hash`
+     * es la clave del render parcial y `$indice` la POSICION de la instancia
+     * (0-based) que usa el Motor; sin `$indice` se conserva el numero de archivo
+     * como indice.
      * Devuelve {indice, file, hash}.
      */
-    public function guardar_imagen($sid, $item_key, $pdf, $grupo, $bytes, $hash = null)
+    public function guardar_imagen($sid, $item_key, $pdf, $grupo, $bytes, $hash = null, $indice = null)
     {
         $pdf = $this->motor->nombre_seguro($pdf, 'sesion:guardar_imagen');
         $grupo = strtoupper((string)$grupo);
@@ -325,7 +330,7 @@ class PMU_Sesion
         $bytes = $img['bytes'];
         $ext = $img['ext'];
         $fila = null;
-        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $pdf, $grupo, $bytes, $ext, $hash, &$fila) {
+        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $pdf, $grupo, $bytes, $ext, $hash, $indice, &$fila) {
             $imgDir = $this->motor->dir_sesion_item_img($sid, $item_key, true);
             $n = $this->siguiente_n($imgDir, $pdf, $grupo);
             $file = 'img/' . $pdf . '-' . $grupo . '-' . $n . '.' . $ext;
@@ -335,16 +340,112 @@ class PMU_Sesion
             if (!isset($manifest['archivos']) || !is_array($manifest['archivos'])) {
                 $manifest['archivos'] = [];
             }
-            $fila = [
-                'pdf' => $pdf,
-                'grupo_id' => $grupo,
-                'indice' => $n - 1,
-                'file' => $file,
-                'hash' => (string)($hash !== null ? $hash : sha1($bytes)),
-            ];
+            $fila = $this->fila_archivo(
+                $pdf,
+                $grupo,
+                ($indice === null) ? ($n - 1) : (int)$indice,
+                $file,
+                'texto',
+                (string)($hash !== null ? $hash : sha1($bytes))
+            );
             $manifest['archivos'][] = $fila;
         });
         return ['indice' => $fila['indice'], 'file' => $fila['file'], 'hash' => $fila['hash']];
+    }
+
+    /**
+     * Una fila de `manifest.archivos[]` (un solo lugar para su forma).
+     *
+     * `origen` (spec 029 D4) distingue lo que el sistema **genero** (`texto`,
+     * vive en el pool `img/`) de lo que el comprador **subio** (`subida`,
+     * referenciada desde `subidas/`: se registra, no se copia).
+     */
+    private function fila_archivo($pdf, $grupo, $indice, $file, $origen, $hash = '')
+    {
+        return [
+            'pdf' => (string)$pdf,
+            'grupo_id' => (string)$grupo,
+            'indice' => max(0, (int)$indice),
+            'file' => (string)$file,
+            'hash' => (string)$hash,
+            'origen' => (string)$origen,
+        ];
+    }
+
+    /**
+     * Spec 029 (D1): registra las FOTOS del comprador de un grupo **sin
+     * copiarlas**. La fila apunta al archivo que ya subio (`subidas/{id}.{ext}`):
+     * esa foto **es** la imagen compuesta (el selector la rasteriza al lienzo,
+     * spec 028 D11), asi que copiarla al pool solo gastaba red, disco y una
+     * recompresion WebP→WebP.
+     *
+     * Los ids se validan contra `manifest.subidas[]` (nunca se arma una ruta con
+     * lo que manda el cliente): un id desconocido se **omite** y esa instancia
+     * queda transparente (no se inventa nada).
+     *
+     * **Una fila cuando alcanza**: si TODAS las instancias usan la misma foto se
+     * escribe UNA fila con `indice` 0 (el Motor la replica a todo el grupo:
+     * `item_generar_pdfs` pasa un escalar). Si difieren, una fila por instancia
+     * con `indice` = indice de instancia (0-based), que es la posicion que lee el
+     * Motor. Antes el indice era el **numero de archivo** y, como las instancias
+     * suben en paralelo, el orden podia no coincidir con el de las instancias.
+     *
+     * Reemplaza las filas del grupo (idempotente): re-registrar no acumula.
+     *
+     * @param array $ids ids de subida POR INSTANCIA ('' = instancia sin valor)
+     * @return array filas escritas
+     */
+    public function registrar_fotos($sid, $item_key, $pdf, $grupo, array $ids)
+    {
+        $pdf = $this->motor->nombre_seguro($pdf, 'sesion:registrar_fotos');
+        $grupo = strtoupper((string)$grupo);
+        if (!preg_match('/^[0-9A-F]{6}$/', $grupo)) {
+            throw new Exception('motor:sesion:grupo:invalido');
+        }
+        $manifest = $this->leer_manifest($sid, $item_key);
+        $porId = [];
+        foreach ((array)(is_array($manifest) ? ($manifest['subidas'] ?? []) : []) as $fila) {
+            if (!is_array($fila) || !isset($fila['id'], $fila['file'])) {
+                continue;
+            }
+            $file = (string)$fila['file'];
+            // Defensa: la fila del manifest apunta a `subidas/` (D14).
+            if (preg_match('#^subidas/[A-Za-z0-9._-]+$#', $file) === 1) {
+                $porId[(string)$fila['id']] = $file;
+            }
+        }
+        $porInstancia = [];
+        foreach (array_values($ids) as $i => $id) {
+            $id = (string)$id;
+            if ($id !== '' && isset($porId[$id])) {
+                $porInstancia[(int)$i] = $porId[$id];
+            }
+        }
+        $out = [];
+        if ($porInstancia) {
+            $unicos = array_values(array_unique($porInstancia));
+            if (count($unicos) === 1) {
+                $out[] = $this->fila_archivo($pdf, $grupo, 0, $unicos[0], 'subida');
+            } else {
+                ksort($porInstancia);
+                foreach ($porInstancia as $i => $file) {
+                    $out[] = $this->fila_archivo($pdf, $grupo, (int)$i, $file, 'subida');
+                }
+            }
+        }
+        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($pdf, $grupo, $out) {
+            $resto = [];
+            foreach ((array)($manifest['archivos'] ?? []) as $fila) {
+                if (is_array($fila)
+                    && (string)($fila['pdf'] ?? '') === $pdf
+                    && strtoupper((string)($fila['grupo_id'] ?? '')) === $grupo) {
+                    continue;   // el contenido del grupo se reemplaza entero
+                }
+                $resto[] = $fila;
+            }
+            $manifest['archivos'] = array_merge($resto, $out);
+        });
+        return $out;
     }
 
     /**

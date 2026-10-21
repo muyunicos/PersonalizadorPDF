@@ -452,6 +452,9 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   (**q0.85**: la foto del comprador es unseen, el ahorro es ~10x) y **el alfa se preserva**;
   sin GD se guarda el original tal cual. La carpeta viaja sola al pedido porque las tres mudanzas
   mueven el arbol entero del item.
+  **Spec 029 (D1)**: la foto **no se copia** al pool: la fila de `archivos[]` la **referencia**
+  (`subidas/{id}.{ext}`, `origen: 'subida'`), asi que el cliente no la descarga, no la rasteriza
+  y no la vuelve a subir (un POST por grupo, solo ids).
 - Catálogo global de campos (formato v1, ya migrado a v3): ver la entrada de arriba.
   `id` auto no reutilizable, `titulo_cliente`, `tipo`, `array`, valor dual
   `valor`(sistema)/`cliente`(etiqueta); detalle en `specs/004.../contracts/campos.md`).
@@ -472,7 +475,9 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   (`img/{pdf}-{id}-{n}.{ext}`, numerados si hay varios por `id`; la extension sale de
   la FIRMA de los bytes — **spec 026**: `webp` tras la conversion del servidor, `png`
   si no hay GD; los items viejos conservan sus `.png` y se siguen leyendo; sin deduplicacion global
-  entre items) + `mockup-{id}.webp` congelados 300x300; `draft-{uuid}` →
+  entre items; **spec 029 (D2)**: el pool guarda **solo lo que se genera** —el texto— y **una
+  fila por grupo** cuando el contenido es uniforme, con `indice` = **posicion de instancia**, D3)
+  + `mockup-{id}.webp` congelados 300x300; `draft-{uuid}` →
   `cart_item_key`; mockup obligatorio en ficha antes del add-to-cart, salvo
   `config.json:preview_omisible=true`); `preview_estado` en meta (`ok`|`sin_vista`|`omisible`);
   canonico comprador = meta del item Woo + espejo `tmp/sesion-{sid}/{item_key}/` para el Motor; staging en
@@ -712,8 +717,21 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   sigue siendo el PDF**; sólo baja la resolución, que es la que el PDF podría mostrar. Con una foto
   **grande** `k = 1` (el caso típico no cambia). La **Escala multiplica la caja**: acercar **baja**
   `k`. Caso real: 400×300 en 1000×1000 → Cubrir **300×300**, Encajar **400×400**, Estirar
-  **400×400** (antes 1000×1000: ~11x de peso de más). El pool (`rasterizar`) recibe un PNG del
-  mismo aspecto y ≤ el hueco, así que lo dibuja **1:1 sin remuestrear**.
+  **400×400** (antes 1000×1000: ~11x de peso de más).
+- ✅ **Spec 029 `pool-sin-copias` (implementada 2026-10-20, v4.20.0)**: **el pool guarda solo lo
+  que se GENERA** (el texto de TextMuy) y **las fotos del comprador se referencian**, no se
+  copian. Antes, con 1 grupo × 100 instancias y una foto + un texto, la vista previa creaba
+  **200 archivos**: `PURO.conciliarGrupo()` devuelve una copia del valor único **por instancia**,
+  y cada entrada se bajaba, se rasterizaba al hueco y se subía (el texto, además, se renderizaba
+  100 veces). Ahora: **1 POST por grupo** con los ids por instancia (`registrar_fotos`, **sin
+  bytes**) y la fila apunta a `subidas/{id}.{ext}` (`origen: 'subida'`); el texto uniforme se
+  renderiza y se sube **una vez** (`dedupPendientes`, `repite`) con `indice` 0 (el Motor la
+  replica a todo el grupo, como ya hacía `item_generar_pdfs` con una sola fila). El `indice` pasa
+  a ser la **posición de instancia** (antes era el número de archivo: con instancias subidas en
+  paralelo el PDF podía asignar la foto equivocada). Sin `rasterizar` ya no hay recompresión
+  WebP→WebP ni copias: **200 archivos → 2** en el caso real. **El Motor y el formato del pedido
+  no cambian** (el árbol del item viaja entero, así que `subidas/` está en `orders/`).
+  Puerta: fase `fotos` del arnés (8 checks) + 3 checks en `selector-contrato`.
 - ✅ **Spec 027 `transparencia-campo` (implementada 2026-10-20, v4.17.0)**: **la politica de
   transparencia la declara el `campo.js`** (no el comprador). La ranura acepta `transp: 'si'|'no'`
   (**ausente = comportamiento actual**: el cliente decide con el boton "damero"). Con `transp:'no'`
@@ -814,7 +832,7 @@ php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
                               # linea | campos | config | tienda | pedido |
                               # migracion | nonce [cap] | validez | validez_admin |
                               # validez_admin_mal | ficha* | vista_previa* |
-                              # carrito | pool* | sesion | conciliacion |
+                              # carrito | pool* | fotos | sesion | conciliacion |
                               # completados | mockups* | mockup_capas |
                              # mockup_preview | mockup_foto |
                               # mockup_foto_baja | mockup_foto_ajax |
@@ -1016,3 +1034,6 @@ el numero a mano. El stub `get_file_data` del arnes esta en `tests/texto_puente.
 | El WebP guardado pesa **mucho mas de lo que la foto justifica** (p. ej. 1 MB por una foto de 400x300 en un hueco de 1000x1000) y llega ampliado/borroso | El PNG media el **lienzo entero** sin mirar la resolucion de la foto: el navegador **inventaba** pixeles (hasta 3,3x en ese caso) y el archivo crecia con el area | **Spec 028 D11**: `escalaSalida()` acota el PNG a `round(W·k) x round(H·k)` con `k = min(1, max(iw,ih)/max(caja))` — uniforme, para conservar el aspecto del lienzo (y el encuadre). El caso tipico (foto grande) queda en `k = 1`, sin cambios. Lo cubre `selector-contrato` F2b (propiedades + los casos 300x300 / 400x400 / 400x400) |
 | Los 3 modos "no hacen lo que dicen" (**Cubrir deja huecos**) o el PDF sale **corrido** respecto de la vista previa | La spec 025 redefinio los modos con palabras ambiguas ("Rellenar" = recortar al aspecto **sin ampliar**) y el PNG se generaba como `min(caja, lienzo)` pero **centrado en el LIENZO**: con un lienzo no cuadrado la ventana y el centro no coincidian, y con una foto mas chica que el marco la caja no lo tapaba | El contrato vigente es la **tabla de la spec 028** (`specs/028-modos-lienzo/contracts/modos.md`): **Cubrir**=`cover`, **Encajar**=`contain`, **Estirar**=`fill`, y **el PNG mide SIEMPRE el lienzo** (`W x H` = el hueco), asi que el Motor encaja 1:1. Los modos se verifican **por propiedad** (`selector-contrato` F2b), no con ejemplos: fue justamente un banco de ejemplos lo que fijo la lectura equivocada |
 | La politica `transp` del campo **se ignora en la ficha** (el comprador ve el boton "damero" igual que siempre) | `PURO.normalizarRanura()` (`assets/tienda.js`) es el normalizador de la **ficha** y **no devolvia `transp`**: `CargadorPMU` la recibia vacia y el selector caia en el comportamiento del cliente. La consola no lo delataba porque su stub (`admin.js`) pasa las ranuras crudas | Devolver `transp` desde `PURO.normalizarRanura` (fix de la spec 028). Lo atrapa `selector-contrato` F2b ("normalizarRanura NO puede perder `transp`"). **Clase de bug**: hay **dos** normalizadores de la misma ranura (el de la ficha en `tienda.js` y el del cargador en `cargador-pmu.js`): una clave nueva hay que agregarla en **los dos** |
+| La vista previa genera **cientos de archivos** en `{item}/img/` y son **copias** de `subidas/` | `PURO.conciliarGrupo()` devuelve una copia del valor unico **por instancia** del grupo y el cliente subia **una imagen por instancia** (bajando y rasterizando la subida cada vez); el texto se renderizaba tambien una vez por instancia | **Spec 029**: las fotos se **registran** (`registrar_fotos` → la fila apunta a `subidas/{id}.{ext}`, `origen: 'subida'`) y el texto uniforme se colapsa a **una** entrada (`dedupPendientes`). El Motor **ya replicaba** una sola fila a todo el grupo (`item_generar_pdfs` pasa escalar): no hacian falta N filas |
+| El PDF asigna **la foto de otra instancia** (dos fotos en el mismo grupo salen cambiadas) | La fila guardaba `indice` = **numero de archivo** (`siguiente_n`, `$n - 1`) y las instancias 2..N de un grupo suben **en paralelo**: el orden de las filas no era el de las instancias | **Spec 029 (D3)**: `indice` = **posicion de instancia** y lo manda el cliente (`indice` en el POST del pool). Lo cubre la fase `fotos` (el caso mixto exige `[0, 1, 2]`) |
+| Un grupo del que se **borran todas las fotos** sigue imprimiendo la foto vieja | El cliente no llamaba a registrar cuando no habia fotos: las filas viejas quedaban en el manifest | **Spec 029**: se registran **todos** los grupos de imagen (aunque vengan vacios) y el servidor **reemplaza** las filas del grupo (vaciarlo las borra). Lo cubre la fase `fotos` ("un grupo vaciado borra sus filas") |
