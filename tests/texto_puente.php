@@ -655,6 +655,21 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         case 'pipeline_pc':
         case 'pipeline_pc_sin_predeterminados':
         case 'pipeline_pc_invalida':
+        case 'pipeline_pc_guardar_predeterminados':
+            if ($fase === 'pipeline_pc_guardar_predeterminados') {
+                $remota = (array)($GLOBALS['test_remote_post'] ?? []);
+                $opciones = json_decode((string)($remota['args']['body'] ?? ''), true);
+                check('predeterminados PC: JSON success', is_array($json) && $json['success'] === true);
+                check('predeterminados PC: endpoint autenticado y sin imagen',
+                    ($remota['url'] ?? '') === 'https://ai.loc.ar/preferencias'
+                    && ($remota['args']['headers']['Content-Type'] ?? '') === 'application/json; charset=utf-8'
+                    && ($remota['args']['headers']['X-PMU-Token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef'
+                    && (int)($remota['args']['timeout'] ?? 0) === 30
+                    && is_array($opciones)
+                    && isset($opciones['escalado'], $opciones['quitar_fondo'])
+                    && !isset($opciones['tareas']));
+                break;
+            }
             if ($fase === 'pipeline_pc_invalida') {
                 $remota = (array)($GLOBALS['test_remote_post'] ?? []);
                 check('cadena IA invalida: JSON rechazado', is_array($json) && $json['success'] === false);
@@ -3643,6 +3658,41 @@ switch ($fase) {
         $p->handle_ia_config_guardar();
         break;
 
+    case 'pipeline_pc_guardar_predeterminados':
+        preparar_entorno($testBase, $base);
+        $GLOBALS['test_options']['personalizador_pdf_ia_config'] = [
+            'url' => 'https://ai.loc.ar',
+            'token' => 'test-pmu-ai-token-0123456789abcdef0123456789abcdef',
+        ];
+        $_POST = [
+            'action' => 'personalizador_pdf_guardar_predeterminados_pc',
+            '_wpnonce' => 'nonce',
+            'pipeline' => json_encode([
+                'escalado' => [
+                    'modo' => 'ilustracion',
+                    'ancho' => 1500,
+                    'alto' => 1500,
+                    'alfa' => 'anime',
+                ],
+                'quitar_fondo' => [
+                    'motor' => 'rembg',
+                    'modelo' => 'silueta',
+                    'post_process_mask' => true,
+                    'alpha_matting' => false,
+                    'alpha_matting_foreground_threshold' => 240,
+                    'alpha_matting_background_threshold' => 10,
+                    'alpha_matting_erode_size' => 10,
+                ],
+            ]),
+        ];
+        $_REQUEST = $_POST;
+        $GLOBALS['test_remote_post_respuesta'] = [
+            'response' => ['code' => 200],
+            'body' => json_encode(['ok' => true, 'predeterminados' => ['modo' => 'ilustracion']]),
+        ];
+        $p->handle_guardar_predeterminados_pc();
+        break;
+
     case 'redimensionar_pc':
     case 'redimensionar_pc_anime':
     case 'pipeline_pc':
@@ -3670,10 +3720,12 @@ switch ($fase) {
                 : ($fase === 'pipeline_pc_sin_predeterminados'
                     ? '{"tareas":[{"tipo":"quitar_fondo"},{"tipo":"mejorar"}]}'
                 : json_encode([
-                    'modo' => 'ilustracion',
-                    'ancho' => 500,
-                    'alto' => 500,
-                    'alfa' => 'anime',
+                    'escalado' => [
+                        'modo' => 'ilustracion',
+                        'ancho' => 500,
+                        'alto' => 500,
+                        'alfa' => 'anime',
+                    ],
                     'quitar_fondo' => [
                         'motor' => 'rembg',
                         'modelo' => 'birefnet-general',

@@ -107,7 +107,7 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
     </p>
     <hr>
     <h3>Procesar una cadena de tareas en la PC</h3>
-    <p class="description">El JSON es la fuente de verdad al ejecutar. Los controles lo actualizan; puedes editarlo o pegarlo y las opciones omitidas usan los predeterminados del servicio local. Automatico detecta y usa mejora general; Foto e Ilustracion eligen la mejora por defecto.</p>
+    <p class="description">El JSON es la fuente de verdad al ejecutar. Los controles lo actualizan; puedes editarlo o pegarlo y las opciones omitidas usan los predeterminados guardados en el servicio local. Solo «Guardar opciones por defecto» modifica esos valores; ejecutar no los cambia. Automatico detecta y usa mejora general; Foto e Ilustracion eligen la mejora por defecto.</p>
     <p class="description">La primera prueba de cada modelo puede tardar mas al cargarlo. Usa solo imagenes de prueba no sensibles.</p>
     <p class="description">Si una tarea declara opciones propias, esas opciones prevalecen sobre las globales.</p>
     <p>
@@ -180,10 +180,12 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
     <p>
         <label for="ec-redimensionar-pc-json">Tareas en orden (JSON)</label><br>
         <textarea id="ec-redimensionar-pc-json" class="large-text code" rows="15">{
-  "modo": "automatico",
-  "ancho": 500,
-  "alto": 500,
-  "alfa": "lanczos",
+  "escalado": {
+    "modo": "automatico",
+    "ancho": 500,
+    "alto": 500,
+    "alfa": "lanczos"
+  },
   "quitar_fondo": {
     "motor": "birefnet",
     "modelo": "birefnet-lite-2k",
@@ -201,12 +203,16 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
         <span class="description">Cada tarea requiere "tipo". Las opciones de la tarea prevalecen sobre las globales; las opciones globales omitidas usan los predeterminados del servicio. Tipos: detectar, quitar_fondo y mejorar.</span>
     </p>
     <p>
+        <button type="button" class="button ec-redimensionar-pc-guardar"
+                data-nonce="<?php echo esc_attr(wp_create_nonce('personalizador_pdf_guardar_predeterminados_pc')); ?>">
+            Guardar opciones por defecto
+        </button>
         <button type="button" class="button ec-redimensionar-pc-probar"
                 data-nonce="<?php echo esc_attr(wp_create_nonce('personalizador_pdf_redimensionar_pc')); ?>">
             Ejecutar cadena en la PC
         </button>
         <span class="ec-redimensionar-pc-estado" aria-live="polite"></span>
     </p>
-    <p class="description ec-redimensionar-pc-preferencias" aria-live="polite">El JSON se guarda en este navegador y las opciones globales quedan como predeterminados del servicio al ejecutar. La imagen no se guarda.</p>
+    <p class="description ec-redimensionar-pc-preferencias" aria-live="polite">El JSON se guarda en este navegador. Usa «Guardar opciones por defecto» para persistir los valores globales en la PC; «Ejecutar cadena» solo procesa la imagen. La imagen no se guarda.</p>
     <p class="ec-redimensionar-pc-descarga" hidden></p>
 </div>

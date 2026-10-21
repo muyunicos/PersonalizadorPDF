@@ -1549,7 +1549,7 @@ jQuery(function ($) {
         var $estado = $('.ec-redimensionar-pc-preferencias');
         if (!$json.length || !$estado.length) { return null; }
 
-        function leer() {
+        function leer(requerirTareas) {
             var texto = $json.val();
             if (typeof texto !== 'string' || texto.length > 8192) {
                 throw new Error('El JSON de la cadena esta vacio o supera 8 KB.');
@@ -1558,15 +1558,38 @@ jQuery(function ($) {
             if (!configuracion || typeof configuracion !== 'object' || Array.isArray(configuracion)) {
                 throw new Error('La configuracion debe ser un objeto JSON.');
             }
-            if (!Array.isArray(configuracion.tareas) || !configuracion.tareas.length) {
-                throw new Error('El JSON debe incluir una lista "tareas" no vacia.');
-            }
-            configuracion.tareas.forEach(function (tarea) {
-                if (!tarea || typeof tarea !== 'object' || Array.isArray(tarea)
-                    || typeof tarea.tipo !== 'string' || !tarea.tipo) {
-                    throw new Error('Cada tarea debe ser un objeto con "tipo".');
+            if (!configuracion.escalado) {
+                var antiguo = {};
+                ['modo', 'ancho', 'alto', 'alfa'].forEach(function (claveConfig) {
+                    if (Object.prototype.hasOwnProperty.call(configuracion, claveConfig)) {
+                        antiguo[claveConfig] = configuracion[claveConfig];
+                    }
+                });
+                if (Object.keys(antiguo).length) {
+                    configuracion.escalado = antiguo;
+                    delete configuracion.modo;
+                    delete configuracion.ancho;
+                    delete configuracion.alto;
+                    delete configuracion.alfa;
                 }
-            });
+            }
+            if (typeof configuracion.escalado === 'undefined' || configuracion.escalado === null) {
+                configuracion.escalado = {};
+            }
+            if (typeof configuracion.escalado !== 'object' || Array.isArray(configuracion.escalado)) {
+                throw new Error('"escalado" debe ser un objeto JSON.');
+            }
+            if (requerirTareas !== false) {
+                if (!Array.isArray(configuracion.tareas) || !configuracion.tareas.length) {
+                    throw new Error('El JSON debe incluir una lista "tareas" no vacia.');
+                }
+                configuracion.tareas.forEach(function (tarea) {
+                    if (!tarea || typeof tarea !== 'object' || Array.isArray(tarea)
+                        || typeof tarea.tipo !== 'string' || !tarea.tipo) {
+                        throw new Error('Cada tarea debe ser un objeto con "tipo".');
+                    }
+                });
+            }
             return configuracion;
         }
 
@@ -1584,9 +1607,10 @@ jQuery(function ($) {
                 ancho: 'ec-redimensionar-pc-ancho',
                 alto: 'ec-redimensionar-pc-alto'
             };
+            var escalado = configuracion.escalado || {};
             Object.keys(ids).forEach(function (claveConfig) {
-                if (Object.prototype.hasOwnProperty.call(configuracion, claveConfig)) {
-                    $('#' + ids[claveConfig]).val(String(configuracion[claveConfig]));
+                if (Object.prototype.hasOwnProperty.call(escalado, claveConfig)) {
+                    $('#' + ids[claveConfig]).val(String(escalado[claveConfig]));
                 }
             });
             var fondo = configuracion.quitar_fondo;
@@ -1648,8 +1672,12 @@ jQuery(function ($) {
                 'ec-redimensionar-pc-alto': 'alto'
             };
             if (Object.prototype.hasOwnProperty.call(idsRaiz, id)) {
+                if (!configuracion.escalado || typeof configuracion.escalado !== 'object'
+                    || Array.isArray(configuracion.escalado)) {
+                    configuracion.escalado = {};
+                }
                 var valor = $('#' + id).val();
-                configuracion[idsRaiz[id]] = id === 'ec-redimensionar-pc-ancho'
+                configuracion.escalado[idsRaiz[id]] = id === 'ec-redimensionar-pc-ancho'
                     || id === 'ec-redimensionar-pc-alto' ? parseInt(valor, 10) : valor;
             } else {
                 var fondo = configuracion.quitar_fondo;
@@ -1692,6 +1720,7 @@ jQuery(function ($) {
                 var configuracion = leer();
                 aplicar(configuracion);
                 mostrarMotor($('#ec-redimensionar-pc-motor-fondo').val() || 'birefnet');
+                $json.val(JSON.stringify(configuracion, null, 2));
                 guardar($json.val());
             } catch (error) {
                 $estado.text((error && error.message) || 'El JSON aun no es valido.');
@@ -1742,6 +1771,33 @@ jQuery(function ($) {
         return {leer: leer};
     })();
 
+    $(document).on('click', '.ec-redimensionar-pc-guardar', function () {
+        var $btn = $(this).prop('disabled', true);
+        var $estado = $('.ec-redimensionar-pc-preferencias').removeClass('ec-ok ec-error');
+        var pipeline;
+        try {
+            if (!pipelinePc) { throw new Error('El editor JSON no esta disponible.'); }
+            pipelinePc.leer(false);
+            pipeline = $('#ec-redimensionar-pc-json').val();
+        } catch (error) {
+            $estado.addClass('ec-error').text((error && error.message) || 'La configuracion JSON no es valida.');
+            $btn.prop('disabled', false);
+            return;
+        }
+        $estado.text('Guardando opciones predeterminadas en la PC...');
+        pmuPost('personalizador_pdf_guardar_predeterminados_pc', {
+            pipeline: pipeline
+        }, $(this).data('nonce') || '')
+            .then(function (res) {
+                var data = res.data || {};
+                $estado.addClass('ec-ok').text(data.detalle || 'Opciones predeterminadas guardadas en la PC.');
+            })
+            .catch(function (error) {
+                $estado.addClass('ec-error').text((error && error.message) || 'No se pudieron guardar las opciones.');
+            })
+            .then(function () { $btn.prop('disabled', false); });
+    });
+
     $(document).on('click', '.ec-redimensionar-pc-probar', function () {
         var $btn = $(this).prop('disabled', true);
         var $estado = $('.ec-redimensionar-pc-estado').removeClass('ec-ok ec-error');
@@ -1779,10 +1835,7 @@ jQuery(function ($) {
                     .attr('href', URL.createObjectURL(blobDesdeBase64(d.imagen_base64)))
                     .attr('download', d.nombre || 'prueba-pc-pipeline.png');
                 $descarga.append(enlace).removeAttr('hidden');
-                $estado.addClass('ec-ok').text(
-                    (d.detalle || 'Cadena completada; PNG recibido desde la PC.')
-                    + ' Predeterminados guardados en la PC.'
-                );
+                $estado.addClass('ec-ok').text(d.detalle || 'Cadena completada; PNG recibido desde la PC.');
             })
             .catch(function (err) {
                 $estado.addClass('ec-error').text((err && err.message) || 'No se pudo completar la cadena de procesamiento.');

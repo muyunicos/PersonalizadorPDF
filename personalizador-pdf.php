@@ -87,6 +87,7 @@ class Personalizador_PDF_Plugin
         // Prueba aislada Hostinger -> Cloudflare Tunnel -> PC local.
         add_action('admin_post_personalizador_pdf_conexion_pc', [$this, 'handle_conexion_pc']);
         add_action('admin_post_personalizador_pdf_redimensionar_pc', [$this, 'handle_redimensionar_pc']);
+        add_action('admin_post_personalizador_pdf_guardar_predeterminados_pc', [$this, 'handle_guardar_predeterminados_pc']);
         add_action('admin_post_personalizador_pdf_ia_config', [$this, 'handle_ia_config_guardar']);
 
         // Spec 004 (T012): panel del comprador en la ficha del producto.
@@ -2879,6 +2880,29 @@ class Personalizador_PDF_Plugin
             $this->responder(false, [], 'La configuracion de la cadena esta vacia o supera 8 KB.');
         }
         $configuracion = json_decode($entrada, true);
+        if (is_array($configuracion) && array_key_exists('escalado', $configuracion)) {
+            if (array_diff(array_keys($configuracion), ['escalado', 'quitar_fondo', 'tareas'])
+                || !is_array($configuracion['escalado'])) {
+                $this->responder(false, [], 'La configuracion anidada debe contener escalado, quitar_fondo y tareas.');
+            }
+            $anidada = $configuracion;
+            $escalado = $anidada['escalado'];
+            if (array_diff(array_keys($escalado), ['modo', 'ancho', 'alto', 'alfa'])) {
+                $this->responder(false, [], 'escalado contiene opciones desconocidas.');
+            }
+            $configuracion = $escalado;
+            if (array_key_exists('quitar_fondo', $anidada)) {
+                $configuracion['quitar_fondo'] = $anidada['quitar_fondo'];
+            }
+            if (array_key_exists('tareas', $anidada)) {
+                $configuracion['tareas'] = $anidada['tareas'];
+            }
+            $entrada_normalizada = wp_json_encode($configuracion);
+            if (!is_string($entrada_normalizada)) {
+                $this->responder(false, [], 'No se pudo preparar la configuracion anidada.');
+            }
+            return $this->validar_pipeline_pc($entrada_normalizada);
+        }
         $claves_raiz = ['modo', 'tareas', 'predeterminados', 'ancho', 'alto', 'alfa', 'quitar_fondo'];
         if (!is_array($configuracion) || array_diff(array_keys($configuracion), $claves_raiz)) {
             $this->responder(false, [], 'La configuracion de la cadena contiene opciones desconocidas.');
@@ -3359,6 +3383,74 @@ class Personalizador_PDF_Plugin
             'imagen_base64' => base64_encode($salida),
             'nombre' => $nombreSalida,
             'detalle' => $detalle,
+        ]);
+    }
+
+    /** Guarda explicitamente las opciones predeterminadas del servicio local. */
+    public function handle_guardar_predeterminados_pc()
+    {
+        $this->seguridad('personalizador_pdf_guardar_predeterminados_pc');
+        $config = $this->ia_config();
+        if ($config['token'] === '') {
+            $this->responder(false, [], 'Configura el token del servicio IA antes de guardar opciones.');
+        }
+        $entrada = (string)wp_unslash($_POST['pipeline'] ?? '');
+        $documento = json_decode($entrada, true);
+        if (!is_array($documento)
+            || (array_key_exists('escalado', $documento) && !is_array($documento['escalado']))) {
+            $this->responder(false, [], 'El JSON de opciones predeterminadas debe ser un objeto valido.');
+        }
+        $documento_validar = array_intersect_key(
+            $documento,
+            array_fill_keys(['escalado', 'quitar_fondo'], true)
+        );
+        $documento_validar['tareas'] = [['tipo' => 'detectar']];
+        $entrada_validar = wp_json_encode($documento_validar);
+        if (!is_string($entrada_validar)) {
+            $this->responder(false, [], 'No se pudo validar el JSON de opciones predeterminadas.');
+        }
+        $this->validar_pipeline_pc($entrada_validar);
+        $opciones = [];
+        if (isset($documento['escalado'])) {
+            $opciones['escalado'] = $documento['escalado'];
+        }
+        if (isset($documento['quitar_fondo'])) {
+            $opciones['quitar_fondo'] = $documento['quitar_fondo'];
+        }
+        if ($opciones === [] || (($opciones['escalado'] ?? []) === [] && !isset($opciones['quitar_fondo']))) {
+            $this->responder(false, [], 'El JSON no contiene opciones globales para guardar.');
+        }
+        $cuerpo = wp_json_encode($opciones);
+        if (!is_string($cuerpo)) {
+            $this->responder(false, [], 'No se pudieron preparar las opciones predeterminadas.');
+        }
+        $respuesta = wp_remote_post($config['url'] . '/preferencias', [
+            'timeout' => 30,
+            'redirection' => 0,
+            'headers' => [
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json; charset=utf-8',
+                'X-PMU-Token' => $config['token'],
+            ],
+            'body' => $cuerpo,
+            'limit_response_size' => 16384,
+        ]);
+        if (is_wp_error($respuesta)) {
+            $this->responder(false, [], 'No se pudieron guardar las opciones en la PC: ' . $respuesta->get_error_message());
+        }
+        $codigo = (int)wp_remote_retrieve_response_code($respuesta);
+        $resultado = json_decode((string)wp_remote_retrieve_body($respuesta), true);
+        if ($codigo !== 200 || !is_array($resultado) || ($resultado['ok'] ?? false) !== true) {
+            $detalle = is_array($resultado)
+                ? sanitize_text_field((string)($resultado['error'] ?? ''))
+                : '';
+            $this->responder(false, [], $detalle !== ''
+                ? 'La PC rechazo las opciones predeterminadas: ' . $detalle
+                : 'La PC no confirmo el guardado de las opciones predeterminadas (HTTP ' . $codigo . ').');
+        }
+        $this->responder(true, [
+            'detalle' => 'Opciones predeterminadas guardadas en la PC.',
+            'predeterminados' => (array)($resultado['predeterminados'] ?? []),
         ]);
     }
 
