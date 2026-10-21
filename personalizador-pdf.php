@@ -2960,11 +2960,21 @@ class Personalizador_PDF_Plugin
                 }
             } elseif (in_array($tipo, ['mejorar', 'quitar_fondo'], true)) {
                 $nombre = $tipo === 'mejorar' ? 'Mejora' : 'Eliminacion de fondo';
-                $partes[] = $estado === 'omitida' ? $nombre . ' omitida' : $nombre . ' aplicada';
+                if ($estado === 'omitida') {
+                    $partes[] = $nombre . ' omitida';
+                } elseif ($estado === 'rechazada') {
+                    $partes[] = $nombre . ' rechazada; se conserva la imagen original';
+                } else {
+                    $partes[] = $nombre . ' aplicada';
+                }
             }
             if (!empty($tarea['advertencia'])) {
                 $partes[] = sanitize_text_field((string)$tarea['advertencia']);
             }
+        }
+        if (isset($resultado['duracion_ms']) && is_numeric($resultado['duracion_ms'])
+            && (float)$resultado['duracion_ms'] >= 0) {
+            $partes[] = 'Tiempo IA: ' . number_format((float)$resultado['duracion_ms'] / 1000, 1, ',', '.') . ' s';
         }
         return 'Cadena completada' . ($partes ? ': ' . implode('; ', $partes) : '')
             . '. Salida: ' . $ancho . ' x ' . $alto . ' px.';

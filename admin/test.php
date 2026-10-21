@@ -107,7 +107,7 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
     </p>
     <hr>
     <h3>Procesar una cadena de tareas en la PC</h3>
-    <p class="description">Puedes encadenar deteccion, mejora de calidad y eliminacion de fondo. En modo automatico, la mejora usa Real-ESRGAN Foto solo para fotografias no ambiguas; preserva graficas y no quita fondos salvo que agregues esa tarea.</p>
+    <p class="description">Puedes encadenar deteccion, mejora de calidad y eliminacion de fondo. En modo automatico, la deteccion es informativa y la mejora siempre usa Real-ESRGAN general, incluso con graficas o clasificaciones ambiguas. El fondo solo se quita si agregas esa tarea; si la mascara queda casi vacia, se conserva la imagen original.</p>
     <p class="description">La primera prueba de cada modelo puede tardar mas al cargarlo. Usa solo imagenes de prueba no sensibles.</p>
     <p>
         <input type="file" id="ec-redimensionar-pc-imagen" accept="image/png,image/jpeg,image/gif,image/webp">
@@ -115,7 +115,7 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
     <p>
         <label for="ec-redimensionar-pc-modo">Modo de procesamiento</label>
         <select id="ec-redimensionar-pc-modo">
-            <option value="automatico" selected>Automatico (detecta y aplica la regla segura)</option>
+            <option value="automatico" selected>Automatico (detecta y siempre mejora)</option>
             <option value="manual">Manual (ejecuta las tareas declaradas)</option>
         </select>
     </p>

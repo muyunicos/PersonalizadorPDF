@@ -678,8 +678,10 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                     && strlen((string)($remota['args']['body'] ?? '')) > 0);
                 check('cadena IA: PNG y resumen de resultado al navegador',
                     ($resultado['nombre'] ?? '') === 'prueba-pc-cadena-320x180.png'
-                    && strpos((string)($resultado['detalle'] ?? ''), 'Detectado: fotografia') !== false
-                    && strpos((string)($resultado['detalle'] ?? ''), 'Eliminacion de fondo aplicada') !== false
+                    && strpos((string)($resultado['detalle'] ?? ''), 'Detectado: grafica (ambiguo)') !== false
+                    && strpos((string)($resultado['detalle'] ?? ''), 'Mejora aplicada') !== false
+                    && strpos((string)($resultado['detalle'] ?? ''), 'Eliminacion de fondo rechazada; se conserva la imagen original') !== false
+                    && strpos((string)($resultado['detalle'] ?? ''), 'Tiempo IA: 12,3 s') !== false
                     && substr((string)base64_decode((string)($resultado['imagen_base64'] ?? ''), true), 0, 4) === "\x89PNG");
             } else {
                 check('redimensionar PC: envia al endpoint correcto',
@@ -3658,10 +3660,15 @@ switch ($fase) {
                 'x-pmu-resultado' => json_encode([
                     'modo' => 'automatico',
                     'tareas' => [
-                        ['tipo' => 'detectar', 'categoria' => 'fotografia', 'ambiguo' => false],
+                        ['tipo' => 'detectar', 'categoria' => 'grafica', 'ambiguo' => true],
                         ['tipo' => 'mejorar', 'estado' => 'aplicada'],
-                        ['tipo' => 'quitar_fondo', 'estado' => 'aplicada'],
+                        [
+                            'tipo' => 'quitar_fondo',
+                            'estado' => 'rechazada',
+                            'advertencia' => 'Mascara casi vacia; se conserva la imagen original.',
+                        ],
                     ],
+                    'duracion_ms' => 12345,
                 ]),
             ] : [],
         ];
