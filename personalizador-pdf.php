@@ -2879,10 +2879,22 @@ class Personalizador_PDF_Plugin
             $this->responder(false, [], 'La configuracion de la cadena esta vacia o supera 8 KB.');
         }
         $configuracion = json_decode($entrada, true);
-        if (!is_array($configuracion) || array_diff(array_keys($configuracion), ['modo', 'tareas'])) {
-            $this->responder(false, [], 'La configuracion de la cadena debe ser un objeto JSON con modo y tareas.');
+        $claves_raiz = ['modo', 'tareas', 'predeterminados', 'ancho', 'alto', 'alfa', 'quitar_fondo'];
+        if (!is_array($configuracion) || array_diff(array_keys($configuracion), $claves_raiz)) {
+            $this->responder(false, [], 'La configuracion de la cadena contiene opciones desconocidas.');
         }
-        $modo = sanitize_key((string)($configuracion['modo'] ?? ''));
+        if (array_key_exists('modo', $configuracion) && !is_string($configuracion['modo'])) {
+            $this->responder(false, [], 'modo debe ser una cadena.');
+        }
+        $modo_entrada = sanitize_key((string)($configuracion['modo'] ?? ''));
+        $formato_nuevo = array_intersect(
+            array_keys($configuracion),
+            ['ancho', 'alto', 'alfa', 'quitar_fondo']
+        ) !== [] || in_array($modo_entrada, ['foto', 'ilustracion'], true);
+        if (!in_array($modo_entrada, ['', 'manual', 'automatico', 'foto', 'ilustracion'], true)) {
+            $this->responder(false, [], 'El modo debe ser automatico, foto o ilustracion.');
+        }
+        $modo = $modo_entrada === 'automatico' ? 'automatico' : 'manual';
         $tareas = $configuracion['tareas'] ?? null;
         if (!in_array($modo, ['manual', 'automatico'], true)
             || !is_array($tareas) || count($tareas) < 1 || count($tareas) > 8
@@ -2890,10 +2902,152 @@ class Personalizador_PDF_Plugin
             $this->responder(false, [], 'El modo debe ser manual o automatico y la cadena debe tener entre 1 y 8 tareas.');
         }
 
+        $modelos_rembg = [
+            'isnet-general-use', 'isnet-anime', 'birefnet-general',
+            'birefnet-general-lite', 'birefnet-portrait', 'u2net', 'u2netp', 'silueta',
+        ];
+        $predeterminados = (array)($configuracion['predeterminados'] ?? []);
+        if (array_key_exists('modo', $configuracion) && in_array($modo_entrada, ['automatico', 'foto', 'ilustracion'], true)
+            && !array_key_exists('modelo', $predeterminados)) {
+            $predeterminados['modelo'] = [
+                'automatico' => 'automatico',
+                'foto' => 'foto',
+                'ilustracion' => 'anime',
+            ][$modo_entrada];
+        }
+        if (array_key_exists('alfa', $configuracion)) {
+            $predeterminados['alfa'] = $configuracion['alfa'];
+        }
+        if (array_key_exists('ancho', $configuracion) || array_key_exists('alto', $configuracion)) {
+            foreach (['ancho', 'alto'] as $clave_dimension) {
+                if (array_key_exists($clave_dimension, $configuracion)) {
+                    $predeterminados[$clave_dimension] = $configuracion[$clave_dimension];
+                }
+            }
+        }
+        if (array_key_exists('quitar_fondo', $configuracion)) {
+            $opciones_fondo = $configuracion['quitar_fondo'];
+            $claves_fondo = [
+                'motor', 'modelo', 'post_process_mask', 'alpha_matting',
+                'alpha_matting_foreground_threshold', 'alpha_matting_background_threshold',
+                'alpha_matting_erode_size',
+            ];
+            if (!is_array($opciones_fondo) || array_diff(array_keys($opciones_fondo), $claves_fondo)) {
+                $this->responder(false, [], 'quitar_fondo debe ser un objeto con opciones conocidas.');
+            }
+            foreach (['motor', 'modelo'] as $clave_fondo_texto) {
+                if (isset($opciones_fondo[$clave_fondo_texto]) && !is_string($opciones_fondo[$clave_fondo_texto])) {
+                    $this->responder(false, [], 'quitar_fondo.' . $clave_fondo_texto . ' debe ser una cadena.');
+                }
+            }
+            if (isset($opciones_fondo['motor'])) {
+                $predeterminados['motor_fondo'] = $opciones_fondo['motor'];
+            }
+            if (isset($opciones_fondo['modelo'])) {
+                $motor_fondo = $opciones_fondo['motor'] ?? $predeterminados['motor_fondo'] ?? 'birefnet';
+                if (!isset($opciones_fondo['motor']) && in_array($opciones_fondo['modelo'], $modelos_rembg, true)) {
+                    $motor_fondo = 'rembg';
+                }
+                $predeterminados[$motor_fondo === 'rembg' ? 'modelo_rembg' : 'modelo_birefnet'] = $opciones_fondo['modelo'];
+            }
+            foreach ([
+                'post_process_mask',
+                'alpha_matting',
+                'alpha_matting_foreground_threshold',
+                'alpha_matting_background_threshold',
+                'alpha_matting_erode_size',
+            ] as $clave_fondo) {
+                if (array_key_exists($clave_fondo, $opciones_fondo)) {
+                    $predeterminados[$clave_fondo] = $opciones_fondo[$clave_fondo];
+                }
+            }
+        }
+        $tiene_predeterminados = array_key_exists('predeterminados', $configuracion)
+            || $formato_nuevo;
+        $claves_predeterminadas = [
+            'modelo', 'motor_fondo', 'modelo_rembg', 'post_process_mask', 'alpha_matting',
+            'alpha_matting_foreground_threshold', 'alpha_matting_background_threshold',
+            'alpha_matting_erode_size', 'alfa', 'modelo_birefnet', 'ancho', 'alto',
+        ];
+        if (array_diff(array_keys($predeterminados), $claves_predeterminadas)) {
+            $this->responder(false, [], 'Los predeterminados contienen opciones desconocidas.');
+        }
+        foreach (['modelo', 'motor_fondo', 'modelo_rembg', 'modelo_birefnet', 'alfa'] as $clave_texto) {
+            if (isset($predeterminados[$clave_texto]) && !is_string($predeterminados[$clave_texto])) {
+                $this->responder(false, [], 'El predeterminado ' . $clave_texto . ' debe ser una cadena.');
+            }
+        }
+        $modelo_predeterminado = sanitize_key((string)($predeterminados['modelo'] ?? 'automatico'));
+        if (!in_array($modelo_predeterminado, ['automatico', 'foto', 'anime'], true)) {
+            $this->responder(false, [], 'El modelo predeterminado debe ser automatico, foto o anime.');
+        }
+        $motor_predeterminado = sanitize_key((string)($predeterminados['motor_fondo'] ?? 'birefnet'));
+        if (!in_array($motor_predeterminado, ['birefnet', 'rembg'], true)) {
+            $this->responder(false, [], 'El motor predeterminado debe ser birefnet o rembg.');
+        }
+        $modelo_rembg_predeterminado = sanitize_key((string)($predeterminados['modelo_rembg'] ?? 'isnet-general-use'));
+        if (!in_array($modelo_rembg_predeterminado, $modelos_rembg, true)) {
+            $this->responder(false, [], 'El modelo rembg predeterminado no es valido.');
+        }
+        $modelo_birefnet_predeterminado = sanitize_key((string)($predeterminados['modelo_birefnet'] ?? 'birefnet-lite-2k'));
+        if ($modelo_birefnet_predeterminado !== 'birefnet-lite-2k') {
+            $this->responder(false, [], 'El modelo BiRefNet predeterminado no es valido.');
+        }
+        if (isset($predeterminados['alfa']) && !is_string($predeterminados['alfa'])) {
+            $this->responder(false, [], 'alfa debe ser una cadena.');
+        }
+        $alfa_predeterminado = sanitize_key((string)($predeterminados['alfa'] ?? 'lanczos'));
+        if (!in_array($alfa_predeterminado, ['lanczos', 'anime'], true)) {
+            $this->responder(false, [], 'El tratamiento predeterminado del alfa debe ser lanczos o anime.');
+        }
+        $predeterminados_normalizados = [
+            'modelo' => $modelo_predeterminado,
+            'motor_fondo' => $motor_predeterminado,
+            'modelo_rembg' => $modelo_rembg_predeterminado,
+            'modelo_birefnet' => $modelo_birefnet_predeterminado,
+            'alfa' => $alfa_predeterminado,
+        ];
+        foreach (['post_process_mask', 'alpha_matting'] as $clave_booleana) {
+            $valor_booleano = $predeterminados[$clave_booleana] ?? false;
+            if (!is_bool($valor_booleano)) {
+                $this->responder(false, [], $clave_booleana . ' debe ser booleano.');
+            }
+            $predeterminados_normalizados[$clave_booleana] = $valor_booleano;
+        }
+        $umbrales_predeterminados = [
+            'alpha_matting_foreground_threshold' => [240, 1, 255],
+            'alpha_matting_background_threshold' => [10, 0, 254],
+            'alpha_matting_erode_size' => [10, 1, 100],
+        ];
+        foreach ($umbrales_predeterminados as $clave_umbral => $rango) {
+            $valor_umbral = $predeterminados[$clave_umbral] ?? $rango[0];
+            if (!is_int($valor_umbral) || $valor_umbral < $rango[1] || $valor_umbral > $rango[2]) {
+                $this->responder(false, [], $clave_umbral . ' esta fuera de rango.');
+            }
+            $predeterminados_normalizados[$clave_umbral] = $valor_umbral;
+        }
+        foreach (['ancho', 'alto'] as $clave_dimension) {
+            if (!array_key_exists($clave_dimension, $predeterminados)) {
+                continue;
+            }
+            $valor_dimension = $predeterminados[$clave_dimension];
+            if (!is_int($valor_dimension) || $valor_dimension < 1 || $valor_dimension > 3000) {
+                $this->responder(false, [], $clave_dimension . ' debe ser un entero de 1 a 3000 px.');
+            }
+            $predeterminados_normalizados[$clave_dimension] = $valor_dimension;
+        }
+        if ($predeterminados_normalizados['alpha_matting_background_threshold']
+            >= $predeterminados_normalizados['alpha_matting_foreground_threshold']) {
+            $this->responder(false, [], 'El umbral de fondo debe ser menor que el umbral de primer plano.');
+        }
+
         $normalizadas = [];
         foreach ($tareas as $tarea) {
             if (!is_array($tarea)) {
                 $this->responder(false, [], 'Cada tarea de la cadena debe ser un objeto.');
+            }
+            if (!isset($tarea['tipo']) || !is_string($tarea['tipo'])) {
+                $this->responder(false, [], 'Cada tarea requiere un tipo de tarea como cadena.');
             }
             $tipo = sanitize_key((string)($tarea['tipo'] ?? ''));
             $claves = [
@@ -2908,58 +3062,78 @@ class Personalizador_PDF_Plugin
             if (!isset($claves[$tipo]) || array_diff(array_keys($tarea), $claves[$tipo])) {
                 $this->responder(false, [], 'La cadena contiene un tipo de tarea u opcion desconocidos.');
             }
+            foreach (['modelo', 'motor', 'alfa', 'si_categoria'] as $clave_texto) {
+                if (isset($tarea[$clave_texto]) && !is_string($tarea[$clave_texto])) {
+                    $this->responder(false, [], $clave_texto . ' debe ser una cadena.');
+                }
+            }
             $fila = ['tipo' => $tipo];
             if ($tipo === 'quitar_fondo') {
-                $motor = sanitize_key((string)($tarea['motor'] ?? 'birefnet'));
-                if (!in_array($motor, ['birefnet', 'rembg'], true)) {
-                    $this->responder(false, [], 'El motor para quitar el fondo debe ser birefnet o rembg.');
-                }
-                $fila['motor'] = $motor;
-                if ($motor === 'rembg') {
-                    $modelo = sanitize_key((string)($tarea['modelo'] ?? 'isnet-general-use'));
-                    $modelos_rembg = [
-                        'isnet-general-use', 'isnet-anime', 'birefnet-general',
-                        'birefnet-general-lite', 'birefnet-portrait', 'u2net', 'u2netp', 'silueta',
-                    ];
-                    if (!in_array($modelo, $modelos_rembg, true)) {
-                        $this->responder(false, [], 'El modelo rembg no es valido.');
+                $motor = null;
+                if (isset($tarea['motor']) || $tiene_predeterminados) {
+                    $motor = sanitize_key((string)($tarea['motor'] ?? $motor_predeterminado));
+                    if (!in_array($motor, ['birefnet', 'rembg'], true)) {
+                        $this->responder(false, [], 'El motor para quitar el fondo debe ser birefnet o rembg.');
                     }
-                    $fila['modelo'] = $modelo;
+                    $fila['motor'] = $motor;
+                }
+                if ($motor === 'rembg') {
+                    if (isset($tarea['modelo']) || $tiene_predeterminados) {
+                        $modelo = sanitize_key((string)($tarea['modelo'] ?? $modelo_rembg_predeterminado));
+                        if (!in_array($modelo, $modelos_rembg, true)) {
+                            $this->responder(false, [], 'El modelo rembg no es valido.');
+                        }
+                        $fila['modelo'] = $modelo;
+                    }
                     foreach (['post_process_mask', 'alpha_matting'] as $clave_booleana) {
-                        $valor_booleano = $tarea[$clave_booleana] ?? false;
+                        if (!array_key_exists($clave_booleana, $tarea) && !$tiene_predeterminados) {
+                            continue;
+                        }
+                        $valor_booleano = $tarea[$clave_booleana] ?? $predeterminados_normalizados[$clave_booleana];
                         if (!is_bool($valor_booleano)) {
                             $this->responder(false, [], $clave_booleana . ' debe ser booleano.');
                         }
                         $fila[$clave_booleana] = $valor_booleano;
                     }
                     $umbrales = [
-                        'alpha_matting_foreground_threshold' => [240, 1, 255],
-                        'alpha_matting_background_threshold' => [10, 0, 254],
-                        'alpha_matting_erode_size' => [10, 1, 100],
+                        'alpha_matting_foreground_threshold' => [$predeterminados_normalizados['alpha_matting_foreground_threshold'], 1, 255],
+                        'alpha_matting_background_threshold' => [$predeterminados_normalizados['alpha_matting_background_threshold'], 0, 254],
+                        'alpha_matting_erode_size' => [$predeterminados_normalizados['alpha_matting_erode_size'], 1, 100],
                     ];
                     foreach ($umbrales as $clave_umbral => $rango) {
+                        if (!array_key_exists($clave_umbral, $tarea) && !$tiene_predeterminados) {
+                            continue;
+                        }
                         $valor_umbral = $tarea[$clave_umbral] ?? $rango[0];
                         if (!is_int($valor_umbral) || $valor_umbral < $rango[1] || $valor_umbral > $rango[2]) {
                             $this->responder(false, [], $clave_umbral . ' esta fuera de rango.');
                         }
                         $fila[$clave_umbral] = $valor_umbral;
                     }
-                    if ($fila['alpha_matting_background_threshold'] >= $fila['alpha_matting_foreground_threshold']) {
+                    $umbral_fondo = $fila['alpha_matting_background_threshold']
+                        ?? ($tiene_predeterminados ? $predeterminados_normalizados['alpha_matting_background_threshold'] : null);
+                    $umbral_frente = $fila['alpha_matting_foreground_threshold']
+                        ?? ($tiene_predeterminados ? $predeterminados_normalizados['alpha_matting_foreground_threshold'] : null);
+                    if ($umbral_fondo !== null && $umbral_frente !== null && $umbral_fondo >= $umbral_frente) {
                         $this->responder(false, [], 'El umbral de fondo debe ser menor que el umbral de primer plano.');
                     }
                 }
             }
             if ($tipo === 'mejorar') {
-                $modelo = sanitize_key((string)($tarea['modelo'] ?? 'foto'));
-                if (!in_array($modelo, ['foto', 'anime', 'automatico'], true)) {
-                    $this->responder(false, [], 'El modelo de mejora debe ser foto, anime o automatico.');
+                if (isset($tarea['modelo']) || $tiene_predeterminados) {
+                    $modelo = sanitize_key((string)($tarea['modelo'] ?? $modelo_predeterminado));
+                    if (!in_array($modelo, ['foto', 'anime', 'automatico'], true)) {
+                        $this->responder(false, [], 'El modelo de mejora debe ser foto, anime o automatico.');
+                    }
+                    $fila['modelo'] = $modelo;
                 }
-                $fila['modelo'] = $modelo;
-                $alfa = sanitize_key((string)($tarea['alfa'] ?? 'lanczos'));
-                if (!in_array($alfa, ['lanczos', 'anime'], true)) {
-                    $this->responder(false, [], 'El tratamiento del alfa debe ser lanczos o anime.');
+                if (isset($tarea['alfa']) || $tiene_predeterminados) {
+                    $alfa = sanitize_key((string)($tarea['alfa'] ?? $alfa_predeterminado));
+                    if (!in_array($alfa, ['lanczos', 'anime'], true)) {
+                        $this->responder(false, [], 'El tratamiento del alfa debe ser lanczos o anime.');
+                    }
+                    $fila['alfa'] = $alfa;
                 }
-                $fila['alfa'] = $alfa;
                 if (isset($tarea['ancho']) !== isset($tarea['alto'])) {
                     $this->responder(false, [], 'La mejora requiere ancho y alto juntos.');
                 }
@@ -2972,6 +3146,9 @@ class Personalizador_PDF_Plugin
                     }
                     $fila['ancho'] = $ancho;
                     $fila['alto'] = $alto;
+                } elseif (isset($predeterminados_normalizados['ancho'], $predeterminados_normalizados['alto'])) {
+                    $fila['ancho'] = $predeterminados_normalizados['ancho'];
+                    $fila['alto'] = $predeterminados_normalizados['alto'];
                 }
             }
             if (isset($tarea['si_categoria'])) {
@@ -2984,7 +3161,25 @@ class Personalizador_PDF_Plugin
             $normalizadas[] = $fila;
         }
 
-        $salida = wp_json_encode(['modo' => $modo, 'tareas' => $normalizadas]);
+        if ($formato_nuevo) {
+            $salida_configuracion = $configuracion;
+            if ($modo_entrada === '') {
+                unset($salida_configuracion['modo']);
+            }
+            $salida = wp_json_encode($salida_configuracion);
+            if (!is_string($salida)) {
+                $this->responder(false, [], 'No se pudo preparar la configuracion de la cadena.');
+            }
+            return $salida;
+        }
+        $salida_configuracion = ['tareas' => $normalizadas];
+        if ($modo_entrada !== '') {
+            $salida_configuracion['modo'] = $modo;
+        }
+        if ($tiene_predeterminados) {
+            $salida_configuracion['predeterminados'] = $predeterminados_normalizados;
+        }
+        $salida = wp_json_encode($salida_configuracion);
         if (!is_string($salida)) {
             $this->responder(false, [], 'No se pudo preparar la configuracion de la cadena.');
         }

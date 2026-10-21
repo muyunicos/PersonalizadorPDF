@@ -251,6 +251,22 @@
     z-index: 20;
 }
 .ec-resultados-producto[hidden] { display: none; }
+.ec-redimensionar-pc-umbrales {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin-left: 12px;
+}
+.ec-redimensionar-pc-rembg-opciones {
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+}
+.personalizador-pdf .ec-redimensionar-pc-rembg-opciones:not([hidden]) { display: flex; }
+.ec-redimensionar-pc-umbrales label { white-space: nowrap; }
+.personalizador-pdf .ec-redimensionar-pc-modelo-fondo-rembg[hidden],
+.personalizador-pdf .ec-redimensionar-pc-modelo-fondo-birefnet[hidden],
+.personalizador-pdf .ec-redimensionar-pc-rembg-opciones[hidden] { display: none; }
 .ec-resultado-item {
     display: block;
     width: 100%;

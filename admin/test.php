@@ -107,37 +107,48 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
     </p>
     <hr>
     <h3>Procesar una cadena de tareas en la PC</h3>
-    <p class="description">La cadena recomendada elimina el fondo antes de mejorar la imagen. En modo automatico, la deteccion es informativa y la mejora siempre usa Real-ESRGAN general, incluso con graficas o clasificaciones ambiguas. Si la mascara queda casi vacia, se conserva la imagen original.</p>
+    <p class="description">El JSON es la fuente de verdad al ejecutar. Los controles lo actualizan; puedes editarlo o pegarlo y las opciones omitidas usan los predeterminados del servicio local. Automatico detecta y usa mejora general; Foto e Ilustracion eligen la mejora por defecto.</p>
     <p class="description">La primera prueba de cada modelo puede tardar mas al cargarlo. Usa solo imagenes de prueba no sensibles.</p>
-    <p class="description">Si la imagen tiene transparencia, puedes comparar como se amplia el canal alfa. El RGB siempre usa el modelo seleccionado en la tarea mejorar.</p>
+    <p class="description">Si una tarea declara opciones propias, esas opciones prevalecen sobre las globales.</p>
     <p>
         <input type="file" id="ec-redimensionar-pc-imagen" accept="image/png,image/jpeg,image/gif,image/webp">
     </p>
     <p>
         <label for="ec-redimensionar-pc-modo">Modo de procesamiento</label>
         <select id="ec-redimensionar-pc-modo">
-            <option value="automatico" selected>Automatico (detecta y siempre mejora)</option>
-            <option value="manual">Manual (ejecuta las tareas declaradas)</option>
+            <option value="automatico" selected>Automatico</option>
+            <option value="foto">Foto</option>
+            <option value="ilustracion">Ilustracion</option>
         </select>
     </p>
     <p>
-        <label for="ec-redimensionar-pc-alfa">Ampliacion del canal alfa</label>
+        <label for="ec-redimensionar-pc-alfa" title="Se aplica a las tareas mejorar cuando la imagen tiene transparencia y se amplia.">
+            Ampliacion del canal alfa
+        </label>
         <select id="ec-redimensionar-pc-alfa">
             <option value="lanczos" selected>Lanczos (rapido; mascara original)</option>
             <option value="anime">Real-ESRGAN Anime (mejora la mascara)</option>
         </select>
-        <span class="description">Se aplica a las tareas mejorar cuando la imagen tiene transparencia y se amplia.</span>
     </p>
     <p>
-        <label for="ec-redimensionar-pc-motor-fondo">Motor para quitar el fondo</label>
+        <label for="ec-redimensionar-pc-motor-fondo" title="BiRefNet usa la GPU PyTorch. rembg usa GPU solo si ONNX Runtime dispone de CUDA; de lo contrario funciona en CPU.">
+            Motor para quitar el fondo
+        </label>
         <select id="ec-redimensionar-pc-motor-fondo">
             <option value="birefnet" selected>BiRefNet Lite-2K (GPU)</option>
             <option value="rembg">rembg (ONNX Runtime)</option>
         </select>
-        <span class="description">BiRefNet usa la GPU PyTorch. rembg solo usara GPU si ONNX Runtime tiene CUDAExecutionProvider; si no, funcionara en CPU.</span>
     </p>
-    <p>
-        <label for="ec-redimensionar-pc-rembg-modelo">Modelo rembg</label>
+    <p class="ec-redimensionar-pc-modelo-fondo-birefnet">
+        <label for="ec-redimensionar-pc-birefnet-modelo">Modelo BiRefNet</label>
+        <select id="ec-redimensionar-pc-birefnet-modelo">
+            <option value="birefnet-lite-2k" selected>BiRefNet Lite-2K (GPU)</option>
+        </select>
+    </p>
+    <p class="ec-redimensionar-pc-modelo-fondo-rembg" hidden>
+        <label for="ec-redimensionar-pc-rembg-modelo" title="El modelo seleccionado se descarga la primera vez que se utiliza.">
+            Modelo rembg
+        </label>
         <select id="ec-redimensionar-pc-rembg-modelo">
             <option value="isnet-general-use" selected>IS-Net General (actual)</option>
             <option value="birefnet-general">BiRefNet General</option>
@@ -148,28 +159,46 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
             <option value="u2netp">U2-Net pequeno</option>
             <option value="silueta">Silueta</option>
         </select>
-        <span class="description">Se descarga la primera vez que se elige un modelo. Para logos y graficas, compara IS-Net General y BiRefNet General.</span>
     </p>
-    <p>
-        <label><input type="checkbox" id="ec-redimensionar-pc-rembg-postproceso"> Postprocesar mascara</label>
-        <span class="description">Limpia ruido con operaciones morfologicas, pero puede endurecer o quitar detalles finos.</span>
-        <br>
-        <label><input type="checkbox" id="ec-redimensionar-pc-rembg-matting"> Alpha matting</label>
-        <span class="description">Refina bordes y semitransparencias; puede tardar mas. Se combina con postproceso si ambos estan activados.</span>
-        <br>
-        <label>Umbral primer plano <input type="number" id="ec-redimensionar-pc-rembg-foreground" min="1" max="255" value="240"></label>
-        <label>Umbral fondo <input type="number" id="ec-redimensionar-pc-rembg-background" min="0" max="254" value="10"></label>
-        <label>Erosion <input type="number" id="ec-redimensionar-pc-rembg-erode" min="1" max="100" value="10"></label>
-    </p>
-    <p>
-        <label for="ec-redimensionar-pc-tareas">Tareas en orden (JSON)</label><br>
-        <textarea id="ec-redimensionar-pc-tareas" class="large-text code" rows="4">[{"tipo":"quitar_fondo"},{"tipo":"mejorar","modelo":"automatico"}]</textarea>
-        <span class="description">Tipos: detectar, mejorar (modelo: automatico, foto o anime) y quitar_fondo. Las opciones rembg de arriba se aplican a cada tarea quitar_fondo cuando el motor elegido es rembg.</span>
+    <p class="ec-redimensionar-pc-rembg-opciones" hidden>
+        <label title="Limpia ruido con operaciones morfologicas, pero puede endurecer o quitar detalles finos.">
+            <input type="checkbox" id="ec-redimensionar-pc-rembg-postproceso"> Postprocesar mascara ⓘ
+        </label>
+        <label title="Refina bordes y semitransparencias; puede tardar mas. Se combina con postproceso si ambos estan activados.">
+            <input type="checkbox" id="ec-redimensionar-pc-rembg-matting"> Alpha matting ⓘ
+        </label>
+        <span class="ec-redimensionar-pc-umbrales">
+            <label>Umbral primer plano <input type="number" id="ec-redimensionar-pc-rembg-foreground" min="1" max="255" value="240"></label>
+            <label>Umbral fondo <input type="number" id="ec-redimensionar-pc-rembg-background" min="0" max="254" value="10"></label>
+            <label>Erosion <input type="number" id="ec-redimensionar-pc-rembg-erode" min="1" max="100" value="10"></label>
+        </span>
     </p>
     <p>
         <label>Ancho <input type="number" id="ec-redimensionar-pc-ancho" min="1" max="3000" value="500"> px</label>
         <label>Alto <input type="number" id="ec-redimensionar-pc-alto" min="1" max="3000" value="500"> px</label>
-        <span class="description">Se aplican a cada tarea mejorar que no indique dimensiones propias.</span>
+    </p>
+    <p>
+        <label for="ec-redimensionar-pc-json">Tareas en orden (JSON)</label><br>
+        <textarea id="ec-redimensionar-pc-json" class="large-text code" rows="15">{
+  "modo": "automatico",
+  "ancho": 500,
+  "alto": 500,
+  "alfa": "lanczos",
+  "quitar_fondo": {
+    "motor": "birefnet",
+    "modelo": "birefnet-lite-2k",
+    "post_process_mask": false,
+    "alpha_matting": false,
+    "alpha_matting_foreground_threshold": 240,
+    "alpha_matting_background_threshold": 10,
+    "alpha_matting_erode_size": 10
+  },
+  "tareas": [
+    {"tipo": "quitar_fondo"},
+    {"tipo": "mejorar"}
+  ]
+}</textarea>
+        <span class="description">Cada tarea requiere "tipo". Las opciones de la tarea prevalecen sobre las globales; las opciones globales omitidas usan los predeterminados del servicio. Tipos: detectar, quitar_fondo y mejorar.</span>
     </p>
     <p>
         <button type="button" class="button ec-redimensionar-pc-probar"
@@ -178,5 +207,6 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
         </button>
         <span class="ec-redimensionar-pc-estado" aria-live="polite"></span>
     </p>
+    <p class="description ec-redimensionar-pc-preferencias" aria-live="polite">El JSON se guarda en este navegador y las opciones globales quedan como predeterminados del servicio al ejecutar. La imagen no se guarda.</p>
     <p class="ec-redimensionar-pc-descarga" hidden></p>
 </div>

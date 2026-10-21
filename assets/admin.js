@@ -1543,64 +1543,227 @@ jQuery(function ($) {
         return new Blob([bytes], {type: 'image/png'});
     }
 
+    var pipelinePc = (function () {
+        var clave = 'personalizador-pdf-test-pipeline-v2';
+        var $json = $('#ec-redimensionar-pc-json');
+        var $estado = $('.ec-redimensionar-pc-preferencias');
+        if (!$json.length || !$estado.length) { return null; }
+
+        function leer() {
+            var texto = $json.val();
+            if (typeof texto !== 'string' || texto.length > 8192) {
+                throw new Error('El JSON de la cadena esta vacio o supera 8 KB.');
+            }
+            var configuracion = JSON.parse(texto);
+            if (!configuracion || typeof configuracion !== 'object' || Array.isArray(configuracion)) {
+                throw new Error('La configuracion debe ser un objeto JSON.');
+            }
+            if (!Array.isArray(configuracion.tareas) || !configuracion.tareas.length) {
+                throw new Error('El JSON debe incluir una lista "tareas" no vacia.');
+            }
+            configuracion.tareas.forEach(function (tarea) {
+                if (!tarea || typeof tarea !== 'object' || Array.isArray(tarea)
+                    || typeof tarea.tipo !== 'string' || !tarea.tipo) {
+                    throw new Error('Cada tarea debe ser un objeto con "tipo".');
+                }
+            });
+            return configuracion;
+        }
+
+        function mostrarMotor(motor) {
+            var rembg = motor === 'rembg';
+            $('.ec-redimensionar-pc-modelo-fondo-birefnet').prop('hidden', rembg);
+            $('.ec-redimensionar-pc-modelo-fondo-rembg').prop('hidden', !rembg);
+            $('.ec-redimensionar-pc-rembg-opciones').prop('hidden', !rembg);
+        }
+
+        function aplicar(configuracion) {
+            var ids = {
+                modo: 'ec-redimensionar-pc-modo',
+                alfa: 'ec-redimensionar-pc-alfa',
+                ancho: 'ec-redimensionar-pc-ancho',
+                alto: 'ec-redimensionar-pc-alto'
+            };
+            Object.keys(ids).forEach(function (claveConfig) {
+                if (Object.prototype.hasOwnProperty.call(configuracion, claveConfig)) {
+                    $('#' + ids[claveConfig]).val(String(configuracion[claveConfig]));
+                }
+            });
+            var fondo = configuracion.quitar_fondo;
+            if (fondo && typeof fondo === 'object' && !Array.isArray(fondo)) {
+                if (fondo.motor) {
+                    $('#ec-redimensionar-pc-motor-fondo').val(fondo.motor);
+                    mostrarMotor(fondo.motor);
+                }
+                if (fondo.modelo) {
+                    var idModelo = fondo.motor === 'rembg'
+                        ? '#ec-redimensionar-pc-rembg-modelo'
+                        : '#ec-redimensionar-pc-birefnet-modelo';
+                    $(idModelo).val(fondo.modelo);
+                }
+                [
+                    ['post_process_mask', 'ec-redimensionar-pc-rembg-postproceso'],
+                    ['alpha_matting', 'ec-redimensionar-pc-rembg-matting']
+                ].forEach(function (par) {
+                    if (Object.prototype.hasOwnProperty.call(fondo, par[0])) {
+                        $('#' + par[1]).prop('checked', fondo[par[0]] === true);
+                    }
+                });
+                [
+                    ['alpha_matting_foreground_threshold', 'ec-redimensionar-pc-rembg-foreground'],
+                    ['alpha_matting_background_threshold', 'ec-redimensionar-pc-rembg-background'],
+                    ['alpha_matting_erode_size', 'ec-redimensionar-pc-rembg-erode']
+                ].forEach(function (par) {
+                    if (Object.prototype.hasOwnProperty.call(fondo, par[0])) {
+                        $('#' + par[1]).val(String(fondo[par[0]]));
+                    }
+                });
+            }
+        }
+
+        function guardar(texto) {
+            try {
+                window.localStorage.setItem(clave, texto);
+                $estado.text('JSON guardado en este navegador; la imagen no se guarda.');
+            } catch (error) {
+                $estado.text('No se pudo guardar el JSON en este navegador.');
+                if (window.console && typeof window.console.warn === 'function') {
+                    window.console.warn('No se pudo guardar el JSON del Test.', error);
+                }
+            }
+        }
+
+        function actualizarDesdeControl(id) {
+            var configuracion;
+            try {
+                configuracion = leer();
+            } catch (error) {
+                $estado.text('JSON invalido; corrige el documento antes de sincronizar controles.');
+                return;
+            }
+            var idsRaiz = {
+                'ec-redimensionar-pc-modo': 'modo',
+                'ec-redimensionar-pc-alfa': 'alfa',
+                'ec-redimensionar-pc-ancho': 'ancho',
+                'ec-redimensionar-pc-alto': 'alto'
+            };
+            if (Object.prototype.hasOwnProperty.call(idsRaiz, id)) {
+                var valor = $('#' + id).val();
+                configuracion[idsRaiz[id]] = id === 'ec-redimensionar-pc-ancho'
+                    || id === 'ec-redimensionar-pc-alto' ? parseInt(valor, 10) : valor;
+            } else {
+                var fondo = configuracion.quitar_fondo;
+                if (!fondo || typeof fondo !== 'object' || Array.isArray(fondo)) {
+                    fondo = {};
+                    configuracion.quitar_fondo = fondo;
+                }
+                var motor = $('#ec-redimensionar-pc-motor-fondo').val() || 'birefnet';
+                if (id === 'ec-redimensionar-pc-motor-fondo') {
+                    fondo.motor = motor;
+                    fondo.modelo = motor === 'rembg'
+                        ? ($('#ec-redimensionar-pc-rembg-modelo').val() || 'isnet-general-use')
+                        : ($('#ec-redimensionar-pc-birefnet-modelo').val() || 'birefnet-lite-2k');
+                } else if (id === 'ec-redimensionar-pc-rembg-modelo') {
+                    fondo.modelo = $('#ec-redimensionar-pc-rembg-modelo').val();
+                } else if (id === 'ec-redimensionar-pc-birefnet-modelo') {
+                    fondo.modelo = $('#ec-redimensionar-pc-birefnet-modelo').val();
+                } else {
+                    var opciones = {
+                        'ec-redimensionar-pc-rembg-postproceso': ['post_process_mask', 'boolean'],
+                        'ec-redimensionar-pc-rembg-matting': ['alpha_matting', 'boolean'],
+                        'ec-redimensionar-pc-rembg-foreground': ['alpha_matting_foreground_threshold', 'integer'],
+                        'ec-redimensionar-pc-rembg-background': ['alpha_matting_background_threshold', 'integer'],
+                        'ec-redimensionar-pc-rembg-erode': ['alpha_matting_erode_size', 'integer']
+                    };
+                    var opcion = opciones[id];
+                    if (opcion) {
+                        fondo[opcion[0]] = opcion[1] === 'boolean'
+                            ? $('#' + id).prop('checked')
+                            : parseInt($('#' + id).val(), 10);
+                    }
+                }
+            }
+            $json.val(JSON.stringify(configuracion, null, 2));
+            guardar($json.val());
+        }
+
+        function sincronizarDesdeJson() {
+            try {
+                var configuracion = leer();
+                aplicar(configuracion);
+                mostrarMotor($('#ec-redimensionar-pc-motor-fondo').val() || 'birefnet');
+                guardar($json.val());
+            } catch (error) {
+                $estado.text((error && error.message) || 'El JSON aun no es valido.');
+            }
+        }
+
+        var guardado;
+        try {
+            guardado = window.localStorage.getItem(clave);
+        } catch (error) {
+            $estado.text('No se pudieron leer las preferencias guardadas.');
+            if (window.console && typeof window.console.warn === 'function') {
+                window.console.warn('No se pudo leer el JSON del Test.', error);
+            }
+        }
+        if (guardado) {
+            $json.val(guardado);
+            sincronizarDesdeJson();
+            $estado.text('JSON restaurado; selecciona la imagen de prueba nuevamente.');
+        } else {
+            try {
+                aplicar(leer());
+            } catch (error) {
+                $estado.text((error && error.message) || 'No se pudo iniciar el JSON.');
+            }
+            mostrarMotor($('#ec-redimensionar-pc-motor-fondo').val() || 'birefnet');
+            guardar($json.val());
+        }
+
+        $(document).on('input', '#ec-redimensionar-pc-json', function () {
+            guardar($json.val());
+        });
+        $(document).on('change', '#ec-redimensionar-pc-json', sincronizarDesdeJson);
+        $(document).on(
+            'input change',
+            '#ec-redimensionar-pc-modo, #ec-redimensionar-pc-alfa, #ec-redimensionar-pc-motor-fondo, '
+                + '#ec-redimensionar-pc-birefnet-modelo, #ec-redimensionar-pc-rembg-modelo, '
+                + '#ec-redimensionar-pc-rembg-postproceso, #ec-redimensionar-pc-rembg-matting, '
+                + '#ec-redimensionar-pc-rembg-foreground, #ec-redimensionar-pc-rembg-background, '
+                + '#ec-redimensionar-pc-rembg-erode, #ec-redimensionar-pc-ancho, #ec-redimensionar-pc-alto',
+            function () {
+                if (this.id === 'ec-redimensionar-pc-motor-fondo') {
+                    mostrarMotor($(this).val());
+                }
+                actualizarDesdeControl(this.id);
+            }
+        );
+        return {leer: leer};
+    })();
+
     $(document).on('click', '.ec-redimensionar-pc-probar', function () {
         var $btn = $(this).prop('disabled', true);
         var $estado = $('.ec-redimensionar-pc-estado').removeClass('ec-ok ec-error');
         var $descarga = $('.ec-redimensionar-pc-descarga').attr('hidden', true).empty();
         var archivo = ($('#ec-redimensionar-pc-imagen')[0] || {}).files;
-        var ancho = parseInt($('#ec-redimensionar-pc-ancho').val(), 10);
-        var alto = parseInt($('#ec-redimensionar-pc-alto').val(), 10);
-        var tareas;
+        var pipeline;
         try {
-            tareas = JSON.parse($('#ec-redimensionar-pc-tareas').val() || '');
+            if (!pipelinePc) { throw new Error('El editor JSON no esta disponible.'); }
+            pipelinePc.leer();
+            pipeline = $('#ec-redimensionar-pc-json').val();
         } catch (error) {
-            tareas = null;
-        }
-        if (!archivo || !archivo[0] || !Array.isArray(tareas) || !tareas.length) {
-            $estado.addClass('ec-error').text('Selecciona una imagen e indica las tareas como una lista JSON.');
+            $estado.addClass('ec-error').text((error && error.message) || 'La configuracion JSON no es valida.');
             $btn.prop('disabled', false);
             return;
         }
-        var necesitaDimensiones = tareas.some(function (tarea) {
-            return tarea && tarea.tipo === 'mejorar'
-                && (typeof tarea.ancho === 'undefined' || typeof tarea.alto === 'undefined');
-        });
-        if (necesitaDimensiones && (!Number.isFinite(ancho) || !Number.isFinite(alto)
-            || ancho < 1 || alto < 1 || ancho > 3000 || alto > 3000)) {
-            $estado.addClass('ec-error').text('Indica dimensiones entre 1 y 3000 px para las tareas de mejora.');
-            $btn.prop('disabled', false);
-            return;
-        }
-        tareas = tareas.map(function (tarea) {
-            if (tarea && tarea.tipo === 'mejorar') {
-                if (typeof tarea.ancho === 'undefined') { tarea.ancho = ancho; }
-                if (typeof tarea.alto === 'undefined') { tarea.alto = alto; }
-                tarea.alfa = $('#ec-redimensionar-pc-alfa').val() || 'lanczos';
-            } else if (tarea && tarea.tipo === 'quitar_fondo') {
-                tarea.motor = $('#ec-redimensionar-pc-motor-fondo').val() || 'birefnet';
-                if (tarea.motor === 'rembg') {
-                    tarea.modelo = $('#ec-redimensionar-pc-rembg-modelo').val() || 'isnet-general-use';
-                    tarea.post_process_mask = $('#ec-redimensionar-pc-rembg-postproceso').prop('checked');
-                    tarea.alpha_matting = $('#ec-redimensionar-pc-rembg-matting').prop('checked');
-                    tarea.alpha_matting_foreground_threshold = parseInt(
-                        $('#ec-redimensionar-pc-rembg-foreground').val(), 10
-                    );
-                    tarea.alpha_matting_background_threshold = parseInt(
-                        $('#ec-redimensionar-pc-rembg-background').val(), 10
-                    );
-                    tarea.alpha_matting_erode_size = parseInt(
-                        $('#ec-redimensionar-pc-rembg-erode').val(), 10
-                    );
-                }
-            }
-            return tarea;
-        });
-        var pipeline = JSON.stringify({
-            modo: $('#ec-redimensionar-pc-modo').val() || 'manual',
-            tareas: tareas
-        });
         if (pipeline.length > 8192) {
-            $estado.addClass('ec-error').text('La configuracion de tareas supera el limite de 8 KB.');
+            $estado.addClass('ec-error').text('La configuracion JSON supera el limite de 8 KB.');
+            $btn.prop('disabled', false);
+            return;
+        }
+        if (!archivo || !archivo[0]) {
+            $estado.addClass('ec-error').text('Selecciona una imagen de prueba.');
             $btn.prop('disabled', false);
             return;
         }
@@ -1616,7 +1779,10 @@ jQuery(function ($) {
                     .attr('href', URL.createObjectURL(blobDesdeBase64(d.imagen_base64)))
                     .attr('download', d.nombre || 'prueba-pc-pipeline.png');
                 $descarga.append(enlace).removeAttr('hidden');
-                $estado.addClass('ec-ok').text(d.detalle || 'Cadena completada; PNG recibido desde la PC.');
+                $estado.addClass('ec-ok').text(
+                    (d.detalle || 'Cadena completada; PNG recibido desde la PC.')
+                    + ' Predeterminados guardados en la PC.'
+                );
             })
             .catch(function (err) {
                 $estado.addClass('ec-error').text((err && err.message) || 'No se pudo completar la cadena de procesamiento.');

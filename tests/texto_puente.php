@@ -22,7 +22,7 @@ if (PHP_SAPI !== 'cli') {
  *    carrito | minimos | pool* | overrides | sesion | conciliacion | completados | mockups* |
  *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
  *    reanalizar | envoltura_op | borrado | campo_global | campo_subida | pool_concurrente |
- *    conexion_pc | redimensionar_pc | redimensionar_pc_anime | pipeline_pc | pipeline_pc_invalida | ia_config | ia_config_locar | ia_config_invalida | ia_config_host_obsoleto`
+ *    conexion_pc | redimensionar_pc | redimensionar_pc_anime | pipeline_pc | pipeline_pc_sin_predeterminados | pipeline_pc_invalida | ia_config | ia_config_locar | ia_config_invalida | ia_config_host_obsoleto`
  */
 
 $fase = isset($argv[1]) ? $argv[1] : 'setup';
@@ -653,6 +653,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         case 'redimensionar_pc':
         case 'redimensionar_pc_anime':
         case 'pipeline_pc':
+        case 'pipeline_pc_sin_predeterminados':
         case 'pipeline_pc_invalida':
             if ($fase === 'pipeline_pc_invalida') {
                 $remota = (array)($GLOBALS['test_remote_post'] ?? []);
@@ -663,24 +664,40 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             $resultado = is_array($json) ? (array)($json['data'] ?? []) : [];
             $remota = (array)($GLOBALS['test_remote_post'] ?? []);
             $es_pipeline = $fase === 'pipeline_pc';
+            $sin_predeterminados = $fase === 'pipeline_pc_sin_predeterminados';
             $modo_prueba = $fase === 'redimensionar_pc_anime' ? 'anime' : 'foto';
             $modelo_prueba = $modo_prueba === 'foto' ? 'realesr-general-x4v3' : 'RealESRGAN_x4plus_anime_6B';
             check('redimensionar PC: JSON success', is_array($json) && $json['success'] === true);
+            if ($sin_predeterminados) {
+                $pipeline = json_decode((string)($remota['args']['headers']['X-PMU-Pipeline'] ?? ''), true);
+                check('cadena IA sin predeterminados: conserva valores del servicio',
+                    is_array($pipeline)
+                    && !array_key_exists('modo', $pipeline)
+                    && !array_key_exists('predeterminados', $pipeline)
+                    && array_column((array)($pipeline['tareas'] ?? []), 'tipo') === ['quitar_fondo', 'mejorar']
+                    && !array_key_exists('motor', $pipeline['tareas'][0] ?? [])
+                    && !array_key_exists('modelo', $pipeline['tareas'][1] ?? []));
+                break;
+            }
             if ($es_pipeline) {
                 $pipeline = json_decode((string)($remota['args']['headers']['X-PMU-Pipeline'] ?? ''), true);
                 check('cadena IA: envia al endpoint correcto',
                     ($remota['url'] ?? '') === 'https://ai.loc.ar/procesar');
                 check('cadena IA: envia tareas ordenadas, token y bytes',
-                    is_array($pipeline) && ($pipeline['modo'] ?? '') === 'automatico'
+                    is_array($pipeline) && ($pipeline['modo'] ?? '') === 'ilustracion'
                     && array_column((array)($pipeline['tareas'] ?? []), 'tipo') === ['detectar', 'quitar_fondo', 'mejorar']
-                    && ($pipeline['tareas'][1]['motor'] ?? '') === 'rembg'
-                    && ($pipeline['tareas'][1]['modelo'] ?? '') === 'birefnet-general'
-                    && ($pipeline['tareas'][1]['post_process_mask'] ?? null) === true
-                    && ($pipeline['tareas'][1]['alpha_matting'] ?? null) === true
-                    && ($pipeline['tareas'][1]['alpha_matting_foreground_threshold'] ?? 0) === 230
-                    && ($pipeline['tareas'][1]['alpha_matting_background_threshold'] ?? 0) === 20
-                    && ($pipeline['tareas'][1]['alpha_matting_erode_size'] ?? 0) === 5
-                    && ($pipeline['tareas'][2]['alfa'] ?? '') === 'anime'
+                    && ($pipeline['ancho'] ?? 0) === 500
+                    && ($pipeline['alto'] ?? 0) === 500
+                    && ($pipeline['alfa'] ?? '') === 'anime'
+                    && ($pipeline['quitar_fondo']['motor'] ?? '') === 'rembg'
+                    && ($pipeline['quitar_fondo']['modelo'] ?? '') === 'birefnet-general'
+                    && ($pipeline['quitar_fondo']['post_process_mask'] ?? null) === true
+                    && ($pipeline['quitar_fondo']['alpha_matting'] ?? null) === true
+                    && ($pipeline['quitar_fondo']['alpha_matting_foreground_threshold'] ?? 0) === 230
+                    && ($pipeline['quitar_fondo']['alpha_matting_background_threshold'] ?? 0) === 20
+                    && ($pipeline['quitar_fondo']['alpha_matting_erode_size'] ?? 0) === 5
+                    && ($pipeline['tareas'][2]['modelo'] ?? '') === ''
+                    && ($pipeline['tareas'][2]['ancho'] ?? 0) === 320
                     && ($remota['args']['headers']['X-PMU-Token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef'
                     && (int)($remota['args']['timeout'] ?? 0) === 180
                     && strlen((string)($remota['args']['body'] ?? '')) > 0);
@@ -3629,9 +3646,10 @@ switch ($fase) {
     case 'redimensionar_pc':
     case 'redimensionar_pc_anime':
     case 'pipeline_pc':
+    case 'pipeline_pc_sin_predeterminados':
     case 'pipeline_pc_invalida':
         preparar_entorno($testBase, $base);
-        $esPipeline = in_array($fase, ['pipeline_pc', 'pipeline_pc_invalida'], true);
+        $esPipeline = in_array($fase, ['pipeline_pc', 'pipeline_pc_sin_predeterminados', 'pipeline_pc_invalida'], true);
         $pipelineInvalida = $fase === 'pipeline_pc_invalida';
         $modoPrueba = $fase === 'redimensionar_pc_anime' ? 'anime' : 'foto';
         $temporal = $testBase . '/prueba-redimensionar.png';
@@ -3649,23 +3667,28 @@ switch ($fase) {
         if ($esPipeline) {
             $_POST['pipeline'] = $pipelineInvalida
                 ? '{"modo":"automatico","tareas":[{"tipo":"quitar_fondo","motor":"desconocido"}]}'
+                : ($fase === 'pipeline_pc_sin_predeterminados'
+                    ? '{"tareas":[{"tipo":"quitar_fondo"},{"tipo":"mejorar"}]}'
                 : json_encode([
-                    'modo' => 'automatico',
+                    'modo' => 'ilustracion',
+                    'ancho' => 500,
+                    'alto' => 500,
+                    'alfa' => 'anime',
+                    'quitar_fondo' => [
+                        'motor' => 'rembg',
+                        'modelo' => 'birefnet-general',
+                        'post_process_mask' => true,
+                        'alpha_matting' => true,
+                        'alpha_matting_foreground_threshold' => 230,
+                        'alpha_matting_background_threshold' => 20,
+                        'alpha_matting_erode_size' => 5,
+                    ],
                     'tareas' => [
                         ['tipo' => 'detectar'],
-                        [
-                            'tipo' => 'quitar_fondo',
-                            'motor' => 'rembg',
-                            'modelo' => 'birefnet-general',
-                            'post_process_mask' => true,
-                            'alpha_matting' => true,
-                            'alpha_matting_foreground_threshold' => 230,
-                            'alpha_matting_background_threshold' => 20,
-                            'alpha_matting_erode_size' => 5,
-                        ],
-                        ['tipo' => 'mejorar', 'modelo' => 'automatico', 'ancho' => 320, 'alto' => 180, 'alfa' => 'anime'],
+                        ['tipo' => 'quitar_fondo'],
+                        ['tipo' => 'mejorar', 'ancho' => 320, 'alto' => 180],
                     ],
-                ]);
+                ]));
         } else {
             $_POST['ancho'] = '320';
             $_POST['alto'] = '180';
