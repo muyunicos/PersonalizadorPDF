@@ -809,12 +809,20 @@ class Personalizador_PDF_Plugin
             PERSONALIZADOR_PDF_VERSION,
             true
         );
-        // Spec 012 (T024): cargador de imagenes del comprador. Va antes que tienda.js,
+        // Spec 030 (D28): visor fullscreen COMPARTIDO (ranura + biblioteca). Se encola
+        // antes del cargador, que ahora lo usa en vez de su visor propio.
+        wp_enqueue_script(
+            'personalizador-pdf-visor',
+            PERSONALIZADOR_PDF_URL . 'assets/visor-pmu.js',
+            [],
+            PERSONALIZADOR_PDF_VERSION,
+            true
+        );        // Spec 012 (T024): cargador de imagenes del comprador. Va antes que tienda.js,
         // que lo usa al montar los campos que traen `cargador`.
         wp_enqueue_script(
             'personalizador-pdf-cargador',
             PERSONALIZADOR_PDF_URL . 'assets/cargador-pmu.js',
-            [],
+            ['personalizador-pdf-visor'],
             PERSONALIZADOR_PDF_VERSION,
             true
         );
@@ -3205,10 +3213,15 @@ class Personalizador_PDF_Plugin
                 continue;
             }
             $valor_dimension = $predeterminados[$clave_dimension];
-            if (!is_int($valor_dimension) || $valor_dimension < 1 || $valor_dimension > 3000) {
-                $this->responder(false, [], $clave_dimension . ' debe ser un entero de 1 a 3000 px.');
+            if (!is_int($valor_dimension) || $valor_dimension < 0 || $valor_dimension > 3000) {
+                $this->responder(false, [], $clave_dimension . ' debe ser un entero de 0 a 3000 px.');
             }
             $predeterminados_normalizados[$clave_dimension] = $valor_dimension;
+        }
+        if (isset($predeterminados_normalizados['ancho'], $predeterminados_normalizados['alto'])
+            && $predeterminados_normalizados['ancho'] === 0
+            && $predeterminados_normalizados['alto'] === 0) {
+            $this->responder(false, [], 'ancho y alto no pueden ser ambos cero.');
         }
         if ($predeterminados_normalizados['alpha_matting_background_threshold']
             >= $predeterminados_normalizados['alpha_matting_foreground_threshold']) {
@@ -3315,8 +3328,9 @@ class Personalizador_PDF_Plugin
                     $ancho = $tarea['ancho'];
                     $alto = $tarea['alto'];
                     if (!is_int($ancho) || !is_int($alto)
-                        || $ancho < 1 || $alto < 1 || $ancho > 3000 || $alto > 3000) {
-                        $this->responder(false, [], 'Las dimensiones de mejora deben ser enteros de 1 a 3000 px.');
+                        || $ancho < 0 || $alto < 0 || $ancho > 3000 || $alto > 3000
+                        || ($ancho === 0 && $alto === 0)) {
+                        $this->responder(false, [], 'Las dimensiones de mejora deben ser enteros de 0 a 3000 px y no pueden ser ambas cero.');
                     }
                     $fila['ancho'] = $ancho;
                     $fila['alto'] = $alto;
@@ -5332,7 +5346,7 @@ JS;
         wp_enqueue_script(
             'personalizador-pdf-cargador',
             PERSONALIZADOR_PDF_URL . 'assets/cargador-pmu.js',
-            [],
+            ['personalizador-pdf-visor'],
             PERSONALIZADOR_PDF_VERSION,
             true
         );

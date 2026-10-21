@@ -492,9 +492,46 @@
         }).catch(function () { /* queda el numero */ });
     };
 
-    /** Spec 021 (D9): tocar una miniatura abre la mini galeria / visor fullscreen. */
+    /**
+     * Spec 030 (D28): tocar una miniatura abre el visor COMPARTIDO
+     * (`assets/visor-pmu.js`), no uno propio. Los `items` van con la URL YA
+     * RESUELTA (`config.urlDe` esta memoizado en `tienda.js`, D23), asi que navegar
+     * no hace ninguna peticion: ese era el motivo de la lentitud. Acciones de la
+     * ranura: Reemplazar y Eliminar.
+     */
     CargadorPMU.prototype._miniTocar = function (indice, posicion) {
-        this._abrirVisor(indice, posicion);
+        return this._abrirVisorCompartido(indice, posicion);
+    };
+
+    /** Abre el visor compartido con las fotos de ESTE hueco (D28/D23). */
+    CargadorPMU.prototype._abrirVisorCompartido = function (indice, posicion) {
+        var self = this;
+        var ids = (this.estado[indice] && this.estado[indice].ids) || [];
+        if (!ids.length) { return Promise.resolve(false); }
+        if (!global.PMUVisor || !this.config.urlDe) {
+            // Sin el visor compartido no se rompe la ficha: cae en el historico.
+            return Promise.resolve(this._abrirVisor(indice, posicion));
+        }
+        var pos = Math.max(0, Math.min(ids.length - 1, parseInt(posicion, 10) || 0));
+        return Promise.all(ids.map(function (id) { return self.config.urlDe(id); }))
+            .then(function (urls) {
+                var items = [];
+                ids.forEach(function (id, i) {
+                    if (urls[i]) { items.push({ url: String(urls[i]), etiqueta: String(id) }); }
+                });
+                if (!items.length) { return false; }
+                return global.PMUVisor.abrir({
+                    items: items,
+                    indice: (pos < items.length) ? pos : 0,
+                    titulo: 'En este campo',
+                    acciones: [
+                        { etiqueta: 'Reemplazar', clase: 'button-primary',
+                            onAccion: function (p) { global.PMUVisor.cerrar(); self._cambiar(indice, p, true); } },
+                        { etiqueta: 'Eliminar', clase: 'pmu-visor-peligro',
+                            onAccion: function (p) { self._quitar(indice, p); self._abrirVisorCompartido(indice, p); } }
+                    ]
+                });
+            });
     };
 
     /**

@@ -1367,9 +1367,29 @@
         api.subirFoto = function (blob, campo) {
             return subirFoto(blob, campo ? (campo.id || campo) : campo);
         };
+        // Spec 030 (D23): mapa id -> url por pagina. La miniatura, el visor y el
+        // recorte usan la MISMA URL, asi que el navegador la sirve de su cache y
+        // navegar no hace NINGUNA peticion (antes cada paso pedia la URL por POST
+        // y tardaba segundos). Se siembra con los `urls` que publica la ficha.
+        var urlsResueltas = {};
+        var anotarUrl = function (dato) {
+            if (!dato || !dato.id || !dato.url) { return; }
+            urlsResueltas[String(dato.id)] = String(dato.url);
+        };
+        Object.keys(ficha.urls || {}).forEach(function (k) {
+            urlsResueltas[String(k)] = String(ficha.urls[k]);
+        });
+        api.anotarUrl = anotarUrl;
         api.urlDeSubida = function (id) {
+            var clave = String(id || '');
+            if (clave !== '' && urlsResueltas[clave]) {
+                return Promise.resolve(urlsResueltas[clave]);
+            }
             var ses = api.sesion || {};
-            return urlDeSubida(ses.sid, ses.item_key, id);
+            return urlDeSubida(ses.sid, ses.item_key, clave).then(function (url) {
+                if (url) { urlsResueltas[clave] = String(url); }
+                return url;
+            });
         };
         // Spec 018 (T004): montar cargador desde el campo.
         api.montarCargador = function (el, opts) {
