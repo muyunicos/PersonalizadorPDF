@@ -672,14 +672,17 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                     ($remota['url'] ?? '') === 'https://ai.loc.ar/procesar');
                 check('cadena IA: envia tareas ordenadas, token y bytes',
                     is_array($pipeline) && ($pipeline['modo'] ?? '') === 'automatico'
-                    && array_column((array)($pipeline['tareas'] ?? []), 'tipo') === ['detectar', 'mejorar', 'quitar_fondo']
-                    && ($pipeline['tareas'][1]['alfa'] ?? '') === 'anime'
+                    && array_column((array)($pipeline['tareas'] ?? []), 'tipo') === ['detectar', 'quitar_fondo', 'mejorar']
+                    && ($pipeline['tareas'][1]['motor'] ?? '') === 'rembg'
+                    && ($pipeline['tareas'][2]['alfa'] ?? '') === 'anime'
                     && ($remota['args']['headers']['X-PMU-Token'] ?? '') === 'test-pmu-ai-token-0123456789abcdef0123456789abcdef'
                     && (int)($remota['args']['timeout'] ?? 0) === 180
                     && strlen((string)($remota['args']['body'] ?? '')) > 0);
                 check('cadena IA: PNG y resumen de resultado al navegador',
                     ($resultado['nombre'] ?? '') === 'prueba-pc-cadena-320x180.png'
                     && strpos((string)($resultado['detalle'] ?? ''), 'Detectado: grafica (ambiguo)') !== false
+                    && strpos((string)($resultado['detalle'] ?? ''), 'Motor de fondo: rembg IS-Net General') !== false
+                    && strpos((string)($resultado['detalle'] ?? ''), 'Cobertura: 0,0%') !== false
                     && strpos((string)($resultado['detalle'] ?? ''), 'Mejora aplicada') !== false
                     && strpos((string)($resultado['detalle'] ?? ''), 'Alfa: Anime') !== false
                     && strpos((string)($resultado['detalle'] ?? ''), 'Eliminacion de fondo rechazada; se conserva la imagen original') !== false
@@ -3637,13 +3640,13 @@ switch ($fase) {
         ];
         if ($esPipeline) {
             $_POST['pipeline'] = $pipelineInvalida
-                ? '{"modo":"automatico","tareas":[{"tipo":"ejecutar"}]}'
+                ? '{"modo":"automatico","tareas":[{"tipo":"quitar_fondo","motor":"desconocido"}]}'
                 : json_encode([
                     'modo' => 'automatico',
                     'tareas' => [
                         ['tipo' => 'detectar'],
+                        ['tipo' => 'quitar_fondo', 'motor' => 'rembg'],
                         ['tipo' => 'mejorar', 'modelo' => 'automatico', 'ancho' => 320, 'alto' => 180, 'alfa' => 'anime'],
-                        ['tipo' => 'quitar_fondo'],
                     ],
                 ]);
         } else {
@@ -3663,12 +3666,9 @@ switch ($fase) {
                     'modo' => 'automatico',
                     'tareas' => [
                         ['tipo' => 'detectar', 'categoria' => 'grafica', 'ambiguo' => true],
+                        ['tipo' => 'quitar_fondo', 'estado' => 'rechazada', 'motor' => 'rembg', 'cobertura_opaca' => 0,
+                            'advertencia' => 'Mascara casi vacia; se conserva la imagen original.'],
                         ['tipo' => 'mejorar', 'estado' => 'aplicada', 'alfa' => 'anime'],
-                        [
-                            'tipo' => 'quitar_fondo',
-                            'estado' => 'rechazada',
-                            'advertencia' => 'Mascara casi vacia; se conserva la imagen original.',
-                        ],
                     ],
                     'duracion_ms' => 12345,
                 ]),

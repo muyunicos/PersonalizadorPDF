@@ -2899,12 +2899,19 @@ class Personalizador_PDF_Plugin
             $claves = [
                 'detectar' => ['tipo'],
                 'mejorar' => ['tipo', 'modelo', 'ancho', 'alto', 'alfa', 'si_categoria'],
-                'quitar_fondo' => ['tipo', 'si_categoria'],
+                'quitar_fondo' => ['tipo', 'motor', 'si_categoria'],
             ];
             if (!isset($claves[$tipo]) || array_diff(array_keys($tarea), $claves[$tipo])) {
                 $this->responder(false, [], 'La cadena contiene un tipo de tarea u opcion desconocidos.');
             }
             $fila = ['tipo' => $tipo];
+            if ($tipo === 'quitar_fondo') {
+                $motor = sanitize_key((string)($tarea['motor'] ?? 'birefnet'));
+                if (!in_array($motor, ['birefnet', 'rembg'], true)) {
+                    $this->responder(false, [], 'El motor para quitar el fondo debe ser birefnet o rembg.');
+                }
+                $fila['motor'] = $motor;
+            }
             if ($tipo === 'mejorar') {
                 $modelo = sanitize_key((string)($tarea['modelo'] ?? 'foto'));
                 if (!in_array($modelo, ['foto', 'anime', 'automatico'], true)) {
@@ -2965,6 +2972,18 @@ class Personalizador_PDF_Plugin
                 }
             } elseif (in_array($tipo, ['mejorar', 'quitar_fondo'], true)) {
                 $nombre = $tipo === 'mejorar' ? 'Mejora' : 'Eliminacion de fondo';
+                if ($tipo === 'quitar_fondo') {
+                    $motor = sanitize_key((string)($tarea['motor'] ?? ''));
+                    if ($motor === 'birefnet') {
+                        $partes[] = 'Motor de fondo: BiRefNet Lite-2K';
+                    } elseif ($motor === 'rembg') {
+                        $partes[] = 'Motor de fondo: rembg IS-Net General';
+                    }
+                    $cobertura = $tarea['cobertura_opaca'] ?? null;
+                    if (is_numeric($cobertura) && (float)$cobertura >= 0 && (float)$cobertura <= 1) {
+                        $partes[] = 'Cobertura: ' . number_format((float)$cobertura * 100, 1, ',', '.') . '%';
+                    }
+                }
                 if ($estado === 'omitida') {
                     $partes[] = $nombre . ' omitida';
                 } elseif ($estado === 'rechazada') {

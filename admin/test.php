@@ -107,7 +107,7 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
     </p>
     <hr>
     <h3>Procesar una cadena de tareas en la PC</h3>
-    <p class="description">Puedes encadenar deteccion, mejora de calidad y eliminacion de fondo. En modo automatico, la deteccion es informativa y la mejora siempre usa Real-ESRGAN general, incluso con graficas o clasificaciones ambiguas. El fondo solo se quita si agregas esa tarea; si la mascara queda casi vacia, se conserva la imagen original.</p>
+    <p class="description">La cadena recomendada elimina el fondo antes de mejorar la imagen. En modo automatico, la deteccion es informativa y la mejora siempre usa Real-ESRGAN general, incluso con graficas o clasificaciones ambiguas. Si la mascara queda casi vacia, se conserva la imagen original.</p>
     <p class="description">La primera prueba de cada modelo puede tardar mas al cargarlo. Usa solo imagenes de prueba no sensibles.</p>
     <p class="description">Si la imagen tiene transparencia, puedes comparar como se amplia el canal alfa. El RGB siempre usa el modelo seleccionado en la tarea mejorar.</p>
     <p>
@@ -129,9 +129,17 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
         <span class="description">Se aplica a las tareas mejorar cuando la imagen tiene transparencia y se amplia.</span>
     </p>
     <p>
+        <label for="ec-redimensionar-pc-motor-fondo">Motor para quitar el fondo</label>
+        <select id="ec-redimensionar-pc-motor-fondo">
+            <option value="birefnet" selected>BiRefNet Lite-2K (GPU)</option>
+            <option value="rembg">rembg - IS-Net General (ONNX)</option>
+        </select>
+        <span class="description">rembg descarga su modelo la primera vez que se usa. La seleccion se aplica a cada tarea quitar_fondo.</span>
+    </p>
+    <p>
         <label for="ec-redimensionar-pc-tareas">Tareas en orden (JSON)</label><br>
-        <textarea id="ec-redimensionar-pc-tareas" class="large-text code" rows="4">[{"tipo":"mejorar","modelo":"automatico"}]</textarea>
-        <span class="description">Tipos: detectar, mejorar (modelo: automatico, foto o anime) y quitar_fondo. Ejemplo detectar -> mejorar -> quitar fondo: [{"tipo":"detectar"},{"tipo":"mejorar","modelo":"automatico"},{"tipo":"quitar_fondo"}].</span>
+        <textarea id="ec-redimensionar-pc-tareas" class="large-text code" rows="4">[{"tipo":"quitar_fondo"},{"tipo":"mejorar","modelo":"automatico"}]</textarea>
+        <span class="description">Tipos: detectar, mejorar (modelo: automatico, foto o anime) y quitar_fondo (motor: birefnet o rembg). Ejemplo recomendado: detectar -> quitar fondo -> mejorar: [{"tipo":"detectar"},{"tipo":"quitar_fondo"},{"tipo":"mejorar","modelo":"automatico"}].</span>
     </p>
     <p>
         <label>Ancho <input type="number" id="ec-redimensionar-pc-ancho" min="1" max="3000" value="500"> px</label>

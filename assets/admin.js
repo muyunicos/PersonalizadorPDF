@@ -1576,6 +1576,8 @@ jQuery(function ($) {
                 if (typeof tarea.ancho === 'undefined') { tarea.ancho = ancho; }
                 if (typeof tarea.alto === 'undefined') { tarea.alto = alto; }
                 tarea.alfa = $('#ec-redimensionar-pc-alfa').val() || 'lanczos';
+            } else if (tarea && tarea.tipo === 'quitar_fondo') {
+                tarea.motor = $('#ec-redimensionar-pc-motor-fondo').val() || 'birefnet';
             }
             return tarea;
         });
