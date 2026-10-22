@@ -954,6 +954,19 @@ fue el shell: fue usar scripts que reescriben ficheros completos.**
 5. **Si algo se rompe**: `git checkout -- <fichero>` (el árbol está limpio y
    pusheado) y rehacerlo con el editor. No intentar "arreglarlo" con más scripts.
 
+### Commits (2026-10-21)
+
+**Moderados, no diminutos**: un commit por **paso verificado**, no por micro-edicion.
+Agrupar en el mismo commit las ediciones de un mismo tema, con sus puertas
+(`php -l` + la fase o suite que corresponda) y, si aplica, su doc (contrato, `spec.md`,
+`tasks.md`). Cuando una ronda cierra **varios hallazgos del mismo tipo** (p. ej. los del
+analisis), va **un solo commit por bloque tematico**.
+
+- **Un tema por commit**: no mezclar refactor + feature + docs.
+- Evitar commits de una linea salvo que el cambio sea de alto riesgo (ahi conviene
+  poder revertirlo solo).
+- `git commit --amend` mientras el paso siga sin publicar; una vez pusheado, commit nuevo.
+
 ### Sintaxis del shell activo (PowerShell 7)
 
 ```powershell
