@@ -90,7 +90,7 @@ compras, con reglas claras de reuso, de consolidacion y de borrado.
 - `sha` = hash del contenido escrito **al subir** por el servidor: es lo que habilita el **dedupe por contenido** (D24).
 | **D17** | **Borrar** elimina la **familia completa** (la original y todas sus versiones) y **avisa antes**, diciendo donde se esta usando (`carrito`, `pedido #N`). Toda baja pasa por `PMU_Sesion` (manifiesto + archivo), **nunca** un `unlink` crudo. |
 | **D18** | **TTL explicito**: `limpiar_ttl()` **no tiene llamador en produccion**; la spec lo agenda (cron diario) y barre **drafts (24 h), sesiones sin items e items de carrito abandonados (D26)**, jamas un archivo en uso. La imagen temporal vence con su sesion; lo comprado vive en `orders/`. |
-| **D19** | **Un endpoint con `op=`**: `admin_post_personalizador_pdf_biblioteca` (+ `nopriv`), coherente con la spec 010 (sin rutas REST ni un segundo camino de escritura). Ops: `listar`, `usar`, `borrar`. |
+| **D19** | **Un endpoint con `op=`**: `admin_post_personalizador_pdf_biblioteca` (+ `nopriv`), coherente con la spec 010 (sin rutas REST ni un segundo camino de escritura). Ops: `listar`, `imagen`, `usos`, `usar`, `borrar`. |
 | **D20** | **Sin cuota dura en v1**: tope por archivo (el vigente) + contadores por identidad para medir. La cuota/purga por peso se decide con datos reales (seccion 6). |
 | **D21** | **La spec 029 no se toca**: en `tmp` la fila sigue siendo `origen: subida`, `resolver_subidas` y `podar_subidas` siguen igual, y `ref` aparece **solo en `orders/`**. |
 | **D22** | **Super-resolucion (futuro)**: la `base` es *la mejor **producida** hasta ahora* (el PNG mide el lienzo acotado a la foto, spec 028 D11), no *la mejor posible*. Un archivo super-resuelto entra como un archivo mas de la familia y pasa a `base` **por flag**. |
@@ -132,7 +132,7 @@ compras, con reglas claras de reuso, de consolidacion y de borrado.
 | `borrar` | `madre` | borra la **familia completa** (`{madre}` + `{madre}-{n}`) con sus filas, por `PMU_Sesion` (avisa antes, D17) |
 
 Causas: `api:biblioteca:<motivo>` (`foto:ajena`, `madre:invalida`, `params:invalidos`) y
-`motor:descarga:ref:ausente` en el PDF. El **aviso** de borrado informa los `usos` (`en_carrito`, `en_pedido`).
+`motor:descarga:ref:ausente` en el PDF. El **aviso** de borrado informa los `usos` (`usos.carrito`, `usos.pedidos`).
 ### 3.4 Sin consolidacion (D11)
 
 No hay carpeta compartida ni paso de consolidacion: cada item del pedido guarda su copia y las filas
@@ -152,7 +152,7 @@ No hay carpeta compartida ni paso de consolidacion: cada item del pedido guarda 
 - Arnes `texto_puente.php`, fase nueva **`biblioteca`**: invitado ve solo lo suyo; familia ajena (`madre`) ->
   `api:biblioteca:foto:ajena`; elegir sin cambios -> fila `ref` y **0 bytes**; elegir con cambios ->
   version `{madre}-2`; el reuso desde `orders` -> fila `ref` sin copiar bytes +
-  3 `ref` + idempotencia; `item_generar_pdfs` con `ref` arma el PDF; `ref` roto -> causa explicita y
+  las filas `ref` al MISMO archivo + idempotencia; `item_generar_pdfs` con `ref` arma el PDF; `ref` roto -> causa explicita y
   PDF con hueco (no rompe); galeria con **una** entrada por familia; `borrar` elimina la familia completa (original + versiones) y sus filas;
   el **aviso** de borrado informa donde se usa (D17); TTL no borra lo referenciado; y la vista respeta el **tope de 10 contenedores** con `revision`/`sin_cambios`; subir **la misma** foto de nuevo **reusa la familia** en vez de crear una segunda entrada; y la galeria se pide **una sola vez por cliente** (cache compartida entre campos); el barrido respeta el **TTL de 30 dias** de los items abandonados (D26).
 - `node tests/selector-contrato.test.js`: tira **Cargas anteriores** + visor en modo biblioteca
@@ -177,7 +177,7 @@ No hay carpeta compartida ni paso de consolidacion: cada item del pedido guarda 
 
 | # | Pendiente | Propuesta |
 |---|---|---|
-Cerrado: **P1** (pagina Mis imagenes) -> fuera de la 030, spec aparte (D28).
+| P1 | Pagina "Mis imagenes" (Mi cuenta) | **CERRADO**: fuera de la 030, spec aparte (D28) |
 
 | P2 | Cuota/peso por identidad | medir con `op=listar` y decidir |
 | P3 | Purga de `orders/` con referencias | documentar el invariante; materializar antes de purgar (cuando exista la purga) |

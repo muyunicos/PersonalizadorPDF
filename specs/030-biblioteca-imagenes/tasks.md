@@ -2,7 +2,7 @@
 
 **Input**: Design documents from `/specs/030-biblioteca-imagenes/`
 
-**Prerequisites**: plan.md (tech + gates), spec.md (28 decisiones + 5 clarificaciones), research.md (R1-R12),
+**Prerequisites**: plan.md (tech + gates), spec.md (28 decisiones + 9 clarificaciones), research.md (R1-R12),
 data-model.md (familia/version/ref/receta), contracts/biblioteca.md + contracts/cliente-biblioteca.md,
 quickstart.md (E1-E7)
 
@@ -136,7 +136,7 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 ### Implementation for User Story 4
 
-- [X] T029 [US4] `inc/class-pmu-sesion.php`: `borrar_familia($sid, $item, $madre)` por `PMU_Sesion` (manifiesto + archivo) devolviendo los `usos` para el aviso (D17/D25)
+- [X] T029 [US4] `inc/class-pmu-sesion.php`: `borrar_familia_dir($dir, $madre)` por `PMU_Sesion` (manifiesto + archivo) devolviendo los `usos` para el aviso (D17/D25)
 - [X] T030 [US4] `personalizador-pdf.php`: `op=borrar` en `handle_biblioteca()` — re-resuelve la `madre` contra el escaneo propio y **no** bloquea (solo avisa) (D17/D19)
 - [X] T031 [US4] `assets/biblioteca-pmu.js`: **Borrar** en el visor: pide `op=usos` (situacion en vivo), confirma con ese aviso y **vuelve a pedir la lista** despues (D25/R8)
 - [X] T032 [US4] `inc/class-pmu-sesion.php`: `limpiar_ttl()` — drafts 24 h, sesiones sin items e items de carrito abandonados 30 dias **desde `manifest.creado`**, siempre **por item completo** (D18/D26/R10)

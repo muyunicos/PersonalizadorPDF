@@ -12,9 +12,9 @@ crear un almacen nuevo**: la galeria es una **vista** sobre `tmp/sesion-{sid}/*/
 `_pmu_sid` de los line items para registrados, con el vinculo que ya da Woo).
 
 El reuso es por **receta**: si la composicion no cambia la fila **referencia** el archivo
-(`origen: ref`, 0 bytes); si cambia, se guarda una **version** `{madre}-{n}`. Al consolidar el pedido,
-los duplicados de sus items apuntan al **archivo de origen** del pedido y **todos** los items quedan
-apuntando ahi: nadie es dueno del archivo y borrar un item no rompe a sus hermanos. **El Motor no se toca.**
+(`origen: ref`, 0 bytes); si cambia, se guarda una **version** `{madre}-{n}`. **Sin consolidacion (D11)**:
+cada item guarda su copia y la fila `ref` apunta al **archivo de origen** del item donde se subio:
+el ahorro es **entre pedidos** (N compras con la misma foto = **1** archivo); si ese origen desaparece, el hueco sale **transparente** con causa `motor:descarga:ref:ausente` (nunca un PDF roto). **El Motor no se toca.**
 
 ## Technical Context
 
@@ -41,7 +41,7 @@ siguientes **0 requests** (revalidacion por `revision` -> `sin_cambios`)
 **nunca** evalua JS, **nunca** confia en rutas del cliente y **recomputa** los hashes que decide
 (mismo patron que `hash_pool()`)
 
-**Scale/Scope**: 3 PHP tocados + 4 JS + 1 fase de arnes + 1 suite Node; **tope de 10 contenedores** por consulta
+**Scale/Scope**: 2 PHP tocados (plugin + `PMU_Sesion`) + 5 JS (biblioteca, visor, selector, cargador, tienda) + 1 fase de arnes + 1 suite Node; **tope de 10 contenedores** por consulta
 
 ## Constitution Check
 
@@ -70,7 +70,7 @@ enmienda planificada de §IV (familias `{madre}-{n}` + `origen: ref`, sin cambio
 
 ```text
 specs/030-biblioteca-imagenes/
-├── spec.md                        # 26 decisiones + 5 clarificaciones
+├── spec.md                        # 28 decisiones + 9 clarificaciones
 ├── plan.md                        # este archivo
 ├── research.md                    # Fase 0 (R1-R12)
 ├── data-model.md                  # Fase 1
@@ -95,7 +95,7 @@ inc/class-pmu-sesion.php
 ├── resolver_ref($dir_item, $ref)         # NUEVO: relativo al item, dentro de uploads/pmu/
 ├── usar_de_biblioteca()                  # NUEVO: copia desde tmp / referencia desde orders / versiona
 
-├── borrar_familia($sid, $item, $madre)   # NUEVO: original + versiones, con el aviso de usos
+├── borrar_familia_dir($dir, $madre)   # NUEVO: original + versiones, con el aviso de usos
 ├── mutar_manifest_dir($dir, $cb)         # NUEVO: variante por DIRECTORIO (orders/ no resuelve por sid)
 └── limpiar_ttl()                         # drafts 24 h + sesiones sin items + carrito abandonado 30 dias
 
@@ -104,7 +104,7 @@ inc/class-pmu-uploads.php
 
 assets/
 ├── visor-pmu.js                   # NUEVO: visor fullscreen COMPARTIDO (PMUVisor), extraido de cargador-pmu.js (D28)
-├── biblioteca-pmu.js              # NUEVO: copia por cliente en localStorage (TTL 15-30 min) + tira (10 fotos via op=imagen)
+├── biblioteca-pmu.js              # NUEVO: copia por cliente en localStorage, revalidada por revision (el TTL es del nonce de las URLs) + tira (las que caben en el ancho; tope 10)
 ├── selector-pmu.js                # contenedor de la tira en el modal + "Elegir" (fuente elegida) vs "Subir"
 ├── cargador-pmu.js                # ranura: receta del hueco + usa PMUVisor (deja de duplicar el visor)
 └── tienda.js                      # op=usar (params de composicion) + PMU_FICHA.biblioteca
@@ -115,8 +115,8 @@ tests/
 ```
 
 **Structure Decision**: se conserva la estructura del repo (plugin + `inc/` + `assets/` + `tests/`): la 030
-no crea modulos, ambitos ni catalogos. No hay lugar nuevo en disco:, dentro
-del ambito `orders` ya existente.
+no crea modulos, ambitos ni catalogos. No hay lugar nuevo en disco: las familias
+viven dentro del ambito `orders` ya existente.
 
 El unico archivo cliente nuevo es `assets/biblioteca-pmu.js` y se justifica: **la cache debe ser unica por
 pagina y compartida por todos los campos** (D23, tu pedido de "por campo con cache y rapido"), y la tira +
