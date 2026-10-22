@@ -1184,6 +1184,61 @@ class PMU_Sesion
         });
         return $fila;
     }
+    /**
+     * Borra una FAMILIA en un item por DIRECTORIO (spec 030, D17/D25): los
+     * archivos `{madre}` y `{madre}-{n}` de `subidas/` mas sus filas en
+     * `manifest.subidas[]` y en `manifest.archivos[]`. Sirve para items de la
+     * sesion y para items ya promovidos (`orders/`, que no resuelven por sid).
+     *
+     * @return int archivos borrados
+     */
+    public function borrar_familia_dir($dir, $madre)
+    {
+        $madre = (string)$madre;
+        if (!preg_match('/^[a-z0-9\-]{4,32}$/', $madre)) {
+            throw new Exception('motor:sesion:familia:invalida');
+        }
+        $borrados = 0;
+        $this->mutar_manifest_dir($dir, function (&$manifest) use ($dir, $madre, &$borrados) {
+            $ids = [];
+            $quedan = [];
+            foreach ((array)($manifest['subidas'] ?? []) as $fila) {
+                if (!is_array($fila) || !isset($fila['id'])) {
+                    continue;
+                }
+                $id = (string)$fila['id'];
+                $suya = (string)($fila['madre'] ?? $id);
+                if ($suya === '') {
+                    $suya = $id;
+                }
+                if ($suya !== $madre) {
+                    $quedan[] = $fila;
+                    continue;
+                }
+                $ids[$id] = true;
+                $archivo = basename((string)($fila['file'] ?? '' ));
+                if ($archivo !== '' ) {
+                    $ruta = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . 'subidas' . DIRECTORY_SEPARATOR . $archivo;
+                    if (is_file($ruta)) {
+                        @unlink($ruta);
+                        $borrados++;
+                    }
+                }
+            }
+            $manifest['subidas'] = $quedan;
+            $archivos = [];
+            foreach ((array)($manifest['archivos'] ?? []) as $fila) {
+                $idFila = (is_array($fila) && (string)($fila['origen'] ?? '') === 'subida')
+                    ? (string)($fila['id'] ?? '') : '';
+                if ($idFila !== '' && isset($ids[$idFila])) {
+                    continue;
+                }
+                $archivos[] = $fila;
+            }
+            $manifest['archivos'] = $archivos;
+        });
+        return $borrados;
+    }
     /* ==================== Ayudantes de arbol ==================== */
 
     private function copiar_arbol($origen, $destino)
