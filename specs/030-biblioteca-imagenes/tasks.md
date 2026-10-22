@@ -38,7 +38,7 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 - [X] T001 [P] Verificar las puertas base en verde antes de tocar nada: `php -l personalizador-pdf.php`, `php -l inc/class-pmu-sesion.php`, `php tests/motor_smoke.php`, `php tests/parity.php`, `php tests/texto_puente.php fotos`, `node tests/selector-contrato.test.js`
 - [X] T002 [P] Crear el esqueleto de la fase `biblioteca` en `tests/texto_puente.php` (case + `preparar_entorno()` con 2 sesiones, 1 pedido pagado y 1 preset) para poder correr la fase vacia
-- [X] T003 Crear el accesor `dir_comun_order($order_id, $crear = false)` en `inc/class-pmu-uploads.php` (unica fuente de rutas, constitution §II)
+- [~] T003 Crear el accesor `dir_comun_order($order_id, $crear = false)` en `inc/class-pmu-uploads.php` (unica fuente de rutas, constitution §II)
 
 ---
 
@@ -73,10 +73,10 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 - [X] T011 [P] [US1] `assets/biblioteca-pmu.js` (NUEVO): `PMUBiblioteca.abrir/cache/invalidar/visor` + cache unica por pagina compartida por campos, invalidada por **re-consulta** tras subir o borrar (D23/R8)
 - [X] T012 [P] [US1] `assets/biblioteca-pmu.js`: tira `pmu-bib-tira` (**una imagen por familia** desde `op=imagen`, hasta 10 fotos, orden por fecha, badge `N versiones`, `usos`) y visor `pmu-bib-visor` con **Elegir**
-- [ ] T013 [US1] `assets/selector-pmu.js`: montar la tira en `spmu-modal` (boton **Elegir ya subida**) y abrir el recorte con la fuente elegida (`onElegir` -> `open({archivo})`); el visor que usa es el **compartido** (T043)
+- [X] T013 [US1] `assets/selector-pmu.js`: montar la tira en `spmu-modal` (boton **Elegir ya subida**) y abrir el recorte con la fuente elegida (`onElegir` -> `open({archivo})`); el visor que usa es el **compartido** (T043)
 - [ ] T014 [US1] `assets/cargador-pmu.js`: pasar a la biblioteca la `receta` del hueco (`w,h,forma,modo,escala,dx,dy,fondo,transp,iw,ih`) y el `onElegir`
 - [ ] T015 [US1] `assets/tienda.js`: `api.biblioteca` + `PMU_FICHA.biblioteca = {endpoint, nonce}` (identidad por cookie, D14)
-- [ ] T016 [US1] `personalizador-pdf.php`: `handle_biblioteca()` con `op=listar|imagen|usos|usar`, nonce `personalizador_pdf_vista_previa`, `admin_post_*` + `nopriv` (D19) y encolar `assets/biblioteca-pmu.js` en `assets_ficha()`
+- [X] T016 [US1] `personalizador-pdf.php`: `handle_biblioteca()` con `op=listar|imagen|usos|usar`, nonce `personalizador_pdf_vista_previa`, `admin_post_*` + `nopriv` (D19) y encolar `assets/biblioteca-pmu.js` en `assets_ficha()`
 - [X] T017 [US1] `inc/class-pmu-sesion.php`: `usar_de_biblioteca($sid, $item, $pdf, $grupo, $madre, $indice, $params)` — receta **recomputada en el servidor** (R2): copia desde `tmp`, referencia desde `orders` y versiona si difiere (D8/D9/D10)
 
 **Checkpoint**: US1 probable sola (E2 + E3) = MVP entregable
@@ -132,15 +132,15 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 ### Tests for User Story 4
 
-- [ ] T028 [P] [US4] Fase `biblioteca` en `tests/texto_puente.php`: el borrado elimina la original y sus versiones con sus filas; el aviso lleva los `usos`; el barrido respeta drafts 24 h / carrito abandonado 30 dias y **no** toca lo referenciado (D17/D25/D26)
+- [~] T028 [P] [US4] Fase `biblioteca` en `tests/texto_puente.php`: el borrado elimina la original y sus versiones con sus filas; el aviso lleva los `usos`; el barrido respeta drafts 24 h / carrito abandonado 30 dias y **no** toca lo referenciado (D17/D25/D26)
 
 ### Implementation for User Story 4
 
-- [ ] T029 [US4] `inc/class-pmu-sesion.php`: `borrar_familia($sid, $item, $madre)` por `PMU_Sesion` (manifiesto + archivo) devolviendo los `usos` para el aviso (D17/D25)
-- [ ] T030 [US4] `personalizador-pdf.php`: `op=borrar` en `handle_biblioteca()` — re-resuelve la `madre` contra el escaneo propio y **no** bloquea (solo avisa) (D17/D19)
-- [ ] T031 [US4] `assets/biblioteca-pmu.js`: **Borrar** en el visor: pide `op=usos` (situacion en vivo), confirma con ese aviso y **vuelve a pedir la lista** despues (D25/R8)
-- [ ] T032 [US4] `inc/class-pmu-sesion.php`: `limpiar_ttl()` — drafts 24 h, sesiones sin items e items de carrito abandonados 30 dias **desde `manifest.creado`**, siempre **por item completo** (D18/D26/R10)
-- [ ] T033 [US4] `personalizador-pdf.php`: agendar el barrido con `wp_schedule_event` diario (hoy `limpiar_ttl()` no tiene ningun llamador) (D18/R10)
+- [X] T029 [US4] `inc/class-pmu-sesion.php`: `borrar_familia($sid, $item, $madre)` por `PMU_Sesion` (manifiesto + archivo) devolviendo los `usos` para el aviso (D17/D25)
+- [X] T030 [US4] `personalizador-pdf.php`: `op=borrar` en `handle_biblioteca()` — re-resuelve la `madre` contra el escaneo propio y **no** bloquea (solo avisa) (D17/D19)
+- [X] T031 [US4] `assets/biblioteca-pmu.js`: **Borrar** en el visor: pide `op=usos` (situacion en vivo), confirma con ese aviso y **vuelve a pedir la lista** despues (D25/R8)
+- [X] T032 [US4] `inc/class-pmu-sesion.php`: `limpiar_ttl()` — drafts 24 h, sesiones sin items e items de carrito abandonados 30 dias **desde `manifest.creado`**, siempre **por item completo** (D18/D26/R10)
+- [X] T033 [US4] `personalizador-pdf.php`: agendar el barrido con `wp_schedule_event` diario (hoy `limpiar_ttl()` no tiene ningun llamador) (D18/R10)
 
 **Checkpoint**: US4 probable sola (E6)
 
@@ -178,7 +178,7 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 - [X] T044 [US1] `assets/cargador-pmu.js`: usar `PMUVisor` (eliminar `_abrirVisor`), mandar los `items` con `url` ya resuelta y el segmento **En este campo / Mis imagenes** (D28/D23)
 - [X] T045 [US1] `personalizador-pdf.php` + `assets/tienda.js`: `handle_subida` devuelve `url`; `PMU_FICHA.urls` publica las URLs de lo cargado; `op=imagen` sirve tambien `item_key`+`id` (D14/D23)
 - [ ] T046 [US1] Puertas del visor: **0 POST por paso** al navegar 5 fotos (la URL sale del mapa `id -> url`), checks en `tests/selector-contrato.test.js` y `tests/campos-contrato.test.js`
-- [ ] T042 Recorrido manual en WP real (quickstart **E1-E8**, incluida la medicion de volumen de E8): 2 productos con la misma foto, compra, `orders/{id}/_comun/`, borrado con aviso y vencimiento de sesiones
+- [ ] T042 Recorrido manual en WP real (quickstart **E1-E8**, incluida la medicion de volumen de E8): 2 productos con la misma foto, compra, la fila ref al archivo de origen (sin `_comun`), borrado con aviso y vencimiento de sesiones
 
 ---
 
