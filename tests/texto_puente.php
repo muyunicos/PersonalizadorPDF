@@ -187,7 +187,18 @@ function wp_send_json_error($d) { $GLOBALS['test_json'] = ['success' => false, '
 function set_transient($k, $v, $e = 0) { $GLOBALS['test_transients'][$k] = $v; return true; }
 function get_transient($k) { return isset($GLOBALS['test_transients'][$k]) ? $GLOBALS['test_transients'][$k] : false; }
 function submit_button($t = '', $c = '', $n = '', $w = true) { echo '<button class="button">' . htmlspecialchars((string)$t) . '</button>'; }
-function esc_textarea($t) { return htmlspecialchars((string)$t, ENT_QUOTES, 'UTF-8'); }
+function esc_textarea($t) { return htmlspecialchars((string)$t, ENT_QUOTES, 'UTF-8'); }// Spec 030 (T009): biblioteca del comprador. La identidad lee la user meta de las
+// sesiones ligadas (`_pmu_sids`) y, con cuenta, pide sus pedidos a Woo.
+function get_user_meta($uid, $key = '', $single = false) {
+    $v = $GLOBALS['test_user_meta'][$uid][$key] ?? null;
+    if ($single) { return $v === null ? '' : $v; }
+    return $v === null ? [] : (array)$v;
+}
+function update_user_meta($uid, $key, $val, $prev = '') {
+    $GLOBALS['test_user_meta'][$uid][$key] = $val;
+    return true;
+}
+function wc_get_orders($args = []) { return (array)($GLOBALS['test_wc_orders_ids'] ?? []); }
 function checked($a, $b = true) { echo ((string)$a === (string)$b || ($b === true && !empty($a))) ? ' checked="checked"' : ''; }
 function register_activation_hook($f, $cb) { return true; }
 
@@ -285,7 +296,26 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
     $admin_error = '';
     $pedidos_html = '';
     $pedidos_error = '';
-    if ($fase === 'admin') {
+    if ($fase === 'biblioteca') {
+        check('spec 030: la receta es un hash de 12 hex', (string)($GLOBALS['bib_receta'] ?? '') !== '' && strlen((string)$GLOBALS['bib_receta']) === 12);
+        check('spec 030: la misma composicion da la misma receta', !empty($GLOBALS['bib_receta_igual']));
+        check('spec 030: otra composicion cambia la receta', !empty($GLOBALS['bib_receta_otra']));
+        check('reuso desde tmp: se COPIA un archivo al item', !empty($GLOBALS['bib_copia_archivo']));
+        check('reuso desde tmp: fila con origen subida + madre + file', !empty($GLOBALS['bib_copia_fila']));
+        check('reuso desde orders: NO se copia nada', !empty($GLOBALS['bib_ref_sin_copia']));
+        check('reuso desde orders: fila origen ref con ../../orders', !empty($GLOBALS['bib_ref_fila']));
+        check('resolver_ref: la referencia da un archivo real', !empty($GLOBALS['bib_ref_ok']));
+        check('resolver_ref: una referencia rota devuelve cadena vacia', !empty($GLOBALS['bib_ref_roto']));
+        check('resolver_subidas resuelve la fila ref', !empty($GLOBALS['bib_resuelve_ref']));
+        $fotos_b = (is_array($json) && !empty($json['success'])) ? (array)($json['data']['fotos'] ?? []) : [];
+        check('op=listar devuelve las familias del comprador', count($fotos_b) >= 1, 'fotos=' . count($fotos_b));
+        check('op=listar trae revision de 12 hex', is_array($json) && strlen((string)($json['data']['revision'] ?? '')) === 12);
+        check('op=listar: contenedores >= 1', (int)($json['data']['totales']['contenedores'] ?? 0) >= 1);
+        check('la familia trae url por op=imagen', !empty($fotos_b[0]['url']) && strpos((string)$fotos_b[0]['url'], 'op=imagen') !== false);
+        check('la familia trae base y archivos', !empty($fotos_b[0]['base']) && (int)($fotos_b[0]['archivos'] ?? 0) >= 1);
+        check('usos: el item del carrito queda anotado', !empty($fotos_b[0]['usos']['carrito']));
+        check('op=listar no deja avisos de PHP', $admin_error === '');
+    }    if ($fase === 'admin') {
         preparar_entorno($testBase, $base);
         // Catalogo sembrado por el motor y luego corrompido (0 bytes, quickstart 007 §6).
         $m_admin = $p->motor_para_tests();
@@ -788,6 +818,10 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         case 'pool_hijo':
             // Hijo de la fase de concurrencia: sin verificacion propia (el padre
             // recoge su stdout). Solo se evita el default de fase desconocida.
+            break;        case 'biblioteca':
+            // Spec 030: los checks de la biblioteca se corren en el bloque
+            // `if ($fase === 'biblioteca')` de arriba; aca solo se evita el
+            // default de fase desconocida.
             break;
         case 'pool_concurrente':
             // Concurrencia real del manifest: los hijos corren en paralelo sobre
@@ -2480,6 +2514,60 @@ switch ($fase) {
         ];
         $_REQUEST = $_POST;
         $p->handle_pool_png(); // exit en wp_send_json_* -> checks del shutdown
+        break;    case 'biblioteca':
+        // Spec 030 (T002/T009): la biblioteca sobre datos REALES (sesion + pedido).
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $motor_b = $p->motor_para_tests();
+        $sesion_b = new PMU_Sesion($motor_b);
+        $sid_b = 'test-bib-0001';
+        $_COOKIE[PMU_Sesion::COOKIE] = $sid_b;
+        $draft_b = $sesion_b->crear_draft($sid_b, ['muestra']);
+        $png_b = sys_get_temp_dir() . '/pd_puente_bib_' . getmypid() . '.webp';
+        \ExtractCorel\Engine\PngWriter::write($png_b, 60, 40);
+        $bytes_b = (string)file_get_contents($png_b);
+        $sub_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b);
+        // Pedido ya entregado del MISMO comprador (origen estable -> se REFERENCIA).
+        $itemOrder_b = $motor_b->dir_ambito('orders') . '/4242/item-pedido';
+        @mkdir($itemOrder_b . '/subidas', 0775, true);
+        $madre_b = 'aaaabbbbcccc';
+        @copy($png_b, $itemOrder_b . '/subidas/' . $madre_b . '.webp');
+        file_put_contents($itemOrder_b . '/manifest.json', json_encode([
+            'item_key' => 'item-pedido', 'sid' => $sid_b, 'pdfs' => ['muestra'],
+            'valores' => [], 'archivos' => [], 'preview_estado' => 'ok',
+            'subidas' => [['id' => $madre_b, 'file' => 'subidas/' . $madre_b . '.webp',
+                'mime' => 'image/webp', 'bytes' => (int)filesize($png_b), 'creado' => time(),
+                'madre' => $madre_b, 'receta' => 'r0', 'origen' => 'subida']],
+        ]));
+        $params_b = ['w' => 1000, 'h' => 1000, 'forma' => 'auto', 'modo' => 'cubrir', 'escala' => 1,
+            'dx' => 0, 'dy' => 0, 'fondo' => 'auto', 'transp' => '', 'iw' => 400, 'ih' => 300];
+        $GLOBALS['bib_receta'] = PMU_Sesion::receta_de($params_b);
+        $GLOBALS['bib_receta_igual'] = ($GLOBALS['bib_receta'] === PMU_Sesion::receta_de($params_b));
+        $otra_b = $params_b;
+        $otra_b['w'] = 900;
+        $GLOBALS['bib_receta_otra'] = ($GLOBALS['bib_receta'] !== PMU_Sesion::receta_de($otra_b));
+        $dirSub_b = $sesion_b->dir_subidas($sid_b, $draft_b, false);
+        $antes_b = count((array)glob($dirSub_b . '/*'));
+        $resSub_b = $sesion_b->resolver_subidas($sid_b, $draft_b, [$sub_b['id']]);
+        $filaTmp_b = $sesion_b->usar_de_biblioteca($sid_b, $draft_b, 'muestra', '0000FF', 'ffff11112222', 0, $params_b, (string)($resSub_b[$sub_b['id']] ?? ''));
+        $GLOBALS['bib_copia_archivo'] = (count((array)glob($dirSub_b . '/*')) === $antes_b + 1);
+        $GLOBALS['bib_copia_fila'] = (is_array($filaTmp_b) && ($filaTmp_b['origen'] ?? '') === 'subida'
+            && ($filaTmp_b['madre'] ?? '') === 'ffff11112222' && ($filaTmp_b['file'] ?? '') !== '' );
+        $antes2_b = count((array)glob($dirSub_b . '/*'));
+        $filaOrd_b = $sesion_b->usar_de_biblioteca($sid_b, $draft_b, 'muestra', '0000FF', $madre_b, 1, $params_b, $itemOrder_b . '/subidas/' . $madre_b . '.webp');
+        $GLOBALS['bib_ref_sin_copia'] = (count((array)glob($dirSub_b . '/*')) === $antes2_b);
+        $GLOBALS['bib_ref_fila'] = (is_array($filaOrd_b) && ($filaOrd_b['origen'] ?? '') === 'ref'
+            && strpos((string)($filaOrd_b['ref'] ?? ''), 'orders/') === 0);
+        $itemDir_b = $sesion_b->dir_item($sid_b, $draft_b);
+        $GLOBALS['bib_ref_ok'] = is_file($sesion_b->resolver_ref($itemDir_b, (string)$filaOrd_b['ref']));
+        $GLOBALS['bib_ref_roto'] = ($sesion_b->resolver_ref($itemDir_b, 'orders/9999/nada/x.webp') === '' );
+        $resRef_b = $sesion_b->resolver_subidas($sid_b, $draft_b, [(string)$filaOrd_b['id']]);
+        $GLOBALS['bib_resuelve_ref'] = is_file((string)($resRef_b[$filaOrd_b['id']] ?? ''));
+        $_REQUEST = ['op' => 'listar', '_wpnonce' => 'nonce'];
+        $_POST = $_REQUEST;
+        $p->handle_biblioteca(); // exit -> checks del shutdown
         break;
 
     case 'overrides':

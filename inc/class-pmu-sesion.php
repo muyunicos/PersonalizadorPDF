@@ -1059,8 +1059,11 @@ class PMU_Sesion
         if ($ref === '' || strpos($ref, "\0") !== false) {
             return '';
         }
+        // El `ref` es relativo a `uploads/pmu/` (D10 revisado: en `tmp` el item esta a 3
+        // niveles y en `orders/` a 2, asi que un `../..` fijo NO sobrevive a la
+        // promocion). `$dir_item` se conserva en la firma como pista del llamador.
         $raiz = @realpath($this->motor->dir_pmu());
-        $ruta = @realpath(rtrim((string)$dir_item, '/\\') . DIRECTORY_SEPARATOR
+        $ruta = @realpath($this->motor->dir_pmu() . DIRECTORY_SEPARATOR
             . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $ref));
         if ($raiz === false || $ruta === false || !is_file($ruta)) {
             return '';
@@ -1155,7 +1158,7 @@ class PMU_Sesion
                 if ($rel === '') {
                     throw new Exception('motor:sesion:biblioteca:fuera:de:pmu');
                 }
-                $subidas[] = ['id' => $id, 'origen' => 'ref', 'ref' => '../../' . $rel,
+                $subidas[] = ['id' => $id, 'origen' => 'ref', 'ref' => $rel,
                     'madre' => $madre, 'receta' => $receta, 'creado' => time()];
             }
             $manifest['subidas'] = $subidas;
@@ -1165,7 +1168,7 @@ class PMU_Sesion
             if ($enTmp) {
                 $nueva['file'] = 'subidas/' . $archivo;
             } else {
-                $nueva['ref'] = '../../' . $rel;
+                $nueva['ref'] = $rel;
             }
             $resto = [];
             foreach ((array)($manifest['archivos'] ?? []) as $f) {
