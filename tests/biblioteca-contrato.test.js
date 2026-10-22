@@ -82,13 +82,20 @@ check('el aviso excluye el item que se esta editando (D17)',
 console.log('== Elegir sin recomponer (D8) ==');
 check('usar() postea op=usar con item/pdf/grupo/indice/params e invalida la copia',
     /fd\.append\('op', 'usar'\)/.test(bib) && /fd\.append\('params', JSON\.stringify\(datos\.params \|\| \{\}\)\)/.test(bib)
-    && /invalidar\(\);\s*return json\.data/.test(bib) && /usar: usar/.test(bib));
+    && /if \(json\.data && json\.data\.fila\) \{ invalidar\(\); \}/.test(bib) && /usar: usar/.test(bib));
 
 console.log('== Auto-open condicionado (4a clarificacion) ==');
 check('el selector de archivos se auto-abre SOLO si la biblioteca esta vacia',
     /bibVacia/.test(sel) && /PMUBiblioteca\.cache/.test(sel));
 check('la copia de la tira se calienta al cargar la ficha (una por pagina)',
     /if \(config\(\)\.url && typeof global\.fetch === 'function'\)/.test(bib));
+
+console.log('== Elegir: la receta la decide el servidor (D8) ==');
+check('op=usar no escribe si la receta no coincide y avisa coincide:false',
+    /coincide' => false/.test(plugin)
+    && /in_array\(\$recetaUsar, \(array\)\(\$fam\['recetas'\] \?\? \[\]\), true\)/.test(plugin));
+check('usar() solo invalida la copia cuando hay fila escrita',
+    /if \(json\.data && json\.data\.fila\) \{ invalidar\(\); \}/.test(bib));
 
 console.log('');
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }

@@ -2107,6 +2107,15 @@ class Personalizador_PDF_Plugin
                 if ($rutaBase === '') {
                     throw new \RuntimeException('imagen:ausente');
                 }
+                // Spec 030 (D8): la RECETA manda. Si la composicion del hueco no coincide
+                // con NINGUNA de la familia, no se escribe nada: el cliente compone y sube
+                // una version (viaja `coincide: false`). El cliente NO decide esto: podria
+                // mentir (constitution §III).
+                $fam = $this->biblioteca_familia_de($contenedores, $madre);
+                $recetaUsar = PMU_Sesion::receta_de($params);
+                if (!in_array($recetaUsar, (array)($fam['recetas'] ?? []), true)) {
+                    wp_send_json_success(['coincide' => false, 'receta' => $recetaUsar]);
+                }
                 $fila = $this->sesion()->usar_de_biblioteca($sid, $item, $pdf, $grupo, $madre, $indice, $params, $rutaBase);
                 wp_send_json_success(['fila' => $fila, 'receta' => PMU_Sesion::receta_de($params)]);
             }

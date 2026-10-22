@@ -295,7 +295,9 @@
             .then(function (r) { return r.json(); })
             .then(function (json) {
                 if (!json || !json.success) { throw new Error((json && json.data) || 'api:biblioteca:falla'); }
-                invalidar();
+                // D8: la copia se invalida SOLO si el servidor escribio una fila. Si la
+                // receta no coincidia, respondio `coincide: false` y no cambio nada.
+                if (json.data && json.data.fila) { invalidar(); }
                 return json.data || {};
             });
     }
