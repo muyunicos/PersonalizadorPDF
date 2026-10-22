@@ -98,10 +98,10 @@
         var s = doc.createElement('style');
         s.id = ESTILO_ID;
         s.textContent =
-            '.pmu-bib-tira{display:flex;gap:8px;overflow-x:auto;padding:6px 0}' +
-            '.pmu-bib-mini{flex:0 0 auto;width:56px;height:56px;border:2px solid #dcdcde;border-radius:6px;background:repeating-conic-gradient(#eee 0 25%,#fff 0 50%) 0/12px 12px;cursor:pointer;padding:0;overflow:hidden}' +
+            '.pmu-bib-tira{display:flex;gap:8px;overflow-x:auto;padding:6px 0;scroll-snap-type:x proximity}' +
+            '.pmu-bib-mini{flex:0 0 auto;width:56px;height:56px;border:2px solid #dcdcde;border-radius:6px;scroll-snap-align:start;background:repeating-conic-gradient(#eee 0 25%,#fff 0 50%) 0/12px 12px;cursor:pointer;padding:0;overflow:hidden}' +
             '.pmu-bib-mini img{width:100%;height:100%;object-fit:cover;display:block}' +
-            '.pmu-bib-mas{border:0;background:transparent;color:#2271b1;font-size:12.5px;cursor:pointer;text-decoration:underline}';
+            '.pmu-bib-mas{border-style:dashed;background:#f6f7f7;font-weight:600;font-size:15px;color:#3c434a;text-decoration:none}';
         (doc.head || doc.documentElement).appendChild(s);
     }
 
@@ -147,7 +147,7 @@
                 var img = doc.createElement('img');
                 img.alt = '';
                 img.decoding = 'async';
-                img.src = String(f.url || '' );
+                img.src = String(f.thumb || f.url || '' );
                 b.appendChild(img);
                 b.addEventListener('click', function () { if (onElegir) { onElegir(f); } });
                 t.appendChild(b);
@@ -155,7 +155,7 @@
             if (fotos.length > TOPE_TIRA) {
                 var mas = doc.createElement('button');
                 mas.type = 'button';
-                mas.className = 'pmu-bib-mas';
+                mas.className = 'pmu-bib-mini pmu-bib-mas';
                 mas.textContent = 'Ver todas (' + fotos.length + ')';
                 mas.addEventListener('click', function () { visor(TOPE_TIRA); });
                 t.appendChild(mas);
