@@ -34,7 +34,7 @@ respuesta y la `receta` se **calculan** (no se guarda ningun indice). Cache del 
 
 **Project Type**: plugin de WordPress (PHP puro en servidor) + componentes JS de cliente
 
-**Performance Goals**: primera apertura de la biblioteca **<= 1,5 s con 300 pedidos**; aperturas
+**Performance Goals**: primera apertura de la biblioteca **<= 1,5 s con 300 pedidos** (se mide en el recorrido manual T042/E8); aperturas
 siguientes **0 requests** (revalidacion por `revision` -> `sin_cambios`)
 
 **Constraints**: sin `exec` ni Node en produccion; escritura **atomica** de manifests; el servidor

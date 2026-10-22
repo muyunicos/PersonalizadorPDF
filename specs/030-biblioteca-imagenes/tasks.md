@@ -167,9 +167,11 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
+> T043-T046 son de **US1** (quedaron listadas aca por el orden en que se agregaron; su codigo es el visor compartido).
+
 **Purpose**: docs, constitucion, release y recorrido real
 
-- [ ] T037 [P] `AGENTS.md`: mapa (§2), convenciones (§5: familias `{madre}-{n}` y `origen: ref`), decisiones (§7), pruebas (§9: fase `biblioteca`) y errores (§11: `api:biblioteca:*`, `motor:descarga:ref:ausente`)
+- [ ] T037 [P] `AGENTS.md`: mapa (§2), convenciones (§5: familias `{madre}-{n}` y `origen: ref`), decisiones (§7), pruebas (§9: fase `biblioteca`) y errores (§11: `api:biblioteca:*`, `motor:descarga:ref:ausente`, y el invariante "no se purga un pedido referenciado" de D12)
 - [ ] T038 [P] `specs/004-woocommerce-pdf-personalization/contracts/sesion-item.md`: firmas nuevas (`fila_subida`, `usar_de_biblioteca`, `borrar_familia_dir`, `mutar_manifest_dir`, `resolver_ref`, `familias`, `familia_de`, `ruta_familia`; y `biblioteca_ruta_imagen`/`biblioteca_mime_de` en el plugin)
 - [ ] T039 [P] `.specify/memory/constitution.md`: enmienda §IV (familias `{madre}-{n}` y `origen: ref`: convenciones de `subidas/`, sin cambio estructural) + Sync Impact Report MINOR, sin tocar principios (y nota del cache de cliente: metadatos, nunca bytes)
 - [ ] T040 [P] `specs/INDICE.md` + `readme.txt` (changelog) + bump de version **solo en la cabecera** de `personalizador-pdf.php` -> 4.22.0
