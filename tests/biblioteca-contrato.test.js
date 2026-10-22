@@ -63,6 +63,16 @@ check('la ficha encola el visor y la biblioteca, con el visor como dependencia',
     && plugin.indexOf("'personalizador-pdf-biblioteca'") !== -1
     && /'personalizador-pdf-biblioteca',[\s\S]{0,220}\[.personalizador-pdf-visor.\]/.test(plugin));
 
+console.log('== Tira adaptativa y tap (2026-10-21) ==');
+check('la tira se adapta al ANCHO (sin scroll) y reserva el tile N+',
+    /var ANCHO_MINI = 64;/.test(bib) && /function caben\(el\)/.test(bib)
+    && /overflow:hidden/.test(bib) && /Math\.max\(1, cabe - 1\)/.test(bib));
+check('el tap de una miniatura abre el visor (no elige directo)',
+    /addEventListener\('click', function \(\) \{ visor\(i\); \}\)/.test(bib)
+    && !/if \(onElegir\) \{ onElegir\(f\); \}/.test(bib));
+check('se repinta al cambiar el tamaño sin volver a pedir',
+    /'resize'/.test(bib) && /pintarTira\(ultimoEl, ultimas\)/.test(bib));
+
 console.log('');
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }
 console.log('BIBLIOTECA CONTRATO FALLA (' + fallos + ' de ' + (ok + fallos) + ')');

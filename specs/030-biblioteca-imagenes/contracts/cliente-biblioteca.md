@@ -8,7 +8,8 @@ Contrato del servidor: [biblioteca.md](./biblioteca.md).
 
 | Miembro | Firma | Que hace |
 |---|---|---|
-| `PMUBiblioteca.abrir` | `(opts)` -> `void` | dibuja la **tira** de imagenes en `opts.contenedor` |
+| `PMUBiblioteca.tira` | `(el, opts)` -> `Promise<number>` | dibuja la **tira**: las miniaturas que caben en el ancho (tope 10) + el tile `N+`; el tap abre el visor |
+| `PMUBiblioteca.pedir` | `()` -> `Promise<{revision, sin_cambios, fotos}>` | pide la vista al servidor (`desde` evita que viaje la lista si no cambio) |
 | `PMUBiblioteca.cache` | `()` -> `{version, fotos, ts}` | estado vigente de la cache (diagnostico y puertas) |
 | `PMUBiblioteca.invalidar` | `()` -> `void` | descarta la copia local (tras subir o borrar) |
 | `PMUBiblioteca.visor` | `(indice)` -> `void` | abre el visor fullscreen en modo biblioteca |
@@ -54,8 +55,8 @@ Sin endpoint (consola o preview) `abrir()` **no dibuja nada** y avisa por `conso
 - Orden: **por fecha, las mas nuevas primero**, **sin filtro** por compatibilidad con el hueco (D27): las
   que no encajan se recomponen al elegirlas.
 - Se monta **dentro del modal de recorte** (`spmu-modal`); **no** se dibuja en la ranura del campo (D28).
-- La tira pinta **hasta 10 fotos**; el visor muestra **todas** las que devolvio la respuesta.
-- Se abre con el boton **Elegir ya subida** del modal de recorte.
+- La tira pinta **las que caben en el ancho** del contenedor (tope **10**, **sin scroll**): con mas fotos que lugar aparece el tile **N+**, y el visor muestra **todas** las que devolvio la respuesta.
+- Se abre con el boton **Elegir ya subida** del modal de recorte; **tocar** una miniatura (o el tile `N+`) abre el **visor** (no elige directo).
 - Si no hay fotos, la tira **no se dibuja** (la ficha no muestra estados vacios).
 - Con `tecnico: true` (preview de la consola) suma las causas (`sin endpoint`, `sin identidad`).
 
