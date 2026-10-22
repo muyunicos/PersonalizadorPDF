@@ -953,6 +953,11 @@ fue el shell: fue usar scripts que reescriben ficheros completos.**
    `$PSVersionTable.PSVersion` → 7.x. Es un comando barato (§8).
 5. **Si algo se rompe**: `git checkout -- <fichero>` (el árbol está limpio y
    pusheado) y rehacerlo con el editor. No intentar "arreglarlo" con más scripts.
+6. **Anclas de UNA linea y sin espacios iniciales**: el editor matchea el texto tal cual, asi que
+   incluir la indentacion adivinada es la causa #1 de "text not found" (2026-10-21). Usar el texto de
+   la linea **sin** sus espacios iniciales; si el cambio abarca varias lineas, partirlo en pasos.
+7. **Un archivo, una edicion por turno**: mandar varias ediciones al MISMO archivo en un lote hace que
+   las siguientes corran sobre un snapshot viejo y fallen (con texto identico al del archivo).
 
 ### Commits (2026-10-21)
 
