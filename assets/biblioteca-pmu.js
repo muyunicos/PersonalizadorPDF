@@ -156,7 +156,7 @@
                 var mas = doc.createElement('button');
                 mas.type = 'button';
                 mas.className = 'pmu-bib-mini pmu-bib-mas';
-                mas.textContent = 'Ver todas (' + fotos.length + ')';
+                mas.textContent = String(fotos.length) + '+';
                 mas.addEventListener('click', function () { visor(TOPE_TIRA); });
                 t.appendChild(mas);
             }
