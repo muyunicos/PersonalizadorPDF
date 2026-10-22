@@ -3019,13 +3019,31 @@ class Personalizador_PDF_Plugin
                 // las instancias sobrantes quedan transparentes, sin bloquear
                 // (D17/D18/D19).
                 $porIdx = [];
+                $refsFaltantes = 0;
+                $sesionRef = $this->sesion();
                 foreach ((array) ($manifest['archivos'] ?? []) as $fila) {
-                    if (!is_array($fila) || (string) ($fila['pdf'] ?? '') !== $pdf || empty($fila['file'])) {
+                    if (!is_array($fila) || (string) ($fila['pdf'] ?? '') !== $pdf) {
                         continue;
                     }
                     $gid = strtoupper((string) ($fila['grupo_id'] ?? ''));
-                    $ruta = $dir . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string) $fila['file']);
-                    if ($gid === '' || !is_file($ruta)) {
+                    if ($gid === '') {
+                        continue;
+                    }
+                    // Spec 030 (D13): la fila viene del pool (`file`) o es una REFERENCIA
+                    // a otro item/pedido (`ref`, relativo al item). Un `ref` que no
+                    // resuelve deja el hueco transparente, pero se cuenta para dar
+                    // una causa clara si el grupo queda entero vacio.
+                    $refFila = (string) ($fila['ref'] ?? '' );
+                    $ruta = '';
+                    if ($refFila !== '') {
+                        $ruta = $sesionRef->resolver_ref($dir, $refFila);
+                    } elseif (!empty($fila['file'])) {
+                        $ruta = $dir . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string) $fila['file']);
+                    }
+                    if ($ruta === '' || !is_file($ruta)) {
+                        if ($refFila !== '') {
+                            $refsFaltantes++;
+                        }
                         continue;
                     }
                     $porIdx[$gid][(int) ($fila['indice'] ?? 0)] = $ruta;
@@ -3040,6 +3058,9 @@ class Personalizador_PDF_Plugin
                         : array_values($rutasGrupo);
                 }
                 if (!$mapa) {
+                    if (!empty($refsFaltantes)) {
+                        throw new \RuntimeException('motor:descarga:ref:ausente:' . $pdf);
+                    }
                     throw new \RuntimeException('motor:descarga:pool:vacio:' . $pdf);
                 }
                 $resultado = Motor::procesar_pedido($motor->ruta_pdf($pdf), $mapa);

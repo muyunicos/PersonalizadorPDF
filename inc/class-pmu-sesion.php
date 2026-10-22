@@ -856,8 +856,13 @@ class PMU_Sesion
         }
         $porId = [];
         foreach ((array)($manifest['subidas'] ?? []) as $fila) {
-            if (is_array($fila) && isset($fila['id'], $fila['file'])) {
-                $porId[(string)$fila['id']] = (string)$fila['file'];
+            if (!is_array($fila) || !isset($fila['id'])) {
+                continue;
+            }
+            if (isset($fila['ref']) && (string)$fila['ref'] !== '') {
+                $porId[(string)$fila['id']] = ['ref' => (string)$fila['ref']];
+            } elseif (isset($fila['file'])) {
+                $porId[(string)$fila['id']] = ['file' => (string)$fila['file']];
             }
         }
         // La foto vive en `{item}/subidas/` (D14), NO en la raiz del item.
@@ -871,9 +876,19 @@ class PMU_Sesion
         $out = [];
         foreach ($ids as $id) {
             $id = (string)$id;
-            if ($id !== '' && isset($porId[$id])) {
-                $out[$id] = $dirSub . DIRECTORY_SEPARATOR . basename($porId[$id]);
+            if ($id === '' || !isset($porId[$id])) {
+                continue;
             }
+            // Spec 030 (D13): una fila `ref` vive FUERA del item (`orders/`): se resuelve
+            // contra `uploads/pmu/` en vez de `subidas/`.
+            if (isset($porId[$id]['ref'])) {
+                $rutaRef = $this->resolver_ref($this->dir_item($sid, $item_key), $porId[$id]['ref']);
+                if ($rutaRef !== '') {
+                    $out[$id] = $rutaRef;
+                }
+                continue;
+            }
+            $out[$id] = $dirSub . DIRECTORY_SEPARATOR . basename($porId[$id]['file']);
         }
         return $out;
     }
@@ -1146,7 +1161,7 @@ class PMU_Sesion
             $manifest['subidas'] = $subidas;
             $ind = ($indice === null) ? 0 : max(0, (int)$indice);
             $nueva = ['pdf' => (string)$pdf, 'grupo_id' => (string)$grupo, 'indice' => $ind,
-                'hash' => $receta, 'origen' => 'subida', 'id' => $id, 'madre' => $madre];
+                'hash' => $receta, 'origen' => ($enTmp ? 'subida' : 'ref'), 'id' => $id, 'madre' => $madre];
             if ($enTmp) {
                 $nueva['file'] = 'subidas/' . $archivo;
             } else {
