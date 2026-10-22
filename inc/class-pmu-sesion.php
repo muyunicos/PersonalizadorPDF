@@ -1021,7 +1021,7 @@ class PMU_Sesion
      * $horas). Devuelve la cantidad de drafts eliminados. Nunca toca items de
      * carrito ni orders/.
      */
-    public function limpiar_ttl($horas = 24)
+    public function limpiar_ttl($horas = 24, $horas_carrito = 720)
     {
         $raiz = $this->motor->dir_ambito('tmp');
         if (!is_dir($raiz)) {
@@ -1038,6 +1038,31 @@ class PMU_Sesion
                     $this->borrar_arbol($draft);
                     $eliminados++;
                 }
+            }
+        }
+        // Spec 030 (T032/D18/D26): ademas de los drafts vencen los ITEMS de carrito
+        // abandonados (30 dias por defecto) y las sesiones sin items, siempre por ITEM completo.
+        $horizonteCarrito = time() - max(1, (int)$horas_carrito) * HOUR_IN_SECONDS;
+        foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . 'sesion-*', GLOB_ONLYDIR) as $dirSesion) {
+            $vivos = 0;
+            foreach ((array)glob($dirSesion . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $item) {
+                $nombre = basename($item);
+                if (strpos($nombre, 'draft-') === 0) {
+                    $vivos++;
+                    continue;
+                }
+                $man = json_decode((string)@file_get_contents($item . DIRECTORY_SEPARATOR . 'manifest.json'), true);
+                $creado = is_array($man) && isset($man['creado']) ? strtotime((string)$man['creado']) : 0;
+                $fallback = @filemtime($item) ?: 0;
+                if (($creado ?: $fallback) < $horizonteCarrito) {
+                    $this->borrar_arbol($item);
+                    $eliminados++;
+                    continue;
+                }
+                $vivos++;
+            }
+            if ($vivos === 0) {
+                $this->borrar_arbol($dirSesion);
             }
         }
         return $eliminados;

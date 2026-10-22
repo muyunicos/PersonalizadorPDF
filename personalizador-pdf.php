@@ -133,6 +133,9 @@ class Personalizador_PDF_Plugin
         // Spec 030 (D19): endpoint unico de la biblioteca (op=imagen|listar|usos|usar|borrar).
         add_action('admin_post_personalizador_pdf_biblioteca', [$this, 'handle_biblioteca']);
         add_action('admin_post_nopriv_personalizador_pdf_biblioteca', [$this, 'handle_biblioteca']);
+        // Spec 030 (T033/D18): barrido diario del TTL (drafts 24 h; carrito abandonado 30 dias).
+        add_action('init', [$this, 'programar_limpieza_ttl']);
+        add_action('personalizador_pdf_limpieza_ttl', [$this, 'handle_limpieza_ttl']);
         add_action('woocommerce_remove_cart_item', [$this, 'carrito_quitar']);
         add_filter('woocommerce_quantity_input_min', [$this, 'cantidad_fija'], 10, 2);
         add_filter('woocommerce_quantity_input_max', [$this, 'cantidad_fija'], 10, 2);
@@ -186,6 +189,27 @@ class Personalizador_PDF_Plugin
             require_once PERSONALIZADOR_PDF_PATH . 'inc' . DIRECTORY_SEPARATOR . 'class-pmu-sesion.php';
         }
         return new PMU_Sesion($this->pmu_uploads());
+    }
+
+    /** Spec 030 (T033/D18): agendar el barrido diario del TTL (una sola vez). */
+    public function programar_limpieza_ttl()
+    {
+        if (!function_exists('wp_next_scheduled') || !function_exists('wp_schedule_event')) {
+            return;
+        }
+        if (!wp_next_scheduled('personalizador_pdf_limpieza_ttl')) {
+            wp_schedule_event(time() + HOUR_IN_SECONDS, 'daily', 'personalizador_pdf_limpieza_ttl');
+        }
+    }
+
+    /** Corre el barrido (hook del cron): drafts 24 h + carrito abandonado 30 dias (D26). */
+    public function handle_limpieza_ttl()
+    {
+        try {
+            $this->sesion()->limpiar_ttl(24, 720);
+        } catch (\Throwable $e) {
+            // Un fallo de limpieza nunca tumba el cron.
+        }
     }
 
     public function handle_pmu_uploads()
