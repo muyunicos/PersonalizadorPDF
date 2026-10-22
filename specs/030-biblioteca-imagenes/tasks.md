@@ -90,12 +90,12 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 ### Tests for User Story 2
 
-- [ ] T018 [P] [US2] Fase `biblioteca` en `tests/texto_puente.php`: subir dos veces la misma foto reusa la familia (1 entrada); recomponer crea `{madre}-2`; el `base` se promueve por area (D5/D6/D24)
+- [~] T018 [P] [US2] Fase `biblioteca` en `tests/texto_puente.php`: subir dos veces la misma foto reusa la familia (1 entrada); recomponer crea `{madre}-2`; el `base` se promueve por area (D5/D6/D24)
 
 ### Implementation for User Story 2
 
-- [ ] T019 [US2] `inc/class-pmu-sesion.php`: `guardar_subida()` calcula `madre`, `receta` y `sha` (sha de los bytes **antes** de `convertir_webp()`, R9) y numera `{madre}-{n}` (primer `n >= 2` libre del item, R11)
-- [ ] T020 [US2] `inc/class-pmu-sesion.php`: `promover_base($familia)` — el flag `base` se mueve comparando area `w*h`, **nunca** con `rename` (D6/R11)
+- [X] T019 [US2] `inc/class-pmu-sesion.php`: `guardar_subida()` calcula `madre`, `receta` y `sha` (sha de los bytes **antes** de `convertir_webp()`, R9) y numera `{madre}-{n}` (primer `n >= 2` libre del item, R11)
+- [ ] T020 [US2] `inc/class-pmu-sesion.php`: `promover_base($familia)` — el flag `base` se mueve comparando area `w*h`, **nunca** con `rename` (D6/R11): **no hace falta** — `PMU_Sesion::familias()` DERIVA la base por area (una sola verdad, sin flag persistido)
 - [ ] T021 [US2] `personalizador-pdf.php`: `handle_subida()` — dedupe por `sha` contra las **bases** del listado vigente (mismo alcance que la galeria, D24/R9)
 
 **Checkpoint**: US2 probable sola (E4 + E6.1)

@@ -840,7 +840,7 @@ class PMU_Sesion
      * ver `firma_imagen()`) y se convierte a WebP si el servidor puede (spec 026
      * D3). Devuelve ['id','file','mime','bytes'].
      */
-    public function guardar_subida($sid, $item_key, $bytes)
+    public function guardar_subida($sid, $item_key, $bytes, $madre = '')
     {
         $bytes = (string)$bytes;
         if ($bytes === '' || strlen($bytes) > self::TOPE_SUBIDA_BYTES) {
@@ -859,19 +859,37 @@ class PMU_Sesion
         $bytes = $img['bytes'];
         $firma = ['ext' => $img['ext'], 'mime' => $img['mime']];
         $salida = null;
-        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $bytes, $firma, $sha, &$salida) {
+        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $bytes, $firma, $sha, $madre, &$salida) {
             if ((string)($manifest['item_key'] ?? '') !== (string)$item_key) {
                 throw new Exception('motor:sesion:item:ausente');
             }
             $dir = $this->dir_subidas($sid, $item_key, true);
+            // Spec 030 (T019/D5): con una familia conocida (dedupe por `sha`, D24) se
+            // reusa su `madre` y se numera la version `{madre}-{n}` (primer `n` libre
+            // del item), igual que en `usar_de_biblioteca()`.
+            $madreFam = (string)$madre;
             $id = substr(str_replace('-', '', $this->uuid4()), 0, 12);
+            if ($madreFam !== '') {
+                $usados = [];
+                foreach ((array)($manifest['subidas'] ?? []) as $s) {
+                    if (is_array($s) && isset($s['id'])) {
+                        $usados[(string)$s['id']] = true;
+                    }
+                }
+                $id = $madreFam;
+                $n = 1;
+                while (isset($usados[$id])) {
+                    $n++;
+                    $id = $madreFam . '-' . $n;
+                }
+            }
             $file = 'subidas/' . $id . '.' . $firma['ext'];
             if (@file_put_contents($dir . DIRECTORY_SEPARATOR . $id . '.' . $firma['ext'], $bytes) === false) {
                 throw new Exception('motor:sesion:subidas:no_escribible');
             }
             $filas = isset($manifest['subidas']) && is_array($manifest['subidas'])
                 ? array_values($manifest['subidas']) : [];
-            $filas[] = $this->fila_subida($id, $file, $id, '', $sha, $firma['mime'], strlen($bytes), time());
+            $filas[] = $this->fila_subida($id, $file, ($madreFam !== '' ? $madreFam : $id), '', $sha, $firma['mime'], strlen($bytes), time());
             $manifest['subidas'] = $filas;
             $salida = ['id' => $id, 'file' => $file, 'mime' => $firma['mime'], 'bytes' => strlen($bytes)];
         });
@@ -1057,6 +1075,32 @@ class PMU_Sesion
             return (int)$b['creado'] - (int)$a['creado'];
         });
         return $out;
+    }
+
+    /**
+     * Spec 030 (T021/D24): familia ya conocida cuyo contenido tiene este `sha` (el
+     * de los bytes CRUDOS, escrito al subir) — `''` si no hay. Es la llave del
+     * dedupe, con el MISMO alcance que la galeria (los contenedores del escaneo,
+     * no toda la tienda). No lee archivos: el `sha` ya esta en la fila.
+     */
+    public function familia_por_sha(array $contenedores, $sha)
+    {
+        $sha = (string)$sha;
+        if ($sha === '') {
+            return '';
+        }
+        foreach ($contenedores as $c) {
+            foreach ((array)($c['manifest']['subidas'] ?? []) as $fila) {
+                if (!is_array($fila) || (string)($fila['sha'] ?? '') !== $sha) {
+                    continue;
+                }
+                $madre = (string)($fila['madre'] ?? ($fila['id'] ?? ''));
+                if ($madre !== '') {
+                    return $madre;
+                }
+            }
+        }
+        return '';
     }
 
     /** Familia concreta del escaneo, o null si no es de este comprador (D14). */

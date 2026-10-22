@@ -325,6 +325,9 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('TTL: la sesion con items sigue viva', !empty($GLOBALS['bib_ttl_sesion_viva']));
         check('TTL: lo comprado (orders/) no se toca', !empty($GLOBALS['bib_ttl_order_intacto']));
         check('TTL: la referencia a orders/ sigue resolviendo', !empty($GLOBALS['bib_ttl_ref_ok']));
+        check('US2: el sha del contenido encuentra la familia (D24)', !empty($GLOBALS['bib_sha_familia']));
+        check('US2: con familia conocida se reusa su madre', !empty($GLOBALS['bib_fam_1']));
+        check('US2: la segunda entra como version {madre}-2 (D5)', !empty($GLOBALS['bib_fam_2']));
         check('op=listar no deja avisos de PHP', $admin_error === '');
     }    if ($fase === 'admin') {
         preparar_entorno($testBase, $base);
@@ -2637,6 +2640,19 @@ switch ($fase) {
         $GLOBALS['bib_ttl_order_intacto'] = is_file($itemOrder_b . '/subidas/' . $madre_b . '.webp');
         $GLOBALS['bib_ttl_ref_ok'] = is_file($sesion_b->resolver_ref($sesion_b->dir_item($sid_b, $draft_b), (string)($filaOrd_b['ref'] ?? '')));
         $GLOBALS['bib_ttl_sesion_viva'] = is_dir($motor_b->dir_ambito('tmp') . '/sesion-' . $sid_b);
+        // Spec 030 (T018/T021): el dedupe por `sha` y el reuso de familia (D5/D24).
+        $contenedoresBib_b = [];
+        foreach ([['sesion', $draft_b, $sesion_b->dir_item($sid_b, $draft_b), 0],
+            ['order', 'item-pedido', $itemOrder_b, 4242]] as $cBib_b) {
+            $manBib_b = json_decode((string)@file_get_contents($cBib_b[2] . '/manifest.json'), true);
+            $contenedoresBib_b[] = ['tipo' => $cBib_b[0], 'item_key' => $cBib_b[1], 'dir' => $cBib_b[2],
+                'order_id' => $cBib_b[3], 'manifest' => is_array($manBib_b) ? $manBib_b : []];
+        }
+        $GLOBALS['bib_sha_familia'] = ($sesion_b->familia_por_sha($contenedoresBib_b, sha1($bytes_b)) !== '');
+        $subFam_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b, 'familiatest');
+        $subFam2_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b, 'familiatest');
+        $GLOBALS['bib_fam_1'] = is_array($subFam_b) && ($subFam_b['id'] === 'familiatest');
+        $GLOBALS['bib_fam_2'] = is_array($subFam2_b) && ($subFam2_b['id'] === 'familiatest-2');
         $_REQUEST = ['op' => 'listar', '_wpnonce' => 'nonce'];
         $_POST = $_REQUEST;
         $p->handle_biblioteca(); // exit -> checks del shutdown
