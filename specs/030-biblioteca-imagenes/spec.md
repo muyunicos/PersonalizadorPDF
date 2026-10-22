@@ -25,6 +25,12 @@
 
 - Q: El visor de la ranura (`cpmu-visor`) tarda segundos al pasar de foto: se puede reutilizar y mejorar tambien para las galerias de los campos? → A: Si: **un solo visor** (`assets/visor-pmu.js`, `PMUVisor`) compartido por la ranura y la biblioteca, con las **URLs ya resueltas** (`PMU_FICHA.urls` + mapa `id -> url`) para que navegar no haga ni un POST (D14/D23/D28).
 
+### Session 2026-10-21 (cuarta pasada: layout del cargador + Elegir vs Subir)
+
+- Q: Donde vive el gesto de elegir una foto ya subida, ahora que la tira existe? → A: La tira vive **SIEMPRE visible** en el modal de recorte (arriba) y se **quita** el boton "Elegir ya subida": se elige **tocando** una miniatura (abre el visor con `Elegir`/`Borrar`). "Cargar imagen" baja a la fila de acciones, junto a `Cancelar`/`Subir`.
+- Q: Cuando el boton primario dice `Elegir` y cuando `Subir`? → A: `Elegir` **solo** si la fuente cargada es una foto de la biblioteca y su `receta` coincide con la del hueco (0 bytes, `op=usar`); con un archivo del equipo, o con cambios, dice `Subir` (siempre viajan bytes). El "sin cambios" se mide contra la `receta` **de la fila del hueco**, asi que tambien vale al reabrir el modal con la imagen cargada antes.
+- Q: Se auto-abre el selector de archivos al abrir el modal? → A: **Solo si la biblioteca del comprador esta VACIA**. La decision es **sincronica** con la copia local de la tira (que el modulo calienta al montar el cargador): con fotos -> tira visible y sin auto-open; **sin** copia -> tampoco se auto-abre (nunca se adivina; queda el boton).
+
 ## 1. Problema
 
 Todo lo que el comprador sube queda **encerrado en el item** de esa compra:

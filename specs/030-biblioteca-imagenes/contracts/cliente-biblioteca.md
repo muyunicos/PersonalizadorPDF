@@ -69,6 +69,9 @@ Sin endpoint (consola o preview) `abrir()` **no dibuja nada** y avisa por `conso
 
 ## Elegir vs Subir (D8)
 
+**Etiqueta**: `Elegir` **solo** con una foto de la biblioteca y receta igual (`receta` ∈ `foto.recetas`); con un archivo del equipo, o con cambios, dice **`Subir`** (siempre viajan bytes). El "sin cambios" se mide contra la `receta` **de la fila del hueco**, asi que vale tambien al reabrir el modal con la imagen cargada antes.
+**Despues de `Elegir`**: registrar el `id` de la fila devuelta por `op=usar` por instancia con `op=fotos` — la Vista previa se arma del pool, no de la fila.
+
 | Situacion | Boton | Resultado |
 |---|---|---|
 | la receta del hueco es igual a la de la foto | **Elegir** | `op=usar` con la `madre`: el servidor **referencia** (0 bytes) |
