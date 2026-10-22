@@ -646,6 +646,13 @@
         inyectarEstilos();
         this._focoPrevio = document.activeElement || null;
         this._contextoReemplazo = opciones.tituloContexto ? String(opciones.tituloContexto) : '';
+        // Spec 030 (T014/4a clarificacion): el contexto del hueco (para `op=usar`) y si la
+        // fuente viene de la BIBLIOTECA (entonces se puede ELEGIR sin recomponer). `_cambios`
+        // se enciende con cualquier retoque: si no, el primario dice `Elegir` (0 bytes).
+        this._hueco = opciones.hueco || null;
+        this._bibMadre = opciones.bibMadre ? String(opciones.bibMadre) : '';
+        this._cambios = false;
+        this._yaElegido = false;
         this._subiendo = false;
         this.raiz = document.createElement('div');
         this.raiz.className = 'spmu-modal';
