@@ -38,7 +38,7 @@ check('tiene TTL (las URLs llevan nonce de WP)',
 check('revalida por revision: manda desde y respeta sin_cambios',
     /fd\.append\(.desde., previa\.revision\)/.test(bib) && /d\.sin_cambios && previa/.test(bib));
 check('la tira pinta hasta 10 fotos y no dibuja si esta vacia',
-    /var TOPE_TIRA = 10;/.test(bib) && /if \(!fotos\.length\)/.test(bib));
+    /var TOPE_TIRA = 10;/.test(bib) && /if \(!fotos \|\| !fotos\.length\)/.test(bib));
 check('guarda solo metadatos: usa la url del endpoint y no la resuelve por POST',
     /img\.src = String\(f\.thumb \|\| f\.url/.test(bib) && !/urlDeSubida/.test(bib));
 check('el visor es el COMPARTIDO y la accion es Elegir',
