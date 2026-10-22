@@ -2217,7 +2217,7 @@ class Personalizador_PDF_Plugin
      * (`madre`, con el escaneo de T008). `Cache-Control: private` + `ETag` para que
      * el navegador la cachee (por eso navegar el visor no vuelve a descargar).
      */
-    private function biblioteca_servir_imagen($sid)
+    public function biblioteca_ruta_imagen($sid)
     {
         $param = static function ($k) {
             return sanitize_text_field(wp_unslash((string)($_REQUEST[$k] ?? '')));
@@ -2242,12 +2242,30 @@ class Personalizador_PDF_Plugin
         if ($ruta === '' || !is_file($ruta)) {
             throw new \RuntimeException('imagen:ausente');
         }
-        // D14: sin miniaturas derivadas: se sirve la imagen de la familia y la cachea el navegador.
-        $mimes = ['webp' => 'image/webp', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'gif' => 'image/gif'];
+        return $ruta;
+    }
+
+    /** Mime por EXTENSION del archivo (spec 030: el Content-Type que se perdia). */
+    public function biblioteca_mime_de($ruta)
+    {
+        $ext = strtolower((string)pathinfo((string)$ruta, PATHINFO_EXTENSION));
+        $tipos = ['webp' => 'image/webp', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'gif' => 'image/gif'];
+        return isset($tipos[$ext]) ? $tipos[$ext] : 'application/octet-stream';
+    }
+
+    /**
+     * Sirve los bytes de una imagen (D14). La RESOLUCION vive en
+     * `biblioteca_ruta_imagen()` (publica: el arnes la ejercita sin `exit`).
+     */
+    private function biblioteca_servir_imagen($sid)
+    {
+        $ruta = $this->biblioteca_ruta_imagen($sid);
+        // D14: sin miniaturas derivadas: la imagen de la familia, cacheada por el navegador.
+        // (el mapa extension->mime vive en biblioteca_mime_de: una sola fuente)
         header('Cache-Control: private, max-age=604800');
         header('ETag: "' . sha1((string)@filemtime($ruta) . '-' . (int)@filesize($ruta)) . '"');
-        $ext = strtolower((string)pathinfo($ruta, PATHINFO_EXTENSION));
-        header('Content-Type: ' . (isset($mimes[$ext]) ? $mimes[$ext] : 'application/octet-stream'));
+        $mime = $this->biblioteca_mime_de($ruta);
+        header('Content-Type: ' . $mime);
         header('Content-Length: ' . (int)@filesize($ruta));
         readfile($ruta);
         exit;

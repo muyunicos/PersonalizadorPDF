@@ -314,6 +314,10 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('la familia trae url por op=imagen', !empty($fotos_b[0]['url']) && strpos((string)$fotos_b[0]['url'], 'op=imagen') !== false);
         check('la familia trae base y archivos', !empty($fotos_b[0]['base']) && (int)($fotos_b[0]['archivos'] ?? 0) >= 1);
         check('usos: el item del carrito queda anotado', !empty($fotos_b[0]['usos']['carrito']));
+        check('op=imagen: la familia propia se resuelve a un archivo real', !empty($GLOBALS['bib_img_propia']));
+        check('op=imagen: el mime sale por EXTENSION (image/webp)', !empty($GLOBALS['bib_img_mime']));
+        check('op=imagen: una madre ajena da la causa foto:ajena', !empty($GLOBALS['bib_img_ajena']));
+        check('op=imagen: la variante item_key+id (ranura) tambien resuelve', !empty($GLOBALS['bib_img_item']));
         check('op=listar no deja avisos de PHP', $admin_error === '');
     }    if ($fase === 'admin') {
         preparar_entorno($testBase, $base);
@@ -2565,6 +2569,33 @@ switch ($fase) {
         $GLOBALS['bib_ref_roto'] = ($sesion_b->resolver_ref($itemDir_b, 'orders/9999/nada/x.webp') === '' );
         $resRef_b = $sesion_b->resolver_subidas($sid_b, $draft_b, [(string)$filaOrd_b['id']]);
         $GLOBALS['bib_resuelve_ref'] = is_file((string)($resRef_b[$filaOrd_b['id']] ?? ''));
+        // Spec 030 (T009): la RESOLUCION de `op=imagen` (el camino que fallaba en
+        // silencio y dejaba la tira sin fotos). Se ejercita SIN streaming.
+        $_REQUEST = ['op' => 'imagen', 'madre' => $madre_b, '_wpnonce' => 'nonce'];
+        $rutaImg_b = '';
+        try {
+            $rutaImg_b = $p->biblioteca_ruta_imagen($sid_b);
+        } catch (\Throwable $e) {
+            $rutaImg_b = '';
+        }
+        $GLOBALS['bib_img_propia'] = is_file($rutaImg_b);
+        $GLOBALS['bib_img_mime'] = ($p->biblioteca_mime_de($rutaImg_b) === 'image/webp');
+        $_REQUEST = ['op' => 'imagen', 'madre' => 'zzzznoexiste', '_wpnonce' => 'nonce'];
+        $causaBib_b = '';
+        try {
+            $p->biblioteca_ruta_imagen($sid_b);
+        } catch (\Throwable $e) {
+            $causaBib_b = $e->getMessage();
+        }
+        $GLOBALS['bib_img_ajena'] = ($causaBib_b === 'foto:ajena');
+        $_REQUEST = ['op' => 'imagen', 'item_key' => $draft_b, 'id' => $sub_b['id'], '_wpnonce' => 'nonce'];
+        $rutaItem_b = '';
+        try {
+            $rutaItem_b = $p->biblioteca_ruta_imagen($sid_b);
+        } catch (\Throwable $e) {
+            $rutaItem_b = '';
+        }
+        $GLOBALS['bib_img_item'] = is_file($rutaItem_b);
         $_REQUEST = ['op' => 'listar', '_wpnonce' => 'nonce'];
         $_POST = $_REQUEST;
         $p->handle_biblioteca(); // exit -> checks del shutdown
