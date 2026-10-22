@@ -303,7 +303,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('reuso desde tmp: se COPIA un archivo al item', !empty($GLOBALS['bib_copia_archivo']));
         check('reuso desde tmp: fila con origen subida + madre + file', !empty($GLOBALS['bib_copia_fila']));
         check('reuso desde orders: NO se copia nada', !empty($GLOBALS['bib_ref_sin_copia']));
-        check('reuso desde orders: fila origen ref con ../../orders', !empty($GLOBALS['bib_ref_fila']));
+        check('reuso desde orders: fila origen ref relativa a uploads/pmu', !empty($GLOBALS['bib_ref_fila']));
         check('resolver_ref: la referencia da un archivo real', !empty($GLOBALS['bib_ref_ok']));
         check('resolver_ref: una referencia rota devuelve cadena vacia', !empty($GLOBALS['bib_ref_roto']));
         check('resolver_subidas resuelve la fila ref', !empty($GLOBALS['bib_resuelve_ref']));

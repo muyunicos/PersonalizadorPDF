@@ -46,7 +46,7 @@ conocida); devolver el item a la sesion (rompe la promocion por `rename`).
 
 ## R4 — `resolver_ref` (D10/D13)
 
-**Decision**: `ref` es **relativo al item**, se resuelve con `realpath()` y se verifica que quede dentro del
+**Decision**: `ref` es **relativo a `uploads/pmu/`** (el arnes demostro que la profundidad del item difiere entre `tmp` y `orders/`: 3 vs 2 niveles), se resuelve con `realpath()` y se verifica que quede dentro del
 `basedir` de `uploads/pmu/`; si no resuelve: `motor:descarga:ref:ausente` y hueco transparente. El cliente
 **nunca** manda rutas: manda `madre` (la familia) de su propio listado.
 
