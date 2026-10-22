@@ -1957,118 +1957,30 @@ class Personalizador_PDF_Plugin
      * `madre`, con la `base` (mayor area) como portada, sus versiones y los usos
      * (carrito/pedidos) para el aviso de borrado (R6).
      */
+    /**
+     * Familias del comprador (D1): la convencion (madre / base por area / usos)
+     * vive en `PMU_Sesion::familias()` — **dueno unico** (constitution §II). Aca
+     * solo se inyecta la URL del endpoint, que es politica del plugin (D14).
+     */
     private function biblioteca_familias(array $contenedores)
     {
-        $familias = [];
-        foreach ($contenedores as $c) {
-            foreach ((array)($c['manifest']['subidas'] ?? []) as $fila) {
-                if (!is_array($fila) || !isset($fila['id'])) {
-                    continue;
-                }
-                $id = (string)$fila['id'];
-                $madre = (string)($fila['madre'] ?? $id);
-                if ($madre === '') {
-                    $madre = $id;
-                }
-                $file = (string)($fila['file'] ?? '' );
-                if ($file === '' ) {
-                    continue;
-                }
-                $ruta = $c['dir'] . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $file);
-                if (!is_file($ruta)) {
-                    continue;
-                }
-                $w = (int)($fila['w'] ?? 0);
-                $h = (int)($fila['h'] ?? 0);
-                if ($w < 1 || $h < 1) {
-                    $dim = @getimagesize($ruta);
-                    $w = is_array($dim) ? (int)$dim[0] : 0;
-                    $h = is_array($dim) ? (int)$dim[1] : 0;
-                }
-                if (!isset($familias[$madre])) {
-                    $familias[$madre] = ['madre' => $madre, 'archivos' => 0, 'w' => 0, 'h' => 0,
-                        'base' => '', 'url' => $this->url_biblioteca_imagen_madre($madre), 'creado' => 0, 'bytes' => 0,
-                        'usos' => ['carrito' => [], 'pedidos' => []]];
-                }
-                $familias[$madre]['archivos']++;                $familias[$madre]['bytes'] += (int)@filesize($ruta);
-                $creado = (int)($fila['creado'] ?? 0);
-                if ($creado > $familias[$madre]['creado']) {
-                    $familias[$madre]['creado'] = $creado;
-                }
-                if (($w * $h) > ($familias[$madre]['w'] * $familias[$madre]['h'])) {
-                    $familias[$madre]['w'] = $w;
-                    $familias[$madre]['h'] = $h;
-                    $familias[$madre]['base'] = $id;
-                    $familias[$madre]['url'] = $this->url_biblioteca_imagen_madre($madre);
-                }
-                if ($c['tipo'] === 'sesion') {
-                    if (!in_array($c['item_key'], $familias[$madre]['usos']['carrito'], true)) {
-                        $familias[$madre]['usos']['carrito'][] = (string)$c['item_key'];
-                    }
-                } elseif ((int)$c['order_id'] > 0
-                    && !in_array((int)$c['order_id'], $familias[$madre]['usos']['pedidos'], true)) {
-                    $familias[$madre]['usos']['pedidos'][] = (int)$c['order_id'];
-                }
-            }
-        }
-        $out = array_values($familias);
-        usort($out, function ($a, $b) {
-            return (int)$b['creado'] - (int)$a['creado'];
+        return $this->sesion()->familias($contenedores, function ($madre) {
+            return $this->url_biblioteca_imagen_madre($madre);
         });
-        return $out;
     }
 
     /** Familia concreta del escaneo, o null si no es de este comprador (D14). */
     private function biblioteca_familia_de(array $contenedores, $madre)
     {
-        $madre = (string)$madre;
-        if ($madre === '' || !preg_match('/^[a-z0-9\-]{4,32}$/', $madre)) {
-            return null;
-        }
-        foreach ($this->biblioteca_familias($contenedores) as $f) {
-            if ((string)$f['madre'] === $madre) {
-                return $f;
-            }
-        }
-        return null;
+        return $this->sesion()->familia_de($contenedores, $madre, function ($m) {
+            return $this->url_biblioteca_imagen_madre($m);
+        });
     }
 
     /** Ruta absoluta de la `base` (mayor area) de una familia del escaneo (D13). */
     private function biblioteca_ruta_familia(array $contenedores, $madre)
     {
-        $madre = (string)$madre;
-        if ($madre === '') {
-            return '';
-        }
-        $mejor = '';
-        $area = -1;
-        foreach ($contenedores as $c) {
-            foreach ((array)($c['manifest']['subidas'] ?? []) as $fila) {
-                if (!is_array($fila) || !isset($fila['id'], $fila['file'])) {
-                    continue;
-                }
-                $id = (string)$fila['id'];
-                $suya = (string)($fila['madre'] ?? $id);
-                if ($suya === '') {
-                    $suya = $id;
-                }
-                if ($suya !== $madre) {
-                    continue;
-                }
-                $ruta = $c['dir'] . DIRECTORY_SEPARATOR
-                    . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string)$fila['file']);
-                if (!is_file($ruta)) {
-                    continue;
-                }
-                $dim = @getimagesize($ruta);
-                $a2 = is_array($dim) ? ((int)$dim[0] * (int)$dim[1]) : 0;
-                if ($a2 > $area) {
-                    $area = $a2;
-                    $mejor = $ruta;
-                }
-            }
-        }
-        return $mejor;
+        return $this->sesion()->ruta_familia($contenedores, $madre);
     }
     /** URL protegida de la base de una familia (spec 030, D14/D27). */
     private function url_biblioteca_imagen_madre($madre, $w = 0)
@@ -2261,7 +2173,6 @@ class Personalizador_PDF_Plugin
     {
         $ruta = $this->biblioteca_ruta_imagen($sid);
         // D14: sin miniaturas derivadas: la imagen de la familia, cacheada por el navegador.
-        // (el mapa extension->mime vive en biblioteca_mime_de: una sola fuente)
         header('Cache-Control: private, max-age=604800');
         header('ETag: "' . sha1((string)@filemtime($ruta) . '-' . (int)@filesize($ruta)) . '"');
         $mime = $this->biblioteca_mime_de($ruta);
