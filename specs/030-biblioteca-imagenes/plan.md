@@ -104,7 +104,7 @@ inc/class-pmu-uploads.php
 
 assets/
 ├── visor-pmu.js                   # NUEVO: visor fullscreen COMPARTIDO (PMUVisor), extraido de cargador-pmu.js (D28)
-├── biblioteca-pmu.js              # NUEVO: cache por pagina + mapa id->url + tira (10 fotos via op=imagen)
+├── biblioteca-pmu.js              # NUEVO: copia por cliente en localStorage (TTL 15-30 min) + tira (10 fotos via op=imagen)
 ├── selector-pmu.js                # contenedor de la tira en el modal + "Elegir" (fuente elegida) vs "Subir"
 ├── cargador-pmu.js                # ranura: receta del hueco + usa PMUVisor (deja de duplicar el visor)
 └── tienda.js                      # op=usar (params de composicion) + PMU_FICHA.biblioteca
