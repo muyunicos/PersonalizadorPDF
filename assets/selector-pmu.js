@@ -899,6 +899,8 @@
         if (btnBib && cajaBib && window.PMUBiblioteca) {
             btnBib.addEventListener('click', function () {
                 cajaBib.hidden = false;
+                if (!cajaBib.childElementCount) { cajaBib.textContent = 'Cargando tus imagenes...'; }
+
                 window.PMUBiblioteca.tira(cajaBib, {
                     onElegir: function (foto) {
                         window.fetch(foto.url, { credentials: 'same-origin' })
