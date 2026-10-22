@@ -328,6 +328,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('US2: el sha del contenido encuentra la familia (D24)', !empty($GLOBALS['bib_sha_familia']));
         check('US2: con familia conocida se reusa su madre', !empty($GLOBALS['bib_fam_1']));
         check('US2: la segunda entra como version {madre}-2 (D5)', !empty($GLOBALS['bib_fam_2']));
+        check('T021: el contenido ya subido devuelve su familia (dedupe)', !empty($GLOBALS['bib_dedupe_madre']));
+        check('T021: un contenido nuevo devuelve cadena vacia (no bloquea)', !empty($GLOBALS['bib_dedupe_nuevo']));
         check('op=listar no deja avisos de PHP', $admin_error === '');
     }    if ($fase === 'admin') {
         preparar_entorno($testBase, $base);
@@ -2653,6 +2655,10 @@ switch ($fase) {
         $subFam2_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b, 'familiatest');
         $GLOBALS['bib_fam_1'] = is_array($subFam_b) && ($subFam_b['id'] === 'familiatest');
         $GLOBALS['bib_fam_2'] = is_array($subFam2_b) && ($subFam2_b['id'] === 'familiatest-2');
+        // Spec 030 (T021): el seam que usa `handle_subida`: contenido ya subido ->
+        // su familia; contenido nuevo -> '' (y la subida sigue normal, sin bloquear).
+        $GLOBALS['bib_dedupe_madre'] = ($p->biblioteca_madre_por_contenido($bytes_b) !== '');
+        $GLOBALS['bib_dedupe_nuevo'] = ($p->biblioteca_madre_por_contenido('contenido-nuevo-sin-familia') === '');
         $_REQUEST = ['op' => 'listar', '_wpnonce' => 'nonce'];
         $_POST = $_REQUEST;
         $p->handle_biblioteca(); // exit -> checks del shutdown

@@ -1724,6 +1724,22 @@ class Personalizador_PDF_Plugin
      * `$_POST`) o como dataURL en `imagen_data`. Techo alto por archivo
      * (`motor:subida:tamano`): es defensa, no limite de producto (D15).
      */
+    /**
+     * Spec 030 (T021/D24): `madre` de la familia que ya tiene este contenido (por
+     * `sha` de los bytes **CRUDOS**, como los escribe `guardar_subida()`), o `''` si
+     * es nuevo. Nunca lanza: sin identidad o sin escaneo la subida sigue normal (la
+     * biblioteca no bloquea nada, D17).
+     */
+    public function biblioteca_madre_por_contenido($bytes)
+    {
+        try {
+            $contenedores = $this->biblioteca_contenedores($this->biblioteca_identidad());
+            return $this->sesion()->familia_por_sha($contenedores, sha1((string)$bytes));
+        } catch (\Throwable $e) {
+            return '';
+        }
+    }
+
     public function handle_subida()
     {
         // Primero la sesion: `sesion()` carga `class-pmu-sesion.php` de forma
@@ -1776,7 +1792,11 @@ class Personalizador_PDF_Plugin
                 $item = $sesion->crear_draft($sid, [$pdf]);
                 $creado = true;
             }
-            $fila = $sesion->guardar_subida($sid, $item, $bytes);
+            // Spec 030 (T021/D24): dedupe por contenido. Si estos bytes (crudos) ya
+            // son una familia conocida del comprador, la subida REUSA esa familia
+            // (una sola entrada en la galeria) en vez de crear una nueva.
+            $fila = $sesion->guardar_subida($sid, $item, $bytes,
+                $this->biblioteca_madre_por_contenido($bytes));
             $fila['sid'] = $sid;
             $fila['item_key'] = $item;
             $fila['item_nuevo'] = $creado;
