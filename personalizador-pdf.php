@@ -1981,6 +1981,58 @@ class Personalizador_PDF_Plugin
         return $out;
     }
 
+    /** Familia concreta del escaneo, o null si no es de este comprador (D14). */
+    private function biblioteca_familia_de(array $contenedores, $madre)
+    {
+        $madre = (string)$madre;
+        if ($madre === '' || !preg_match('/^[a-z0-9\-]{4,32}$/', $madre)) {
+            return null;
+        }
+        foreach ($this->biblioteca_familias($contenedores) as $f) {
+            if ((string)$f['madre'] === $madre) {
+                return $f;
+            }
+        }
+        return null;
+    }
+
+    /** Ruta absoluta de la `base` (mayor area) de una familia del escaneo (D13). */
+    private function biblioteca_ruta_familia(array $contenedores, $madre)
+    {
+        $madre = (string)$madre;
+        if ($madre === '') {
+            return '';
+        }
+        $mejor = '';
+        $area = -1;
+        foreach ($contenedores as $c) {
+            foreach ((array)($c['manifest']['subidas'] ?? []) as $fila) {
+                if (!is_array($fila) || !isset($fila['id'], $fila['file'])) {
+                    continue;
+                }
+                $id = (string)$fila['id'];
+                $suya = (string)($fila['madre'] ?? $id);
+                if ($suya === '') {
+                    $suya = $id;
+                }
+                if ($suya !== $madre) {
+                    continue;
+                }
+                $ruta = $c['dir'] . DIRECTORY_SEPARATOR
+                    . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string)$fila['file']);
+                if (!is_file($ruta)) {
+                    continue;
+                }
+                $dim = @getimagesize($ruta);
+                $a2 = is_array($dim) ? ((int)$dim[0] * (int)$dim[1]) : 0;
+                if ($a2 > $area) {
+                    $area = $a2;
+                    $mejor = $ruta;
+                }
+            }
+        }
+        return $mejor;
+    }
     /** URL protegida de la base de una familia (spec 030, D14/D27). */
     private function url_biblioteca_imagen_madre($madre)
     {
@@ -2051,6 +2103,36 @@ class Personalizador_PDF_Plugin
                 wp_send_json_success(['revision' => $revision, 'sin_cambios' => false, 'fotos' => $fotos,
                     'totales' => ['fotos' => count($fotos), 'bytes' => $bytes,
                         'contenedores' => count($contenedores)]]);
+            }
+            if ($op === 'usos') {
+                $familia = $this->biblioteca_familia_de($contenedores, (string)($_REQUEST['madre'] ?? ''));
+                if ($familia === null) {
+                    throw new \RuntimeException('foto:ajena');
+                }
+                wp_send_json_success(['madre' => (string)$familia['madre'],
+                    'versiones' => (int)$familia['archivos'], 'bytes' => (int)$familia['bytes'],
+                    'carrito' => array_values((array)$familia['usos']['carrito']),
+                    'pedidos' => array_values((array)$familia['usos']['pedidos'])]);
+            }
+            if ($op === 'usar') {
+                $item = sanitize_text_field(wp_unslash((string)($_POST['item_key'] ?? '')));
+                $pdf = sanitize_file_name(wp_unslash((string)($_POST['pdf'] ?? '')));
+                $grupo = strtoupper(sanitize_text_field(wp_unslash((string)($_POST['grupo'] ?? ''))));
+                $madre = sanitize_text_field(wp_unslash((string)($_POST['madre'] ?? '')));
+                $indice = isset($_POST['indice']) ? (int)$_POST['indice'] : 0;
+                $params = json_decode((string)wp_unslash($_POST['params'] ?? ''), true);
+                if (!is_array($params)) {
+                    throw new \RuntimeException('params:invalidos');
+                }
+                if ($this->biblioteca_familia_de($contenedores, $madre) === null) {
+                    throw new \RuntimeException('foto:ajena');
+                }
+                $rutaBase = $this->biblioteca_ruta_familia($contenedores, $madre);
+                if ($rutaBase === '') {
+                    throw new \RuntimeException('imagen:ausente');
+                }
+                $fila = $this->sesion()->usar_de_biblioteca($sid, $item, $pdf, $grupo, $madre, $indice, $params, $rutaBase);
+                wp_send_json_success(['fila' => $fila, 'receta' => PMU_Sesion::receta_de($params)]);
             }
             throw new \RuntimeException('op:invalido');
         } catch (\Throwable $e) {

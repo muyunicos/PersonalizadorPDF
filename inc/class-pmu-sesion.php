@@ -1058,6 +1058,114 @@ class PMU_Sesion
         return $ruta;
     }
 
+    /** Receta canonica de una composicion (spec 030, D7/R2): la recomputa el SERVIDOR. */
+    public static function receta_de(array $params)
+    {
+        $claves = ['w', 'h', 'forma', 'modo', 'escala', 'dx', 'dy', 'fondo', 'transp', 'iw', 'ih'];
+        $partes = [];
+        foreach ($claves as $k) {
+            $v = isset($params[$k]) ? $params[$k] : '';
+            $partes[] = is_scalar($v) ? (string)$v : '';
+        }
+        return substr(sha1(implode('|', $partes)), 0, 12);
+    }
+
+    /**
+     * Registra el uso de una foto de la BIBLIOTECA en el item (spec 030, D8/D9/D10).
+     *
+     * De `tmp/` se COPIA (es volatil); de `orders/` se REFERENCIA: el item esta a
+     * la misma profundidad en las dos etapas, asi que `../../orders/...` vale antes
+     * y despues de promover (cero reescritura). La fila lleva `madre` y `receta`.
+     *
+     * @param string $rutaBase ruta absoluta del archivo de la familia (su `base`)
+     * @return array fila escrita
+     */
+    public function usar_de_biblioteca($sid, $item_key, $pdf, $grupo, $madre, $indice, array $params, $rutaBase)
+    {
+        $pdf = $this->motor->nombre_seguro($pdf, 'sesion:usar_de_biblioteca');
+        $grupo = strtoupper((string)$grupo);
+        if (!preg_match('/^[0-9A-F]{6}$/', $grupo)) {
+            throw new Exception('motor:sesion:grupo:invalido');
+        }
+        $madre = (string)$madre;
+        if (!preg_match('/^[a-z0-9\-]{4,32}$/', $madre)) {
+            throw new Exception('motor:sesion:familia:invalida');
+        }
+        $rutaBase = (string)$rutaBase;
+        if ($rutaBase === '' || !is_file($rutaBase)) {
+            throw new Exception('motor:sesion:biblioteca:archivo:ausente');
+        }
+        $receta = self::receta_de($params);
+        $ext = strtolower((string)pathinfo($rutaBase, PATHINFO_EXTENSION));
+        if ($ext === '') {
+            $ext = 'webp';
+        }
+        $raiz = rtrim(str_replace('\\', '/', $this->motor->dir_pmu()), '/') . '/';
+        $plano = str_replace('\\', '/', $rutaBase);
+        $enTmp = (strpos($plano, $raiz . 'tmp/') === 0);
+        $fila = null;
+        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $pdf, $grupo, $madre, $indice, $receta, $rutaBase, $ext, $enTmp, $raiz, $plano, &$fila) {
+            if ((string)($manifest['item_key'] ?? '') !== (string)$item_key) {
+                throw new Exception('motor:sesion:item:ausente');
+            }
+            $subidas = isset($manifest['subidas']) && is_array($manifest['subidas'])
+                ? array_values($manifest['subidas']) : [];
+            $id = $madre;
+            $archivo = '';
+            $rel = '';
+            if ($enTmp) {
+                $dir = $this->dir_subidas($sid, $item_key, true);
+                $usados = [];
+                foreach ($subidas as $s) {
+                    if (isset($s['id'])) {
+                        $usados[(string)$s['id']] = true;
+                    }
+                }
+                $archivo = $madre . '.' . $ext;
+                $n = 1;
+                while (isset($usados[$id])) {
+                    $n++;
+                    $id = $madre . '-' . $n;
+                    $archivo = $id . '.' . $ext;
+                }
+                if (!@copy($rutaBase, $dir . DIRECTORY_SEPARATOR . $archivo)) {
+                    throw new Exception('motor:sesion:subidas:no_escribible');
+                }
+                $subidas[] = ['id' => $id, 'file' => 'subidas/' . $archivo,
+                    'mime' => 'image/' . ($ext === 'jpg' ? 'jpeg' : $ext),
+                    'bytes' => (int)@filesize($rutaBase), 'creado' => time(),
+                    'madre' => $madre, 'receta' => $receta, 'origen' => 'subida'];
+            } else {
+                $rel = (strpos($plano, $raiz) === 0) ? substr($plano, strlen($raiz)) : '';
+                if ($rel === '') {
+                    throw new Exception('motor:sesion:biblioteca:fuera:de:pmu');
+                }
+                $subidas[] = ['id' => $id, 'origen' => 'ref', 'ref' => '../../' . $rel,
+                    'madre' => $madre, 'receta' => $receta, 'creado' => time()];
+            }
+            $manifest['subidas'] = $subidas;
+            $ind = ($indice === null) ? 0 : max(0, (int)$indice);
+            $nueva = ['pdf' => (string)$pdf, 'grupo_id' => (string)$grupo, 'indice' => $ind,
+                'hash' => $receta, 'origen' => 'subida', 'id' => $id, 'madre' => $madre];
+            if ($enTmp) {
+                $nueva['file'] = 'subidas/' . $archivo;
+            } else {
+                $nueva['ref'] = '../../' . $rel;
+            }
+            $resto = [];
+            foreach ((array)($manifest['archivos'] ?? []) as $f) {
+                if (is_array($f) && (string)($f['pdf'] ?? '') === $pdf
+                    && strtoupper((string)($f['grupo_id'] ?? '')) === $grupo) {
+                    continue;
+                }
+                $resto[] = $f;
+            }
+            $resto[] = $nueva;
+            $manifest['archivos'] = $resto;
+            $fila = $nueva;
+        });
+        return $fila;
+    }
     /* ==================== Ayudantes de arbol ==================== */
 
     private function copiar_arbol($origen, $destino)
