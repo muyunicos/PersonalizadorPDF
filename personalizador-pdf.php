@@ -2147,6 +2147,40 @@ class Personalizador_PDF_Plugin
                 $fila = $this->sesion()->usar_de_biblioteca($sid, $item, $pdf, $grupo, $madre, $indice, $params, $rutaBase);
                 wp_send_json_success(['fila' => $fila, 'receta' => PMU_Sesion::receta_de($params)]);
             }
+           if ($op === 'borrar') {
+               $madre = sanitize_text_field(wp_unslash((string)($_REQUEST['madre'] ?? '')));
+               $familia = $this->biblioteca_familia_de($contenedores, $madre);
+               if ($familia === null) {
+                   throw new \RuntimeException('foto:ajena');
+               }
+               $borrados = 0;
+               foreach ($contenedores as $contenedor) {
+                   $tiene = false;
+                   foreach ((array)($contenedor['manifest']['subidas'] ?? []) as $fila) {
+                       if (!is_array($fila) || !isset($fila['id'])) {
+                           continue;
+                       }
+                       $suya = (string)($fila['madre'] ?? $fila['id']);
+                       if ($suya === $madre || (string)$fila['id'] === $madre) {
+                           $tiene = true;
+                       }
+                   }
+                   if (!$tiene) {
+                       continue;
+                   }
+                   $borrados += $this->sesion()->borrar_familia_dir($contenedor['dir'], $madre);
+               }
+               wp_send_json_success(array(
+                   'madre' => $madre,
+                   'borrado' => true,
+                   'versiones' => (int)$familia['archivos'],
+                   'archivos_borrados' => $borrados,
+                   'usos' => array(
+                       'carrito' => array_values((array)$familia['usos']['carrito']),
+                       'pedidos' => array_values((array)$familia['usos']['pedidos']),
+                   ),
+               ));
+           }
             throw new \RuntimeException('op:invalido');
         } catch (\Throwable $e) {
             wp_send_json_error('api:biblioteca:' . $e->getMessage());
