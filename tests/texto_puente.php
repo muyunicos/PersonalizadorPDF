@@ -698,7 +698,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 check('cadena IA: envia opciones sin lista de tareas, token y bytes',
                     is_array($pipeline) && ($pipeline['escalado']['modo'] ?? '') === 'ilustracion'
                     && !array_key_exists('tareas', $pipeline)
-                    && ($pipeline['escalado']['ancho'] ?? 0) === 500
+                    && ($pipeline['escalado']['ancho'] ?? null) === 0
                     && ($pipeline['escalado']['alto'] ?? 0) === 500
                     && ($pipeline['escalado']['alfa'] ?? '') === 'anime'
                     && ($pipeline['quitar_fondo']['motor'] ?? '') === 'rembg'
@@ -3711,7 +3711,7 @@ switch ($fase) {
                 : json_encode([
                     'escalado' => [
                         'modo' => 'ilustracion',
-                        'ancho' => 500,
+                        'ancho' => 0,
                         'alto' => 500,
                         'alfa' => 'anime',
                     ],

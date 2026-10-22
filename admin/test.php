@@ -137,9 +137,10 @@ $token_ia_configurado = trim((string)($config_ia['token'] ?? '')) !== '';
             </select>
         </p>
         <p>
-            <label>Ancho <input type="number" id="ec-redimensionar-pc-ancho" min="1" max="3000" value="500"> px</label>
-            <label>Alto <input type="number" id="ec-redimensionar-pc-alto" min="1" max="3000" value="500"> px</label>
+            <label>Ancho <input type="number" id="ec-redimensionar-pc-ancho" min="0" max="3000" value="500"> px</label>
+            <label>Alto <input type="number" id="ec-redimensionar-pc-alto" min="0" max="3000" value="500"> px</label>
         </p>
+        <p class="description">Con ancho 0, el alto limita el lado mas largo; con alto 0, el ancho fija el lado mas corto. Si ambos son 0, se conserva el tamaño de origen. Si ambos son mayores que 0, la imagen se ajusta exactamente a esas dimensiones.</p>
         <p>
             <button type="button" class="button ec-redimensionar-pc-guardar"
                     data-nonce="<?php echo esc_attr(wp_create_nonce('personalizador_pdf_guardar_predeterminados_pc')); ?>">
