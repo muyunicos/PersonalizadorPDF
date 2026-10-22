@@ -73,6 +73,12 @@ check('el tap de una miniatura abre el visor (no elige directo)',
 check('se repinta al cambiar el tamaño sin volver a pedir',
     /'resize'/.test(bib) && /pintarTira\(ultimoEl, ultimas\)/.test(bib));
 
+console.log('== Borrado multiple y aviso (2026-10-21) ==');
+check('borrar NO cierra la galeria: refresca la lista y sigue en la misma posicion',
+    /invalidar\(\);\s*return pedir\(\);/.test(bib) && /visor\(Math\.min\(i, restantes\.length - 1\)\)/.test(bib));
+check('el aviso excluye el item que se esta editando (D17)',
+    /fd\.append\('item_key', String\(c\.item \|\| ''\)\)/.test(bib) && /item: s\.item_key \|\| ''/.test(bib));
+
 console.log('');
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }
 console.log('BIBLIOTECA CONTRATO FALLA (' + fallos + ' de ' + (ok + fallos) + ')');

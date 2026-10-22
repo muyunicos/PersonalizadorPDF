@@ -2078,9 +2078,16 @@ class Personalizador_PDF_Plugin
                 if ($familia === null) {
                     throw new \RuntimeException('foto:ajena');
                 }
+                // D17: el aviso habla de OTROS usos. El item que el comprador esta
+                // editando ahora mismo no es "esta en tu carrito" (esta ahi mismo).
+                $itemActual = sanitize_text_field(wp_unslash((string)($_REQUEST['item_key'] ?? '')));
+                $carrito = array_values((array)$familia['usos']['carrito']);
+                if ($itemActual !== '') {
+                    $carrito = array_values(array_diff($carrito, [$itemActual]));
+                }
                 wp_send_json_success(['madre' => (string)$familia['madre'],
                     'versiones' => (int)$familia['archivos'], 'bytes' => (int)$familia['bytes'],
-                    'carrito' => array_values((array)$familia['usos']['carrito']),
+                    'carrito' => $carrito,
                     'pedidos' => array_values((array)$familia['usos']['pedidos'])]);
             }
             if ($op === 'usar') {

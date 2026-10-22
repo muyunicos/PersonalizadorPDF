@@ -37,7 +37,9 @@
         if (cfg) { return cfg; }
         var t = global.PMU_TIENDA || {};
         var b = (global.PMU_FICHA && global.PMU_FICHA.biblioteca) || {};
-        cfg = { url: b.endpoint || t.postUrl || '', nonce: b.nonce || t.nonceVistaPrevia || '' };
+        var s = (global.PMU_FICHA && global.PMU_FICHA.sesion) || {};
+        cfg = { url: b.endpoint || t.postUrl || '', nonce: b.nonce || t.nonceVistaPrevia || '',
+            item: s.item_key || '' };
         return cfg;
     }
 
@@ -140,7 +142,13 @@
                         pedirOp('borrar', String(foto.madre)).then(function () {
                             global.PMUVisor.cerrar();
                             invalidar();
-                            if (ultimoEl) { tira(ultimoEl, { onElegir: onElegir }); }
+                            invalidar();
+                            return pedir();
+                        }).then(function (res) {
+                            var restantes = (res && res.fotos) || [];
+                            if (ultimoEl) { pintarTira(ultimoEl, restantes); }
+                            if (global.PMUVisor) { global.PMUVisor.cerrar(); }
+                            if (restantes.length) { visor(Math.min(i, restantes.length - 1)); }
                         }).catch(function () { });
                     }).catch(function () { });
                 }
@@ -157,6 +165,9 @@
         fd.append('action', 'personalizador_pdf_biblioteca');
         fd.append('op', op);
         fd.append('madre', String(madre || ''));
+        // D17: el item que el comprador esta editando AHORA no cuenta como "esta en
+        // tu carrito" (el servidor lo saca de `usos.carrito`).
+        fd.append('item_key', String(c.item || ''));
         fd.append('_wpnonce', c.nonce);
         return global.fetch(c.url, { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
