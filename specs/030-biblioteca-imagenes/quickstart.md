@@ -44,13 +44,13 @@ version, consolidacion con idempotencia, `ref` resuelto en el PDF, `ref` roto, u
 2. Esperado: el boton dice **Subir**; se sube `{madre}-2.webp` al item; la galeria sigue mostrando **una**
    entrada (badge `2 versiones`) y el `base` pasa al de mayor resolucion (flag, **sin** `rename`).
 
-## E5 — Consolidacion de un pedido con dos items
+## E5 — El pedido NO duplica archivos por consolidacion
 
-1. Agregar al carrito los dos productos con la misma foto y pagar (o pasar el pedido a `processing`).
-2. Esperado en disco: `orders/{order_id}/_comun/{madre}-{n}.{ext}` **una sola vez**; los dos items con
-   filas `{origen: ref, ref: ../_comun/...}`; el PDF se genera igual.
-3. Re-guardar el estado del pedido: **idempotente** (no se duplica `_comun` ni se reescriben rutas).
-
+1. Reusar una foto de un pedido YA pagado en un item nuevo.
+2. Esperado: la fila de `manifest.subidas[]` queda con `origen: ref` y su `ref` apunta al **archivo de
+   ORIGEN** (relativo a `uploads/pmu/`), **sin copiar bytes**; el PDF lo imprime resolviendo esa ruta.
+3. No hay `_comun` ni consolidacion (D11): el ahorro de disco es **entre pedidos** (N compras con la
+   misma foto = 1 archivo). Si el origen se borra, el hueco queda transparente con causa `ref:ausente`.
 ## E6 — Dedupe, aviso de borrado y TTL
 
 1. Subir **la misma** foto otra vez desde el equipo: se **reusa** la familia (no aparece una segunda entrada).

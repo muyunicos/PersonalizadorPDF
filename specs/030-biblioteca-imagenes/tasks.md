@@ -169,9 +169,9 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 **Purpose**: docs, constitucion, release y recorrido real
 
-- [ ] T037 [P] `AGENTS.md`: mapa (§2), convenciones (§5: familias `{madre}-{n}`, `origen: ref`, `_comun`), decisiones (§7), pruebas (§9: fase `biblioteca`) y errores (§11: `api:biblioteca:*`, `motor:descarga:ref:ausente`)
+- [ ] T037 [P] `AGENTS.md`: mapa (§2), convenciones (§5: familias `{madre}-{n}` y `origen: ref`), decisiones (§7), pruebas (§9: fase `biblioteca`) y errores (§11: `api:biblioteca:*`, `motor:descarga:ref:ausente`)
 - [ ] T038 [P] `specs/004-woocommerce-pdf-personalization/contracts/sesion-item.md`: firmas nuevas (`fila_subida`, `usar_de_biblioteca`, `consolidar_order`, `borrar_familia`, `mutar_manifest_dir`, `resolver_ref`)
-- [ ] T039 [P] `.specify/memory/constitution.md`: enmienda §IV (layout `orders/{order_id}/_comun/`, familias `{madre}-{n}` y `origen: ref`) + Sync Impact Report MINOR, sin tocar principios (y nota del cache de cliente: metadatos, nunca bytes)
+- [ ] T039 [P] `.specify/memory/constitution.md`: enmienda §IV (familias `{madre}-{n}` y `origen: ref`: convenciones de `subidas/`, sin cambio estructural) + Sync Impact Report MINOR, sin tocar principios (y nota del cache de cliente: metadatos, nunca bytes)
 - [ ] T040 [P] `specs/INDICE.md` + `readme.txt` (changelog) + bump de version **solo en la cabecera** de `personalizador-pdf.php` -> 4.22.0
 - [ ] T041 `php tests/inventario_repo.php`, `php tests/sin_lectura.php` y `php tests/estado_pmu.php` en verde (leer la galeria no escribe catalogos)
 - [X] T043 [P] [US1] `assets/visor-pmu.js` (NUEVO, **extraido** de `cargador-pmu.js`): `PMUVisor.abrir({items, indice, acciones, fuente, titulo, tecnico})` con navegacion sin `await`, `<img>` reusado, precarga de vecinos y `decoding="async"` (D28)
