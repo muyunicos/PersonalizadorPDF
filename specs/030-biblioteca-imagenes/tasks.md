@@ -132,7 +132,7 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 ### Tests for User Story 4
 
-- [~] T028 [P] [US4] Fase `biblioteca` en `tests/texto_puente.php`: el borrado elimina la original y sus versiones con sus filas; el aviso lleva los `usos`; el barrido respeta drafts 24 h / carrito abandonado 30 dias y **no** toca lo referenciado (D17/D25/D26)
+- [X] T028 [P] [US4] Fase `biblioteca` en `tests/texto_puente.php`: el borrado elimina la original y sus versiones con sus filas; el aviso lleva los `usos`; el barrido respeta drafts 24 h / carrito abandonado 30 dias y **no** toca lo referenciado (D17/D25/D26)
 
 ### Implementation for User Story 4
 

@@ -318,6 +318,13 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('op=imagen: el mime sale por EXTENSION (image/webp)', !empty($GLOBALS['bib_img_mime']));
         check('op=imagen: una madre ajena da la causa foto:ajena', !empty($GLOBALS['bib_img_ajena']));
         check('op=imagen: la variante item_key+id (ranura) tambien resuelve', !empty($GLOBALS['bib_img_item']));
+        check('TTL: un draft vencido (26 h) se borra con sus fotos', !empty($GLOBALS['bib_ttl_draft']));
+        check('TTL: un carrito abandonado (31 dias) se borra con sus fotos', !empty($GLOBALS['bib_ttl_abandonado']));
+        check('TTL: un item de carrito reciente NO se borra', !empty($GLOBALS['bib_ttl_reciente']));
+        check('TTL: una sesion sin items se borra', !empty($GLOBALS['bib_ttl_huerfana']));
+        check('TTL: la sesion con items sigue viva', !empty($GLOBALS['bib_ttl_sesion_viva']));
+        check('TTL: lo comprado (orders/) no se toca', !empty($GLOBALS['bib_ttl_order_intacto']));
+        check('TTL: la referencia a orders/ sigue resolviendo', !empty($GLOBALS['bib_ttl_ref_ok']));
         check('op=listar no deja avisos de PHP', $admin_error === '');
     }    if ($fase === 'admin') {
         preparar_entorno($testBase, $base);
@@ -2596,6 +2603,40 @@ switch ($fase) {
             $rutaItem_b = '';
         }
         $GLOBALS['bib_img_item'] = is_file($rutaItem_b);
+        // Spec 030 (T028/D18/D26): el barrido por ITEM sobre datos reales. Un item de
+        // carrito ABANDONADO (31 dias) se va con sus fotos; uno RECIENTE sobrevive; un
+        // draft vencido (26 h) se va; una sesion sin items se borra; lo comprado
+        // (orders/) NO se toca y su referencia sigue resolviendo.
+        $draftVencido_b = $sesion_b->crear_draft($sid_b, ['muestra']);
+        $dirVencido_b = $sesion_b->dir_item($sid_b, $draftVencido_b);
+        $manVencido_b = json_decode((string)@file_get_contents($dirVencido_b . '/manifest.json'), true);
+        $manVencido_b['creado'] = date('c', time() - 26 * 3600);
+        file_put_contents($dirVencido_b . '/manifest.json', json_encode($manVencido_b));
+        $dirAbandonado_b = $motor_b->dir_sesion_item($sid_b, 'carrito-abandonado');
+        @mkdir($dirAbandonado_b . '/subidas', 0775, true);
+        @copy($png_b, $dirAbandonado_b . '/subidas/' . $madre_b . '.webp');
+        file_put_contents($dirAbandonado_b . '/manifest.json', json_encode([
+            'item_key' => 'carrito-abandonado', 'sid' => $sid_b, 'pdfs' => ['muestra'],
+            'creado' => date('c', time() - 31 * 86400),
+            'subidas' => [['id' => $madre_b, 'file' => 'subidas/' . $madre_b . '.webp',
+                'madre' => $madre_b, 'creado' => time() - 31 * 86400, 'origen' => 'subida']],
+        ]));
+        $dirReciente_b = $motor_b->dir_sesion_item($sid_b, 'carrito-reciente');
+        @mkdir($dirReciente_b . '/subidas', 0775, true);
+        file_put_contents($dirReciente_b . '/manifest.json', json_encode([
+            'item_key' => 'carrito-reciente', 'sid' => $sid_b, 'pdfs' => ['muestra'],
+            'creado' => date('c'), 'subidas' => [],
+        ]));
+        $dirHuerfana_b = $motor_b->dir_ambito('tmp') . '/sesion-huerfana-bib';
+        @mkdir($dirHuerfana_b, 0775, true);
+        $GLOBALS['bib_ttl_borrados'] = $sesion_b->limpiar_ttl(24, 720);
+        $GLOBALS['bib_ttl_draft'] = !is_dir($dirVencido_b);
+        $GLOBALS['bib_ttl_abandonado'] = !is_dir($dirAbandonado_b);
+        $GLOBALS['bib_ttl_reciente'] = is_dir($dirReciente_b);
+        $GLOBALS['bib_ttl_huerfana'] = !is_dir($dirHuerfana_b);
+        $GLOBALS['bib_ttl_order_intacto'] = is_file($itemOrder_b . '/subidas/' . $madre_b . '.webp');
+        $GLOBALS['bib_ttl_ref_ok'] = is_file($sesion_b->resolver_ref($sesion_b->dir_item($sid_b, $draft_b), (string)($filaOrd_b['ref'] ?? '')));
+        $GLOBALS['bib_ttl_sesion_viva'] = is_dir($motor_b->dir_ambito('tmp') . '/sesion-' . $sid_b);
         $_REQUEST = ['op' => 'listar', '_wpnonce' => 'nonce'];
         $_POST = $_REQUEST;
         $p->handle_biblioteca(); // exit -> checks del shutdown
