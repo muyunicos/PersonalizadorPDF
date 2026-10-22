@@ -51,7 +51,7 @@ Una familia **no** tiene estado de ocultamiento (D16) y no se borra por partes (
 | `id` | string | `{madre}` en la primera, `{madre}-{n}` (n>=2) en las versiones; **lo pone el servidor** (R11) |
 | `file` | string | `subidas/{id}.{ext}`, **relativo al item** (ausente cuando la fila es `ref`) |
 | `origen` | `subida` o `ref` | `ref` = el archivo vive fuera del item (D10) |
-| `ref` | string | solo con `origen: ref`: relativo a `uploads/pmu/` (`orders/{A}/_comun/...`), validado con `realpath` (R4, corregido por el arnes) |
+| `ref` | string | solo con `origen: ref`: relativo a `uploads/pmu/` (la ruta al archivo de ORIGEN (`orders/{A}/{item_key}/subidas/...`)), validado con `realpath` (R4, corregido por el arnes) |
 | `madre` | string | familia a la que pertenece (D5) |
 | `base` | 0 o 1 | flag de calidad de la familia (D6) |
 | `receta` | string | `sha1` de la composicion, **recomputado por el servidor** (R2) |
@@ -80,7 +80,7 @@ subida   -> familia nueva (o reuso por sha: D24)
          -> uso: receta igual     -> fila {origen: ref}                  (0 bytes)
                  receta distinta  -> archivo {madre}-{n} + promocion de base (version)
 carrito  -> consolidacion (staging + promocion, idempotente, R3)
-         -> orders/{order}/_comun/{madre}-{n} y TODOS los items en {origen: ref}
+         -> filas {origen: ref} que apuntan al archivo de origen
 pago     -> orders/ (permanente: no vence)
 abandono -> TTL 30 dias -> se borra el item con sus fotos (D26)
 borrado  -> familia completa (original + versiones) y sus filas, con el aviso de usos (D17/D25)

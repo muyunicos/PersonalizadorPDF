@@ -21,8 +21,7 @@ del POST. Respuesta JSON. Causas: `api:biblioteca:<motivo>`.
 
 1. `madre` se **re-resuelve** contra el escaneo propio del servidor (nunca una ruta del cliente): se busca `{madre}.webp` y su familia `{madre}-?.webp`.
 2. Fuente en `tmp/` -> **copia** al item (`subidas/{madre}-{n}.{ext}`), fila `origen: subida`.
-3. Fuente en `orders/` y `receta` igual -> fila `origen: ref` (`../_comun/...` o
-   `orders/{A}/_comun/...`): **sin bytes**.
+3. Fuente en `orders/` y `receta` igual -> fila `origen: ref` con la ruta al archivo de ORIGEN (relativa a `uploads/pmu/`): **sin bytes**.
 4. Fuente en `orders/` y `receta` distinta -> se sube la composicion: **version** `{madre}-{n}` en
    el item (y candidata a `base` si es la mayor).
 
@@ -31,7 +30,7 @@ del POST. Respuesta JSON. Causas: `api:biblioteca:<motivo>`.
 ```json
 { "id":"9f2c41ab0d7e-2", "file":"subidas/9f2c41ab0d7e-2.webp", "madre":"9f2c41ab0d7e",
   "receta":"77e0aa19", "base":0 }
-{ "id":"9f2c41ab0d7e-2", "origen":"ref", "ref":"orders/29088/_comun/9f2c41ab0d7e-2.webp",
+{ "id":"9f2c41ab0d7e-2", "origen":"ref", "ref":"orders/29088/156e/subidas/9f2c41ab0d7e-2.webp",
   "madre":"9f2c41ab0d7e", "receta":"77e0aa19" }
 ```
 
@@ -43,21 +42,10 @@ del POST. Respuesta JSON. Causas: `api:biblioteca:<motivo>`.
 - `sha` = hash del contenido, escrito por el servidor **al subir**: si coincide con una base conocida del cliente
   (mismo alcance que la galeria), la subida **reusa la familia** (D24).
 
-## Consolidacion (`_comun`)
+## Sin consolidacion (D11)
 
-```
-staging_order(order, item, sid) -> copiar el item y despues:
-consolidar_order(order)     // idempotente; tambien se llama en pedido_promover
-  1. por cada item staged: leer manifest.subidas[] y manifest.archivos[]
-  2. agrupar por (madre, receta); gana el de mayor resolucion
-  3. mover el ganador a tmp/orders/{order}/_comun/{madre}-{n}.{ext}
-  4. borrar los duplicados de los items y reescribir TODAS las filas del grupo a
-     { origen: ref, ref: orders/{order}/_comun/{madre}-{n}.{ext} }
-  5. si la familia ya existe en el _comun de un pedido anterior del mismo cliente: referenciar ese
-```
-
-Promocion: `rename` de cada item + `rename` de `_comun` (mismo nivel) -> las rutas relativas **no se
-reescriben**.
+No hay carpeta compartida: la fila `origen: ref` guarda la ruta **relativa a `uploads/pmu/`** del
+archivo de la familia en el pedido donde se subio (el ahorro de disco es **entre pedidos**).
 
 ## Cache del cliente (D23)
 

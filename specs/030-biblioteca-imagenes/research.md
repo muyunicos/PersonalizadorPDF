@@ -139,16 +139,17 @@ pedidos anteriores.
 **Alternativas**: `n` global (exigiria un contador persistido = JSON extra); `n` = timestamp (ilegible y
 mas largo); renombrar el archivo mayor a `{madre}` (rompe referencias: descartado).
 
-## R12 — `_comun`: nombre y profundidad (D10/D11)
+## R12 — La referencia apunta al ORIGEN (D10/D11)
 
-**Decision**: `_comun` **no** existe en `tmp/sesion-{sid}/` (nunca se referencia `tmp`). La consolidacion
-arma `tmp/orders/{order}/_comun/` y la promocion lo renombra a `orders/{order}/_comun/`, **al mismo nivel**
-que los items.
+**Decision**: no hay carpeta compartida ni consolidacion: las filas `origen: ref` guardan la ruta
+**relativa a `uploads/pmu/`** del archivo de la familia en el pedido donde se subio (p. ej.
+`orders/{oid}/{item}/subidas/{madre}.webp`). El ahorro es **entre pedidos**.
 
-**Rationale**: `../_comun/...` (escrito desde el item) vale en las dos etapas -> cero reescritura de rutas.
+**Rationale**: N compras con la misma foto = 1 archivo, sin paso de consolidacion ni carpeta de dueno
+ambiguo; y el arnes demostro que un `../..` fijo no sobrevive a la promocion (de ahi la base `uploads/pmu/`).
 
-**Alternativas**: guardar el compartido dentro de un item (borrar ese item romperia a los hermanos); un
-ambito global `comun/` (rompe *por pedido* y complica TTL y purga).
+**Alternativas**: `_comun` + consolidacion (mas pasos e invariantes); punteros `.url` (segundo dueno del
+mismo dato); catalogo JSON aparte (un catalogo nuevo, D1).
 
 ## Hallazgos del codigo (verificados, no supuestos)
 
