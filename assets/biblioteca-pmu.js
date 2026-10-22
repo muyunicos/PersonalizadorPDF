@@ -28,6 +28,7 @@
     var ESTILO_ID = 'pmu-bib-estilo';
     var cache = null;
     var cfg = null;
+    var ultimoEl = null; // contenedor vigente de la tira (para repintar tras borrar)
     var onElegir = null;
 
     function config() {
@@ -121,13 +122,50 @@
                     global.PMUVisor.cerrar();
                     if (typeof onElegir === 'function' && fotos[i]) { onElegir(fotos[i]); }
                 }
+            }, {
+                etiqueta: 'Borrar',
+                clase: 'pmu-visor-peligro',
+                onAccion: function (i) {
+                    var foto = fotos[i];
+                    if (!foto) { return; }
+                    pedirOp('usos', String(foto.madre)).then(function (uso) {
+                        var aviso = 'Borrar esta imagen?', detalle = [];
+                        if (uso && (uso.carrito || []).length) { detalle.push('esta en tu carrito'); }
+                        if (uso && (uso.pedidos || []).length) { detalle.push('corresponde a la compra #' + uso.pedidos.join(', #')); }
+                        if (detalle.length) { aviso += ' Ojo: ' + detalle.join(' y ') + '.'; }
+                        if (!global.confirm(aviso + ' Se elimina la original y sus versiones.')) { return; }
+                        pedirOp('borrar', String(foto.madre)).then(function () {
+                            global.PMUVisor.cerrar();
+                            invalidar();
+                            if (ultimoEl) { tira(ultimoEl, { onElegir: onElegir }); }
+                        }).catch(function () { });
+                    }).catch(function () { });
+                }
             }]
         });
     }
 
     /** Dibuja la tira (hasta 10 fotos) en `el`; si no hay fotos NO dibuja nada (D23). */
     /** Pinta la tira en `el`: una miniatura por familia + el tile del resto (N+). */
+    /** POST simple al endpoint (op con `madre`): usos y borrar. */
+    function pedirOp(op, madre) {
+        var c = config();
+        var fd = new FormData();
+        fd.append('action', 'personalizador_pdf_biblioteca');
+        fd.append('op', op);
+        fd.append('madre', String(madre || ''));
+        fd.append('_wpnonce', c.nonce);
+        return global.fetch(c.url, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (json) {
+                if (!json || !json.success) {
+                    throw new Error((json && json.data) || 'api:biblioteca:falla');
+                }
+                return json.data || {};
+            });
+    }
     function pintarTira(el, fotos) {
+        ultimoEl = el;
         var doc = el.ownerDocument || global.document;
         el.innerHTML = '';
         if (!fotos || !fotos.length) { return 0; }
