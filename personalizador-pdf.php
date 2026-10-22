@@ -810,6 +810,15 @@ class Personalizador_PDF_Plugin
             true
         );
         // Spec 030 (D28): visor fullscreen COMPARTIDO (ranura + biblioteca). Se encola
+        // Spec 030 (T011): biblioteca del comprador (copia en localStorage + tira).
+        wp_enqueue_script(
+            'personalizador-pdf-biblioteca',
+            PERSONALIZADOR_PDF_URL . 'assets/biblioteca-pmu.js',
+            ['personalizador-pdf-visor'],
+            PERSONALIZADOR_PDF_VERSION,
+            true
+        );
+        // Spec 030 (D28): visor fullscreen COMPARTIDO (ranura + biblioteca). Se encola
         // antes del cargador, que ahora lo usa en vez de su visor propio.
         wp_enqueue_script(
             'personalizador-pdf-visor',
