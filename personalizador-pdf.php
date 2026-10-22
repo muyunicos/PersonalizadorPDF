@@ -1987,7 +1987,7 @@ class Personalizador_PDF_Plugin
                 }
                 if (!isset($familias[$madre])) {
                     $familias[$madre] = ['madre' => $madre, 'archivos' => 0, 'w' => 0, 'h' => 0,
-                        'base' => '', 'url' => '', 'creado' => 0, 'bytes' => 0,
+                        'base' => '', 'url' => $this->url_biblioteca_imagen_madre($madre), 'creado' => 0, 'bytes' => 0,
                         'usos' => ['carrito' => [], 'pedidos' => []]];
                 }
                 $familias[$madre]['archivos']++;                $familias[$madre]['bytes'] += (int)@filesize($ruta);
@@ -2231,15 +2231,22 @@ class Personalizador_PDF_Plugin
             $rutas = $sesion->resolver_subidas($sid, $item, [$id]);
             $ruta = isset($rutas[$id]) ? (string)$rutas[$id] : '';
         } elseif ($madre !== '') {
-            throw new \RuntimeException('madre:sin_escanear');
+            // D14: una sola politica de acceso. `madre` se re-resuelve contra el escaneo
+            // propio del comprador (nunca una ruta del cliente).
+            $contenedores = $this->biblioteca_contenedores($this->biblioteca_identidad());
+            if ($this->biblioteca_familia_de($contenedores, $madre) === null) {
+                throw new \RuntimeException('foto:ajena');
+            }
+            $ruta = $this->biblioteca_ruta_familia($contenedores, $madre);
         }
         if ($ruta === '' || !is_file($ruta)) {
             throw new \RuntimeException('imagen:ausente');
         }
-        // Miniatura al vuelo (spec 030): la tira pide `w=160` y asi no viajan 200 KB por foto.
+        // D14: sin miniaturas derivadas: se sirve la imagen de la familia y la cachea el navegador.
         $mimes = ['webp' => 'image/webp', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'gif' => 'image/gif'];
         header('Cache-Control: private, max-age=604800');
         header('ETag: "' . sha1((string)@filemtime($ruta) . '-' . (int)@filesize($ruta)) . '"');
+        $ext = strtolower((string)pathinfo($ruta, PATHINFO_EXTENSION));
         header('Content-Type: ' . (isset($mimes[$ext]) ? $mimes[$ext] : 'application/octet-stream'));
         header('Content-Length: ' . (int)@filesize($ruta));
         readfile($ruta);
