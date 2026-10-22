@@ -1890,7 +1890,11 @@ class Personalizador_PDF_Plugin
             }
         }
         $raiz = $motor->dir_ambito('orders');
-        foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirOrder) {
+        // Spec 030 (velocidad): los `order_id` crecen -> miro solo los 10 mas nuevos
+        // (antes se recorria el arbol COMPLETO de pedidos en cada apertura).
+        $dirsOrder = (array)glob($raiz . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR);
+        rsort($dirsOrder, SORT_STRING);
+        foreach (array_slice($dirsOrder, 0, 10) as $dirOrder) {
             $oid = (int)basename($dirOrder);
             if ($oid < 1) {
                 continue;
@@ -2043,7 +2047,7 @@ class Personalizador_PDF_Plugin
         return $mejor;
     }
     /** URL protegida de la base de una familia (spec 030, D14/D27). */
-    private function url_biblioteca_imagen_madre($madre)
+    private function url_biblioteca_imagen_madre($madre, $w = 0)
     {
         $madre = (string)$madre;
         if ($madre === '') {
@@ -2174,7 +2178,7 @@ class Personalizador_PDF_Plugin
         if ($ruta === '' || !is_file($ruta)) {
             throw new \RuntimeException('imagen:ausente');
         }
-        $ext = strtolower((string)pathinfo($ruta, PATHINFO_EXTENSION));
+        // Miniatura al vuelo (spec 030): la tira pide `w=160` y asi no viajan 200 KB por foto.
         $mimes = ['webp' => 'image/webp', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'gif' => 'image/gif'];
         header('Cache-Control: private, max-age=604800');
         header('ETag: "' . sha1((string)@filemtime($ruta) . '-' . (int)@filesize($ruta)) . '"');
