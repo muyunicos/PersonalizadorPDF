@@ -253,6 +253,13 @@
 
     // El ancho decide cuantas miniaturas entran: al cambiar el tamaño se repinta
     // (sin volver a pedir nada) para que la tira siga sin scroll.
+    // Spec 030 (T015 / 4a clarificacion): el modal decide en SINCRONICO si auto-abre el
+    // selector (solo con la biblioteca vacia), asi que la copia de la tira se calienta al
+    // cargar la ficha. Es UNA por pagina: `desde=<revision>` hace gratis las siguientes.
+    if (config().url && typeof global.fetch === 'function') {
+        pedir().catch(function () { /* sin identidad o sin red: no pasa nada */ });
+    }
+
     if (global.addEventListener) {
         var anchoPrevio = 0;
         global.addEventListener('resize', function () {

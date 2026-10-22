@@ -84,6 +84,12 @@ check('usar() postea op=usar con item/pdf/grupo/indice/params e invalida la copi
     /fd\.append\('op', 'usar'\)/.test(bib) && /fd\.append\('params', JSON\.stringify\(datos\.params \|\| \{\}\)\)/.test(bib)
     && /invalidar\(\);\s*return json\.data/.test(bib) && /usar: usar/.test(bib));
 
+console.log('== Auto-open condicionado (4a clarificacion) ==');
+check('el selector de archivos se auto-abre SOLO si la biblioteca esta vacia',
+    /bibVacia/.test(sel) && /PMUBiblioteca\.cache/.test(sel));
+check('la copia de la tira se calienta al cargar la ficha (una por pagina)',
+    /if \(config\(\)\.url && typeof global\.fetch === 'function'\)/.test(bib));
+
 console.log('');
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }
 console.log('BIBLIOTECA CONTRATO FALLA (' + fallos + ' de ' + (ok + fallos) + ')');

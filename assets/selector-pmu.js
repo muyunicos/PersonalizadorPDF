@@ -753,7 +753,14 @@
         if (opciones.archivo) {
             this._cargar(opciones.archivo);
         } else if (opciones.abrirArchivo !== false) {
-            try { $('.spmu-file').click(); } catch (e) { /* entorno sin click programatico */ }
+                    // Spec 030 (4a clarificacion): el selector se auto-abre SOLO si la biblioteca
+            // del comprador esta VACIA (copia local de la tira con `fotos: []`). Sin copia
+            // NO se adivina: queda el boton "Cargar imagen".
+            var bib = (window.PMUBiblioteca && window.PMUBiblioteca.cache) ? window.PMUBiblioteca.cache() : null;
+            var bibVacia = !!(bib && bib.fotos && bib.fotos.length === 0);
+            if (bibVacia) {
+                try { $('.spmu-file').click(); } catch (e) { /* entorno sin click programatico */ }
+            }
         }
     };
 
