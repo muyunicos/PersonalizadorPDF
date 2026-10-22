@@ -79,6 +79,11 @@ check('borrar NO cierra la galeria: refresca la lista y sigue en la misma posici
 check('el aviso excluye el item que se esta editando (D17)',
     /fd\.append\('item_key', String\(c\.item \|\| ''\)\)/.test(bib) && /item: s\.item_key \|\| ''/.test(bib));
 
+console.log('== Elegir sin recomponer (D8) ==');
+check('usar() postea op=usar con item/pdf/grupo/indice/params e invalida la copia',
+    /fd\.append\('op', 'usar'\)/.test(bib) && /fd\.append\('params', JSON\.stringify\(datos\.params \|\| \{\}\)\)/.test(bib)
+    && /invalidar\(\);\s*return json\.data/.test(bib) && /usar: usar/.test(bib));
+
 console.log('');
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }
 console.log('BIBLIOTECA CONTRATO FALLA (' + fallos + ' de ' + (ok + fallos) + ')');

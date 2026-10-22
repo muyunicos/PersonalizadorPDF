@@ -264,7 +264,36 @@
         });
     }
 
-    var api = { pedir: pedir, cache: leerCache, invalidar: invalidar, tira: tira, visor: visor,
+    /**
+     * Elegir una foto de la biblioteca SIN recomponer (D8/D14): POST `op=usar` con la
+     * `madre` y los datos del hueco. El servidor **re-decide** con su receta: igual ->
+     * fila `origen: ref` (0 bytes); distinta -> version `{madre}-{n}`. Invalida la copia
+     * local: la vista cambio.
+     */
+    function usar(madre, datos) {
+        var c = config();
+        if (!c.url) { return Promise.reject(new Error('api:biblioteca:sin:endpoint')); }
+        datos = datos || {};
+        var fd = new FormData();
+        fd.append('action', 'personalizador_pdf_biblioteca');
+        fd.append('op', 'usar');
+        fd.append('madre', String(madre || ''));
+        fd.append('item_key', String(datos.item_key || c.item || ''));
+        fd.append('pdf', String(datos.pdf || ''));
+        fd.append('grupo', String(datos.grupo || ''));
+        fd.append('indice', String(datos.indice || 0));
+        fd.append('params', JSON.stringify(datos.params || {}));
+        fd.append('_wpnonce', c.nonce);
+        return global.fetch(c.url, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (json) {
+                if (!json || !json.success) { throw new Error((json && json.data) || 'api:biblioteca:falla'); }
+                invalidar();
+                return json.data || {};
+            });
+    }
+
+    var api = { pedir: pedir, cache: leerCache, invalidar: invalidar, tira: tira, visor: visor, usar: usar,
         tope: TOPE_TIRA, clave: CLAVE };
     global.PMUBiblioteca = api;
     if (typeof module !== 'undefined' && module.exports) { module.exports = api; }
