@@ -49,7 +49,7 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 **CRITICAL**: ninguna historia empieza hasta cerrar esta fase
 
 - [X] T004 [P] `inc/class-pmu-sesion.php`: `mutar_manifest_dir($dir, $cb)`, `guardar_manifest_dir($dir, $manifest)` y `leer_manifest_dir($dir)` (lock `flock` + `manifest.json.tmp` + `rename`), extraidos del patron de `mutar_manifest()` (R3)
-- [ ] T005 [P] `inc/class-pmu-sesion.php`: `fila_subida($id, $file, $madre, $receta, $base, $sha, $mime, $bytes, $creado)` — unico lugar de la forma de la fila; `fila_archivo()` se conserva para el pool
+- [X] T005 [P] `inc/class-pmu-sesion.php`: `fila_subida($id, $file, $madre, $receta, $sha, $mime, $bytes, $creado)` + `fila_ref($id, $ref, $madre, $receta, $creado)` — unicos lugares de la forma de la fila (`base` no se persiste: `familias()` lo deriva por area); `fila_archivo()` se conserva para el pool
 - [X] T006 [P] `inc/class-pmu-sesion.php`: `resolver_ref($dir_item, $ref)` con `realpath()` validado dentro de `uploads/pmu/` y causa `motor:descarga:ref:ausente` (R4)
 - [X] T007 [P] `personalizador-pdf.php`: `biblioteca_identidad()` (cookie `pmu_sid` + cuenta) y `biblioteca_version(array $contenedores)` (hash de `{contenedor}|{item_key}|{mtime}|{size}`, R5)
 - [X] T008 `personalizador-pdf.php`: `biblioteca_contenedores($identidad)` — escaneo por identidad con **tope de 10 contenedores** y `usos` por familia (D23/R1/R6)

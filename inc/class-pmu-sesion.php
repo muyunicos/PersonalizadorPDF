@@ -432,6 +432,45 @@ class PMU_Sesion
      * vive en el pool `img/`) de lo que el comprador **subio** (`subida`,
      * referenciada desde `subidas/`: se registra, no se copia).
      */
+    /**
+     * Spec 030 (T005/D5/D24): UNICO lugar de la forma de una fila de `subidas[]`
+     * cuando la foto **es** un archivo del item (`origen: subida`). `madre` es la
+     * familia (la define el primer archivo) y `sha` el contenido **crudo** (antes
+     * de convertir a WebP, D24). `base` NO se persiste: `PMU_Sesion::familias()` lo
+     * **deriva** por area (una sola verdad, sin drift).
+     */
+    private function fila_subida($id, $file, $madre, $receta, $sha, $mime, $bytes, $creado)
+    {
+        return [
+            'id' => (string)$id,
+            'file' => (string)$file,
+            'mime' => (string)$mime,
+            'bytes' => max(0, (int)$bytes),
+            'creado' => max(0, (int)$creado),
+            'madre' => (string)$madre,
+            'receta' => (string)$receta,
+            'sha' => (string)$sha,
+            'origen' => 'subida',
+        ];
+    }
+
+    /**
+     * Fila de `subidas[]` que **referencia** un archivo ya existente dentro de
+     * `uploads/pmu/` (spec 030, D10/D13): sin bytes y sin `mime` (el Motor resuelve
+     * la ruta con `resolver_ref()`).
+     */
+    private function fila_ref($id, $ref, $madre, $receta, $creado)
+    {
+        return [
+            'id' => (string)$id,
+            'origen' => 'ref',
+            'ref' => (string)$ref,
+            'madre' => (string)$madre,
+            'receta' => (string)$receta,
+            'creado' => max(0, (int)$creado),
+        ];
+    }
+
     private function fila_archivo($pdf, $grupo, $indice, $file, $origen, $hash = '')
     {
         return [
@@ -811,13 +850,16 @@ class PMU_Sesion
         if ($firma === null) {
             throw new Exception('motor:subida:formato:invalido');
         }
+        // Spec 030 (T019/D24): el `sha` es del contenido **CRUDO**, calculado ANTES
+        // de convertir a WebP (la conversion no es determinista entre versiones).
+        $sha = sha1($bytes);
         // Spec 026 (D3): el servidor convierte a WebP si puede. La foto del
         // comprador es unseen: calidad 0.85 (D4).
         $img = self::convertir_webp($bytes, 85);
         $bytes = $img['bytes'];
         $firma = ['ext' => $img['ext'], 'mime' => $img['mime']];
         $salida = null;
-        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $bytes, $firma, &$salida) {
+        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $bytes, $firma, $sha, &$salida) {
             if ((string)($manifest['item_key'] ?? '') !== (string)$item_key) {
                 throw new Exception('motor:sesion:item:ausente');
             }
@@ -829,13 +871,7 @@ class PMU_Sesion
             }
             $filas = isset($manifest['subidas']) && is_array($manifest['subidas'])
                 ? array_values($manifest['subidas']) : [];
-            $filas[] = [
-                'id' => $id,
-                'file' => $file,
-                'mime' => $firma['mime'],
-                'bytes' => strlen($bytes),
-                'creado' => time(),
-            ];
+            $filas[] = $this->fila_subida($id, $file, $id, '', $sha, $firma['mime'], strlen($bytes), time());
             $manifest['subidas'] = $filas;
             $salida = ['id' => $id, 'file' => $file, 'mime' => $firma['mime'], 'bytes' => strlen($bytes)];
         });
@@ -1296,17 +1332,14 @@ class PMU_Sesion
                 if (!@copy($rutaBase, $dir . DIRECTORY_SEPARATOR . $archivo)) {
                     throw new Exception('motor:sesion:subidas:no_escribible');
                 }
-                $subidas[] = ['id' => $id, 'file' => 'subidas/' . $archivo,
-                    'mime' => 'image/' . ($ext === 'jpg' ? 'jpeg' : $ext),
-                    'bytes' => (int)@filesize($rutaBase), 'creado' => time(),
-                    'madre' => $madre, 'receta' => $receta, 'origen' => 'subida'];
+                $subidas[] = $this->fila_subida($id, 'subidas/' . $archivo, $madre, $receta, '',
+                    'image/' . ($ext === 'jpg' ? 'jpeg' : $ext), (int)@filesize($rutaBase), time());
             } else {
                 $rel = (strpos($plano, $raiz) === 0) ? substr($plano, strlen($raiz)) : '';
                 if ($rel === '') {
                     throw new Exception('motor:sesion:biblioteca:fuera:de:pmu');
                 }
-                $subidas[] = ['id' => $id, 'origen' => 'ref', 'ref' => $rel,
-                    'madre' => $madre, 'receta' => $receta, 'creado' => time()];
+                $subidas[] = $this->fila_ref($id, $rel, $madre, $receta, time());
             }
             $manifest['subidas'] = $subidas;
             $ind = ($indice === null) ? 0 : max(0, (int)$indice);
