@@ -56,8 +56,8 @@ compras, con reglas claras de reuso, de consolidacion y de borrado.
 | **D7** | **`receta` = identidad de la composicion**: hash de `w,h,forma,modo,escala,desplazamiento,fondo,transp` + medidas del origen. El `sha` de los bytes **no** sirve para deduplicar recomposiciones: el compuesto sale de `canvas.toBlob()` y no es determinista entre navegadores/versiones. |
 | **D8** | **Elegir vs Subir**: al abrir el modal **desde la biblioteca**, si la receta **coincide** el boton dice **Elegir** y **no se compone ni se sube nada** (se registra una referencia); si **difiere**, dice **Subir** y la composicion entra como **version**. El caso *el contenedor tiene otra relacion de aspecto* cae solo: al abrir con otro marco el modal recalcula el 5% (spec 028) y eso **ya es otra receta**. |
 | **D9** | **De `tmp` se copia; de `orders` se referencia**: `tmp` es volatil (TTL + borrado quirurgico del item) y `orders` es el entregable permanente del cliente. **Nunca existe una referencia a `tmp`**: no hay referencia rota por vencimiento. |
-| **D10** | **Fila `origen: ref`**: `ref` es **relativo a `uploads/pmu/`** (**corregido por el arnes**: en `tmp` el item esta a 3 niveles y en `orders/` a 2, asi que un `../..` fijo **no** sobrevive a la promocion) y se valida con `realpath` que quede dentro de `uploads/pmu/`. Un `ref` como `orders/{A}/_comun/{madre}-{n}.webp` **vale antes y despues de promover**: cero reescritura de rutas. |
-| **D11** | **Consolidacion por pedido (`_comun`)**: al consolidar (staging, e **idempotente** en la promocion) los items del pedido se agrupan por **`(madre, receta)`**; queda **UNA** copia en `orders/{order_id}/_comun/{madre}-{n}.{ext}` y **todos** los items (incluido el primero) apuntan con `ref: ../_comun/...`. **Nadie es dueno del archivo**: quitar un producto del carrito o borrar un item no rompe a sus hermanos. Los duplicados de la sesion se van con su TTL. |
+| **D10** | **Fila `origen: ref`**: `ref` es **relativo a `uploads/pmu/`** (**corregido por el arnes**: en `tmp` el item esta a 3 niveles y en `orders/` a 2, asi que un `../..` fijo **no** sobrevive a la promocion) y se valida con `realpath` que quede dentro de `uploads/pmu/`. Un `ref` como `orders/{A}/{item_key}/subidas/{madre}.webp` **vale antes y despues de promover**: cero reescritura de rutas. |
+| **D11** | **Sin carpeta compartida ni consolidacion**: la referencia (`origen: ref`) apunta al **archivo de ORIGEN** (`orders/{order_id}/{item_key}/subidas/{madre}.{ext}`), el que vive en el item donde se subio. Cada item del pedido guarda su propia copia (no se colapsan duplicados): el ahorro es **entre pedidos** (la misma foto en N compras = 1 archivo). Quitar un producto del carrito no afecta a otros; si se borra el **origen**, el hueco queda transparente con causa `ref:ausente`. |
 | **D12** | **Referencia cruzada entre pedidos**: si la fuente vive en `orders/`, se referencia **en el acto** (el caso *la misma foto en 20 pedidos = 1 archivo*). **Invariante nuevo y documentado**: no se purga un pedido referenciado. Hoy nada purga `orders/` (el TTL solo mira `draft-*`), asi que no hay codigo nuevo por esto. |
 | **D13** | **Resolucion unica**: un solo `PMU_Sesion::resolver_ref()` (relativo al item, dentro de `uploads/pmu/`), usado por `item_generar_pdfs`, `handle_item_regenerar` y la galeria. **El Motor no se toca** (`Motor::procesar_pedido` recibe rutas absolutas). Un `ref` que no resuelve da causa explicita (`motor:descarga:ref:ausente`) y **hueco transparente**: nunca un PDF roto. |
 | **D14** | **Lectura por el endpoint protegido**: **no hay miniaturas derivadas** — la tira y el visor muestran **la imagen de la familia** (su `base`: el `.webp` que ya existe), servida por `op=imagen` con nonce (`personalizador_pdf_vista_previa`) e identidad por cookie, y con `Cache-Control: private` + `ETag` para que **el navegador la cachee**. **Nunca** URLs crudas de `uploads/`. El cliente manda **`madre` (la familia), nunca rutas**; el servidor la re-resuelve contra su propio escaneo (`api:biblioteca:foto:ajena` si no es de esa identidad). **Una sola politica de acceso**: `op=imagen` sirve tambien los ids de la **ranura** (`item_key` + `id`), asi que la tira y el visor del campo dejan la URL cruda de `handle_subida_url`. |
@@ -79,7 +79,7 @@ compras, con reglas claras de reuso, de consolidacion y de borrado.
   "receta": "77e0aa19", "origen": "subida" }
 
 // referencia (solo en orders/)
-{ "id": "9f2c41ab0d7e-2", "origen": "ref", "ref": "../_comun/9f2c41ab0d7e-2.webp",
+{ "id": "9f2c41ab0d7e-2", "origen": "ref", "ref": "orders/29088/156e/subidas/9f2c41ab0d7e-2.webp",
   "madre": "9f2c41ab0d7e", "receta": "77e0aa19" }
 ```
 
@@ -106,7 +106,7 @@ compras, con reglas claras de reuso, de consolidacion y de borrado.
 ```json
 { "ok": true, "revision": "b3d7f1", "sin_cambios": false, "fotos": [
   { "madre": "9f2c41ab0d7e", "url": "...op=imagen&madre=9f2c41ab0d7e&_wpnonce=...",
-    "w": 1000, "h": 1000, "base": "orders/29088/_comun/9f2c41ab0d7e.webp",
+    "w": 1000, "h": 1000, "base": "orders/29088/156e/subidas/9f2c41ab0d7e.webp",
     "versiones": 2, "creado": "2026-10-13T04:43:15Z",
     "usos": { "carrito": ["156e"], "pedidos": [29088, 29091] } } ],
   "totales": { "fotos": 12, "bytes": 4194304, "contenedores": 3 } }
@@ -133,25 +133,17 @@ compras, con reglas claras de reuso, de consolidacion y de borrado.
 
 Causas: `api:biblioteca:<motivo>` (`foto:ajena`, `madre:invalida`, `params:invalidos`) y
 `motor:descarga:ref:ausente` en el PDF. El **aviso** de borrado informa los `usos` (`en_carrito`, `en_pedido`).
-### 3.4 Consolidacion (D11)
+### 3.4 Sin consolidacion (D11)
 
-```
-por pedido (staging + promocion, idempotente):
-  agrupar los items del pedido por (madre, receta)
-  por grupo: ganar el archivo de mayor resolucion -> orders/{order}/_comun/{madre}-{n}.{ext}
-             borrar los duplicados del staging y reescribir TODAS las filas del grupo a
-             { origen: ref, ref: ../_comun/{madre}-{n}.{ext} }   (incluido el primer item)
-  si la familia ya existe en el _comun de un pedido anterior del mismo cliente -> referenciar ese
-```
-
-Promocion: `rename` de cada item + `rename` de `_comun` (mismo nivel) -> **las rutas relativas no
-se reescriben**.
+No hay carpeta compartida ni paso de consolidacion: cada item del pedido guarda su copia y las filas
+`origen: ref` apuntan al **archivo de origen**, en el pedido donde se subio (D11). El ahorro de disco es
+**entre pedidos**, no dentro de uno.
 
 ### 3.5 Efecto
 
 | caso | Antes | Ahora |
 |---|---|---|
-| 10 items del mismo pedido con la misma foto | 10 archivos | **1** (`_comun`) + 10 filas `ref` |
+| 10 items del mismo pedido con la misma foto | 10 archivos | **1** archivo (la copia del primer item) + 9 filas `ref` |
 | la misma foto en 20 pedidos | 20 copias (~25 MB) | **1** archivo + 19 referencias |
 | reusar sin cambios dentro del carrito | no existe (habia que volver a subir) | **0 bytes** (referencia) |
 
@@ -159,7 +151,7 @@ se reescriben**.
 
 - Arnes `texto_puente.php`, fase nueva **`biblioteca`**: invitado ve solo lo suyo; familia ajena (`madre`) ->
   `api:biblioteca:foto:ajena`; elegir sin cambios -> fila `ref` y **0 bytes**; elegir con cambios ->
-  version `{madre}-2`; consolidacion de 3 items del mismo pedido -> **1** archivo en `_comun` +
+  version `{madre}-2`; el reuso desde `orders` -> fila `ref` sin copiar bytes +
   3 `ref` + idempotencia; `item_generar_pdfs` con `ref` arma el PDF; `ref` roto -> causa explicita y
   PDF con hueco (no rompe); galeria con **una** entrada por familia; `borrar` elimina la familia completa (original + versiones) y sus filas;
   el **aviso** de borrado informa donde se usa (D17); TTL no borra lo referenciado; y la vista respeta el **tope de 10 contenedores** con `revision`/`sin_cambios`; subir **la misma** foto de nuevo **reusa la familia** en vez de crear una segunda entrada; y la galeria se pide **una sola vez por cliente** (cache compartida entre campos); el barrido respeta el **TTL de 30 dias** de los items abandonados (D26).
@@ -176,7 +168,7 @@ se reescriben**.
   ficha ya cubre ver, elegir y borrar (D28).
 - **Super-resolucion**: la spec solo garantiza que encaja sin cambios (D22).
 - **Guardar el archivo crudo**: hoy el selector lo descarta (la `base` es la composicion mayor).
-- **`_comun` por sesion** (cero copias en `tmp`): se descarta por D9 (el item es dueno de lo suyo y
+- **`_comun` / consolidacion por pedido**: se descarta (D11; el item es dueno de lo suyo y
   `carrito_quitar` borra su carpeta al instante).
 - **Cuota por identidad**: se define con datos (seccion 6).
 - **La politica de acceso de la ranura** (que hoy sirve la subida con URL cruda via `handle_subida_url`) **no** cambia en la 030: la biblioteca usa el endpoint protegido; unificar ambas politicas es spec aparte.

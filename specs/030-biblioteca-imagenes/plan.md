@@ -13,7 +13,7 @@ crear un almacen nuevo**: la galeria es una **vista** sobre `tmp/sesion-{sid}/*/
 
 El reuso es por **receta**: si la composicion no cambia la fila **referencia** el archivo
 (`origen: ref`, 0 bytes); si cambia, se guarda una **version** `{madre}-{n}`. Al consolidar el pedido,
-los duplicados de sus items se colapsan en `orders/{order_id}/_comun/` y **todos** los items quedan
+los duplicados de sus items apuntan al **archivo de origen** del pedido y **todos** los items quedan
 apuntando ahi: nadie es dueno del archivo y borrar un item no rompe a sus hermanos. **El Motor no se toca.**
 
 ## Technical Context
@@ -52,17 +52,17 @@ siguientes **0 requests** (revalidacion por `revision` -> `sin_cambios`)
 | G1 | §I WooCommerce (NON-NEGOTIABLE): mockup obligatorio, sesion por item, `_pmu_pdf_slugs`, snapshot `manifest.pdfs[]` | **PASS** — la 030 **solo lee** de Woo (`wc_get_orders`, `customer_id`, `_pmu_sid`): no toca la ficha, la validacion del carrito, el mockup ni el snapshot |
 | G2 | §II Arquitectura modular: un dueno por dato y por ruta | **PASS** — rutas por `PMU_Uploads`; logica de item/familia en `PMU_Sesion`; endpoint en la clase del plugin; **sin modulo nuevo** |
 | G3 | §III Render en navegador + inyeccion server-side; PHP nunca evalua JS | **PASS** — no hay render nuevo; el servidor **recomputa** la `receta` desde los parametros declarados (igual que `hash_pool()`) y no evalua codigo del cliente |
-| G4 | §IV Estructura PMU: `uploads/pmu/`, JSON solo ahi, sin tablas, escritura atomica, limpieza por ITEM | **PASS con enmienda planificada** — se agrega `orders/{order_id}/_comun/` (archivos compartidos del pedido), las familias `{madre}-{n}` en `subidas/` y las filas `origen: ref`. El TTL sigue siendo **por ITEM**, nunca por archivo suelto |
+| G4 | §IV Estructura PMU: `uploads/pmu/`, JSON solo ahi, sin tablas, escritura atomica, limpieza por ITEM | **PASS con enmienda planificada** — se agrega las filas `origen: ref` que apuntan al archivo de origen, las familias `{madre}-{n}` en `subidas/` y las filas `origen: ref`. El TTL sigue siendo **por ITEM**, nunca por archivo suelto |
 | G5 | §V Sin retrocompatibilidad ni migraciones | **PASS** — sin migracion: los archivos actuales se leen como familias sin versiones (D5) |
 | G6 | Technical Constraints: PHP puro, sin dependencias nativas, Node solo para testing | **PASS** — solo PHP + JS de navegador |
 | G7 | Development Workflow / Validation: puertas del repo | **PASS** — fase `biblioteca` del arnes + checks en `selector-contrato`; `php -l`, smoke y parity en verde |
 
 Sin violaciones que justificar (ver `Complexity Tracking`). **Enmienda a §IV a registrar** al implementar
-(Sync Impact Report de `constitution`): layout de `orders/` con `_comun/`, familias `{madre}-{n}` y `origen: ref`.
+(Sync Impact Report de `constitution`): las convenciones de `subidas/` (familias `{madre}-{n}`) y `origen: ref`, sin cambio estructural.
 
 **Re-check post-Fase 1 (2026-10-21)**: PASS — el diseno de Fase 1 (`research.md`, `data-model.md`, los dos
 contratos y `quickstart.md`) no agrega modulos, ambitos, tablas ni dependencias, y mantiene la unica
-enmienda planificada de §IV (`orders/{order_id}/_comun/` + familias `{madre}-{n}` + `origen: ref`).
+enmienda planificada de §IV (familias `{madre}-{n}` + `origen: ref`, sin cambio estructural).
 
 ## Project Structure
 
@@ -94,13 +94,13 @@ inc/class-pmu-sesion.php
 ├── fila_subida() / guardar_subida()      # madre, base, receta, sha (bytes ANTES de convertir a WebP)
 ├── resolver_ref($dir_item, $ref)         # NUEVO: relativo al item, dentro de uploads/pmu/
 ├── usar_de_biblioteca()                  # NUEVO: copia desde tmp / referencia desde orders / versiona
-├── consolidar_order($order_id)           # NUEVO: agrupa por (madre, receta) y arma orders/{id}/_comun/
+
 ├── borrar_familia($sid, $item, $madre)   # NUEVO: original + versiones, con el aviso de usos
 ├── mutar_manifest_dir($dir, $cb)         # NUEVO: variante por DIRECTORIO (orders/ no resuelve por sid)
 └── limpiar_ttl()                         # drafts 24 h + sesiones sin items + carrito abandonado 30 dias
 
 inc/class-pmu-uploads.php
-└── dir_comun_order($order_id, $crear)    # NUEVO accesor (mismo ambito orders, sin ambito nuevo)
+
 
 assets/
 ├── visor-pmu.js                   # NUEVO: visor fullscreen COMPARTIDO (PMUVisor), extraido de cargador-pmu.js (D28)
@@ -115,7 +115,7 @@ tests/
 ```
 
 **Structure Decision**: se conserva la estructura del repo (plugin + `inc/` + `assets/` + `tests/`): la 030
-no crea modulos, ambitos ni catalogos. El unico lugar nuevo en disco es `orders/{order_id}/_comun/`, dentro
+no crea modulos, ambitos ni catalogos. No hay lugar nuevo en disco:, dentro
 del ambito `orders` ya existente.
 
 El unico archivo cliente nuevo es `assets/biblioteca-pmu.js` y se justifica: **la cache debe ser unica por
@@ -129,4 +129,4 @@ la ranura y la biblioteca, y las URLs se resuelven **una sola vez** (`PMU_FICHA.
 > **Fill ONLY if Constitution Check has violations that must be justified**
 
 Sin violaciones constitucionales: la 030 no agrega modulos, ambitos, tablas ni dependencias; extiende el
-layout de `orders/` con `_comun/` (enmienda planificada de §IV, sin violacion).
+las convenciones de `subidas/` (familia/version/`ref`) en la enmienda de §IV.

@@ -36,9 +36,9 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 **Purpose**: dejar el terreno listo sin tocar comportamiento
 
-- [ ] T001 [P] Verificar las puertas base en verde antes de tocar nada: `php -l personalizador-pdf.php`, `php -l inc/class-pmu-sesion.php`, `php tests/motor_smoke.php`, `php tests/parity.php`, `php tests/texto_puente.php fotos`, `node tests/selector-contrato.test.js`
-- [ ] T002 [P] Crear el esqueleto de la fase `biblioteca` en `tests/texto_puente.php` (case + `preparar_entorno()` con 2 sesiones, 1 pedido pagado y 1 preset) para poder correr la fase vacia
-- [ ] T003 Crear el accesor `dir_comun_order($order_id, $crear = false)` en `inc/class-pmu-uploads.php` (unica fuente de rutas, constitution §II)
+- [X] T001 [P] Verificar las puertas base en verde antes de tocar nada: `php -l personalizador-pdf.php`, `php -l inc/class-pmu-sesion.php`, `php tests/motor_smoke.php`, `php tests/parity.php`, `php tests/texto_puente.php fotos`, `node tests/selector-contrato.test.js`
+- [X] T002 [P] Crear el esqueleto de la fase `biblioteca` en `tests/texto_puente.php` (case + `preparar_entorno()` con 2 sesiones, 1 pedido pagado y 1 preset) para poder correr la fase vacia
+- [X] T003 Crear el accesor `dir_comun_order($order_id, $crear = false)` en `inc/class-pmu-uploads.php` (unica fuente de rutas, constitution §II)
 
 ---
 
@@ -48,11 +48,11 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 **CRITICAL**: ninguna historia empieza hasta cerrar esta fase
 
-- [ ] T004 [P] `inc/class-pmu-sesion.php`: `mutar_manifest_dir($dir, $cb)`, `guardar_manifest_dir($dir, $manifest)` y `leer_manifest_dir($dir)` (lock `flock` + `manifest.json.tmp` + `rename`), extraidos del patron de `mutar_manifest()` (R3)
+- [X] T004 [P] `inc/class-pmu-sesion.php`: `mutar_manifest_dir($dir, $cb)`, `guardar_manifest_dir($dir, $manifest)` y `leer_manifest_dir($dir)` (lock `flock` + `manifest.json.tmp` + `rename`), extraidos del patron de `mutar_manifest()` (R3)
 - [ ] T005 [P] `inc/class-pmu-sesion.php`: `fila_subida($id, $file, $madre, $receta, $base, $sha, $mime, $bytes, $creado)` — unico lugar de la forma de la fila; `fila_archivo()` se conserva para el pool
-- [ ] T006 [P] `inc/class-pmu-sesion.php`: `resolver_ref($dir_item, $ref)` con `realpath()` validado dentro de `uploads/pmu/` y causa `motor:descarga:ref:ausente` (R4)
-- [ ] T007 [P] `personalizador-pdf.php`: `biblioteca_identidad()` (cookie `pmu_sid` + cuenta) y `biblioteca_version(array $contenedores)` (hash de `{contenedor}|{item_key}|{mtime}|{size}`, R5)
-- [ ] T008 `personalizador-pdf.php`: `biblioteca_contenedores($identidad)` — escaneo por identidad con **tope de 10 contenedores** y `usos` por familia (D23/R1/R6)
+- [X] T006 [P] `inc/class-pmu-sesion.php`: `resolver_ref($dir_item, $ref)` con `realpath()` validado dentro de `uploads/pmu/` y causa `motor:descarga:ref:ausente` (R4)
+- [X] T007 [P] `personalizador-pdf.php`: `biblioteca_identidad()` (cookie `pmu_sid` + cuenta) y `biblioteca_version(array $contenedores)` (hash de `{contenedor}|{item_key}|{mtime}|{size}`, R5)
+- [X] T008 `personalizador-pdf.php`: `biblioteca_contenedores($identidad)` — escaneo por identidad con **tope de 10 contenedores** y `usos` por familia (D23/R1/R6)
 
 **Checkpoint**: base lista — las historias pueden empezar (US3 y US5 incluso en paralelo)
 
@@ -66,18 +66,18 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 ### Tests for User Story 1
 
-- [ ] T009 [P] [US1] Fase `biblioteca` en `tests/texto_puente.php`: el invitado ve solo lo suyo; `madre` ajena -> `api:biblioteca:foto:ajena`; `listar` con `desde` responde `sin_cambios`; `op=usar` con receta igual escribe fila `origen: ref` y **0 bytes** (D14/R2)
+- [X] T009 [P] [US1] Fase `biblioteca` en `tests/texto_puente.php`: el invitado ve solo lo suyo; `madre` ajena -> `api:biblioteca:foto:ajena`; `listar` con `desde` responde `sin_cambios`; `op=usar` con receta igual escribe fila `origen: ref` y **0 bytes** (D14/R2)
 - [ ] T010 [P] [US1] `tests/selector-contrato.test.js`: la tira lista **todas** las familias por fecha (D27), se monta dentro del modal (D28), `Elegir` vs `Subir` por receta y la cache `pmu_bib_v1` no repite peticion con la misma `revision` (D8/R8)
 
 ### Implementation for User Story 1
 
-- [ ] T011 [P] [US1] `assets/biblioteca-pmu.js` (NUEVO): `PMUBiblioteca.abrir/cache/invalidar/visor` + cache unica por pagina compartida por campos, invalidada por **re-consulta** tras subir o borrar (D23/R8)
-- [ ] T012 [P] [US1] `assets/biblioteca-pmu.js`: tira `pmu-bib-tira` (**una imagen por familia** desde `op=imagen`, hasta 10 fotos, orden por fecha, badge `N versiones`, `usos`) y visor `pmu-bib-visor` con **Elegir**
+- [X] T011 [P] [US1] `assets/biblioteca-pmu.js` (NUEVO): `PMUBiblioteca.abrir/cache/invalidar/visor` + cache unica por pagina compartida por campos, invalidada por **re-consulta** tras subir o borrar (D23/R8)
+- [X] T012 [P] [US1] `assets/biblioteca-pmu.js`: tira `pmu-bib-tira` (**una imagen por familia** desde `op=imagen`, hasta 10 fotos, orden por fecha, badge `N versiones`, `usos`) y visor `pmu-bib-visor` con **Elegir**
 - [ ] T013 [US1] `assets/selector-pmu.js`: montar la tira en `spmu-modal` (boton **Elegir ya subida**) y abrir el recorte con la fuente elegida (`onElegir` -> `open({archivo})`); el visor que usa es el **compartido** (T043)
 - [ ] T014 [US1] `assets/cargador-pmu.js`: pasar a la biblioteca la `receta` del hueco (`w,h,forma,modo,escala,dx,dy,fondo,transp,iw,ih`) y el `onElegir`
 - [ ] T015 [US1] `assets/tienda.js`: `api.biblioteca` + `PMU_FICHA.biblioteca = {endpoint, nonce}` (identidad por cookie, D14)
 - [ ] T016 [US1] `personalizador-pdf.php`: `handle_biblioteca()` con `op=listar|imagen|usos|usar`, nonce `personalizador_pdf_vista_previa`, `admin_post_*` + `nopriv` (D19) y encolar `assets/biblioteca-pmu.js` en `assets_ficha()`
-- [ ] T017 [US1] `inc/class-pmu-sesion.php`: `usar_de_biblioteca($sid, $item, $pdf, $grupo, $madre, $indice, $params)` — receta **recomputada en el servidor** (R2): copia desde `tmp`, referencia desde `orders` y versiona si difiere (D8/D9/D10)
+- [X] T017 [US1] `inc/class-pmu-sesion.php`: `usar_de_biblioteca($sid, $item, $pdf, $grupo, $madre, $indice, $params)` — receta **recomputada en el servidor** (R2): copia desde `tmp`, referencia desde `orders` y versiona si difiere (D8/D9/D10)
 
 **Checkpoint**: US1 probable sola (E2 + E3) = MVP entregable
 
@@ -116,9 +116,9 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 - [ ] T023 [US3] `inc/class-pmu-sesion.php`: `consolidar_order($order_id)` — agrupa por `(madre, receta)`, gana el de mayor resolucion, arma `tmp/orders/{order}/_comun/`, borra los duplicados y reescribe **todas** las filas a `ref` (idempotente, D11/R3/R12)
 - [ ] T024 [US3] `personalizador-pdf.php`: `staging_order()` y `pedido_promover()` llaman `consolidar_order()` y mueven `_comun` en el mismo `rename` (D11)
-- [ ] T025 [US3] `personalizador-pdf.php`: `item_generar_pdfs()` resuelve `origen: ref` con `resolver_ref()` (hoy `!is_file` saltea en silencio en la linea 2621) (D13)
-- [ ] T026 [US3] `inc/class-pmu-sesion.php`: `resolver_subidas()` contempla las filas `origen: ref` (miniaturas de la ficha) (D13)
-- [ ] T027 [US3] `inc/class-pmu-sesion.php`: `podar_subidas()` — una fila `ref` no cuenta como archivo local en uso (D13)
+- [X] T025 [US3] `personalizador-pdf.php`: `item_generar_pdfs()` resuelve `origen: ref` con `resolver_ref()` (hoy `!is_file` saltea en silencio en la linea 2621) (D13)
+- [X] T026 [US3] `inc/class-pmu-sesion.php`: `resolver_subidas()` contempla las filas `origen: ref` (miniaturas de la ficha) (D13)
+- [X] T027 [US3] `inc/class-pmu-sesion.php`: `podar_subidas()` — una fila `ref` no cuenta como archivo local en uso (D13)
 
 **Checkpoint**: US3 probable sola (E5)
 
@@ -174,9 +174,9 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 - [ ] T039 [P] `.specify/memory/constitution.md`: enmienda §IV (layout `orders/{order_id}/_comun/`, familias `{madre}-{n}` y `origen: ref`) + Sync Impact Report MINOR, sin tocar principios (y nota del cache de cliente: metadatos, nunca bytes)
 - [ ] T040 [P] `specs/INDICE.md` + `readme.txt` (changelog) + bump de version **solo en la cabecera** de `personalizador-pdf.php` -> 4.22.0
 - [ ] T041 `php tests/inventario_repo.php`, `php tests/sin_lectura.php` y `php tests/estado_pmu.php` en verde (leer la galeria no escribe catalogos)
-- [ ] T043 [P] [US1] `assets/visor-pmu.js` (NUEVO, **extraido** de `cargador-pmu.js`): `PMUVisor.abrir({items, indice, acciones, fuente, titulo, tecnico})` con navegacion sin `await`, `<img>` reusado, precarga de vecinos y `decoding="async"` (D28)
-- [ ] T044 [US1] `assets/cargador-pmu.js`: usar `PMUVisor` (eliminar `_abrirVisor`), mandar los `items` con `url` ya resuelta y el segmento **En este campo / Mis imagenes** (D28/D23)
-- [ ] T045 [US1] `personalizador-pdf.php` + `assets/tienda.js`: `handle_subida` devuelve `url`; `PMU_FICHA.urls` publica las URLs de lo cargado; `op=imagen` sirve tambien `item_key`+`id` (D14/D23)
+- [X] T043 [P] [US1] `assets/visor-pmu.js` (NUEVO, **extraido** de `cargador-pmu.js`): `PMUVisor.abrir({items, indice, acciones, fuente, titulo, tecnico})` con navegacion sin `await`, `<img>` reusado, precarga de vecinos y `decoding="async"` (D28)
+- [X] T044 [US1] `assets/cargador-pmu.js`: usar `PMUVisor` (eliminar `_abrirVisor`), mandar los `items` con `url` ya resuelta y el segmento **En este campo / Mis imagenes** (D28/D23)
+- [X] T045 [US1] `personalizador-pdf.php` + `assets/tienda.js`: `handle_subida` devuelve `url`; `PMU_FICHA.urls` publica las URLs de lo cargado; `op=imagen` sirve tambien `item_key`+`id` (D14/D23)
 - [ ] T046 [US1] Puertas del visor: **0 POST por paso** al navegar 5 fotos (la URL sale del mapa `id -> url`), checks en `tests/selector-contrato.test.js` y `tests/campos-contrato.test.js`
 - [ ] T042 Recorrido manual en WP real (quickstart **E1-E8**, incluida la medicion de volumen de E8): 2 productos con la misma foto, compra, `orders/{id}/_comun/`, borrado con aviso y vencimiento de sesiones
 
