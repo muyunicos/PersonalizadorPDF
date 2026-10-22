@@ -126,42 +126,56 @@
     }
 
     /** Dibuja la tira (hasta 10 fotos) en `el`; si no hay fotos NO dibuja nada (D23). */
+    /** Pinta la tira en `el`: una miniatura por familia + el tile del resto (N+). */
+    function pintarTira(el, fotos) {
+        var doc = el.ownerDocument || global.document;
+        el.innerHTML = '';
+        if (!fotos || !fotos.length) { return 0; }
+        inyectarEstilos(doc);
+        var t = doc.createElement('div');
+        t.className = 'pmu-bib-tira';
+        fotos.slice(0, TOPE_TIRA).forEach(function (f) {
+            var b = doc.createElement('button');
+            b.type = 'button';
+            b.className = 'pmu-bib-mini';
+            b.setAttribute('data-madre', String(f.madre || ''));
+            b.title = (f.versiones > 1) ? (f.versiones + ' versiones') : 'Imagen guardada';
+            var img = doc.createElement('img');
+            img.alt = '';
+            img.decoding = 'async';
+            img.src = String(f.thumb || f.url || '' );
+            b.appendChild(img);
+            b.addEventListener('click', function () { if (onElegir) { onElegir(f); } });
+            t.appendChild(b);
+        });
+        if (fotos.length > TOPE_TIRA) {
+            var mas = doc.createElement('button');
+            mas.type = 'button';
+            mas.className = 'pmu-bib-mini pmu-bib-mas';
+            mas.textContent = String(fotos.length) + '+';
+            mas.addEventListener('click', function () { visor(TOPE_TIRA); });
+            t.appendChild(mas);
+        }
+        el.appendChild(t);
+        return fotos.length;
+    }
+
+    /**
+     * Dibuja la tira (hasta 10 fotos) en `el`. Con copia local se pinta AL
+     * INSTANTE y el servidor solo confirma (D23): abrir el modal no espera al POST.
+     */
     function tira(el, opts) {
         opts = opts || {};
         if (typeof opts.onElegir === 'function') { onElegir = opts.onElegir; }
         if (!el) { return Promise.resolve(0); }
-        var doc = el.ownerDocument || global.document;
+        var previa = leerCache();
+        if (previa && previa.fotos.length) { pintarTira(el, previa.fotos); }
         return pedir().then(function (res) {
             var fotos = res.fotos || [];
-            el.innerHTML = '';
-            if (!fotos.length) { return 0; }
-            inyectarEstilos(doc);
-            var t = doc.createElement('div');
-            t.className = 'pmu-bib-tira';
-            fotos.slice(0, TOPE_TIRA).forEach(function (f) {
-                var b = doc.createElement('button');
-                b.type = 'button';
-                b.className = 'pmu-bib-mini';
-                b.setAttribute('data-madre', String(f.madre || ''));
-                b.title = (f.versiones > 1) ? (f.versiones + ' versiones') : 'Imagen guardada';
-                var img = doc.createElement('img');
-                img.alt = '';
-                img.decoding = 'async';
-                img.src = String(f.thumb || f.url || '' );
-                b.appendChild(img);
-                b.addEventListener('click', function () { if (onElegir) { onElegir(f); } });
-                t.appendChild(b);
-            });
-            if (fotos.length > TOPE_TIRA) {
-                var mas = doc.createElement('button');
-                mas.type = 'button';
-                mas.className = 'pmu-bib-mini pmu-bib-mas';
-                mas.textContent = String(fotos.length) + '+';
-                mas.addEventListener('click', function () { visor(TOPE_TIRA); });
-                t.appendChild(mas);
-            }
-            el.appendChild(t);
-            return fotos.length;
+            if (previa && previa.fotos.length && res.sin_cambios) { return fotos.length; }
+            return pintarTira(el, fotos);
+        }).catch(function () {
+            return (previa && previa.fotos.length) ? previa.fotos.length : 0;
         });
     }
 
