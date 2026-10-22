@@ -702,6 +702,8 @@
             '<div class="spmu-acciones-izq">' +
             '<input type="file" class="spmu-file" accept="' + ACEPTA + '" hidden>' +
             '<button type="button" class="button spmu-elegir">Cargar imagen</button>' +
+            '<button type="button" class="button spmu-biblioteca">Elegir ya subida</button>' +
+            '<div class="pmu-bib-contenedor" style="flex:1 0 100%" hidden></div>' +
             '</div>' +
             '<div class="spmu-acciones-der">' +
             '<button type="button" class="button-link spmu-cancelar">Cancelar</button>' +
@@ -889,6 +891,33 @@
         });
         $('.spmu-rotar').addEventListener('click', function () { self._rotar(); });
         $('.spmu-ok').addEventListener('click', function () { self._aceptar(); });
+        // Spec 030 (T013): "Elegir ya subida" abre la tira de la biblioteca; la foto
+        // elegida entra al modal por el MISMO camino que un arrastre, asi no se
+        // duplica la logica de archivo elegido.
+        var btnBib = $('.spmu-biblioteca');
+        var cajaBib = $('.pmu-bib-contenedor');
+        if (btnBib && cajaBib && window.PMUBiblioteca) {
+            btnBib.addEventListener('click', function () {
+                cajaBib.hidden = false;
+                window.PMUBiblioteca.tira(cajaBib, {
+                    onElegir: function (foto) {
+                        window.fetch(foto.url, { credentials: 'same-origin' })
+                            .then(function (r) { return r.blob(); })
+                            .then(function (b) {
+                                var f = new File([b], 'biblioteca.webp', { type: b.type || 'image/webp' });
+                                var dt = new DataTransfer();
+                                dt.items.add(f);
+                                var zona = $('.spmu-escena') || $('.spmu-caja');
+                                if (zona) {
+                                    zona.dispatchEvent(new DragEvent('drop',
+                                        { bubbles: true, cancelable: true, dataTransfer: dt }));
+                                }
+                            })
+                            .catch(function () { });
+                    }
+                });
+            });
+        }
         $('.spmu-cancelar').addEventListener('click', function () {
             if (!self._subiendo) { self._cancelar(); }
         });
