@@ -313,6 +313,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('op=listar: contenedores >= 1', (int)($json['data']['totales']['contenedores'] ?? 0) >= 1);
         check('la familia trae url por op=imagen', !empty($fotos_b[0]['url']) && strpos((string)$fotos_b[0]['url'], 'op=imagen') !== false);
         check('la familia trae base y archivos', !empty($fotos_b[0]['base']) && (int)($fotos_b[0]['archivos'] ?? 0) >= 1);
+        check('la familia expone sus recetas (D8: Elegir vs Subir)', isset($fotos_b[0]['recetas']) && is_array($fotos_b[0]['recetas']));
         check('usos: el item del carrito queda anotado', !empty($fotos_b[0]['usos']['carrito']));
         check('op=imagen: la familia propia se resuelve a un archivo real', !empty($GLOBALS['bib_img_propia']));
         check('op=imagen: el mime sale por EXTENSION (image/webp)', !empty($GLOBALS['bib_img_mime']));

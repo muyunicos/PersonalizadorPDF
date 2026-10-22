@@ -1047,9 +1047,17 @@ class PMU_Sesion
                 if (!isset($familias[$madre])) {
                     $familias[$madre] = ['madre' => $madre, 'archivos' => 0, 'w' => 0, 'h' => 0,
                         'base' => '', 'url' => ($url ? (string)$url($madre) : ''), 'creado' => 0, 'bytes' => 0,
+                        'recetas' => [],
                         'usos' => ['carrito' => [], 'pedidos' => []]];
                 }
                 $familias[$madre]['archivos']++;
+                // Spec 030 (T014/D8): las recetas de la familia viajan en la vista para
+                // que el cliente pueda decidir Elegir (misma receta -> `ref`, 0 bytes)
+                // vs Subir (otra composicion -> version `{madre}-{n}`).
+                $recetaFila = (string)($fila['receta'] ?? '');
+                if ($recetaFila !== '') {
+                    $familias[$madre]['recetas'][$recetaFila] = true;
+                }
                 $familias[$madre]['bytes'] += (int)@filesize($ruta);
                 $creado = (int)($fila['creado'] ?? 0);
                 if ($creado > $familias[$madre]['creado']) {
@@ -1071,6 +1079,10 @@ class PMU_Sesion
             }
         }
         $out = array_values($familias);
+        foreach ($out as &$f) {
+            $f['recetas'] = array_values(array_keys((array)$f['recetas']));
+        }
+        unset($f);
         usort($out, function ($a, $b) {
             return (int)$b['creado'] - (int)$a['creado'];
         });
