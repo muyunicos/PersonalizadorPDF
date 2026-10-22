@@ -16,7 +16,7 @@ feature elimina) mas el vinculo de identidad; cada una se implementa y se prueba
 |---|---|---|---|
 | US1 — Ver y reusar mis fotos desde la ficha | **P1 (MVP)** | el comprador ve su historial en el modal y reusa una foto sin recomponer (0 bytes) | E2 + E3 |
 | US2 — Una sola vez, con versiones | P2 | la misma foto no se duplica y crece sin perder calidad (`{madre}-{n}`, `base` por flag, dedupe por `sha`) | E4 + E6.1 |
-| US3 — El pedido no duplica archivos | P3 | items del mismo pedido comparten **1** archivo (`_comun`) y los pedidos se referencian entre si | E5 |
+| US3 — El pedido no duplica archivos | P3 | los pedidos se **referencian** entre si: la misma foto en N compras = **1** archivo (sin `_comun`, D11) | E5 |
 | US4 — Control del cliente: borrar y vencer | P4 | borra su familia completa con aviso; lo temporal vence (drafts 24 h, carrito abandonado 30 dias) | E6 |
 | US5 — Mi historial completo al iniciar sesion | P5 | el invitado que se registra recupera sus sesiones (`sid` -> cuenta, via Woo) | E2 + E3 con cuenta |
 
@@ -104,18 +104,18 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 ## Phase 5: User Story 3 - El pedido no duplica archivos (P3)
 
-**Goal**: los items de un pedido comparten **una** copia (`orders/{order_id}/_comun/`) y los pedidos se referencian entre si
+**Goal**: los pedidos se **referencian** entre si (la fila `origen: ref` apunta al archivo de origen; sin `_comun`)
 
 **Independent Test**: **E5** (2 items con la misma foto, ya comprados)
 
 ### Tests for User Story 3
 
-- [ ] T022 [P] [US3] Fase `biblioteca` en `tests/texto_puente.php`: consolidacion de 3 items -> **1** archivo en `_comun` + 3 filas `ref` + idempotencia; `item_generar_pdfs` con `ref` arma el PDF; `ref` roto -> causa explicita y hueco transparente (D11/D13)
+- [~] T022 [P] [US3] **OBSOLETA** con D11 revisado: los checks de `ref` (valido, roto y `resolver_subidas`) ya estan en la fase `biblioteca` (T009)
 
 ### Implementation for User Story 3
 
-- [ ] T023 [US3] `inc/class-pmu-sesion.php`: `consolidar_order($order_id)` — agrupa por `(madre, receta)`, gana el de mayor resolucion, arma `tmp/orders/{order}/_comun/`, borra los duplicados y reescribe **todas** las filas a `ref` (idempotente, D11/R3/R12)
-- [ ] T024 [US3] `personalizador-pdf.php`: `staging_order()` y `pedido_promover()` llaman `consolidar_order()` y mueven `_comun` en el mismo `rename` (D11)
+- [~] T023 [US3] **OBSOLETA** con D11 revisado: no hay `consolidar_order()` ni `_comun` (la referencia apunta al archivo de origen) `inc/class-pmu-sesion.php`: `consolidar_order($order_id)` — agrupa por `(madre, receta)`, gana el de mayor resolucion, arma `tmp/orders/{order}/_comun/`, borra los duplicados y reescribe **todas** las filas a `ref` (idempotente, D11/R3/R12)
+- [~] T024 [US3] **OBSOLETA** con D11 revisado: no hay `_comun` que mover en la promocion
 - [X] T025 [US3] `personalizador-pdf.php`: `item_generar_pdfs()` resuelve `origen: ref` con `resolver_ref()` (hoy `!is_file` saltea en silencio en la linea 2621) (D13)
 - [X] T026 [US3] `inc/class-pmu-sesion.php`: `resolver_subidas()` contempla las filas `origen: ref` (miniaturas de la ficha) (D13)
 - [X] T027 [US3] `inc/class-pmu-sesion.php`: `podar_subidas()` — una fila `ref` no cuenta como archivo local en uso (D13)
@@ -231,7 +231,7 @@ node --check assets/biblioteca-pmu.js        # T011 + T012 (modulo nuevo)
 
 1. **US1** = valor inmediato (ver y reusar) — desplegable
 2. **US2** = una entrada por foto (`sha` + versiones) — desplegable
-3. **US3** = ahorro real de disco entre pedidos (`_comun` + `ref`) — desplegable
+3. **US3** = ahorro real de disco entre pedidos (la referencia `ref` al archivo de origen) — desplegable
 4. **US4** = control del cliente + limpieza (el cron se despliega con el TTL ya probado)
 5. **US5** = historial por cuenta (invitado -> registrado)
 
