@@ -331,6 +331,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('US2: la segunda entra como version {madre}-2 (D5)', !empty($GLOBALS['bib_fam_2']));
         check('T021: el contenido ya subido devuelve su familia (dedupe)', !empty($GLOBALS['bib_dedupe_madre']));
         check('T021: un contenido nuevo devuelve cadena vacia (no bloquea)', !empty($GLOBALS['bib_dedupe_nuevo']));
+        check('T035: el login anota el sid en _pmu_sids (una sola vez)', !empty($GLOBALS['bib_vinculo']));
+        check('T035: el vinculo respeta el tope de 20 (D3)', !empty($GLOBALS['bib_vinculo_tope']));
         check('op=listar no deja avisos de PHP', $admin_error === '');
     }    if ($fase === 'admin') {
         preparar_entorno($testBase, $base);
@@ -2660,6 +2662,21 @@ switch ($fase) {
         // su familia; contenido nuevo -> '' (y la subida sigue normal, sin bloquear).
         $GLOBALS['bib_dedupe_madre'] = ($p->biblioteca_madre_por_contenido($bytes_b) !== '');
         $GLOBALS['bib_dedupe_nuevo'] = ($p->biblioteca_madre_por_contenido('contenido-nuevo-sin-familia') === '');
+        // Spec 030 (T034/T035): el vinculo invitado -> cuenta (D3). Se simula el login con
+        // un `sid` vigente y se comprueba el alta, el dedupe (idempotente) y el tope de 20.
+        $GLOBALS['test_user_meta'] = [];
+        $_COOKIE[PMU_Sesion::COOKIE] = 'sid-vinculo-0007';
+        $p->vinculo_sid_usuario(7, '');
+        $p->vinculo_sid_usuario(7, '');
+        $p->vinculo_sid_filtro(7);
+        $sidsVin_b = (array)get_user_meta(7, '_pmu_sids', true);
+        $GLOBALS['bib_vinculo'] = (count($sidsVin_b) === 1 && (string)$sidsVin_b[0] === 'sid-vinculo-0007');
+        for ($nVin_b = 0; $nVin_b < 25; $nVin_b++) {
+            $_COOKIE[PMU_Sesion::COOKIE] = 'sid-corte-' . $nVin_b;
+            $p->vinculo_sid_usuario(7, '');
+        }
+        $GLOBALS['bib_vinculo_tope'] = (count((array)get_user_meta(7, '_pmu_sids', true)) === 20);
+        $_COOKIE[PMU_Sesion::COOKIE] = $sid_b;
         $_REQUEST = ['op' => 'listar', '_wpnonce' => 'nonce'];
         $_POST = $_REQUEST;
         $p->handle_biblioteca(); // exit -> checks del shutdown

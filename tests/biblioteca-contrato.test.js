@@ -122,6 +122,13 @@ check('tienda.js da usar al cargador y usa PMUBiblioteca.usar (T015/D8)',
     /usar: function \(madre, params, ctxUsar\)/.test(tienda) && /api\.usarBiblioteca = function/.test(tienda)
     && /PMUBiblioteca\.usar\(String\(madre \|\| ''\)/.test(tienda));
 
+console.log('== US5: vinculo invitado -> cuenta (D3) ==');
+check('D3: el vinculo solo se consulta con cuenta (uid > 0)',
+    /if \(\$uid > 0 && function_exists\('get_user_meta'\)\)/.test(plugin));
+check('T035: los hooks del vinculo estan registrados (wp_login + Woo 8.8+)',
+    /add_action\('wp_login', \[\$this, 'vinculo_sid_usuario'\], 10, 2\)/.test(plugin)
+    && /add_filter\('woocommerce_guest_session_to_user_id', \[\$this, 'vinculo_sid_filtro'\], 10, 1\)/.test(plugin));
+
 console.log('');
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }
 console.log('BIBLIOTECA CONTRATO FALLA (' + fallos + ' de ' + (ok + fallos) + ')');

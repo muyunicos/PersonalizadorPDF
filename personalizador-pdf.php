@@ -133,6 +133,10 @@ class Personalizador_PDF_Plugin
         // Spec 030 (D19): endpoint unico de la biblioteca (op=imagen|listar|usos|usar|borrar).
         add_action('admin_post_personalizador_pdf_biblioteca', [$this, 'handle_biblioteca']);
         add_action('admin_post_nopriv_personalizador_pdf_biblioteca', [$this, 'handle_biblioteca']);
+        // Spec 030 (T035/D3): al loguearse, el `sid` del invitado se anota en su cuenta
+        // (`_pmu_sids`): su historial lo sigue en cualquier dispositivo. Nunca al reves.
+        add_action('wp_login', [$this, 'vinculo_sid_usuario'], 10, 2);
+        add_filter('woocommerce_guest_session_to_user_id', [$this, 'vinculo_sid_filtro'], 10, 1);
         // Spec 030 (T033/D18): barrido diario del TTL (drafts 24 h; carrito abandonado 30 dias).
         add_action('init', [$this, 'programar_limpieza_ttl']);
         add_action('personalizador_pdf_limpieza_ttl', [$this, 'handle_limpieza_ttl']);
@@ -1854,6 +1858,53 @@ class Personalizador_PDF_Plugin
      * `woocommerce_guest_session_to_user_id` (o el fallback `wp_login`).
      * Devuelve ['clave' => string, 'uid' => int, 'sids' => string[]].
      */
+    /**
+     * Spec 030 (T035/D3): vincula el `sid` del invitado a su cuenta al loguearse, para
+     * que su historial (sesiones y pedidos) lo siga en cualquier dispositivo. Se
+     * registra en `wp_login` y en el hook de Woo 8.8+ (`woocommerce_guest_session_to_user_id`,
+     * que puede llegar como filtro con el id o como accion con el id de sesion). El `sid`
+     * sale de la COOKIE vigente (D3): el servidor no lo acepta del POST.
+     */
+    public function vinculo_sid_usuario($arg1 = 0, $arg2 = '')
+    {
+        $uid = (int)$arg1;
+        if ($uid < 1 && is_object($arg2) && isset($arg2->ID)) {
+            $uid = (int)$arg2->ID;
+        }
+        if ($uid < 1 && function_exists('get_current_user_id')) {
+            $uid = (int)get_current_user_id();
+        }
+        if ($uid < 1 || !function_exists('get_user_meta') || !function_exists('update_user_meta')) {
+            return;
+        }
+        $sid = (string)$this->sesion()->sid_actual();
+        if ($sid === '') {
+            return;
+        }
+        $lista = [];
+        foreach ((array)get_user_meta($uid, '_pmu_sids', true) as $s) {
+            $s = (string)$s;
+            if ($s !== '' && !in_array($s, $lista, true)) {
+                $lista[] = $s;
+            }
+        }
+        if (in_array($sid, $lista, true)) {
+            return;
+        }
+        $lista[] = $sid;
+        if (count($lista) > 20) {
+            $lista = array_slice($lista, -20);
+        }
+        update_user_meta($uid, '_pmu_sids', $lista);
+    }
+
+    /** Mismo vinculo, como FILTRO de Woo 8.8+: anota y devuelve el id sin tocar nada. */
+    public function vinculo_sid_filtro($cliente_id)
+    {
+        $this->vinculo_sid_usuario((int)$cliente_id);
+        return $cliente_id;
+    }
+
     private function biblioteca_identidad()
     {
         $sesion = $this->sesion();

@@ -154,12 +154,12 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 ### Tests for User Story 5
 
-- [ ] T034 [P] [US5] Fase `biblioteca` en `tests/texto_puente.php`: el logueado ve `wc_get_orders(customer_id)` + las sesiones de sus `_pmu_sids`; una request **deslogueada** no consulta el vinculo (D3/R1)
+- [X] T034 [P] [US5] Fase `biblioteca` en `tests/texto_puente.php`: el logueado ve `wc_get_orders(customer_id)` + las sesiones de sus `_pmu_sids`; una request **deslogueada** no consulta el vinculo (D3/R1)
 
 ### Implementation for User Story 5
 
-- [ ] T035 [US5] `personalizador-pdf.php`: `vinculo_sid_usuario()` en `woocommerce_guest_session_to_user_id` (y fallback `wp_login` con `version_compare(WC()->version, '8.8', '>=')` para Woo viejo) -> `update_user_meta($uid, '_pmu_sids', ...)` con dedup y cap 20 (D3/R1)
-- [ ] T036 [US5] `personalizador-pdf.php`: `biblioteca_identidad()` suma los `_pmu_sids` del usuario a la lista de sesiones (D3)
+- [X] T035 [US5] `personalizador-pdf.php`: `vinculo_sid_usuario()` en `woocommerce_guest_session_to_user_id` (y fallback `wp_login` con `version_compare(WC()->version, '8.8', '>=')` para Woo viejo) -> `update_user_meta($uid, '_pmu_sids', ...)` con dedup y cap 20 (D3/R1)
+- [X] T036 [US5] `personalizador-pdf.php`: `biblioteca_identidad()` suma los `_pmu_sids` del usuario a la lista de sesiones (D3)
 
 **Checkpoint**: US5 probable sola
 
