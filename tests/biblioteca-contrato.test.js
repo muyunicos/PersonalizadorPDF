@@ -97,6 +97,11 @@ check('op=usar no escribe si la receta no coincide y avisa coincide:false',
 check('usar() solo invalida la copia cuando hay fila escrita',
     /if \(json\.data && json\.data\.fila\) \{ invalidar\(\); \}/.test(bib));
 
+console.log('== Params de receta en el selector (T014/D7) ==');
+check('el selector sabe sus params con los 11 campos del servidor',
+    /prototype\._params = function/.test(sel) && /modo: modoCanonico\(this\.config\.mode\)/.test(sel)
+    && /dx: disp\.x \|\| 0/.test(sel) && /iw: dim\.w/.test(sel));
+
 console.log('');
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }
 console.log('BIBLIOTECA CONTRATO FALLA (' + fallos + ' de ' + (ok + fallos) + ')');

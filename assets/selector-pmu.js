@@ -1090,6 +1090,31 @@
         }
     };
 
+    /**
+     * Spec 030 (T014/D7): los `params` del hueco tal como los hashea el servidor
+     * (`PMU_Sesion::receta_de`): MISMOS nombres y MISMOS valores que el PNG de salida.
+     * Es lo que permite decidir Elegir (receta igual -> `ref`, 0 bytes) vs Subir
+     * (composicion nueva). Si esto cambia, el servidor lo detecta y NO reusa.
+     */
+    SelectorPMU.prototype._params = function () {
+        var dim = this._dimensionesImagen ? this._dimensionesImagen() : { w: 1, h: 1 };
+        var disp = this.desplazamiento || { x: 0, y: 0 };
+        var fondo = (this.colorFondo === 'transparent') ? 'transparent' : (this.colorFondo || 'auto');
+        return {
+            w: Math.max(1, parseInt(this.config.finalW, 10) || 1),
+            h: Math.max(1, parseInt(this.config.finalH, 10) || 1),
+            forma: String(this.config.forma || 'auto'),
+            modo: modoCanonico(this.config.mode),
+            escala: this.zoom || 1,
+            dx: disp.x || 0,
+            dy: disp.y || 0,
+            fondo: fondo,
+            transp: String(this.config.transp || ''),
+            iw: dim.w,
+            ih: dim.h
+        };
+    };
+
     SelectorPMU.prototype._dimensionesImagen = function () {
         if (!this.imagen) { return { w: 1, h: 1 }; }
         var iw = Math.max(1, this.imagen.naturalWidth || this.imagen.width || 1);
