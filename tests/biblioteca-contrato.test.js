@@ -102,6 +102,13 @@ check('el selector sabe sus params con los 11 campos del servidor',
     /prototype\._params = function/.test(sel) && /modo: modoCanonico\(this\.config\.mode\)/.test(sel)
     && /dx: disp\.x \|\| 0/.test(sel) && /iw: dim\.w/.test(sel));
 
+console.log('== Elegir en el selector (T014/D8) ==');
+check('el selector tiene el guard de Elegir, la etiqueta y la fuente de biblioteca',
+    /prototype\._actualizarPrimario = function/.test(sel) && /self\._bibMadre = String\(\(foto && foto\.madre\)/.test(sel)
+    && /selfB\._emitir\('usado'/.test(sel) && /_paramsBase === JSON\.stringify\(this\._params\(\)\)/.test(sel));
+check('el guard cae al camino normal cuando el servidor no reusa (coincide:false)',
+    /selfB\._aceptar\(\);\s*\n\s*\}\)\.catch/.test(sel) && /selfB\._aceptar\(\);/.test(sel));
+
 console.log('');
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }
 console.log('BIBLIOTECA CONTRATO FALLA (' + fallos + ' de ' + (ok + fallos) + ')');

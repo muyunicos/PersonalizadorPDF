@@ -650,6 +650,7 @@
         // fuente viene de la BIBLIOTECA (entonces se puede ELEGIR sin recomponer). `_cambios`
         // se enciende con cualquier retoque: si no, el primario dice `Elegir` (0 bytes).
         this._hueco = opciones.hueco || null;
+        this.config.usar = opciones.usar || this.config.usar || null;
         this._bibMadre = opciones.bibMadre ? String(opciones.bibMadre) : '';
         this._cambios = false;
         this._yaElegido = false;
@@ -917,6 +918,9 @@
 
                 window.PMUBiblioteca.tira(cajaBib, {
                     onElegir: function (foto) {
+                        // Spec 030 (D8): la fuente viene de la BIBLIOTECA: si el comprador
+                        // no toca la composicion, el primario dira `Elegir` (0 bytes).
+                        self._bibMadre = String((foto && foto.madre) || '');
                         window.fetch(foto.url, { credentials: 'same-origin' })
                             .then(function (r) { return r.blob(); })
                             .then(function (b) {
@@ -1044,6 +1048,9 @@
             if (self.config.transp === 'no' && self.colorFondo === 'transparent') {
                 self.colorFondo = '#ffffff';
             }
+            // Spec 030 (D8): composicion de REFERENCIA al cargar la imagen. Si el comprador
+            // no la toca, el primario puede ELEGIR (0 bytes) y no recomponer ni subir.
+            self._paramsBase = JSON.stringify(self._params());
             self.supera5 = superaCincoPorciento(
                 img.naturalWidth || 1, img.naturalHeight || 1,
                 self.config.finalW, self.config.finalH
@@ -1256,11 +1263,25 @@
         ctx.restore();
     };
 
+    /**
+     * Spec 030 (D8): el primario dice `Elegir` (0 bytes) cuando la fuente es una foto
+     * de la biblioteca y la composicion NO se toco; en cualquier otro caso, `Subir`.
+     */
+    SelectorPMU.prototype._actualizarPrimario = function () {
+        if (!this.raiz || this._subiendo) { return; }
+        var ok = this.raiz.querySelector('.spmu-ok');
+        if (!ok) { return; }
+        var puede = !!(this._bibMadre && this.config.usar && this._paramsBase
+            && this._paramsBase === JSON.stringify(this._params()));
+        ok.textContent = puede ? 'Elegir' : 'Subir';
+    };
+
     SelectorPMU.prototype._dibujar = function () {
         if (!this.ctx) { return; }
         this._pintarImagenEnContexto(this.ctx, true);
         this._pintarEnvoltura();
         this._badge();
+        this._actualizarPrimario();
     };
 
     SelectorPMU.prototype._ajustarCajaEscena = function () {
@@ -1584,6 +1605,31 @@
         var self = this;
         if (!this.imagen || this._subiendo) {
             if (!this.imagen) { this._fallo('UPLOAD_FAILED', 'No hay imagen para subir'); }
+            return;
+        }
+        // Spec 030 (D8/4a clarificacion): si la fuente es de la BIBLIOTECA y no se toco
+        // nada (misma composicion que al cargarla), no se compone ni se suben bytes: se le
+        // pide al servidor que REUSE esa familia (`op=usar`, decide por receta). Si vuelve
+        // `coincide:false`, se sigue por el camino normal. El `_yaElegido` evita re-entrar.
+        if (!this._yaElegido && this._bibMadre && this.config.usar
+            && this._paramsBase === JSON.stringify(this._params())) {
+            var selfB = this;
+            this._yaElegido = true;
+            var okB = this.raiz ? this.raiz.querySelector('.spmu-ok') : null;
+            if (okB) { okB.disabled = true; okB.textContent = 'Eligiendo...'; }
+            this._emitir('progress', { percentage: 30 });
+            this.config.usar(this._bibMadre, this._params()).then(function (res) {
+                if (okB) { okB.disabled = false; okB.textContent = 'Elegir'; }
+                if (res && res.fila) {
+                    selfB._emitir('usado', { fila: res.fila, madre: selfB._bibMadre });
+                    selfB._cancelar();
+                    return;
+                }
+                selfB._aceptar();
+            }).catch(function () {
+                if (okB) { okB.disabled = false; okB.textContent = 'Elegir'; }
+                selfB._aceptar();
+            });
             return;
         }
         var ok = this.raiz ? this.raiz.querySelector('.spmu-ok') : null;
