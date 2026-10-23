@@ -4045,6 +4045,20 @@ class Personalizador_PDF_Plugin
         $this->smoke_hooks($add);
         $this->smoke_woo($add);
         $this->smoke_consola($add);
+        // Spec 030 (anti-drift): la biblioteca vive en DOS archivos; si un deploy deja uno
+        // viejo, la tira queda vacia EN SILENCIO (paso el 2026-10-23). Esto lo canta.
+        $this->sesion(); // carga inc/class-pmu-sesion.php (lazy) antes de mirar metodos
+        $faltanBib = [];
+        foreach (['familias', 'familia_de', 'ruta_familia', 'familia_por_sha', 'guardar_subida', 'limpiar_ttl'] as $mBib) {
+            if (!method_exists('PMU_Sesion', $mBib)) {
+                $faltanBib[] = $mBib;
+            }
+        }
+        $add(
+            'Biblioteca: PMU_Sesion al dia (metodos de la spec 030)',
+            !$faltanBib && method_exists($this, 'biblioteca_familias'),
+            $faltanBib ? ('FALTA(n): ' . implode(', ', $faltanBib) . ' en inc/class-pmu-sesion.php') : 'ok'
+        );
         return $out;
     }
 
