@@ -955,9 +955,11 @@ fue el shell: fue usar scripts que reescriben ficheros completos.**
    pusheado) y rehacerlo con el editor. No intentar "arreglarlo" con más scripts.
 6. **Anclas de UNA linea y sin espacios iniciales**: el editor matchea el texto tal cual, asi que
    incluir la indentacion adivinada es la causa #1 de "text not found" (2026-10-21). Usar el texto de
-   la linea **sin** sus espacios iniciales; si el cambio abarca varias lineas, partirlo en pasos.
-7. **Un archivo, una edicion por turno**: mandar varias ediciones al MISMO archivo en un lote hace que
-   las siguientes corran sobre un snapshot viejo y fallen (con texto identico al del archivo).
+   la linea **sin** sus espacios iniciales; si el cambio abarca varias lineas, partirlo en pasos (los
+   lotes al MISMO archivo entran todos si las anclas son de una linea sin espacios: no es el lote, es
+   la indentacion adivinada).
+7. **Anclas de una linea = lotes seguros**: varias ediciones al mismo archivo en un solo lote entran
+   bien **si** cada `old_text` es de una linea y empieza en texto, no en espacios (probado 2026-10-21).
 
 ### Commits (2026-10-21)
 
