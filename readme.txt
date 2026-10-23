@@ -67,6 +67,16 @@ Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}
 
 == Changelog ==
 
+= 4.22.1 =
+* Spec 030 - Biblioteca de imagenes del comprador: la tira vive siempre visible en el modal
+  (adaptada al ancho, sin scroll) y la galeria fullscreen permite Elegir o Borrar; reuso sin
+  recomponer (0 bytes) cuando la receta coincide, versiones {madre}-{n} al recomponer, dedupe
+  por contenido al subir, referencias entre pedidos (origen: ref), borrado de la familia
+  completa con aviso de usos y vencimiento por item (drafts 24 h / carrito 30 dias) con cron.
+* Fixes: la tira se auto-sana de una copia local vacia; el aviso de borrado no nombra el
+  carrito cuando es el item en edicion; el selector de archivos solo se auto-abre si la
+  biblioteca esta vacia.
+
 = 4.21.1 =
 * **Hostname oficial para la prueba IA**: se admite `https://ai.loc.ar` como endpoint predeterminado junto con Quick Tunnels temporales; se conserva la allowlist exacta para evitar destinos arbitrarios.
 

@@ -129,6 +129,9 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   ├── selector-pmu.js      ← Cliente de subida/recorte de imágenes de campos (spec 004,
 │   │                          contrato `specs/004.../contracts/selector-pmu.md`; editor visual
 │   │                          spec 016; spec 021: motor propio Canvas 2D sin dependencias)
+│   ├── visor-pmu.js         ← Visor fullscreen COMPARTIDO (PMUVisor: ranura + biblioteca; spec 030 D28)
+│   ├── biblioteca-pmu.js    ← Biblioteca del comprador (spec 030): copia local v2 (metadatos), tira
+│   │                          adaptativa, visor (Elegir/Borrar) y usar (0 bytes); se calienta en la ficha
 │   └── miniaturas.js        ← ThumbEngine: miniaturas `.webp` y sprites por ámbito; único
 │                              cliente de `op=sprite`/`op=miniatura` (envía `firma`; nunca
 │                              escribe catálogos). Se encola en admin y su URL viaja al iframe
@@ -775,6 +778,22 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   (smoke: WebP con alfa -> raster + SMask igual).
 - ✅ **Hooks legacy retirados**: los hooks y el nonce historico `extractor_corel_*`
   (<= 2.0.0) ya no existen; `seguridad()` solo acepta `personalizador_pdf_*`.
+- ✅ **Spec 030 `biblioteca-imagenes` (implementada, v4.22.1)**: el comprador **ve y reusa** sus fotos
+  desde la ficha. La **tira** vive SIEMPRE visible en el modal (montada al abrir, adaptada al ancho, sin
+  scroll, tile `N+` al resto) y **tocar** una miniatura abre el **visor compartido** (`Elegir`/`Borrar`).
+  **Elegir sin recomponer = 0 bytes**: `op=usar` escribe una fila `origen: ref` (o copia desde `tmp`)
+  **solo si** la `receta` del hueco esta entre las de la familia — la decide el **servidor** (el cliente
+  no puede mentir, §III); si difiere, el primario dice `Subir` y entra una **version** `{madre}-{n}`. La
+  `receta` se **estampa tambien al subir** (sin eso, una familia nacida de una subida nunca podia ser
+  Elegible). **Dedupe por `sha`** del contenido CRUDO al subir, **familias** (`{madre}-{n}`, `base`
+  **DERIVADA** por area) en `PMU_Sesion` (**duenio unico**, D1/§II), **referencias entre pedidos**
+  (`ref` relativo a `uploads/pmu/`; si falta, `motor:descarga:ref:ausente` = hueco transparente),
+  **borrado** de la familia completa con aviso de `usos` (sin contar el item en edicion) y
+  **vencimiento por ITEM** (`limpiar_ttl`: drafts 24 h / carrito abandonado 30 dias) con **cron diario**.
+  La copia del cliente es `pmu_bib_v2` (metadatos, nunca bytes) revalidada por `revision`, con
+  **auto-sanado** si dice `fotos: []` y el servidor responde `sin_cambios`. Puertas: fase `biblioteca`
+  del arnes + `tests/biblioteca-contrato.test.js`. Contratos en
+  `specs/030-biblioteca-imagenes/contracts/{biblioteca,cliente-biblioteca}.md`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
   `admin/ayuda.php`, `modules/LEEME.md` solo resumen y apuntan aqui). El `== Changelog ==`
   de `readme.txt` es historial, no normativa.
@@ -824,6 +843,7 @@ php tests/campos_migracion.php   # CRUD de campos v3 (debe decir "CAMPOS V3 OK")
 php tests/certificacion_hoja.php  # Certificacion del sprite (debe decir "CERTIFICACION HOJA OK")
 node tests/campos-contrato.test.js  # Montaje de campos + cargador (spec 012): "CAMPOS CONTRATO OK"
 node tests/selector-contrato.test.js  # Contrato del selector visual (spec 016): "SELECTOR CONTRATO OK"
+node tests/biblioteca-contrato.test.js  # Biblioteca del comprador (spec 030): "BIBLIOTECA CONTRATO OK (N checks)"
 node tests/conciliacion.js    # `PURO.conciliarGrupo` (spec 012, D17-D19): "CONCILIACION OK"
 php tests/motor_smoke.php     # Smoke del motor (debe decir "SMOKE OK")
 php tests/parity.php          # Oráculo del detector (debe decir "PARIDAD OK")
@@ -850,7 +870,7 @@ php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
                               # completados | mockups* | mockup_capas |
                              # mockup_preview | mockup_foto |
                               # mockup_foto_baja | mockup_foto_ajax |
-                              # desactivar | reanalizar | envoltura_op | borrado | campo_global | smoke
+                              # desactivar | reanalizar | envoltura_op | borrado | campo_global | smoke | biblioteca
 ```
 Los 3 arneses CLI salen de inmediato si no corren por CLI (`PHP_SAPI !== 'cli'`):
 la carpeta `tests/` viaja con el plugin al hosting y no debe ser ejecutable por HTTP.
