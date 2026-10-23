@@ -136,6 +136,11 @@ check('config() no cachea endpoint vacio y el calentado va en load',
     /if \(cfg && cfg\.url\) \{ return cfg; \}/.test(bib)
     && /addEventListener\('load', function \(\) \{ calentar\(\); \}\)/.test(bib));
 
+console.log('== Copia envenenada: auto-sanado (2026-10-23) ==');
+check('la copia local es v2 y pedir() se auto-sana de una copia vacia',
+    /var CLAVE = 'pmu_bib_v2';/.test(bib) && /function pedir\(sinDesde\)/.test(bib)
+    && /if \(\(!previa\.fotos \|\| !previa\.fotos\.length\) && !sinDesde\) \{ return pedir\(true\); \}/.test(bib));
+
 console.log('');
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }
 console.log('BIBLIOTECA CONTRATO FALLA (' + fallos + ' de ' + (ok + fallos) + ')');

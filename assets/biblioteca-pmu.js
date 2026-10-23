@@ -22,7 +22,7 @@
 (function (global) {
     'use strict';
 
-    var CLAVE = 'pmu_bib_v1';
+    var CLAVE = 'pmu_bib_v2'; // v2 (2026-10-23): mata las copias viejas envenenadas (fotos: [] + revision vigente)
     var TOPE_TIRA = 10;
     var ANCHO_MINI = 64; // 56px del tile + 8px de separacion (CSS de la tira)
     var TTL_MS = 20 * 60 * 1000; // 20 min: las URLs llevan nonce de WP (D23)
@@ -75,7 +75,7 @@
     }
 
     /** Pide la vista al servidor (con `desde` para no viajar si no cambio). */
-    function pedir() {
+    function pedir(sinDesde) {
         var c = config();
         if (!c.url) { return Promise.reject(new Error('api:biblioteca:sin:endpoint')); }
         var previa = leerCache();
@@ -83,6 +83,7 @@
         fd.append('action', 'personalizador_pdf_biblioteca');
         fd.append('op', 'listar');
         fd.append('_wpnonce', c.nonce);
+        if (sinDesde) { previa = null; } // reintento del auto-sanado: se pide la lista COMPLETA
         if (previa && previa.revision) { fd.append('desde', previa.revision); }
         return global.fetch(c.url, { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
@@ -92,6 +93,10 @@
                 }
                 var d = json.data || {};
                 if (d.sin_cambios && previa) {
+                    // D23 (2026-10-23): copia con `fotos: []` + "sin cambios" = copia envenenada (una
+                    // revision que no se movio tras un bug de deploy). Se re-pregunta UNA vez
+                    // SIN `desde` para que la tira nunca quede vacia por una copia mala.
+                    if ((!previa.fotos || !previa.fotos.length) && !sinDesde) { return pedir(true); }
                     return { revision: previa.revision, sin_cambios: true, fotos: previa.fotos };
                 }
                 var g = guardarCache(d);
