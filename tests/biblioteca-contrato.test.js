@@ -109,6 +109,13 @@ check('el selector tiene el guard de Elegir, la etiqueta y la fuente de bibliote
 check('el guard cae al camino normal cuando el servidor no reusa (coincide:false)',
     /selfB\._aceptar\(\);\s*\n\s*\}\)\.catch/.test(sel) && /selfB\._aceptar\(\);/.test(sel));
 
+console.log('== Cargador: reuso y receta (T014) ==');
+check('el cargador pasa params al subir y una funcion usar al selector',
+    /params: \(this\.selectores\[indice\] && this\.selectores\[indice\]\._params\)/.test(carg)
+    && /usar: self\.config\.usar \? function \(madre, params\)/.test(carg));
+check('el cargador escucha el evento usado y anota el id de la fila',
+    /sel\.on\('usado', function \(dato\)/.test(carg) && /dato\.fila && dato\.fila\.id/.test(carg));
+
 console.log('');
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }
 console.log('BIBLIOTECA CONTRATO FALLA (' + fallos + ' de ' + (ok + fallos) + ')');

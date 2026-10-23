@@ -388,6 +388,21 @@
                 self._subir(indice, blob, reemplazo ? reemplazo.posicion : null);
             }
         });
+        slot.sel.on('usado', function (dato) {
+            // Spec 030 (D8): el selector REUSO la familia (0 bytes): el id de la fila entra
+            // al estado de la ranura como si se hubiera subido, y la ranura se repinta.
+            var idU = (dato && dato.fila && dato.fila.id) ? String(dato.fila.id) : '';
+            if (!idU) { return; }
+            var reemplazoU = self._reemplazo;
+            self._reemplazo = null;
+            var posU = reemplazoU ? reemplazoU.posicion : null;
+            if (posU === null || posU === undefined || posU >= self.estado[indice].ids.length) {
+                self.estado[indice].ids.push(String(idU));
+            } else {
+                self.estado[indice].ids[posU] = String(idU);
+            }
+            self._pintar();
+        });
         slot.sel.onError(function (mensaje, err) {
             if (err && err.code === 'CROP_ABORTED') {
                 var reemp = self._reemplazo;
@@ -404,7 +419,12 @@
             : '';
         slot.sel.open({
             archivo: archivo || null,
-            tituloContexto: tituloContexto
+            tituloContexto: tituloContexto,
+            // Spec 030 (T014/D8): el selector decide `Elegir` vs `Subir` con su receta.
+            // La funcion la provee tienda.js (como `subir`): tiene el item, el pdf y el grupo.
+            usar: self.config.usar ? function (madre, params) {
+                return self.config.usar(madre, params, { ranura: indice });
+            } : null
         });
     };
 
@@ -419,7 +439,11 @@
         var btn = this.selectores[indice].boton;
         btn.disabled = true;
         return Promise.resolve(this.config.subir(blob, {
-            ranura: indice, w: r.w, h: r.h, forma: r.forma
+            ranura: indice, w: r.w, h: r.h, forma: r.forma,
+            // Spec 030 (D8): la receta de la composicion viaja con la subida (el servidor la
+            // guarda y despues `Elegir` puede reconocerla).
+            params: (this.selectores[indice] && this.selectores[indice]._params)
+                ? this.selectores[indice]._params() : {}
         })).then(function (res) {
             btn.disabled = false;
             var id = res && res.id;
