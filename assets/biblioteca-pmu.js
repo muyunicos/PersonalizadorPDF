@@ -34,7 +34,7 @@
     var onElegir = null;
 
     function config() {
-        if (cfg) { return cfg; }
+        if (cfg && cfg.url) { return cfg; } // OJO: nunca cachear un endpoint vacio
         var t = global.PMU_TIENDA || {};
         var b = (global.PMU_FICHA && global.PMU_FICHA.biblioteca) || {};
         var s = (global.PMU_FICHA && global.PMU_FICHA.sesion) || {};
@@ -256,8 +256,12 @@
     // Spec 030 (T015 / 4a clarificacion): el modal decide en SINCRONICO si auto-abre el
     // selector (solo con la biblioteca vacia), asi que la copia de la tira se calienta al
     // cargar la ficha. Es UNA por pagina: `desde=<revision>` hace gratis las siguientes.
-    if (config().url && typeof global.fetch === 'function') {
+    if (global.addEventListener) { global.addEventListener('load', function () { calentar(); }); } else { calentar(); }
+    /** Spec 030 (4a): el calentado corre con la pagina cargada (los globals ya estan). */
+    function calentar() {
+        if (config().url && typeof global.fetch === 'function') {
         pedir().catch(function () { /* sin identidad o sin red: no pasa nada */ });
+        }
     }
 
     if (global.addEventListener) {

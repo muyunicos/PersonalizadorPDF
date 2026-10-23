@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.22.0
+ * Version: 4.22.1
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -541,6 +541,13 @@ class Personalizador_PDF_Plugin
             'preview_omisible' => !empty($panel['preview_omisible']),
             'valores' => $valores,
             'urls' => $urls,
+            // Spec 030 (T015/D14/D19): endpoint de la biblioteca (admin-post + nonce de la
+            // vista previa). Se publica ACA para que el modulo NO dependa del orden de carga:
+            // antes leia `PMU_TIENDA`, que todavia no existia cuando el modulo se cargaba.
+            'biblioteca' => [
+                'endpoint' => admin_url('admin-post.php'),
+                'nonce' => wp_create_nonce('personalizador_pdf_vista_previa'),
+            ],
             'sesion' => $itemEdicion !== '' ? ['sid' => $sid, 'item_key' => $itemEdicion] : null,
             // Spec 026 (D3): el cliente solo envia **WebP** si el servidor puede
             // leerlo (GD con `imagecreatefromwebp`); si no, el Motor no podria

@@ -129,6 +129,13 @@ check('T035: los hooks del vinculo estan registrados (wp_login + Woo 8.8+)',
     /add_action\('wp_login', \[\$this, 'vinculo_sid_usuario'\], 10, 2\)/.test(plugin)
     && /add_filter\('woocommerce_guest_session_to_user_id', \[\$this, 'vinculo_sid_filtro'\], 10, 1\)/.test(plugin));
 
+console.log('== Endpoint de la biblioteca (fix 4.22.0) ==');
+check('el endpoint viaja en PMU_FICHA.biblioteca (no depende del orden de carga)',
+    /'biblioteca' => \[\s*'endpoint' => admin_url\('admin-post\.php'\)/.test(plugin));
+check('config() no cachea endpoint vacio y el calentado va en load',
+    /if \(cfg && cfg\.url\) \{ return cfg; \}/.test(bib)
+    && /addEventListener\('load', function \(\) \{ calentar\(\); \}\)/.test(bib));
+
 console.log('');
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }
 console.log('BIBLIOTECA CONTRATO FALLA (' + fallos + ' de ' + (ok + fallos) + ')');
