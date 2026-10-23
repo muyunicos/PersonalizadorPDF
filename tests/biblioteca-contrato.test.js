@@ -46,8 +46,8 @@ check('el visor es el COMPARTIDO y la accion es Elegir',
     /global\.PMUVisor\.abrir\(\{/.test(bib) && /etiqueta: .Elegir./.test(bib));
 
 console.log('== Modal de recorte (T013) ==');
-check('el modal trae el boton "Elegir ya subida" y el contenedor de la tira',
-    /class="button spmu-biblioteca">Elegir ya subida</.test(sel) && /pmu-bib-contenedor/.test(sel));
+check('el modal monta la tira SIEMPRE visible (sin boton de biblioteca)',
+    !/spmu-biblioteca/.test(sel) && /pmu-bib-contenedor/.test(sel));
 check('engancha la tira pasando onElegir', /PMUBiblioteca\.tira\(cajaBib, \{/.test(sel));
 check('la foto elegida entra por el MISMO camino que un arrastre (drop)',
     /new DragEvent\(.drop./.test(sel) && /dataTransfer: dt/.test(sel));

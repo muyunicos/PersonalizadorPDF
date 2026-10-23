@@ -667,6 +667,9 @@
             '<button type="button" class="spmu-x" aria-label="Cerrar">&#10005;</button>' +
             '</div>' +
             '<div class="spmu-escena-wrap"><div class="spmu-escena"></div></div>' +
+            // Spec 030 (4a clarificacion): la tira de la biblioteca vive SIEMPRE visible
+            // arriba (sin boton): si no hay fotos, no dibuja nada.
+            '<div class="pmu-bib-contenedor" style="flex:1 0 100%"></div>' +
             // Spec 024 (D2): el badge de salida es tecnico: solo en la consola.
             (this.config.tecnico
                 ? '<p class="spmu-badge"><span class="spmu-origen"></span><span class="spmu-salida"></span></p>'
@@ -708,10 +711,10 @@
             // Acciones (D7): cargar a la izquierda; Cancelar + Subir a la derecha.
             '<div class="spmu-acciones">' +
             '<div class="spmu-acciones-izq">' +
-            '<input type="file" class="spmu-file" accept="' + ACEPTA + '" hidden>' +
             '<button type="button" class="button spmu-elegir">Cargar imagen</button>' +
-            '<button type="button" class="button spmu-biblioteca">Elegir ya subida</button>' +
-            '<div class="pmu-bib-contenedor" style="flex:1 0 100%" hidden></div>' +
+            '<input type="file" class="spmu-file" accept="' + ACEPTA + '" hidden>' +
+            '' + // 4a clarificacion: se fue "Elegir ya subida" (la tira vive arriba, siempre visible)
+            '' + // 4a clarificacion: el contenedor de la tira vive ARRIBA (uno solo)
             '</div>' +
             '<div class="spmu-acciones-der">' +
             '<button type="button" class="button-link spmu-cancelar">Cancelar</button>' +
@@ -909,10 +912,10 @@
         // Spec 030 (T013): "Elegir ya subida" abre la tira de la biblioteca; la foto
         // elegida entra al modal por el MISMO camino que un arrastre, asi no se
         // duplica la logica de archivo elegido.
-        var btnBib = $('.spmu-biblioteca');
+        var btnBib = null; // 4a clarificacion: la tira vive siempre visible (sin boton)
         var cajaBib = $('.pmu-bib-contenedor');
-        if (btnBib && cajaBib && window.PMUBiblioteca) {
-            btnBib.addEventListener('click', function () {
+        if (cajaBib && window.PMUBiblioteca) {
+            (function () { // 4a clarificacion: la tira se monta al ABRIR (ya no hay boton)
                 cajaBib.hidden = false;
                 if (!cajaBib.childElementCount) { cajaBib.textContent = 'Cargando tus imagenes...'; }
 

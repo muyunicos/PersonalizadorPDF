@@ -56,7 +56,7 @@ Sin endpoint (consola o preview) `abrir()` **no dibuja nada** y avisa por `conso
   que no encajan se recomponen al elegirlas.
 - Se monta **dentro del modal de recorte** (`spmu-modal`); **no** se dibuja en la ranura del campo (D28).
 - La tira pinta **las que caben en el ancho** del contenedor (tope **10**, **sin scroll**): con mas fotos que lugar aparece el tile **N+**, y el visor muestra **todas** las que devolvio la respuesta.
-- Se abre con el boton **Elegir ya subida** del modal de recorte; **tocar** una miniatura (o el tile `N+`) abre el **visor** (no elige directo).
+- Vive **siempre visible** en el modal de recorte (arriba; ya no hay boton "Elegir ya subida"); **tocar** una miniatura (o el tile `N+`) abre el **visor** (no elige directo).
 - Si no hay fotos, la tira **no se dibuja** (la ficha no muestra estados vacios).
 - Con `tecnico: true` (preview de la consola) suma las causas (`sin endpoint`, `sin identidad`).
 
