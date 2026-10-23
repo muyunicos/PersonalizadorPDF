@@ -56,3 +56,6 @@ Recorrido manual unico (cubre T030 + T012 + T017 + T029 + T051 en una sesion):
 - Dataset PDF: `analisis.json` (inmutable) + `config.json` (editable). Sin `textos.json`
   ni `metadata.json`. Motor unico `PMU_Uploads` (`inc/class-pmu-uploads.php`),
   endpoint unico `admin_post_pmu_uploads` con `op=`.
+- Biblioteca del comprador (030, v4.22.1): la tira vive SIEMPRE visible en el modal y la galeria
+  fullscreen permite `Elegir` (0 bytes si la `receta` coincide; la decide el SERVIDOR) o `Borrar`
+  (familia completa, con aviso de `usos`). Familias `{madre}-{n}` + `origen: ref` (ver §IV).
