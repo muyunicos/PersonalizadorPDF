@@ -1795,8 +1795,12 @@ class Personalizador_PDF_Plugin
             // Spec 030 (T021/D24): dedupe por contenido. Si estos bytes (crudos) ya
             // son una familia conocida del comprador, la subida REUSA esa familia
             // (una sola entrada en la galeria) en vez de crear una nueva.
+            // Spec 030 (D8): los `params` de la composicion viajan CON la subida para que la
+            // fila guarde su `receta`: asi `Elegir` puede reconocerla despues (0 bytes).
+            $paramsSubida = json_decode((string)wp_unslash($_POST['params'] ?? ''), true);
+            if (!is_array($paramsSubida)) { $paramsSubida = []; }
             $fila = $sesion->guardar_subida($sid, $item, $bytes,
-                $this->biblioteca_madre_por_contenido($bytes));
+                $this->biblioteca_madre_por_contenido($bytes), $paramsSubida);
             $fila['sid'] = $sid;
             $fila['item_key'] = $item;
             $fila['item_nuevo'] = $creado;

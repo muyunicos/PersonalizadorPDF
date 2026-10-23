@@ -840,7 +840,7 @@ class PMU_Sesion
      * ver `firma_imagen()`) y se convierte a WebP si el servidor puede (spec 026
      * D3). Devuelve ['id','file','mime','bytes'].
      */
-    public function guardar_subida($sid, $item_key, $bytes, $madre = '')
+    public function guardar_subida($sid, $item_key, $bytes, $madre = '', $params = [])
     {
         $bytes = (string)$bytes;
         if ($bytes === '' || strlen($bytes) > self::TOPE_SUBIDA_BYTES) {
@@ -853,13 +853,17 @@ class PMU_Sesion
         // Spec 030 (T019/D24): el `sha` es del contenido **CRUDO**, calculado ANTES
         // de convertir a WebP (la conversion no es determinista entre versiones).
         $sha = sha1($bytes);
+        // Spec 030 (D8/D24): la RECETA de la composicion que se sube (los mismos `params`
+        // que validara `op=usar`). Sin ella, una familia nacida de una subida no podria
+        // reconocer su propia composicion y `Elegir` nunca daria 0 bytes.
+        $recetaFam = (is_array($params) && $params) ? self::receta_de($params) : '';
         // Spec 026 (D3): el servidor convierte a WebP si puede. La foto del
         // comprador es unseen: calidad 0.85 (D4).
         $img = self::convertir_webp($bytes, 85);
         $bytes = $img['bytes'];
         $firma = ['ext' => $img['ext'], 'mime' => $img['mime']];
         $salida = null;
-        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $bytes, $firma, $sha, $madre, &$salida) {
+        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $bytes, $firma, $sha, $madre, $recetaFam, &$salida) {
             if ((string)($manifest['item_key'] ?? '') !== (string)$item_key) {
                 throw new Exception('motor:sesion:item:ausente');
             }
@@ -889,7 +893,7 @@ class PMU_Sesion
             }
             $filas = isset($manifest['subidas']) && is_array($manifest['subidas'])
                 ? array_values($manifest['subidas']) : [];
-            $filas[] = $this->fila_subida($id, $file, ($madreFam !== '' ? $madreFam : $id), '', $sha, $firma['mime'], strlen($bytes), time());
+            $filas[] = $this->fila_subida($id, $file, ($madreFam !== '' ? $madreFam : $id), $recetaFam, $sha, $firma['mime'], strlen($bytes), time());
             $manifest['subidas'] = $filas;
             $salida = ['id' => $id, 'file' => $file, 'mime' => $firma['mime'], 'bytes' => strlen($bytes)];
         });
