@@ -74,8 +74,8 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 - [X] T011 [P] [US1] `assets/biblioteca-pmu.js` (NUEVO): `PMUBiblioteca.abrir/cache/invalidar/visor` + cache unica por pagina compartida por campos, invalidada por **re-consulta** tras subir o borrar (D23/R8)
 - [X] T012 [P] [US1] `assets/biblioteca-pmu.js`: tira `pmu-bib-tira` (**una imagen por familia** desde `op=imagen`, hasta 10 fotos, orden por fecha, badge `N versiones`, `usos`) y visor `pmu-bib-visor` con **Elegir**
 - [X] T013 [US1] `assets/selector-pmu.js`: montar la tira en `spmu-modal` (boton **Elegir ya subida**) y abrir el recorte con la fuente elegida (`onElegir` -> `open({archivo})`); el visor que usa es el **compartido** (T043)
-- [~] T014 [US1] `assets/cargador-pmu.js`: pasar a la biblioteca la `receta` del hueco (`w,h,forma,modo,escala,dx,dy,fondo,transp,iw,ih`) y el `onElegir`
-- [ ] T015 [US1] `assets/tienda.js`: `api.biblioteca` + `PMU_FICHA.biblioteca = {endpoint, nonce}` (identidad por cookie, D14)
+- [X] T014 [US1] `assets/cargador-pmu.js`: pasar a la biblioteca la `receta` del hueco (`w,h,forma,modo,escala,dx,dy,fondo,transp,iw,ih`) y el `onElegir`
+- [X] T015 [US1] `assets/tienda.js`: `api.biblioteca` + `PMU_FICHA.biblioteca = {endpoint, nonce}` (identidad por cookie, D14)
 - [X] T016 [US1] `personalizador-pdf.php`: `handle_biblioteca()` con `op=listar|imagen|usos|usar`, nonce `personalizador_pdf_vista_previa`, `admin_post_*` + `nopriv` (D19) y encolar `assets/biblioteca-pmu.js` en `assets_ficha()`
 - [X] T017 [US1] `inc/class-pmu-sesion.php`: `usar_de_biblioteca($sid, $item, $pdf, $grupo, $madre, $indice, $params)` — receta **recomputada en el servidor** (R2): copia desde `tmp`, referencia desde `orders` y versiona si difiere (D8/D9/D10)
 
