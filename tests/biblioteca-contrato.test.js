@@ -20,6 +20,7 @@ const visor = lee('assets/visor-pmu.js');
 const sel = lee('assets/selector-pmu.js');
 const carg = lee('assets/cargador-pmu.js');
 const plugin = lee('personalizador-pdf.php');
+const tienda = lee('assets/tienda.js');
 
 let ok = 0;
 let fallos = 0;
@@ -115,6 +116,11 @@ check('el cargador pasa params al subir y una funcion usar al selector',
     && /usar: self\.config\.usar \? function \(madre, params\)/.test(carg));
 check('el cargador escucha el evento usado y anota el id de la fila',
     /sel\.on\('usado', function \(dato\)/.test(carg) && /dato\.fila && dato\.fila\.id/.test(carg));
+
+console.log('== Tienda provee Elegir (T015) ==');
+check('tienda.js da usar al cargador y usa PMUBiblioteca.usar (T015/D8)',
+    /usar: function \(madre, params, ctxUsar\)/.test(tienda) && /api\.usarBiblioteca = function/.test(tienda)
+    && /PMUBiblioteca\.usar\(String\(madre \|\| ''\)/.test(tienda));
 
 console.log('');
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }

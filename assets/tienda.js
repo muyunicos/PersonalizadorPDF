@@ -1392,6 +1392,20 @@
             });
         };
         // Spec 018 (T004): montar cargador desde el campo.
+        api.usarBiblioteca = function (madre, params, cid, ctxUsar) {
+            if (!window.PMUBiblioteca || !window.PMUBiblioteca.usar) {
+                return Promise.resolve(null);
+            }
+            var ses = api.sesion || {};
+            var gidU = '';
+            (ficha.campos || []).forEach(function (c) {
+                if (c && parseInt(c.id, 10) === cid && c.grupo_gid) { gidU = String(c.grupo_gid); }
+            });
+            return window.PMUBiblioteca.usar(String(madre || ''), {
+                item_key: ses.item_key || '', pdf: api.pdf || '', grupo: gidU,
+                indice: 0, params: params || {}
+            });
+        };
         api.montarCargador = function (el, opts) {
             opts = opts || {};
             var campo = opts.campo || {};
@@ -1456,6 +1470,13 @@
                 idsIniciales: idsIniciales,
                 urlDe: api.urlDeSubida,
                 subir: function (blob) { return api.subirFoto(blob, cid); },
+                // Spec 030 (T014/D8): Elegir sin recomponer. Devuelve `{fila}` o
+                // `{coincide:false}`; el id de la fila entra al estado de la ranura
+                // (lo hace el cargador al escuchar `usado`) y la Vista previa lo
+                // registra sola (spec 029: `subidas/{id}`, sin copias).
+                usar: function (madre, params, ctxUsar) {
+                    return api.usarBiblioteca(madre, params, cid, ctxUsar);
+                },
                 onChange: function (est) {
                     if (cid < 1) { return; }
                     if (!api.estado[cid]) { api.estado[cid] = { valor: null, cliente: '' }; }
