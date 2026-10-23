@@ -2046,18 +2046,6 @@ class Personalizador_PDF_Plugin
      */
     private function biblioteca_familias(array $contenedores)
     {
-        // DEBUG TEMPORAL (spec 030): traza del escaneo de la biblioteca. Se borra con el diagnostico.
-        foreach ($contenedores as $cDbg) {
-            @file_put_contents(
-                $this->pmu_uploads()->dir_ambito('tmp') . DIRECTORY_SEPARATOR . 'pmu-bib-debug.log',
-                date('c') . ' CONT tipo=' . (string)($cDbg['tipo'] ?? '')
-                . ' dir=' . (string)($cDbg['dir'] ?? '')
-                . ' man=' . (is_array($cDbg['manifest'] ?? null) ? 'ok' : 'no')
-                . ' subidas=' . count((array)($cDbg['manifest']['subidas'] ?? []))
-                . ' mtime=' . (int)($cDbg['mtime'] ?? 0) . "\n",
-                FILE_APPEND
-            );
-        }
         return $this->sesion()->familias($contenedores, function ($madre) {
             return $this->url_biblioteca_imagen_madre($madre);
         });

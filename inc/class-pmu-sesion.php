@@ -1038,15 +1038,6 @@ class PMU_Sesion
                     continue;
                 }
                 $ruta = $c['dir'] . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $file);
-                // DEBUG TEMPORAL (spec 030): que hace `familias()` con cada fila. Se borra con el diagnostico.
-                @file_put_contents(
-                    $this->motor->dir_ambito('tmp') . DIRECTORY_SEPARATOR . 'pmu-bib-debug.log',
-                    date('c') . ' FILA tipo=' . (string)($c['tipo'] ?? '')
-                    . ' id=' . $id . ' file=' . $file
-                    . ' is_file=' . (is_file($ruta) ? '1' : '0')
-                    . ' ruta=' . $ruta . "\n",
-                    FILE_APPEND
-                );
                 if (!is_file($ruta)) {
                     continue;
                 }
