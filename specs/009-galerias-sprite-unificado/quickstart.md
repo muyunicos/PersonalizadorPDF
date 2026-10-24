@@ -86,6 +86,28 @@ Corrida desde la raiz del proyecto (PowerShell 7), antes de tocar nada:
 
 Registro por escenario (E1-E7 del §2): **pendiente** — se completa con el recorrido manual en WP real (T013/T023/T028/T032; guion en `specs/MANUAL-PENDIENTE-WP-REAL.md` §6f).
 
+## §2ter Recorrido E1-E7 en WP real (laboratorio local, 2026-10-24)
+
+Corrido con **WP real** en el laboratorio local (`C:\wp-lab`: WP + SQLite, plugin instalado por junction al repo, `php -S localhost:8091`) y Chrome via Playwright, con el **puente real** del plugin (el editor dentro de `wp-admin`, sin stubs). Script: `C:\wp-lab\recorrido-009.cjs`; capturas en `C:\wp-lab\capturas\e*.png`; resumen en `C:\wp-lab\capturas\recorrido-009.json`.
+
+**Resultado: 33/33 checks en verde.** Numeros medidos:
+
+| Escenario | Evidencia |
+|---|---|
+| E1 (SC-002/003) | **1** sola escritura `op=sprite`; `thumbs.webp` **720x540** (reticula c4 x 180x30 con 72 items); firma escrita; **~2,2 s** y **39 KB** (el maximo aceptado es 5 MB / 60 s) |
+| E2 (SC-001) | 0 `.ttf`, 0 peticiones a Google, 0 originales, 0 `<link>` nuevos; celdas dibujadas desde la hoja (fonts 72, img 83) |
+| E3 (SC-004) | el alta agrega 1 item con **1 POST op=alta**; la hoja se regenera con **1** escritura y queda certificada; la apertura siguiente: 0 descargas |
+| E4 (SC-005) | con hoja certificada el clic en una celda Google **no** descarga nada (la hoja ya trae el tipo real) y no crea `FontFace`; la variante "celda **pendiente** => 1 `css2` sin `wght@`/`text=`" la cubre la puerta de navegador (T039) |
+| E5 (SC-007) | catalogo no escribible (`attrib +R`: el `rename` del motor falla con Acceso denegado) => causa **visible** `Miniaturas: fonts:hoja:motor:rechazo` + boton **Reintentar**; con el fallo **no** se persiste nada; al reintentar: 1 escritura y hoja certificada |
+| E6 (SC-006) | 2 columnas, celda de **162 px**, alto **27 px** = `round(162 x 30/180)` y `aspect-ratio: 6 / 1` |
+| E7 (FR-009/SC-009) | no existen los botones "Generar miniaturas"/"Miniaturas"; las galerias exponen `Reintentar` (oculto sin error: 2 de panel + el del panel de presets); **dos aperturas simultaneas => 1 escritura** |
+
+**Hallazgo del recorrido (corregido en RC75)**: en la galeria de FUENTES la causa y el `Reintentar` quedaban **invisibles** (el `then` posterior al `onError` ocultaba el boton y `render()` pisaba el status). Fix + escenario nuevo en la puerta de navegador: el escenario **falla** sin el fix (verificado). Detalle: `modules/textmuy/AGENTS.md` §7.31.
+
+**Pendiente declarado (T041)**: cuando el MOTOR rechaza la escritura, el cliente informa `motor:rechazo` en vez del motivo exacto (`motor:sprite:catalogo:no_escribible`), porque `assets/miniaturas.js::persistirSheet` descarta `data.data`. SC-007 pide el motivo exacto.
+
+**Notas de datos del laboratorio**: el lab tiene su propio `uploads/pmu` (no el espejo del repo). Para E2 se copio `img/` del espejo (el lab no lo tenia) y el catalogo de presets del lab (3 `.txm` de otro dataset) se aparto a `tm-presets/_lab-ajeno/` porque su generacion fallaba por datos ajenos y contaminaba la medicion.
+
 ## §3 Regresión y despliegue
 
 1. Tras tocar JS/CSS del módulo: subir `?v=RCn` en `index.html` **y** `render-core.html` (+ `css/style.css?v=`) y recargar con Ctrl+F5 (AGENTS §4.6/§10).

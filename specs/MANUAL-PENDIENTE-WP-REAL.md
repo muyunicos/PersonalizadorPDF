@@ -251,7 +251,11 @@ Detalle completo por spec: [004/quickstart.md §1](./004-woocommerce-pdf-persona
 ## 6f. Galerías del editor: hojas de miniaturas (009 T013/T023/T028/T032)
 
 Referencia: `specs/009-galerias-sprite-unificado/quickstart.md` §2 (E1–E7) y §4 (mapeo SC).
-**Automatico ya corrido (2026-10-24, todo en verde)**: `php tests/certificacion_hoja.php` (checks A–G),
+**CORRIDO en el laboratorio local con WP real (`C:\wp-lab`) el 2026-10-24: 33/33 checks en verde**
+(script `C:\wp-lab\recorrido-009.cjs`; evidencia en `C:\wp-lab\capturas\` y en
+`specs/009-galerias-sprite-unificado/quickstart.md` §2ter). Hallazgo corregido en RC75: la galeria de
+fuentes se comia el error (causa + Reintentar invisibles). Queda solo la confirmacion en el hosting
+productivo. **Automatico ya corrido (2026-10-24, todo en verde)**: `php tests/certificacion_hoja.php` (checks A–G),
 `php tests/motor_smoke.php`, `php -l`, **45 suites** Node y la puerta de navegador
 `node tests/galerias.browser.js` (Chrome + Playwright; receta en `modules/textmuy/AGENTS.md` §7.29).
 Falta solo la confirmacion en WordPress real:
