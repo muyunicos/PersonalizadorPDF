@@ -156,6 +156,17 @@ check('la subida lleva madre_origen (validada) y el selector recalcula el primar
 check('la tira reusa la URL ya resuelta de la ficha (una sola descarga)',
     /img\.src = String\(urlResuelta \|\| f\.thumb/.test(bib));
 
+console.log('== T046: visor y tira sin POST extra (mapa id -> url) ==');
+check('urlDeSubida reusa el mapa PMU_FICHA.urls antes de resolver por POST',
+    /var mapa = \(window\.PMU_FICHA && PMU_FICHA\.urls\) \|\| null;/.test(tienda)
+    && /if \(mapa && mapa\[String\(id\)\]\) \{ return Promise\.resolve\(String\(mapa\[String\(id\)\]\)\); \}/.test(tienda));
+check('la URL resuelta por POST se ANOTA en el mapa (una vez por foto)',
+    /window\.PMU_FICHA\.urls\[String\(id\)\] = String\(json\.data\.url\);/.test(tienda));
+check('el visor navega con las URLs ya resueltas (config.urlDe memoizado, items[].url)',
+    /urlDe: typeof config\.urlDe === 'function' \? config\.urlDe : null/.test(carg)
+    && /items\.push\(\{ url: String\(urls\[i\]\), etiqueta: String\(id\) \}\);/.test(carg)
+    && /urlDe: api\.urlDeSubida/.test(tienda));
+
 console.log('');
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }
 console.log('BIBLIOTECA CONTRATO FALLA (' + fallos + ' de ' + (ok + fallos) + ')');

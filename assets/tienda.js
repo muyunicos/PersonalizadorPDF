@@ -1100,6 +1100,10 @@
     /** URL de la foto subida `id` (null si no existe en el manifest). */
     function urlDeSubida(sid, itemKey, id) {
         if (!sid || !itemKey || !id) { return Promise.resolve(null); }
+        // Spec 030 (D23/T046): si la ficha ya publico la URL de esa foto (mapa `id -> url` de
+        // lo cargado), se reusa: navegar el visor o repintar la tira cuesta **0 POST**.
+        var mapa = (window.PMU_FICHA && PMU_FICHA.urls) || null;
+        if (mapa && mapa[String(id)]) { return Promise.resolve(String(mapa[String(id)])); }
         var fd = new FormData();
         fd.append('action', 'personalizador_pdf_subida_url');
         fd.append('_wpnonce', cfg.nonceVistaPrevia || '');
@@ -1110,6 +1114,10 @@
             .then(function (r) { return r.json(); })
             .then(function (json) {
                 if (!json || !json.success || !json.data || !json.data.url) { return null; }
+                // Se ANOTA: la proxima resolucion de esa foto sale del mapa (una vez por foto).
+                if (window.PMU_FICHA && window.PMU_FICHA.urls) {
+                    window.PMU_FICHA.urls[String(id)] = String(json.data.url);
+                }
                 return json.data.url;
             })
             .catch(function () { return null; });
