@@ -666,10 +666,15 @@
             '<p class="spmu-titulo">' + tituloTxt + '</p>' +
             '<button type="button" class="spmu-x" aria-label="Cerrar">&#10005;</button>' +
             '</div>' +
+            // Spec 030 (5a clarificacion): la tira vive ARRIBA de la escena, en su propia fila,
+            // con "Cargar imagen" a la IZQUIERDA (misma fila que las miniaturas). El boton va
+            // FUERA del contenedor: la tira lo vacia (`innerHTML = ''`) al pintar.
+            '<div class="spmu-fila-bib" style="display:flex;align-items:center;gap:8px;margin:0 0 8px">' +
+            '<button type="button" class="button spmu-elegir">Cargar imagen</button>' +
+            '<div class="pmu-bib-contenedor" style="flex:1 1 auto;min-width:0"></div>' +
+            '</div>' +
             '<div class="spmu-escena-wrap"><div class="spmu-escena"></div></div>' +
-            // Spec 030 (4a clarificacion): la tira de la biblioteca vive SIEMPRE visible
-            // arriba (sin boton): si no hay fotos, no dibuja nada.
-            '<div class="pmu-bib-contenedor" style="flex:1 0 100%"></div>' +
+            '' + // 5a: la tira se mueve ARRIBA de la escena (ver `spmu-fila-bib`)
             // Spec 024 (D2): el badge de salida es tecnico: solo en la consola.
             (this.config.tecnico
                 ? '<p class="spmu-badge"><span class="spmu-origen"></span><span class="spmu-salida"></span></p>'
@@ -711,7 +716,7 @@
             // Acciones (D7): cargar a la izquierda; Cancelar + Subir a la derecha.
             '<div class="spmu-acciones">' +
             '<div class="spmu-acciones-izq">' +
-            '<button type="button" class="button spmu-elegir">Cargar imagen</button>' +
+            '' + // 5a: "Cargar imagen" vive ARRIBA, en la fila de la tira
             '<input type="file" class="spmu-file" accept="' + ACEPTA + '" hidden>' +
             '' + // 4a clarificacion: se fue "Elegir ya subida" (la tira vive arriba, siempre visible)
             '' + // 4a clarificacion: el contenedor de la tira vive ARRIBA (uno solo)

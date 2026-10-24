@@ -56,7 +56,8 @@ Sin endpoint (consola o preview) `abrir()` **no dibuja nada** y avisa por `conso
   que no encajan se recomponen al elegirlas.
 - Se monta **dentro del modal de recorte** (`spmu-modal`); **no** se dibuja en la ranura del campo (D28).
 - La tira pinta **las que caben en el ancho** del contenedor (tope **10**, **sin scroll**): con mas fotos que lugar aparece el tile **N+**, y el visor muestra **todas** las que devolvio la respuesta.
-- Vive **siempre visible** en el modal de recorte (arriba; ya no hay boton "Elegir ya subida"); **tocar** una miniatura (o el tile `N+`) abre el **visor** (no elige directo).
+- Vive **siempre visible** en el modal, **arriba de la escena** y en su **propia fila**, con **`Cargar imagen` a la izquierda** (fuera del contenedor: la tira lo vacia al pintar); la fila de acciones queda `Cancelar | Subir`. **Tocar** una miniatura (o el tile `N+`) abre el **visor** (no elige directo).
+- Si el `base` de la familia ya tiene URL resuelta en `PMU_FICHA.urls`, la tira la **reusa** (una sola descarga y una sola entrada en la cache del navegador); el resto va por `op=imagen`.
 - Si no hay fotos, la tira **no se dibuja** (la ficha no muestra estados vacios).
 - Con `tecnico: true` (preview de la consola) suma las causas (`sin endpoint`, `sin identidad`).
 

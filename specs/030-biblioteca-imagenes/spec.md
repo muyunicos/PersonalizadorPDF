@@ -31,6 +31,12 @@
 - Q: Cuando el boton primario dice `Elegir` y cuando `Subir`? → A: `Elegir` **solo** si la fuente cargada es una foto de la biblioteca y su `receta` coincide con la del hueco (0 bytes, `op=usar`); con un archivo del equipo, o con cambios, dice `Subir` (siempre viajan bytes). El "sin cambios" se mide contra la `receta` **de la fila del hueco**, asi que tambien vale al reabrir el modal con la imagen cargada antes.
 - Q: Se auto-abre el selector de archivos al abrir el modal? → A: **Solo si la biblioteca del comprador esta VACIA**. La decision es **sincronica** con la copia local de la tira (que el modulo calienta al montar el cargador): con fotos -> tira visible y sin auto-open; **sin** copia -> tampoco se auto-abre (nunca se adivina; queda el boton).
 
+### Session 2026-10-23 (quinta pasada: layout del modal + version al subir)
+
+- Q: Donde vive la tira dentro del modal de recorte? → A: **ARRIBA de la escena**, en su **propia fila**, con "Cargar imagen" a la **izquierda**, haciendo juego con las miniaturas. El boton **no** puede vivir dentro del contenedor de la tira: el modulo lo vacia (`innerHTML = ''`) al pintar. La fila de acciones queda `Cancelar | Subir`.
+- Q: Que pasa si el comprador sube una foto que YA es una familia suya (eligio de la biblioteca y no la retoco)? → A: la subida manda `madre_origen` (la familia elegida); el servidor la **valida** contra su escaneo y escribe la fila como **version de ESA familia**, asi la tira sigue mostrando **una** entrada (badge `N versiones`) en vez de una familia nueva duplicada. Sin `madre_origen` manda el dedupe por `sha` (D24).
+- Q: La misma foto se descargaba dos veces (la URL cruda de la ranura y `op=imagen`). → A: la tira **reusa la URL ya resuelta** de la ficha cuando el `base` de la familia esta entre lo cargado (una sola descarga y una sola entrada en la cache del navegador); el resto sigue por `op=imagen`. Unificar las dos politicas de URL (ranura con URL cruda vs endpoint protegido) sigue siendo **spec aparte** (AGENTS §5).
+
 ## 1. Problema
 
 Todo lo que el comprador sube queda **encerrado en el item** de esa compra:
