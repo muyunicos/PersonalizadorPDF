@@ -42,6 +42,14 @@ del POST. Respuesta JSON. Causas: `api:biblioteca:<motivo>`.
 - `sha` = hash del contenido, escrito por el servidor **al subir**: si coincide con una base conocida del cliente
   (mismo alcance que la galeria), la subida **reusa la familia** (D24).
 
+## Subida desde la biblioteca (5a, 2026-10-23)
+
+Si la foto se elige de la biblioteca y luego se sube (receta distinta, o familia **sin `recetas`**
+como las subidas anteriores a 4.22.2), el cliente manda `madre_origen`. El servidor la **valida
+contra su escaneo** (nunca confia en el cliente, §III) y escribe la fila como **version de ESA
+familia** (`{madre}-{n}`): la galeria sigue mostrando **una** entrada (badge `N versiones`), no una
+familia nueva duplicada. Sin `madre_origen` manda el dedupe por `sha` (D24).
+
 ## Sin consolidacion (D11)
 
 No hay carpeta compartida: la fila `origen: ref` guarda la ruta **relativa a `uploads/pmu/`** del

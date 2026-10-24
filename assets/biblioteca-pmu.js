@@ -219,7 +219,9 @@
             var img = doc.createElement('img');
             img.alt = '';
             img.decoding = 'async';
-            img.src = String(f.thumb || f.url || '' );
+            var urlResuelta = (global.PMU_FICHA && global.PMU_FICHA.urls && f.base)
+                ? global.PMU_FICHA.urls[String(f.base)] : '';
+            img.src = String(urlResuelta || f.thumb || f.url || '' );
             b.appendChild(img);
             b.addEventListener('click', function () { visor(i); });
             t.appendChild(b);

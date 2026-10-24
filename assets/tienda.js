@@ -498,6 +498,9 @@
         // Spec 030 (D8): la RECETA de la composicion viaja CON la subida: el servidor la
         // estampa en la fila y despues `Elegir` puede reconocerla (si no, `recetas: []`).
         fd.append('params', JSON.stringify((ctx && ctx.params) || {}));
+        // Spec 030 (5a): la familia de origen (cuando la foto se elige de la biblioteca): el
+        // servidor la valida contra su escaneo y evita una familia duplicada en la tira.
+        fd.append('madre_origen', String((ctx && ctx.madre_origen) || ''));
         return postAjax(fd).then(function (json) {
             if (!json || !json.success) {
                 throw new Error((json && json.data) || 'motor:subida:falla');

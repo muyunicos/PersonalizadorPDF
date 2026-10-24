@@ -443,7 +443,10 @@
             // Spec 030 (D8): la receta de la composicion viaja con la subida (el servidor la
             // guarda y despues `Elegir` puede reconocerla).
             params: (this.selectores[indice] && this.selectores[indice]._params)
-                ? this.selectores[indice]._params() : {}
+                ? this.selectores[indice]._params() : {},
+            // Spec 030 (5a): la familia elegida de la biblioteca. El servidor la VALIDA y
+            // escribe la fila como version de ESA familia (la tira no suma una entrada nueva).
+            madre_origen: (this.selectores[indice] && this.selectores[indice]._bibMadre) || ''
         })).then(function (res) {
             btn.disabled = false;
             var id = res && res.id;

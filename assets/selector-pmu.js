@@ -1059,6 +1059,9 @@
             // Spec 030 (D8): composicion de REFERENCIA al cargar la imagen. Si el comprador
             // no la toca, el primario puede ELEGIR (0 bytes) y no recomponer ni subir.
             self._paramsBase = JSON.stringify(self._params());
+            // Spec 030 (5a): el primario se recalcula YA (no depende de un redibujo posterior):
+            // si la fuente es de la biblioteca y no se toco, el boton dice `Elegir` (0 bytes).
+            self._actualizarPrimario();
             self.supera5 = superaCincoPorciento(
                 img.naturalWidth || 1, img.naturalHeight || 1,
                 self.config.finalW, self.config.finalH
