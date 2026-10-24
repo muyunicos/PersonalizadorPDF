@@ -601,7 +601,7 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   ratio simplificado y alto completo (fin del recorte de las tiras de tipografías).
   Artefactos en `specs/009-galerias-sprite-unificado/` (checklist 16/16, `plan.md`, `tasks.md`
   T001–T039 con su estado real (`[X]` hecho / `[~]` con desviación o a medias / `[ ]` pendiente); T037–T039 son los huecos de esa revisión). Índice y estado en `specs/INDICE.md`. Al tocarla: enumerar
-  primero el Phase 2 del `tasks.md` (certificación en el motor), ya cerrada. Puertas: `php tests/certificacion_hoja.php` (checks A–G), la suite `hoja-generacion` y la puerta de navegador `galerias.browser.js` (Chrome + Playwright). Pendiente: recorrido manual E1–E7 (`MANUAL-PENDIENTE-WP-REAL.md` §6f).
+  primero el Phase 2 del `tasks.md` (certificación en el motor), ya cerrada. Puertas: `php tests/certificacion_hoja.php` (checks A–G), la suite `hoja-generacion` y la puerta de navegador `galerias.browser.js` (Chrome + Playwright). Recorrido E1–E7 **corrido en el laboratorio local con WP real** (`C:\wp-lab`) el 2026-10-24: los siete escenarios en verde, con un **hallazgo** que se corrigio en RC75 (la galeria de fuentes se comia el error: ver `modules/textmuy/AGENTS.md` §7.30 y §11). Pendiente declarado: el cliente no propaga el motivo exacto del motor cuando este **rechaza** la escritura. Falta solo confirmar en el hosting real.
 - ✅ **Spec 010 `api-wordpress` (especificada, SIN implementar)**: es el objetivo de negocio
   declarado en §1. Endpoint **único** `admin_post_pmu_api` (+ `nopriv`) con dispatcher `op=`
   (`procesar`/`estado`/`limpiar`); **no** se introducen rutas REST ni un segundo camino de
@@ -925,7 +925,7 @@ Set-Location ..\..
 (**45 suites** `*.test.js` + `tests/galerias.browser.js`; Node NO corre en el servidor productivo
 de WP: es solo testing del módulo. Las ultimas 5 en entrar: `preset-roundtrip`,
 `fuente-compuesta`, `fuente-carga-estados`, `fuente-selector` e `integridad-archivos`;
-`?v=RC74` hoy en ambos HTML.)
+`?v=RC75` hoy en ambos HTML.)
 
 `tests/galerias.browser.js` es la única prueba con **navegador real** (Playwright + Chrome vía
 la variable de entorno `TEXTMUY_CHROME`): valida el DOM de las galerías (celdas, descargas,
