@@ -910,9 +910,10 @@ Los recorridos de aceptación de cada spec se corren en el **laboratorio local**
 y tema montados por *junction*) con Chrome + Playwright **sin instalar nada en el repo**: arranque,
 credenciales, scripteado, higiene de datos y las trampas conocidas están en
 `docs/entorno-desarrollo.md` §9. Vigentes: `recorrido-009.cjs` (spec 009: **33/33**) y
-`recorrido-ficha-pedido.cjs` (ficha → pedido: **20/26**, con el **ciclo completo hasta
-`orders/{id}/{item}/`** validado y dos ítems pendientes documentados en §9.5: la galería del mockup y
-la descarga del PDF).
+`recorrido-ficha-pedido.cjs` (ficha → pedido → **`orders/{id}/{item}/…_procesado.pdf`**: **29/29**).
+Hallazgo relevante del recorrido: con **presets v1** en los datos el motor no renderiza el hueco, la
+ficha queda sin mockup y **desbloquea el carrito** (conducta documentada); el lab se siembra con
+`php preset-lab.php` (ver §9.5).
 
 ### Verificación en el sitio real (WordPress + Woo)
 Consola → pestaña **Test** → botón **Ejecutar smoke test**. Corre con WordPress/Woo

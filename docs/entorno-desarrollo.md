@@ -215,7 +215,7 @@ Start-Process 'C:\Users\Jonatan\php\php.exe' `
 | `…\wp-content\uploads\pmu\` | Datos propios del lab (`fonts`, `tm-presets`, `pdfs/{circulo6cm,sincampos}`, `campos` 1-2, `tmp`, `orders`) |
 | `C:\wp-lab\mariadb\` + `C:\wp-lab\mariadb-data\` | MariaDB 11.8.9 portable + datadir (`my.ini` generado por `mariadb-install-db`) |
 | `C:\wp-lab\*.cjs`, `probe*.cjs` | Recorridos y probes (§9.5) |
-| Raíz de WP | Helpers: `install.php`, `activate.php`, `plug.php`, `tema.php`, `config-lab.php`, `seed-lab.php`, `flush.php`, `refrescar-campo.php`, `diag-ficha.php` |
+| Raíz de WP | Helpers: `install.php`, `activate.php`, `plug.php`, `tema.php`, `config-lab.php`, `seed-lab.php`, `preset-lab.php`, `flush.php`, `refrescar-campo.php`, `diag-ficha.php`, `diag-carrito.php` |
 | `C:\wp-lab\capturas\` | Capturas + JSON de resultados |
 | `C:\wp-lab\{wp.zip, sqlite.zip, pmu-backup-*.zip, mariadb-*.zip, woocommerce.zip, generatepress.zip}` | Insumos para recrear |
 | `C:\wp-lab\_backup-sqlite\` | Backup del modo SQLite anterior (`lab.sqlite` + `db.php` + `wp-config.php`) |
@@ -259,19 +259,19 @@ node C:\wp-lab\probe-modal.cjs               # volcado del modal del cargador
 
 - `recorrido-009.cjs`: **33/33 OK** (SC-001/002/003/004/005/006/007/009 + FR-009). Evidencia:
   `capturas/e*.png` y `capturas/recorrido-009.json`.
-- `recorrido-ficha-pedido.cjs`: **20/26 OK**. **El ciclo completo queda validado**: ficha con panel y
-  formulario, `PMU_FICHA` (2 PDFs / 2 campos), campos montados, **cargador subiendo la foto** (queda
-  `.webp` en `subidas/` del item, spec 026), **mínimo de fotos bloqueando el carrito** con su aviso
-  (spec 022), **Vista previa** (`admin-ajax`) que habilita la compra, **carrito con la personalización**,
-  **checkout con COD y el resumen del item personalizado**, **pedido creado** (los `order-received/13`,
-  `/14` y `/15` de las corridas) y **`orders/{id}/{item}/` con `manifest.json`, `subidas/*.webp` y
-  `img/`** (staging → promoción, specs 004/014/017/029/030).
-  **Pendiente (2 ítems)**: (a) la **galería del mockup** no se monta —la respuesta de `vista_previa`
-  **sí** trae el mockup (`circulo6cm: mockups=1`)— y con ella quedan pendientes el pool `img/` y el
-  `mockup-*.webp` congelado (hipótesis: el render compone las vistas en `.pmu-gal-item` y no en
-  `.pmu-galeria-vista`; hace falta mirar el DOM con devtools paso a paso); (b) la **descarga del PDF**
-  desde Descargas: la fila existe pero el click no entrega archivo (Woo/el tema exigen la sesión del
-  comprador registrado → probar logueado o en la página de gracias).
+- `recorrido-ficha-pedido.cjs`: **29/29 OK** (2026-10-24). Ciclo completo: ficha con panel y formulario,
+  `PMU_FICHA` (2 PDFs / 2 campos), campos montados, **cargador subiendo la foto** (queda `.webp` en
+  `subidas/`, spec 026), **mínimo de fotos bloqueando el carrito** con su aviso (spec 022), **Vista
+  previa** (`admin-ajax`) con la **galería 300x300 y el canvas del mockup** (spec 011), **pool `img/`**
+  (spec 029) y **`mockup-{id}.webp` congelado** al agregar (spec 004), carrito con la personalización,
+  checkout con COD y el resumen, **pedido creado** (`order-received/22`) y **`orders/{id}/{item}/`** con
+  `manifest.json` + `subidas/` + `img/` + **`{pdf}_procesado.pdf` (119 KB)** al descargar.
+  **Investigación de la galería del mockup (a pedido)**: **no era un defecto del plugin** —el motor daba
+  la causa exacta y desbloquear la venta mostrando "No hay vista previa disponible" es la conducta
+  documentada en T021—, era **dato viejo del lab**: sus presets son **v1** y el módulo exige **v2**
+  (`presets:neon-glow:formato:version (archivo v1, se esperaba v2)`); sin ese render no hay PNG, ni
+  canvas, ni mockup. Se resolvió con `php preset-lab.php lab-v2 circulo6cm 0000FF` (escribe el `.txm`
+  v2, lo da de alta en el catálogo y repunta el hueco del PDF).
 
 **Lecciones que costaron tiempo** (aplican a cualquier recorrido nuevo):
 
@@ -311,3 +311,11 @@ node C:\wp-lab\probe-modal.cjs               # volcado del modal del cargador
     renderiza la ficha: usar el **permalink** del producto y el **botón** de la ficha.
 16. **El `_procesado.pdf` se genera al descargar**, no al pagar: el pagó deja el pedido en `orders/`
     con `manifest.json` + `subidas/` + `img/`, y el PDF aparece cuando el comprador baja su archivo.
+17. **Los presets del dataset viejo son v1 y el módulo exige v2** (`presets:<nombre>:formato:version`):
+    sin eso **no se renderiza el hueco**, la vista queda sin canvas y la ficha muestra "No hay vista
+    previa disponible" + desbloquea el carrito (conducta documentada: T021, la venta no se bloquea).
+    Se siembra un preset v2 con **`php preset-lab.php lab-v2 circulo6cm 0000FF`** (crea el `.txm` v2,
+    lo da de alta en el catálogo y repunta el hueco del PDF). Spec 020: no hay migración, se regenera.
+18. **Para diagnosticar la ficha conviene mirar la consola**: el motor informa la causa exacta por
+    `console.warn`/`console.error` (el recorrido la captura sólo si filtra `type() === 'error'`; contar
+    *todos* los logs marca falsos negativos con JQMIGRATE y los avisos del tema).
