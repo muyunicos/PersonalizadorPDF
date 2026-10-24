@@ -482,7 +482,7 @@
      * D7): si no hay, el servidor crea un borrador y lo devuelve, y el cliente
      * lo guarda para que la vista previa lo reusa en vez de abrir otro.
      */
-    function subirFoto(blob, campo, onItem) {
+    function subirFoto(blob, campo, onItem, ctx) {
         var ses = (global.PMU_API && global.PMU_API.sesion) || {};
         var fd = new FormData();
         fd.append('action', 'personalizador_pdf_subida');
@@ -495,6 +495,9 @@
         // bytes de todas formas: esto es solo coherencia del form.
         var extSubida = (blob && blob.size >= 12 && blob.type === 'image/webp') ? 'webp' : 'png';
         fd.append('imagen', blob, 'campo-' + campo + '.' + extSubida);
+        // Spec 030 (D8): la RECETA de la composicion viaja CON la subida: el servidor la
+        // estampa en la fila y despues `Elegir` puede reconocerla (si no, `recetas: []`).
+        fd.append('params', JSON.stringify((ctx && ctx.params) || {}));
         return postAjax(fd).then(function (json) {
             if (!json || !json.success) {
                 throw new Error((json && json.data) || 'motor:subida:falla');
@@ -1364,8 +1367,8 @@
         };
         api.valores = function () { return api.estado; };
         // Spec 018 (T002/T003): metodos publicos.
-        api.subirFoto = function (blob, campo) {
-            return subirFoto(blob, campo ? (campo.id || campo) : campo);
+        api.subirFoto = function (blob, campo, ctx) {
+            return subirFoto(blob, campo ? (campo.id || campo) : campo, null, ctx);
         };
         // Spec 030 (D23): mapa id -> url por pagina. La miniatura, el visor y el
         // recorte usan la MISMA URL, asi que el navegador la sirve de su cache y
@@ -1469,7 +1472,7 @@
                 envoltura: envoltura,
                 idsIniciales: idsIniciales,
                 urlDe: api.urlDeSubida,
-                subir: function (blob) { return api.subirFoto(blob, cid); },
+                subir: function (blob, ctx) { return api.subirFoto(blob, cid, ctx); },
                 // Spec 030 (T014/D8): Elegir sin recomponer. Devuelve `{fila}` o
                 // `{coincide:false}`; el id de la fila entra al estado de la ranura
                 // (lo hace el cargador al escuchar `usado`) y la Vista previa lo

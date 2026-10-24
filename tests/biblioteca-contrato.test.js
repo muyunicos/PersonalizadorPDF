@@ -141,6 +141,12 @@ check('la copia local es v2 y pedir() se auto-sana de una copia vacia',
     /var CLAVE = 'pmu_bib_v2';/.test(bib) && /function pedir\(sinDesde\)/.test(bib)
     && /if \(\(!previa\.fotos \|\| !previa\.fotos\.length\) && !sinDesde\) \{ return pedir\(true\); \}/.test(bib));
 
+console.log('== Fix 4.22.2: montaje y receta de la subida ==');
+check('el montaje de la tira INVOCA su bloque (})();) y los params viajan con la subida',
+    /\(function \(\) \{ \/\/ 4a[\s\S]{0,1500}\}\)\(\);/.test(sel)
+    && /fd\.append\('params', JSON\.stringify\(\(ctx && ctx\.params\)/.test(tienda)
+    && /subir: function \(blob, ctx\) \{ return api\.subirFoto\(blob, cid, ctx\); \}/.test(tienda));
+
 console.log('');
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }
 console.log('BIBLIOTECA CONTRATO FALLA (' + fallos + ' de ' + (ok + fallos) + ')');

@@ -939,7 +939,7 @@
                             .catch(function () { });
                     }
                 });
-            });
+            })();
         }
         $('.spmu-cancelar').addEventListener('click', function () {
             if (!self._subiendo) { self._cancelar(); }
