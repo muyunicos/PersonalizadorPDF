@@ -1936,6 +1936,63 @@ class Personalizador_PDF_Plugin
         return $cliente_id;
     }
 
+    /**
+     * Spec 030 (§6 P2/P4): MEDICION (solo lectura) de la biblioteca por IDENTIDAD. Recorre
+     * los manifiestos de `tmp/sesion-{sid}/{item}/` y `orders/{oid}/{item}/`, agrupa las filas
+     * `subidas` por `sid` y devuelve un resumen para el smoke. No escribe nada y no decide
+     * nada: la cuota (D20) y el "ver mas" (P4) se deciden con estos numeros.
+     */
+    private function biblioteca_peso_identidades()
+    {
+        $motor = $this->pmu_uploads();
+        $porSid = [];
+        $items = 0;
+        $fotos = 0;
+        $bytes = 0;
+        foreach (['tmp', 'orders'] as $ambito) {
+            $raiz = $motor->dir_ambito($ambito);
+            if (!is_dir($raiz)) {
+                continue;
+            }
+            foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $nivel1) {
+                foreach ((array)glob($nivel1 . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirItem) {
+                    $man = json_decode((string)@file_get_contents($dirItem . DIRECTORY_SEPARATOR . 'manifest.json'), true);
+                    if (!is_array($man) || empty($man['subidas'])) {
+                        continue;
+                    }
+                    $items++;
+                    $sid = (string)($man['sid'] ?? '');
+                    if (!isset($porSid[$sid])) {
+                        $porSid[$sid] = ['fotos' => 0, 'bytes' => 0, 'contenedores' => 0];
+                    }
+                    $porSid[$sid]['contenedores']++;
+                    foreach ((array)$man['subidas'] as $fila) {
+                        if (!is_array($fila)) {
+                            continue;
+                        }
+                        $fotos++;
+                        $porSid[$sid]['fotos']++;
+                        $n = (int)($fila['bytes'] ?? 0);
+                        if ($n < 1 && !empty($fila['file'])) {
+                            $n = (int)@filesize($dirItem . DIRECTORY_SEPARATOR
+                                . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string)$fila['file']));
+                        }
+                        $bytes += $n;
+                        $porSid[$sid]['bytes'] += $n;
+                    }
+                }
+            }
+        }
+        $max = 0;
+        foreach ($porSid as $dato) {
+            $max = max($max, (int)$dato['contenedores']);
+        }
+        return ['resumen' => count($porSid) . ' identidad(es) · ' . $fotos . ' fotos · '
+            . number_format($bytes / 1024, 0, ',', '.') . ' KB · max ' . $max . ' contenedores ('
+            . $items . ' items con fotos)'
+            . ($max > 10 ? ' — revisar P4 (el tope de 10 contenedores ya corta fotos)' : '')];
+    }
+
     private function biblioteca_identidad()
     {
         $sesion = $this->sesion();
@@ -4059,6 +4116,9 @@ class Personalizador_PDF_Plugin
         $this->smoke_consola($add);
         // Spec 030 (anti-drift): la biblioteca vive en DOS archivos; si un deploy deja uno
         // viejo, la tira queda vacia EN SILENCIO (paso el 2026-10-23). Esto lo canta.
+        // Spec 030 (§6 P2/P4): MEDICION del peso por identidad (solo lectura: informa, no decide).
+        $pesoBib = $this->biblioteca_peso_identidades();
+        $add('Biblioteca: peso por identidad (medicion P2/P4)', true, $pesoBib['resumen']);
         $this->sesion(); // carga inc/class-pmu-sesion.php (lazy) antes de mirar metodos
         $faltanBib = [];
         foreach (['familias', 'familia_de', 'ruta_familia', 'familia_por_sha', 'guardar_subida', 'limpiar_ttl'] as $mBib) {
