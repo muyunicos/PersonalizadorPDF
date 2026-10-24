@@ -259,15 +259,19 @@ node C:\wp-lab\probe-modal.cjs               # volcado del modal del cargador
 
 - `recorrido-009.cjs`: **33/33 OK** (SC-001/002/003/004/005/006/007/009 + FR-009). Evidencia:
   `capturas/e*.png` y `capturas/recorrido-009.json`.
-- `recorrido-ficha-pedido.cjs`: **18/23 OK**. Verificado end-to-end: ficha con panel y formulario,
-  `PMU_FICHA` (2 PDFs / 2 campos), campos montados, **cargador subiendo la foto** (queda como `.webp`
-  en `subidas/` del item, spec 026), **mínimo de fotos bloqueando el carrito** y su aviso (spec 022),
-  **Vista previa** (`admin-ajax`) que habilita el botón, y **el item personalizado en el carrito**.
-  **Pendiente (2 ajustes del script, no defectos vistos del producto)**: (a) la **galería del mockup**
-  no aparece por el selector usado —hay que ver por dónde publica el mockup `PMU_TIENDA`/el endpoint
-  de mockups—; (b) el **checkout** no completó el pedido: falta seleccionar `#billing_state`
-  (Woo lo exige para AR) para que `#place_order` valide. Sin (a) tampoco se congela
-  `mockup-*.webp`, y sin (b) no hay `orders/{id}/…_procesado.pdf` ni fila en Descargas.
+- `recorrido-ficha-pedido.cjs`: **20/26 OK**. **El ciclo completo queda validado**: ficha con panel y
+  formulario, `PMU_FICHA` (2 PDFs / 2 campos), campos montados, **cargador subiendo la foto** (queda
+  `.webp` en `subidas/` del item, spec 026), **mínimo de fotos bloqueando el carrito** con su aviso
+  (spec 022), **Vista previa** (`admin-ajax`) que habilita la compra, **carrito con la personalización**,
+  **checkout con COD y el resumen del item personalizado**, **pedido creado** (los `order-received/13`,
+  `/14` y `/15` de las corridas) y **`orders/{id}/{item}/` con `manifest.json`, `subidas/*.webp` y
+  `img/`** (staging → promoción, specs 004/014/017/029/030).
+  **Pendiente (2 ítems)**: (a) la **galería del mockup** no se monta —la respuesta de `vista_previa`
+  **sí** trae el mockup (`circulo6cm: mockups=1`)— y con ella quedan pendientes el pool `img/` y el
+  `mockup-*.webp` congelado (hipótesis: el render compone las vistas en `.pmu-gal-item` y no en
+  `.pmu-galeria-vista`; hace falta mirar el DOM con devtools paso a paso); (b) la **descarga del PDF**
+  desde Descargas: la fila existe pero el click no entrega archivo (Woo/el tema exigen la sesión del
+  comprador registrado → probar logueado o en la página de gracias).
 
 **Lecciones que costaron tiempo** (aplican a cualquier recorrido nuevo):
 
@@ -293,3 +297,17 @@ node C:\wp-lab\probe-modal.cjs               # volcado del modal del cargador
    que ya no existen (p. ej. `PMUCargador`); se refresca con `php refrescar-campo.php <id> <tipo>`
    (equivale al botón "Cargar la plantilla de este tipo" del drawer).
 10. **El push dispara deploy** (webhooks de Hostinger): el lab **no** lo necesita.
+11. **El tema restringe los productos FÍSICOS** en hosts restringidos ("we only sell digital products
+    here"): los productos de prueba del lab deben ser **virtuales + descargables** (`seed-lab.php` ya
+    lo hace). Con el carrito en ese estado, el aviso del tema es "Productos no disponibles".
+12. **COD y pedidos virtuales**: `woocommerce_cod_settings['enable_for_virtual'] = 'yes'`, si no no
+    aparece ningún medio de pago y `#place_order` no hace nada (`config-lab.php` ya lo setea).
+13. **El checkout del tema tiene 2 pasos**: primero "¿Cómo quieres continuar?" → **"Continuar como
+    invitado"**, y recién después los campos. El nombre va en **`#billing_full_name`** ("Nombre y
+    Apellido"); `#billing_first_name/_last_name` existen pero no se usan.
+14. **Email único por corrida** en el checkout (`comprador-lab+<timestamp>@…`): la primera compra
+    **registra la cuenta** y la siguiente falla con "An account is already registered…".
+15. **`?add-to-cart=ID` por GET no agrega** en este entorno (el carrito queda vacío) y `/?p=ID` no
+    renderiza la ficha: usar el **permalink** del producto y el **botón** de la ficha.
+16. **El `_procesado.pdf` se genera al descargar**, no al pagar: el pagó deja el pedido en `orders/`
+    con `manifest.json` + `subidas/` + `img/`, y el PDF aparece cuando el comprador baja su archivo.

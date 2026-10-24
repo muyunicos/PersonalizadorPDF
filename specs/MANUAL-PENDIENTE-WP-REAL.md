@@ -42,9 +42,9 @@ Detalle completo por spec: [004/quickstart.md §1](./004-woocommerce-pdf-persona
 
 Arranque, credenciales (`lab`/`labpass123`), datos del lab, helpers y recetas de recreación:
 `docs/entorno-desarrollo.md` §9. Recorridos vigentes: `recorrido-009.cjs` (**33/33**, spec 009) y
-`recorrido-ficha-pedido.cjs` (**18/23**: ficha → foto → vista previa → carrito ✓; pendientes de
-calibrar la galería del mockup y el `billing_state` del checkout). Regla: el recorrido se corre
-**scripteado** en el lab y el hosting solo confirma el deploy.
+`recorrido-ficha-pedido.cjs` (**20/26**: ficha → foto → vista previa → carrito → **checkout con COD →
+pedido → `orders/{id}/{item}/`** validado; pendientes la galería del mockup y la descarga del PDF).
+Regla: el recorrido se corre **scripteado** en el lab y el hosting solo confirma el deploy.
 
 ## 1. Editor + raiz unica (006 T017-parcial, T029-parcial)
 

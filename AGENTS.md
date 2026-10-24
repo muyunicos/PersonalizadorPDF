@@ -910,8 +910,9 @@ Los recorridos de aceptación de cada spec se corren en el **laboratorio local**
 y tema montados por *junction*) con Chrome + Playwright **sin instalar nada en el repo**: arranque,
 credenciales, scripteado, higiene de datos y las trampas conocidas están en
 `docs/entorno-desarrollo.md` §9. Vigentes: `recorrido-009.cjs` (spec 009: **33/33**) y
-`recorrido-ficha-pedido.cjs` (ficha → pedido: **18/23**, con dos ajustes pendientes documentados en
-§9.5).
+`recorrido-ficha-pedido.cjs` (ficha → pedido: **20/26**, con el **ciclo completo hasta
+`orders/{id}/{item}/`** validado y dos ítems pendientes documentados en §9.5: la galería del mockup y
+la descarga del PDF).
 
 ### Verificación en el sitio real (WordPress + Woo)
 Consola → pestaña **Test** → botón **Ejecutar smoke test**. Corre con WordPress/Woo
