@@ -997,6 +997,11 @@ analisis), va **un solo commit por bloque tematico**.
 - Evitar commits de una linea salvo que el cambio sea de alto riesgo (ahi conviene
   poder revertirlo solo).
 - `git commit --amend` mientras el paso siga sin publicar; una vez pusheado, commit nuevo.
+- **Commitear solo con el lint en verde, y gateado**: `php -l` / `node --check` en el MISMO comando con
+  `if ($LASTEXITCODE -eq 0) { … git commit … }`. Imprimir el lint sin cortar deja pasar un commit roto
+  (paso el 2026-10-23). Los tests del arnes que cargan el plugin **no** lo cubren si el lint falla antes.
+- Un `*/` dentro de un docblock de PHP **cierra el comentario**: escribir `tmp/sesion-{sid}/{item}/`,
+  nunca `tmp/sesion-*/item/` (fue el parse error del 2026-10-23).
 
 ### Sintaxis del shell activo (PowerShell 7)
 
