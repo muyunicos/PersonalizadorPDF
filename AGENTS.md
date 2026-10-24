@@ -474,6 +474,10 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   por grupo, se sobrescribe en cada Procesar)
 - Placeholders: sin archivos en disco; marco dibujado en la consola + descarga generada
   al vuelo (`PngWriter::bytes(w, h)`)
+- **Retencion de `orders/` con referencias (spec 030, §6 P3)**: una fila `origen: ref` puede apuntar a
+  **otro pedido** (`orders/{order_id}/...`), asi que **no se purga un pedido referenciado**: antes de
+  cualquier purga hay que **materializar** esas filas (copiar el archivo al pedido que lo referencia).
+  Hoy nada purga `orders/` (el TTL solo mira `tmp/`), asi que el invariante es documental.
 - Salida de muestra: `tmp/muestras/{nombre}/{nombre}_procesado.pdf` (se sobrescribe)
 - Trabajos de la API (spec 010, **aún no implementado**): `api/{job_id}/` = `manifest.json`
   (`pdf`, grupos + hash de contenido, `expira`, `creado`) + pool `img/` + `{pdf}_procesado.pdf`.

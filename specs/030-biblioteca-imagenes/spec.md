@@ -192,7 +192,7 @@ No hay carpeta compartida ni paso de consolidacion: cada item del pedido guarda 
 |---|---|---|
 | P1 | Pagina "Mis imagenes" (Mi cuenta) | **CERRADO**: fuera de la 030, spec aparte (D28) |
 
-| P2 | Cuota/peso por identidad | medir con `op=listar` y decidir |
-| P3 | Purga de `orders/` con referencias | documentar el invariante; materializar antes de purgar (cuando exista la purga) |
-| P4 | Que pasa si el **tope de 10 contenedores** deja una foto vieja fuera de la tira | agregar **ver mas** (pide la pagina siguiente) si aparece el caso |
-| P5 | Orden por **ultimo uso** en lugar de por fecha de creacion | anotar el uso al elegir una foto (campo aditivo) si resulta barato |
+| P2 | Cuota/peso por identidad | **Medido**: el smoke informa `Biblioteca: peso por identidad` (identidades · fotos · KB · max contenedores). La cuota (D20) se decide con esos numeros. |
+| P3 | Purga de `orders/` con referencias | **Documentado** (AGENTS §5): no se purga un pedido referenciado; hay que **materializar** los `ref` antes de purgar (hoy nada purga `orders/`). |
+| P4 | Que pasa si el **tope de 10 contenedores** deja una foto vieja fuera de la tira | **Medido**: el mismo informe avisa `revisar P4` si alguna identidad supera los 10 contenedores; mientras no aparezca, **no** se implementa `ver mas`. |
+| P5 | Orden por **ultimo uso** en lugar de por fecha de creacion | **Descartado por costo**: una marca de ultimo uso por identidad exige un **ambito nuevo** (con catalogo, duenio y GC). El orden por fecha se mantiene. |
