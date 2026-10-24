@@ -67,6 +67,14 @@ Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}
 
 == Changelog ==
 
+= 4.22.3 =
+* Spec 030 (biblioteca de imagenes) - quinta pasada: la tira de "Mis imagenes" vive **arriba de la escena**, en su propia fila, con el boton **Cargar imagen** a la izquierda, junto a las miniaturas; la fila de acciones queda Cancelar/Subir.
+* Elegir sin subir bytes: al abrir una foto que ya es una familia propia y no retocarla, el boton dice **Elegir**; si se sube, entra como **version** de esa familia (no duplica la entrada) y la tira reutiliza la URL ya cargada (una sola descarga).
+* Diagnostico de la biblioteca en la pestana Test: el smoke informa identidades, fotos, KB y el maximo de contenedores por identidad (solo lectura).
+
+= 4.22.2 =
+* Arreglado: la tira de "Mis imagenes" no se montaba en el modal de recorte (un bloque del cliente quedaba sin ejecutar) y la **receta** de la composicion no llegaba a la subida, asi que una foto reusada no podia reconocerse despues.
+
 = 4.22.1 =
 * Spec 030 - Biblioteca de imagenes del comprador: la tira vive siempre visible en el modal
   (adaptada al ancho, sin scroll) y la galeria fullscreen permite Elegir o Borrar; reuso sin
