@@ -38,6 +38,14 @@ Detalle completo por spec: [004/quickstart.md §1](./004-woocommerce-pdf-persona
 [005/quickstart.md §1](./005-pdf-condicionales/quickstart.md),
 [006/quickstart.md §1+§2+§7](./006-align-textmuy-motor/quickstart.md).
 
+## 0.bis Entorno: laboratorio local (`C:\wp-lab`)
+
+Arranque, credenciales (`lab`/`labpass123`), datos del lab, helpers y recetas de recreación:
+`docs/entorno-desarrollo.md` §9. Recorridos vigentes: `recorrido-009.cjs` (**33/33**, spec 009) y
+`recorrido-ficha-pedido.cjs` (**18/23**: ficha → foto → vista previa → carrito ✓; pendientes de
+calibrar la galería del mockup y el `billing_state` del checkout). Regla: el recorrido se corre
+**scripteado** en el lab y el hosting solo confirma el deploy.
+
 ## 1. Editor + raiz unica (006 T017-parcial, T029-parcial)
 
 1. Pestana "Estilos de Texto": galeria muestra recursos con miniatura, sin errores.

@@ -2,7 +2,7 @@
 
 > Jerarquía documental: `.specify/memory/constitution.md` > `AGENTS.md` > resto.
 > Este documento operativiza `AGENTS.md` §8–§10 para el entorno real de trabajo.
-> Verificado el 2026-10-03.
+> Verificado el 2026-10-03. **Laboratorio local (`C:\wp-lab`) documentado el 2026-10-24: ver §9.**
 
 ## 1. Plataforma y shell
 
@@ -162,3 +162,134 @@ scripts que fallan de formas distintas en cada intento.
 | `cat f` | `Get-Content f` |
 | `/tmp/x` | `$env:TEMP\x` |
 | `cmd1 && cmd2` | `cmd1; cmd2` (o `&&`, que sí funciona en pwsh 7) |
+
+## 9. Laboratorio local de WordPress (`C:\wp-lab`)
+
+> **Alcance**: entorno **de esta máquina** (rutas absolutas), no normativa del repo. La regla que sí
+> es normativa: *los recorridos de aceptación se corren **scripteados** contra este laboratorio,
+> con evidencia y capturas; el hosting productivo solo confirma el deploy.*
+
+### 9.1 Qué es y para qué sirve
+
+WordPress + WooCommerce **reales** en local, con el plugin montado por **junction** al checkout
+(`wp-content/plugins/personalizador-pdf` → `C:\Users\Jonatan\Documents\GitHub\personalizador-pdf`)
+y el tema del sitio real (`generatepress-child` → `C:\Users\Jonatan\Documents\GitHub\muyunicos`,
+también por junction). Sirve para:
+
+- Correr los recorridos de aceptación (specs 004/009/012/014/017/022/029/030) **sin deploy**.
+- Reproducir bugs con el **puente real** del plugin (iframe del editor, `PMU_FICHA`, admin-ajax).
+- Medir red, archivos en disco y geometría, y dejar capturas + JSON como evidencia.
+
+**No** reemplaza al hosting: los emails no se pueden probar (no hay mailer) y los datos de
+`uploads/pmu` del lab son **una copia propia**, no el espejo de despliegue.
+
+### 9.2 Arranque y parada
+
+```powershell
+# Base (MariaDB portable, 127.0.0.1:3306)
+Start-Process 'C:\wp-lab\mariadb\mariadb-11.8.9-winx64\bin\mariadbd.exe' `
+  -ArgumentList @('--datadir=C:\wp-lab\mariadb-data','--port=3306','--console') `
+  -RedirectStandardOutput 'C:\wp-lab\mariadb.out.log' -RedirectStandardError 'C:\wp-lab\mariadb.err.log' -WindowStyle Hidden
+
+# Web (PHP embebido, 8091). OJO: -d sube los limites de subida (el php.ini del equipo trae 2M/8M)
+Start-Process 'C:\Users\Jonatan\php\php.exe' `
+  -ArgumentList @('-d','upload_max_filesize=64M','-d','post_max_size=64M','-d','memory_limit=512M',
+                  '-S','localhost:8091','-t','C:\wp-lab\wordpress','C:\wp-lab\wordpress\router.php') `
+  -WorkingDirectory 'C:\wp-lab\wordpress' -RedirectStandardOutput 'C:\wp-lab\srv-lab.out.log' -RedirectStandardError 'C:\wp-lab\srv-lab.err.log' -WindowStyle Hidden
+
+# Parada: Get-Process php,mariadbd | Stop-Process -Force
+```
+
+- Panel: `http://localhost:8091/wp-admin/admin.php?page=personalizador-pdf&tab=textos`
+- Credenciales: **`lab` / `labpass123`** (usuario `lab`, id 1).
+- Log: `C:\wp-lab\wordpress\wp-content\debug.log` (`WP_DEBUG`+`WP_DEBUG_LOG` activos).
+- Si el front muestra la portada en vez de la ficha, faltan rewrite rules: `php C:\wp-lab\wordpress\flush.php`.
+
+### 9.3 Estructura del laboratorio
+
+| Ruta | Qué es |
+|---|---|
+| `C:\wp-lab\wordpress\` | WP core + `wp-config.php` (MariaDB) + `router.php` (URLs limpias para `php -S`) |
+| `…\wp-content\plugins\personalizador-pdf` | **Junction** al repo del plugin |
+| `…\wp-content\themes\generatepress-child` | **Junction** al repo del tema (`muyunicos`, padre `generatepress`) |
+| `…\wp-content\uploads\pmu\` | Datos propios del lab (`fonts`, `tm-presets`, `pdfs/{circulo6cm,sincampos}`, `campos` 1-2, `tmp`, `orders`) |
+| `C:\wp-lab\mariadb\` + `C:\wp-lab\mariadb-data\` | MariaDB 11.8.9 portable + datadir (`my.ini` generado por `mariadb-install-db`) |
+| `C:\wp-lab\*.cjs`, `probe*.cjs` | Recorridos y probes (§9.5) |
+| Raíz de WP | Helpers: `install.php`, `activate.php`, `plug.php`, `tema.php`, `config-lab.php`, `seed-lab.php`, `flush.php`, `refrescar-campo.php`, `diag-ficha.php` |
+| `C:\wp-lab\capturas\` | Capturas + JSON de resultados |
+| `C:\wp-lab\{wp.zip, sqlite.zip, pmu-backup-*.zip, mariadb-*.zip, woocommerce.zip, generatepress.zip}` | Insumos para recrear |
+| `C:\wp-lab\_backup-sqlite\` | Backup del modo SQLite anterior (`lab.sqlite` + `db.php` + `wp-config.php`) |
+
+### 9.4 Recreación desde cero (si se pierde la máquina)
+
+1. WP core en `C:\wp-lab\wordpress` (de `wp.zip` o descarga oficial) + `router.php`.
+2. **MariaDB portable**: descomprimir en `C:\wp-lab\mariadb`;
+   `mariadb-install-db.exe --datadir=C:\wp-lab\mariadb-data --port=3306`; arrancar y crear
+   `wordpress` + usuario `lab`/`labpass123`.
+   *(Alternativa histórica: SQLite con `sqlite-database-integration` + `db.php` — respaldo en
+   `_backup-sqlite`; **Woo necesita MySQL real**.)*
+3. `wp-config.php` con `DB_HOST='127.0.0.1:3306'`, `DB_NAME=wordpress`, `DB_USER=lab`, salts propias,
+   `WP_DEBUG`+log.
+4. `php install.php` (alta no interactiva) y `php activate.php` (activa el plugin).
+5. Junction del plugin; **GeneratePress** (padre) desde wp.org + junction del child `muyunicos`;
+   `php tema.php` (activa el child y verifica `mu_update_item_files`).
+6. `php plug.php woocommerce` → `php config-lab.php` (ARS, AR:B, **COD**, envío gratis, **HPOS legacy**)
+   → `php seed-lab.php` (productos con `_pmu_pdf_slugs`, páginas de carrito/checkout **clásicas**)
+   → `php flush.php`.
+7. Datos: descomprimir `pmu-backup-*.zip` en `wp-content/uploads/` (o sembrar `fonts/` y `tm-presets/`).
+
+### 9.5 Recorridos y probes (scripteados con Chrome + Playwright)
+
+Playwright **no se instala en el repo** (no hay `node_modules` versionado): se usa uno en `%TEMP%`.
+
+```powershell
+# Una sola vez:
+$env:PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD='1'; npm i --prefix "$env:TEMP\pmu-pw" playwright
+
+# Cada corrida:
+$env:NODE_PATH = "$env:TEMP\pmu-pw\node_modules"
+$env:TEXTMUY_CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+node C:\wp-lab\recorrido-009.cjs             # galerias y hojas de la spec 009
+node C:\wp-lab\recorrido-ficha-pedido.cjs    # ficha -> foto -> vista previa -> carrito -> checkout -> descargas
+node C:\wp-lab\probe-ficha.cjs               # volcado del DOM de la ficha (diagnostico)
+node C:\wp-lab\probe-modal.cjs               # volcado del modal del cargador
+```
+
+**Estado de los recorridos (2026-10-24)**
+
+- `recorrido-009.cjs`: **33/33 OK** (SC-001/002/003/004/005/006/007/009 + FR-009). Evidencia:
+  `capturas/e*.png` y `capturas/recorrido-009.json`.
+- `recorrido-ficha-pedido.cjs`: **18/23 OK**. Verificado end-to-end: ficha con panel y formulario,
+  `PMU_FICHA` (2 PDFs / 2 campos), campos montados, **cargador subiendo la foto** (queda como `.webp`
+  en `subidas/` del item, spec 026), **mínimo de fotos bloqueando el carrito** y su aviso (spec 022),
+  **Vista previa** (`admin-ajax`) que habilita el botón, y **el item personalizado en el carrito**.
+  **Pendiente (2 ajustes del script, no defectos vistos del producto)**: (a) la **galería del mockup**
+  no aparece por el selector usado —hay que ver por dónde publica el mockup `PMU_TIENDA`/el endpoint
+  de mockups—; (b) el **checkout** no completó el pedido: falta seleccionar `#billing_state`
+  (Woo lo exige para AR) para que `#place_order` valide. Sin (a) tampoco se congela
+  `mockup-*.webp`, y sin (b) no hay `orders/{id}/…_procesado.pdf` ni fila en Descargas.
+
+**Lecciones que costaron tiempo** (aplican a cualquier recorrido nuevo):
+
+1. **`blog_public = 0` tapa todo el front**: un sitio "privado" dispara la pantalla **"Coming soon"**
+   (landing de Woo con sus `patterns`) y la ficha no renderiza. El lab queda con `blog_public = 1`.
+2. **Modal de país del tema**: intercepta los clics. Se desactiva con las cookies
+   `muyu_geo_country=AR` **y** `muyu_stay_here=localhost` (o cerrando `#muyu-country-close`).
+   Ojo: el modal **reaparece** si sólo se lo cierra a mano.
+3. **Medir sin el ruido de la carga**: asentar la página (~2,5 s) y **limpiar el espía después**;
+   si no, se miden descargas propias de la página (p. ej. la fuente del `index.html` del editor).
+4. **Cachés del cliente por escenario**: al cambiar de escenario hay que invalidar
+   `invalidarCatalogo` / `invalidarSpriteCanonico` / `invalidarDibujados`, o el núcleo no regenera
+   (firma vieja memoizada).
+5. **El iframe del editor se recrea**: re-adquirir el frame en cada escenario (si no, "Frame was
+   detached").
+6. **La vista previa y el carrito van por `admin-ajax.php`** (no `admin-post.php`): el espía debe
+   mirar **ambos** y leer `action` del cuerpo o de la URL.
+7. **Windows**: no hay `chmod -w`; para simular un directorio no escribible se usa `attrib +R <archivo>`
+   (verificado: hace fallar el `rename` del motor con "Acceso denegado").
+8. **Higiene de datos**: backup antes de un escenario que muta (`fonts.json` → `.bak-e1`), reset
+   reproducible al empezar y **restaurar el lab** al terminar (el recorrido de la 009 ya lo hace solo).
+9. **Plantillas de campo viejas**: un campo del lab creado antes de un cambio de plantilla usa nombres
+   que ya no existen (p. ej. `PMUCargador`); se refresca con `php refrescar-campo.php <id> <tipo>`
+   (equivale al botón "Cargar la plantilla de este tipo" del drawer).
+10. **El push dispara deploy** (webhooks de Hostinger): el lab **no** lo necesita.

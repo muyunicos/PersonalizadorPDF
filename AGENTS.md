@@ -824,6 +824,10 @@ VS Code + extensión **Cline**. La integración de **Spec Kit** es `cline` (pred
 - ⚠️ **Permisos Windows**: si un script PHP de testing falla al escribir en Documents,
   escribí los temporales en `%TEMP%` (`sys_get_temp_dir()`). En WP real usar siempre
   `wp_upload_dir()`.
+- ⚠️ **Recorridos de aceptación**: hay un **laboratorio local con WP+Woo reales** (`C:\wp-lab`:
+  plugin y tema por *junction*; ver `docs/entorno-desarrollo.md` §9). Los recorridos se corren
+  **scripteados** contra el lab (evidencia + capturas) y el hosting solo confirma el deploy. Ojo: los
+  datos de `uploads/pmu` del lab son **copia propia**, no el espejo de despliegue.
 - ⚠️ **Rutas web**: no intentes fetch a URLs de `wp-admin` (requiere auth → 404); asumí la
   lógica según `admin/*.php`.
 - 🚫 **Sin aprobación explícita**: no modificar bases de datos, credenciales ni servicios
@@ -899,6 +903,15 @@ php tests/inventario_repo.php               # Archivos/pesos/dependencias -> doc
   los simbolos que PHPStan no descubre viven en `tests/phpstan/simbolos.php`.
 - Los hallazgos que queden en rojo son trabajo pendiente: NO borrar ni "arreglar" nada
   sin aprobacion explicita.
+
+### Recorrido de aceptación en el laboratorio local (`C:\wp-lab`)
+
+Los recorridos de aceptación de cada spec se corren en el **laboratorio local** (WP+Woo reales, plugin
+y tema montados por *junction*) con Chrome + Playwright **sin instalar nada en el repo**: arranque,
+credenciales, scripteado, higiene de datos y las trampas conocidas están en
+`docs/entorno-desarrollo.md` §9. Vigentes: `recorrido-009.cjs` (spec 009: **33/33**) y
+`recorrido-ficha-pedido.cjs` (ficha → pedido: **18/23**, con dos ajustes pendientes documentados en
+§9.5).
 
 ### Verificación en el sitio real (WordPress + Woo)
 Consola → pestaña **Test** → botón **Ejecutar smoke test**. Corre con WordPress/Woo
