@@ -248,6 +248,31 @@ Detalle completo por spec: [004/quickstart.md §1](./004-woocommerce-pdf-persona
    contenedores por identidad (si supera 10 avisa `revisar P4`). Anotar los numeros: con ellos se
    decide la **cuota** (D20/P2) y si hace falta `ver mas` (P4).
 
+## 6f. Galerías del editor: hojas de miniaturas (009 T013/T023/T028/T032)
+
+Referencia: `specs/009-galerias-sprite-unificado/quickstart.md` §2 (E1–E7) y §4 (mapeo SC).
+**Automatico ya corrido (2026-10-24, todo en verde)**: `php tests/certificacion_hoja.php` (checks A–G),
+`php tests/motor_smoke.php`, `php -l`, **45 suites** Node y la puerta de navegador
+`node tests/galerias.browser.js` (Chrome + Playwright; receta en `modules/textmuy/AGENTS.md` §7.29).
+Falta solo la confirmacion en WordPress real:
+
+1. **E1 (SC-002)** sin hoja: respaldar `fonts.json`, borrar `uploads/pmu/fonts/thumbs.webp` y quitarle
+   `thumbs.sprite_firma` al inventario; abrir la galeria de fuentes con Network abierto: progreso `N/M`,
+   **exactamente 1** `POST op=sprite` (con `firma` y `scope=fonts`), `thumbs.webp` de `720x540` y
+   `fonts.json` con `sprite_firma`. Medir vol/time (SC-003: <= 5 MB y <= 60 s).
+2. **E2 (SC-001)** F5 + reapertura de las tres galerias: solo `*.json` + `thumbs.webp`; **0** `.ttf/.woff2`,
+   0 `<link>` de Google, 0 originales; miniaturas completas en las tres.
+3. **E3 (SC-004)** subir un `.ttf`: 1 sola descarga (su archivo) + 1 `op=sprite`; F5 vuelve a E2.
+4. **E4 (SC-005)** clic en una celda Google pendiente: 1 `css2?family=...` (sin `wght@` ni `text=`) y la
+   celda se redibuja con el tipo real; F5 lo conserva sin descargas.
+5. **E5 (SC-007)** provocar el fallo (`chmod -w` en `uploads/pmu/fonts/` o bloquear Google): estado `error`
+   con la causa exacta + boton **Reintentar** en la galeria que fallo (fuentes, imagenes y panel de presets);
+   al restaurar, el reintento vuelve a E1.
+6. **E6 (SC-006)** medir el tile de fuentes: 2 columnas de ~175 px y `alto ~ round(ancho x 30/180) ± 2`;
+   en imagenes `1/1` y en presets `2/1`.
+7. **E7 (SC-009)** dos pestañas del editor forzando la generacion en ambas: **1** escritura por ambito
+   (la segunda espera); y confirmar que **no existen** los botones "Generar miniaturas" ni "Miniaturas".
+
 ## 7. Cierre
 
 - [ ] §1 raiz unica OK (T017-parcial + T029-parcial)

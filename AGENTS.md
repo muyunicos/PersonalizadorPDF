@@ -228,17 +228,19 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
    `op=` de presets/imágenes/fuentes). Sin puente el editor NO opera: muestra un
    error accionable y hace cero peticiones locales (no hay modo standalone).
 5. **Versionado de estáticos (cache-bust)**: `render-core.html` e `index.html` referencian
-   sus scripts internos con `?v=RCn` (**RC59 hoy**): al cambiar cualquier JS del módulo,
+   sus scripts internos con `?v=RCn` (**RC74 hoy**): al cambiar cualquier JS del módulo,
    subir el número en ambos HTML.
 6. **Galería**: manejada internamente por el módulo (`js/galeria.js`), con preview en vivo.
-   La lectura es **canónica y certificada**: `ensureSpriteCanonico(ambito)` +
+   La lectura es **canónica y certificada** en los **tres** ámbitos (`fonts`, `img`, `tm-presets`):
    `drawTileCanonico(ambito, id)`, con la celda derivada del identificador (`id-1`) y la
-   vigencia atestiguada por `thumbs.sprite_firma` del catálogo. Si la hoja no certifica, se
-   pinta el **placeholder del nombre** y la reconstrucción es explícita por botón
-   ("Generar miniaturas" en la galería de fuentes, `generarMiniaturasPresets` en la galería
-   inferior de presets). El único cliente que escribe es `assets/miniaturas.js` (ThumbEngine),
-   vía `op=sprite`/`op=miniatura`. Limitación vigente (= spec 009): al certificar solo `img`,
-   las galerías de `fonts` y `tm-presets` no llegan a leer su hoja (ver §5).
+   vigencia atestiguada por `thumbs.sprite_firma` del catálogo. Con hoja certificada la apertura
+   es **0 descargas de contenido**; si no certifica (o faltan celdas) se
+   pinta el placeholder y **genera sola los huecos** (F1 dibuja en memoria; F2 persiste UNA vez
+   por ámbito y apertura con `op=sprite` + `firma`); si algo falla, muestra la causa exacta
+   con un botón **Reintentar** (en las tres galerías desde RC74). El único cliente que escribe
+   es `assets/miniaturas.js` (ThumbEngine) vía `op=sprite`/`op=miniatura`; los botones "Generar
+   miniaturas" y "Miniaturas" ya no existen. La lectura certificada cubre los tres ámbitos y
+   el ámbito `mockups` (con catálogo) **no certifica**: ver §5.
 
 ## 3. Flujo de trabajo (cómo lo usa el admin de WordPress para pruebas)
 
@@ -341,13 +343,14 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `tm-presets/` (catálogo `presets.json`); un sprite `thumbs.webp` por ámbito, junto a su
   catálogo. La **certificación** de la hoja es `thumbs.sprite_firma` = `[w,h,c,items]`
   (derivada de `thumbs.{w,h,c}` + `items` del catálogo).
-  ⚠️ **Hoy la certifica y valida SOLO el ámbito `img`**: en `PMU_Uploads::sprite()` toda la
-  cadena (firma → dimensiones → escribir firma) vive dentro de `if ($ambito === 'img')`, con
-  causas `motor:sprite:catalogo:desactualizado`, `motor:sprite:dimensiones:invalidas` y
-  `motor:sprite:catalogo:no_escribible`. En `fonts` y `tm-presets` el motor **solo mueve el
-  archivo, sin certificar**, y `guardar_catalogo()` solo invalida la firma cuando `$ambito ===
-  'img'`: por eso la lectura canónica del módulo rechaza siempre esas hojas y sus galerías
-  muestran etiquetas en cada F5. Ampliarlo a los tres ámbitos es la spec 009 (T004/T005).
+  ⚠️ **Certifica todo ámbito con catálogo que mande `firma` no vacía** (spec 009, RC46): en `PMU_Uploads::sprite()` toda la
+  cadena (firma → dimensiones → invalidar → mover → releer `items` → escribir firma) corre para
+  `fonts`, `img` y `tm-presets`, con causas `motor:sprite:catalogo:desactualizado`,
+  `motor:sprite:dimensiones:invalidas`, `motor:sprite:catalogo:no_escribible` y `motor:sprite:archivo:*`;
+  `guardar_catalogo()` invalida la firma en **todos** los ámbitos catalogados. `mockups` tiene
+  catálogo pero **no certifica**: su cliente no manda `firma` (nadie usa la ruta canónica ahí),
+  así que persiste la hoja por la rama simple. La condición real **no** es `AMBITOS_GALERIA`
+  (esa era la ambigüedad del tasks original de la 009). Puerta: `php tests/certificacion_hoja.php`.
   `pdfs/`, `orders/` y `tmp/` son ámbitos de datos del motor, sin catálogo ni sprite.
 - Datasets PDF: `pdfs/{nombre}/analisis.json` (geometría inmutable del Detector: grupos
   `id`/`w`/`h`/`cont`/`pgs`; **sin envolturas**: su formato original nunca cambia)
@@ -586,10 +589,10 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `specs/004-.../_archivo/`; norma vigente = `constitution` §IV (ex-008); auditoria
   de galeria RC34–RC36 archivada (`specs/_archivo/auditoria-galeria-RC34-RC36.md`,
   sin backlog propio; canonico `modules/textmuy/AGENTS.md`).
-- ✅ **Spec 009 `galerias-sprite-unificado` (en especificación, SIN implementar)**: unifica
+- ✅ **Spec 009 `galerias-sprite-unificado` (implementada RC46–RC74; reconciliada el 2026-10-24)**: unifica
   las tres galerías del editor (imágenes, tipografías, estilos guardados) sobre un único
-  mecanismo de lectura certificada (`thumbs.webp` + `thumbs.sprite_firma`), hoy operativo
-  solo en `img` (ver §5). Entrega: (a) certificación de hoja en los **tres** ámbitos en el
+  mecanismo de lectura certificada (`thumbs.webp` + `thumbs.sprite_firma`) en los tres
+  ámbitos (ver §5). Entrega: (a) certificación de hoja en los **tres** ámbitos en el
   motor + invalidación de la firma al mutar cualquiera de ellos; (b) generación automática
   de **solo los huecos**, con **una única escritura por apertura** (pre-dibujado en memoria y
   un solo `POST op=sprite`; nunca un lote parcial); (c) retiro de los botones "Generar
@@ -597,8 +600,8 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   concurrencia acotada, la familia se descarga al elegirla); (e) geometría de celda con
   ratio simplificado y alto completo (fin del recorte de las tiras de tipografías).
   Artefactos en `specs/009-galerias-sprite-unificado/` (checklist 16/16, `plan.md`, `tasks.md`
-  T001–T036, 0 implementadas); índice y estado en `specs/INDICE.md`. Al tocarla: enumerar
-  primero el Phase 2 del `tasks.md` (certificación en el motor), porque bloquea US1–US4.
+  T001–T039 con su estado real (`[X]` hecho / `[~]` con desviación o a medias / `[ ]` pendiente); T037–T039 son los huecos de esa revisión). Índice y estado en `specs/INDICE.md`. Al tocarla: enumerar
+  primero el Phase 2 del `tasks.md` (certificación en el motor), ya cerrada. Puertas: `php tests/certificacion_hoja.php` (checks A–G), la suite `hoja-generacion` y la puerta de navegador `galerias.browser.js` (Chrome + Playwright). Pendiente: recorrido manual E1–E7 (`MANUAL-PENDIENTE-WP-REAL.md` §6f).
 - ✅ **Spec 010 `api-wordpress` (especificada, SIN implementar)**: es el objetivo de negocio
   declarado en §1. Endpoint **único** `admin_post_pmu_api` (+ `nopriv`) con dispatcher `op=`
   (`procesar`/`estado`/`limpiar`); **no** se introducen rutas REST ni un segundo camino de
@@ -919,15 +922,15 @@ node tests/sprite-canonico.test.js && node tests/fuente-compuesta.test.js && nod
 node tests/fuente-selector.test.js && node tests/integridad-archivos.test.js && node tests/rc-bump.test.js
 Set-Location ..\..
 ```
-(38 suites `*.test.js` + `tests/galerias.browser.js`; Node NO corre en el servidor productivo
+(**45 suites** `*.test.js` + `tests/galerias.browser.js`; Node NO corre en el servidor productivo
 de WP: es solo testing del módulo. Las ultimas 5 en entrar: `preset-roundtrip`,
 `fuente-compuesta`, `fuente-carga-estados`, `fuente-selector` e `integridad-archivos`;
-`?v=RC59` hoy en ambos HTML.)
+`?v=RC74` hoy en ambos HTML.)
 
 `tests/galerias.browser.js` es la única prueba con **navegador real** (Playwright + Chrome vía
 la variable de entorno `TEXTMUY_CHROME`): valida el DOM de las galerías (celdas, descargas,
-geometría). No corre en el hosting; es la puerta que consume la spec 009 (SC-006, T027/T031).
-Nota: `hoja-generacion.test.js` ya entró con la spec 009; el conteo vigente es 38 suites.
+geometría). No corre en el hosting; es la puerta que consume la spec 009 (SC-001/002/004/005/006).
+Playwright **no está instalado** en el entorno de desarrollo (Chrome sí): se corre sin tocar el repo con `npm i playwright` en `%TEMP%` + `NODE_PATH` (receta en `modules/textmuy/AGENTS.md` §7.29). Esa puerta arrastraba asserts de ratio sin simplificar (rojo) hasta la revisión de la 009 (RC74).
 Si al regenerar el módulo el total no cuadra, revisar si entraron o salieron suites.
 
 ## 10. Reglas para la IA al editar
@@ -947,7 +950,7 @@ Si al regenerar el módulo el total no cuadra, revisar si entraron o salieron su
   gitignored): actualizá con `specify integration upgrade cline --script ps` (§8).
 - ✅ El módulo `modules/textmuy/` es un repositorio git propio (`muyunicos/textmuy`, el
   original) que vive dentro de este checkout: se edita directamente y se corren sus tests
-  Node (`node --check` + 38 suites), pero sus commits y push van EN ESE repo; se hace bump
+  Node (`node --check` + 45 suites), pero sus commits y push van EN ESE repo; se hace bump
   `?v=RCn` en ambos HTML al tocar su JS.
 - ❌ NO DEBES: guardar datos generados por el admin dentro de la carpeta del plugin
   (siempre usar `uploads/` según §5).
