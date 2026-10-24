@@ -38,7 +38,7 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 - [X] T001 [P] Verificar las puertas base en verde antes de tocar nada: `php -l personalizador-pdf.php`, `php -l inc/class-pmu-sesion.php`, `php tests/motor_smoke.php`, `php tests/parity.php`, `php tests/texto_puente.php fotos`, `node tests/selector-contrato.test.js`
 - [X] T002 [P] Crear el esqueleto de la fase `biblioteca` en `tests/texto_puente.php` (case + `preparar_entorno()` con 2 sesiones, 1 pedido pagado y 1 preset) para poder correr la fase vacia
-- [~] T003 Crear el accesor `dir_comun_order($order_id, $crear = false)` en `inc/class-pmu-uploads.php` (unica fuente de rutas, constitution §II)
+- [~] T003 **OBSOLETA (D11 revisado, 2026-10-21)**: no hay `_comun` ni consolidacion por pedido, asi que el accesor `dir_comun_order()` en `inc/class-pmu-uploads.php` se **retiro** (las rutas del reuso salen de `uploads/pmu/` con `resolver_ref()`)
 
 ---
 
@@ -67,7 +67,7 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 ### Tests for User Story 1
 
 - [X] T009 [P] [US1] Fase `biblioteca` en `tests/texto_puente.php`: el invitado ve solo lo suyo; `madre` ajena -> `api:biblioteca:foto:ajena`; `listar` con `desde` responde `sin_cambios`; `op=usar` con receta igual escribe fila `origen: ref` y **0 bytes** (D14/R2)
-- [ ] T010 [P] [US1] `tests/selector-contrato.test.js`: la tira lista **todas** las familias por fecha (D27), se monta dentro del modal (D28), `Elegir` vs `Subir` por receta y la cache `pmu_bib_v1` no repite peticion con la misma `revision` (D8/R8)
+- [X] T010 [P] [US1] `tests/selector-contrato.test.js`: la tira lista **todas** las familias por fecha (D27), se monta dentro del modal (D28), `Elegir` vs `Subir` por receta y la cache `pmu_bib_v1` no repite peticion con la misma `revision` (D8/R8)
 
 ### Implementation for User Story 1
 
@@ -95,7 +95,7 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 ### Implementation for User Story 2
 
 - [X] T019 [US2] `inc/class-pmu-sesion.php`: `guardar_subida()` calcula `madre`, `receta` y `sha` (sha de los bytes **antes** de `convertir_webp()`, R9) y numera `{madre}-{n}` (primer `n >= 2` libre del item, R11)
-- [ ] T020 [US2] `inc/class-pmu-sesion.php`: `promover_base($familia)` — el flag `base` se mueve comparando area `w*h`, **nunca** con `rename` (D6/R11): **no hace falta** — `PMU_Sesion::familias()` DERIVA la base por area (una sola verdad, sin flag persistido)
+- [X] T020 [US2] `inc/class-pmu-sesion.php`: `promover_base($familia)` — el flag `base` se mueve comparando area `w*h`, **nunca** con `rename` (D6/R11): **no hace falta** — `PMU_Sesion::familias()` DERIVA la base por area (una sola verdad, sin flag persistido)
 - [X] T021 [US2] `personalizador-pdf.php`: `handle_subida()` — dedupe por `sha` contra las **bases** del listado vigente (mismo alcance que la galeria, D24/R9) via `biblioteca_madre_por_contenido()` (seam testeable: el endpoint no tiene fase propia en el arnes)
 
 **Checkpoint**: US2 probable sola (E4 + E6.1)
@@ -171,15 +171,15 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `inc/`, `assets/
 
 **Purpose**: docs, constitucion, release y recorrido real
 
-- [ ] T037 [P] `AGENTS.md`: mapa (§2), convenciones (§5: familias `{madre}-{n}` y `origen: ref`), decisiones (§7), pruebas (§9: fase `biblioteca`) y errores (§11: `api:biblioteca:*`, `motor:descarga:ref:ausente`, y el invariante "no se purga un pedido referenciado" de D12)
-- [ ] T038 [P] `specs/004-woocommerce-pdf-personalization/contracts/sesion-item.md`: firmas nuevas (`fila_subida`, `usar_de_biblioteca`, `borrar_familia_dir`, `mutar_manifest_dir`, `resolver_ref`, `familias`, `familia_de`, `ruta_familia`; y `biblioteca_ruta_imagen`/`biblioteca_mime_de` en el plugin)
-- [ ] T039 [P] `.specify/memory/constitution.md`: enmienda §IV (familias `{madre}-{n}` y `origen: ref`: convenciones de `subidas/`, sin cambio estructural) + Sync Impact Report MINOR, sin tocar principios (y nota del cache de cliente: metadatos, nunca bytes)
-- [ ] T040 [P] `specs/INDICE.md` + `readme.txt` (changelog) + bump de version **solo en la cabecera** de `personalizador-pdf.php` -> 4.22.0
-- [ ] T041 `php tests/inventario_repo.php`, `php tests/sin_lectura.php` y `php tests/estado_pmu.php` en verde (leer la galeria no escribe catalogos)
+- [X] T037 [P] `AGENTS.md`: mapa (§2), convenciones (§5: familias `{madre}-{n}` y `origen: ref`), decisiones (§7), pruebas (§9: fase `biblioteca`) y errores (§11: `api:biblioteca:*`, `motor:descarga:ref:ausente`, y el invariante "no se purga un pedido referenciado" de D12)
+- [X] T038 [P] `specs/004-woocommerce-pdf-personalization/contracts/sesion-item.md`: firmas nuevas (`fila_subida`, `usar_de_biblioteca`, `borrar_familia_dir`, `mutar_manifest_dir`, `resolver_ref`, `familias`, `familia_de`, `ruta_familia`; y `biblioteca_ruta_imagen`/`biblioteca_mime_de` en el plugin)
+- [X] T039 [P] `.specify/memory/constitution.md`: enmienda §IV (familias `{madre}-{n}` y `origen: ref`: convenciones de `subidas/`, sin cambio estructural) + Sync Impact Report MINOR, sin tocar principios (y nota del cache de cliente: metadatos, nunca bytes)
+- [X] T040 [P] `specs/INDICE.md` + `readme.txt` (changelog) + bump de version **solo en la cabecera** de `personalizador-pdf.php` -> 4.22.0
+- [X] T041 `php tests/inventario_repo.php`, `php tests/sin_lectura.php` y `php tests/estado_pmu.php` en verde (leer la galeria no escribe catalogos)
 - [X] T043 [P] [US1] `assets/visor-pmu.js` (NUEVO, **extraido** de `cargador-pmu.js`): `PMUVisor.abrir({items, indice, acciones, fuente, titulo, tecnico})` con navegacion sin `await`, `<img>` reusado, precarga de vecinos y `decoding="async"` (D28)
 - [X] T044 [US1] `assets/cargador-pmu.js`: usar `PMUVisor` (eliminar `_abrirVisor`), mandar los `items` con `url` ya resuelta y el segmento **En este campo / Mis imagenes** (D28/D23)
 - [X] T045 [US1] `personalizador-pdf.php` + `assets/tienda.js`: `handle_subida` devuelve `url`; `PMU_FICHA.urls` publica las URLs de lo cargado; `op=imagen` sirve tambien `item_key`+`id` (D14/D23)
-- [ ] T046 [US1] Puertas del visor: **0 POST por paso** al navegar 5 fotos (la URL sale del mapa `id -> url`), checks en `tests/selector-contrato.test.js` y `tests/campos-contrato.test.js`
+- [X] T046 [US1] Puertas del visor: **0 POST por paso** al navegar 5 fotos (la URL sale del mapa `id -> url`), checks en `tests/selector-contrato.test.js` y `tests/campos-contrato.test.js`
 - [ ] T042 Recorrido manual en WP real (quickstart **E1-E8**, incluida la medicion de volumen de E8): 2 productos con la misma foto, compra, la fila ref al archivo de origen (sin `_comun`), borrado con aviso y vencimiento de sesiones
 
 ---
@@ -246,3 +246,19 @@ node --check assets/biblioteca-pmu.js        # T011 + T012 (modulo nuevo)
 - **No** se toca `engine/*` (el Motor no cambia) ni `modules/textmuy/`
 - Toda ruta nueva sale de `PMU_Uploads` (constitution §II) y todo dato vive en `uploads/pmu/` (§IV)
 - Referencias de decision: `spec.md` (D1-D28) y `research.md` (R1-R12)
+
+## Notas de cierre (2026-10-23, v4.22.3)
+
+- **T003** quedo **OBSOLETA** con el D11 revisado (no hay `_comun`). Junto a T022/T023/T024, son las
+  unicas `[~]` del plan.
+- **T010** se dio por cumplida **en la suite nueva** `tests/biblioteca-contrato.test.js` (40 checks):
+  tira, tap -> visor, `Elegir` por receta, cache y auto-sanado. No se duplicaron checks en
+  `selector-contrato` (ahi vive el contrato del recorte, spec 016/028).
+- **T020** se cumplio **por derivacion**: `PMU_Sesion::familias()` fija `base` por **area** (`w*h`);
+  no hay `promover_base()` ni `rename` (D6/R11 dice "flag", y el flag se calcula al leer).
+- **T041** corre con `sin_lectura` y `estado_pmu` en verde; el inventario del repo se **regenero** al
+  cerrar (el codigo de la 030 cambio despues de la primera corrida).
+- **T046** se cerro con el fix del mapa: `urlDeSubida()` reusa `PMU_FICHA.urls` (y anota lo que
+  resuelve por POST), asi que navegar el visor o repintar la tira cuesta **0 POST**.
+- **T042** (recorrido manual en WP real, quickstart E1-E8) queda **pendiente**: es la unica `[ ]`.
+- Los hallazgos del cierre estan en `spec.md` §6 (P1-P5) y las 3 filas nuevas de `AGENTS.md` §11.

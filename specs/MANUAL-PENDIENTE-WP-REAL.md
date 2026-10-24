@@ -217,6 +217,37 @@ Detalle completo por spec: [004/quickstart.md §1](./004-woocommerce-pdf-persona
     (Origen: [018/spec.md](./018-campos-consola-v4/spec.md) y
     [019/spec.md](./019-ranura-adaptativa/spec.md).)
 
+## 6e. Biblioteca de imagenes del comprador (030 T042)
+
+> Requiere el release **4.22.3** desplegado y **Ctrl+F5**. Con un producto vinculado a un PDF con
+> grupo y un campo de imagen (cargador); opcional: un pedido **pagado** propio (lado `orders/`).
+
+1. **Tira y visor** (E2): subir una foto en el campo, agregar al carrito y volver a la ficha. Al
+   abrir el modal de recorte, la tira **arriba de la escena** muestra **una** imagen (la `base`) y
+   el boton `Cargar imagen` queda a su izquierda; en Network hay **una** `op=listar`; al reabrir el
+   modal, **0** peticiones (revalidacion `sin_cambios`).
+2. **Elegir sin recomponer (0 bytes)** (E3): en la ficha de un **segundo** producto con el mismo
+   hueco, abrir el modal: el primario dice **Elegir**; al pulsarlo el hueco se llena con **solo**
+   `op=usar` en la red (0 bytes) y el `manifest.subidas[]` del item nuevo queda con `origen: ref`.
+3. **Reusar recomponiendo (version)** (E4): usar la misma foto en un hueco de **otra proporcion**
+   (o cambiar escala/desplazamiento): el primario dice **Subir**; se sube `{madre}-2.webp` y la
+   tira sigue mostrando **una** entrada (badge `N versiones`), con la `base` de mayor resolucion.
+4. **Sin duplicar entre pedidos** (E5): reusar una foto de un pedido **ya pagado**: la fila queda
+   `origen: ref` apuntando al archivo de **origen** (relativo a `uploads/pmu/`, sin copiar bytes) y
+   el PDF lo imprime resolviendo esa ruta. Si el origen se borra, el hueco sale **transparente**
+   (`motor:descarga:ref:ausente`), nunca un PDF roto.
+5. **Dedupe, aviso y borrado** (E6): subir **la misma** foto otra vez **reusa** la familia (no
+   aparece una segunda entrada). En el visor, **Borrar** nombra el carrito/pedido que la usa; al
+   confirmar desaparecen original y versiones y la tira se refresca sin volver a pedir todo.
+6. **TTL** (E6): un draft sin agregar se barre a las 24 h; un item de **carrito abandonado**, a los
+   30 dias (D26). `orders/` **nunca** se toca.
+7. **Vinculo con la cuenta** (E2/E3 con cuenta): comprar como invitado, crear la cuenta y volver a
+   entrar: el historial del invitado (`_pmu_sids`) aparece en la biblioteca del usuario.
+8. **Peso (E8)**: en la pestana Test, correr el smoke y leer la linea
+   `Biblioteca: peso por identidad (medicion P2/P4)`: identidades, fotos, KB y maximo de
+   contenedores por identidad (si supera 10 avisa `revisar P4`). Anotar los numeros: con ellos se
+   decide la **cuota** (D20/P2) y si hace falta `ver mas` (P4).
+
 ## 7. Cierre
 
 - [ ] §1 raiz unica OK (T017-parcial + T029-parcial)

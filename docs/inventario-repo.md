@@ -3,7 +3,7 @@
 > **GENERADO automaticamente** por `php tests/inventario_repo.php` — NO editar a mano.
 > La semantica (responsabilidad de cada archivo) vive en `AGENTS.md` seccion 2 y en
 > `modules/LEEME.md`; este reporte aporta los NUMEROS: peso, LOC, dependencias
-> cruzadas y candidatos a codigo muerto. Generado: 2026-10-23 17:55.
+> cruzadas y candidatos a codigo muerto. Generado: 2026-10-24 00:55.
 
 ## 1. Resumen por tipo
 
@@ -11,35 +11,35 @@
 |---|---:|---:|
 | CSS | 2 | 79,0 |
 | HTML | 2 | 132,2 |
-| JS assets | 11 | 471,6 |
+| JS assets | 11 | 473,9 |
 | JS modulo textmuy | 14 | 643,3 |
-| JS test | 7 | 131,0 |
+| JS test | 7 | 132,9 |
 | JS test modulo | 46 | 291,6 |
 | PHP admin | 7 | 102,1 |
-| PHP entry (plugin WP) | 1 | 313,4 |
+| PHP entry (plugin WP) | 1 | 317,3 |
 | PHP inc | 3 | 176,7 |
 | PHP motor | 7 | 134,6 |
 | PHP test CLI | 11 | 364,3 |
 | config | 6 | 13,4 |
-| doc | 164 | 1.548,0 |
+| doc | 164 | 1.560,8 |
 | otro | 10 | 12,7 |
-| **TOTAL** | **291** | **4.413,9** |
+| **TOTAL** | **291** | **4.434,8** |
 
-Codigo fuente (php/js/css/html): **111 archivos, 2.839,8 KB**. Docs (md/txt): 164. Config: 6.
+Codigo fuente (php/js/css/html): **111 archivos, 2.847,9 KB**. Docs (md/txt): 164. Config: 6.
 
 ## 2. Archivos de codigo mas pesados (top 15)
 
 | # | KB | Ruta | Tipo |
 |---|---:|---|---|
-| 1 | 313,4 | `personalizador-pdf.php` | PHP entry (plugin WP) |
+| 1 | 317,3 | `personalizador-pdf.php` | PHP entry (plugin WP) |
 | 2 | 276,4 | `tests/texto_puente.php` | PHP test CLI |
 | 3 | 252,6 | `modules/textmuy/js/editor.js` | JS modulo textmuy |
 | 4 | 130,0 | `modules/textmuy/index.html` | HTML |
 | 5 | 120,5 | `modules/textmuy/js/controls.js` | JS modulo textmuy |
 | 6 | 118,2 | `assets/admin.js` | JS assets |
 | 7 | 107,3 | `inc/class-pmu-uploads.php` | PHP inc |
-| 8 | 87,9 | `assets/selector-pmu.js` | JS assets |
-| 9 | 75,2 | `assets/tienda.js` | JS assets |
+| 8 | 88,5 | `assets/selector-pmu.js` | JS assets |
+| 9 | 76,3 | `assets/tienda.js` | JS assets |
 | 10 | 73,6 | `assets/mockups.js` | JS assets |
 | 11 | 65,6 | `inc/class-pmu-sesion.php` | PHP inc |
 | 12 | 57,1 | `modules/textmuy/js/fonts.js` | JS modulo textmuy |
@@ -64,15 +64,15 @@ enqueue, `<script src>`, etc.).
 | `admin/test.php` | PHP admin | 12,9 | 245 | - | - | <br>admin/page.php | 1 | OK |
 | `assets/admin.css` | CSS | 33,0 | 916 | - | - | - | 1 | OK |
 | `assets/admin.js` | JS assets | 118,2 | 1964 | - | - | - | 4 | OK |
-| `assets/biblioteca-pmu.js` | JS assets | 15,5 | 247 | - | - | - | 2 | OK |
+| `assets/biblioteca-pmu.js` | JS assets | 15,7 | 249 | - | - | - | 2 | OK |
 | `assets/campo-montar.js` | JS assets | 6,7 | 115 | - | - | - | 4 | OK |
-| `assets/cargador-pmu.js` | JS assets | 33,6 | 596 | - | - | - | 6 | OK |
+| `assets/cargador-pmu.js` | JS assets | 33,9 | 597 | - | - | - | 6 | OK |
 | `assets/miniaturas.js` | JS assets | 16,1 | 320 | - | - | - | 1 | OK |
 | `assets/mockup-geometria.js` | JS assets | 15,9 | 281 | - | - | - | 4 | OK |
 | `assets/mockup-render.js` | JS assets | 18,2 | 298 | - | - | - | 3 | OK |
 | `assets/mockups.js` | JS assets | 73,6 | 1425 | - | - | - | 6 | OK |
-| `assets/selector-pmu.js` | JS assets | 87,9 | 1393 | - | - | - | 5 | OK |
-| `assets/tienda.js` | JS assets | 75,2 | 1120 | - | - | - | 7 | OK |
+| `assets/selector-pmu.js` | JS assets | 88,5 | 1398 | - | - | - | 5 | OK |
+| `assets/tienda.js` | JS assets | 76,3 | 1127 | - | - | - | 7 | OK |
 | `assets/visor-pmu.js` | JS assets | 10,8 | 190 | - | - | - | 2 | OK |
 | `engine/Detector.php` | PHP motor | 35,5 | 923 | 38 | - | <br>personalizador-pdf.php<br>tests/envolturas.php<br>tests/motor_smoke.php<br>tests/parity.php | 4 | OK |
 | `engine/Imagen.php` | PHP motor | 15,0 | 325 | 12 | - | <br>personalizador-pdf.php<br>tests/motor_smoke.php | 2 | OK |
@@ -147,8 +147,8 @@ enqueue, `<script src>`, etc.).
 | `modules/textmuy/tests/sombra-posicion.test.js` | JS test modulo | 6,1 | 112 | - | - | - | 0 | ENTRADA CLI test |
 | `modules/textmuy/tests/sprite-canonico.test.js` | JS test modulo | 3,6 | 65 | - | - | - | 0 | ENTRADA CLI test |
 | `modules/textmuy/tests/tile-geometria.test.js` | JS test modulo | 2,8 | 28 | - | - | - | 0 | ENTRADA CLI test |
-| `personalizador-pdf.php` | PHP entry (plugin WP) | 313,4 | 5187 | 185 | <br>engine/Pdf.php<br>engine/Detector.php<br>engine/PngWriter.php<br>engine/Metadata.php<br>engine/Imagen.php<br>engine/Overlay.php<br>engine/Motor.php<br>inc/class-pmu-uploads.php<br>inc/class-pmu-sesion.php<br>inc/class-pmu-sesion.php<br>admin/pdfs.php<br>admin/pedidos.php<br>admin/page.php | - | 7 | ENTRADA plugin WP |
-| `tests/biblioteca-contrato.test.js` | JS test | 8,4 | 117 | - | - | - | 0 | ENTRADA CLI test |
+| `personalizador-pdf.php` | PHP entry (plugin WP) | 317,3 | 5256 | 187 | <br>engine/Pdf.php<br>engine/Detector.php<br>engine/PngWriter.php<br>engine/Metadata.php<br>engine/Imagen.php<br>engine/Overlay.php<br>engine/Motor.php<br>inc/class-pmu-uploads.php<br>inc/class-pmu-sesion.php<br>inc/class-pmu-sesion.php<br>admin/pdfs.php<br>admin/pedidos.php<br>admin/page.php | - | 7 | ENTRADA plugin WP |
+| `tests/biblioteca-contrato.test.js` | JS test | 10,3 | 140 | - | - | - | 0 | ENTRADA CLI test |
 | `tests/campos-contrato.test.js` | JS test | 29,8 | 441 | - | - | - | 0 | ENTRADA CLI test |
 | `tests/campos_migracion.php` | PHP test CLI | 12,3 | 142 | 10 | <br>inc/class-pmu-uploads.php | - | 0 | ENTRADA CLI test |
 | `tests/certificacion_hoja.php` | PHP test CLI | 13,6 | 219 | 16 | <br>inc/class-pmu-galeria.php<br>inc/class-pmu-uploads.php | - | 0 | ENTRADA CLI test |
@@ -179,7 +179,7 @@ conteo y los magicos (`__*`) estan excluidos.
 
 | Funcion | Definida en | Linea | Defs |
 |---|---|---:|---:|
-| `generate()` | `personalizador-pdf.php` | 6630 | 1 |
+| `generate()` | `personalizador-pdf.php` | 6714 | 1 |
 | `get_status()` | `tests/texto_puente.php` | 252 | 1 |
 | `get_transient()` | `tests/texto_puente.php` | 188 | 1 |
 | `register_activation_hook()` | `tests/texto_puente.php` | 203 | 1 |
@@ -193,7 +193,7 @@ _Ninguno._
 
 ## 7. Documentacion y configuracion (fuera de la tabla de codigo)
 
-- Docs (md/txt): **164** archivos, 1.548,0 KB.
+- Docs (md/txt): **164** archivos, 1.560,8 KB.
 - Config: **6** archivos (json/neon/lock).
 - Otros (10): .gitattributes, .gitignore, modules/.gitignore, modules/.gitkeep, modules/textmuy/.editorconfig, modules/textmuy/.gitattributes, modules/textmuy/.gitignore, tests/fixtures/exacto_b.jpg, tests/fixtures/foto_a.png, tests/fixtures/paleta_b.png
 
