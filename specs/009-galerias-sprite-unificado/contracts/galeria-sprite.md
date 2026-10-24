@@ -57,7 +57,7 @@ Reglas Google: estado de preview **aislado** de `loadedFonts`/`loadingPromises` 
 
 - Progreso: `Completando miniaturas: N/M restantes…` mientras F1.
 - Éxito: `Miniaturas listas.` (vuelve a I1 en la próxima apertura).
-- Error: mensaje exacto del motor o de red + botón **Reintentar**.
+- Error: mensaje exacto del motor o de red + botón **Reintentar** en **las tres** galerías (T037 de la revisión 2026-10-24: al cerrar la 009 el botón existía solo en `fuentes-galeria.js`; en `galeria.js` el estado `ausente` impedía incluso reintentar al reabrir).
 - **Retirados**: botón "Generar miniaturas" (`fuentes-galeria.js`) y botón "Miniaturas" (`controls.js`), con su markup/CSS asociado.
 
 ## Compatibilidad con lo vigente

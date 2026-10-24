@@ -14,6 +14,14 @@
 - **[Story]**: US1 · US2 · US3 · US4 (mapa directo al spec)
 - Rutas exactas en cada descripción
 
+## Estado de las tareas (revision 2026-10-24)
+
+- `[X]` — hecho y verificado (CLI o codigo visible).
+- `[~]` — hecho con desviacion (se documenta en la propia linea) o a medias.
+- `[ ]` — pendiente (recorrido manual en WP real o tarea de esta revision).
+
+Contexto: la feature se implemento por etapas RC46-RC73 **sin** actualizar este archivo (quedo como borrador). La revision del 2026-10-24 marco cada tarea con su estado real, agrego T037-T039 (Phase 8) y corrigio los datos rancios (suites, versiones, rutas). Detalle en `spec.md` §Estado real y en `quickstart.md` §1/§2bis.
+
 ## Path Conventions
 
 plugin para WordPress "Personalizador PDF" con módulo integrado (plan.md §Project Structure): `inc/` (motor PHP), `modules/textmuy/` (cliente JS/CSS + `tests/`), `assets/` (ThumbEngine, sin cambios), `uploads/pmu/{fonts,img,tm-presets}/` (dato del admin), `tests/` (suites del plugin).
@@ -24,9 +32,9 @@ plugin para WordPress "Personalizador PDF" con módulo integrado (plan.md §Proj
 
 **Purpose**: línea base verificable antes de tocar el motor y el cliente.
 
-- [ ] T001 Respaldar los inventarios del espejo y preparar el estado de prueba de E1 (copia de `uploads/pmu/fonts/fonts.json`, `uploads/pmu/img/img.json`, `uploads/pmu/tm-presets/presets.json`; anotar si existen `thumbs.webp` y `thumbs.sprite_firma`)
-- [ ] T002 [P] Registrar la línea base de puertas en verde antes de empezar: `php -l` (inc/admin/engine), `php tests/motor_smoke.php`, `php tests/parity.php`, `node --check` + suites en `modules/textmuy/tests/` (guardar salida como evidencia)
-- [ ] T003 [P] Medir el estado actual de geometría (evidencia "antes" de SC-006): en `modules/textmuy/tests/galerias.browser.js`, abrir la galería de fuentes con hoja simulada y anotar `tile.clientWidth/Height` y `getComputedStyle(tile).aspectRatio` (se usará en T031)
+- [~] T001 Respaldar los inventarios del espejo y preparar el estado de prueba de E1 (copia de `uploads/pmu/fonts/fonts.json`, `uploads/pmu/img/img.json`, `uploads/pmu/tm-presets/presets.json`; anotar si existen `thumbs.webp` y `thumbs.sprite_firma`)
+- [X] T002 [P] Registrar la línea base de puertas en verde antes de empezar: `php -l` (inc/admin/engine), `php tests/motor_smoke.php`, `php tests/parity.php`, `node --check` + suites en `modules/textmuy/tests/` (guardar salida como evidencia)
+- [~] T003 [P] Medir el estado actual de geometría (evidencia "antes" de SC-006): en `modules/textmuy/tests/galerias.browser.js`, abrir la galería de fuentes con hoja simulada y anotar `tile.clientWidth/Height` y `getComputedStyle(tile).aspectRatio` (se usará en T031)
 
 ---
 
@@ -36,10 +44,10 @@ plugin para WordPress "Personalizador PDF" con módulo integrado (plan.md §Proj
 
 **⚠️ CRITICAL**: ninguna historia puede cerrarse hasta completar esta fase.
 
-- [ ] T004 Generalizar `PMU_Uploads::sprite()` en `inc/class-pmu-uploads.php` (líneas ~1339-1377): mover fuera del `if ($ambito === 'img')` la validación de firma (`json_decode($firma) === [thumbs.w, thumbs.h, thumbs.c, items]` del inventario en disco), la validación de dimensiones (`getimagesize`: ancho === `c × w`; alto === `ceil(max(1, maxId) / c) × h`) y la escritura final de `thumbs.sprite_firma`, para todo ámbito de `AMBITOS_GALERIA`; conservar el orden: invalidar (`guardar_catalogo`) → mover archivo → releer y comparar `items` → escribir firma; conservar el orden de validación vigente (firma → dimensiones → tamaño/formato, ver `contracts/motor-sprite.md`) y los mensajes exactos (`motor:sprite:catalogo:desactualizado`, `motor:sprite:dimensiones:invalidas`, `motor:sprite:archivo:*`, `motor:sprite:directorio:no_escribible`)
-- [ ] T005 Invalidar la certificación en los tres ámbitos: en `inc/class-pmu-uploads.php::guardar_catalogo()` (líneas ~463-470) el `unset($cat['thumbs']['sprite_firma'])` debe aplicar a `fonts`, `img` y `tm-presets` (hoy solo `img`), manteniendo la escritura atómica `.tmp` + `rename`
-- [ ] T006 [P] Extender `tests/motor_smoke.php` con los casos del contrato `contracts/motor-sprite.md`: (a) `op=sprite` con firma válida certifica `fonts` (escribe `thumbs.sprite_firma` y responde `spriteUrl` con `?v=filemtime`); (b) firma rancia ⇒ `motor:sprite:catalogo:desactualizado`; (c) dimensiones que no calzan ⇒ `motor:sprite:dimensiones:invalidas`; (d) archivo > 4 MB (`SPRITE_MAX_BYTES`) ⇒ `motor:sprite:archivo:tamano`; (e) no-WEBP ⇒ `motor:sprite:archivo:formato` (en ambos, firma válida y dimensiones correctas: el motor llega a tamaño/formato recién después de firma → dimensiones)
-- [ ] T007 [P] Extender `tests/motor_smoke.php` con el caso de invalidación: tras un `alta`/`baja`/`editar` en cada ámbito, el inventario queda sin `thumbs.sprite_firma` y la lectura canónica posterior debe regenerar (deja de estar certificada)
+- [X] T004 Generalizar `PMU_Uploads::sprite()` en `inc/class-pmu-uploads.php` (hoy 2456-2497): mover fuera del `if ($ambito === 'img')` la validación de firma (`json_decode($firma) === [thumbs.w, thumbs.h, thumbs.c, items]` del inventario en disco), la validación de dimensiones (`getimagesize`: ancho === `c × w`; alto === `ceil(max(1, maxId) / c) × h`) y la escritura final de `thumbs.sprite_firma`, para todo ámbito de `AMBITOS_GALERIA`; conservar el orden: invalidar (`guardar_catalogo`) → mover archivo → releer y comparar `items` → escribir firma; conservar el orden de validación vigente (firma → dimensiones → tamaño/formato, ver `contracts/motor-sprite.md`) y los mensajes exactos (`motor:sprite:catalogo:desactualizado`, `motor:sprite:dimensiones:invalidas`, `motor:sprite:archivo:*`, `motor:sprite:directorio:no_escribible`)
+- [X] T005 Invalidar la certificación en los tres ámbitos: en `inc/class-pmu-uploads.php::guardar_catalogo()` (hoy 1046-1054) el `unset($cat['thumbs']['sprite_firma'])` debe aplicar a `fonts`, `img` y `tm-presets` (hoy solo `img`), manteniendo la escritura atómica `.tmp` + `rename`
+- [X] T006 [P] **Hecho por otra via (equivalente y canonica): `tests/certificacion_hoja.php`, checks A-E** — Extender `tests/motor_smoke.php` con los casos del contrato `contracts/motor-sprite.md`: (a) `op=sprite` con firma válida certifica `fonts` (escribe `thumbs.sprite_firma` y responde `spriteUrl` con `?v=filemtime`); (b) firma rancia ⇒ `motor:sprite:catalogo:desactualizado`; (c) dimensiones que no calzan ⇒ `motor:sprite:dimensiones:invalidas`; (d) archivo > 4 MB (`SPRITE_MAX_BYTES`) ⇒ `motor:sprite:archivo:tamano`; (e) no-WEBP ⇒ `motor:sprite:archivo:formato` (en ambos, firma válida y dimensiones correctas: el motor llega a tamaño/formato recién después de firma → dimensiones)
+- [X] T007 [P] **Hecho en `tests/certificacion_hoja.php` (check D: mutar deja el catalogo sin firma)** — Extender `tests/motor_smoke.php` con el caso de invalidación: tras un `alta`/`baja`/`editar` en cada ámbito, el inventario queda sin `thumbs.sprite_firma` y la lectura canónica posterior debe regenerar (deja de estar certificada)
 
 **Checkpoint**: `php -l` + `motor_smoke` en verde; un `POST op=sprite` de prueba con firma correcta deja `fonts.json` certificado.
 
@@ -51,11 +59,11 @@ plugin para WordPress "Personalizador PDF" con módulo integrado (plan.md §Proj
 
 **Independent Test**: en `modules/textmuy/tests/galerias.browser.js` (y manualmente en WP): abrir fuentes/imágenes/presets con hoja certificada ⇒ solo `*.json` + `thumbs.webp`; `fontFace === 0`, `link[data-textmuy-font] === 0`, `canvas` por celda en las tres.
 
-- [ ] T008 [US1] Verificar y ajustar `ensureSpriteCanonico`/`drawTileCanonico` en `modules/textmuy/js/api.js` (líneas ~293-443): acepta hoja solo si `spriteFirma === firma(inventario)` y dimensiones `c × w` por `ceil(maxId/c) × h`; devuelve `null` con causa registrada cuando no certifica (base para el estado `listando` de US2)
-- [ ] T009 [P] [US1] `modules/textmuy/js/fuentes-galeria.js`: con hoja no certificada, pintar **placeholder de nombre** en toda celda (cero `renderFontPreview` por tile al abrir) y declarar estado `listando`; con hoja certificada, dibujar desde `drawTileCanonico('fonts', id)` (celda = `id-1`; excluir tombstones y `id > maxId`)
-- [ ] T010 [P] [US1] `modules/textmuy/js/galeria.js`: reemplazar la reconstrucción silenciosa de `asegurarSpriteImg()` por lectura canónica con placeholder cuando no certifica (imágenes y pestaña de presets ya usan `drawTileCanonico`; quitar el `<img>` de originales como fallback del camino de apertura)
-- [ ] T011 [P] [US1] `modules/textmuy/js/controls.js`: la galería inferior de presets usa solo lectura canónica al abrir (sin `ensureThumbnail` por tile ni `ensureSprite` en el camino de apertura)
-- [ ] T012 [US1] Extender `modules/textmuy/tests/galerias.browser.js`: escenario "hoja certificada" para `fonts` e `img` (y `tm-presets` si el harness lo permite) con asserts SC-001: `hojas === 1`, `fontFace === 0`, `linksGoogle === 0`, `canvases === N`, `ambito` correcto
+- [X] T008 [US1] Verificar y ajustar `ensureSpriteCanonico`/`drawTileCanonico` en `modules/textmuy/js/api.js` (líneas ~293-443): acepta hoja solo si `spriteFirma === firma(inventario)` y dimensiones `c × w` por `ceil(maxId/c) × h`; devuelve `null` con causa registrada cuando no certifica (base para el estado `listando` de US2)
+- [X] T009 [P] [US1] `modules/textmuy/js/fuentes-galeria.js`: con hoja no certificada, pintar **placeholder de nombre** en toda celda (cero `renderFontPreview` por tile al abrir) y declarar estado `listando`; con hoja certificada, dibujar desde `drawTileCanonico('fonts', id)` (celda = `id-1`; excluir tombstones y `id > maxId`)
+- [X] T010 [P] [US1] `modules/textmuy/js/galeria.js`: reemplazar la reconstrucción silenciosa de `asegurarSpriteImg()` por lectura canónica con placeholder cuando no certifica (imágenes y pestaña de presets ya usan `drawTileCanonico`; quitar el `<img>` de originales como fallback del camino de apertura)
+- [X] T011 [P] [US1] `modules/textmuy/js/controls.js`: la galería inferior de presets usa solo lectura canónica al abrir (sin `ensureThumbnail` por tile ni `ensureSprite` en el camino de apertura)
+- [X] T012 [US1] **Cerrado en la revision (T039): ademas de `fonts`, la puerta cubre `img` certificada con 0 originales y celda dibujada desde la hoja (`tm-presets` no tiene stub de catalogo en el harness)** — Extender `modules/textmuy/tests/galerias.browser.js`: escenario "hoja certificada" para `fonts` e `img` (y `tm-presets` si el harness lo permite) con asserts SC-001: `hojas === 1`, `fontFace === 0`, `linksGoogle === 0`, `canvases === N`, `ambito` correcto
 - [ ] T013 [US1] Validación manual E2 en WordPress (`quickstart.md` §2): F5 + reapertura de las tres galerías con Network abierto ⇒ 0 `.ttf/.woff2`, 0 originales, miniaturas completas; registrar evidencia de SC-001
 
 **Checkpoint**: US1 verificable de punta a punta con una hoja existente (la de `img` ya puede certificarse hoy; `fonts`/`tm-presets` quedan completas tras US2).
@@ -72,18 +80,18 @@ plugin para WordPress "Personalizador PDF" con módulo integrado (plan.md §Proj
 
 ### Implementación
 
-- [ ] T014 [US2] Núcleo de dos fases en `modules/textmuy/js/api.js`: `asegurarHojaCompleta(ambito, {renderTile, onProgress})` — F1: por cada celda pendiente producir canvas en memoria (contador `dibujados`/`fallos`); F2: solo si `fallos === 0`, `ThumbEngine.ensureSprite({scope, items del inventario, ancho/alto/columnas del inventario, firma, render: devuelve los canvases ya hechos})`; `false` si hubo fallos (sin POST)
-- [ ] T015 [US2] Reentrancia y causas en `modules/textmuy/js/api.js`: mapa `generando[ambito]` (la segunda llamada espera a la primera; se limpia en `finally`) y clasificación de error según R6 — `catalogo:desactualizado` ⇒ reléer inventario y reintentar **una vez**; `dimensiones:invalidas` / `archivo:*` / `directorio:no_escribible` ⇒ sin reintento; red ⇒ pendiente para la próxima apertura
-- [ ] T016 [P] [US2] `modules/textmuy/js/fonts.js`: carga de preview para Google por **nombre de familia** (sin `wght@`, sin `text=`), concurrencia ≤ 4, espera 3 s, 1 reintento, y mapa de estado de preview **aislado** de `loadedFonts`/`loadingPromises` del render; preview de físicas con `FontFace` de su archivo (una por celda)
-- [ ] T017 [P] [US2] Enganche de apertura en `modules/textmuy/js/galeria.js`, `modules/textmuy/js/fuentes-galeria.js` y `modules/textmuy/js/controls.js`: llamar `asegurarHojaCompleta` cuando la lectura canónica devuelva `null` o falten celdas, con progreso `Completando miniaturas: N/M…` y repintado al terminar
-- [ ] T018 [US2] Retirar el botón "Generar miniaturas": quitar markup en `index.html`, listener en `modules/textmuy/js/fuentes-galeria.js` y regla `.tt-galpanel-gensprite` en `modules/textmuy/css/style.css`
-- [ ] T019 [US2] Retirar el botón "Miniaturas": quitar markup en `index.html`, `generarMiniaturasPresets`/listener en `modules/textmuy/js/controls.js` (la generación queda en el flujo automático)
-- [ ] T020 [US2] Estado de error con causa en las tres galerías (`modules/textmuy/js/galeria.js`, `fuentes-galeria.js`, `controls.js`): mostrar operación + ámbito + motivo exacto y botón **Reintentar** (solo en error); eliminar el mensaje genérico "No se pudo generar la hoja (sin puente o sin catalogo)"
+- [X] T014 [US2] Núcleo de dos fases en `modules/textmuy/js/api.js`: `asegurarHojaCompleta(ambito, {renderTile, onProgress})` — F1: por cada celda pendiente producir canvas en memoria (contador `dibujados`/`fallos`); F2: solo si `fallos === 0`, `ThumbEngine.ensureSprite({scope, items del inventario, ancho/alto/columnas del inventario, firma, render: devuelve los canvases ya hechos})`; `false` si hubo fallos (sin POST)
+- [X] T015 [US2] Reentrancia y causas en `modules/textmuy/js/api.js`: mapa `generando[ambito]` (la segunda llamada espera a la primera; se limpia en `finally`) y clasificación de error según R6 — `catalogo:desactualizado` ⇒ reléer inventario y reintentar **una vez**; `dimensiones:invalidas` / `archivo:*` / `directorio:no_escribible` ⇒ sin reintento; red ⇒ pendiente para la próxima apertura
+- [X] T016 [P] [US2] `modules/textmuy/js/fonts.js`: carga de preview para Google por **nombre de familia** (sin `wght@`, sin `text=`), concurrencia ≤ 4, espera 3 s, 1 reintento, y mapa de estado de preview **aislado** de `loadedFonts`/`loadingPromises` del render; preview de físicas con `FontFace` de su archivo (una por celda)
+- [X] T017 [P] [US2] Enganche de apertura en `modules/textmuy/js/galeria.js`, `modules/textmuy/js/fuentes-galeria.js` y `modules/textmuy/js/controls.js`: llamar `asegurarHojaCompleta` cuando la lectura canónica devuelva `null` o falten celdas, con progreso `Completando miniaturas: N/M…` y repintado al terminar
+- [X] T018 [US2] Retirar el botón "Generar miniaturas": quitar markup en `index.html`, listener en `modules/textmuy/js/fuentes-galeria.js` y regla `.tt-galpanel-gensprite` en `modules/textmuy/css/style.css`
+- [X] T019 [US2] Retirar el botón "Miniaturas": quitar markup en `index.html`, `generarMiniaturasPresets`/listener en `modules/textmuy/js/controls.js` (la generación queda en el flujo automático)
+- [X] T020 [US2] **Cerrado en la revision (T037, RC74): la causa exacta se muestra en las tres galerias y las tres tienen boton `Reintentar`; en `galeria.js` el estado de error volvio a ser reintentable (antes quedaba `ausente`)** — Estado de error con causa en las tres galerías (`modules/textmuy/js/galeria.js`, `fuentes-galeria.js`, `controls.js`): mostrar operación + ámbito + motivo exacto y botón **Reintentar** (solo en error); eliminar el mensaje genérico "No se pudo generar la hoja (sin puente o sin catalogo)"
 
 ### Tests
 
-- [ ] T021 [P] [US2] Nueva suite `modules/textmuy/tests/hoja-generacion.test.js` (Node, stubs de `fetch`/`ThumbEngine`): (a) `fallos > 0` ⇒ **0** POST; (b) éxito ⇒ **1** POST con `firma` = inventario; (c) reentrancia: 2 llamadas ⇒ 1 POST; (d) `catalogo:desactualizado` ⇒ relée y 1 reintento; (e) causa propagada sin mensajes genéricos
-- [ ] T022 [US2] Extender `modules/textmuy/tests/galerias.browser.js`: sin hoja ⇒ genera ⇒ **1** `POST op=sprite` ⇒ segunda apertura con 0 descargas de contenido (asserts de SC-002/SC-004)
+- [X] T021 [P] [US2] Nueva suite `modules/textmuy/tests/hoja-generacion.test.js` (Node, stubs de `fetch`/`ThumbEngine`): (a) `fallos > 0` ⇒ **0** POST; (b) éxito ⇒ **1** POST con `firma` = inventario; (c) reentrancia: 2 llamadas ⇒ 1 POST; (d) `catalogo:desactualizado` ⇒ relée y 1 reintento; (e) causa propagada sin mensajes genéricos
+- [X] T022 [US2] **Cerrado en la revision (T038): escenario "sin hoja => 1 POST => 2a apertura 0 descargas/0 escrituras" en la puerta de navegador** — Extender `modules/textmuy/tests/galerias.browser.js`: sin hoja ⇒ genera ⇒ **1** `POST op=sprite` ⇒ segunda apertura con 0 descargas de contenido (asserts de SC-002/SC-004)
 
 ### Validación manual
 
@@ -101,10 +109,10 @@ plugin para WordPress "Personalizador PDF" con módulo integrado (plan.md §Proj
 
 **Independent Test**: clic en una celda Google pendiente ⇒ 1 request `css2?family=…` (sin `wght@`, sin `text=`) ⇒ celda con tipo real ⇒ F5 la conserva sin descargas.
 
-- [ ] T024 [US3] `modules/textmuy/js/fuentes-galeria.js::previewSeleccionada`: al seleccionar, si la celda está pendiente, esperar la carga (física: su archivo; Google: familia por nombre vía T016) y redibujar solo esa celda; estado intermedio visible en `status` sin romper la selección
-- [ ] T025 [US3] `modules/textmuy/js/fonts.js`: exponer la carga de preview por nombre de familia y garantizar el aislamiento del mapa de preview vs el mapa del render (un preview `ok` NO debe hacer que `loadFont(spec)` omita su carga con el spec completo del inventario)
-- [ ] T026 [US3] `modules/textmuy/js/api.js` + `modules/textmuy/js/fuentes-galeria.js`: cuando la familia elegida quede dibujada, agregar ese canvas a `dibujados` y, si no quedan pendientes, disparar F2 (una escritura) para que la celda quede persistida en la hoja
-- [ ] T027 [P] [US3] Extender `modules/textmuy/tests/galerias.browser.js`: clic en celda Google ⇒ asserts de 1 request `css2` sin `wght@`/`text=`, celda con canvas real y persistencia posterior (1 `POST`) cuando no quedan pendientes
+- [X] T024 [US3] `modules/textmuy/js/fuentes-galeria.js::previewSeleccionada`: al seleccionar, si la celda está pendiente, esperar la carga (física: su archivo; Google: familia por nombre vía T016) y redibujar solo esa celda; estado intermedio visible en `status` sin romper la selección
+- [X] T025 [US3] `modules/textmuy/js/fonts.js`: exponer la carga de preview por nombre de familia y garantizar el aislamiento del mapa de preview vs el mapa del render (un preview `ok` NO debe hacer que `loadFont(spec)` omita su carga con el spec completo del inventario)
+- [X] T026 [US3] `modules/textmuy/js/api.js` + `modules/textmuy/js/fuentes-galeria.js`: cuando la familia elegida quede dibujada, agregar ese canvas a `dibujados` y, si no quedan pendientes, disparar F2 (una escritura) para que la celda quede persistida en la hoja
+- [X] T027 [P] [US3] **Cerrado en la revision (T039): la puerta clickea una celda Google y exige 1 `css2?family=` sin `wght@` ni `text=` + celda redibujada** — Extender `modules/textmuy/tests/galerias.browser.js`: clic en celda Google ⇒ asserts de 1 request `css2` sin `wght@`/`text=`, celda con canvas real y persistencia posterior (1 `POST`) cuando no quedan pendientes
 - [ ] T028 [US3] Validación manual E4 en WordPress con evidencia en `specs/009-galerias-sprite-unificado/quickstart.md` §2: clic en celda Google ⇒ tipo real; F5 ⇒ conservado sin descargas; con Google bloqueado ⇒ celda conserva el nombre con causa (SC-007)
 
 **Checkpoint**: las tipografías Google dejan de verse todas iguales y su miniatura se conserva.
@@ -117,9 +125,9 @@ plugin para WordPress "Personalizador PDF" con módulo integrado (plan.md §Proj
 
 **Independent Test**: medir en navegador ⇒ 2 columnas de ~175 px y `height ≈ round(width × h/w) ± 2` tanto con miniatura como con nombre; 0 celdas cortadas.
 
-- [ ] T029 [P] [US4] `modules/textmuy/js/catalog.js::geometriaTiles`: devolver el ratio **simplificado con MCD** (p. ej. `180/30 → 6 / 1`) manteniendo `w`, `h` y `col`; actualizar `modules/textmuy/tests/tile-geometria.test.js` (incluye el caso `180/30` y `200/100`)
-- [ ] T030 [P] [US4] `modules/textmuy/css/style.css` (bloque `.tt-galpanel-*`): garantizar el alto completo del tile — `aspect-ratio: var(--tt-gal-ratio)` + defaults por `data-ambito` (fonts 6/1 · img 1/1 · presets 2/1) y, según la medición de T003/T032, corregir la causa del recorte (canvas con caja completa; borde de 1 px en tiras de tipografías)
-- [ ] T031 [US4] Extender `modules/textmuy/tests/galerias.browser.js` con el contrato medible: `clientHeight ≈ round(clientWidth × h/w) ± 2`, 2 columnas en fuentes, misma geometría con placeholder y con canvas, y `100/100` / `200/100` en las otras dos galerías
+- [X] T029 [P] [US4] `modules/textmuy/js/catalog.js::geometriaTiles`: devolver el ratio **simplificado con MCD** (p. ej. `180/30 → 6 / 1`) manteniendo `w`, `h` y `col`; actualizar `modules/textmuy/tests/tile-geometria.test.js` (incluye el caso `180/30` y `200/100`)
+- [X] T030 [P] [US4] `modules/textmuy/css/style.css` (bloque `.tt-galpanel-*`): garantizar el alto completo del tile — `aspect-ratio: var(--tt-gal-ratio)` + defaults por `data-ambito` (fonts 6/1 · img 1/1 · presets 2/1) y, según la medición de T003/T032, corregir la causa del recorte (canvas con caja completa; borde de 1 px en tiras de tipografías)
+- [X] T031 [US4] **Cerrado en la revision (T038): ratios sincronizados (`6 / 1`, `1 / 1`, `2 / 1`) ademas del contrato de alto `round(ancho × h / w) ± 2` y de ancho/alto legibles** — Extender `modules/textmuy/tests/galerias.browser.js` con el contrato medible: `clientHeight ≈ round(clientWidth × h/w) ± 2`, 2 columnas en fuentes, misma geometría con placeholder y con canvas, y `100/100` / `200/100` en las otras dos galerías
 - [ ] T032 [US4] Registrar la medición "antes" (T003) vs "después" (T031) en `quickstart.md` §2 E6 (evidencia de SC-006) e identificar/documentar la causa raíz hallada del recorte a mitad de alto
 
 **Checkpoint**: la galería de tipografías se ve legible y sin celdas cortadas en el panel real.
@@ -132,10 +140,10 @@ plugin para WordPress "Personalizador PDF" con módulo integrado (plan.md §Proj
 
 **Purpose**: documentación, caché y cierre de puertas (SC-008, SC-010).
 
-- [ ] T033 [P] Actualizar `modules/textmuy/AGENTS.md`: invariante "abrir = 0 descargas" acotado a "con hoja certificada"; generación automática de huecos; retiro de los botones de generación; geometría con ratio simplificado; Google por familia única
-- [ ] T034 [P] Sync Impact Report en **las dos constituciones** con la aclaración de lectura/generación de hojas para los 3 ámbitos y la regla de "una escritura por apertura", sin cambio de contrato del puente: (a) `modules/textmuy/.specify/memory/constitution.md` (**v3.1.2 → v3.1.3**, PATCH, versionada; nota: v3.1.2 ya se consumió el 2026-10-01 con el acuse `textmuy-bridge-ok` del handshake del puente, asi que esta enmienda arranca desde ahi) con dos cambios: (i) reemplazar la cláusula literal "Regenerarla es una operacion EXCEPCIONAL (una vez por cambio real)… Las galerias MUST NOT reconstruir la hoja al abrirse" (líneas 155-160) por "las galerias MUST generar automaticamente **solo los huecos** cuando la hoja no este certificada, con **una sola escritura por apertura**; con hoja certificada: cero reconstruccion y cero descargas"; (ii) su afirmación de que `op=sprite` "certifica el catalogo" pasa a cumplirse para `fonts`/`tm-presets` con T004/T005 — y (b) `.specify/memory/constitution.md` del plugin (2.0.1 → 2.0.2, PATCH; ojo: `.specify/` está en `.gitignore`, el reporte es local y no viaja con el repo)
-- [ ] T035 Bump `?v=RCn` en `modules/textmuy/index.html` y `modules/textmuy/render-core.html` (+ `css/style.css?v=`) y actualizar la versión vigente en `modules/textmuy/AGENTS.md` §4.6 (Ctrl+F5 al probar)
-- [ ] T036 Correr `quickstart.md` §1 completo y §4 (mapeo SC→evidencia); actualizar `specs/INDICE.md` (mover 009 de "En especificación" a "Activos" con su pendiente manual WP real, si el recorrido queda completo)
+- [X] T033 [P] Actualizar `modules/textmuy/AGENTS.md`: invariante "abrir = 0 descargas" acotado a "con hoja certificada"; generación automática de huecos; retiro de los botones de generación; geometría con ratio simplificado; Google por familia única
+- [X] T034 [P] **Aplicado en esta revision: modulo v3.2.0 -> v3.2.1 (versionado, repo del modulo) y plugin v2.2.0 -> v2.2.1 (local: `.specify/` esta gitignored)** — Sync Impact Report en **las dos constituciones** con la aclaración de lectura/generación de hojas para los 3 ámbitos y la regla de "una escritura por apertura", sin cambio de contrato del puente: (a) `modules/textmuy/.specify/memory/constitution.md` (**v3.2.0 -> v3.2.1**, PATCH, versionada; nota: la enmienda planificada como v3.1.3 nunca se aplico y la constitucion avanzo a v3.2.0 por otro feature (specs/002-text-tab), asi que esta enmienda arranca desde ahi) con dos cambios: (i) reemplazar la cláusula literal "Regenerarla es una operacion EXCEPCIONAL (una vez por cambio real)… Las galerias MUST NOT reconstruir la hoja al abrirse" (hoy 186-195) por "las galerias MUST generar automaticamente **solo los huecos** cuando la hoja no este certificada, con **una sola escritura por apertura**; con hoja certificada: cero reconstruccion y cero descargas"; (ii) su afirmación de que `op=sprite` "certifica el catalogo" pasa a cumplirse para `fonts`/`tm-presets` con T004/T005 — y (b) `.specify/memory/constitution.md` del plugin (v2.2.0 -> v2.2.1, PATCH; ojo: `.specify/` está en `.gitignore`, el reporte es local y no viaja con el repo)
+- [X] T035 Bump `?v=RCn` en `modules/textmuy/index.html` y `modules/textmuy/render-core.html` (+ `css/style.css?v=`) y actualizar la versión vigente en `modules/textmuy/AGENTS.md` §4.6 (Ctrl+F5 al probar)
+- [X] T036 Correr `quickstart.md` §1 completo y §4 (mapeo SC→evidencia); actualizar `specs/INDICE.md` (mover 009 de "En especificación" a "Activos" con su pendiente manual WP real, si el recorrido queda completo)
 
 ---
 
@@ -219,5 +227,17 @@ Task: "fonts.js: preview Google por nombre, concurrencia 4"      # T016
 - No hay tareas de "escribir el test antes": los tests amplían suites existentes y se ejecutan al cerrar cada historia.
 - El contrato del puente NO cambia (payload de `op=sprite` intacto): el despliegue es conjunto plugin+módulo por el alcance de la validación server-side, no por cambios de forma.
 - Al tocar JS/CSS del módulo: bump `?v=RCn` en ambos HTML (T035) y Ctrl+F5 para probar.
+
+---
+
+## Phase 8: Revision 2026-10-24 (huecos detectados al reconciliar la spec)
+
+**Purpose**: cerrar los tres huecos reales que la implementacion por etapas (RC46-RC73) dejo abiertos. Nacen de la revision de la spec 009, no de una historia de usuario nueva: el contrato ya los exigia (T020, T012/T022, T027/T031).
+
+- [X] T037 [Revision] Boton **Reintentar** en la galeria de imagenes y en el panel de presets (hoy existe solo en `fuentes-galeria.js`), y estado de error reintentable en `galeria.js` (hoy queda en `ausente` y ni reabrir la galeria reintenta). Archivos: `modules/textmuy/js/galeria.js`, `modules/textmuy/js/controls.js`, `modules/textmuy/css/style.css`. Cierre: `node --check` + `hoja-generacion`/`galeria-items`/`invalidacion` en verde.
+- [X] T038 [Revision] Sincronizar `modules/textmuy/tests/galerias.browser.js` con `geometriaTiles` (ratio simplificado: `6 / 1` fuentes, `1 / 1` imagenes, `2 / 1` presets; alto `round(ancho × h / w) ± 2`) y agregar el escenario "sin hoja => 1 `POST op=sprite` => segunda apertura con 0 descargas de contenido" (T022).
+- [X] T039 [Revision] Extender el test de navegador con el contrato de Google del preview (1 request `css2?family=` sin `wght@` ni `text=`) y la lectura certificada de `img`/`tm-presets` con 0 descargas (T012/T027).
+
+**Puerta**: `modules/textmuy/tests/galerias.browser.js` exige Chrome + **Playwright**; al 2026-10-24 Playwright no esta instalado en el entorno de desarrollo y la puerta se corrio **sin tocar el repo** (Playwright en `%TEMP%` + `NODE_PATH`; receta en `modules/textmuy/AGENTS.md` §7.29). Resultado de la revision: **45/45 suites Node + `galerias.browser.js` en verde** (T037/T038/T039 cerradas; la puerta ahora cubre SC-001/002/004/005/006 y el Reintentar de las tres galerias).
 
 

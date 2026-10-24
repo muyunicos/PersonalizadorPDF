@@ -16,7 +16,7 @@ Las tres galerías del editor (imágenes, tipografías, estilos guardados) compa
 
 **Storage**: archivos planos en `uploads/pmu/{fonts,img,tm-presets}/` (inventario JSON con escritura atómica `.tmp` + `rename`, hoja `thumbs.webp` por ámbito); sin base de datos.
 
-**Testing**: `php -l`, `php tests/motor_smoke.php`, `php tests/parity.php`, `php tests/texto_puente.php` (una fase por proceso); en el módulo `node --check` por archivo + las 16 suites de `modules/textmuy/tests/` (AGENTS.md §9 y constitution §Validation, sincronizados el 2026-10-01) + `tests/galerias.browser.js` con Chrome/Playwright real (variable `TEXTMUY_CHROME`).
+**Testing**: `php -l`, `php tests/motor_smoke.php`, `php tests/parity.php`, `php tests/texto_puente.php` (una fase por proceso); en el módulo `node --check` por archivo + las 45 suites de `modules/textmuy/tests/` (AGENTS.md §9 y constitution §Validation, sincronizados el 2026-10-01) + `tests/galerias.browser.js` con Chrome/Playwright real (variable `TEXTMUY_CHROME`).
 
 **Target Platform**: servidor WordPress compartido (PHP puro) + panel de administración en navegador de escritorio.
 
@@ -32,7 +32,7 @@ Las tres galerías del editor (imágenes, tipografías, estilos guardados) compa
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Constitución del plugin: `.specify/memory/constitution.md` **v2.0.1** · Constitución del módulo: `modules/textmuy/.specify/memory/constitution.md` **v3.1.1** (jerarquía `constitution` > `AGENTS.md` > resto).
+Constitución del plugin: `.specify/memory/constitution.md` **v2.2.0** (al 2026-10-24; la enmienda de la 009 la lleva a **v2.2.1** en T034) · Constitución del módulo: `modules/textmuy/.specify/memory/constitution.md` **v3.2.0** (la enmienda de la 009 la lleva a **v3.2.1** en T034) (jerarquía `constitution` > `AGENTS.md` > resto).
 
 | Principio | Puerta de esta feature | Estado |
 |---|---|---|
@@ -45,7 +45,7 @@ Constitución del plugin: `.specify/memory/constitution.md` **v2.0.1** · Consti
 | Data Storage (JSON en `uploads/pmu/`, escritura atómica) | La certificación `thumbs.sprite_firma` escribe en el inventario existente con `escribir_json` (atómico); la hoja se valida con `getimagesize` y tope `SPRITE_MAX_BYTES` de 4 MB (la hoja de tipografías de 720×540 px queda muy por debajo) | ✅ Pasa |
 | Validation (puertas de prueba) | Se agregan casos a las suites vigentes y a `motor_smoke`/`parity`; `php -l`, `node --check` + suites y bump `?v=RCn` al tocar JS/CSS del módulo (ver `quickstart.md` §1) | ✅ Pasa |
 | Communication (contrato plugin↔TextMuy) | Payload sin cambios: `op=sprite` ya envía `firma`; solo se amplía la validación/certificación server-side a `fonts`/`tm-presets`. Puente `textmuy-bridge` intacto. El cambio queda documentado aquí y en `contracts/motor-sprite.md` (constitución: "documentar cambios en la arquitectura antes de implementarlos") | ✅ Pasa |
-| Constitución del módulo v3.1.1 — "Regenerarla es una operacion EXCEPCIONAL (una vez por cambio real)… Las galerias **MUST NOT reconstruir la hoja al abrirse**" (líneas 155-160) | El 009 introduce generación automática **solo de huecos** cuando la hoja no está certificada (con hoja certificada: cero reconstrucción y 0 descargas), que es la lectura "una vez por cambio real" llevada al hueso; la cláusula literal "MUST NOT reconstruir al abrirse" queda superada y se reemplaza por la regla nueva | ⚠️ **Pasa con enmienda planificada** (v3.1.1 → v3.1.2, PATCH; declarada y ejecutada en T034 — no silenciosa) |
+| Constitución del módulo v3.2.0 — "Regenerarla es una operacion EXCEPCIONAL (una vez por cambio real)… Las galerias **MUST NOT reconstruir la hoja al abrirse**" (hoy líneas 186-195 de v3.2.0) | El 009 introduce generación automática **solo de huecos** cuando la hoja no está certificada (con hoja certificada: cero reconstrucción y 0 descargas), que es la lectura "una vez por cambio real" llevada al hueso; la cláusula literal "MUST NOT reconstruir al abrirse" queda superada y se reemplaza por la regla nueva | ⚠️ **Pasa con enmienda planificada** (v3.2.0 → v3.2.1, PATCH; declarada y ejecutada en T034 — no silenciosa) |
 
 **Resultado pre-Phase 0**: SIN VIOLACIONES en la constitución del plugin. **1 enmienda planificada** en la constitución del módulo (cláusula "Las galerias MUST NOT reconstruir la hoja al abrirse", reemplazada por la regla de generación de huecos; T034). No se requiere sección Complexity Tracking por justificación de principios.
 **Resultado post-Phase 1 (re-evaluación con el diseño en `research.md`, `data-model.md`, `contracts/` y `quickstart.md`)**: SIN VIOLACIONES en la constitución del plugin; la enmienda planificada del módulo sigue vigente como única excepción declarada (F1/F2 y I1–I6 son consistentes con la regla nueva).

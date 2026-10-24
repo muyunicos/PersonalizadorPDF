@@ -4,6 +4,8 @@
 **Consumidor**: módulo TextMuy vía `ThumbEngine.ensureSprite` (`assets/miniaturas.js`, plugin) y `TextMuyAPI.reconstruirSpriteCanonico` (`modules/textmuy/js/api.js`).
 **Cambio de este spec**: la validación y la certificación dejan de ser exclusivas de `img`; aplican a `fonts`, `img` y `tm-presets`. El payload **no cambia**.
 
+**Alcance real implementado (RC46)**: `sprite()` certifica todo ámbito **con catálogo** (`self::$CATALOGOS`) que reciba una `firma` **no vacía**. La condición no es "ámbito de galería": `mockups` es un ámbito de `AMBITOS_GALERIA` con catálogo, pero su cliente no usa la ruta canónica ni manda `firma`, así que persiste su hoja por la rama simple y **no gana `thumbs.sprite_firma`** (verificado en el check `F` de `tests/certificacion_hoja.php`).
+
 ## Request
 
 `POST {urls.motor}` (`admin-post.php?action=pmu_uploads`), `multipart/form-data`, `credentials: same-origin`:
@@ -16,7 +18,7 @@
 | `firma` | string JSON `[w,h,c,items]` | sí | misma estructura que `catalog.js::firmaCatalogo`; vacía o inválida → rechazo |
 | `_wpnonce` | string | sí | `nonces.motor` |
 
-Sin campos nuevos: este es el contrato de 006 (`contracts/motor-resources.md`) con el alcance ampliado.
+Sin campos nuevos: este es el contrato de 006 (`contracts/motor-resources.md`) con el alcance ampliado. `scope` debe pertenecer a `AMBITOS_GALERIA` (`fonts`, `img`, `tm-presets`, `mockups`); fuera de esa lista el motor responde error de ámbito. El ámbito `mockups` acepta la subida pero no certifica (ver "Alcance real"), y `pdfs`/`orders`/`tmp` no son ámbitos de galería.
 
 ## Validación server-side (en orden)
 

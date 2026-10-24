@@ -25,8 +25,8 @@ cd modules/textmuy
 for a in js/*.js js/effects/*.js; do node --check "$a"; done           # sin salida = OK
 
 # Módulo — suites
-for t in tests/*.test.js; do node "$t"; done                           # 16 vigentes + nuevas en verde
-node tests/galerias.browser.js                                         # OK: galerias.browser.js ...
+for t in tests/*.test.js; do node "$t"; done                           # 45 vigentes en verde (al 2026-10-24)
+node tests/galerias.browser.js                                         # OK: galerias.browser.js ... (requiere Chrome + Playwright; al 2026-10-24 NO instalado en el entorno)
 ```
 
 Salida esperada: 0 errores de sintaxis PHP/JS; todas las suites Node en `OK:`; la prueba de navegador pasa los escenarios de apertura certificada y de generación.
@@ -71,6 +71,21 @@ Salida esperada: 0 errores de sintaxis PHP/JS; todas las suites Node en `OK:`; l
 2. No existe el botón "Generar miniaturas" (galería de fuentes) ni "Miniaturas" (galería inferior de presets).
 3. Con hoja certificada: `document.querySelectorAll('link[data-textmuy-font]').length === 0` al abrir.
 
+## §2bis Evidencia de la revision 2026-10-24 (automatica)
+
+Corrida desde la raiz del proyecto (PowerShell 7), antes de tocar nada:
+
+| Puerta | Comando | Resultado |
+|---|---|---|
+| Sintaxis PHP | `php -l` de `personalizador-pdf.php` + `admin/`, `engine/`, `inc/` | 0 errores |
+| Certificacion de hoja | `php tests/certificacion_hoja.php` | `CERTIFICACION HOJA OK` (18 checks: A-G) |
+| Motor | `php tests/motor_smoke.php` | `SMOKE OK` |
+| Sintaxis JS del modulo | `node --check` de `js/*.js` + `js/effects/*.js` | 0 errores |
+| Suites del modulo | `node tests/*.test.js` | **45/45 OK** |
+| Puerta de navegador | `node tests/galerias.browser.js` (Chrome + Playwright desde `%TEMP%` + `NODE_PATH`) | **OK** (SC-001/002/004/005/006 + Reintentar de las tres galerias) |
+
+Registro por escenario (E1-E7 del §2): **pendiente** — se completa con el recorrido manual en WP real (T013/T023/T028/T032; guion en `specs/MANUAL-PENDIENTE-WP-REAL.md` §6f).
+
 ## §3 Regresión y despliegue
 
 1. Tras tocar JS/CSS del módulo: subir `?v=RCn` en `index.html` **y** `render-core.html` (+ `css/style.css?v=`) y recargar con Ctrl+F5 (AGENTS §4.6/§10).
@@ -91,5 +106,10 @@ Salida esperada: 0 errores de sintaxis PHP/JS; todas las suites Node en `OK:`; l
 | SC-008 | §1 completo en verde | §1 |
 | SC-009 | 1 escritura por ámbito con 2 pestañas | E7.1 |
 | SC-010 | AGENTS/constitución/INDICE actualizados | revisión de docs |
+
+> **Estado al 2026-10-24 (cierre de la revisión)**: SC-001…SC-009 tienen evidencia **automática** (ver §2bis) y quedan
+> pendientes de confirmación por el recorrido manual E1-E7. SC-006 y SC-008 quedaron **sincronizados y en verde**
+> (`galerias.browser.js` corre con Chrome + Playwright desde `%TEMP%` + `NODE_PATH`, sin tocar el repo). SC-010 se cumple
+> (AGENTS.md, `specs/INDICE.md`, manual §6f y las dos constituciones: módulo v3.2.1 y plugin v2.2.1).
 
 

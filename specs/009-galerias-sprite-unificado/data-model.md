@@ -14,7 +14,7 @@
 | Hoja | `thumbs.webp` (exactamente uno por ámbito) |
 | Retícula por defecto | fonts 180×30 c4 · img 100×100 c8 · tm-presets 200×100 c4 (manda el inventario) |
 
-Validación: `ambito` debe pertenecer a `AMBITOS_GALERIA`; sin inventario el motor lo siembra vacío (aviso no bloqueante).
+Validación: `ambito` debe pertenecer a `AMBITOS_GALERIA`; sin inventario el motor devuelve un catálogo vacío con aviso no bloqueante (RC47: LEER no escribe; la siembra ocurre solo en los caminos de escritura).
 
 ### Inventario (catálogo JSON)
 

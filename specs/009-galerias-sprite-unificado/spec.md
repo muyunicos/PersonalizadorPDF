@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-30
 
-**Status**: Borrador — clarificaciones, `plan.md` y `tasks.md` completos (checklist 16/16); pendiente implementación (T001+).
+**Status**: **Implementada** (etapas RC46–RC74; revision 2026-10-24; ver §Estado real al pie) — clarificaciones, `plan.md` y `tasks.md` completos (checklist 16/16); estado de cada tarea en `tasks.md`.
 
 **Input**: User description: "Unificar el comportamiento de las tres galerías del editor (imágenes, tipografías, estilos guardados): al abrirlas leen el inventario (catálogo) y luego la hoja de miniaturas (thumbs.webp) para llenar cada celda con el recorte del sprite correspondiente; si un elemento no existe en la hoja, se genera y se guarda en ese momento para que la próxima vez no haya que cargar el objeto real. Sin botón 'Generar miniaturas' si las faltantes se generan solas. Resolver las limitaciones de Google Fonts para elegir el mejor enfoque. Tiles a altura completa en dos columnas. Igual comportamiento en las tres galerías, reutilizando recursos. Continúa el contrato del spec 006-align-textmuy-motor."
 
@@ -143,7 +143,7 @@ Las miniaturas ocupan toda la altura de su celda con la proporción real de la h
 - **SC-005**: Al seleccionar una celda de tipografía aún no dibujada, se descarga exactamente 1 familia Google (1 petición de hoja de estilos del único peso + sus archivos) o 1 archivo físico, y el texto de la celda refleja el tipo real de esa familia.
 - **SC-006**: La galería de tipografías muestra 2 columnas de ~175 px con celdas de alto completo (~29 px para la retícula 180×30): 0 celdas cortadas a mitad de alto, verificado midiendo en navegador tanto el estado con miniatura como el de nombre.
 - **SC-007**: El 100% de las fallas informa operación, ámbito y motivo exacto (p. ej. firma desactualizada, dimensiones inválidas, directorio sin escritura, familia sin red); 0 fallos silenciosos y 0 mensajes genéricos de galería.
-- **SC-008**: El 100% de las verificaciones automáticas del proyecto pasa en verde: suites Node del módulo (16 vigentes + las nuevas), la prueba de navegador con navegador real, `php -l`, y `motor_smoke`/`parity` cuando existe `uploads/pmu/pdfs/muestra.pdf`.
+- **SC-008**: El 100% de las verificaciones automáticas del proyecto pasa en verde: suites Node del módulo (**45 vigentes** al 2026-10-24), la prueba de navegador con navegador real (requiere Chrome + Playwright), `php -l`, y `motor_smoke`/`parity` cuando existe `uploads/pmu/pdfs/muestra.pdf`.
 - **SC-009**: Ninguna escritura de hoja simultánea del mismo ámbito (0 duplicados) en una sesión con varias galerías y pestañas en operación.
 - **SC-010**: La documentación vigente (AGENTS.md, constitución, INDICE.md) describe el comportamiento nuevo sin contradicciones: 0 invariantes desactualizados sobre "abrir = 0 descargas".
 
@@ -161,5 +161,19 @@ Las miniaturas ocupan toda la altura de su celda con la proporción real de la h
 - **El detalle técnico del módulo** (`modules/textmuy/`, sus suites Node y el bump de versión por caché) es el plan de trabajo de esa parte; este documento fija el resultado esperado.
 - Se mantiene el marco vigente: sin modo standalone, sin datos locales de respaldo, escrituras solo por el motor con credencial, pruebas automatizadas separadas del servidor productivo.
 - **Fuera de alcance**: variables o pesos múltiples por celda de tipografía (queda para más adelante, como se decidió en Clarifications), alojamiento propio de las familias Google (self-host), rediseño de la interfaz de las galerías, nuevas galerías y cualquier cambio en el render del PDF.
+
+## Estado real (revision 2026-10-24 — post-implementacion)
+
+La feature se implemento por etapas entre RC46 y RC73 **sin** actualizar este paquete de artefactos (que habia quedado como "Borrador"). Revision completa del 2026-10-24 con evidencia ejecutada:
+
+- **Linea base en verde** (`php -l` de `admin/`, `engine/`, `inc/` + `personalizador-pdf.php`; `php tests/certificacion_hoja.php` = OK; `php tests/motor_smoke.php` = SMOKE OK; `node --check` de todo `js/` y `js/effects/`; **45/45 suites** de `modules/textmuy/tests/`).
+- **Implementado**: T004/T005 (certificacion e invalidacion de la firma en los tres ambitos), T008/T014/T015 (`ensureSpriteCanonico`, `drawTileCanonico`, `asegurarHojaCompleta` con F1 en concurrencia <=4 y F2 unica), T009/T010/T011/T017 (las tres galerias: placeholders, progreso `N/M`, repintado al terminar), T016/T025 (Google por familia unica y sin `wght@`/`text=`, preview lazy al elegir), T018/T019 (botones "Generar miniaturas" y "Miniaturas" retirados), T021 (`hoja-generacion.test.js`), T024/T026 (preview de la celda elegida + persistencia cuando no quedan pendientes), T029/T030 (ratio con MCD + `aspect-ratio` data-driven por `data-ambito`), T033 (AGENTS del modulo) y T035 (bump vigente, hoy **RC73**).
+- **Desviaciones registradas** (aceptadas y documentadas en el codigo):
+  1. **T006/T007** no se hicieron en `tests/motor_smoke.php` (esa es la puerta del Motor de PDFs y no tiene casos `sprite`): la puerta equivalente y canonica es **`tests/certificacion_hoja.php`** (checks A-G, ya listada en `AGENTS.md` §9).
+  2. **`mockups` es un ambito con catalogo** (`AMBITOS_GALERIA`) que **no certifica**: la condicion real de `sprite()` no es "ambito de galeria" sino **"tiene catalogo + llego `firma` no vacia"**. `mockups` no manda firma y persiste su hoja por la rama simple (check `F` de `certificacion_hoja.php`).
+  3. Las celdas **fantasma** (preset sin `.txm`) se dibujan vacias y **no** cuentan como fallo (RC70); la prohibicion de persistir una hoja parcial (I3) sigue firme para los fallos reales (transitorios).
+  4. El nucleo sustituye el mapa literal `generando[ambito]` del diseno por una **tarea memoizada** por ambito: cumple I4 (dos llamadas concurrentes => 1 escritura, verificado en `hoja-generacion.test.js`).
+- **Cerrado en esta revision**: T020 (Reintentar en las tres galerias), T031/T012/T022/T027 (puerta de navegador sincronizada y ampliada), T034 (constituciones: modulo v3.2.1, plugin v2.2.1) y las tareas nuevas T037-T039 (los tres huecos). Puertas corridas el 2026-10-24: **45/45 suites Node + `galerias.browser.js` en verde** (Chrome + Playwright desde `%TEMP%` + `NODE_PATH`). **Pendiente solo el recorrido manual** E1-E7 (T013/T023/T028/T032; guion en `MANUAL-PENDIENTE-WP-REAL.md` §6f). Estado de cada tarea en `tasks.md`.
+- **Puerta de navegador**: `modules/textmuy/tests/galerias.browser.js` exige Chrome + **Playwright** (al 2026-10-24 no esta instalado en el entorno de desarrollo), por eso su desincronizacion de ratios (`6 / 1`, `1 / 1`, `2 / 1` tras T029) no se detecto. El conteo vigente de suites Node es **45**, no 16.
 
 
