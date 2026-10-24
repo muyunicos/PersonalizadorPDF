@@ -3,29 +3,29 @@
 > **GENERADO automaticamente** por `php tests/inventario_repo.php` — NO editar a mano.
 > La semantica (responsabilidad de cada archivo) vive en `AGENTS.md` seccion 2 y en
 > `modules/LEEME.md`; este reporte aporta los NUMEROS: peso, LOC, dependencias
-> cruzadas y candidatos a codigo muerto. Generado: 2026-10-24 00:55.
+> cruzadas y candidatos a codigo muerto. Generado: 2026-10-24 03:36.
 
 ## 1. Resumen por tipo
 
 | Tipo | Archivos | KB |
 |---|---:|---:|
 | CSS | 2 | 79,0 |
-| HTML | 2 | 132,2 |
+| HTML | 2 | 132,4 |
 | JS assets | 11 | 473,9 |
-| JS modulo textmuy | 14 | 643,3 |
+| JS modulo textmuy | 14 | 645,7 |
 | JS test | 7 | 132,9 |
-| JS test modulo | 46 | 291,6 |
+| JS test modulo | 46 | 307,6 |
 | PHP admin | 7 | 102,1 |
 | PHP entry (plugin WP) | 1 | 317,3 |
 | PHP inc | 3 | 176,7 |
 | PHP motor | 7 | 134,6 |
 | PHP test CLI | 11 | 364,3 |
 | config | 6 | 13,4 |
-| doc | 164 | 1.560,8 |
+| doc | 164 | 1.577,0 |
 | otro | 10 | 12,7 |
-| **TOTAL** | **291** | **4.434,8** |
+| **TOTAL** | **291** | **4.469,7** |
 
-Codigo fuente (php/js/css/html): **111 archivos, 2.847,9 KB**. Docs (md/txt): 164. Config: 6.
+Codigo fuente (php/js/css/html): **111 archivos, 2.866,6 KB**. Docs (md/txt): 164. Config: 6.
 
 ## 2. Archivos de codigo mas pesados (top 15)
 
@@ -34,8 +34,8 @@ Codigo fuente (php/js/css/html): **111 archivos, 2.847,9 KB**. Docs (md/txt): 16
 | 1 | 317,3 | `personalizador-pdf.php` | PHP entry (plugin WP) |
 | 2 | 276,4 | `tests/texto_puente.php` | PHP test CLI |
 | 3 | 252,6 | `modules/textmuy/js/editor.js` | JS modulo textmuy |
-| 4 | 130,0 | `modules/textmuy/index.html` | HTML |
-| 5 | 120,5 | `modules/textmuy/js/controls.js` | JS modulo textmuy |
+| 4 | 130,2 | `modules/textmuy/index.html` | HTML |
+| 5 | 121,5 | `modules/textmuy/js/controls.js` | JS modulo textmuy |
 | 6 | 118,2 | `assets/admin.js` | JS assets |
 | 7 | 107,3 | `inc/class-pmu-uploads.php` | PHP inc |
 | 8 | 88,5 | `assets/selector-pmu.js` | JS assets |
@@ -44,7 +44,7 @@ Codigo fuente (php/js/css/html): **111 archivos, 2.847,9 KB**. Docs (md/txt): 16
 | 11 | 65,6 | `inc/class-pmu-sesion.php` | PHP inc |
 | 12 | 57,1 | `modules/textmuy/js/fonts.js` | JS modulo textmuy |
 | 13 | 52,7 | `admin/pdfs.php` | PHP admin |
-| 14 | 45,9 | `modules/textmuy/css/style.css` | CSS |
+| 14 | 46,0 | `modules/textmuy/css/style.css` | CSS |
 | 15 | 40,1 | `modules/textmuy/js/api.js` | JS modulo textmuy |
 
 ## 3. Codigo fuente: archivo -> que requiere / quien lo requiere
@@ -84,19 +84,19 @@ enqueue, `<script src>`, etc.).
 | `inc/class-pmu-galeria.php` | PHP inc | 3,8 | 69 | 4 | - | <br>inc/class-pmu-uploads.php<br>tests/certificacion_hoja.php<br>tests/sin_lectura.php<br>tests/texto_puente.php | 4 | OK |
 | `inc/class-pmu-sesion.php` | PHP inc | 65,6 | 1111 | 45 | - | <br>personalizador-pdf.php<br>personalizador-pdf.php<br>tests/texto_puente.php | 3 | OK |
 | `inc/class-pmu-uploads.php` | PHP inc | 107,3 | 1981 | 116 | <br>inc/class-pmu-galeria.php<br>engine/Metadata.php | <br>personalizador-pdf.php<br>tests/campos_migracion.php<br>tests/certificacion_hoja.php<br>tests/sin_lectura.php<br>tests/texto_puente.php | 7 | OK |
-| `modules/textmuy/css/style.css` | CSS | 45,9 | 1532 | - | - | - | 10 | OK |
-| `modules/textmuy/index.html` | HTML | 130,0 | 1354 | - | - | - | 5 | ENTRADA editor iframe |
+| `modules/textmuy/css/style.css` | CSS | 46,0 | 1535 | - | - | - | 10 | OK |
+| `modules/textmuy/index.html` | HTML | 130,2 | 1355 | - | - | - | 6 | ENTRADA editor iframe |
 | `modules/textmuy/js/api.js` | JS modulo textmuy | 40,1 | 565 | - | - | - | 12 | OK |
 | `modules/textmuy/js/catalog.js` | JS modulo textmuy | 17,4 | 295 | - | - | - | 19 | OK |
-| `modules/textmuy/js/controls.js` | JS modulo textmuy | 120,5 | 1620 | - | - | - | 5 | OK |
+| `modules/textmuy/js/controls.js` | JS modulo textmuy | 121,5 | 1634 | - | - | - | 6 | OK |
 | `modules/textmuy/js/editor.js` | JS modulo textmuy | 252,6 | 3743 | - | - | - | 29 | OK |
 | `modules/textmuy/js/effects/bevel-webgl.js` | JS modulo textmuy | 14,1 | 249 | - | - | - | 2 | OK |
 | `modules/textmuy/js/effects/distort-engine.js` | JS modulo textmuy | 15,5 | 263 | - | - | - | 6 | OK |
 | `modules/textmuy/js/effects/specular-webgl.js` | JS modulo textmuy | 15,9 | 278 | - | - | - | 2 | OK |
 | `modules/textmuy/js/export.js` | JS modulo textmuy | 3,6 | 65 | - | - | - | 4 | OK |
 | `modules/textmuy/js/fonts.js` | JS modulo textmuy | 57,1 | 837 | - | - | - | 21 | OK |
-| `modules/textmuy/js/fuentes-galeria.js` | JS modulo textmuy | 25,1 | 420 | - | - | - | 7 | OK |
-| `modules/textmuy/js/galeria.js` | JS modulo textmuy | 26,3 | 473 | - | - | - | 7 | OK |
+| `modules/textmuy/js/fuentes-galeria.js` | JS modulo textmuy | 25,1 | 420 | - | - | - | 8 | OK |
+| `modules/textmuy/js/galeria.js` | JS modulo textmuy | 27,6 | 485 | - | - | - | 8 | OK |
 | `modules/textmuy/js/gradient-picker.js` | JS modulo textmuy | 11,1 | 205 | - | - | - | 1 | OK |
 | `modules/textmuy/js/main.js` | JS modulo textmuy | 6,5 | 109 | - | - | - | 2 | OK |
 | `modules/textmuy/js/preset-manager.js` | JS modulo textmuy | 37,7 | 600 | - | - | - | 20 | OK |
@@ -122,9 +122,9 @@ enqueue, `<script src>`, etc.).
 | `modules/textmuy/tests/fuentes-filtros-footer.test.js` | JS test modulo | 3,4 | 33 | - | - | - | 0 | ENTRADA CLI test |
 | `modules/textmuy/tests/fuentes-preview-us3.test.js` | JS test modulo | 4,4 | 37 | - | - | - | 0 | ENTRADA CLI test |
 | `modules/textmuy/tests/galeria-items.test.js` | JS test modulo | 1,7 | 31 | - | - | - | 0 | ENTRADA CLI test |
-| `modules/textmuy/tests/galerias.browser.js` | JS test modulo | 12,3 | 162 | - | - | - | 0 | ENTRADA CLI test |
+| `modules/textmuy/tests/galerias.browser.js` | JS test modulo | 26,5 | 327 | - | - | - | 0 | ENTRADA CLI test |
 | `modules/textmuy/tests/guardar-miniaturas.test.js` | JS test modulo | 8,3 | 125 | - | - | - | 0 | ENTRADA CLI test |
-| `modules/textmuy/tests/hoja-generacion.test.js` | JS test modulo | 17,5 | 241 | - | - | - | 0 | ENTRADA CLI test |
+| `modules/textmuy/tests/hoja-generacion.test.js` | JS test modulo | 19,4 | 261 | - | - | - | 0 | ENTRADA CLI test |
 | `modules/textmuy/tests/img-refs.test.js` | JS test modulo | 7,1 | 102 | - | - | - | 0 | ENTRADA CLI test |
 | `modules/textmuy/tests/integridad-archivos.test.js` | JS test modulo | 1,8 | 36 | - | - | - | 0 | ENTRADA CLI test |
 | `modules/textmuy/tests/invalidacion.test.js` | JS test modulo | 2,2 | 49 | - | - | - | 0 | ENTRADA CLI test |
@@ -193,7 +193,7 @@ _Ninguno._
 
 ## 7. Documentacion y configuracion (fuera de la tabla de codigo)
 
-- Docs (md/txt): **164** archivos, 1.560,8 KB.
+- Docs (md/txt): **164** archivos, 1.577,0 KB.
 - Config: **6** archivos (json/neon/lock).
 - Otros (10): .gitattributes, .gitignore, modules/.gitignore, modules/.gitkeep, modules/textmuy/.editorconfig, modules/textmuy/.gitattributes, modules/textmuy/.gitignore, tests/fixtures/exacto_b.jpg, tests/fixtures/foto_a.png, tests/fixtures/paleta_b.png
 
