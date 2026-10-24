@@ -42,7 +42,16 @@ orders/{order_id}/{item_key}/         <- rename al confirmarse el pago (entregab
 | `borrar_item($sid, $item_key)` | void | borrado quirurgico (al quitar del carrito) |
 | `staging_order($order_id, $item_key, $sid)` | string | copia a `tmp/orders/{order_id}/...` |
 | `promover_order($order_id, $item_key)` | string | rename a `orders/...` (flag `.promocionando`) |
-| `limpiar_ttl($horas_drafts = 24)` | int | borra drafts vencidos por `manifest.creado` |
+| `limpiar_ttl($horas = 24, $horas_carrito = 720)` | int | borra drafts vencidos por `manifest.creado` **y** (spec 030 D18/D26) items de **carrito abandonado** (30 dias). `orders/` nunca se toca. Lo llama un **cron diario** (`wp_schedule_event`) |
+| `familias(array $contenedores, ?callable $url = null)` | array | **spec 030 (D5/D6/D27)**: agrupa el escaneo por `madre` y devuelve por familia `base` (**DERIVADA** por area `w*h`, **nunca** un `rename`), `version` (hash del conjunto), `bytes`, `creado`, `recetas` (las vigentes) y `usos` (carrito/pedidos, D17) |
+| `familia_de($contenedores, $madre, ?callable $url = null)` / `familia_por_sha($contenedores, $sha)` | ?array | **spec 030**: una familia por `madre` (o `null` si no existe o es ajena) y la que ya tiene ese **contenido crudo** (dedupe, D24) |
+| `ruta_familia(array $contenedores, $madre)` | string | **spec 030 (D13)**: ruta absoluta de la `base` (la de mayor area) |
+| `usar_de_biblioteca($sid, $item_key, $pdf, $grupo, $madre, $indice, array $params, $rutaBase)` | array | **spec 030 (D8/D10)**: reuso de una foto de la biblioteca; la `receta` la **recomputa el servidor** (`receta_de`) y, si no coincide con la del hueco, **no** escribe fila y avisa `coincide: false`. De `tmp/` **copia**; de `orders/` **referencia** (`ref` relativo a `uploads/pmu/`) |
+| `borrar_familia_dir($dir, $madre)` | array | **spec 030 (D17)**: borra la familia **completa** (original + versiones) del directorio y devuelve los `usos` para el aviso |
+| `resolver_ref($dir_item, $ref)` | string | **spec 030 (D13)**: `realpath()` validado dentro de `uploads/pmu/` (anti-traversal); cadena vacia si no resuelve -> el hueco queda **transparente** (`motor:descarga:ref:ausente`) |
+| `receta_de(array $params)` | string | **spec 030 (D7/R2)**: **estatica**; `substr(sha1(w\|h\|forma\|modo\|escala\|dx\|dy\|fondo\|transp\|iw\|ih), 0, 12)`. La recomputa el servidor, nunca se confia en el cliente |
+| `mutar_manifest_dir($dir, $fn)` / `leer_manifest_dir($dir)` / `guardar_manifest_dir($dir, $manifest)` | - | **spec 030 (R3)**: el patron atomico (`flock` + `.tmp` + `rename`) sobre **cualquier** directorio del escaneo (no solo el item propio) |
+| `fila_subida(...)` / `fila_ref(...)` | array | **spec 030 (D5/D13)**, **privadas**: unico lugar de la forma de una fila de `subidas[]` (ver "Familias y referencias") |
 
 ## Nomenclatura del pool
 
@@ -96,6 +105,47 @@ Reglas:
 - `preview_estado`: `ok` (vistas + pool completos), `sin_vista` (fallo de render, venta
   habilitada), `omisible` (decision del admin).
 - `valores` siempre dual: `valor` (sistema) + `cliente` (etiqueta).
+
+## Familias y referencias (spec 030)
+
+Una **familia** agrupa las apariciones de la misma foto del comprador. Su id (`madre`) es el `id`
+del **primer** archivo y nunca cambia; las recomposiciones se guardan como **versiones**
+`{madre}-{n}` en el mismo `subidas/`. La `base` (la que se pinta) **no se persiste**: `familias()`
+la **deriva** por area `w*h` (una sola verdad, sin `rename`).
+
+`receta` = `substr(sha1(w|h|forma|modo|escala|dx|dy|fondo|transp|iw|ih), 0, 12)` (`receta_de`): se
+estampa **al subir** y es lo que el servidor compara para decidir **Elegir** (fila `ref`, 0 bytes)
+o **Subir** (version nueva). `sha` = hash del contenido **crudo** (antes de convertir a WebP, D24)
+para el dedupe.
+
+Fila de `subidas[]` con **`origen: 'subida'`** (la foto vive en el item):
+
+```json
+{"id": "9f2c41ab0d7e", "file": "subidas/9f2c41ab0d7e.webp", "mime": "image/webp",
+ "bytes": 118402, "creado": 1776000000, "madre": "9f2c41ab0d7e",
+ "receta": "9f9a1c2f5b7e", "sha": "1d9c8f2a4b6e", "origen": "subida"}
+```
+
+Fila con **`origen: 'ref'`** (la foto vive en otro item/pedido: sin bytes, sin `mime`):
+
+```json
+{"id": "3a7b21c9de04", "origen": "ref", "madre": "9f2c41ab0d7e",
+ "receta": "9f9a1c2f5b7e", "creado": 1776000100,
+ "ref": "orders/29081/item-1/subidas/9f2c41ab0d7e.webp"}
+```
+
+- El `ref` es **relativo a `uploads/pmu/`** y lo resuelve `resolver_ref()` (D13): si el archivo no
+  esta o queda fuera de la raiz, devuelve cadena vacia y el hueco sale **transparente**
+  (`motor:descarga:ref:ausente`), **nunca** un PDF roto.
+- **Retencion**: una fila `ref` puede apuntar a **otro pedido**, asi que ningun barrido purga un
+  pedido referenciado (hoy el TTL solo mira `tmp/`; ver `AGENTS.md` §5).
+- El `base` de la familia se mueve **solo por dato** (derivado por area): jamas se renombra un
+  archivo para "promoverlo".
+- En una fila `subida` el `sha` puede venir **vacio**: lo escribe asi el reuso desde `tmp/` (esa
+  copia no conserva el hash crudo del original).
+- En `archivos[]` (el indice que lee el Motor) el reuso escribe
+  `{pdf, grupo_id, indice, hash: <receta>, origen: "subida"|"ref", id, madre, file|ref}`: en estas
+  filas el `hash` ES la `receta` (no un render de texto) y el camino vive en `file` o en `ref`.
 
 ## Errores (formato `motor:<op>:<causa>`)
 
