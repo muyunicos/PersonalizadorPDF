@@ -3,7 +3,7 @@
 > **GENERADO automaticamente** por `php tests/inventario_repo.php` — NO editar a mano.
 > La semantica (responsabilidad de cada archivo) vive en `AGENTS.md` seccion 2 y en
 > `modules/LEEME.md`; este reporte aporta los NUMEROS: peso, LOC, dependencias
-> cruzadas y candidatos a codigo muerto. Generado: 2026-10-25 00:15.
+> cruzadas y candidatos a codigo muerto. Generado: 2026-10-25 01:10.
 
 ## 1. Resumen por tipo
 
@@ -21,9 +21,9 @@
 | PHP motor | 7 | 134,6 |
 | PHP test CLI | 11 | 364,3 |
 | config | 6 | 13,4 |
-| doc | 165 | 1.654,2 |
+| doc | 165 | 1.655,8 |
 | otro | 10 | 12,7 |
-| **TOTAL** | **296** | **4.694,4** |
+| **TOTAL** | **296** | **4.695,9** |
 
 Codigo fuente (php/js/css/html): **115 archivos, 3.014,0 KB**. Docs (md/txt): 165. Config: 6.
 
@@ -197,7 +197,7 @@ _Ninguno._
 
 ## 7. Documentacion y configuracion (fuera de la tabla de codigo)
 
-- Docs (md/txt): **165** archivos, 1.654,2 KB.
+- Docs (md/txt): **165** archivos, 1.655,8 KB.
 - Config: **6** archivos (json/neon/lock).
 - Otros (10): .gitattributes, .gitignore, modules/.gitignore, modules/.gitkeep, modules/textmuy/.editorconfig, modules/textmuy/.gitattributes, modules/textmuy/.gitignore, tests/fixtures/exacto_b.jpg, tests/fixtures/foto_a.png, tests/fixtures/paleta_b.png
 
