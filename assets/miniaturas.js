@@ -16,6 +16,14 @@
     var config = { endpoint: '', nonce: '', opMini: 'miniatura', opSprite: 'sprite' };
     var cacheSingle = new Map();
     var cacheSprite = new Map();
+    // T041 (spec 009): ultimo motivo con el que el MOTOR rechazo la hoja, por scope.
+    // Lo devuelto por ensureSprite sigue siendo null (contrato del puente intacto);
+    // la causa viaja aca para que el cliente pueda mostrarla EXACTA en vez de
+    // `motor:rechazo`.
+    var causasMotor = new Map();
+    function ultimaCausa(scope) {
+        return scope ? (causasMotor.get(scope) || '') : '';
+    }
 
     function configure(cfg) {
         if (!cfg) return;
@@ -345,7 +353,15 @@ function persistirSheet(cv, scope, manifest, firma) {
                                 spriteImage: null
                             };
                             cacheSprite.set(scope, out);
+                            causasMotor.delete(scope);
                             return out;
+                        }
+                        // El MOTOR respondio con causa: se conserva (antes se descartaba y
+                        // la UI solo podia decir `motor:rechazo`); el valor devuelto sigue
+                        // siendo null para no romper el contrato del puente.
+                        causasMotor.set(scope, (data && data.data) ? String(data.data) : ('thumbs:' + scope + ':motor:rechazo'));
+                        if (window.console && console.warn) {
+                            console.warn('thumbs:' + scope + ':' + causasMotor.get(scope));
                         }
                         return null;
                     })
@@ -391,6 +407,7 @@ function persistirSheet(cv, scope, manifest, firma) {
         ensure: ensure,
         ensureSprite: ensureSprite,
         invalidate: invalidate,
+        ultimaCausa: ultimaCausa,
         tile: tile,
         drawTile: drawTile
     };
