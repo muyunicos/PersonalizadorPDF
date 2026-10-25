@@ -249,7 +249,10 @@ $env:PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD='1'; npm i --prefix "$env:TEMP\pmu-pw" pla
 # Cada corrida:
 $env:NODE_PATH = "$env:TEMP\pmu-pw\node_modules"
 $env:TEXTMUY_CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
-node C:\wp-lab\recorrido-009.cjs             # galerias y hojas de la spec 009 (33/33)
+node C:\Users\Jonatan\Documents\GitHub\personalizador-pdf\tests\galerias-sprite.browser.js
+                                            # PUERTA del plugin: galerias/hojas (spec 009): 32/32
+                                            # (`C:\wp-lab\recorrido-009.cjs` es un wrapper)
+                                            # modo hosting: PMU_SOLO_UI=1 + PMU_BASE=<sitio>
 node C:\Users\Jonatan\Documents\GitHub\personalizador-pdf\tests\ficha-pedido.browser.js
                                             # PUERTA del plugin: ficha -> pedido -> PDF (26/26)
                                             # (`C:\wp-lab\recorrido-ficha-pedido.cjs` es un wrapper)
@@ -261,6 +264,11 @@ node C:\wp-lab\probe-modal.cjs               # volcado del modal del cargador
 
 - `recorrido-009.cjs`: **33/33 OK** (SC-001/002/003/004/005/006/007/009 + FR-009). Evidencia:
   `capturas/e*.png` y `capturas/recorrido-009.json`.
+- **Puerta del plugin `tests/galerias-sprite.browser.js`: 32/32 OK** (2026-10-24) — vive en el repo
+  (el `.cjs` del lab quedo como *wrapper* de una linea) y cubre E1-E7: sin hoja ⇒ 1 escritura y
+  certificacion; con hoja ⇒ 0 descargas; alta ⇒ 1 celda + 1 escritura; geometria (2 columnas, alto
+  `round(ancho·h/w) ±2`); no existen los botones retirados; reentrancia ⇒ 1 escritura. **Precondicion
+  nueva**: el catalogo `img/` del lab debe existir (se copia del espejo del repo: el lab no lo trae).
 - **Puerta del plugin `tests/ficha-pedido.browser.js`: 26/26 OK** (2026-10-24) — vive en el repo
   (el `.cjs` del lab quedo como *wrapper* de una linea, para no duplicar lógica). Cubre
   `assets/tienda.js` con WP+Woo reales y **verifica precondiciones con causa accionable** antes de

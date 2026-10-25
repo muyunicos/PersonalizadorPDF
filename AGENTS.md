@@ -909,17 +909,20 @@ php tests/inventario_repo.php               # Archivos/pesos/dependencias -> doc
 Los recorridos de aceptación de cada spec se corren en el **laboratorio local** (WP+Woo reales, plugin
 y tema montados por *junction*) con Chrome + Playwright **sin instalar nada en el repo**: arranque,
 credenciales, scripteado, higiene de datos y las trampas conocidas están en
-`docs/entorno-desarrollo.md` §9. Vigentes: `recorrido-009.cjs` (spec 009: **33/33**) y la **puerta del
-plugin** `tests/ficha-pedido.browser.js` (ficha → pedido → `orders/{id}/{item}/…_procesado.pdf`:
-**26/26**), que cubre `assets/tienda.js` y **falla con la causa accionable** si al lab le falta una
-precondición (lab apagado, producto sin `_pmu_pdf_slugs`, **presets v1 en lugar de v2**, COD sin
-`enable_for_virtual`).
+`docs/entorno-desarrollo.md` §9. Vigentes: **`tests/galerias-sprite.browser.js`** (spec 009: galerias y
+hojas, **32/32**) y **`tests/ficha-pedido.browser.js`** (ficha → pedido → `orders/{id}/{item}/…_procesado.pdf`,
+**26/26**). Ambas cubren caminos que ninguna otra puerta cubria (`assets/tienda.js`, galerias/hojas) y
+**fallan con la causa accionable** si al lab le falta una precondicion (lab apagado, producto sin
+`_pmu_pdf_slugs`, catalogo `img/` ausente, **presets v1 en lugar de v2**, COD sin `enable_for_virtual`).
+La de galerias tiene modo **`PMU_SOLO_UI=1`** (+ `PMU_BASE=<hosting>`) para correr contra el hosting
+sin leer el disco del lab.
 
 ```powershell
 $env:NODE_PATH = "$env:TEMP\pmu-pw\node_modules"
 $env:TEXTMUY_CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
-node tests/ficha-pedido.browser.js          # recorre y deja capturas + ficha-pedido.json
-pwsh C:\wp-lab\arrancar.ps1                  # (si el lab esta apagado)
+node tests/galerias-sprite.browser.js       # 32/32 (mutan/restauran datos del lab)
+node tests/ficha-pedido.browser.js          # 26/26 (crea un pedido de prueba)
+pwsh C:\wp-lab\arrancar.ps1                 # (si el lab esta apagado)
 ```
 
 ### Verificación en el sitio real (WordPress + Woo)
