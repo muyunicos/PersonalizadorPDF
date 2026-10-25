@@ -3,6 +3,10 @@
 > Fase 1 de `/speckit-plan`. Recorrido minimo para probar la feature de punta a punta.
 > Contratos: [biblioteca.md](./contracts/biblioteca.md) y [cliente-biblioteca.md](./contracts/cliente-biblioteca.md).
 > Modelo: [data-model.md](./data-model.md). Decisiones: [spec.md](./spec.md).
+>
+> **La parte de navegador de E2–E9 corre en la puerta del repo** `tests/ficha-pedido.browser.js`
+> (tira del invitado con `op=listar`/`sin_cambios`, visor compartido, `Elegir` 0 bytes, version y
+> dedupe). E1 son puertas CLI y el **volumen de E8** (sembrar 300 pedidos) sigue siendo prueba manual.
 
 ## Prerequisitos
 

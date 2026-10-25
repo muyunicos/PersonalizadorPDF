@@ -912,7 +912,8 @@ credenciales, scripteado, higiene de datos y las trampas conocidas están en
 `docs/entorno-desarrollo.md` §9. Vigentes: **`tests/galerias-sprite.browser.js`** (spec 009: galerias y
 hojas, **32/32**) y **`tests/ficha-pedido.browser.js`** (ficha → pedido → `orders/{id}/{item}/…_procesado.pdf`,
 **26/26**). Ambas cubren caminos que ninguna otra puerta cubria (`assets/tienda.js`, galerias/hojas) y
-**fallan con la causa accionable** si al lab le falta una precondicion (lab apagado, producto sin
+la de ficha-pedido ademas la **biblioteca del comprador** (spec 030: tira, `Elegir` 0 bytes, version,
+dedupe y visor compartido). **Fallan con la causa accionable** si al lab le falta una precondicion (lab apagado, producto sin
 `_pmu_pdf_slugs`, catalogo `img/` ausente, **presets v1 en lugar de v2**, COD sin `enable_for_virtual`).
 La de galerias tiene modo **`PMU_SOLO_UI=1`** (+ `PMU_BASE=<hosting>`) para correr contra el hosting
 sin leer el disco del lab.

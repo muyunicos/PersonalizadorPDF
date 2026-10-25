@@ -58,7 +58,7 @@ function listarRec(dir) {
     return out;
 }
 function espiar(page) {
-    const log = { posts: [], respuestas: {} };
+    const log = { posts: [], ops: [], respuestas: {} };
     page.on('request', (req) => {
         const u = req.url();
         if (req.method() !== 'POST') return;
@@ -66,7 +66,10 @@ function espiar(page) {
         const b = req.postData() || '';
         const m = /name="action"\r?\n\r?\n([^\r\n]+)/.exec(b) || /[?&]action=([^&\r\n]+)/.exec(u);
         const accion = m ? decodeURIComponent(m[1]) : '(action?)';
+        // El endpoint del motor usa `action` + `op`: se conservan los dos (spec 030).
+        const mo = /name="op"\r?\n\r?\n([^\r\n]+)/.exec(b) || /[?&]op=([^&\r\n]+)/.exec(u);
         log.posts.push(accion);
+        log.ops.push(accion + (mo ? ':' + decodeURIComponent(mo[1]) : ''));
         req.__accion = accion;
     });
     page.on('response', async (res) => {
@@ -81,6 +84,117 @@ async function cerrarModalPais(page) {
     const b = page.locator('#muyu-country-close');
     if (await b.count()) { await b.click({ timeout: 5000 }).catch(() => { }); await esperar(600); }
 }
+/* ---- Biblioteca del comprador (spec 030) ---- */
+const limpiar = (log) => { log.posts.length = 0; log.ops.length = 0; log.respuestas = {}; };
+const ops = (log, sufijo) => log.ops.filter((o) => o.slice(-sufijo.length) === sufijo).length;
+async function abrirModal(page) {
+    await cerrarOverlays(page);                  // sin overlays colgados que intercepten clicks
+    const btn = page.locator('[data-pmu-panel] button', { hasText: /^Cargar imagen$/ }).first();
+    // OJO: `cargador-pmu.js` deshabilita ese boton cuando la ranura ya tiene sus
+    // fotos (`slot.boton.disabled = n >= r.max`). El camino REAL del comprador para
+    // volver al modal es: tocar la miniatura de la ranura => visor => Reemplazar.
+    if (await btn.count() && await btn.isEnabled()) {
+        await btn.click();
+    } else {
+        const mini = page.locator('[data-pmu-panel] .cpmu-mini').first();
+        await mini.waitFor({ state: 'visible', timeout: 15000 });
+        await mini.click();
+        await esperar(900);
+        const reempl = page.getByRole('button', { name: /^Reemplazar$/ }).first();
+        if (await reempl.count() && await reempl.first().isVisible()) { await reempl.first().click(); }
+    }
+    await page.waitForSelector('.spmu-modal', { state: 'visible', timeout: 20000 });
+    await esperar(1500);
+}
+async function cerrarOverlays(page) {
+    // Dos overlays pueden quedar abiertos y comerse los clicks: el visor del
+    // cargador (`cpmu-visor`) y el modal de recorte (`spmu-modal`).
+    for (let i = 0; i < 6; i++) {
+        const pv = page.locator('.pmu-visor').first();
+        if (await pv.count() && await pv.isVisible()) {
+            await pv.locator('.pmu-visor-cerrar').click({ force: true }).catch(() => { });
+            await esperar(600);
+            continue;
+        }
+        const v = page.locator('.cpmu-visor').first();
+        if (await v.count() && await v.isVisible()) {
+            await v.locator('.cpmu-visor-cerrar').click({ force: true }).catch(() => { });
+            await esperar(600);
+            continue;
+        }
+        const m = page.locator('.spmu-modal').first();
+        if (await m.count() && await m.isVisible()) {
+            const c = m.locator('button', { hasText: /^Cancelar$/ }).first();
+            if (await c.count()) { await c.click({ force: true }).catch(() => { }); } else { await page.keyboard.press('Escape'); }
+            await esperar(600);
+            continue;
+        }
+        break;
+    }
+    await esperar(400);
+}
+const cerrarModal = cerrarOverlays;
+async function tiraBib(page) {
+    return page.evaluate(() => {
+        const t = document.querySelector('.pmu-bib-tira');
+        if (!t) return { montada: false, minis: 0, versionadas: 0, mas: 0 };
+        const minis = [...t.querySelectorAll('.pmu-bib-mini')].filter((b) => !b.classList.contains('pmu-bib-mas'));
+        return {
+            montada: true, minis: minis.length, mas: t.querySelectorAll('.pmu-bib-mas').length,
+            versionadas: minis.filter((b) => /versiones/.test(b.title || '')).length,
+            titulos: minis.map((b) => b.title || '')
+        };
+    });
+}
+/** Filas `origen: ref` de los manifests del item (spec 030 D2/D11). */
+function filasRef() {
+    const out = [];
+    for (const f of listarRec(PMU + '\\tmp')) {
+        if (!/manifest\.json$/.test(f.ruta)) continue;
+        try {
+            const j = JSON.parse(fs.readFileSync(f.ruta, 'utf8'));
+            (j.subidas || []).forEach((s) => { if (s && s.origen === 'ref') out.push({ item: f.ruta, ref: String(s.ref || ''), madre: String(s.madre || '') }); });
+        } catch (e) { /* no json */ }
+    }
+    return out;
+}
+/** Familia (`madre`) -> archivos, desde los manifests del comprador (spec 030). */
+function familiasItem() {
+    const out = {};
+    for (const f of listarRec(PMU + '\\tmp')) {
+        if (!/manifest\.json$/.test(f.ruta)) continue;
+        try {
+            const j = JSON.parse(fs.readFileSync(f.ruta, 'utf8'));
+            (j.subidas || []).forEach((s) => {
+                const m = String(s.madre || '');
+                if (!m) return;
+                if (!out[m]) out[m] = [];
+                out[m].push(String(s.file || s.ref || ''));
+            });
+        } catch (e) { /* no json */ }
+    }
+    return out;
+}
+/** Cierra el aviso "¿Queres subir otra imagen?" (spec 021) si aparece. */
+async function subirOtra(pg) {
+    const otra = pg.getByRole('button', { name: 'Si, subir otra' });
+    if (await otra.count() && await otra.first().isVisible()) {
+        const noBtn = pg.getByRole('button', { name: /^(No|Cancelar|Cerrar|Ahora no)$/ }).first();
+        if (await noBtn.count()) { await noBtn.click().catch(() => { }); } else { await pg.keyboard.press('Escape'); }
+    }
+    await esperar(1200);
+}
+/** Espera a que la tira se monte y tenga al menos `minis` entradas. */
+async function esperarTira(page, minis) {
+    let r = { montada: false, minis: 0, versionadas: 0, mas: 0 };
+    for (let i = 0; i < 40; i++) {
+        r = await tiraBib(page);
+        if (r.montada && r.minis >= minis) break;
+        await esperar(500);
+    }
+    return r;
+}
+const subidasArchivos = () => listarRec(PMU + '\\tmp').filter((f) => f.ruta.indexOf('subidas') >= 0 && !/\.lock$/.test(f.ruta));
 
 /* ---------- Precondiciones (fallan con la accion exacta) ---------- */
 async function precondiciones(page) {
@@ -213,6 +327,115 @@ async function precondiciones(page) {
         check('cargador: sin modal de pais ni de recorte abiertos al terminar', !estado.pais && !estado.modal, JSON.stringify(estado));
         await page.screenshot({ path: CAPT + '\\ficha-foto.png' });
 
+        /* ---- Biblioteca del comprador (spec 030, T042) ---- */
+        // E2: tira del invitado. Al abrir el modal: 1 `op=listar`; al reabrir: `sin_cambios` (0 peticiones).
+        limpiar(log);
+        await abrirModal(page);
+        let bib = { montada: false, minis: 0, versionadas: 0, mas: 0 };
+        for (let i = 0; i < 30; i++) { bib = await tiraBib(page); if (bib.montada && bib.minis >= 1) break; await esperar(500); }
+        check('biblioteca (030/E2): la tira se monta con la foto subida (1 entrada)', bib.montada && bib.minis === 1, JSON.stringify(bib));
+        check('biblioteca (030/E2): 1 sola peticion op=listar al abrir', ops(log, ':listar') === 1, JSON.stringify(log.ops));
+        const respBib = log.respuestas['personalizador_pdf_biblioteca'] || null;
+        check('biblioteca (030/E8): la lista llego (volumen real anotado)', !!respBib && !!(respBib.data || {}).fotos,
+            'fotos=' + ((respBib && respBib.data && respBib.data.fotos) ? respBib.data.fotos.length : '?') + ' | el sembrado de 300 pedidos queda como prueba de volumen manual');
+        await cerrarModal(page);
+        limpiar(log);
+        await abrirModal(page);
+        const bib2 = await esperarTira(page, 1);
+        const r2 = (log.respuestas['personalizador_pdf_biblioteca'] || {}).data || {};
+        check('biblioteca (030/E2): al reabrir revalida con 1 op=listar y el servidor responde sin_cambios', ops(log, ':listar') === 1 && r2.sin_cambios === true,
+            JSON.stringify(log.ops) + ' | sin_cambios=' + JSON.stringify(r2.sin_cambios) + ' (lo que NO viaja es la lista: E8)');
+        check('biblioteca (030/E2): la tira sigue mostrando la foto desde la copia local', bib2.montada && bib2.minis === 1, JSON.stringify(bib2));
+
+        // E9: visor compartido (al tocar una miniatura) con Elegir/Borrar y 0 peticiones al recorrer.
+        await page.locator('.pmu-bib-tira .pmu-bib-mini').first().click();
+        let visorBib = null;
+        for (let i = 0; i < 20; i++) {
+            visorBib = await page.evaluate(() => {
+                const v = document.querySelector('.pmu-visor');
+                if (!v) return null;
+                return {
+                    titulo: (v.querySelector('.pmu-visor-titulo') || {}).textContent || '',
+                    acciones: [...v.querySelectorAll('.pmu-visor-acciones button')].map((b) => b.textContent.trim()),
+                    segs: [...v.querySelectorAll('.pmu-visor-seg')].map((b) => b.textContent.trim()),
+                    img: !!v.querySelector('.pmu-visor-img')
+                };
+            });
+            if (visorBib) break; await esperar(400);
+        }
+        check('biblioteca (030/E9): tocar la miniatura abre el visor compartido', !!visorBib && /Mis imagenes/i.test(visorBib.titulo), JSON.stringify(visorBib));
+        check('biblioteca (030/E9): el visor de la biblioteca ofrece Elegir y Borrar', !!visorBib && visorBib.acciones.indexOf('Elegir') >= 0 && visorBib.acciones.indexOf('Borrar') >= 0, JSON.stringify(visorBib && visorBib.acciones));
+        limpiar(log);
+        for (let i = 0; i < 4; i++) {
+            const nav = page.locator('.pmu-visor-nav:not([hidden])').first();
+            if (await nav.count()) { await nav.click().catch(() => { }); await esperar(500); }
+        }
+        check('biblioteca (030/E9): recorrer el visor no dispara peticiones', log.ops.length === 0, JSON.stringify(log.ops));
+
+        // E3: Elegir sin recomponer = 0 bytes. Primero se VACIA la ranura (Eliminar en el
+        // visor del cargador) para que Elegir tenga algo que hacer: si la ranura ya
+        // tiene esa misma foto, Elegir es un no-op y no escribe nada.
+        limpiar(log);
+        await cerrarOverlays(page);
+        await page.locator('[data-pmu-panel] .cpmu-mini').first().click();
+        await esperar(900);
+        page.on('dialog', async (d) => { await d.accept().catch(() => { }); });
+        await page.getByRole('button', { name: 'Eliminar', exact: true }).first().click();
+        await esperar(2000);
+        await cerrarOverlays(page);
+        const bytesAntes = subidasArchivos().length;
+        const refsAntes = filasRef().length;
+        await abrirModal(page);
+        await esperarTira(page, 1);
+        await page.locator('.pmu-bib-tira .pmu-bib-mini').first().click();
+        await page.waitForSelector('.pmu-visor', { state: 'visible', timeout: 10000 }).catch(() => { });
+        limpiar(log);
+        await page.getByRole('button', { name: 'Elegir', exact: true }).first().click();
+        await esperar(2500);
+        await cerrarOverlays(page);
+        check('biblioteca (030/E3): Elegir NO subio bytes (sin POST de alta/subida)', ops(log, ':alta') === 0 && cuenta(log, 'personalizador_pdf_subida') === 0, JSON.stringify(log.ops));
+        check('biblioteca (030/E3): el item no gano archivos en subidas/', subidasArchivos().length === bytesAntes, bytesAntes + ' -> ' + subidasArchivos().length);
+        const refs = filasRef();
+        // D2: la fila `origen: ref` existe cuando el archivo vive en OTRO item/pedido.
+        // Aca la familia es la del PROPIO item, asi que el contrato es NO escribir ref
+        // (y no mover un byte). El caso cruzado (ref a un pedido pagado) lo cubre la
+        // fase `biblioteca` del arnes en CLI.
+        check('biblioteca (030/E3/D2): con la familia en el propio item no escribe ref (contrato del caso cruzado)', refs.length === refsAntes, refsAntes + ' -> ' + refs.length + ' | ' + JSON.stringify(refs.slice(-1)));
+
+        // E4: reusar recomponiendo => VERSION de la MISMA familia. Se comprueba en el
+        // manifest (fuente de verdad): filas que comparten `madre` con `{madre}-N`.
+        const famAntes = familiasItem();
+        await abrirModal(page);
+        await page.evaluate(() => {
+            const r = document.querySelector('.spmu-fila-escala input[type=range]');
+            if (r) { r.value = String(Math.min(4, (Number(r.value) || 1) * 1.5)); r.dispatchEvent(new Event('input', { bubbles: true })); }
+        });
+        await esperar(800);
+        await page.locator('.spmu-file').setInputFiles(FOTO);
+        await esperar(2500);
+        await page.getByRole('button', { name: 'Subir', exact: true }).first().click();
+        await esperar(3000);
+        await subirOtra(page);
+        await cerrarOverlays(page);
+        const famDespues = familiasItem();
+        const versionadas = Object.keys(famDespues).filter((m) => /-2\./.test(famDespues[m].join(' ')));
+        check('biblioteca (030/E4): con otra Escala entra una VERSION de la misma familia', versionadas.length >= 1,
+            'familias=' + Object.keys(famDespues).length + ' antes=' + Object.keys(famAntes).length + ' | version=' + JSON.stringify(versionadas.slice(0, 2)));
+
+        // E6.1: dedupe por contenido. Subir la MISMA foto otra vez NO crea otra familia.
+        const familiasAntes6 = Object.keys(familiasItem()).length;
+        await abrirModal(page);
+        await page.locator('.spmu-file').setInputFiles(FOTO);
+        await esperar(2500);
+        await page.getByRole('button', { name: 'Subir', exact: true }).first().click();
+        await esperar(2500);
+        await subirOtra(page);
+        await cerrarOverlays(page);
+        const familiasDespues6 = Object.keys(familiasItem()).length;
+        check('biblioteca (030/E6): re-subir la misma foto reusa la familia (sin duplicar la entrada)', familiasDespues6 === familiasAntes6,
+            familiasAntes6 + ' -> ' + familiasDespues6 + ' familias');
+        page.screenshot({ path: CAPT + '\\biblioteca-tira.png' }).catch(() => { });
+
         // ---- Vista previa: galeria 300x300 + mockup (spec 004/011) y pool (spec 029)
         const op = page.locator('.pmu-opciones-btn');
         if (await op.count()) { await op.last().click().catch(() => { }); await esperar(400); }
@@ -249,10 +472,15 @@ async function precondiciones(page) {
         if (!/\/cart\//.test(page.url())) { await page.goto(BASE + '/cart/', { waitUntil: 'domcontentloaded' }).catch(() => { }); }
         await esperar(2500);
         await cerrarModalPais(page);
-        const carrito = await page.evaluate(() => ({
-            items: document.querySelectorAll('.woocommerce-cart-form__cart-item, tr.cart_item').length,
-            texto: document.body.innerText.replace(/\s+/g, ' ').slice(0, 200)
-        }));
+        let carrito = { items: 0, texto: '' };
+        for (let i = 0; i < 20; i++) {              // el carrito puede pintar despues del POST
+            carrito = await page.evaluate(() => ({
+                items: document.querySelectorAll('.woocommerce-cart-form__cart-item, tr.cart_item').length,
+                texto: document.body.innerText.replace(/\s+/g, ' ').slice(0, 200)
+            }));
+            if (carrito.items >= 1) break;
+            await esperar(700);
+        }
         check('carrito: el item personalizado entro (1 linea)', carrito.items >= 1, 'items=' + carrito.items + ' | ' + carrito.texto.slice(0, 110));
         const mockup = listarRec(PMU + '\\tmp').filter((f) => /mockup-.*\.webp$/.test(f.ruta))[0];
         check('carrito (spec 004): el mockup quedo congelado en el item al agregar', !!mockup,
