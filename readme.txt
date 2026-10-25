@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.22.3
+Stable tag: 4.22.4
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,10 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.22.4 =
+* Arreglado (spec 009, T041): cuando el motor **rechazaba** escribir la hoja de miniaturas, la galeria informaba `motor:rechazo` en vez de la causa exacta; ahora se muestra el motivo real (`motor:sprite:catalogo:no_escribible`, etc.) conservado por `ThumbEngine.ultimaCausa`.
+* Nueva **puerta de navegador** `tests/galerias-sprite.browser.js` (spec 009: galerias, hojas y geometria en el navegador real, 32/32) con modo **solo-UI** (`PMU_SOLO_UI=1` + `PMU_BASE=<sitio>`) para correrla contra el sitio sin leer el disco.
 
 = 4.22.3 =
 * Spec 030 (biblioteca de imagenes) - quinta pasada: la tira de "Mis imagenes" vive **arriba de la escena**, en su propia fila, con el boton **Cargar imagen** a la izquierda, junto a las miniaturas; la fila de acciones queda Cancelar/Subir.
