@@ -909,11 +909,18 @@ php tests/inventario_repo.php               # Archivos/pesos/dependencias -> doc
 Los recorridos de aceptación de cada spec se corren en el **laboratorio local** (WP+Woo reales, plugin
 y tema montados por *junction*) con Chrome + Playwright **sin instalar nada en el repo**: arranque,
 credenciales, scripteado, higiene de datos y las trampas conocidas están en
-`docs/entorno-desarrollo.md` §9. Vigentes: `recorrido-009.cjs` (spec 009: **33/33**) y
-`recorrido-ficha-pedido.cjs` (ficha → pedido → **`orders/{id}/{item}/…_procesado.pdf`**: **29/29**).
-Hallazgo relevante del recorrido: con **presets v1** en los datos el motor no renderiza el hueco, la
-ficha queda sin mockup y **desbloquea el carrito** (conducta documentada); el lab se siembra con
-`php preset-lab.php` (ver §9.5).
+`docs/entorno-desarrollo.md` §9. Vigentes: `recorrido-009.cjs` (spec 009: **33/33**) y la **puerta del
+plugin** `tests/ficha-pedido.browser.js` (ficha → pedido → `orders/{id}/{item}/…_procesado.pdf`:
+**26/26**), que cubre `assets/tienda.js` y **falla con la causa accionable** si al lab le falta una
+precondición (lab apagado, producto sin `_pmu_pdf_slugs`, **presets v1 en lugar de v2**, COD sin
+`enable_for_virtual`).
+
+```powershell
+$env:NODE_PATH = "$env:TEMP\pmu-pw\node_modules"
+$env:TEXTMUY_CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+node tests/ficha-pedido.browser.js          # recorre y deja capturas + ficha-pedido.json
+pwsh C:\wp-lab\arrancar.ps1                  # (si el lab esta apagado)
+```
 
 ### Verificación en el sitio real (WordPress + Woo)
 Consola → pestaña **Test** → botón **Ejecutar smoke test**. Corre con WordPress/Woo

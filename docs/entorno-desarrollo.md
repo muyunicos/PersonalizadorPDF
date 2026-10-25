@@ -249,8 +249,10 @@ $env:PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD='1'; npm i --prefix "$env:TEMP\pmu-pw" pla
 # Cada corrida:
 $env:NODE_PATH = "$env:TEMP\pmu-pw\node_modules"
 $env:TEXTMUY_CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
-node C:\wp-lab\recorrido-009.cjs             # galerias y hojas de la spec 009
-node C:\wp-lab\recorrido-ficha-pedido.cjs    # ficha -> foto -> vista previa -> carrito -> checkout -> descargas
+node C:\wp-lab\recorrido-009.cjs             # galerias y hojas de la spec 009 (33/33)
+node C:\Users\Jonatan\Documents\GitHub\personalizador-pdf\tests\ficha-pedido.browser.js
+                                            # PUERTA del plugin: ficha -> pedido -> PDF (26/26)
+                                            # (`C:\wp-lab\recorrido-ficha-pedido.cjs` es un wrapper)
 node C:\wp-lab\probe-ficha.cjs               # volcado del DOM de la ficha (diagnostico)
 node C:\wp-lab\probe-modal.cjs               # volcado del modal del cargador
 ```
@@ -259,7 +261,11 @@ node C:\wp-lab\probe-modal.cjs               # volcado del modal del cargador
 
 - `recorrido-009.cjs`: **33/33 OK** (SC-001/002/003/004/005/006/007/009 + FR-009). Evidencia:
   `capturas/e*.png` y `capturas/recorrido-009.json`.
-- `recorrido-ficha-pedido.cjs`: **29/29 OK** (2026-10-24). Ciclo completo: ficha con panel y formulario,
+- **Puerta del plugin `tests/ficha-pedido.browser.js`: 26/26 OK** (2026-10-24) — vive en el repo
+  (el `.cjs` del lab quedo como *wrapper* de una linea, para no duplicar lógica). Cubre
+  `assets/tienda.js` con WP+Woo reales y **verifica precondiciones con causa accionable** antes de
+  recorrer. Detalle del circuito cubierto:
+  ficha con panel y formulario,
   `PMU_FICHA` (2 PDFs / 2 campos), campos montados, **cargador subiendo la foto** (queda `.webp` en
   `subidas/`, spec 026), **mínimo de fotos bloqueando el carrito** con su aviso (spec 022), **Vista
   previa** (`admin-ajax`) con la **galería 300x300 y el canvas del mockup** (spec 011), **pool `img/`**

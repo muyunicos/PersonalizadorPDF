@@ -41,10 +41,10 @@ Detalle completo por spec: [004/quickstart.md §1](./004-woocommerce-pdf-persona
 ## 0.bis Entorno: laboratorio local (`C:\wp-lab`)
 
 Arranque, credenciales (`lab`/`labpass123`), datos del lab, helpers y recetas de recreación:
-`docs/entorno-desarrollo.md` §9. Recorridos vigentes: `recorrido-009.cjs` (**33/33**, spec 009) y
-`recorrido-ficha-pedido.cjs` (**29/29**: ficha → foto → vista previa con mockup → carrito → **checkout
-con COD → pedido → `orders/{id}/{item}/` con el `_procesado.pdf`**). Regla: el recorrido se corre
-**scripteado** en el lab y el hosting solo confirma el deploy.
+`docs/entorno-desarrollo.md` §9. Recorridos vigentes: `recorrido-009.cjs` (**33/33**, spec 009) y la **puerta del plugin**
+`tests/ficha-pedido.browser.js` (**26/26**: ficha → foto → vista previa con mockup → carrito →
+**checkout con COD → pedido → `orders/{id}/{item}/` con el `_procesado.pdf`**). Regla: el recorrido se
+corre **scripteado** en el lab y el hosting solo confirma el deploy.
 
 ## 1. Editor + raiz unica (006 T017-parcial, T029-parcial)
 
