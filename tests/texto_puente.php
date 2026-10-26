@@ -21,7 +21,7 @@ if (PHP_SAPI !== 'cli') {
  *    validez | validez_admin | validez_admin_mal | ficha* | vista_previa* |
  *    carrito | minimos | pool* | overrides | sesion | conciliacion | completados | mockups* |
  *    mockup_foto | mockup_foto_baja | mockup_foto_ajax | desactivar |
- *    reanalizar | envoltura_op | borrado | campo_global | campo_subida | pool_concurrente |
+ *    reanalizar | envoltura_op | reemplazo | borrado | campo_global | campo_subida | pool_concurrente |
  *    conexion_pc | redimensionar_pc | redimensionar_pc_anime | pipeline_pc | pipeline_pc_sin_predeterminados | pipeline_pc_invalida | ia_config | ia_config_locar | ia_config_invalida | ia_config_host_obsoleto`
  */
 
@@ -389,6 +389,79 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
 
     $switch_fase = $fase;
     switch ($switch_fase) {
+        case 'reemplazo':
+            // spec 032 T003/T004: `Metadata::mapaDeReemplazo()` es PURO, asi que
+            // los casos corren aca (sin entorno ni handlers).
+            {
+                $g32 = function ($id, $w, $h, $cont, $cajas, $pagina = 0) {
+                    $inst = [];
+                    foreach ($cajas as $b) {
+                        $inst[] = ['page' => $pagina, 'dev_bbox' => $b, 'w' => $w, 'h' => $h];
+                    }
+                    return ['id' => $id, 'w' => $w, 'h' => $h, 'cont' => $cont,
+                        'pgs' => [$pagina], 'instancias' => $inst];
+                };
+                $boxA4 = [0, 0, 595, 842];
+                $boxesA4 = [0 => $boxA4];
+                $env32 = function ($grupos) use ($boxesA4) {
+                    return \ExtractCorel\Engine\Metadata::mapaDeReemplazo($grupos[0], $grupos[1], $boxesA4, $grupos[2] ?? []);
+                };
+
+                $mismo = $env32([[$g32('0000FF', 463, 463, 8, [[100, 100, 200, 200]])],
+                    [$g32('0000FF', 463, 463, 8, [[100, 100, 200, 200]])]]);
+                check('032: mismo id reasocia solo', $mismo['iguales'] === ['0000FF' => '0000FF']
+                    && !$mismo['sugeridos'] && !$mismo['perdidos'] && !$mismo['nuevos']);
+
+                $cambia = $env32([[$g32('0000FF', 463, 463, 8, [[100, 100, 200, 200]])],
+                    [$g32('00FF00', 463, 463, 8, [[100, 100, 200, 200]])]]);
+                check('032: mismo hueco y OTRO color -> sugerido por geometria',
+                    count($cambia['sugeridos']) === 1
+                    && $cambia['sugeridos'][0]['de'] === '0000FF'
+                    && $cambia['sugeridos'][0]['a'] === '00FF00'
+                    && $cambia['sugeridos'][0]['iou'] > 0.95);
+
+                $movido = $env32([[$g32('0000FF', 463, 463, 8, [[100, 100, 200, 200]])],
+                    [$g32('00FF00', 463, 463, 8, [[5, 800, 20, 815]])]]);
+                check('032: hueco movido -> perdido (sin sugerencia)',
+                    !$movido['sugeridos'] && count($movido['perdidos']) === 1
+                    && $movido['perdidos'][0]['gid'] === '0000FF');
+
+                $dos32 = $env32([[$g32('0000FF', 463, 463, 8, [[100, 100, 200, 200]]),
+                    $g32('FF0000', 463, 463, 8, [[100, 100, 200, 200]])],
+                    [$g32('00FF00', 463, 463, 8, [[100, 100, 200, 200]])]]);
+                check('032: 1:1 -> un solo destino y un perdido',
+                    count($dos32['sugeridos']) === 1 && count($dos32['perdidos']) === 1);
+
+                $sinBbox = $env32([[['id' => '0000FF', 'w' => 400, 'h' => 400, 'cont' => 4, 'pgs' => [0]]],
+                    [['id' => '00FF00', 'w' => 400, 'h' => 400, 'cont' => 4, 'pgs' => [0]]]]);
+                check('032: sin bboxes el score cae a tamano + cantidad',
+                    count($sinBbox['sugeridos']) === 1);
+
+                $otraPag = $env32([[$g32('0000FF', 463, 463, 1, [[100, 100, 200, 200]], 0)],
+                    [$g32('00FF00', 463, 463, 1, [[100, 100, 200, 200]], 1)]]);
+                check('032: la misma caja en OTRA pagina no empareja', !$otraPag['sugeridos']);
+
+                $nuevo32 = $env32([[$g32('0000FF', 463, 463, 8, [[100, 100, 200, 200]])],
+                    [$g32('00FF00', 463, 463, 8, [[100, 100, 200, 200]]),
+                        $g32('112233', 100, 100, 1, [[400, 400, 500, 500]])]]);
+                check('032: el grupo nuevo sin par queda en `nuevos` (y el id numerico es string)',
+                    $nuevo32['nuevos'] === ['112233']
+                    && is_string($nuevo32['nuevos'][0]));
+
+                $per32 = $env32([[$g32('0000FF', 463, 463, 8, [[100, 100, 200, 200]])],
+                    [$g32('00FF00', 463, 463, 8, [[5, 800, 20, 815]])],
+                    ['placeholders' => ['0000FF' => ['value' => 'Ana']]]]);
+                check('032: perdido CON personalizacion',
+                    $per32['perdidos'][0]['con_personalizacion'] === true);
+
+                $M = \ExtractCorel\Engine\Metadata::class;
+                check('032: distancia de color (identico / vecino / opuesto / invalido)',
+                    $M::distanciaColor('0000FF', '0000FF') === 0.0
+                    && $M::distanciaColor('0000FF', '0000FE') <= 0.15
+                    && $M::distanciaColor('0000FF', '00FF00') > 0.15
+                    && $M::distanciaColor('ZZZZZZ', '0000FF') === 1.0);
+            }
+            break;
         case 'desactivar':
             $cfg_d = $p->motor_para_tests()->leer_config('muestra');
             check('JSON de configuracion', is_array($json) && $json['success'] === true);

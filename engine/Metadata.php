@@ -373,4 +373,242 @@ class Metadata
         }
         return json_decode($raw, true);
     }
+
+    /**
+     * Mapa de reasociacion para REEMPLAZAR el PDF (spec 032, T003). PURO.
+     *
+     * Compara el analisis VIGENTE con el NUEVO (ambos con `instancias`, tal como
+     * los devuelve `Detector::analizarPdf()`) y propone el mapa viejo->nuevo:
+     * mismo id = reasociacion automatica; el resto, SUGERENCIA por geometria
+     * (**filtro**: IoU de las `dev_bbox` normalizadas al box de su pagina >= 0,5)
+     * y color (**peso**, no filtro: un rediseno cambia el color a proposito).
+     *
+     * **1:1** (INV-1): ningun grupo nuevo es destino de dos viejos. Los pares
+     * candidatos se ordenan por `score` (0,6*IoU + 0,4*color) y se toman de a uno.
+     *
+     * @param array $previos grupos del analisis vigente (['id','w','h','cont','pgs','instancias'])
+     * @param array $nuevos  idem del PDF nuevo
+     * @param array $boxes   box por pagina (0-based) => [x0,y0,x1,y1]; ausente = sin normalizar
+     * @param array $config  config previo (solo para marcar `con_personalizacion`)
+     * @return array
+     */
+    public static function mapaDeReemplazo(array $previos, array $nuevos, array $boxes = [], array $config = [])
+    {
+        $umbralIou = 0.5;
+
+        $idxPrevios = [];
+        foreach ($previos as $g) {
+            $id = (string)($g['id'] ?? '');
+            if (self::idValido($id)) {
+                $idxPrevios[$id] = $g;
+            }
+        }
+        $idxNuevos = [];
+        foreach ($nuevos as $g) {
+            $id = (string)($g['id'] ?? '');
+            if (self::idValido($id)) {
+                $idxNuevos[$id] = $g;
+            }
+        }
+
+        $maph = isset($config['placeholders']) && is_array($config['placeholders'])
+            ? $config['placeholders'] : [];
+        $tienePerson = function ($id) use ($maph) {
+            $m = $maph[$id] ?? null;
+            if (!is_array($m)) {
+                return false;
+            }
+            return (isset($m['value']) && (string)$m['value'] !== '')
+                || (isset($m['preset']) && (string)$m['preset'] !== '')
+                || (isset($m['settings']) && (string)$m['settings'] !== '');
+        };
+
+        // 1) Ids que sobreviven: reasociacion automatica.
+        // OJO: PHP castea a INT las claves de array con forma numerica (un color
+        // como `112233` entra como int). Por eso TODO lo que sale de aca es
+        // (string): el contrato promete ids string y el JS los usa como claves.
+        $iguales = [];
+        $usados = [];
+        foreach ($idxPrevios as $id => $g) {
+            if (isset($idxNuevos[$id])) {
+                $iguales[$id] = (string)$id;
+                $usados[$id] = true;
+            }
+        }
+
+        // 2) Candidatos entre los que NO tienen id igual (umbrales R3).
+        $pares = [];
+        foreach ($idxPrevios as $id => $g) {
+            if (isset($iguales[$id])) {
+                continue;
+            }
+            foreach ($idxNuevos as $idN => $gN) {
+                if (isset($usados[$idN])) {
+                    continue;
+                }
+                $iou = self::iouGrupos($g, $gN, $boxes);
+                if ($iou < $umbralIou) {
+                    continue;
+                }
+                // El color NO filtra: un rediseno cambia el color A PROPOSITO (ese
+                // era justo el caso que perdia la personalizacion). Pondera en el
+                // score, asi desempata entre huecos geometricamente parecidos.
+                $dist = self::distanciaColor($id, $idN);
+                $pares[] = [
+                    'de' => (string)$id,
+                    'a' => (string)$idN,
+                    'iou' => round($iou, 4),
+                    'color' => round(1 - $dist, 4),
+                    'score' => round(0.6 * $iou + 0.4 * (1 - $dist), 4),
+                ];
+            }
+        }
+        usort($pares, function ($x, $y) {
+            return $y['score'] <=> $x['score'];
+        });
+        $sugeridos = [];
+        $tomados = [];
+        foreach ($pares as $p) {
+            if (isset($tomados[$p['de']]) || isset($usados[$p['a']])) {
+                continue;
+            }
+            $tomados[$p['de']] = true;
+            $usados[$p['a']] = true;
+            $sugeridos[] = $p;
+        }
+        usort($sugeridos, function ($x, $y) {
+            return strcmp($x['de'], $y['de']);
+        });
+
+        // 3) Perdidos (con o sin personalizacion) y nuevos sin par.
+        $perdidos = [];
+        foreach ($idxPrevios as $id => $g) {
+            if (isset($iguales[$id]) || isset($tomados[$id])) {
+                continue;
+            }
+            $perdidos[] = ['gid' => (string)$id, 'con_personalizacion' => (bool)$tienePerson($id)];
+        }
+        $libres = [];
+        foreach ($idxNuevos as $idN => $gN) {
+            if (!isset($usados[$idN])) {
+                $libres[] = (string)$idN;
+            }
+        }
+        sort($libres);
+
+        return [
+            'grupos_previos' => count($idxPrevios),
+            'grupos_nuevos' => count($idxNuevos),
+            'iguales' => $iguales,
+            'sugeridos' => $sugeridos,
+            'perdidos' => $perdidos,
+            'nuevos' => $libres,
+            'avisos' => [],
+        ];
+    }
+
+    /** Distancia de color 0..1 (euclidea normalizada en RGB; R2). Publica: testeable. */
+    public static function distanciaColor($hexA, $hexB)
+    {
+        $a = self::rgbDeHex($hexA);
+        $b = self::rgbDeHex($hexB);
+        if ($a === null || $b === null) {
+            return 1.0;
+        }
+        $dr = $a[0] - $b[0];
+        $dg = $a[1] - $b[1];
+        $db = $a[2] - $b[2];
+        return sqrt(($dr * $dr + $dg * $dg + $db * $db) / 3) / 255;
+    }
+
+    private static function rgbDeHex($hex)
+    {
+        $v = strtoupper(ltrim((string)$hex, '#'));
+        if (preg_match('/^[0-9A-F]{6}$/', $v) !== 1) {
+            return null;
+        }
+        return [hexdec(substr($v, 0, 2)), hexdec(substr($v, 2, 2)), hexdec(substr($v, 4, 2))];
+    }
+
+    /**
+     * IoU de dos grupos: el mejor por par de instancias (misma pagina),
+     * CASTIGADO por la diferencia de cantidad (si no, una instancia suelta
+     * emparejaria a un grupo de 8). Sin bboxes cae a tamano + cantidad (R1).
+     */
+    private static function iouGrupos(array $a, array $b, array $boxes)
+    {
+        $ca = self::cajasNormalizadas($a, $boxes);
+        $cb = self::cajasNormalizadas($b, $boxes);
+        if ($ca && $cb) {
+            $mejor = 0.0;
+            foreach ($ca as $u) {
+                foreach ($cb as $v) {
+                    $iou = self::iou($u, $v);
+                    if ($iou > $mejor) {
+                        $mejor = $iou;
+                    }
+                }
+            }
+            if ($mejor <= 0.0) {
+                return 0.0;
+            }
+            $na = max(1, (int)($a['cont'] ?? count($ca)));
+            $nb = max(1, (int)($b['cont'] ?? count($cb)));
+            return $mejor * (min($na, $nb) / max($na, $nb));
+        }
+        $wa = max(1, (int)($a['w'] ?? 1));
+        $wb = max(1, (int)($b['w'] ?? 1));
+        $ha = max(1, (int)($a['h'] ?? 1));
+        $hb = max(1, (int)($b['h'] ?? 1));
+        $na = max(1, (int)($a['cont'] ?? 1));
+        $nb = max(1, (int)($b['cont'] ?? 1));
+        return (min($wa, $wb) / max($wa, $wb)
+            + min($ha, $hb) / max($ha, $hb)
+            + min($na, $nb) / max($na, $nb)) / 3;
+    }
+
+    /** Cajas 0..1 (por pagina) de las instancias con `dev_bbox`. */
+    private static function cajasNormalizadas(array $g, array $boxes)
+    {
+        $out = [];
+        foreach ((array)($g['instancias'] ?? []) as $in) {
+            $bb = $in['dev_bbox'] ?? null;
+            if (!is_array($bb) || count($bb) < 4) {
+                continue;
+            }
+            $pagina = (int)($in['page'] ?? 0);
+            $x0 = (float)$bb[0];
+            $y0 = (float)$bb[1];
+            $x1 = (float)$bb[2];
+            $y1 = (float)$bb[3];
+            $box = $boxes[$pagina] ?? null;
+            if (is_array($box) && count($box) >= 4) {
+                $bw = (float)$box[2] - (float)$box[0];
+                $bh = (float)$box[3] - (float)$box[1];
+                if ($bw > 0 && $bh > 0) {
+                    $x0 = ($x0 - (float)$box[0]) / $bw;
+                    $x1 = ($x1 - (float)$box[0]) / $bw;
+                    $y0 = ($y0 - (float)$box[1]) / $bh;
+                    $y1 = ($y1 - (float)$box[1]) / $bh;
+                }
+            }
+            $out[] = ['page' => $pagina, 'x0' => $x0, 'y0' => $y0, 'x1' => $x1, 'y1' => $y1];
+        }
+        return $out;
+    }
+
+    /** IoU de dos cajas normalizadas; 0 si son de paginas distintas. */
+    private static function iou(array $a, array $b)
+    {
+        if ((int)$a['page'] !== (int)$b['page']) {
+            return 0.0;
+        }
+        $ix = max(0.0, min($a['x1'], $b['x1']) - max($a['x0'], $b['x0']));
+        $iy = max(0.0, min($a['y1'], $b['y1']) - max($a['y0'], $b['y0']));
+        $inter = $ix * $iy;
+        $areaA = max(0.0, $a['x1'] - $a['x0']) * max(0.0, $a['y1'] - $a['y0']);
+        $areaB = max(0.0, $b['x1'] - $b['x0']) * max(0.0, $b['y1'] - $b['y0']);
+        $union = $areaA + $areaB - $inter;
+        return $union > 0 ? $inter / $union : 0.0;
+    }
 }

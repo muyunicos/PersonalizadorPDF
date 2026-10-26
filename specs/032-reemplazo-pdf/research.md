@@ -30,8 +30,12 @@ declarado "inmutable" (§5) para un dato que se puede recalcular. **Se descartan
 
 **Decision**: distancia **euclidea normalizada en RGB**: los grupos se identifican por un color
 **plano** (`id` = hex `RRGGBB`, el `fill` del rectangulo), asi que
-`d = sqrt((Δr² + Δg² + Δb²) / 3) / 255` (0 = identico, 1 = blanco vs negro). Umbral de "color
-parecido": **d <= 0,15** (~ 38 niveles por canal).
+`d = sqrt((Δr² + Δg² + Δb²) / 3) / 255` (0 = identico, 1 = blanco vs negro). Se usa
+`Metadata::distanciaColor()`.
+
+**El color NO se usa como filtro, solo como PESO del score (ver R3)**. Aprendido en la puerta T004:
+un filtro `d <= 0,15` mataba el caso principal (un rediseno cambia el color **a proposito**: azul
+`0000FF` -> verde `00FF00` da `d = 0,816`).
 
 **Rationale**: no hace falta ΔE perceptual: el color del placeholder es **exacto y plano** (no hay
 gradientes ni perfiles), y el caso real es "el mismo hueco con otro color de relleno", donde la
@@ -42,15 +46,20 @@ igualdad exacta — pierde el caso "mismo hueco, color levemente distinto". **Se
 
 ## R3 — Umbrales y direccion del mapa (1:1)
 
-**Decision**: para cada grupo **viejo con personalizacion** se busca el mejor grupo **nuevo** por
-`score = 0,6 * IoU + 0,4 * (1 - d)`; se propone como **sugerido** si `IoU >= 0,5` **y** `d <= 0,15`
-(o si el **id coincide**, que es reasociacion automatica). Cada grupo nuevo se usa **como maximo una
-vez** (**1:1**): al elegir el mejor par se excluyen ambos y se sigue. Sin candidato que pase el umbral
+**Decision**: **el filtro es geometrico**: un grupo viejo se propone como **sugerido** si el mejor
+`IoU >= 0,5`. El **color no filtra**: entra en el `score = 0,6 * IoU + 0,4 * (1 - d)` para
+**desempatar** entre candidatos geometricamente parecidos. Cada grupo nuevo se usa **como maximo una
+vez** (**1:1**): al elegir el mejor par se excluyen ambos y se sigue. Sin candidato que pase el IoU
 = **perdido** (se informa y no se toca su personalizacion: el admin decide).
 
 **Rationale**: 1:1 evita la ambiguedad de "dos personalizaciones viejas al mismo hueco nuevo" (no hay
-regla para elegir cual gana). Los pesos 0,6/0,4 priorizan la posicion, que es mas estable que el color
-(el color se cambia a proposito al redisenar).
+regla para elegir cual gana). El **IoU** manda porque el rediseno puede cambiar el color a proposito
+(era el error de la primera version: filtrar por `d <= 0,15` descartaba azul->verde con el hueco en el
+mismo lugar, justo el caso que el feature existe para resolver).
+
+**Nota de implementacion (trampa de PHP)**: PHP castea a **int** las claves de array con forma
+numerica, asi que un color como `112233` entra como int; el mapa devuelve ids **siempre string**
+(`(string)`) para que el contrato se cumpla y el JS los use como claves. Lo cubre la puerta T004.
 
 **Alternativas**: N:1 (descartado: ambiguo), y "todo manual" (descartado: el caso comun es que **todos**
 los ids coincidan y no hay nada que decidir).
