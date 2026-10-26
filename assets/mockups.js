@@ -342,6 +342,25 @@ jQuery(function ($) {
             '        <span class="ec-mk-marcas"></span>' +
             '      </div>' +
             '      <div class="ec-mk-lienzo"><canvas width="300" height="300"></canvas></div>' +
+            '      <div class="ec-mk-transformar">' +
+            '        <div class="ec-mk-panel-props" hidden>' +
+            '          <div class="ec-mk-props"></div>' +
+            '        </div>' +
+            '        <div class="ec-mk-acciones ec-mk-transformar-acciones" hidden>' +
+            '          <span class="description">Alinear:</span>' +
+            '          <button type="button" class="button button-small ec-mk-alin" data-pos="izquierda">Izq.</button>' +
+            '          <button type="button" class="button button-small ec-mk-alin" data-pos="centro_h">Centro H</button>' +
+            '          <button type="button" class="button button-small ec-mk-alin" data-pos="derecha">Der.</button>' +
+            '          <button type="button" class="button button-small ec-mk-alin" data-pos="arriba">Arriba</button>' +
+            '          <button type="button" class="button button-small ec-mk-alin" data-pos="centro_v">Centro V</button>' +
+            '          <button type="button" class="button button-small ec-mk-alin" data-pos="abajo">Abajo</button>' +
+            '        </div>' +
+            '        <div class="ec-mk-acciones ec-mk-transformar-acciones" hidden>' +
+            '          <span class="description">Distribuir (Ctrl+clic marca varias):</span>' +
+            '          <button type="button" class="button button-small ec-mk-dist" data-eje="x">Distribuir H</button>' +
+            '          <button type="button" class="button button-small ec-mk-dist" data-eje="y">Distribuir V</button>' +
+            '        </div>' +
+            '      </div>' +
             '      <p class="ec-mk-ayuda">Arrastra para mover; usa los tiradores para redimensionar, rotar ' +
             '        y ajustar los cuatro puntos de perspectiva. Los grupos pueden exceder el lienzo; ' +
             '        Alt+clic selecciona solo una capa.</p>' +
@@ -391,26 +410,14 @@ jQuery(function ($) {
             '          </div>' +
             '          <p class="description ec-mk-importar-ayuda">La pagina elegida y sus placeholders se agregan como un grupo movible, redimensionable y rotatable.</p>' +
             '          <p class="ec-mk-importar-estado" aria-live="polite"></p>' +
-            '          <div class="ec-mk-acciones">' +
-            '            <button type="button" class="button button-small ec-mk-alin" data-pos="izquierda">Izq.</button>' +
-            '            <button type="button" class="button button-small ec-mk-alin" data-pos="centro_h">Centro H</button>' +
-            '            <button type="button" class="button button-small ec-mk-alin" data-pos="derecha">Der.</button>' +
-            '            <button type="button" class="button button-small ec-mk-alin" data-pos="arriba">Arriba</button>' +
-            '            <button type="button" class="button button-small ec-mk-alin" data-pos="centro_v">Centro V</button>' +
-            '            <button type="button" class="button button-small ec-mk-alin" data-pos="abajo">Abajo</button>' +
-            '          </div>' +
-            '          <div class="ec-mk-acciones">' +
-            '            <span class="description" style="margin-right:4px">Distribuir (Ctrl+clic marca varias):</span>' +
-            '            <button type="button" class="button button-small ec-mk-dist" data-eje="x">Distribuir H</button>' +
-            '            <button type="button" class="button button-small ec-mk-dist" data-eje="y">Distribuir V</button>' +
-            '          </div>' +
             '        </div>' +
             '      </details>' +
             '      <details class="ec-mk-acordeon" data-ac="ajustes">' +
             '        <summary class="ec-mk-acordeon-cab">Ajustes</summary>' +
             '        <div class="ec-mk-acordeon-cuerpo">' +
-            '          <div class="ec-mk-panel-props" hidden>' +
-            '            <div class="ec-mk-props"></div>' +
+            '          <p class="description ec-mk-ajustes-vacio">Selecciona una capa para ver sus ajustes (solo el mockup).</p>' +
+            '          <div class="ec-mk-ajustes" hidden>' +
+            '            <div class="ec-mk-props-aj"></div>' +
             '          </div>' +
             '        </div>' +
             '      </details>' +
@@ -444,6 +451,10 @@ jQuery(function ($) {
     var ctx = lienzo.getContext('2d');
     var $props = $ed.find('.ec-mk-props');
     var $panelProps = $ed.find('.ec-mk-panel-props');
+    var $ajustes = $ed.find('.ec-mk-ajustes');
+    var $ajustesVacio = $ed.find('.ec-mk-ajustes-vacio');
+    var $propsAj = $ed.find('.ec-mk-props-aj');
+    var $bloqueAline = $ed.find('.ec-mk-transformar-acciones');
 
 
     /* ============ Lienzo de trabajo (T015) ============ */
