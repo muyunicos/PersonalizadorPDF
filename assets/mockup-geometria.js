@@ -239,6 +239,12 @@
         };
     }
 
+    /** Diferencia angular minima, en grados, entre dos angulos en radianes. */
+    function deltaAngular(inicial, actual) {
+        return Math.atan2(Math.sin(numero(actual) - numero(inicial)),
+            Math.cos(numero(actual) - numero(inicial))) * 180 / Math.PI;
+    }
+
     /* ============ Acierto de capa ============ */
 
     /** El punto (x, y) cae dentro de la caja de la capa (con rotacion y sesgo). */
@@ -317,6 +323,63 @@
     }
 
     /**
+     * Limites del grupo en sus ejes locales. `rot` es la orientacion comun
+     * aplicada al grupo; los puntos devueltos por `puntoMarco` vuelven al lienzo.
+     */
+    function marcoOrientado(capas, indices, rot) {
+        var lista = capas || [];
+        var angulo = numero(rot) * Math.PI / 180;
+        var cos = Math.cos(angulo);
+        var sin = Math.sin(angulo);
+        var puntos = [];
+        expandirGrupos(lista, indices).forEach(function (i) {
+            ['nw', 'ne', 'se', 'sw'].forEach(function (tirador) {
+                var global = posicionTirador(lista[i], tirador);
+                puntos.push({
+                    x: global.x * cos + global.y * sin,
+                    y: -global.x * sin + global.y * cos
+                });
+            });
+        });
+        if (!puntos.length) { return null; }
+        var xs = puntos.map(function (p) { return p.x; });
+        var ys = puntos.map(function (p) { return p.y; });
+        var x = Math.min.apply(Math, xs);
+        var y = Math.min.apply(Math, ys);
+        return {
+            x: x,
+            y: y,
+            w: Math.max(1, Math.max.apply(Math, xs) - x),
+            h: Math.max(1, Math.max.apply(Math, ys) - y),
+            rot: numero(rot)
+        };
+    }
+
+    /** Mapea coordenadas normalizadas del marco al espacio global del lienzo. */
+    function puntoMarco(marco, x, y, offsetX, offsetY) {
+        var m = marco || { x: 0, y: 0, w: 1, h: 1, rot: 0 };
+        var lx = numero(m.x) + numero(x) * numero(m.w, 1) + numero(offsetX);
+        var ly = numero(m.y) + numero(y) * numero(m.h, 1) + numero(offsetY);
+        var rad = numero(m.rot) * Math.PI / 180;
+        return {
+            x: lx * Math.cos(rad) - ly * Math.sin(rad),
+            y: lx * Math.sin(rad) + ly * Math.cos(rad)
+        };
+    }
+
+    /** Convierte un punto global a coordenadas locales del marco orientado. */
+    function coordenadaMarco(marco, punto) {
+        var m = marco || { x: 0, y: 0, w: 1, h: 1, rot: 0 };
+        var rad = -numero(m.rot) * Math.PI / 180;
+        var x = numero(punto && punto.x);
+        var y = numero(punto && punto.y);
+        return {
+            x: x * Math.cos(rad) - y * Math.sin(rad) - numero(m.x),
+            y: x * Math.sin(rad) + y * Math.cos(rad) - numero(m.y)
+        };
+    }
+
+    /**
      * Traslada y rota un conjunto alrededor de `centro`, conservando todos
      * los campos de cada capa y las distancias relativas entre ellas.
      */
@@ -339,6 +402,7 @@
             copia.x = nuevoX - numero(original.w, 1) / 2;
             copia.y = nuevoY - numero(original.h, 1) / 2;
             copia.rot = acotarNumero(numero(original.rot) + numero(grados), -360, 360);
+            copia.grupo_rot = acotarNumero(numero(original.grupo_rot) + numero(grados), -360, 360);
             lista[i] = acotar(copia);
         });
         return lista;
@@ -491,11 +555,15 @@
         redimensionarDesdeTirador: redimensionarDesdeTirador,
         posicionTirador: posicionTirador,
         puntosDeRotacion: puntosDeRotacion,
+        deltaAngular: deltaAngular,
         centro: centro,
         contiene: contiene,
         acertarCapa: acertarCapa,
         expandirGrupos: expandirGrupos,
         marco: marco,
+        marcoOrientado: marcoOrientado,
+        puntoMarco: puntoMarco,
+        coordenadaMarco: coordenadaMarco,
         transformarGrupo: transformarGrupo,
         escalarGrupo: escalarGrupo,
         alinear: alinear,

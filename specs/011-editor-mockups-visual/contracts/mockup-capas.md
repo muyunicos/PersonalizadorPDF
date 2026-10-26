@@ -1,6 +1,6 @@
 # Contract: Capas de mockup y render compartido
 
-**Feature**: 011-editor-mockups-visual | **Version**: 7 (enmienda `004-woocommerce-pdf-personalization/contracts/mockups.md`; v3 envolturas PowerClip, v4 dedup de formas + forma representativa + guia del cargador, v5 grupos e importacion de paginas PDF, v6 transformaciones fuera del lienzo, v7 perspectiva y propiedades de grupo)
+**Feature**: 011-editor-mockups-visual | **Version**: 8 (enmienda `004-woocommerce-pdf-personalization/contracts/mockups.md`; v3 envolturas PowerClip, v4 dedup de formas + forma representativa + guia del cargador, v5 grupos e importacion de paginas PDF, v6 transformaciones fuera del lienzo, v7 perspectiva y propiedades de grupo, v8 marco orientado y giro sin salto)
 
 Contrato de la composicion de un mockup (`config.json:mockups[]`) y del **nucleo de render
 compartido** que la usan el editor del admin y la ficha del cliente. Especificacion: [../spec.md](../spec.md).
@@ -18,7 +18,7 @@ compartido** que la usan el editor del admin y la ficha del cliente. Especificac
      "filtros": {"brillo": 95, "contraste": 110}},
     {"tipo": "placeholder", "ref": "0000FF#1", "x": 96, "y": 60, "w": 110, "h": 180,
      "rot": -3, "sesgo": 0.05, "oculta": false, "modo": "normal",
-     "filtros": {"opacidad": 90}, "grupo": "g-pagina-1",
+     "filtros": {"opacidad": 90}, "grupo": "g-pagina-1", "grupo_rot": 0,
      "perspectiva": {"puntos": [{"x": 0.08, "y": 0}, {"x": 1, "y": 0.12},
        {"x": 0.92, "y": 1}, {"x": 0, "y": 0.88}]}}
   ]
@@ -41,6 +41,7 @@ compartido** que la usan el editor del admin y la ficha del cliente. Especificac
 | `bloqueada` | bool; default `false` | **nuevo** |
 | `envoltura` | bool; default `false`; **solo** `tipo=placeholder` (en `img` el saneo fuerza `false`). Recorta la capa al clip vectorial del hueco en el PDF (PowerClip) | **nuevo (v3)** |
 | `grupo` | opcional; id `g-` + 1..36 caracteres `[a-z0-9_-]`; agrupa capas para seleccion, movimiento y rotacion conjuntos en el editor. Sin efecto en el render de la ficha | **nuevo (v5)** |
+| `grupo_rot` | float -360..360; orientacion compartida del marco del grupo; saneada y persistida en cada miembro para que los tiradores sigan la rotacion. Sin efecto si no hay perspectiva | **nuevo (v8)** |
 | `perspectiva` | opcional; `puntos` tiene exactamente cuatro puntos normalizados `(x,y)` en 0..1, en orden arriba-izquierda, arriba-derecha, abajo-derecha, abajo-izquierda. Solo se persiste si el cuadrilatero es convexo y no neutro. Debe repetirse en los miembros del grupo; la deformacion compone el grupo como una sola pieza en el mockup | nuevo (v7) |
 
 ### 1.3 Grupos e importacion de pagina PDF — v6
@@ -54,6 +55,14 @@ compartido** que la usan el editor del admin y la ficha del cliente. Especificac
 - El marco de un grupo seleccionado ofrece ocho tiradores de escala uniforme alrededor de su
   centro y permite dimensiones de hasta 1200 px; las capas bloqueadas impiden transformar el grupo. El control de rotacion permanece
   dentro del lienzo cuando el borde superior o inferior coincide con el limite.
+- El marco de grupo se calcula en los ejes de `grupo_rot`; el rectangulo, los ocho tiradores,
+  el control de rotacion, el hit-test y los cuatro puntos de perspectiva comparten esa misma
+  transformacion. La rasterizacion temporal de perspectiva usa el mismo marco orientado.
+- El tirador de rotacion de una capa individual aplica el delta angular desde el inicio del gesto
+  a la rotacion existente; tomar el control no cambia el angulo por si solo. `Shift` ajusta a 15°.
+- Al insertar una imagen del catalogo, la caja inicial usa sus dimensiones naturales y conserva
+  la proporcion, centrada y ajustada al lienzo; no se selecciona una caja cuadrada distinta de
+  los limites visibles de la imagen.
 - Las propiedades X/Y/ancho/alto/rotacion actuan sobre el grupo seleccionado. El lienzo presenta
   cuatro tiradores rojos para transformar la perspectiva de todo el grupo; la salida del editor y
   la ficha usan el render deformado. La transformacion no altera el PDF procesado ni los PNG del pool.

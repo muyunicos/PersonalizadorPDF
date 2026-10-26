@@ -504,6 +504,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && ($capas[1]['ref'] ?? '') === 'mock:7');
             check('grupo de capas persiste con id valido', is_array($mc)
                 && ($capas[1]['grupo'] ?? '') === 'g-pagina-1');
+            check('giro comun de grupo persiste saneado', is_array($mc)
+                && ($capas[1]['grupo_rot'] ?? 0) === 360.0);
             check('id de grupo invalido se descarta', is_array($mc)
                 && ($capas[3]['grupo'] ?? '') === '');
             check('dimensiones permiten ampliar hasta 1200 px', is_array($mc)
@@ -4127,7 +4129,7 @@ switch ($fase) {
                         'filtros' => ['brillo' => 100], 'envoltura' => true],
                     // 1: imagen del catalogo por id numerico.
                     ['tipo' => 'img', 'ref' => 'mock:7', 'x' => 10, 'y' => 10, 'w' => 1300, 'h' => 50,
-                        'grupo' => 'g-pagina-1',
+                        'grupo' => 'g-pagina-1', 'grupo_rot' => 450,
                         'perspectiva' => ['puntos' => [
                             ['x' => 0.08, 'y' => 0], ['x' => 1, 'y' => 0.12],
                             ['x' => 0.92, 'y' => 1], ['x' => 0, 'y' => 0.88],

@@ -213,6 +213,17 @@ jQuery(function ($) {
         });
     }
 
+    function giroSeleccion(indices, lista) {
+        var capasLista = lista || capas();
+        var primera = (indices || []).map(function (i) { return capasLista[i]; })
+            .filter(function (c) { return !!c; })[0];
+        return primera ? (parseFloat(primera.grupo_rot) || 0) : 0;
+    }
+
+    function marcoOrientadoSeleccion(indices, lista) {
+        return G.marcoOrientado(lista || capas(), indices, giroSeleccion(indices, lista));
+    }
+
     function puntosPerspectiva(indices, lista) {
         var capasLista = lista || capas();
         var actual = (indices || []).map(function (i) {
@@ -242,12 +253,14 @@ jQuery(function ($) {
     function puntosTiradoresPerspectiva(marco, puntos) {
         var offsets = [{ x: 8, y: 8 }, { x: -8, y: 8 }, { x: -8, y: -8 }, { x: 8, y: -8 }];
         return puntos.map(function (p, i) {
+            var centro = G.puntoMarco(marco, p.x, p.y);
+            var punto = G.puntoMarco(marco, p.x, p.y, offsets[i].x, offsets[i].y);
             return {
                 indice: i,
-                x: marco.x + p.x * marco.w + offsets[i].x,
-                y: marco.y + p.y * marco.h + offsets[i].y,
-                offsetX: -offsets[i].x,
-                offsetY: -offsets[i].y
+                x: punto.x,
+                y: punto.y,
+                offsetX: centro.x - punto.x,
+                offsetY: centro.y - punto.y
             };
         });
     }
@@ -551,30 +564,26 @@ jQuery(function ($) {
     }
 
     function puntosTiradoresGrupo(marco) {
-        var x1 = marco.x;
-        var x2 = marco.x + marco.w / 2;
-        var x3 = marco.x + marco.w;
-        var y1 = marco.y;
-        var y2 = marco.y + marco.h / 2;
-        var y3 = marco.y + marco.h;
         return [
-            { nombre: 'nw', x: x1, y: y1 }, { nombre: 'n', x: x2, y: y1 },
-            { nombre: 'ne', x: x3, y: y1 }, { nombre: 'e', x: x3, y: y2 },
-            { nombre: 'se', x: x3, y: y3 }, { nombre: 's', x: x2, y: y3 },
-            { nombre: 'sw', x: x1, y: y3 }, { nombre: 'w', x: x1, y: y2 }
-        ];
+            { nombre: 'nw', x: 0, y: 0 }, { nombre: 'n', x: 0.5, y: 0 },
+            { nombre: 'ne', x: 1, y: 0 }, { nombre: 'e', x: 1, y: 0.5 },
+            { nombre: 'se', x: 1, y: 1 }, { nombre: 's', x: 0.5, y: 1 },
+            { nombre: 'sw', x: 0, y: 1 }, { nombre: 'w', x: 0, y: 0.5 }
+        ].map(function (p) {
+            var global = G.puntoMarco(marco, p.x, p.y);
+            return { nombre: p.nombre, x: global.x, y: global.y };
+        });
     }
 
     function puntoRotacionGrupo(marco) {
-        var x = marco.x + marco.w / 2;
-        var y = marco.y - 14;
-        if (y < 7) {
-            y = marco.y + Math.min(14, marco.h / 2);
+        var punto = G.puntoMarco(marco, 0.5, 0, 0, -14);
+        if (punto.y < 7) {
+            punto = G.puntoMarco(marco, 0.5, 0, 0, Math.min(14, marco.h / 2));
         }
-        if (y > LIENZO - 7) {
-            y = marco.y + marco.h / 2;
+        if (punto.y > LIENZO - 7) {
+            punto = G.puntoMarco(marco, 0.5, 0.5);
         }
-        return { x: x, y: y };
+        return punto;
     }
 
     /** Tiradores, medidas y nombre de la capa seleccionada (T019). */
@@ -584,43 +593,54 @@ jQuery(function ($) {
         var f = factor();
         var seleccion = indicesSeleccionados();
         if (seleccion.length > 1) {
-            var marcoGrupo = G.marco(capas(), seleccion);
+            var marcoGrupo = marcoOrientadoSeleccion(seleccion);
             if (!marcoGrupo) { return; }
             var rotGrupo = puntoRotacionGrupo(marcoGrupo);
-            var gx = rotGrupo.x;
-            var gy = rotGrupo.y;
             ctx.save();
+            var centroMarco = G.puntoMarco(marcoGrupo, 0.5, 0.5);
+            ctx.translate(centroMarco.x, centroMarco.y);
+            ctx.rotate(marcoGrupo.rot * Math.PI / 180);
             ctx.strokeStyle = '#2271b1';
             ctx.lineWidth = 1.5 / f;
             ctx.setLineDash([4 / f, 3 / f]);
-            ctx.strokeRect(marcoGrupo.x, marcoGrupo.y, marcoGrupo.w, marcoGrupo.h);
+            ctx.strokeRect(-marcoGrupo.w / 2, -marcoGrupo.h / 2, marcoGrupo.w, marcoGrupo.h);
             ctx.setLineDash([]);
             ctx.beginPath();
-            ctx.moveTo(gx, marcoGrupo.y);
-            ctx.lineTo(gx, gy);
+            ctx.moveTo(0, -marcoGrupo.h / 2);
+            var rotLocal = G.coordenadaMarco(marcoGrupo, rotGrupo);
+            ctx.lineTo(rotLocal.x - marcoGrupo.x - marcoGrupo.w / 2,
+                rotLocal.y - marcoGrupo.y - marcoGrupo.h / 2);
             ctx.stroke();
             ctx.fillStyle = '#fff';
             ctx.beginPath();
-            ctx.arc(gx, gy, 5 / f, 0, Math.PI * 2);
+            ctx.arc(rotLocal.x - marcoGrupo.x - marcoGrupo.w / 2,
+                rotLocal.y - marcoGrupo.y - marcoGrupo.h / 2, 5 / f, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
+            ctx.restore();
+            ctx.save();
             var textoGrupo = seleccion.length + ' elementos';
             ctx.font = '11px sans-serif';
             var anchoGrupo = ctx.measureText(textoGrupo).width + 10;
             ctx.fillStyle = 'rgba(255, 255, 255, .92)';
-            ctx.fillRect(marcoGrupo.x, Math.max(0, marcoGrupo.y - 16), anchoGrupo, 14);
+            var etiquetaGrupo = G.puntoMarco(marcoGrupo, 0, 0, 0, -16);
+            ctx.fillRect(etiquetaGrupo.x, etiquetaGrupo.y, anchoGrupo, 14);
             ctx.fillStyle = '#1d2327';
             ctx.textBaseline = 'middle';
-            ctx.fillText(textoGrupo, marcoGrupo.x + 5, Math.max(0, marcoGrupo.y - 8.5));
+            ctx.fillText(textoGrupo, etiquetaGrupo.x + 5, etiquetaGrupo.y + 7);
+            ctx.restore();
             puntosTiradoresGrupo(marcoGrupo).forEach(function (p) {
+                ctx.save();
                 ctx.fillStyle = '#fff';
                 ctx.strokeStyle = '#2271b1';
                 ctx.lineWidth = 1.5 / f;
                 ctx.fillRect(p.x - 4 / f, p.y - 4 / f, 8 / f, 8 / f);
                 ctx.strokeRect(p.x - 4 / f, p.y - 4 / f, 8 / f, 8 / f);
+                ctx.restore();
             });
             if (esGrupoPersistido(seleccion) && !seleccionConBloqueadas(seleccion)) {
                 puntosTiradoresPerspectiva(marcoGrupo, puntosPerspectiva(seleccion)).forEach(function (p) {
+                    ctx.save();
                     ctx.beginPath();
                     ctx.fillStyle = '#fff';
                     ctx.strokeStyle = '#d63638';
@@ -633,9 +653,9 @@ jQuery(function ($) {
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText(String(p.indice + 1), p.x, p.y);
+                    ctx.restore();
                 });
             }
-            ctx.restore();
             return;
         }
         var cx = c.x + c.w / 2;
@@ -708,7 +728,7 @@ jQuery(function ($) {
         var seleccion = indicesSeleccionados();
         if (seleccion.length > 1) {
             if (seleccionConBloqueadas(seleccion)) { return ''; }
-            var marcoGrupo = G.marco(capas(), seleccion);
+            var marcoGrupo = marcoOrientadoSeleccion(seleccion);
             if (!marcoGrupo) { return ''; }
             if (esGrupoPersistido(seleccion)) {
                 var puntosPersp = puntosTiradoresPerspectiva(marcoGrupo, puntosPerspectiva(seleccion));
@@ -771,7 +791,7 @@ jQuery(function ($) {
 
     function capturarArrastreGrupo(tipo, p) {
         var indices = indicesSeleccionados();
-        var marcoGrupo = G.marco(capas(), indices);
+        var marcoGrupo = marcoOrientadoSeleccion(indices);
         if (!marcoGrupo || !indices.length || seleccionConBloqueadas(indices)) { return null; }
         var arrastre = {
             tipo: tipo,
@@ -779,7 +799,8 @@ jQuery(function ($) {
             indices: indices,
             originales: JSON.parse(JSON.stringify(capas())),
             estadoAnterior: JSON.stringify(estado.mockups),
-            centro: { x: marcoGrupo.x + marcoGrupo.w / 2, y: marcoGrupo.y + marcoGrupo.h / 2 }
+            centro: G.puntoMarco(marcoGrupo, 0.5, 0.5),
+            marco: marcoGrupo
         };
         if (tipo === 'rotar-grupo') {
             arrastre.anguloInicio = Math.atan2(p.y - arrastre.centro.y, p.x - arrastre.centro.x);
@@ -793,6 +814,7 @@ jQuery(function ($) {
             arrastre.perspectivaIndex = puntoIndex;
             arrastre.offsetPunto = tiradorPersp
                 ? { x: tiradorPersp.offsetX, y: tiradorPersp.offsetY } : { x: 0, y: 0 };
+            arrastre.marco = marcoGrupo;
         }
         if (tipo.indexOf('redimensionar-grupo:') === 0) {
             arrastre.pivote = arrastre.centro;
@@ -818,6 +840,9 @@ jQuery(function ($) {
                     tipo: tir,
                     inicio: p,
                     original: capa() ? Object.assign({}, capa()) : null,
+                    centro: capa() ? G.centro(capa()) : null,
+                    anguloInicio: capa() && tir === 'rotar'
+                        ? Math.atan2(p.y - G.centro(capa()).y, p.x - G.centro(capa()).x) : 0,
                     estadoAnterior: estadoAnterior
                 };
         } else {
@@ -865,12 +890,16 @@ jQuery(function ($) {
         }
         var a = estado.arrastre;
         if (a.tipo.indexOf('perspectiva:') === 0) {
-            var marcoPerspectiva = G.marco(a.originales, a.indices);
+            var marcoPerspectiva = a.marco;
             if (!marcoPerspectiva || !marcoPerspectiva.w || !marcoPerspectiva.h) { return; }
             var puntosActuales = puntosPerspectiva(a.indices, a.originales);
+            var localPerspectiva = G.coordenadaMarco(marcoPerspectiva, {
+                x: p.x + a.offsetPunto.x,
+                y: p.y + a.offsetPunto.y
+            });
             var nuevoPunto = {
-                x: Math.max(0, Math.min(1, (p.x + a.offsetPunto.x - marcoPerspectiva.x) / marcoPerspectiva.w)),
-                y: Math.max(0, Math.min(1, (p.y + a.offsetPunto.y - marcoPerspectiva.y) / marcoPerspectiva.h))
+                x: Math.max(0, Math.min(1, localPerspectiva.x / marcoPerspectiva.w)),
+                y: Math.max(0, Math.min(1, localPerspectiva.y / marcoPerspectiva.h))
             };
             puntosActuales[a.perspectivaIndex] = nuevoPunto;
             if (perspectivaConvexa(puntosActuales)) {
@@ -894,7 +923,7 @@ jQuery(function ($) {
         }
         if (a.tipo === 'rotar-grupo') {
             var anguloActual = Math.atan2(p.y - a.centro.y, p.x - a.centro.x);
-            var deltaAngulo = (anguloActual - a.anguloInicio) * 180 / Math.PI;
+            var deltaAngulo = G.deltaAngular(a.anguloInicio, anguloActual);
             var giradas = G.transformarGrupo(a.originales, a.indices, a.centro, deltaAngulo, 0, 0);
             mockup().capas = giradas;
             estado.guias = [];
@@ -928,8 +957,10 @@ jQuery(function ($) {
             c.y = imanes.y;
             estado.guias = imanes.guias;
         } else if (a.tipo === 'rotar') {
-            var ang = G.puntosDeRotacion(c, p, { paso: ev.shiftKey ? 15 : 1 });
-            c.rot = ang.angulo;
+            var anguloCapa = Math.atan2(p.y - a.centro.y, p.x - a.centro.x);
+            var deltaCapa = G.deltaAngular(a.anguloInicio, anguloCapa);
+            c.rot = Math.max(-360, Math.min(360, a.original.rot + deltaCapa));
+            if (ev.shiftKey) { c.rot = Math.round(c.rot / 15) * 15; }
             estado.guias = [];
         } else {
             c = G.redimensionarDesdeTirador(a.original, a.tipo, p.x - a.inicio.x, p.y - a.inicio.y, {
@@ -1342,17 +1373,29 @@ jQuery(function ($) {
     }
 
     /**
-     * Imagen del catalogo: cubre todo el lienzo (es el fondo de la escena).
-     * Spec 011 (T032): el catalogo `mockups` es la unica fuente de imagenes;
-     * las fotos por PDF se retiraron.
+     * Inserta la imagen del catalogo con su proporcion natural, centrada en el
+     * lienzo. Spec 011 (T032): `mockups` es la unica fuente de imagenes.
      */
     function agregarCatalogo(id) {
         var it = (datos.imagenes || []).filter(function (x) { return String(x.id) === String(id); })[0];
         if (!it) { return; }
-        agregarCapa({
-            tipo: 'img', ref: 'mock:' + it.id, x: 0, y: 0, w: LIENZO, h: LIENZO,
-            rot: 0, sesgo: 0, filtros: {}, modo: 'normal',
-            nombre: it.title || it.file, oculta: false, bloqueada: false
+        var url = R.urlDeImagen('mock:' + it.id, contexto());
+        R.imagen(url).then(function (recurso) {
+            if (!recurso || !recurso.w || !recurso.h) {
+                $ed.find('.ec-mk-alertas').text('No se pudo cargar la imagen del catalogo para insertarla.');
+                return;
+            }
+            var escala = Math.min(1, LIENZO / Math.max(recurso.w, recurso.h));
+            var ancho = Math.max(1, recurso.w * escala);
+            var alto = Math.max(1, recurso.h * escala);
+            agregarCapa({
+                tipo: 'img', ref: 'mock:' + it.id,
+                x: (LIENZO - ancho) / 2, y: (LIENZO - alto) / 2,
+                w: ancho, h: alto, rot: 0, sesgo: 0, filtros: {}, modo: 'normal',
+                nombre: it.title || it.file, oculta: false, bloqueada: false
+            });
+        }).catch(function () {
+            $ed.find('.ec-mk-alertas').text('No se pudo cargar la imagen del catalogo para insertarla.');
         });
     }
 
@@ -1369,7 +1412,10 @@ jQuery(function ($) {
         }
         var estadoAnterior = JSON.stringify(estado.mockups);
         var grupo = nuevoIdGrupo();
-        indices.forEach(function (i) { m.capas[i].grupo = grupo; });
+        indices.forEach(function (i) {
+            m.capas[i].grupo = grupo;
+            m.capas[i].grupo_rot = 0;
+        });
         estado.seleccionados = indices;
         estado.seleccion = indices.indexOf(estado.seleccion) !== -1 ? estado.seleccion : indices[0];
         marcarPaso(estadoAnterior);
@@ -1493,7 +1539,8 @@ jQuery(function ($) {
             var nuevas = [{
                 tipo: 'img', ref: 'mock:' + imagen.id, x: marco.x, y: marco.y,
                 w: marco.w, h: marco.h, rot: 0, sesgo: 0, filtros: {}, modo: 'normal',
-                nombre: 'Pagina ' + numeroPagina, oculta: false, bloqueada: false, grupo: grupoId
+                nombre: 'Pagina ' + numeroPagina, oculta: false, bloqueada: false,
+                grupo: grupoId, grupo_rot: 0
             }];
             var geometria = resultado.geometria;
             if (!geometria || !Array.isArray(geometria.grupos)) {
@@ -1527,6 +1574,7 @@ jQuery(function ($) {
                         tipo: 'placeholder', ref: ref, x: centroX - w / 2, y: centroY - h / 2,
                         w: w, h: h, rot: rotacion, sesgo: 0, filtros: {}, modo: 'normal',
                         nombre: '', oculta: false, bloqueada: false, grupo: grupoId,
+                        grupo_rot: 0,
                         envoltura: info.hay
                     });
                 });

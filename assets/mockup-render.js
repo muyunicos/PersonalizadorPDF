@@ -364,14 +364,28 @@
         });
     }
 
-    function marcoItems(items) {
+    function marcoItems(items, rot) {
+        var angulo = numero(rot) * Math.PI / 180;
+        var cos = Math.cos(angulo), sin = Math.sin(angulo);
         var puntos = [];
-        items.forEach(function (item) { puntos = puntos.concat(esquinasCapa(item.capa)); });
+        items.forEach(function (item) {
+            esquinasCapa(item.capa).forEach(function (p) {
+                puntos.push({ x: p.x * cos + p.y * sin, y: -p.x * sin + p.y * cos });
+            });
+        });
         var xs = puntos.map(function (p) { return p.x; });
         var ys = puntos.map(function (p) { return p.y; });
         var x = Math.min.apply(Math, xs), y = Math.min.apply(Math, ys);
         return { x: x, y: y, w: Math.max(1, Math.max.apply(Math, xs) - x),
-            h: Math.max(1, Math.max.apply(Math, ys) - y) };
+            h: Math.max(1, Math.max.apply(Math, ys) - y), rot: numero(rot) };
+    }
+
+    function puntoMarco(marco, x, y) {
+        var rad = numero(marco.rot) * Math.PI / 180;
+        var lx = marco.x + numero(x) * marco.w;
+        var ly = marco.y + numero(y) * marco.h;
+        return { x: lx * Math.cos(rad) - ly * Math.sin(rad),
+            y: lx * Math.sin(rad) + ly * Math.cos(rad) };
     }
 
     function crearCanvas(w, h) {
@@ -444,8 +458,8 @@
         ctx.restore();
     }
 
-    function dibujarPerspectiva(ctx, items, puntos, discrepancias, op) {
-        var marco = marcoItems(items);
+    function dibujarPerspectiva(ctx, items, puntos, discrepancias, op, rot) {
+        var marco = marcoItems(items, rot);
         var dimension = Math.max(marco.w, marco.h);
         var calidad = Math.min(2, 1200 / dimension);
         var ancho = Math.max(1, Math.ceil(marco.w * calidad));
@@ -454,11 +468,14 @@
         if (!fuente || !fuente.getContext) { return false; }
         var fctx = fuente.getContext('2d');
         if (!fctx) { return false; }
-        fctx.setTransform(calidad, 0, 0, calidad, -marco.x * calidad, -marco.y * calidad);
+        var rad = marco.rot * Math.PI / 180;
+        var cos = Math.cos(rad), sin = Math.sin(rad);
+        fctx.setTransform(calidad * cos, -calidad * sin, calidad * sin, calidad * cos,
+            -marco.x * calidad, -marco.y * calidad);
         items.forEach(function (item) { dibujarItem(fctx, item, op, discrepancias); });
 
         var destino = puntos.map(function (p) {
-            return { x: marco.x + p.x * marco.w, y: marco.y + p.y * marco.h };
+            return puntoMarco(marco, p.x, p.y);
         });
         var celdas = 32;
         for (var iy = 0; iy < celdas; iy++) {
@@ -556,7 +573,7 @@
                 var puntos = puntosPerspectiva(item.capa.perspectiva);
                 if (gid && puntos && perspectivaConvexa(puntos) && !esPerspectivaNeutra(puntos)) {
                     gruposPerspectiva[gid] = gruposPerspectiva[gid]
-                        || { puntos: puntos, items: [] };
+                        || { puntos: puntos, items: [], rot: numero(item.capa.grupo_rot) };
                     gruposPerspectiva[gid].items.push(item);
                 }
             });
@@ -567,7 +584,7 @@
                 var grupoPerspectiva = gid ? gruposPerspectiva[gid] : null;
                 if (grupoPerspectiva && grupoPerspectiva.items.length > 1
                     && dibujarPerspectiva(ctx, grupoPerspectiva.items,
-                        grupoPerspectiva.puntos, discrepancias, op)) {
+                        grupoPerspectiva.puntos, discrepancias, op, grupoPerspectiva.rot)) {
                     grupoPerspectiva.items.forEach(function (miembro) {
                         procesadas[miembro.indice] = true;
                     });

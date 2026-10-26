@@ -47,6 +47,10 @@ if (!defined('ABSPATH')) {
         lista; sus campos X/Y permiten traerla de vuelta. El PDF se procesa localmente con los recursos
         incluidos en el plugin; la pagina rasterizada se guarda en el catalogo de imagenes de mockup.
         La perspectiva solo afecta el render del mockup, no modifica el PDF final.</p>
+    <p>Las imagenes agregadas desde el catalogo se insertan centradas y con su proporcion real; el marco
+        de seleccion coincide con sus limites. Al rotar una capa, el gesto conserva el angulo inicial y
+        no salta al tomar el tirador. En grupos rotados, el marco, sus tiradores y los cuatro controles
+        de perspectiva siguen la orientacion del conjunto.</p>
 </div>
 
 <div class="card">

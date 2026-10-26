@@ -1700,6 +1700,7 @@ class PMU_Uploads
                     'w' => max(1, min(1200, (int)($c['w'] ?? 0))),
                     'h' => max(1, min(1200, (int)($c['h'] ?? 0))),
                     'rot' => $this->clamp_float((float)($c['rot'] ?? 0), -360, 360),
+                    'grupo_rot' => $this->clamp_float((float)($c['grupo_rot'] ?? 0), -360, 360),
                     'sesgo' => $this->clamp_float((float)($c['sesgo'] ?? 0), -1, 1),
                     'filtros' => $this->mockup_filtros($c['filtros'] ?? []),
                     'modo' => $this->mockup_modo($c['modo'] ?? 'normal'),

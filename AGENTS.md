@@ -367,7 +367,8 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   se inventa geometria)) + `pdfs/{nombre}/config.json` (editable: `activo`, `productos`,
   `campos_ids`, `preview_omisible` (bool, default `false` = mockup obligatorio en ficha),
   `mockups[]` (plantillas de vista previa: `capas[]` con `tipo`/`ref`/`x`/`y`/`w`/`h`/
-  `rot`/`sesgo` legado/`filtros`/`modo`/`nombre`/`oculta`/`bloqueada`/`envoltura`/`grupo` y
+  `rot`/`sesgo` legado/`filtros`/`modo`/`nombre`/`oculta`/`bloqueada`/`envoltura`/`grupo`/
+  `grupo_rot` y
   `perspectiva.puntos[]` opcional (cuatro puntos normalizados para deformar el grupo completo)
   opcional; canvas 300x300),
   `tienda{product_id}` (spec 005: Configuracion
@@ -392,15 +393,16 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `brillo`/`gama`/`contraste`/`saturacion` 0..200, `opacidad` 0..100, `desenfoque` 0..20 y
   `tono` -180..180; el valor igual al default **no se persiste**. `capas[].modo` es
   `normal`|`multiply`. `grupo` agrupa capas del editor para seleccionar/mover/redimensionar/rotar
-  juntas (capas de hasta 1200 px); el panel y sus controles numericos operan sobre el grupo. Cuatro
-  puntos convexos `perspectiva.puntos` aplican homografia al grupo a traves del render compartido,
+  juntas (capas de hasta 1200 px); `grupo_rot` conserva la orientacion comun del marco, y dibujo,
+  hit-test y perspectiva usan sus mismos ejes. El panel y sus controles numericos operan sobre el
+  grupo. Cuatro puntos convexos `perspectiva.puntos` aplican homografia al grupo a traves del render compartido,
   solo para el mockup: no modifican los PNG del pool ni el PDF final. `sesgo` se conserva para capas
   guardadas, pero ya no se ofrece como control del editor. Alt+clic permite manipular un miembro sin
   cambiar su pertenencia. `x`/`y` aceptan ±3000 px:
   el contenido fuera del area 300x300 queda recortado al renderizar. En la lista ▲/▼, mantener
   1 segundo envia la seleccion (grupo como bloque) al extremo del orden y se registra como una
   accion deshacible. El editor importa una pagina elegida del PDF como imagen del
-  catalogo `mockups` y sus placeholders con envolturas, inicialmente en el mismo grupo;
+  catalogo `mockups` con su proporcion natural y sus placeholders con envolturas, inicialmente en el mismo grupo;
   rasteriza con PDF.js local y consulta la geometria al motor PHP. Todo es opcional:
   ausente = comportamiento actual.
   Contrato completo: `specs/011-editor-mockups-visual/contracts/mockup-capas.md`.

@@ -102,6 +102,10 @@ var puntoAbajo = G.puntosDeRotacion(capaRot, { x: 150, y: 200 }, {});
 igual('rotacion: angulo 90 abajo', puntoAbajo.angulo, 90);
 var conPaso = G.puntosDeRotacion(capaRot, { x: 143, y: 207 }, { paso: 15 });
 igual('rotacion: redondeo al paso mas cercano', conPaso.angulo, 90);
+igual('rotacion: al tomar el tirador el delta inicial es cero',
+    G.deltaAngular(-Math.PI / 4, -Math.PI / 4), 0);
+igual('rotacion: cruza el limite angular sin saltar una vuelta',
+    G.deltaAngular(179 * Math.PI / 180, -179 * Math.PI / 180), 2);
 
 /* ============ Posicion de tiradores (local para dibujo, global para hit-test) ============ */
 
@@ -147,6 +151,20 @@ var esperadoX = (capaCons.x + capaCons.w / 2) + u * Math.cos(r) - consLocal.y * 
 var esperadoY = (capaCons.y + capaCons.h / 2) + u * Math.sin(r) + consLocal.y * Math.cos(r);
 igual('posTirador local+sesgo+rot+centro = global (x)', consGlobal.x, esperadoX);
 igual('posTirador local+sesgo+rot+centro = global (y)', consGlobal.y, esperadoY);
+
+var marco45 = G.marcoOrientado([
+    { x: 100, y: 100, w: 40, h: 20, rot: 45, grupo_rot: 45 }
+], [0], 45);
+var esquina45 = G.posicionTirador(
+    { x: 100, y: 100, w: 40, h: 20, rot: 45, grupo_rot: 45 }, 'nw'
+);
+var marcoEsquina = G.puntoMarco(marco45, 0, 0);
+igual('marco orientado: su esquina sigue la capa rotada (x)', marcoEsquina.x, esquina45.x);
+igual('marco orientado: su esquina sigue la capa rotada (y)', marcoEsquina.y, esquina45.y);
+var punto45 = G.puntoMarco(marco45, 0.3, 0.7);
+var local45 = G.coordenadaMarco(marco45, punto45);
+igual('marco orientado: convierte punto global a local (x)', local45.x, marco45.w * 0.3);
+igual('marco orientado: convierte punto global a local (y)', local45.y, marco45.h * 0.7);
 
 /* ============ Acierto de capa (inversa de rotacion y sesgo) ============ */
 
@@ -222,6 +240,7 @@ igual('grupos: rotacion transforma el centro de la primera capa (y)', transforma
 igual('grupos: rotacion transforma el centro de la segunda capa', transformadas[1].x + 10, 55);
 igual('grupos: rotacion transforma el centro de la segunda capa (y)', transformadas[1].y + 10, 75);
 igual('grupos: suma la rotacion a la capa', transformadas[1].rot, 100);
+igual('grupos: persiste el giro comun', transformadas[0].grupo_rot, 90);
 igual('grupos: no transforma capas ajenas', transformadas[2].x, grupoCapas[2].x);
 igual('grupos: no muta el arreglo original', grupoCapas[0].x, 15);
 var fueraGrupo = G.transformarGrupo(grupoCapas, [0], { x: 50, y: 50 }, 0, -80, 420);
@@ -273,6 +292,10 @@ igual('normalizar: geometria valida intacta', normOk.capa.x, 10);
 igual('lienzo de 300 (salida fija)', G.LIENZO, 300);
 igual('coordenadas fuera del lienzo: limite seguro de 3000', G.MAX_POSICION, 3000);
 igual('tiradores: 8', G.TIRADORES.length, 8);
+check('la geometria exporta marco orientado y conversiones de punto',
+    typeof G.marcoOrientado === 'function'
+        && typeof G.puntoMarco === 'function'
+        && typeof G.coordenadaMarco === 'function');
 igual('posiciones de alineacion: 6', G.POSICIONES.length, 6);
 
 if (fallos > 0) {

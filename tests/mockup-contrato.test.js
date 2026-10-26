@@ -103,7 +103,9 @@ check('el editor ofrece cuatro controles de perspectiva con reinicio',
 check('el renderer aplica perspectiva al grupo a traves de una malla de triangulos',
     /function dibujarPerspectiva\(/.test(leer('assets/mockup-render.js'))
         && /dibujarTriangulo\(ctx, fuente/.test(leer('assets/mockup-render.js'))
-        && /dibujarPerspectiva\(ctx, grupoPerspectiva\.items/.test(leer('assets/mockup-render.js')));
+        && /dibujarPerspectiva\(ctx, grupoPerspectiva\.items/.test(leer('assets/mockup-render.js'))
+        && /marcoItems\(items, rot\)/.test(leer('assets/mockup-render.js'))
+        && /grupoPerspectiva\.rot/.test(leer('assets/mockup-render.js')));
 check('la homografia mapea las cuatro esquinas al cuadrilatero pedido', (function () {
     var q = [{ x: 0.1, y: 0.05 }, { x: 0.9, y: 0.15 },
         { x: 0.8, y: 0.95 }, { x: 0.2, y: 0.85 }];
@@ -316,9 +318,14 @@ check('normalizarCapa conserva los campos extra de la capa', (function () {
 /** Contexto 2D falso que registra lo que se dibuja y en que orden. */
 function ctxFalso() {
     var ops = [];
+    var transforms = [];
     return {
         ops: ops,
-        setTransform: function () { ops.push('setTransform'); },
+        transforms: transforms,
+        setTransform: function () {
+            transforms.push(Array.prototype.slice.call(arguments));
+            ops.push('setTransform');
+        },
         clearRect: function () { ops.push('clearRect'); },
         save: function () { ops.push('save'); },
         restore: function () { ops.push('restore'); },
@@ -615,9 +622,21 @@ check('el editor comprueba los tiradores en GLOBAL',
         && /G\.posicionTirador\(c, G\.TIRADORES\[i\]\)/.test(ed),
     'tiradorEn debe comparar contra la posicion global, no la local');
 // El giro: fino (1 grado) sin Shift, rejilla de 15 con Shift (convencion estandar).
-check('el giro es fino sin Shift y de 15 con Shift',
-    ed.indexOf('paso: ev.shiftKey ? 15 : 1') !== -1,
-    'sin Shift salta de 15 en 15 y con Shift era al reves: poca precision');
+check('el giro conserva la rotacion inicial y usa Shift para pasos de 15',
+    /a\.original\.rot \+ deltaCapa/.test(ed)
+        && /G\.deltaAngular\(a\.anguloInicio, anguloCapa\)/.test(ed)
+        && /G\.deltaAngular\(a\.anguloInicio, anguloActual\)/.test(ed)
+        && /ev\.shiftKey\) \{ c\.rot = Math\.round\(c\.rot \/ 15\) \* 15; \}/.test(ed),
+    'el primer movimiento no debe sustituir la rotacion por el angulo absoluto del puntero');
+check('los tiradores de grupo usan un marco orientado compartido',
+    typeof geometria.marcoOrientado === 'function'
+        && editor.indexOf('marcoOrientadoSeleccion') !== -1
+        && editor.indexOf('G.puntoMarco(marco, p.x, p.y') !== -1
+        && editor.indexOf('G.coordenadaMarco(marcoPerspectiva') !== -1);
+check('la imagen del catalogo conserva su proporcion al insertarse',
+    /R\.imagen\(url\)\.then/.test(editor)
+        && /recurso\.w \* escala/.test(editor)
+        && /recurso\.h \* escala/.test(editor));
 
 /* El indice que espera el nucleo: esValida() acepta 1..cont. */
 check('el nucleo acepta el indice de instancia 1-based',
@@ -837,6 +856,42 @@ pruebas.push(function () {
     }).then(function () {
         check('una capa img nunca se recorta con envoltura',
             !ctx.ops.some(function (o) { return o.indexOf('clip:') === 0; }));
+    });
+});
+
+pruebas.push(function () {
+    var anterior = global.OffscreenCanvas;
+    var contextosFuente = [];
+    global.OffscreenCanvas = function (w, h) {
+        this.width = w;
+        this.height = h;
+        this.getContext = function () {
+            var contextoFuente = ctxFalso();
+            contextosFuente.push(contextoFuente);
+            return contextoFuente;
+        };
+    };
+    var ctx = ctxFalso();
+    var grupo = 'g-rotado';
+    var puntos = [{ x: 0.1, y: 0.05 }, { x: 0.9, y: 0.1 },
+        { x: 0.95, y: 0.9 }, { x: 0.05, y: 0.95 }];
+    return R.componer(ctx, [
+        capa('img', 'mock:1', { grupo: grupo, grupo_rot: 45, perspectiva: { puntos: puntos } }),
+        capa('img', 'mock:2', { grupo: grupo, grupo_rot: 45, perspectiva: { puntos: puntos } })
+    ], {
+        resolver: function (c) { return { url: c.ref }; },
+        contexto: {},
+        lienzo: 300
+    }).then(function () {
+        global.OffscreenCanvas = anterior;
+        var transformacion = contextosFuente[0] && contextosFuente[0].transforms[0];
+        check('la perspectiva rasteriza en los ejes orientados del grupo',
+            !!transformacion && Math.abs(transformacion[1]) > 0.1
+                && Math.abs(transformacion[2]) > 0.1,
+            'el marco de origen debe rotar junto con el grupo');
+    }, function (error) {
+        global.OffscreenCanvas = anterior;
+        throw error;
     });
 });
 
