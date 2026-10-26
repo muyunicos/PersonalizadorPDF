@@ -35,7 +35,7 @@ class PMU_Uploads
     ];
 
     /** Subambitos de trabajo bajo tmp/ (contrato rutas-pmu.md v2, spec 007). */
-    private static $SUBAMBITOS_TMP = ['muestras', 'cart', 'orders'];
+    private static $SUBAMBITOS_TMP = ['muestras', 'cart', 'orders', 'reemplazos'];
 
     /** Grilla del sprite por ambito (defaults; el catalogo vigente manda). */
     private static $THUMBS = [
@@ -836,6 +836,76 @@ class PMU_Uploads
             throw new Exception('motor:dir_tmp_muestras:directorio:no_escribible');
         }
         return $dir;
+    }
+
+    /* ============ Reemplazo del PDF (spec 032) ============ */
+
+    /** Raiz de los reemplazos: uploads/pmu/tmp/reemplazos/ (spec 032). */
+    public function dir_reemplazos($crear = false)
+    {
+        return $this->dir_tmp_sub('reemplazos', $crear);
+    }
+
+    /**
+     * Carpeta de trabajo de UN reemplazo: `tmp/reemplazos/{nombre}/{ts}/` (spec 032, R4).
+     * Con `$ts` vacio devuelve la carpeta del producto (donde vive `ultimo.json`).
+     * El `{ts}` se valida contra el patron que genera el handler (nunca una ruta).
+     */
+    public function dir_reemplazo($nombre, $ts = '', $crear = false)
+    {
+        $nombre = $this->nombre_seguro($nombre, 'reemplazo');
+        $dir = $this->dir_reemplazos($crear) . DIRECTORY_SEPARATOR . $nombre;
+        if ($ts !== '') {
+            $ts = (string)$ts;
+            if (preg_match('/^[0-9]{8}-[0-9]{6}-[a-f0-9]{4}$/', $ts) !== 1) {
+                throw new Exception('motor:reemplazo:ts:invalido');
+            }
+            $dir .= DIRECTORY_SEPARATOR . $ts;
+        }
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        if ($crear && (!is_dir($dir) || !wp_is_writable($dir))) {
+            throw new Exception('motor:reemplazo:directorio:no_escribible');
+        }
+        return $dir;
+    }
+
+    /** Marca el ultimo reemplazo recuperable: `tmp/reemplazos/{n}/ultimo.json`. */
+    public function marcar_ultimo_reemplazo($nombre, $ts)
+    {
+        $nombre = $this->nombre_seguro($nombre, 'reemplazo');
+        $ts = (string)$ts;
+        if (preg_match('/^[0-9]{8}-[0-9]{6}-[a-f0-9]{4}$/', $ts) !== 1) {
+            throw new Exception('motor:reemplazo:ts:invalido');
+        }
+        $dir = $this->dir_reemplazo($nombre, '', true);
+        $ruta = $dir . DIRECTORY_SEPARATOR . 'ultimo.json';
+        $tmp = $ruta . '.tmp';
+        file_put_contents($tmp, json_encode(['ts' => $ts, 'creado' => gmdate('Y-m-d\TH:i:s\Z')]));
+        if (!@rename($tmp, $ruta)) {
+            throw new Exception('motor:reemplazo:ultimo:no_escribible');
+        }
+        return $ts;
+    }
+
+    /** Ultimo reemplazo marcado (o null): lo usa "Recuperar la version anterior". */
+    public function ultimo_reemplazo($nombre)
+    {
+        try {
+            $nombre = $this->nombre_seguro($nombre, 'reemplazo');
+            $ruta = $this->dir_reemplazo($nombre, '') . DIRECTORY_SEPARATOR . 'ultimo.json';
+            if (!is_file($ruta)) {
+                return null;
+            }
+            $datos = json_decode((string)@file_get_contents($ruta), true);
+            if (!is_array($datos) || empty($datos['ts'])) {
+                return null;
+            }
+            return (string)$datos['ts'];
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     /** Imagen aplicada de un grupo (muestra): tmp/muestras/{pdf}/{id}.{ext} */

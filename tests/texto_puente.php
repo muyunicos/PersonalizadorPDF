@@ -525,6 +525,27 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 check('032: sin grupos nuevos NO se tocan los refs',
                     $fallback['config']['mockups'][0]['capas'][0]['ref'] === '0000FF#3'
                     && $fallback['refs_sin_destino'] === []);
+
+                // --- flujo de la transaccion (T011/T015/T020) ---
+                check('032: el respaldo guarda los archivos del producto',
+                    (int)($GLOBALS['rp_respaldo'] ?? 0) >= 3,
+                    'archivos=' . (int)($GLOBALS['rp_respaldo'] ?? 0));
+                check('032: el puntero del ultimo reemplazo queda marcado',
+                    ($GLOBALS['rp_ultimo'] ?? null) === ($GLOBALS['ts_rp'] ?? null),
+                    (string)($GLOBALS['rp_ultimo'] ?? 'null'));
+                check('032: el "swap" cambio el producto (control negativo)',
+                    !empty($GLOBALS['rp_swap_cambio']));
+                check('032: recuperar devuelve los hashes previos (byte a byte)',
+                    !empty($GLOBALS['rp_restaurado']));
+                check('032: recuperar dos veces da lo mismo y el respaldo se conserva',
+                    !empty($GLOBALS['rp_restaurado2']));
+                check('032: tmp/reemplazos sobrevive a limpiar_ttl (TTL de la 030)',
+                    !empty($GLOBALS['rp_ttl_vive']));
+                check('032: sin error en la transaccion', empty($GLOBALS['rp_error']),
+                    (string)($GLOBALS['rp_error'] ?? ''));
+                check('032: preparar sin archivo responde no_file',
+                    is_array($json) && $json['success'] === false
+                    && ($json['data'] ?? null) === 'no_file');
             }
             break;
         case 'desactivar':
@@ -4736,6 +4757,75 @@ switch ($fase) {
         } catch (\Throwable $e) {
             $GLOBALS['test_pedido_doble'] = $e->getMessage();
         }
+        break;
+
+    case 'reemplazo':
+        // spec 032 (T011/T015/T020): el flujo del reemplazo. La subida REAL de un
+        // PDF no se puede simular en el arnes (`move_uploaded_file` solo acepta un
+        // upload real y su `tmp_name` no se puede falsificar): lo que se prueba aca
+        // es la TRANSACCION (respaldo -> swap -> restauracion) por los auxiliares,
+        // el puntero del ultimo reemplazo, la retencion/TTL y el camino de error
+        // del handler. El flujo completo con subida real va en el lab (quickstart).
+        preparar_entorno($testBase, $base);
+        $motor_rp = $p->motor_para_tests();
+        $motor_rp->guardar_config('muestra', [
+            'activo' => true,
+            'productos' => [7],
+            'campos_ids' => [],
+            'bonus' => [['archivo' => 'extra.pdf', 'titulo' => 'Extra']],
+            'placeholders' => ['0000FF' => ['tipo' => 'texto', 'value' => 'Ana', 'settings' => '']],
+        ]);
+        $GLOBALS['rp_config_previo'] = $motor_rp->leer_config('muestra');
+        $GLOBALS['rp_h_pdf'] = md5_file($motor_rp->ruta_pdf('muestra'));
+        $GLOBALS['rp_h_analisis'] = md5_file($motor_rp->ruta_analisis('muestra'));
+        $GLOBALS['rp_h_config'] = md5_file($motor_rp->ruta_config('muestra'));
+
+        $rp_respaldar = function ($nombre, $archivo, $dirAnt) {
+            return $this->respaldar_producto($nombre, $archivo, $dirAnt);
+        };
+        $rp_respaldar = $rp_respaldar->bindTo($p, get_class($p));
+        $rp_restaurar = function ($nombre, $archivo, $dirAnt) {
+            return $this->restaurar_producto($nombre, $archivo, $dirAnt);
+        };
+        $rp_restaurar = $rp_restaurar->bindTo($p, get_class($p));
+
+        $GLOBALS['ts_rp'] = gmdate('Ymd-His') . '-beef';
+        try {
+            $dir_rp = $motor_rp->dir_reemplazo('muestra', $GLOBALS['ts_rp'], true);
+            $dirAnt_rp = $dir_rp . DIRECTORY_SEPARATOR . 'anterior';
+            // 1) RESPALDO (C-5)
+            $rp_respaldar('muestra', 'muestra.pdf', $dirAnt_rp);
+            $GLOBALS['rp_respaldo'] = count((array)glob($dirAnt_rp . DIRECTORY_SEPARATOR . '*'));
+            $motor_rp->marcar_ultimo_reemplazo('muestra', $GLOBALS['ts_rp']);
+            $GLOBALS['rp_ultimo'] = $motor_rp->ultimo_reemplazo('muestra');
+            // 2) "SWAP": el producto pasa a otro estado (contenido distinto)
+            file_put_contents($motor_rp->ruta_pdf('muestra'), "PDF-NUEVO\n");
+            file_put_contents($motor_rp->ruta_analisis('muestra'), json_encode(['grupos' => [['id' => '00FF00']]]));
+            file_put_contents($motor_rp->ruta_config('muestra'), json_encode(['activo' => false]));
+            $GLOBALS['rp_swap_cambio'] = md5_file($motor_rp->ruta_pdf('muestra')) !== $GLOBALS['rp_h_pdf'];
+            // 3) RECUPERAR (T020): byte a byte
+            $rp_restaurar('muestra', 'muestra.pdf', $dirAnt_rp);
+            $GLOBALS['rp_restaurado'] = md5_file($motor_rp->ruta_pdf('muestra')) === $GLOBALS['rp_h_pdf']
+                && md5_file($motor_rp->ruta_analisis('muestra')) === $GLOBALS['rp_h_analisis']
+                && md5_file($motor_rp->ruta_config('muestra')) === $GLOBALS['rp_h_config'];
+            // 4) Dos veces: el respaldo se conserva (C-11)
+            file_put_contents($motor_rp->ruta_config('muestra'), json_encode(['activo' => true]));
+            $rp_restaurar('muestra', 'muestra.pdf', $dirAnt_rp);
+            $GLOBALS['rp_restaurado2'] = md5_file($motor_rp->ruta_config('muestra')) === $GLOBALS['rp_h_config'];
+            // 5) TTL (T018): `tmp/reemplazos/` NO entra en el barrido de la 030
+            if (!class_exists('PMU_Sesion')) {
+                require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+            }
+            (new PMU_Sesion($motor_rp))->limpiar_ttl();
+            $GLOBALS['rp_ttl_vive'] = is_dir($dir_rp) && is_file($dirAnt_rp . DIRECTORY_SEPARATOR . 'config.json');
+        } catch (\Throwable $e) {
+            $GLOBALS['rp_error'] = $e->getMessage();
+        }
+        // 6) Camino de error del handler `preparar` (T011): sin archivo -> no_file
+        $_FILES = [];
+        $_POST = ['action' => 'personalizador_pdf_reemplazar_preparar', 'archivo' => 'muestra.pdf', '_wpnonce' => 'nonce'];
+        $_REQUEST = $_POST;
+        $p->handle_reemplazar_preparar();
         break;
 
 }

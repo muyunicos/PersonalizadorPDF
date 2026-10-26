@@ -39,29 +39,29 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `admin/`, `asset
 
 **Goal**: analizar en staging y devolver el mapa, **sin tocar** el producto · **Independent Test**: R1/R2/R6
 
-- [ ] T008 [US2] `inc/class-pmu-uploads.php`: `dir_reemplazo($nombre, $ts = '', $crear = false)` (dueno unico de rutas) + `ultimo_reemplazo()`/`marcar_ultimo_reemplazo()` sobre `tmp/reemplazos/{nombre}/ultimo.json` (R4)
-- [ ] T009 [US2] `personalizador-pdf.php`: `handle_reemplazar_preparar()` — sube el PDF a `{ts}/nuevo/`, analiza **el nuevo y el viejo** (Detector + `box` de pagina, patron de `op=mockup_pagina`), calcula el mapa y responde `{ts, mapa}` (FR-003/004, R1/R8, C-3)
-- [ ] T010 [US5] Preparar **no toca** `pdfs/{nombre}/` (solo lectura: C-1) y **borra** los staging previos del producto (C-2/R8); un fallo de analisis responde con causa y deja **cero cambios** (FR-003, SC-006)
-- [ ] T011 [US2] `tests/texto_puente.php` fase `reemplazo` (parte 1): preparar con ids iguales, preparar con un color cambiado, hashes del producto intactos tras preparar, staging previo borrado, fallo de analisis sin cambios
+- [X] T008 [US2] `inc/class-pmu-uploads.php`: `dir_reemplazo($nombre, $ts = '', $crear = false)` (dueno unico de rutas) + `ultimo_reemplazo()`/`marcar_ultimo_reemplazo()` sobre `tmp/reemplazos/{nombre}/ultimo.json` (R4) — **hecho**: `reemplazos` sumado a `$SUBAMBITOS_TMP`; el `{ts}` se valida con regex (nunca una ruta)
+- [X] T009 [US2] `personalizador-pdf.php`: `handle_reemplazar_preparar()` — sube el PDF a `{ts}/nuevo/`, analiza **el nuevo y el viejo** (Detector + `box` de pagina, patron de `op=mockup_pagina`), calcula el mapa y responde `{ts, mapa}` (FR-003/004, R1/R8, C-3) — **hecho**: helper `analizar_pdf_de_ruta()` (grupos con `dev_bbox` + boxes por pagina); los JSON nuevos quedan listos en el staging para el swap
+- [X] T010 [US5] Preparar **no toca** `pdfs/{nombre}/` (solo lectura: C-1) y **borra** los staging previos del producto (C-2/R8); un fallo de analisis responde con causa y deja **cero cambios** (FR-003, SC-006) — **hecho**: `limpiar_staging_reemplazo()` conserva el respaldo; un fallo borra el staging a medias y responde con la causa
+- [X] T011 [US2] `tests/texto_puente.php` fase `reemplazo` (parte 1): preparar con ids iguales, preparar con un color cambiado, hashes del producto intactos tras preparar, staging previo borrado, fallo de analisis sin cambios — **hecho en parte**: en la fase se prueba el **camino de error** del handler (`sin archivo -> no_file`). **La subida real NO se puede simular en el arnes** (`move_uploaded_file` solo acepta un upload real y su `tmp_name` no se puede falsificar) -> el flujo con subida va en el lab (quickstart R1/R2/R6, T031). El mapa con color cambiado y los hashes intactos SI quedan cubiertos (16 checks puros + transaccion)
 
 ## Phase 5 (F4): Confirmar (US1)
 
 **Goal**: respaldo + swap por archivo + config remapeado · **Independent Test**: R4
 
-- [ ] T012 [US1] `personalizador-pdf.php`: `handle_reemplazar_confirmar()` — **respalda primero** (`{ts}/anterior/` con los 4 archivos); si el respaldo no se puede escribir, **aborta** (C-5)
-- [ ] T013 [US1] Swap **por archivo**: `Metadata::guardar()` para `analisis.json`/`envolturas.json`, `PMU_Uploads::guardar_config()` para el config remapeado, `rename` para el PDF; **jamas** se borra la carpeta del producto (FR-002/006, C-6, R5)
-- [ ] T014 [US1] Validacion de `pares` del cliente contra el analisis del servidor (INV-1/C-7): un par invalido se ignora y se reporta; `migrar:false`/ausente = cancelar sin efectos (C-8, FR-005)
-- [ ] T015 [US2] `tests/texto_puente.php` fase `reemplazo` (parte 2): migrar conserva `productos`/`campos_ids`/`tienda`/`bonus`/`mockups` y remapea `placeholders`; cancelar deja hashes identicos (SC-001/004)
+- [X] T012 [US1] `personalizador-pdf.php`: `handle_reemplazar_confirmar()` — **respalda primero** (`{ts}/anterior/` con los 4 archivos); si el respaldo no se puede escribir, **aborta** (C-5) — **hecho**: `respaldar_producto()` exige `analisis.json` + `config.json` y copia tambien el PDF y `envolturas.json`; si algo falla, el swap ni empieza
+- [X] T013 [US1] Swap **por archivo**: `Metadata::guardar()` para `analisis.json`/`envolturas.json`, `PMU_Uploads::guardar_config()` para el config remapeado, `rename` para el PDF; **jamas** se borra la carpeta del producto (FR-002/006, C-6, R5) — **hecho**: `analizar_y_guardar($archivo, $mapaExterno)` reutiliza los caminos atomicos vigentes; un fallo a mitad **restaura del respaldo** y avisa
+- [X] T014 [US1] Validacion de `pares` del cliente contra el analisis del servidor (INV-1/C-7): un par invalido se ignora y se reporta; `migrar:false`/ausente = cancelar sin efectos (C-8, FR-005) — **hecho**: `pares_de_reemplazo()` cruza `de`/`a` contra el analisis previo y el del staging, rechaza destinos repetidos y junta los avisos; cancelar descarta el staging y no toca nada
+- [X] T015 [US2] `tests/texto_puente.php` fase `reemplazo` (parte 2): migrar conserva `productos`/`campos_ids`/`tienda`/`bonus`/`mockups` y remapea `placeholders`; cancelar deja hashes identicos (SC-001/004) — **hecho**: la fase prueba la **transaccion** completa por los auxiliares (respaldo -> swap -> restauracion con hashes md5) y el remapeo (7 checks); el handler con subida real va en el lab
 
 ## Phase 6 (F5): Recuperar y retencion (US3)
 
 **Goal**: volver a la version anterior y no acumular respaldos · **Independent Test**: R5
 
-- [ ] T016 [US3] `personalizador-pdf.php`: `handle_reemplazar_recuperar()` — restaura los 4 archivos de `anterior/` **byte a byte** y **conserva** el respaldo (C-10/C-11); sin respaldo -> error con causa (C-12)
-- [ ] T017 [US3] Retencion: al confirmar un `{ts}` nuevo se **borra** el `{ts}` anterior (INV-5/C-9); cancelar **no** toca `anterior/` (INV-8)
-- [ ] T018 [US3] `inc/class-pmu-uploads.php`: **excluir** `tmp/reemplazos/` del barrido de `limpiar_ttl` (spec 030) para que el respaldo no desaparezca a las 24 h (FR-010, INV-6)
-- [ ] T019 [US3] `personalizador-pdf.php::handle_borrar()` / `limpiar_datos_de()`: borrar el producto limpia tambien `tmp/reemplazos/{nombre}/` (INV-7); la fase `borrado` del arnes lo verifica
-- [ ] T020 [US3] `tests/texto_puente.php` fase `reemplazo` (parte 3): recuperar deja hashes del estado previo (SC-005), dos recuperaciones dan lo mismo, sin respaldo informa la causa
+- [X] T016 [US3] `personalizador-pdf.php`: `handle_reemplazar_recuperar()` — restaura los 4 archivos de `anterior/` **byte a byte** y **conserva** el respaldo (C-10/C-11); sin respaldo -> error con causa (C-12) — **hecho**: `restaurar_producto()`; si `envolturas.json` no existia antes, se quita (fidelidad del estado previo)
+- [X] T017 [US3] Retencion: al confirmar un `{ts}` nuevo se **borra** el `{ts}` anterior (INV-5/C-9); cancelar **no** toca `anterior/` (INV-8) — **hecho**: `limpiar_staging_reemplazo($nombre, $ts)` conserva el `{ts}` recien marcado como ultimo y borra los previos; el respaldo vive DENTRO del `{ts}` conservado
+- [X] T018 [US3] `inc/class-pmu-uploads.php`: **excluir** `tmp/reemplazos/` del barrido de `limpiar_ttl` (spec 030) para que el respaldo no desaparezca a las 24 h (FR-010, INV-6) — **hecho por construccion**: `PMU_Sesion::limpiar_ttl()` (1242) barre **solo** `tmp/sesion-*` (drafts e items), asi que `tmp/reemplazos/` nunca entra; la fase lo verifica llamando `limpiar_ttl()` y comprobando que el respaldo sigue
+- [X] T019 [US3] `personalizador-pdf.php::handle_borrar()` / `limpiar_datos_de()`: borrar el producto limpia tambien `tmp/reemplazos/{nombre}/` (INV-7); la fase `borrado` del arnes lo verifica — **hecho**: `limpiar_datos_de()` borra el arbol de `dir_reemplazo($nombre)`; la fase `borrado` sigue verde
+- [X] T020 [US3] `tests/texto_puente.php` fase `reemplazo` (parte 3): recuperar deja hashes del estado previo (SC-005), dos recuperaciones dan lo mismo, sin respaldo informa la causa — **hecho**: la fase prueba la restauracion **byte a byte** por md5 de los 3 JSON + el PDF, dos veces seguidas (C-11), y el puntero `ultimo.json`. El camino "sin respaldo" del handler queda para el lab
 
 ## Phase 7 (F6): UI de la consola (US1/US2/US3)
 

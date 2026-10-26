@@ -72,6 +72,10 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_personalizador_pdf_descargar', [$this, 'handle_descargar']);
         add_action('admin_post_personalizador_pdf_ver', [$this, 'handle_ver']);
         add_action('admin_post_personalizador_pdf_borrar', [$this, 'handle_borrar']);
+        // spec 032: reemplazo del PDF sin perder la personalizacion.
+        add_action('admin_post_personalizador_pdf_reemplazar_preparar', [$this, 'handle_reemplazar_preparar']);
+        add_action('admin_post_personalizador_pdf_reemplazar_confirmar', [$this, 'handle_reemplazar_confirmar']);
+        add_action('admin_post_personalizador_pdf_reemplazar_recuperar', [$this, 'handle_reemplazar_recuperar']);
         // Spec 004 (T007): fotos de mockup del admin (subida/borrado).
         add_action('admin_post_personalizador_pdf_mockup_subir', [$this, 'handle_mockup_subir']);
         add_action('admin_post_personalizador_pdf_mockup_borrar', [$this, 'handle_mockup_borrar']);
@@ -6111,7 +6115,12 @@ JS;
      * cuyo id sigue existiendo (research D8, T019) e informa en el resumen
      * los grupos que la perdieron por desaparecer del analisis.
      */
-    private function analizar_y_guardar($archivo)
+    /**
+     * Regenera el dataset del producto y lo guarda. `$mapaExterno` (spec 032): el
+     * mapa que el admin ACEPTO en el modal de reemplazo; sin el, el remapeo usa solo
+     * los ids que sobreviven (comportamiento del Re-analizar).
+     */
+    private function analizar_y_guardar($archivo, $mapaExterno = null)
     {
         $ruta = $this->ruta_pdf($archivo);
         $nombre = $this->nombre_de($archivo);
@@ -6152,10 +6161,12 @@ JS;
         // spec 032 (T006): el REMAPEO compartido (envolturas{gid} y refs de capa)
         // corre tambien al re-analizar. Es el mismo PDF: no hay sugerencias, solo
         // los ids que sobreviven; los que desaparecen se podan mas abajo.
-        $mapaReemplazo = ['iguales' => [], 'sugeridos' => []];
-        foreach ($ids_nuevos as $idN => $_) {
-            if (isset($ids_previos[$idN])) {
-                $mapaReemplazo['iguales'][$idN] = (string)$idN;
+        $mapaReemplazo = is_array($mapaExterno) ? $mapaExterno : ['iguales' => [], 'sugeridos' => []];
+        if (!is_array($mapaExterno)) {
+            foreach ($ids_nuevos as $idN => $_) {
+                if (isset($ids_previos[$idN])) {
+                    $mapaReemplazo['iguales'][$idN] = (string)$idN;
+                }
             }
         }
         $remapeo = Metadata::remapearConfig($config_previa, $mapaReemplazo, $grupos, $envolturas);
@@ -6428,6 +6439,329 @@ JS;
         $this->responder(true, $args);
     }
 
+    /* ==================== Handlers: reemplazo del PDF (spec 032) ==================== */
+
+    /**
+     * Analisis crudo de un PDF en una RUTA arbitraria (spec 032, T009): los grupos
+     * con sus `dev_bbox` (los necesita el mapa) y el box de CADA pagina (para
+     * normalizar en `mapaDeReemplazo`). Es el camino de `op=mockup_pagina`
+     * (`class-pmu-uploads.php:144-197`), pero para todas las paginas y sin filtro.
+     */
+    private function analizar_pdf_de_ruta($ruta)
+    {
+        $bytes = @file_get_contents($ruta);
+        if (!is_string($bytes) || $bytes === '') {
+            throw new \RuntimeException('No se pudo leer el PDF.');
+        }
+        $pdf = new \ExtractCorel\Engine\Pdf($bytes);
+        $pdf->load();
+        $paginas = $pdf->getPages();
+        $boxes = [];
+        foreach ($paginas as $indice => $pagina) {
+            $boxes[$indice] = array_map('floatval', (array)$pdf->pageBox($pagina));
+        }
+        $grupos = (new Detector($pdf))->analizarPdf()['grupos'];
+        return ['grupos' => $grupos, 'boxes' => $boxes, 'total_paginas' => count($paginas)];
+    }
+
+    /** Borra los staging previos del producto, salvo el respaldo y el `{ts}` dado (C-2/R8). */
+    private function limpiar_staging_reemplazo($nombre, $conservar)
+    {
+        $motor = $this->pmu_uploads();
+        $raiz = $motor->dir_reemplazo($nombre, '');
+        $ultimo = $motor->ultimo_reemplazo($nombre);
+        foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dir) {
+            $ts = basename($dir);
+            if ($ts === $conservar || ($ultimo !== null && $ts === $ultimo)) {
+                continue;
+            }
+            $this->borrar_arbol($dir);
+        }
+    }
+
+    /**
+     * Reemplazo, paso 1 (spec 032, T009): sube el PDF NUEVO a staging, lo analiza
+     * (junto con el vigente) y devuelve el MAPA viejo->nuevo. **No toca el
+     * producto**: si el analisis falla, no quedo nada.
+     */
+    public function handle_reemplazar_preparar()
+    {
+        $this->seguridad('personalizador_pdf_reemplazar_preparar');
+        if (empty($_FILES['pdf']) || !is_array($_FILES['pdf'])) {
+            $this->responder(false, [], 'no_file');
+        }
+        $file = $_FILES['pdf'];
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            $this->responder(false, [], 'upload');
+        }
+        $nuevo = sanitize_file_name($file['name']);
+        if (strtolower(pathinfo($nuevo, PATHINFO_EXTENSION)) !== 'pdf') {
+            $this->responder(false, [], 'tipo');
+        }
+        $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
+        if (!$archivo || !is_file($this->ruta_pdf($archivo))) {
+            $this->responder(false, [], 'pdf_inexistente');
+        }
+        $nombre = $this->nombre_de($archivo);
+        $motor = $this->pmu_uploads();
+        $ts = gmdate('Ymd-His') . '-' . bin2hex(random_bytes(2));
+        $dir = '';
+        try {
+            $dir = $motor->dir_reemplazo($nombre, $ts, true);
+            $dirNuevo = $dir . DIRECTORY_SEPARATOR . 'nuevo';
+            wp_mkdir_p($dirNuevo);
+            if (!@move_uploaded_file($file['tmp_name'], $dirNuevo . DIRECTORY_SEPARATOR . $archivo)) {
+                throw new \RuntimeException('No se pudo guardar el PDF subido.');
+            }
+            $aNuevo = $this->analizar_pdf_de_ruta($dirNuevo . DIRECTORY_SEPARATOR . $archivo);
+            if (empty($aNuevo['grupos'])) {
+                throw new \RuntimeException('No se detectaron placeholders. Asegurate de exportar'
+                    . ' desde Corel con rectangulos 100% transparentes.');
+            }
+            // Los JSON nuevos quedan LISTOS en el staging: el swap (T012) los mueve.
+            Metadata::guardar(
+                Metadata::generarAnalisis($nombre, $aNuevo['grupos'], 200),
+                $dirNuevo . DIRECTORY_SEPARATOR . Metadata::ARCHIVO_ANALISIS
+            );
+            Metadata::guardar(
+                Metadata::generarEnvolturas($nombre, $aNuevo['grupos']),
+                $dirNuevo . DIRECTORY_SEPARATOR . 'envolturas.json'
+            );
+            $aViejo = $this->analizar_pdf_de_ruta($this->ruta_pdf($archivo));
+            $mapa = Metadata::mapaDeReemplazo(
+                $aViejo['grupos'],
+                $aNuevo['grupos'],
+                $aNuevo['boxes'],
+                $this->config_de($nombre)
+            );
+            $this->limpiar_staging_reemplazo($nombre, $ts);
+            $this->responder(true, ['ts' => $ts, 'archivo' => $archivo, 'mapa' => $mapa]);
+        } catch (\Throwable $e) {
+            if ($dir !== '') {
+                $this->borrar_arbol($dir); // staging a medias: el producto quedo intacto
+            }
+            $this->responder(false, [], $e->getMessage());
+        }
+    }
+
+    /**
+     * Lee y **revalida** los pares que el admin acepto (C-7/INV-1): el cliente no
+     * manda la verdad. Devuelve el mapa para `analizar_y_guardar` + los avisos.
+     */
+    private function pares_de_reemplazo($nombre, $dirNuevo)
+    {
+        $previos = [];
+        foreach ((array)($this->analisis_de($nombre)['grupos'] ?? []) as $g) {
+            if (isset($g['id'])) {
+                $previos[strtoupper((string)$g['id'])] = true;
+            }
+        }
+        $staging = json_decode((string)@file_get_contents(
+            $dirNuevo . DIRECTORY_SEPARATOR . 'analisis.json'
+        ), true);
+        $nuevos = [];
+        foreach ((array)($staging['grupos'] ?? []) as $g) {
+            if (isset($g['id'])) {
+                $nuevos[strtoupper((string)$g['id'])] = true;
+            }
+        }
+        $crudo = isset($_POST['pares']) ? wp_unslash($_POST['pares']) : '';
+        $lista = is_string($crudo) ? json_decode($crudo, true) : (is_array($crudo) ? $crudo : []);
+        $avisos = [];
+        $mapa = ['iguales' => [], 'sugeridos' => []];
+        $tomados = [];
+        foreach ((array)$lista as $p) {
+            $de = isset($p['de']) ? strtoupper(trim((string)$p['de'])) : '';
+            $a = isset($p['a']) ? strtoupper(trim((string)$p['a'])) : '';
+            if ($de === '' || $a === '') {
+                continue;
+            }
+            if (!isset($previos[$de]) || !isset($nuevos[$a])) {
+                $avisos[] = 'Se ignoro el par ' . $de . ' -> ' . $a . ' (grupo inexistente)';
+                continue;
+            }
+            if (isset($tomados[$a])) {
+                $avisos[] = 'Se ignoro el par ' . $de . ' -> ' . $a . ' (destino ya usado)';
+                continue;
+            }
+            $tomados[$a] = true;
+            if ($de === $a) {
+                $mapa['iguales'][$de] = $a;
+                continue;
+            }
+            $mapa['sugeridos'][] = ['de' => $de, 'a' => $a];
+        }
+        return ['mapa' => $mapa, 'avisos' => $avisos];
+    }
+
+    /** Copia el estado actual del producto al respaldo `{ts}/anterior/` (C-5). */
+    private function respaldar_producto($nombre, $archivo, $dirAnt)
+    {
+        $motor = $this->pmu_uploads();
+        wp_mkdir_p($dirAnt);
+        $necesarios = [
+            [$motor->ruta_analisis($nombre), 'analisis.json'],
+            [$motor->ruta_config($nombre), 'config.json'],
+        ];
+        foreach ($necesarios as $par) {
+            if (!is_file($par[0])) {
+                throw new \RuntimeException('No se pudo respaldar la version anterior (falta '
+                    . $par[1] . ').');
+            }
+        }
+        $opcionales = [
+            [$this->ruta_pdf($archivo), $archivo],
+            [$motor->ruta_envolturas($nombre), 'envolturas.json'],
+        ];
+        foreach (array_merge($necesarios, $opcionales) as $par) {
+            if (!is_file($par[0])) {
+                continue;
+            }
+            if (!@copy($par[0], $dirAnt . DIRECTORY_SEPARATOR . $par[1])) {
+                throw new \RuntimeException('No se pudo respaldar la version anterior.');
+            }
+        }
+        return $dirAnt;
+    }
+
+    /** Restaura el respaldo `{ts}/anterior/` sobre el producto (C-10, byte a byte). */
+    private function restaurar_producto($nombre, $archivo, $dirAnt)
+    {
+        if (!is_dir($dirAnt)) {
+            throw new \RuntimeException('motor:reemplazo:respaldo:ausente');
+        }
+        $motor = $this->pmu_uploads();
+        $destinos = [
+            'analisis.json' => $motor->ruta_analisis($nombre),
+            'config.json' => $motor->ruta_config($nombre),
+            'envolturas.json' => $motor->ruta_envolturas($nombre),
+        ];
+        foreach ($destinos as $origen => $destino) {
+            $ruta = $dirAnt . DIRECTORY_SEPARATOR . $origen;
+            if (!is_file($ruta)) {
+                // No existia antes del reemplazo: se quita lo que haya quedado.
+                if (is_file($destino)) {
+                    @unlink($destino);
+                }
+                continue;
+            }
+            if (!@copy($ruta, $destino)) {
+                throw new \RuntimeException('No se pudo restaurar ' . $origen . '.');
+            }
+        }
+        $pdf = $dirAnt . DIRECTORY_SEPARATOR . $archivo;
+        if (is_file($pdf) && !@copy($pdf, $this->ruta_pdf($archivo))) {
+            throw new \RuntimeException('No se pudo restaurar el PDF.');
+        }
+        return true;
+    }
+
+    /**
+     * Reemplazo, paso 2 (spec 032, T012/T013): con el OK del admin **respalda**,
+     * hace el swap **por archivo** (jamas borra la carpeta del producto) y
+     * reescribe `config.json` remapeado con el mapa aceptado.
+     * `migrar:false` = **cancelar**: descarta el staging y no toca nada (C-8).
+     */
+    public function handle_reemplazar_confirmar()
+    {
+        $this->seguridad('personalizador_pdf_reemplazar_confirmar');
+        $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
+        if (!$archivo || !is_file($this->ruta_pdf($archivo))) {
+            $this->responder(false, [], 'pdf_inexistente');
+        }
+        $nombre = $this->nombre_de($archivo);
+        $motor = $this->pmu_uploads();
+        $ts = isset($_POST['ts']) ? (string)$_POST['ts'] : '';
+        try {
+            $dir = $motor->dir_reemplazo($nombre, $ts);
+        } catch (\Throwable $e) {
+            $this->responder(false, [], $e->getMessage());
+        }
+        $dirNuevo = $dir . DIRECTORY_SEPARATOR . 'nuevo';
+        if (!is_dir($dirNuevo) || !is_file($dirNuevo . DIRECTORY_SEPARATOR . $archivo)) {
+            $this->responder(false, [], 'motor:reemplazo:staging:ausente');
+        }
+        $migrar = true;
+        if (isset($_POST['migrar'])) {
+            $migrar = !in_array(strtolower((string)$_POST['migrar']), ['', '0', 'false', 'no'], true);
+        }
+        if (!$migrar) {
+            $this->borrar_arbol($dirNuevo);
+            $this->responder(true, ['cancelado' => true, 'archivo' => $archivo]);
+        }
+        $dirAnt = $dir . DIRECTORY_SEPARATOR . 'anterior';
+        try {
+            $pares = $this->pares_de_reemplazo($nombre, $dirNuevo);
+            // 1) RESPALDO primero (C-5): sin respaldo no hay swap.
+            $this->respaldar_producto($nombre, $archivo, $dirAnt);
+            // 2) SWAP por archivo: el PDF nuevo entra a la carpeta del producto.
+            if (!@rename($dirNuevo . DIRECTORY_SEPARATOR . $archivo, $this->ruta_pdf($archivo))) {
+                throw new \RuntimeException('No se pudo mover el PDF nuevo.');
+            }
+            // 3) Dataset regenerado + config remapeado con el mapa ACEPTADO.
+            $resumen = $this->analizar_y_guardar($archivo, $pares['mapa']);
+        } catch (\Throwable $e) {
+            // Un fallo a mitad de camino vuelve al estado previo: no se pierde nada.
+            $restaurado = true;
+            try {
+                $this->restaurar_producto($nombre, $archivo, $dirAnt);
+            } catch (\Throwable $e2) {
+                $restaurado = false;
+            }
+            $this->responder(false, [], $e->getMessage() . ($restaurado
+                ? ' (se restauro la version anterior)'
+                : ' (ATENCION: no se pudo restaurar; usa Recuperar)'));
+        }
+        try {
+            $motor->marcar_ultimo_reemplazo($nombre, $ts);
+        } catch (\Throwable $e) {
+            // sin puntero no hay recuperacion, pero el reemplazo ya quedo aplicado
+        }
+        // Retencion (INV-5/C-9): el `{ts}` conservado es el nuevo; los previos se van.
+        $this->limpiar_staging_reemplazo($nombre, $ts);
+        $avisos = array_merge($pares['avisos'], (array)($resumen['remapeo_avisos'] ?? []));
+        $args = [
+            'archivo' => $archivo,
+            'grupos' => (int)($resumen['total_grupos'] ?? 0),
+            'instancias' => (int)($resumen['total_instancias'] ?? 0),
+            'respaldo' => $ts,
+        ];
+        if ($avisos) {
+            $args['avisos'] = $avisos;
+        }
+        if (!empty($resumen['personalizacion_perdida'])) {
+            $args['perdidos'] = $resumen['personalizacion_perdida'];
+        }
+        if (!empty($resumen['refs_sin_destino'])) {
+            $args['refs_sin_destino'] = $resumen['refs_sin_destino'];
+        }
+        $this->responder(true, $args);
+    }
+
+    /** Recuperar la version anterior (spec 032, T016): restaura el ultimo respaldo. */
+    public function handle_reemplazar_recuperar()
+    {
+        $this->seguridad('personalizador_pdf_reemplazar_recuperar');
+        $archivo = isset($_POST['archivo']) ? sanitize_file_name($_POST['archivo']) : '';
+        if (!$archivo || !is_file($this->ruta_pdf($archivo))) {
+            $this->responder(false, [], 'pdf_inexistente');
+        }
+        $nombre = $this->nombre_de($archivo);
+        $motor = $this->pmu_uploads();
+        $ts = $motor->ultimo_reemplazo($nombre);
+        if ($ts === null) {
+            $this->responder(false, [], 'motor:reemplazo:respaldo:ausente');
+        }
+        try {
+            $dirAnt = $motor->dir_reemplazo($nombre, $ts) . DIRECTORY_SEPARATOR . 'anterior';
+            $this->restaurar_producto($nombre, $archivo, $dirAnt);
+        } catch (\Throwable $e) {
+            $this->responder(false, [], $e->getMessage());
+        }
+        // El respaldo SE CONSERVA: se puede volver a recuperar (C-11).
+        $this->responder(true, ['archivo' => $archivo, 'respaldo' => $ts, 'restaurado' => true]);
+    }
+
     /** Borra un PDF subido con todo su dataset, imagenes y salida. */
     public function handle_borrar()
     {
@@ -6470,6 +6804,12 @@ JS;
         $dirs[] = $motor->dir_tmp_muestras($nombre); // ruta sin crear ni validar
         foreach ($dirs as $dir) {
             $this->borrar_arbol($dir);
+        }
+        // spec 032 (INV-7): el staging y el respaldo del reemplazo tambien se van.
+        try {
+            $this->borrar_arbol($motor->dir_reemplazo($nombre, ''));
+        } catch (\Throwable $e) {
+            // sin carpeta de reemplazos: nada que borrar
         }
         $this->limpiar_muestras_huerfanas();
     }
