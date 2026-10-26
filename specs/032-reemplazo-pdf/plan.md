@@ -54,7 +54,7 @@ specs/032-reemplazo-pdf/
 ├── contracts/
 │   └── reemplazo.md   (ops, JSON de ida/vuelta, invariantes del swap)
 ├── quickstart.md  (casos R1..R8 en el laboratorio)
-└── tasks.md       (T001..T0NN)
+└── tasks.md       (T001..T034, 10 fases)
 ```
 
 ### Codigo (que se toca y que no)
