@@ -1,6 +1,6 @@
 # Contract: Capas de mockup y render compartido
 
-**Feature**: 011-editor-mockups-visual | **Version**: 5 (enmienda `004-woocommerce-pdf-personalization/contracts/mockups.md`; v3 envolturas PowerClip, v4 dedup de formas + forma representativa + guia del cargador, v5 grupos e importacion de paginas PDF)
+**Feature**: 011-editor-mockups-visual | **Version**: 7 (enmienda `004-woocommerce-pdf-personalization/contracts/mockups.md`; v3 envolturas PowerClip, v4 dedup de formas + forma representativa + guia del cargador, v5 grupos e importacion de paginas PDF, v6 transformaciones fuera del lienzo, v7 perspectiva y propiedades de grupo)
 
 Contrato de la composicion de un mockup (`config.json:mockups[]`) y del **nucleo de render
 compartido** que la usan el editor del admin y la ficha del cliente. Especificacion: [../spec.md](../spec.md).
@@ -18,7 +18,9 @@ compartido** que la usan el editor del admin y la ficha del cliente. Especificac
      "filtros": {"brillo": 95, "contraste": 110}},
     {"tipo": "placeholder", "ref": "0000FF#1", "x": 96, "y": 60, "w": 110, "h": 180,
      "rot": -3, "sesgo": 0.05, "oculta": false, "modo": "normal",
-     "filtros": {"opacidad": 90}, "grupo": "g-pagina-1"}
+     "filtros": {"opacidad": 90}, "grupo": "g-pagina-1",
+     "perspectiva": {"puntos": [{"x": 0.08, "y": 0}, {"x": 1, "y": 0.12},
+       {"x": 0.92, "y": 1}, {"x": 0, "y": 0.88}]}}
   ]
 }
 ```
@@ -29,7 +31,7 @@ compartido** que la usan el editor del admin y la ficha del cliente. Especificac
 |---|---|---|
 | `tipo` | `img` \| `placeholder`; otro valor se descarta al guardar | = |
 | `ref` | `{ambito}:{valor}`; `pdf:{archivo}` (foto del PDF) o `img:{id}` (id numerico del catalogo). **Sin `:` se lee como `pdf:`** | **ampliado** |
-| `x`,`y`,`w`,`h` | int; `x,y` entre -3000 y 3000; `1 <= w,h <= 300`; espacio logico 300x300. El contenido fuera del area se recorta en el lienzo de salida | ampliado |
+| `x`,`y`,`w`,`h` | int; `x,y` entre -3000 y 3000; `1 <= w,h <= 1200`; espacio logico 300x300. El contenido fuera del area se recorta en el lienzo de salida | ampliado |
 | `rot` | float -360..360 (grados) | = |
 | `sesgo` | float -1..1 | = |
 | `filtros` | object; claves de §1.4; ausente = neutro | **ampliado** |
@@ -39,6 +41,7 @@ compartido** que la usan el editor del admin y la ficha del cliente. Especificac
 | `bloqueada` | bool; default `false` | **nuevo** |
 | `envoltura` | bool; default `false`; **solo** `tipo=placeholder` (en `img` el saneo fuerza `false`). Recorta la capa al clip vectorial del hueco en el PDF (PowerClip) | **nuevo (v3)** |
 | `grupo` | opcional; id `g-` + 1..36 caracteres `[a-z0-9_-]`; agrupa capas para seleccion, movimiento y rotacion conjuntos en el editor. Sin efecto en el render de la ficha | **nuevo (v5)** |
+| `perspectiva` | opcional; `puntos` tiene exactamente cuatro puntos normalizados `(x,y)` en 0..1, en orden arriba-izquierda, arriba-derecha, abajo-derecha, abajo-izquierda. Solo se persiste si el cuadrilatero es convexo y no neutro. Debe repetirse en los miembros del grupo; la deformacion compone el grupo como una sola pieza en el mockup | nuevo (v7) |
 
 ### 1.3 Grupos e importacion de pagina PDF — v6
 
@@ -49,8 +52,14 @@ compartido** que la usan el editor del admin y la ficha del cliente. Especificac
   sobrepasar cualquier borde del area 300x300; el contenido fuera del area queda recortado solo al
   dibujar la salida. Las coordenadas se limitan a ±3000 px como proteccion frente a valores extremos.
 - El marco de un grupo seleccionado ofrece ocho tiradores de escala uniforme alrededor de su
-  centro; las capas bloqueadas impiden transformar el grupo. El control de rotacion permanece
+  centro y permite dimensiones de hasta 1200 px; las capas bloqueadas impiden transformar el grupo. El control de rotacion permanece
   dentro del lienzo cuando el borde superior o inferior coincide con el limite.
+- Las propiedades X/Y/ancho/alto/rotacion actuan sobre el grupo seleccionado. El lienzo presenta
+  cuatro tiradores rojos para transformar la perspectiva de todo el grupo; la salida del editor y
+  la ficha usan el render deformado. La transformacion no altera el PDF procesado ni los PNG del pool.
+- La perspectiva rasteriza temporalmente el grupo y lo proyecta mediante una malla de triangulos
+  Canvas 2D; conserva transparencia, z-order y PowerClip del mockup. Cuadrilateros cruzados o
+  degenerados no se aceptan. Restablecer perspectiva vuelve los cuatro puntos al rectangulo original.
 - La seleccion automatica de grupo se puede anular temporalmente con **Alt+clic** sobre una capa,
   tanto en el lienzo como en la lista. Asi se mueve, redimensiona o rota un miembro sin cambiar su
   pertenencia al grupo; seleccionar normalmente vuelve a expandir el grupo.
@@ -158,6 +167,8 @@ el mockup (recorte de la capa) y en el cargador del comprador (guia al subir la 
 |---|---|
 | `componer(ctx, capas, resolver, opciones)` | Dibuja `capas` en orden. `resolver(ref)` devuelve `{url, w, h}` o `null`. **Es la unica funcion de render del sistema** (criterio 004). |
 | `contener(destino, recurso)` | Encaja el recurso en la caja **sin deformar** (regla `contain` vigente) y devuelve el rectangulo usado + si hubo discrepancia de proporcion. |
+| `homografia(puntos, u, v)` | Puro: proyecta una coordenada normalizada del cuadrado unidad a un cuadrilatero de cuatro puntos. |
+| `perspectivaConvexa(puntos)` | Puro: valida que los cuatro puntos formen un cuadrilatero convexo no degenerado. |
 | `filtroCss(filtros, modo)` | Traduce ajustes a `ctx.filter` + `globalAlpha` + `globalCompositeOperation`. |
 | `esValida(capa, contexto)` | Dice si la capa resuelve (foto en `fotos`/catalogo, grupo existente, indice dentro de `cont`). |
 | `envolturaDeRef(ref, grupos)` | Envoltura (clip del PDF) de una capa placeholder segun su `ref` (v3). `null` = sin envoltura. |
@@ -171,7 +182,9 @@ Reglas:
    (**nunca estira**) y devuelve informacion de discrepancia para que el editor avise (FR-023/024).
    El cliente no avisa, solo encaja.
 3. **Transformacion**: rotacion y sesgo se aplican alrededor del centro de la caja; cada capa se
-   aisla con `save`/`restore` (mismo criterio que `Overlay` en el motor, AGENTS §4.4).
+   aisla con `save`/`restore` (mismo criterio que `Overlay` en el motor, AGENTS §4.4). Si un grupo
+   trae `perspectiva`, el nucleo compone sus miembros en una superficie temporal y proyecta el
+   resultado completo; las capas fuera de ese grupo conservan su orden normal.
 4. **Degradacion**: si `resolver` devuelve `null`, la capa se dibuja como caja neutra con su
    `ref`; la composicion nunca falla (mismo criterio que la ficha actual).
 5. **Ajustes**: solo afectan a la composicion; **nunca** al PNG del pool ni al PDF (contrato 004

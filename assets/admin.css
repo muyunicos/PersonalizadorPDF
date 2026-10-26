@@ -926,6 +926,7 @@ body.ec-c-drawer-abierto { overflow: hidden; }
     width: 100%;
     font-size: 12px;
 }
+.ec-mk-props-titulo, .ec-mk-perspectiva-ayuda { grid-column: 1 / -1; margin: 2px 0; }
 .ec-mk-props .ec-mk-ancho { grid-column: 1 / -1; }
 .ec-mk-seccion {
     grid-column: 1 / -1;

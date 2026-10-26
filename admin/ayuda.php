@@ -31,8 +31,11 @@ if (!defined('ABSPATH')) {
     <h2>Editor de mockups</h2>
     <p>En la consola de <strong>PDFs</strong>, cada mockup puede incluir capas de imagen y placeholders.
         Selecciona varias con <strong>Ctrl/Cmd + clic</strong> para agruparlas o desagruparlas; cualquier
-        miembro de un grupo permite mover, redimensionar y rotar el conjunto. Usa los tiradores del
-        marco; la escala conserva la proporcion. Si necesitas editar un PH sin mover los demas,
+        miembro de un grupo permite mover, redimensionar y rotar el conjunto. El panel indica
+        <strong>Grupo seleccionado</strong> y sus campos X/Y/ancho/alto/rotacion modifican el grupo
+        completo; la escala por tiradores conserva la proporcion y admite dimensiones de hasta 1200 px.
+        Los cuatro puntos rojos del lienzo deforman el grupo como una sola pieza, solo para el mockup;
+        usa "Restablecer perspectiva" para volver al rectangulo. Si necesitas editar un PH sin mover los demas,
         haz <strong>Alt + clic</strong> sobre el PH en el lienzo o en la lista. La capa sigue en su
         grupo, que vuelve a seleccionarse completo con un clic normal.</p>
     <p>En ▲/▼, un clic cambia un nivel. Mantener pulsado 1 segundo envia el grupo seleccionado arriba
@@ -42,7 +45,8 @@ if (!defined('ABSPATH')) {
         el conjunto puede moverse o transformarse mas alla de los bordes; la parte que queda fuera no
         aparece en el mockup final. Alt+clic permite volver a seleccionar una capa desplazada desde la
         lista; sus campos X/Y permiten traerla de vuelta. El PDF se procesa localmente con los recursos
-        incluidos en el plugin; la pagina rasterizada se guarda en el catalogo de imagenes de mockup.</p>
+        incluidos en el plugin; la pagina rasterizada se guarda en el catalogo de imagenes de mockup.
+        La perspectiva solo afecta el render del mockup, no modifica el PDF final.</p>
 </div>
 
 <div class="card">

@@ -1612,6 +1612,48 @@ class PMU_Uploads
         return max(-3000, min(3000, (int)$valor));
     }
 
+    private function mockup_perspectiva($valor)
+    {
+        if (!is_array($valor) || !isset($valor['puntos']) || !is_array($valor['puntos'])
+            || count($valor['puntos']) !== 4) {
+            return null;
+        }
+        $puntos = [];
+        foreach (array_values($valor['puntos']) as $punto) {
+            if (!is_array($punto) || !is_numeric($punto['x'] ?? null) || !is_numeric($punto['y'] ?? null)) {
+                return null;
+            }
+            $puntos[] = [
+                'x' => $this->clamp_float((float)$punto['x'], 0, 1),
+                'y' => $this->clamp_float((float)$punto['y'], 0, 1),
+            ];
+        }
+        $signo = 0;
+        for ($i = 0; $i < 4; $i++) {
+            $a = $puntos[$i];
+            $b = $puntos[($i + 1) % 4];
+            $c = $puntos[($i + 2) % 4];
+            $cruz = ($b['x'] - $a['x']) * ($c['y'] - $b['y'])
+                - ($b['y'] - $a['y']) * ($c['x'] - $b['x']);
+            if (abs($cruz) < 0.0001) {
+                return null;
+            }
+            $actual = $cruz > 0 ? 1 : -1;
+            if ($signo !== 0 && $actual !== $signo) {
+                return null;
+            }
+            $signo = $actual;
+        }
+        $neutros = [[0, 0], [1, 0], [1, 1], [0, 1]];
+        foreach ($puntos as $i => $punto) {
+            if (abs($punto['x'] - $neutros[$i][0]) > 0.0001
+                || abs($punto['y'] - $neutros[$i][1]) > 0.0001) {
+                return ['puntos' => $puntos];
+            }
+        }
+        return null;
+    }
+
     /**
      * Normaliza mockups de salida 300x300; x/y admiten desborde limitado.
      *
@@ -1650,13 +1692,13 @@ class PMU_Uploads
                 if ($ref === '') {
                     continue;
                 }
-                $capas[] = [
+                $capa = [
                     'tipo' => $tipo,
                     'ref' => $ref,
                     'x' => $this->mockup_posicion($c['x'] ?? 0),
                     'y' => $this->mockup_posicion($c['y'] ?? 0),
-                    'w' => max(1, (int)($c['w'] ?? 0)),
-                    'h' => max(1, (int)($c['h'] ?? 0)),
+                    'w' => max(1, min(1200, (int)($c['w'] ?? 0))),
+                    'h' => max(1, min(1200, (int)($c['h'] ?? 0))),
                     'rot' => $this->clamp_float((float)($c['rot'] ?? 0), -360, 360),
                     'sesgo' => $this->clamp_float((float)($c['sesgo'] ?? 0), -1, 1),
                     'filtros' => $this->mockup_filtros($c['filtros'] ?? []),
@@ -1670,6 +1712,11 @@ class PMU_Uploads
                     // placeholder; en `img` se fuerza a false.
                     'envoltura' => $tipo === 'placeholder' && !empty($c['envoltura']),
                 ];
+                $perspectiva = $this->mockup_perspectiva($c['perspectiva'] ?? null);
+                if ($perspectiva !== null) {
+                    $capa['perspectiva'] = $perspectiva;
+                }
+                $capas[] = $capa;
             }
             if ($id === '' || isset($out[$id])) {
                 continue;

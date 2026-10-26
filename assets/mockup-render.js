@@ -623,6 +623,8 @@
         componer: componer,
         composicion: componer,
         contener: contener,
+        homografia: homografia,
+        perspectivaConvexa: perspectivaConvexa,
         filtroCss: filtroCss,
         esValida: esValida,
         urlDeImagen: urlDeImagen,

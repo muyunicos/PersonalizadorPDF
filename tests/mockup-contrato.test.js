@@ -88,6 +88,33 @@ check('el editor expone los botones de distribuir', editor.indexOf('ec-mk-dist')
     && editor.indexOf('Distribuir H') !== -1 && editor.indexOf('Distribuir V') !== -1);
 check('el editor lleva el estado de seleccion multiple', editor.indexOf('seleccionados: []') !== -1
     && editor.indexOf('ec-mk-sel') !== -1);
+check('las propiedades numericas muestran y transforman el grupo seleccionado',
+    editor.indexOf('Grupo seleccionado (') !== -1
+        && editor.indexOf('G.transformarGrupo(originales, indices') !== -1
+        && editor.indexOf("$ed.on('input', '.ec-mk-geo'") !== -1
+        && editor.indexOf("$ed.on('focusout', '.ec-mk-geo'") !== -1
+        && editor.indexOf('G.escalarGrupo(originales, indices') !== -1);
+check('el editor ofrece cuatro controles de perspectiva con reinicio',
+    editor.indexOf('puntosTiradoresPerspectiva') !== -1
+        && editor.indexOf("return 'perspectiva:' + puntosPersp[tp].indice") !== -1
+        && editor.indexOf('esGrupoPersistido(seleccion)') !== -1
+        && editor.indexOf('data-mk="reset-perspectiva"') !== -1
+        && editor.indexOf('perspectivaConvexa(puntosActuales)') !== -1);
+check('el renderer aplica perspectiva al grupo a traves de una malla de triangulos',
+    /function dibujarPerspectiva\(/.test(leer('assets/mockup-render.js'))
+        && /dibujarTriangulo\(ctx, fuente/.test(leer('assets/mockup-render.js'))
+        && /dibujarPerspectiva\(ctx, grupoPerspectiva\.items/.test(leer('assets/mockup-render.js')));
+check('la homografia mapea las cuatro esquinas al cuadrilatero pedido', (function () {
+    var q = [{ x: 0.1, y: 0.05 }, { x: 0.9, y: 0.15 },
+        { x: 0.8, y: 0.95 }, { x: 0.2, y: 0.85 }];
+    return q.every(function (p, i) {
+        var uv = [[0, 0], [1, 0], [1, 1], [0, 1]][i];
+        var r = R.homografia(q, uv[0], uv[1]);
+        return Math.abs(r.x - p.x) < 0.00001 && Math.abs(r.y - p.y) < 0.00001;
+    }) && R.perspectivaConvexa(q)
+        && !R.perspectivaConvexa([{ x: 0, y: 0 }, { x: 1, y: 1 },
+            { x: 1, y: 0 }, { x: 0, y: 1 }]);
+})());
 check('el grupo importado ofrece tiradores de escala y rotacion accesibles',
     editor.indexOf('redimensionar-grupo:') !== -1
         && editor.indexOf('puntosTiradoresGrupo') !== -1

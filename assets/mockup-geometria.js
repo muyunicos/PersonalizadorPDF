@@ -63,7 +63,6 @@
         c.w = Math.max(1, numero(capa.w, 1));
         c.h = Math.max(1, numero(capa.h, 1));
         c.rot = acotarNumero(numero(capa.rot), -360, 360);
-        c.giro = acotarNumero(numero(capa.giro), -360, 360);
         c.sesgo = acotarNumero(numero(capa.sesgo), -1, 1);
         if (c.w > MAX_DIMENSION) { c.w = MAX_DIMENSION; }
         if (c.h > MAX_DIMENSION) { c.h = MAX_DIMENSION; }
@@ -149,7 +148,7 @@
             } else {
                 escala = Math.abs(ddx) >= Math.abs(ddy) ? (w / w0) : (h / h0);
             }
-            escala = acotarNumero(escala, 0.02, lado / Math.max(w0, h0));
+            escala = acotarNumero(escala, 0.02, MAX_DIMENSION / Math.max(w0, h0));
             w = w0 * escala;
             h = h0 * escala;
         }
@@ -340,7 +339,6 @@
             copia.x = nuevoX - numero(original.w, 1) / 2;
             copia.y = nuevoY - numero(original.h, 1) / 2;
             copia.rot = acotarNumero(numero(original.rot) + numero(grados), -360, 360);
-            copia.giro = acotarNumero(numero(original.giro) + numero(grados), -360, 360);
             lista[i] = acotar(copia);
         });
         return lista;
@@ -465,7 +463,7 @@
     /* ============ Normalizacion al abrir ============ */
 
     /**
-     * Normaliza una capa persistida: acota la geometria al lienzo. Devuelve
+     * Normaliza una capa persistida: limita la geometria al rango seguro. Devuelve
      * `{capa, avisos}` para informar en una linea sin bloquear la edicion.
      */
     function normalizarCapa(capa, opciones) {

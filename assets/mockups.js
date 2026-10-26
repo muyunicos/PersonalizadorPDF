@@ -204,6 +204,15 @@ jQuery(function ($) {
         return estado.soloSeleccion ? seleccion : G.expandirGrupos(capas(), seleccion);
     }
 
+    function esGrupoPersistido(indices, lista) {
+        var capasLista = lista || capas();
+        if (!indices || indices.length < 2) { return false; }
+        var grupo = capasLista[indices[0]] && String(capasLista[indices[0]].grupo || '');
+        return !!grupo && indices.every(function (i) {
+            return capasLista[i] && String(capasLista[i].grupo || '') === grupo;
+        });
+    }
+
     function puntosPerspectiva(indices, lista) {
         var capasLista = lista || capas();
         var actual = (indices || []).map(function (i) {
@@ -320,9 +329,9 @@ jQuery(function ($) {
             '        <span class="ec-mk-marcas"></span>' +
             '      </div>' +
             '      <div class="ec-mk-lienzo"><canvas width="300" height="300"></canvas></div>' +
-            '      <p class="ec-mk-ayuda">Arrastra para mover; usa los tiradores para redimensionar y el ' +
-            '        tirador redondo para rotar. El grupo escala sin deformarse; Alt+clic selecciona ' +
-            '        solo una capa. Reduce el grupo importado para dejar margen al moverlo.</p>' +
+            '      <p class="ec-mk-ayuda">Arrastra para mover; usa los tiradores para redimensionar, rotar ' +
+            '        y ajustar los cuatro puntos de perspectiva. Los grupos pueden exceder el lienzo; ' +
+            '        Alt+clic selecciona solo una capa.</p>' +
             '      <div class="ec-mk-alertas" aria-live="polite"></div>' +
             '      <div class="ec-mk-acciones" style="margin-top:8px">' +
             '        <button type="button" class="button button-small" data-mk="ver-cliente">Ver como lo ve el cliente</button>' +
@@ -381,7 +390,7 @@ jQuery(function ($) {
             '        </div>' +
             '      </div>' +
             '      <div class="ec-mk-panel ec-mk-panel-props" hidden>' +
-            '        <h4>Capa seleccionada</h4>' +
+            '        <h4>Propiedades</h4>' +
             '        <div class="ec-mk-props"></div>' +
             '      </div>' +
             '      <div class="ec-mk-panel">' +
@@ -610,7 +619,7 @@ jQuery(function ($) {
                 ctx.fillRect(p.x - 4 / f, p.y - 4 / f, 8 / f, 8 / f);
                 ctx.strokeRect(p.x - 4 / f, p.y - 4 / f, 8 / f, 8 / f);
             });
-            if (!seleccionConBloqueadas(seleccion)) {
+            if (esGrupoPersistido(seleccion) && !seleccionConBloqueadas(seleccion)) {
                 puntosTiradoresPerspectiva(marcoGrupo, puntosPerspectiva(seleccion)).forEach(function (p) {
                     ctx.beginPath();
                     ctx.fillStyle = '#fff';
@@ -701,11 +710,13 @@ jQuery(function ($) {
             if (seleccionConBloqueadas(seleccion)) { return ''; }
             var marcoGrupo = G.marco(capas(), seleccion);
             if (!marcoGrupo) { return ''; }
-            var puntosPersp = puntosTiradoresPerspectiva(marcoGrupo, puntosPerspectiva(seleccion));
-            for (var tp = 0; tp < puntosPersp.length; tp++) {
-                if (Math.abs(p.x - puntosPersp[tp].x) <= tol * 1.4
-                    && Math.abs(p.y - puntosPersp[tp].y) <= tol * 1.4) {
-                    return 'perspectiva:' + puntosPersp[tp].indice;
+            if (esGrupoPersistido(seleccion)) {
+                var puntosPersp = puntosTiradoresPerspectiva(marcoGrupo, puntosPerspectiva(seleccion));
+                for (var tp = 0; tp < puntosPersp.length; tp++) {
+                    if (Math.abs(p.x - puntosPersp[tp].x) <= tol * 1.4
+                        && Math.abs(p.y - puntosPersp[tp].y) <= tol * 1.4) {
+                        return 'perspectiva:' + puntosPersp[tp].indice;
+                    }
                 }
             }
             var rotGrupo = puntoRotacionGrupo(marcoGrupo);
@@ -800,7 +811,8 @@ jQuery(function ($) {
         var estadoAnterior = JSON.stringify(estado.mockups);
         var tir = tiradorEn(p);
         if (tir) {
-            estado.arrastre = (tir === 'rotar-grupo' || tir.indexOf('redimensionar-grupo:') === 0)
+            estado.arrastre = (tir === 'rotar-grupo' || tir.indexOf('redimensionar-grupo:') === 0
+                || tir.indexOf('perspectiva:') === 0)
                 ? capturarArrastreGrupo(tir, p)
                 : {
                     tipo: tir,
@@ -862,7 +874,8 @@ jQuery(function ($) {
             };
             puntosActuales[a.perspectivaIndex] = nuevoPunto;
             if (perspectivaConvexa(puntosActuales)) {
-                mockup().capas = asignarPerspectiva(a.originales.slice(), a.indices, puntosActuales);
+                var capasPerspectiva = JSON.parse(JSON.stringify(a.originales));
+                mockup().capas = asignarPerspectiva(capasPerspectiva, a.indices, puntosActuales);
                 sinGuardar(false);
                 dibujar();
             }
@@ -964,7 +977,7 @@ jQuery(function ($) {
         var $e = $ed.find('.ec-mk-estado');
         var textos = {
             guardado: 'Guardado',
-            sin_guardar: 'Sin guardar',
+            'sin-guardar': 'Sin guardar',
             guardando: 'Guardando...',
             error: 'No se pudo guardar'
         };
@@ -1210,6 +1223,7 @@ jQuery(function ($) {
         { k: 'desenfoque', etiqueta: 'Desenfoque', min: 0, max: 20, def: 0, paso: 0.5 },
         { k: 'tono', etiqueta: 'Tono', min: -180, max: 180, def: 0, paso: 1 }
     ];
+    var geoEdicion = null;
 
     function valorAjuste(c, k) {
         var f = (c && c.filtros) ? c.filtros : {};
@@ -1283,9 +1297,11 @@ jQuery(function ($) {
         html += '<div class="ec-mk-acciones">'
             + '<button type="button" class="button button-small" data-mk="reset">Restablecer ajustes</button>'
             + '</div>';
-        if (esGrupo) {
+        if (esGrupoPersistido(indices)) {
             html += '<p class="description ec-mk-perspectiva-ayuda">Arrastra los cuatro puntos rojos del lienzo para deformar el grupo como una sola pieza.</p>'
                 + '<div class="ec-mk-acciones"><button type="button" class="button button-small" data-mk="reset-perspectiva">Restablecer perspectiva</button></div>';
+        } else if (esGrupo) {
+            html += '<p class="description ec-mk-perspectiva-ayuda">Agrupa la seleccion para habilitar la perspectiva de cuatro puntos.</p>';
         }
         $props.html(html);
         $props.find('.ec-mk-modo').val(c.modo || 'normal');
@@ -1801,6 +1817,17 @@ jQuery(function ($) {
         if (accion === 'agrupar') { agruparSeleccion(); return; }
         if (accion === 'desagrupar') { desagruparSeleccion(); return; }
         if (accion === 'importar-pagina') { importarPagina(); return; }
+        if (accion === 'reset-perspectiva') {
+            var indicesPerspectiva = indicesSeleccionados();
+            if (indicesPerspectiva.length < 2) { return; }
+            var antesPerspectiva = JSON.stringify(estado.mockups);
+            mockup().capas = asignarPerspectiva(capas().slice(), indicesPerspectiva,
+                [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }]);
+            marcarPaso(antesPerspectiva);
+            sinGuardar();
+            refrescar();
+            return;
+        }
         if (accion === 'guardar') { guardar(); return; }
         if (accion === 'ver-cliente') { verCliente(); return; }
         if (accion === 'reset') {
@@ -1958,22 +1985,67 @@ jQuery(function ($) {
         }
     });
 
-    /* Propiedades numericas: sincronizan con el lienzo en ambos sentidos. */
-    $ed.on('change', '.ec-mk-geo', function () {
-        var c = capa();
-        if (!c) { return; }
-        var campo = String($(this).attr('data-geo'));
+    /* Propiedades numericas: aplicar durante la edicion y guardar un solo paso al terminar. */
+    $ed.on('focusin', '.ec-mk-geo', function () {
+        var indices = indicesSeleccionados();
+        geoEdicion = {
+            campo: String($(this).attr('data-geo')),
+            indices: indices,
+            original: JSON.parse(JSON.stringify(capas())),
+            estadoAnterior: JSON.stringify(estado.mockups),
+            seleccion: estado.seleccion,
+            modificado: false
+        };
+    });
+    $ed.on('input', '.ec-mk-geo', function () {
+        if (!geoEdicion) { return; }
+        var campo = geoEdicion.campo;
         var v = parseFloat(this.value);
-        if (isNaN(v)) { return; }
-        var n = G.acotar({
-            x: c.x, y: c.y, w: c.w, h: c.h,
-            rot: campo === 'rot' ? v : c.rot,
-            sesgo: campo === 'sesgo' ? v : c.sesgo
-        });
-        c.x = n.x; c.y = n.y; c.w = n.w; c.h = n.h; c.rot = n.rot; c.sesgo = n.sesgo;
-        marcarPaso();
-        sinGuardar();
-        refrescar();
+        if (!isFinite(v)) { return; }
+        geoEdicion.modificado = true;
+        var originales = geoEdicion.original;
+        var indices = geoEdicion.indices;
+        var base = originales[geoEdicion.seleccion];
+        if (indices.length > 1) {
+            var marco = G.marco(originales, indices);
+            if (!marco) { return; }
+            if (campo === 'x' || campo === 'y') {
+                mockup().capas = G.transformarGrupo(originales, indices,
+                    { x: marco.x, y: marco.y }, 0,
+                    campo === 'x' ? v - marco.x : 0,
+                    campo === 'y' ? v - marco.y : 0);
+            } else if (campo === 'w' || campo === 'h') {
+                var dimension = Math.max(1, Math.min(G.MAX_DIMENSION, v));
+                var sx = campo === 'w' ? dimension / Math.max(1, marco.w) : 1;
+                var sy = campo === 'h' ? dimension / Math.max(1, marco.h) : 1;
+                mockup().capas = G.escalarGrupo(originales, indices,
+                    { x: marco.x + marco.w / 2, y: marco.y + marco.h / 2 }, sx, sy);
+            } else if (campo === 'rot' && base) {
+                mockup().capas = G.transformarGrupo(originales, indices,
+                    { x: marco.x + marco.w / 2, y: marco.y + marco.h / 2 },
+                    v - (base.rot || 0), 0, 0);
+            }
+        } else if (base) {
+            var editada = {};
+            Object.keys(base).forEach(function (k) { editada[k] = base[k]; });
+            editada[campo] = v;
+            var normalizada = G.acotar(editada);
+            Object.keys(normalizada).forEach(function (k) { editada[k] = normalizada[k]; });
+            mockup().capas = originales.slice();
+            mockup().capas[geoEdicion.seleccion] = editada;
+        }
+        sinGuardar(false);
+        dibujar();
+    });
+    $ed.on('focusout', '.ec-mk-geo', function () {
+        if (!geoEdicion) { return; }
+        var edicion = geoEdicion;
+        geoEdicion = null;
+        if (edicion.modificado) {
+            marcarPaso(edicion.estadoAnterior);
+            sinGuardar();
+            refrescar();
+        }
     });
 
     $ed.on('input', '.ec-mk-aj', function () {

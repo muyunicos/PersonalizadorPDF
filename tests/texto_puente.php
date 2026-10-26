@@ -506,6 +506,13 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && ($capas[1]['grupo'] ?? '') === 'g-pagina-1');
             check('id de grupo invalido se descarta', is_array($mc)
                 && ($capas[3]['grupo'] ?? '') === '');
+            check('dimensiones permiten ampliar hasta 1200 px', is_array($mc)
+                && ($capas[1]['w'] ?? 0) === 1200);
+            check('perspectiva valida de cuatro puntos persiste', is_array($mc)
+                && count($capas[1]['perspectiva']['puntos'] ?? []) === 4
+                && abs(($capas[1]['perspectiva']['puntos'][1]['y'] ?? 0) - 0.12) < 0.001);
+            check('perspectiva cruzada se descarta', is_array($mc)
+                && !isset($capas[3]['perspectiva']));
             check('ref con traversal rechazado y capa fuera', is_array($mc) && count($capas) === 4);
             check('endpoint devuelve geometria de la pagina seleccionada', is_array($mc)
                 && ($mc['pagina']['pagina'] ?? 0) === 1
@@ -4119,8 +4126,12 @@ switch ($fase) {
                     ['tipo' => 'img', 'ref' => 'fondo.png', 'x' => -45, 'y' => 460, 'w' => 300, 'h' => 300,
                         'filtros' => ['brillo' => 100], 'envoltura' => true],
                     // 1: imagen del catalogo por id numerico.
-                    ['tipo' => 'img', 'ref' => 'mock:7', 'x' => 10, 'y' => 10, 'w' => 50, 'h' => 50,
-                        'grupo' => 'g-pagina-1'],
+                    ['tipo' => 'img', 'ref' => 'mock:7', 'x' => 10, 'y' => 10, 'w' => 1300, 'h' => 50,
+                        'grupo' => 'g-pagina-1',
+                        'perspectiva' => ['puntos' => [
+                            ['x' => 0.08, 'y' => 0], ['x' => 1, 'y' => 0.12],
+                            ['x' => 0.92, 'y' => 1], ['x' => 0, 'y' => 0.88],
+                        ]]],
                     // 2: ajustes ampliados + campos nuevos.
                     ['tipo' => 'placeholder', 'ref' => '0000FF#1', 'x' => 5, 'y' => 5, 'w' => 40, 'h' => 60,
                         'rot' => 400, 'sesgo' => 9, 'nombre' => 'Marco', 'modo' => 'multiply',
@@ -4129,6 +4140,10 @@ switch ($fase) {
                     // 3: fuera de rango -> clamp; modo invalido -> normal.
                     ['tipo' => 'img', 'ref' => 'pdf:marco.png', 'x' => 99999, 'y' => -99999, 'w' => 10, 'h' => 10,
                         'modo' => 'inventado', 'grupo' => 'grupo invalido',
+                        'perspectiva' => ['puntos' => [
+                            ['x' => 0, 'y' => 0], ['x' => 1, 'y' => 1],
+                            ['x' => 1, 'y' => 0], ['x' => 0, 'y' => 1],
+                        ]],
                         'filtros' => ['opacidad' => 500, 'desenfoque' => 99, 'tono' => -900]],
                     // 4: traversal -> capa fuera.
                     ['tipo' => 'img', 'ref' => '../fuera', 'x' => 0, 'y' => 0, 'w' => 1, 'h' => 1],
