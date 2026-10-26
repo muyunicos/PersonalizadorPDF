@@ -352,71 +352,83 @@ jQuery(function ($) {
             '      <div class="ec-mk-vistas-cliente" style="margin-top:8px"></div>' +
             '    </div>' +
             '    <div class="ec-mk-der">' +
-            '      <div class="ec-mk-panel">' +
-            '        <h4>Vistas del PDF</h4>' +
-            '        <ul class="ec-mk-mockups"></ul>' +
-            '        <div class="ec-mk-acciones">' +
-            '          <button type="button" class="button button-small button-primary" data-mk="nuevo">Nueva vista</button>' +
-            '          <button type="button" class="button button-small" data-mk="duplicar">Duplicar</button>' +
-            '          <button type="button" class="button button-small button-link-delete" data-mk="eliminar-mockup">Eliminar</button>' +
-            '          <label class="ec-block-label" style="margin:0"><input type="checkbox" class="ec-mk-omisible" name="preview_omisible" value="1"> Vista previa omisible</label>' +
+            '      <details class="ec-mk-acordeon" data-ac="vistas-del-pdf">' +
+            '        <summary class="ec-mk-acordeon-cab">Vistas del PDF</summary>' +
+            '        <div class="ec-mk-acordeon-cuerpo">' +
+            '          <p class="description" style="margin:0 0 6px">Titulo: ' +
+            '            <input type="text" class="ec-mk-titulo" maxlength="200" style="width:100%"></p>' +
+            '          <ul class="ec-mk-mockups"></ul>' +
+            '          <div class="ec-mk-acciones">' +
+            '            <button type="button" class="button button-small button-primary" data-mk="nuevo">Nueva vista</button>' +
+            '            <button type="button" class="button button-small" data-mk="duplicar">Duplicar</button>' +
+            '            <button type="button" class="button button-small button-link-delete" data-mk="eliminar-mockup">Eliminar</button>' +
+            '            <label class="ec-block-label" style="margin:0"><input type="checkbox" class="ec-mk-omisible" name="preview_omisible" value="1"> Vista previa omisible</label>' +
+            '          </div>' +
             '        </div>' +
-            '        <p class="description" style="margin-top:6px">Titulo: ' +
-            '          <input type="text" class="ec-mk-titulo" maxlength="200" style="width:100%"></p>' +
-            '      </div>' +
-            '      <div class="ec-mk-panel">' +
-            '        <h4>Capas</h4>' +
-            '        <ul class="ec-mk-capas"></ul>' +
-            '        <div class="ec-mk-acciones">' +
-            '          <button type="button" class="button button-small" data-mk="add-catalogo">+ Imagen</button>' +
-            '          <button type="button" class="button button-small" data-mk="add-placeholder">+ Placeholder</button>' +
+            '      </details>' +
+            '      <details class="ec-mk-acordeon" data-ac="capas">' +
+            '        <summary class="ec-mk-acordeon-cab">Capas</summary>' +
+            '        <div class="ec-mk-acordeon-cuerpo">' +
+            '          <ul class="ec-mk-capas"></ul>' +
+            '          <div class="ec-mk-acciones">' +
+            '            <button type="button" class="button button-small" data-mk="add-catalogo">+ Imagen</button>' +
+            '            <button type="button" class="button button-small" data-mk="add-placeholder">+ Placeholder</button>' +
+            '          </div>' +
+            '          <div class="ec-mk-acciones">' +
+            '            <button type="button" class="button button-small" data-mk="subir" title="Subir capa">Subir</button>' +
+            '            <button type="button" class="button button-small" data-mk="bajar" title="Bajar capa">Bajar</button>' +
+            '            <button type="button" class="button button-small" data-mk="duplicar-capa">Duplicar</button>' +
+            '            <button type="button" class="button button-small button-link-delete" data-mk="borrar-capa">Quitar</button>' +
+            '          </div>' +
+            '          <div class="ec-mk-acciones ec-mk-grupos-acciones">' +
+            '            <button type="button" class="button button-small" data-mk="agrupar">Agrupar seleccion</button>' +
+            '            <button type="button" class="button button-small" data-mk="desagrupar">Desagrupar seleccion</button>' +
+            '            <span class="description">Selecciona varias capas con Ctrl/Cmd+clic.</span>' +
+            '          </div>' +
+            '          <div class="ec-mk-acciones ec-mk-importar">' +
+            '            <label>Pagina del PDF <input type="number" class="ec-mk-num-pagina" min="1" step="1" value="1" style="width:72px"></label>' +
+            '            <button type="button" class="button button-small" data-mk="importar-pagina">Importar pagina + PH</button>' +
+            '          </div>' +
+            '          <p class="description ec-mk-importar-ayuda">La pagina elegida y sus placeholders se agregan como un grupo movible, redimensionable y rotatable.</p>' +
+            '          <p class="ec-mk-importar-estado" aria-live="polite"></p>' +
+            '          <div class="ec-mk-acciones">' +
+            '            <button type="button" class="button button-small ec-mk-alin" data-pos="izquierda">Izq.</button>' +
+            '            <button type="button" class="button button-small ec-mk-alin" data-pos="centro_h">Centro H</button>' +
+            '            <button type="button" class="button button-small ec-mk-alin" data-pos="derecha">Der.</button>' +
+            '            <button type="button" class="button button-small ec-mk-alin" data-pos="arriba">Arriba</button>' +
+            '            <button type="button" class="button button-small ec-mk-alin" data-pos="centro_v">Centro V</button>' +
+            '            <button type="button" class="button button-small ec-mk-alin" data-pos="abajo">Abajo</button>' +
+            '          </div>' +
+            '          <div class="ec-mk-acciones">' +
+            '            <span class="description" style="margin-right:4px">Distribuir (Ctrl+clic marca varias):</span>' +
+            '            <button type="button" class="button button-small ec-mk-dist" data-eje="x">Distribuir H</button>' +
+            '            <button type="button" class="button button-small ec-mk-dist" data-eje="y">Distribuir V</button>' +
+            '          </div>' +
             '        </div>' +
-            '        <div class="ec-mk-acciones">' +
-            '          <button type="button" class="button button-small" data-mk="subir" title="Subir capa">Subir</button>' +
-            '          <button type="button" class="button button-small" data-mk="bajar" title="Bajar capa">Bajar</button>' +
-            '          <button type="button" class="button button-small" data-mk="duplicar-capa">Duplicar</button>' +
-            '          <button type="button" class="button button-small button-link-delete" data-mk="borrar-capa">Quitar</button>' +
+            '      </details>' +
+            '      <details class="ec-mk-acordeon" data-ac="ajustes">' +
+            '        <summary class="ec-mk-acordeon-cab">Ajustes</summary>' +
+            '        <div class="ec-mk-acordeon-cuerpo">' +
+            '          <div class="ec-mk-panel-props" hidden>' +
+            '            <div class="ec-mk-props"></div>' +
+            '          </div>' +
             '        </div>' +
-            '        <div class="ec-mk-acciones ec-mk-grupos-acciones">' +
-            '          <button type="button" class="button button-small" data-mk="agrupar">Agrupar seleccion</button>' +
-            '          <button type="button" class="button button-small" data-mk="desagrupar">Desagrupar seleccion</button>' +
-            '          <span class="description">Selecciona varias capas con Ctrl/Cmd+clic.</span>' +
+            '      </details>' +
+            '      <details class="ec-mk-acordeon" data-ac="imagenes">' +
+            '        <summary class="ec-mk-acordeon-cab">Imagenes</summary>' +
+            '        <div class="ec-mk-acordeon-cuerpo">' +
+            '          <input type="search" class="ec-mk-buscar ec-mk-buscar-catalogo" placeholder="Buscar imagenes...">' +
+            '          <ul class="ec-mk-minis ec-mk-catalogo"></ul>' +
+            '          <p class="ec-mk-vacio">Sin imagenes en el catalogo del proyecto.</p>' +
             '        </div>' +
-            '        <div class="ec-mk-acciones ec-mk-importar">' +
-            '          <label>Pagina del PDF <input type="number" class="ec-mk-num-pagina" min="1" step="1" value="1" style="width:72px"></label>' +
-            '          <button type="button" class="button button-small" data-mk="importar-pagina">Importar pagina + PH</button>' +
+            '      </details>' +
+            '      <details class="ec-mk-acordeon" data-ac="placeholders">' +
+            '        <summary class="ec-mk-acordeon-cab">Placeholders</summary>' +
+            '        <div class="ec-mk-acordeon-cuerpo">' +
+            '          <ul class="ec-mk-grupos"></ul>' +
+            '          <p class="ec-mk-vacio">Este PDF no tiene grupos detectados.</p>' +
             '        </div>' +
-            '        <p class="description ec-mk-importar-ayuda">La pagina elegida y sus placeholders se agregan como un grupo movible, redimensionable y rotatable.</p>' +
-            '        <p class="ec-mk-importar-estado" aria-live="polite"></p>' +
-            '        <div class="ec-mk-acciones">' +
-            '          <button type="button" class="button button-small ec-mk-alin" data-pos="izquierda">Izq.</button>' +
-            '          <button type="button" class="button button-small ec-mk-alin" data-pos="centro_h">Centro H</button>' +
-            '          <button type="button" class="button button-small ec-mk-alin" data-pos="derecha">Der.</button>' +
-            '          <button type="button" class="button button-small ec-mk-alin" data-pos="arriba">Arriba</button>' +
-            '          <button type="button" class="button button-small ec-mk-alin" data-pos="centro_v">Centro V</button>' +
-            '          <button type="button" class="button button-small ec-mk-alin" data-pos="abajo">Abajo</button>' +
-            '        </div>' +
-            '        <div class="ec-mk-acciones">' +
-            '          <span class="description" style="margin-right:4px">Distribuir (Ctrl+clic marca varias):</span>' +
-            '          <button type="button" class="button button-small ec-mk-dist" data-eje="x">Distribuir H</button>' +
-            '          <button type="button" class="button button-small ec-mk-dist" data-eje="y">Distribuir V</button>' +
-            '        </div>' +
-            '      </div>' +
-            '      <div class="ec-mk-panel ec-mk-panel-props" hidden>' +
-            '        <h4>Propiedades</h4>' +
-            '        <div class="ec-mk-props"></div>' +
-            '      </div>' +
-            '      <div class="ec-mk-panel">' +
-            '        <h4>Imagenes de mockup</h4>' +
-            '        <input type="search" class="ec-mk-buscar ec-mk-buscar-catalogo" placeholder="Buscar imagenes...">' +
-            '        <ul class="ec-mk-minis ec-mk-catalogo"></ul>' +
-            '        <p class="ec-mk-vacio">Sin imagenes en el catalogo del proyecto.</p>' +
-            '      </div>' +
-            '      <div class="ec-mk-panel">' +
-            '        <h4>Placeholders</h4>' +
-            '        <ul class="ec-mk-grupos"></ul>' +
-            '        <p class="ec-mk-vacio">Este PDF no tiene grupos detectados.</p>' +
-            '      </div>' +
+            '      </details>' +
             '    </div>' +
             '  </div>' +
             '  <div class="ec-mk-menu-ctx" role="menu" hidden></div>' +

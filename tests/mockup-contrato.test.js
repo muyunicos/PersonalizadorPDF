@@ -596,9 +596,10 @@ check('el ref de la instancia es 1-based (#01 = ref plano)',
     ed.indexOf('n > 1 ? String(g.id)') !== -1,
     'si se guardara la #01 como <grupo>#1, el motor la cuenta como instancia 1 de 0');
 
-// No debe quedar el vocabulario viejo en la UI del editor.
+// No debe quedar el vocabulario viejo en la UI del editor (spec 031: el titulo
+// vive en el summary del acordeon; ya no hay <h4> en el panel derecho).
 check('la UI dice Placeholders, no Huecos',
-    ed.indexOf('<h4>Placeholders</h4>') !== -1
+    /data-ac="placeholders"[\s\S]{0,200}summary[^>]*>Placeholders</.test(ed)
         && ed.indexOf('add-hueco') === -1
         && ed.indexOf('+ Hueco') === -1);
 
