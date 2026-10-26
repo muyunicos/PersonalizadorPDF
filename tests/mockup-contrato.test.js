@@ -88,6 +88,23 @@ check('el editor expone los botones de distribuir', editor.indexOf('ec-mk-dist')
     && editor.indexOf('Distribuir H') !== -1 && editor.indexOf('Distribuir V') !== -1);
 check('el editor lleva el estado de seleccion multiple', editor.indexOf('seleccionados: []') !== -1
     && editor.indexOf('ec-mk-sel') !== -1);
+check('el grupo importado ofrece tiradores de escala y rotacion accesibles',
+    editor.indexOf('redimensionar-grupo:') !== -1
+        && editor.indexOf('puntosTiradoresGrupo') !== -1
+        && editor.indexOf('puntoRotacionGrupo') !== -1
+        && editor.indexOf('G.escalarGrupo(') !== -1);
+check('Alt+clic permite editar una capa sin expandir su grupo',
+    editor.indexOf('soloSeleccion') !== -1
+        && editor.indexOf('seleccionarCapa(i, ev.ctrlKey || ev.metaKey, ev.altKey)') !== -1);
+check('los botones de orden admiten pulsacion larga con cancelacion y sin doble clic',
+    editor.indexOf('setTimeout(function () {') !== -1
+        && editor.indexOf('}, 1000)') !== -1
+        && editor.indexOf('pointercancel.pmuCapa') !== -1
+        && editor.indexOf('suprimirClicCapa') !== -1
+        && editor.indexOf("moverCapa(0, accion)") !== -1);
+check('el movimiento de grupo no acota su marco al lienzo',
+    editor.indexOf('function corregirGrupoEnLienzo') === -1
+        && editor.indexOf('mockup().capas = G.transformarGrupo(a.originales, a.indices,') !== -1);
 check('el editor ofrece agrupar y desagrupar las capas seleccionadas',
     editor.indexOf('data-mk="agrupar"') !== -1
         && editor.indexOf('data-mk="desagrupar"') !== -1

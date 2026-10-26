@@ -294,6 +294,192 @@
         ctx.restore();
     }
 
+    function puntosPerspectiva(valor) {
+        var puntos = valor && valor.puntos;
+        if (!Array.isArray(puntos) || puntos.length !== 4) { return null; }
+        var salida = [];
+        for (var i = 0; i < 4; i++) {
+            if (!puntos[i] || !isFinite(Number(puntos[i].x)) || !isFinite(Number(puntos[i].y))) {
+                return null;
+            }
+            salida.push({ x: Number(puntos[i].x), y: Number(puntos[i].y) });
+        }
+        return salida;
+    }
+
+    function esPerspectivaNeutra(puntos) {
+        var neutros = [[0, 0], [1, 0], [1, 1], [0, 1]];
+        return !puntos || puntos.every(function (p, i) {
+            return Math.abs(p.x - neutros[i][0]) < 0.0001
+                && Math.abs(p.y - neutros[i][1]) < 0.0001;
+        });
+    }
+
+    function perspectivaConvexa(puntos) {
+        if (!puntos || puntos.length !== 4) { return false; }
+        var signo = 0;
+        for (var i = 0; i < 4; i++) {
+            var a = puntos[i], b = puntos[(i + 1) % 4], c = puntos[(i + 2) % 4];
+            var cruz = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+            if (Math.abs(cruz) < 0.00001) { return false; }
+            var actual = cruz > 0 ? 1 : -1;
+            if (signo && actual !== signo) { return false; }
+            signo = actual;
+        }
+        return true;
+    }
+
+    /** Mapea el cuadrado unidad a un cuadrilatero mediante una homografia. */
+    function homografia(puntos, u, v) {
+        var p0 = puntos[0], p1 = puntos[1], p2 = puntos[2], p3 = puntos[3];
+        var dx1 = p1.x - p2.x, dx2 = p3.x - p2.x, dx3 = p0.x - p1.x + p2.x - p3.x;
+        var dy1 = p1.y - p2.y, dy2 = p3.y - p2.y, dy3 = p0.y - p1.y + p2.y - p3.y;
+        var den = dx1 * dy2 - dx2 * dy1;
+        var g = 0, h = 0;
+        if (Math.abs(den) > 1e-8) {
+            g = (dx3 * dy2 - dx2 * dy3) / den;
+            h = (dx1 * dy3 - dx3 * dy1) / den;
+        }
+        var a = p1.x - p0.x + g * p1.x;
+        var b = p3.x - p0.x + h * p3.x;
+        var c = p0.x;
+        var d = p1.y - p0.y + g * p1.y;
+        var e = p3.y - p0.y + h * p3.y;
+        var f = p0.y;
+        var divisor = g * u + h * v + 1;
+        if (Math.abs(divisor) < 1e-8) { divisor = divisor < 0 ? -1e-8 : 1e-8; }
+        return { x: (a * u + b * v + c) / divisor, y: (d * u + e * v + f) / divisor };
+    }
+
+    function esquinasCapa(capa) {
+        var cx = numero(capa.x) + numero(capa.w, 1) / 2;
+        var cy = numero(capa.y) + numero(capa.h, 1) / 2;
+        var rad = numero(capa.rot) * Math.PI / 180;
+        var cos = Math.cos(rad), sin = Math.sin(rad);
+        var sesgo = acotar(numero(capa.sesgo), -1, 1);
+        return [[-capa.w / 2, -capa.h / 2], [capa.w / 2, -capa.h / 2],
+            [capa.w / 2, capa.h / 2], [-capa.w / 2, capa.h / 2]].map(function (p) {
+            var x = p[0] + sesgo * p[1];
+            return { x: cx + x * cos - p[1] * sin, y: cy + x * sin + p[1] * cos };
+        });
+    }
+
+    function marcoItems(items) {
+        var puntos = [];
+        items.forEach(function (item) { puntos = puntos.concat(esquinasCapa(item.capa)); });
+        var xs = puntos.map(function (p) { return p.x; });
+        var ys = puntos.map(function (p) { return p.y; });
+        var x = Math.min.apply(Math, xs), y = Math.min.apply(Math, ys);
+        return { x: x, y: y, w: Math.max(1, Math.max.apply(Math, xs) - x),
+            h: Math.max(1, Math.max.apply(Math, ys) - y) };
+    }
+
+    function crearCanvas(w, h) {
+        var canvas;
+        if (typeof OffscreenCanvas !== 'undefined') {
+            canvas = new OffscreenCanvas(w, h);
+        } else if (typeof document !== 'undefined' && document.createElement) {
+            canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+        }
+        return canvas || null;
+    }
+
+    function dibujarItem(ctx, item, op, discrepancias) {
+        var c = item.capa;
+        var caja = item.caja;
+        var est = filtroCss(c.filtros, c.modo);
+        ctx.save();
+        ctx.globalAlpha = est.alfa;
+        ctx.globalCompositeOperation = est.composicion;
+        ctx.filter = est.filtro;
+        ctx.translate(caja.x + caja.w / 2, caja.y + caja.h / 2);
+        if (numero(c.rot) !== 0) { ctx.rotate(numero(c.rot) * Math.PI / 180); }
+        if (numero(c.sesgo) !== 0) {
+            ctx.transform(1, 0, acotar(numero(c.sesgo), -1, 1), 1, 0, 0);
+        }
+        if (item.env) {
+            trazarEnvoltura(ctx, comandosEnvoltura(item.env, {
+                x: -caja.w / 2, y: -caja.h / 2, w: caja.w, h: caja.h
+            }));
+            ctx.clip(item.env.par ? 'evenodd' : 'nonzero');
+        }
+        if (item.img && item.img.img) {
+            var medidas = item.recurso && item.recurso.w && item.recurso.h
+                ? { w: item.recurso.w, h: item.recurso.h }
+                : { w: item.img.w, h: item.img.h };
+            var encaje = contener({ x: -caja.w / 2, y: -caja.h / 2, w: caja.w, h: caja.h }, medidas);
+            if (encaje.discrepancia) { discrepancias.push({ indice: item.indice, ref: c.ref }); }
+            ctx.drawImage(item.img.img, encaje.x, encaje.y, encaje.w, encaje.h);
+        } else if (!op.huecosTransparentes) {
+            cajaNeutra(ctx, c.ref, { x: -caja.w / 2, y: -caja.h / 2, w: caja.w, h: caja.h });
+        }
+        ctx.restore();
+    }
+
+    function dibujarTriangulo(ctx, fuente, origen, destino) {
+        var x0 = origen[0].x, y0 = origen[0].y;
+        var x1 = origen[1].x, y1 = origen[1].y;
+        var x2 = origen[2].x, y2 = origen[2].y;
+        var X0 = destino[0].x, Y0 = destino[0].y;
+        var X1 = destino[1].x, Y1 = destino[1].y;
+        var X2 = destino[2].x, Y2 = destino[2].y;
+        var den = x0 * (y1 - y2) + x1 * (y2 - y0) + x2 * (y0 - y1);
+        if (Math.abs(den) < 1e-8) { return; }
+        var a = (X0 * (y1 - y2) + X1 * (y2 - y0) + X2 * (y0 - y1)) / den;
+        var c = (X0 * (x2 - x1) + X1 * (x0 - x2) + X2 * (x1 - x0)) / den;
+        var e = (X0 * (x1 * y2 - x2 * y1) + X1 * (x2 * y0 - x0 * y2)
+            + X2 * (x0 * y1 - x1 * y0)) / den;
+        var b = (Y0 * (y1 - y2) + Y1 * (y2 - y0) + Y2 * (y0 - y1)) / den;
+        var d = (Y0 * (x2 - x1) + Y1 * (x0 - x2) + Y2 * (x1 - x0)) / den;
+        var f = (Y0 * (x1 * y2 - x2 * y1) + Y1 * (x2 * y0 - x0 * y2)
+            + Y2 * (x0 * y1 - x1 * y0)) / den;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(X0, Y0); ctx.lineTo(X1, Y1); ctx.lineTo(X2, Y2); ctx.closePath();
+        ctx.clip();
+        ctx.transform(a, b, c, d, e, f);
+        ctx.drawImage(fuente, 0, 0);
+        ctx.restore();
+    }
+
+    function dibujarPerspectiva(ctx, items, puntos, discrepancias, op) {
+        var marco = marcoItems(items);
+        var dimension = Math.max(marco.w, marco.h);
+        var calidad = Math.min(2, 1200 / dimension);
+        var ancho = Math.max(1, Math.ceil(marco.w * calidad));
+        var alto = Math.max(1, Math.ceil(marco.h * calidad));
+        var fuente = crearCanvas(ancho, alto);
+        if (!fuente || !fuente.getContext) { return false; }
+        var fctx = fuente.getContext('2d');
+        if (!fctx) { return false; }
+        fctx.setTransform(calidad, 0, 0, calidad, -marco.x * calidad, -marco.y * calidad);
+        items.forEach(function (item) { dibujarItem(fctx, item, op, discrepancias); });
+
+        var destino = puntos.map(function (p) {
+            return { x: marco.x + p.x * marco.w, y: marco.y + p.y * marco.h };
+        });
+        var celdas = 32;
+        for (var iy = 0; iy < celdas; iy++) {
+            for (var ix = 0; ix < celdas; ix++) {
+                var u0 = ix / celdas, u1 = (ix + 1) / celdas;
+                var v0 = iy / celdas, v1 = (iy + 1) / celdas;
+                var s00 = { x: u0 * ancho, y: v0 * alto };
+                var s10 = { x: u1 * ancho, y: v0 * alto };
+                var s11 = { x: u1 * ancho, y: v1 * alto };
+                var s01 = { x: u0 * ancho, y: v1 * alto };
+                var d00 = homografia(destino, u0, v0);
+                var d10 = homografia(destino, u1, v0);
+                var d11 = homografia(destino, u1, v1);
+                var d01 = homografia(destino, u0, v1);
+                dibujarTriangulo(ctx, fuente, [s00, s10, s11], [d00, d10, d11]);
+                dibujarTriangulo(ctx, fuente, [s00, s11, s01], [d00, d11, d01]);
+            }
+        }
+        return true;
+    }
+
     /**
      * Compone las capas sobre el contexto en el espacio logico 300x300.
      *
@@ -363,8 +549,30 @@
         return Promise.all(trabajo).then(function () {
             // Orden estable: el array de entrada manda en el z-order.
             compuestas.sort(function (a, b) { return a.indice - b.indice; });
+            var gruposPerspectiva = {};
+            var procesadas = {};
+            compuestas.forEach(function (item) {
+                var gid = item.capa.grupo ? String(item.capa.grupo) : '';
+                var puntos = puntosPerspectiva(item.capa.perspectiva);
+                if (gid && puntos && perspectivaConvexa(puntos) && !esPerspectivaNeutra(puntos)) {
+                    gruposPerspectiva[gid] = gruposPerspectiva[gid]
+                        || { puntos: puntos, items: [] };
+                    gruposPerspectiva[gid].items.push(item);
+                }
+            });
             compuestas.forEach(function (item) {
                 if (!ctx) { return; }
+                if (procesadas[item.indice]) { return; }
+                var gid = item.capa.grupo ? String(item.capa.grupo) : '';
+                var grupoPerspectiva = gid ? gruposPerspectiva[gid] : null;
+                if (grupoPerspectiva && grupoPerspectiva.items.length > 1
+                    && dibujarPerspectiva(ctx, grupoPerspectiva.items,
+                        grupoPerspectiva.puntos, discrepancias, op)) {
+                    grupoPerspectiva.items.forEach(function (miembro) {
+                        procesadas[miembro.indice] = true;
+                    });
+                    return;
+                }
                 var c = item.capa;
                 var caja = item.caja;
                 var est = filtroCss(c.filtros, c.modo);
@@ -426,4 +634,3 @@
         trazarEnvoltura: trazarEnvoltura
     };
 }));
-

@@ -21,6 +21,10 @@
 
     /** Lado del lienzo logico (salida 300x300 px, norma vigente). */
     var LIENZO = 300;
+    /** Tope de seguridad para capas desplazadas fuera del area de salida. */
+    var MAX_POSICION = LIENZO * 10;
+    /** Permite ampliar grupos mas alla del lienzo sin admitir tamaños extremos. */
+    var MAX_DIMENSION = LIENZO * 4;
     /** Tolerancia de imanes en px del espacio logico. */
     var TOLERANCIA_IMAN = 6;
     /** Tiradores de redimension admitidos. */
@@ -40,8 +44,8 @@
     /* ============ Acotado ============ */
 
     /**
-     * Acota una capa al area del lienzo: nunca se pierde ni queda fuera.
-     * `w`/`h` >= 1; si la caja era mayor que el lienzo, se reduce.
+     * Sanea dimensiones y limita desplazamientos extremos, pero permite que
+     * una capa quede parcialmente o totalmente fuera del lienzo de salida.
      */
     function acotar(capa, lienzo) {
         var lado = numero(lienzo, LIENZO);
@@ -59,11 +63,12 @@
         c.w = Math.max(1, numero(capa.w, 1));
         c.h = Math.max(1, numero(capa.h, 1));
         c.rot = acotarNumero(numero(capa.rot), -360, 360);
+        c.giro = acotarNumero(numero(capa.giro), -360, 360);
         c.sesgo = acotarNumero(numero(capa.sesgo), -1, 1);
-        if (c.w > lado) { c.w = lado; }
-        if (c.h > lado) { c.h = lado; }
-        c.x = acotarNumero(c.x, 0, lado - c.w);
-        c.y = acotarNumero(c.y, 0, lado - c.h);
+        if (c.w > MAX_DIMENSION) { c.w = MAX_DIMENSION; }
+        if (c.h > MAX_DIMENSION) { c.h = MAX_DIMENSION; }
+        c.x = acotarNumero(c.x, -MAX_POSICION, MAX_POSICION);
+        c.y = acotarNumero(c.y, -MAX_POSICION, MAX_POSICION);
         return c;
     }
 
@@ -148,8 +153,8 @@
             w = w0 * escala;
             h = h0 * escala;
         }
-        w = acotarNumero(w, 1, lado);
-        h = acotarNumero(h, 1, lado);
+        w = acotarNumero(w, 1, MAX_DIMENSION);
+        h = acotarNumero(h, 1, MAX_DIMENSION);
 
         var x = oeste ? x0 + (w0 - w) : x0;
         var y = norte ? y0 + (h0 - h) : y0;
@@ -335,7 +340,30 @@
             copia.x = nuevoX - numero(original.w, 1) / 2;
             copia.y = nuevoY - numero(original.h, 1) / 2;
             copia.rot = acotarNumero(numero(original.rot) + numero(grados), -360, 360);
-            lista[i] = copia;
+            copia.giro = acotarNumero(numero(original.giro) + numero(grados), -360, 360);
+            lista[i] = acotar(copia);
+        });
+        return lista;
+    }
+
+    /** Escala un conjunto en ambos ejes alrededor de `origen`, sin mutar la entrada. */
+    function escalarGrupo(capas, indices, origen, escalaX, escalaY) {
+        var lista = (capas || []).slice();
+        var cx = numero(origen && origen.x);
+        var cy = numero(origen && origen.y);
+        var sx = numero(escalaX, 1);
+        var sy = numero(escalaY, sx);
+        if (sx <= 0 || sy <= 0) { return lista; }
+        expandirGrupos(lista, indices).forEach(function (i) {
+            var original = lista[i];
+            var copia = {};
+            Object.keys(original).forEach(function (k) { copia[k] = original[k]; });
+            var centroCapa = centro(original);
+            copia.w = Math.min(MAX_DIMENSION, numero(original.w, 1) * sx);
+            copia.h = Math.min(MAX_DIMENSION, numero(original.h, 1) * sy);
+            copia.x = cx + (centroCapa.x - cx) * sx - copia.w / 2;
+            copia.y = cy + (centroCapa.y - cy) * sy - copia.h / 2;
+            lista[i] = acotar(copia);
         });
         return lista;
     }
@@ -455,6 +483,8 @@
 
     return {
         LIENZO: LIENZO,
+        MAX_POSICION: MAX_POSICION,
+        MAX_DIMENSION: MAX_DIMENSION,
         TOLERANCIA_IMAN: TOLERANCIA_IMAN,
         TIRADORES: TIRADORES,
         POSICIONES: Object.keys(POSICIONES),
@@ -469,6 +499,7 @@
         expandirGrupos: expandirGrupos,
         marco: marco,
         transformarGrupo: transformarGrupo,
+        escalarGrupo: escalarGrupo,
         alinear: alinear,
         distribuir: distribuir,
         reordenar: reordenar,

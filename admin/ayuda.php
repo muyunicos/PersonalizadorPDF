@@ -31,11 +31,18 @@ if (!defined('ABSPATH')) {
     <h2>Editor de mockups</h2>
     <p>En la consola de <strong>PDFs</strong>, cada mockup puede incluir capas de imagen y placeholders.
         Selecciona varias con <strong>Ctrl/Cmd + clic</strong> para agruparlas o desagruparlas; cualquier
-        miembro de un grupo permite mover y rotar el conjunto.</p>
+        miembro de un grupo permite mover, redimensionar y rotar el conjunto. Usa los tiradores del
+        marco; la escala conserva la proporcion. Si necesitas editar un PH sin mover los demas,
+        haz <strong>Alt + clic</strong> sobre el PH en el lienzo o en la lista. La capa sigue en su
+        grupo, que vuelve a seleccionarse completo con un clic normal.</p>
+    <p>En ▲/▼, un clic cambia un nivel. Mantener pulsado 1 segundo envia el grupo seleccionado arriba
+        o abajo del todo; el gesto se cancela si mueves el puntero antes de que termine.</p>
     <p><strong>Importar pagina + PH</strong> rasteriza en el navegador la pagina indicada del PDF y
-        agrega la imagen junto con sus placeholders y envolturas detectadas, ya agrupados. El PDF se
-        procesa localmente con los recursos incluidos en el plugin; la pagina rasterizada se guarda
-        en el catalogo de imagenes de mockup.</p>
+        agrega la imagen junto con sus placeholders y envolturas detectadas, ya agrupados. Al importar,
+        el conjunto puede moverse o transformarse mas alla de los bordes; la parte que queda fuera no
+        aparece en el mockup final. Alt+clic permite volver a seleccionar una capa desplazada desde la
+        lista; sus campos X/Y permiten traerla de vuelta. El PDF se procesa localmente con los recursos
+        incluidos en el plugin; la pagina rasterizada se guarda en el catalogo de imagenes de mockup.</p>
 </div>
 
 <div class="card">

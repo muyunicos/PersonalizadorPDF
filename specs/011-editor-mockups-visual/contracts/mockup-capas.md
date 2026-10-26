@@ -29,7 +29,7 @@ compartido** que la usan el editor del admin y la ficha del cliente. Especificac
 |---|---|---|
 | `tipo` | `img` \| `placeholder`; otro valor se descarta al guardar | = |
 | `ref` | `{ambito}:{valor}`; `pdf:{archivo}` (foto del PDF) o `img:{id}` (id numerico del catalogo). **Sin `:` se lee como `pdf:`** | **ampliado** |
-| `x`,`y`,`w`,`h` | int; `w,h >= 1`; espacio logico 300x300 | = |
+| `x`,`y`,`w`,`h` | int; `x,y` entre -3000 y 3000; `1 <= w,h <= 300`; espacio logico 300x300. El contenido fuera del area se recorta en el lienzo de salida | ampliado |
 | `rot` | float -360..360 (grados) | = |
 | `sesgo` | float -1..1 | = |
 | `filtros` | object; claves de §1.4; ausente = neutro | **ampliado** |
@@ -40,13 +40,24 @@ compartido** que la usan el editor del admin y la ficha del cliente. Especificac
 | `envoltura` | bool; default `false`; **solo** `tipo=placeholder` (en `img` el saneo fuerza `false`). Recorta la capa al clip vectorial del hueco en el PDF (PowerClip) | **nuevo (v3)** |
 | `grupo` | opcional; id `g-` + 1..36 caracteres `[a-z0-9_-]`; agrupa capas para seleccion, movimiento y rotacion conjuntos en el editor. Sin efecto en el render de la ficha | **nuevo (v5)** |
 
-### 1.3 Grupos e importacion de pagina PDF — v5
+### 1.3 Grupos e importacion de pagina PDF — v6
 
 - Agrupar asigna el mismo `grupo` a todas las capas seleccionadas; desagrupar elimina ese campo
   de sus miembros. Al seleccionar cualquier miembro, el editor selecciona el grupo completo.
 - El movimiento conserva las posiciones relativas; la rotacion conjunta se aplica alrededor del
-  centro del marco del grupo y suma el mismo angulo a cada capa. El grupo se mantiene dentro del
-  lienzo cuando es posible.
+  centro del marco del grupo y suma el mismo angulo a cada capa. Las capas y grupos pueden
+  sobrepasar cualquier borde del area 300x300; el contenido fuera del area queda recortado solo al
+  dibujar la salida. Las coordenadas se limitan a ±3000 px como proteccion frente a valores extremos.
+- El marco de un grupo seleccionado ofrece ocho tiradores de escala uniforme alrededor de su
+  centro; las capas bloqueadas impiden transformar el grupo. El control de rotacion permanece
+  dentro del lienzo cuando el borde superior o inferior coincide con el limite.
+- La seleccion automatica de grupo se puede anular temporalmente con **Alt+clic** sobre una capa,
+  tanto en el lienzo como en la lista. Asi se mueve, redimensiona o rota un miembro sin cambiar su
+  pertenencia al grupo; seleccionar normalmente vuelve a expandir el grupo.
+- En los botones ▲/▼ de la lista, un clic mueve la capa seleccionada un nivel. Mantener el boton
+  pulsado durante 1 segundo la envia al extremo superior/inferior; en una seleccion de grupo se
+  reordena el conjunto como bloque. El gesto se cancela al mover el puntero o soltar antes, y se
+  registra como una sola accion de deshacer.
 - **Importar pagina + PH** recibe el numero de pagina. PDF.js, servido localmente desde el plugin,
   rasteriza esa pagina como una imagen de catalogo; el motor PHP devuelve las instancias de
   placeholders de esa pagina usando el `Detector`. Se crean una capa de imagen y una capa por

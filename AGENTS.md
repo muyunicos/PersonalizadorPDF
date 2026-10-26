@@ -114,7 +114,9 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   │                             ampliable, manipulacion directa; DELEGA el render
 │   │                             en `mockup-render.js` y la geometria en
 │   │                             `mockup-geometria.js`; grupos e importacion
-│   │                             local de pagina PDF (spec 011)
+│   │                             local de pagina PDF, seleccion Alt+clic de miembro,
+│   │                             escala uniforme de grupo y orden extremo por pulsacion
+│   │                             larga (spec 011)
 │   ├── mockup-render.js      ← NUCLEO de composicion del mockup (Canvas 2D):
 │   │                             `PMUMockup.componer/contener/filtroCss/esValida`.
 │   │                             UNICA funcion de render del sistema: la usan el
@@ -388,8 +390,11 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   acepta en el cliente (el servidor lo normaliza al leer, una sola vez). `capas[].filtros` admite
   `brillo`/`gama`/`contraste`/`saturacion` 0..200, `opacidad` 0..100, `desenfoque` 0..20 y
   `tono` -180..180; el valor igual al default **no se persiste**. `capas[].modo` es
-  `normal`|`multiply`. `grupo` agrupa capas del editor para mover/rotar juntas; no altera
-  el render del comprador. El editor importa una pagina elegida del PDF como imagen del
+  `normal`|`multiply`. `grupo` agrupa capas del editor para mover/redimensionar/rotar juntas;
+  Alt+clic permite manipular un miembro sin cambiar su pertenencia. `x`/`y` aceptan ±3000 px:
+  el contenido fuera del area 300x300 queda recortado al renderizar. En la lista ▲/▼, mantener
+  1 segundo envia la seleccion (grupo como bloque) al extremo del orden y se registra como una
+  accion deshacible. El editor importa una pagina elegida del PDF como imagen del
   catalogo `mockups` y sus placeholders con envolturas, inicialmente en el mismo grupo;
   rasteriza con PDF.js local y consulta la geometria al motor PHP. Todo es opcional:
   ausente = comportamiento actual.

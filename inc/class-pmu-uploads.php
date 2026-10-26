@@ -1606,8 +1606,14 @@ class PMU_Uploads
         return array_values(array_slice(array_unique($ids), 0, 100));
     }
 
+    /** Conserva posiciones parciales fuera del lienzo con un limite seguro. */
+    private function mockup_posicion($valor)
+    {
+        return max(-3000, min(3000, (int)$valor));
+    }
+
     /**
-     * Normaliza la seccion mockups de un config (composicion de capas 300x300).
+     * Normaliza mockups de salida 300x300; x/y admiten desborde limitado.
      *
      * Spec 011: el contrato de capa se amplia de forma retrocompatible.
      * - `ref` con namespace `{ambito}:{valor}` (`pdf:` = foto del PDF,
@@ -1647,8 +1653,8 @@ class PMU_Uploads
                 $capas[] = [
                     'tipo' => $tipo,
                     'ref' => $ref,
-                    'x' => (int)($c['x'] ?? 0),
-                    'y' => (int)($c['y'] ?? 0),
+                    'x' => $this->mockup_posicion($c['x'] ?? 0),
+                    'y' => $this->mockup_posicion($c['y'] ?? 0),
                     'w' => max(1, (int)($c['w'] ?? 0)),
                     'h' => max(1, (int)($c['h'] ?? 0)),
                     'rot' => $this->clamp_float((float)($c['rot'] ?? 0), -360, 360),

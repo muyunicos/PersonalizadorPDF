@@ -31,11 +31,12 @@ var dentro = G.acotar({ x: 100, y: 100, w: 80, h: 60 });
 igual('acotar: x dentro se respeta', dentro.x, 100);
 igual('acotar: y dentro se respeta', dentro.y, 100);
 var fuera = G.acotar({ x: 280, y: 280, w: 100, h: 100 });
-igual('acotar: x pegado al borde derecho', fuera.x + fuera.w, 300);
-igual('acotar: y pegado al borde inferior', fuera.y + fuera.h, 300);
+igual('acotar: permite desbordar el borde derecho', fuera.x + fuera.w, 380);
+igual('acotar: permite desbordar el borde inferior', fuera.y + fuera.h, 380);
 var negativo = G.acotar({ x: -50, y: -50, w: 40, h: 40 });
-igual('acotar: negativo a 0 (x)', negativo.x, 0);
-igual('acotar: negativo a 0 (y)', negativo.y, 0);
+igual('acotar: conserva posicion negativa (x)', negativo.x, -50);
+igual('acotar: conserva posicion negativa (y)', negativo.y, -50);
+igual('acotar: limita coordenadas extremas', G.acotar({ x: 99999, y: -99999, w: 10, h: 10 }).x, 3000);
 var enorme = G.acotar({ x: 0, y: 0, w: 900, h: 900 });
 igual('acotar: ancho mayor que el lienzo se reduce', enorme.w, 300);
 igual('acotar: alto mayor que el lienzo se reduce', enorme.h, 300);
@@ -80,7 +81,7 @@ check('tirador con proporcion: caja no se deforma',
 check('tirador con proporcion: crece', prop.w > 100);
 var acotado = G.redimensionarDesdeTirador(base, 'se', 5000, 5000, {});
 igual('tirador: no supera el lienzo (w)', acotado.w, 300);
-check('tirador: no supera el lienzo (posicion)', acotado.x + acotado.w <= 300 && acotado.y + acotado.h <= 300);
+check('tirador: permite desbordar el lienzo', acotado.x + acotado.w > 300 && acotado.y + acotado.h > 300);
 var minimo = G.redimensionarDesdeTirador(base, 'se', -5000, -5000, {});
 igual('tirador: no baja de 1 px', minimo.w, 1);
 
@@ -218,6 +219,16 @@ igual('grupos: rotacion transforma el centro de la segunda capa (y)', transforma
 igual('grupos: suma la rotacion a la capa', transformadas[1].rot, 100);
 igual('grupos: no transforma capas ajenas', transformadas[2].x, grupoCapas[2].x);
 igual('grupos: no muta el arreglo original', grupoCapas[0].x, 15);
+var fueraGrupo = G.transformarGrupo(grupoCapas, [0], { x: 50, y: 50 }, 0, -80, 420);
+igual('grupos: permite trasladar mas alla del lienzo', fueraGrupo[0].y, 460);
+igual('grupos: conserva posiciones negativas al mover', fueraGrupo[0].x, -65);
+var escaladas = G.escalarGrupo(grupoCapas, [0], { x: 50, y: 50 }, 0.5);
+igual('grupos: escala el ancho uniformemente', escaladas[0].w, 10);
+igual('grupos: escala el alto uniformemente', escaladas[1].h, 10);
+igual('grupos: escala alrededor del origen', G.centro(escaladas[0]).x, 37.5);
+igual('grupos: mantiene rotacion al escalar', escaladas[1].rot, 10);
+igual('grupos: no escala capas ajenas', escaladas[2].w, grupoCapas[2].w);
+igual('grupos: escalar no muta el arreglo original', grupoCapas[0].w, 20);
 
 /* ============ Reordenar (T036) ============ */
 
@@ -249,6 +260,7 @@ igual('normalizar: geometria valida intacta', normOk.capa.x, 10);
 /* ============ Constantes ============ */
 
 igual('lienzo de 300 (salida fija)', G.LIENZO, 300);
+igual('coordenadas fuera del lienzo: limite seguro de 3000', G.MAX_POSICION, 3000);
 igual('tiradores: 8', G.TIRADORES.length, 8);
 igual('posiciones de alineacion: 6', G.POSICIONES.length, 6);
 

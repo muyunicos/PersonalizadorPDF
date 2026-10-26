@@ -496,6 +496,10 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('mockups guardados (con el vacio)', is_array($mc) && count($mc['mockups']) === 2);
             check('ref plano legado se lee como pdf:', is_array($mc)
                 && ($capas[0]['ref'] ?? '') === 'pdf:fondo.png');
+            check('posiciones fuera del lienzo persisten', is_array($mc)
+                && ($capas[0]['x'] ?? 0) === -45 && ($capas[0]['y'] ?? 0) === 460);
+            check('posiciones extremas limitadas por seguridad', is_array($mc)
+                && ($capas[3]['x'] ?? 0) === 3000 && ($capas[3]['y'] ?? 0) === -3000);
             check('ref del catalogo con namespace mock:', is_array($mc)
                 && ($capas[1]['ref'] ?? '') === 'mock:7');
             check('grupo de capas persiste con id valido', is_array($mc)
@@ -4111,8 +4115,8 @@ switch ($fase) {
                 'id' => 'vistas',
                 'titulo' => 'Vistas',
                 'capas' => [
-                    // 0: ref plano legado (compatibilidad con mockups previos).
-                    ['tipo' => 'img', 'ref' => 'fondo.png', 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300,
+                    // 0: ref plano legado y coordenadas fuera del lienzo conservadas.
+                    ['tipo' => 'img', 'ref' => 'fondo.png', 'x' => -45, 'y' => 460, 'w' => 300, 'h' => 300,
                         'filtros' => ['brillo' => 100], 'envoltura' => true],
                     // 1: imagen del catalogo por id numerico.
                     ['tipo' => 'img', 'ref' => 'mock:7', 'x' => 10, 'y' => 10, 'w' => 50, 'h' => 50,
@@ -4123,7 +4127,7 @@ switch ($fase) {
                         'oculta' => true, 'bloqueada' => true, 'envoltura' => true,
                         'filtros' => ['gama' => 0, 'opacidad' => 80, 'desenfoque' => 4.5, 'tono' => -30, 'xxx' => 1]],
                     // 3: fuera de rango -> clamp; modo invalido -> normal.
-                    ['tipo' => 'img', 'ref' => 'pdf:marco.png', 'x' => 0, 'y' => 0, 'w' => 10, 'h' => 10,
+                    ['tipo' => 'img', 'ref' => 'pdf:marco.png', 'x' => 99999, 'y' => -99999, 'w' => 10, 'h' => 10,
                         'modo' => 'inventado', 'grupo' => 'grupo invalido',
                         'filtros' => ['opacidad' => 500, 'desenfoque' => 99, 'tono' => -900]],
                     // 4: traversal -> capa fuera.
