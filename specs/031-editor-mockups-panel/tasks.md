@@ -116,11 +116,11 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `admin/`, `asset
 
 **Independent Test**: quickstart **E5**
 
-- [ ] T020 [US5] Apertura: `contextmenu` en `.ec-mk-capa` (fila) y en la cabecera del acordeon de grupo; el menu se construye sobre `.ec-mk-menu-ctx` con items `[data-ctx]` y estado (`aria-disabled` cuando no aplica: Agrupar con < 2 seleccionables, Desagrupar sin grupo) (FR-008, R2/R3)
-- [ ] T021 [US5] Acciones: cada item llama a la funcion vigente (`duplicarCapa`, `borrarCapa`, `agruparSeleccion`, `desagruparSeleccion`, toggles ocultar/bloquear) — cero logica nueva (INV-2); acciones de grupo en cabecera: Desagrupar / Ocultar grupo / Quitar grupo sobre todas las miembros (FR-008)
-- [ ] T022 [US5] Cierre: `pointerdown` fuera, Escape, scroll del panel y repintado de la lista; retirar/unificar el `contextmenu` preventivo de mockups.js:2014 (FR-014, C-3)
-- [ ] T023 [US5] Boton `...` (`.ec-mk-capa-ias`) en cada fila abre el mismo menu (fallback sin clic derecho); verificar atajos T044 (Delete, Ctrl+D, [, ], flechas) sobre la capa seleccionada (FR-009)
-- [ ] T024 [US5] quickstart E5: menu por clic derecho en fila y cabecera; Delete/Ctrl+D; `...`; cierre por fuera/Esc/scroll; Agrupar deshabilitado con 1 capa
+- [X] T020 [US5] Apertura: `contextmenu` en `.ec-mk-capa` (fila) y en la cabecera del acordeon de grupo; el menu se construye sobre `.ec-mk-menu-ctx` con items `[data-ctx]` y estado (`aria-disabled` cuando no aplica: Agrupar con < 2 seleccionables, Desagrupar sin grupo) (FR-008, R2/R3) — **hecho**: nodo unico con `position: fixed` (robusto ante el scroll) y clamp al viewport
+- [X] T021 [US5] Acciones: cada item llama a la funcion vigente (`duplicarCapa`, `borrarCapa`, `agruparSeleccion`, `desagruparSeleccion`, toggles ocultar/bloquear) — cero logica nueva (INV-2); acciones de grupo en cabecera: Desagrupar / Ocultar grupo / Quitar grupo sobre todas las miembros (FR-008) — **hecho**: `accionMenuCtx()` reutiliza las funciones y fija la seleccion al grupo para las acciones de cabecera; Ocultar/Mostrar tambien para el grupo
+- [X] T022 [US5] Cierre: `pointerdown` fuera, Escape, scroll del panel y repintado de la lista; retirar/unificar el `contextmenu` preventivo de mockups.js:2014 (FR-014, C-3) — **hecho** (fuera/Escape/scroll). **Decision**: el `contextmenu` preventivo de los botones ▲▼/`...` se CONSERVA: es lo que sostiene la pulsacion larga; el menu contextual ignora los eventos cuyo target esta en un boton de fila
+- [X] T023 [US5] Boton `...` (`.ec-mk-capa-ias`) en cada fila abre el mismo menu (fallback sin clic derecho); verificar atajos T044 (Delete, Ctrl+D, [, ], flechas) sobre la capa seleccionada (FR-009) — **hecho**: el boton cierra con `stopPropagation` y abre el menu bajo la fila; los atajos siguen intactos (verificados en E5)
+- [X] T024 [US5] quickstart E5: menu por clic derecho en fila y cabecera; Delete/Ctrl+D; `...`; cierre por fuera/Esc/scroll; Agrupar deshabilitado con 1 capa — **hecho**: E5 9/9. **Hallazgo**: `borrarCapa()` confirma con `window.confirm` (patron vigente que el menu hereda) y tras Ctrl+D el foco cae a `<body>`, asi que hay que re-enfocar la fila para que el atajo global siga operando (comportamiento preexistente del editor)
 
 ---
 
