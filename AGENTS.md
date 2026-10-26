@@ -1100,6 +1100,21 @@ version vieja. **Para cambiar la version, editar SOLO la cabecera** (y el `Stabl
 `readme.txt` si se publica en el repo de WordPress.org). No volver a escribir un `define` con
 el numero a mano. El stub `get_file_data` del arnes esta en `tests/texto_puente.php`.
 
+## 10.quater Aviso de fin de tarea (tooling local, fuera del repo)
+
+Al terminar una tarea o cuando se requiera intervencion del usuario:
+
+    & "$env:LOCALAPPDATA\pmu-aviso\aviso.bat"
+
+- Vive en `%LOCALAPPDATA%\pmu-aviso\` (`aviso.bat` + `aviso-tarea.ps1`): fuera del
+  repo, no se versiona ni se despliega.
+- Suena el MP3 completo (`Alarma.mp3`), corta con CUALQUIER tecla o clic (deteccion
+  global: funciona con el foco en VS Code) y respeta un minimo de 4 s. Con `-Loop`
+  se repite hasta que toquen algo.
+- Opciones en la cabecera del `.bat` (VENTANA / MP3 / LOOP / MIN / ESCANEO / MENSAJE /
+  DETALLE / LOG / CONSOLA) o por variable de entorno; el `.bat` vuelve al instante
+  (lanza en segundo plano y sin consola visible).
+
 ## 11. Tabla de errores comunes (resolver antes de preguntar)
 
 | Error | Causa | Solución |
