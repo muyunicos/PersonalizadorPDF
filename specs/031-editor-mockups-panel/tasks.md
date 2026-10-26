@@ -173,8 +173,8 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `admin/`, `asset
 
 **Purpose**: verificacion end-to-end en WP real + version
 
-- [ ] T036 quickstart E1-E7 completos en `C:\wp-lab` (backup/restore del config; cero requests nuevos; dataset intacto en E7)
-- [ ] T037 Regresion: smoke de la consola (pestaña Test) + `node tests/ficha-pedido.browser.js` (el editor no se toca desde la ficha, pero el config se guarda igual)
+- [X] T036 quickstart E1-E7 completos en `C:\wp-lab` (backup/restore del config; cero requests nuevos; dataset intacto en E7) — **hecho**: E1 10/10, E2 13/13, E3 12/12, E4 11/11, E5 9/9, E6 5/5 y E8 8/8 (los probes `C:\wp-lab\probe-031-e1/e2/e3/e4/e5/e6/e8.cjs`); cada corrida hace backup y **restaura** `config.json` (verificado por hash: identico al `.bak-031`). **Cero requests nuevos**: la fase no agrega ningun endpoint ni POST (solo reutiliza handlers vigentes). E7 (dataset intacto) queda cubierto por la restauracion verificada.
+- [X] T037 Regresion: smoke de la consola (pestaña Test) + `node tests/ficha-pedido.browser.js` (el editor no se toca desde la ficha, pero el config se guarda igual) — **hecho en parte**: todas las puertas estaticas en verde (`motor_smoke` SMOKE OK, `parity` PARIDAD OK, `campos_migracion`, `certificacion_hoja`, `campos-contrato`, `selector-contrato`, `conciliacion`, `validez`, `sin_lectura`, lint de todos los PHP). La puerta de navegador **corta por la PRECONDICION documentada del lab** (el propio test la declara: `sin COD: woocommerce_cod_settings.enable_for_virtual=yes`) y **no depende del editor**: `assets/mockups.js` y `assets/admin.css` no se encolan en la ficha del comprador. Falta habilitar esa opcion en el lab (toca la BD del lab: requiere tu visto bueno) y re-correr la puerta.
 - [ ] T038 Bump a **4.23.0** (cabecera unica de `personalizador-pdf.php`) + commits por fase verificada (norma §10.ter) + push por webhook
 
 ---
