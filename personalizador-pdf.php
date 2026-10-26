@@ -5947,6 +5947,10 @@ JS;
                 'subir_pdf' => wp_create_nonce('personalizador_pdf_subir_pdf'),
                 'reanalizar' => wp_create_nonce('personalizador_pdf_reanalizar'),
                 'borrar' => wp_create_nonce('personalizador_pdf_borrar'),
+                // spec 032: reemplazo del PDF sin perder la personalizacion.
+                'reemplazar_preparar' => wp_create_nonce('personalizador_pdf_reemplazar_preparar'),
+                'reemplazar_confirmar' => wp_create_nonce('personalizador_pdf_reemplazar_confirmar'),
+                'reemplazar_recuperar' => wp_create_nonce('personalizador_pdf_reemplazar_recuperar'),
                 'subir_imagen' => wp_create_nonce('personalizador_pdf_subir_imagen'),
                 'quitar_imagen' => wp_create_nonce('personalizador_pdf_quitar_imagen'),
                 'procesar' => wp_create_nonce('personalizador_pdf_procesar'),

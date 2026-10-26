@@ -67,12 +67,12 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `admin/`, `asset
 
 **Goal**: boton, modal del mapa y recuperacion · **Independent Test**: R1-R5 a mano en el lab
 
-- [ ] T021 [US1] `admin/pdfs.php`: en "2. PDFs subidos" (93) un boton **Reemplazar archivo** por fila con `<input type="file">` propio (nunca un form anidado: leccion de la spec 011) y su nonce (FR-001)
-- [ ] T022 [US2] `admin/pdfs.php` + `assets/admin.js`: **modal del mapa** — iguales / sugeridos (con `de -> a`, IoU y color) / perdidos / nuevos + avisos, con **Migrar** y **Cancelar**; sin recargas (FR-005/014, `pmuPost`)
-- [ ] T023 [US2] `assets/admin.js`: `pares` construido desde lo que el admin acepta (por defecto todos) y enviado en el confirmar (T014); estado del boton mientras prepara/confirma
-- [ ] T024 [US3] `admin/pdfs.php` + `assets/admin.js`: **Recuperar la version anterior** por fila, visible solo si hay respaldo (lo dice el listado), con confirmacion (FR-008)
-- [ ] T025 [US1] `admin/pdfs.php`: la opcion `sobrescribir` del modal de conflicto (793-802) se reescribe a **"Reemplazar (conserva la personalizacion)"** y dispara el flujo nuevo (D10/FR-001)
-- [ ] T026 [P] `assets/admin.css`: estilos del modal del mapa (tabla de pares, etiquetas de estado) y del boton de recuperacion
+- [X] T021 [US1] `admin/pdfs.php`: en "2. PDFs subidos" (93) un boton **Reemplazar archivo** por fila con `<input type="file">` propio (nunca un form anidado: leccion de la spec 011) y su nonce (FR-001) — **hecho**: boton `type=button` + `<input type=file hidden>` por fila (sin `<form>` nuevo: la fase `admin` valida el equilibrio) y los 3 nonces publicados en `PersonalizadorPDF.nonces`
+- [X] T022 [US2] `admin/pdfs.php` + `assets/admin.js`: **modal del mapa** — iguales / sugeridos (con `de -> a`, IoU y color) / perdidos / nuevos + avisos, con **Migrar** y **Cancelar**; sin recargas (FR-005/014, `pmuPost`) — **hecho**: `.ec-rp-modal` con tabla de sugeridos (checkbox por par), perdidos marcados si tenian personalizacion, nuevos sin par y avisos; Migrar/Cancelar por `pmuPost` (JSON) y recarga solo en exito
+- [X] T023 [US2] `assets/admin.js`: `pares` construido desde lo que el admin acepta (por defecto todos) y enviado en el confirmar (T014); estado del boton mientras prepara/confirma — **hecho**: los `iguales` viajan como pares `de=a` y los sugeridos marcados; el boton de la fila y los del modal se deshabilitan durante la peticion
+- [X] T024 [US3] `admin/pdfs.php` + `assets/admin.js`: **Recuperar la version anterior** por fila, visible solo si hay respaldo (lo dice el listado), con confirmacion (FR-008) — **hecho**: `ultimo_reemplazo($nombre)` decide si el boton se pinta; el JS confirma con `window.confirm` y recarga con el notice
+- [X] T025 [US1] `admin/pdfs.php`: la opcion `sobrescribir` del modal de conflicto (793-802) se reescribe a **"Reemplazar (conserva la personalizacion)"** y dispara el flujo nuevo (D10/FR-001) — **hecho**: `data-modo="reemplazar"`; el JS intercepta ese modo y llama `PMURp.preparar(file, archivoEnConflicto)` en vez de `subir_pdf`
+- [X] T026 [P] `assets/admin.css`: estilos del modal del mapa (tabla de pares, etiquetas de estado) y del boton de recuperacion — **hecho**: `.ec-rp-modal` con overlay fijo y z-index 180000 (la escala documentada de la consola), tabla y acciones
 
 ## Phase 8 (F7): Legado
 

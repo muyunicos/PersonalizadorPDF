@@ -440,14 +440,28 @@ jQuery(function ($) {
     });
 
     function abrirModal(nombre) {
+        archivoConflicto = nombre;
         var $modal = $('.ec-modal');
         $modal.find('.ec-modal-caja p:first').text('Ya existe un PDF llamado "' + nombre + '". ¿Que queres hacer?');
         $modal.removeAttr('hidden');
     }
 
+    var archivoConflicto = '';
     $(document).on('click', '.ec-modal-btn', function () {
         modoElegido = $(this).data('modo');
         $('.ec-modal').attr('hidden', true);
+        if (modoElegido === 'reemplazar') {
+            // spec 032: el archivo ya existe y se reemplaza conservando la personalizacion.
+            var inp = $formSubir.find('input[type=file]')[0];
+            var f = inp && inp.files ? inp.files[0] : null;
+            if (!f || !archivoConflicto || !window.PMURp) {
+                pmuAviso($formSubir.closest('.card, .wrap'),
+                    'Elegi otra vez el PDF para reemplazarlo.', true);
+                return;
+            }
+            window.PMURp.preparar(f, archivoConflicto, $formSubir.closest('.card, .wrap'));
+            return;
+        }
         $formSubir.find('input[name=modo]').val(modoElegido);
         $formSubir.trigger('submit');
     });
@@ -456,6 +470,170 @@ jQuery(function ($) {
         $('.ec-modal').attr('hidden', true);
     });
     } // fin guarda $formSubir (pestana PDFs)
+
+    /* ============ 1.ter Reemplazo del PDF sin perder la personalizacion (spec 032) ============ */
+
+    (function reemplazoUI() {
+        if (!$('.ec-rp-file').length) { return; }
+
+        function avisoRp($donde, texto, esError) {
+            if (!texto) { return; }
+            var $caja = $donde && $donde.length ? $donde : $('.ec-rp-file').first().closest('td, .card, .wrap');
+            pmuAviso($caja, texto, esError === true);
+        }
+
+        function abrirMapaRp(archivo, ts, mapa) {
+            var $m = $('.ec-rp-modal');
+            var iguales = mapa.iguales || {};
+            var ids = Object.keys(iguales);
+            var sugeridos = mapa.sugeridos || [];
+            var perdidos = mapa.perdidos || [];
+            var nuevos = mapa.nuevos || [];
+            var html = '<p>La version nueva tiene <strong>' + (mapa.grupos_nuevos || 0)
+                + '</strong> grupo(s) y la vigente <strong>' + (mapa.grupos_previos || 0) + '</strong>.</p>';
+            if (ids.length) {
+                html += '<p>Se conservan sin cambios: ' + ids.map(function (k) {
+                    return '<code>' + k + '</code>';
+                }).join(', ') + '.</p>';
+            }
+            if (sugeridos.length) {
+                html += '<table class="widefat striped ec-rp-tabla"><thead><tr>'
+                    + '<th>Migrar</th><th>Grupo actual</th><th>Grupo nuevo</th>'
+                    + '<th title="Coincidencia de lugar y tamano">Geometria</th>'
+                    + '<th title="Parecido del color">Color</th>'
+                    + '</tr></thead><tbody>';
+                sugeridos.forEach(function (s) {
+                    html += '<tr><td><input type="checkbox" class="ec-rp-par" checked'
+                        + ' data-de="' + s.de + '" data-a="' + s.a + '"></td>'
+                        + '<td><code>' + s.de + '</code></td>'
+                        + '<td><code>' + s.a + '</code></td>'
+                        + '<td>' + Math.round((s.iou || 0) * 100) + '% del hueco</td>'
+                        + '<td>' + Math.round((s.color || 0) * 100) + '% de parecido</td></tr>';
+                });
+                html += '</tbody></table>';
+                html += '<p class="description">Desmarca lo que NO quieras migrar.</p>';
+            }
+            if (perdidos.length) {
+                html += '<p><strong>Se pierde la personalizacion de:</strong> ' + perdidos.map(function (p) {
+                    return '<code>' + p.gid + '</code>' + (p.con_personalizacion ? ' (tenia personalizacion)' : '');
+                }).join(', ') + '.</p>';
+            }
+            if (nuevos.length) {
+                html += '<p>Grupos nuevos sin nada que migrar: ' + nuevos.map(function (k) {
+                    return '<code>' + k + '</code>';
+                }).join(', ') + '.</p>';
+            }
+            if ((mapa.avisos || []).length) {
+                html += '<p class="description">' + (mapa.avisos || []).join('<br>') + '</p>';
+            }
+            $m.find('.ec-rp-modal-cuerpo').html(html);
+            $m.data('archivo', archivo).data('ts', ts).data('iguales', iguales).removeAttr('hidden');
+        }
+
+        function enviarRp(archivo, ts, migrar, pares) {
+            var $m = $('.ec-rp-modal');
+            var $btns = $m.find('button').prop('disabled', true);
+            var fd = new FormData();
+            fd.append('archivo', archivo);
+            fd.append('ts', ts || '');
+            fd.append('migrar', migrar ? '1' : '0');
+            fd.append('pares', JSON.stringify(pares || []));
+            pmuPost('personalizador_pdf_reemplazar_confirmar', fd, NONCES.reemplazar_confirmar)
+                .then(function (res) {
+                    var d = res.data || {};
+                    $m.attr('hidden', true);
+                    if (d.cancelado) {
+                        pmuAviso($('.wrap').first(), 'Reemplazo cancelado: no se cambio nada.', false);
+                        return;
+                    }
+                    var url = window.location.pathname + '?page=personalizador-pdf&tab=pdfs'
+                        + '&ec_reemplazado=1&ec_pdf=' + encodeURIComponent(archivo);
+                    if ((d.avisos || []).length) {
+                        url += '&ec_avisos=' + encodeURIComponent(d.avisos.join('; '));
+                    }
+                    if ((d.perdidos || []).length) {
+                        url += '&ec_perdidos=' + encodeURIComponent(d.perdidos.join(','));
+                    }
+                    window.location.href = url; // recarga solo en exito
+                })
+                .catch(function (err) {
+                    pmuAviso($m.find('.ec-rp-modal-caja'), (err && err.message) || 'No se pudo reemplazar.', true);
+                })
+                .then(function () { $btns.prop('disabled', false); });
+        }
+
+        function prepararRp(file, archivo, $donde) {
+            var $abrir = $('.ec-rp-abrir[data-archivo="' + archivo + '"]').prop('disabled', true);
+            avisoRp($donde, 'Analizando la version nueva...', false);
+            var fd = new FormData();
+            fd.append('pdf', file, file.name);
+            fd.append('archivo', archivo);
+            pmuPost('personalizador_pdf_reemplazar_preparar', fd, NONCES.reemplazar_preparar)
+                .then(function (res) {
+                    var d = res.data || {};
+                    abrirMapaRp(archivo, d.ts, d.mapa || {});
+                })
+                .catch(function (err) {
+                    avisoRp($donde, (err && err.message) || 'No se pudo analizar la version nueva.', true);
+                })
+                .then(function () { $abrir.prop('disabled', false); });
+        }
+
+        // El modal de conflicto de nombre reusa esto (el archivo ya existe).
+        window.PMURp = { preparar: prepararRp };
+
+        $(document).on('click', '.ec-rp-abrir', function () {
+            var archivo = $(this).data('archivo');
+            $('.ec-rp-file[data-archivo="' + archivo + '"]').trigger('click');
+        });
+
+        $(document).on('change', '.ec-rp-file', function () {
+            var input = this;
+            var file = input.files && input.files[0] ? input.files[0] : null;
+            var archivo = $(this).data('archivo');
+            if (!file) { return; }
+            prepararRp(file, archivo, $(this).closest('td, .card, .wrap'));
+            input.value = '';
+        });
+
+        $(document).on('click', '.ec-rp-cancelar', function () {
+            var $m = $('.ec-rp-modal');
+            enviarRp($m.data('archivo'), $m.data('ts'), false, []);
+        });
+
+        $(document).on('click', '.ec-rp-migrar', function () {
+            var $m = $('.ec-rp-modal');
+            var pares = [];
+            var iguales = $m.data('iguales') || {};
+            Object.keys(iguales).forEach(function (k) {
+                pares.push({ de: String(k), a: String(iguales[k]) });
+            });
+            $m.find('.ec-rp-par:checked').each(function () {
+                pares.push({ de: String($(this).data('de')), a: String($(this).data('a')) });
+            });
+            enviarRp($m.data('archivo'), $m.data('ts'), true, pares);
+        });
+
+        $(document).on('click', '.ec-rp-recuperar', function () {
+            var archivo = $(this).data('archivo');
+            if (!window.confirm('¿Volver a la version anterior de "' + archivo + '"?'
+                + ' El PDF actual se reemplaza por el respaldado (la personalizacion vuelve a la de antes).')) {
+                return;
+            }
+            var $btn = $(this).prop('disabled', true);
+            var fd = new FormData();
+            fd.append('archivo', archivo);
+            pmuPost('personalizador_pdf_reemplazar_recuperar', fd, NONCES.reemplazar_recuperar)
+                .then(function () {
+                    window.location.href = window.location.pathname + '?page=personalizador-pdf&tab=pdfs'
+                        + '&ec_recuperado=1&ec_pdf=' + encodeURIComponent(archivo);
+                })
+                .catch(function (err) {
+                    pmuAviso($btn.closest('td, .card, .wrap'), (err && err.message) || 'No se pudo recuperar.', true);
+                })
+                .then(function () { $btn.prop('disabled', false); });
+        });
+    })();
     /* ============ 1.bis Bonus por PDF 0..N (spec 018) ============ */
 
     (function bonusUI() {

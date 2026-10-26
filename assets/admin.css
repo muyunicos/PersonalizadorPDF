@@ -861,6 +861,34 @@ body.ec-c-drawer-abierto { overflow: hidden; }
 .ec-mk-menu-ctx button:hover { background: #f0f6fb; }
 .ec-mk-menu-ctx button[aria-disabled="true"] { color: #a7aaad; cursor: default; }
 
+/* ---- Modal del mapa de reemplazo (spec 032, T026) ---- */
+.ec-rp-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 180000; /* escala de capas de la consola: modales */
+    background: rgba(0, 0, 0, .5);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 16px;
+    overflow: auto;
+}
+.ec-rp-modal[hidden] { display: none; }
+.ec-rp-modal-caja {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, .3);
+    max-width: 720px;
+    width: 100%;
+    padding: 18px 20px;
+}
+.ec-rp-modal-caja h3 { margin: 0 0 10px; }
+.ec-rp-modal-cuerpo p { margin: 6px 0; }
+.ec-rp-modal-cuerpo code { background: #f0f0f1; padding: 1px 4px; border-radius: 3px; }
+.ec-rp-tabla { margin: 8px 0; }
+.ec-rp-tabla th, .ec-rp-tabla td { padding: 6px 8px; }
+.ec-rp-modal-acciones { margin: 14px 0 6px; display: flex; gap: 8px; }
+
 
 /* ---- Galeria de mockups ---- */
 .ec-mk-mockups {

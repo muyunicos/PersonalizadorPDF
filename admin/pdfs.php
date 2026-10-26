@@ -68,6 +68,19 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
         <?php endif; ?>
 <?php elseif (isset($get['ec_borrado'])) : ?>
     <div class="notice notice-success"><p><strong>PDF eliminado</strong> con sus datos, imagenes y salida.</p></div>
+<?php elseif (isset($get['ec_reemplazado'])) : ?>
+    <div class="notice notice-success"><p><strong>PDF reemplazado</strong> conservando la personalizacion de
+        <?php echo esc_html((string)$get['ec_pdf']); ?>.</p></div>
+    <?php if (!empty($get['ec_avisos'])) : ?>
+        <div class="notice notice-warning"><p><?php echo esc_html((string)$get['ec_avisos']); ?></p></div>
+    <?php endif; ?>
+    <?php if (!empty($get['ec_perdidos'])) : ?>
+        <div class="notice notice-warning"><p><strong>Sin destino</strong> (personalizacion no migrada) en:
+            <?php echo esc_html((string)$get['ec_perdidos']); ?>.</p></div>
+    <?php endif; ?>
+<?php elseif (isset($get['ec_recuperado'])) : ?>
+    <div class="notice notice-success"><p><strong>Version anterior restaurada</strong> para
+        <?php echo esc_html((string)$get['ec_pdf']); ?>.</p></div>
 <?php endif; ?>
 
 <div class="card">
@@ -127,6 +140,15 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                     <a class="button button-small" href="<?php echo esc_url(add_query_arg('ec_pdf', $archivo, $url_tab)); ?>">Seleccionar</a>
                 <?php endif; ?>
                 <a class="button button-small" href="<?php echo esc_url($link_desc('pdf', ['archivo' => $archivo])); ?>">Descargar</a>
+                <?php $rp_ts = $this->pmu_uploads()->ultimo_reemplazo($n); ?>
+                <button type="button" class="button button-small ec-rp-abrir"
+                    data-archivo="<?php echo esc_attr($archivo); ?>">Reemplazar archivo</button>
+                <input type="file" class="ec-rp-file" accept=".pdf,application/pdf" hidden
+                    data-archivo="<?php echo esc_attr($archivo); ?>">
+                <?php if ($rp_ts) : ?>
+                    <button type="button" class="button button-small ec-rp-recuperar"
+                        data-archivo="<?php echo esc_attr($archivo); ?>">Recuperar version anterior</button>
+                <?php endif; ?>
                 <form class="ec-form-inline ec-borrar" method="post" action="<?php echo esc_url($post_url); ?>">
                     <input type="hidden" name="action" value="personalizador_pdf_borrar">
                     <input type="hidden" name="archivo" value="<?php echo esc_attr($archivo); ?>">
@@ -795,8 +817,22 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
         <p>Ya existe un PDF con ese nombre. ¿Que queres hacer?</p>
         <p>
             <button type="button" class="button ec-modal-btn" data-modo="renombrar">Renombrar automaticamente</button>
-            <button type="button" class="button ec-modal-btn" data-modo="sobrescribir">Sobrescribir (regenera datos)</button>
+            <button type="button" class="button ec-modal-btn" data-modo="reemplazar">Reemplazar (conserva la personalizacion)</button>
             <button type="button" class="button button-link ec-modal-cancelar">Cancelar</button>
         </p>
+    </div>
+</div>
+
+<?php // spec 032 (T022): mapa viejo->nuevo antes de aplicar el reemplazo. ?>
+<div class="ec-rp-modal" hidden>
+    <div class="ec-rp-modal-caja">
+        <h3>Reemplazar el PDF</h3>
+        <div class="ec-rp-modal-cuerpo"></div>
+        <p class="ec-rp-modal-acciones">
+            <button type="button" class="button button-primary ec-rp-migrar">Migrar la personalizacion</button>
+            <button type="button" class="button ec-rp-cancelar">Cancelar</button>
+        </p>
+        <p class="description">Cancelar no cambia nada: el PDF y su personalizacion quedan como estan.
+            Con el respaldo que se guarda podes volver atras con "Recuperar version anterior".</p>
     </div>
 </div>
