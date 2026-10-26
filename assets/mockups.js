@@ -390,12 +390,6 @@ jQuery(function ($) {
             '        <div class="ec-mk-acordeon-cuerpo">' +
             '          <ul class="ec-mk-capas"></ul>' +
             '          <p class="description ec-mk-capas-ayuda">Clic selecciona, Ctrl/Cmd+clic suma, Alt+clic entra a un miembro del grupo. Clic derecho (o el boton ...) abre las acciones.</p>' +
-            '          <div class="ec-mk-acciones ec-mk-importar">' +
-            '            <label>Pagina del PDF <input type="number" class="ec-mk-num-pagina" min="1" step="1" value="1" style="width:72px"></label>' +
-            '            <button type="button" class="button button-small" data-mk="importar-pagina">Importar pagina + PH</button>' +
-            '          </div>' +
-            '          <p class="description ec-mk-importar-ayuda">La pagina elegida y sus placeholders se agregan como un grupo movible, redimensionable y rotatable.</p>' +
-            '          <p class="ec-mk-importar-estado" aria-live="polite"></p>' +
             '        </div>' +
             '      </details>' +
             '      <details class="ec-mk-acordeon" data-ac="ajustes">' +
@@ -420,6 +414,12 @@ jQuery(function ($) {
             '        <div class="ec-mk-acordeon-cuerpo">' +
             '          <ul class="ec-mk-grupos"></ul>' +
             '          <p class="ec-mk-vacio">Este PDF no tiene grupos detectados.</p>' +
+            '          <div class="ec-mk-acciones ec-mk-importar">' +
+            '            <label>Pagina del PDF <input type="number" class="ec-mk-num-pagina" min="1" step="1" value="1" style="width:72px"></label>' +
+            '            <button type="button" class="button button-small" data-mk="importar-pagina">Importar pagina + PH</button>' +
+            '          </div>' +
+            '          <p class="description ec-mk-importar-ayuda">La pagina elegida y sus placeholders se agregan como un grupo movible, redimensionable y rotatable.</p>' +
+            '          <p class="ec-mk-importar-estado" aria-live="polite"></p>' +
             '        </div>' +
             '      </details>' +
             '    </div>' +
@@ -1272,25 +1272,39 @@ jQuery(function ($) {
         });
     }
 
+    /**
+     * Spec 031 (T026, FR-012): cada grupo de placeholders es un acordeon (summary
+     * con swatch + etiqueta + conteo + boton Agregar) y sus instancias viven
+     * dentro. Los selectores vigentes (.ec-mk-grupo[data-grupo],
+     * .ec-mk-instancia[data-grupo][data-instancia]) se conservan tal cual.
+     */
     function pintarGrupos() {
         var $ul = $ed.find('.ec-mk-grupos').empty();
         $ed.find('.ec-mk-grupos').siblings('.ec-mk-vacio').toggle(!grupos.length);
+        estado.gruposPhCerrados = estado.gruposPhCerrados || {};
         grupos.forEach(function (g) {
             var cont = parseInt(g.cont, 10) || 1;
-            var $li = $('<li>');
-            $li.append($('<button type="button" class="ec-mk-grupo">')
+            var $li = $('<li class="ec-mk-grupo-ph">');
+            var abierto = !estado.gruposPhCerrados[g.id];
+            var $det = $('<details class="ec-mk-acordeon">').attr('data-grupo-ph', g.id);
+            if (abierto) { $det.attr('open', 'open'); }
+            var $cab = $('<summary class="ec-mk-acordeon-cab ec-mk-grupo-cab">');
+            $cab.append($('<span class="swatch">').css('background', '#' + g.id));
+            $cab.append($('<span class="ec-mk-grupo-info">')
+                .append($('<b>').text(etiquetaPlaceholder(g.id)))
+                .append($('<span class="description">').text(' '
+                    + g.w + '×' + g.h + ' px · '
+                    + cont + ' instancia' + (cont > 1 ? 's' : ''))));
+            $cab.append($('<button type="button" class="ec-mk-grupo ec-mk-grupo-agregar">')
                 .attr('data-grupo', g.id)
                 .attr('aria-label', 'Agregar el placeholder '
                     + etiquetaPlaceholder(g.id) + ' de ' + g.w + ' por '
                     + g.h + ' pixeles')
-                .append($('<span class="swatch">').css('background', '#' + g.id))
-                .append($('<span class="ec-mk-grupo-info">')
-                    .append($('<b>').text(etiquetaPlaceholder(g.id)))
-                    .append($('<span class="description">').text(' '
-                        + g.w + '×' + g.h + ' px · '
-                        + cont + ' instancia' + (cont > 1 ? 's' : '')))));
+                .text('Agregar'));
+            $det.append($cab);
+            var $cuerpo = $('<div class="ec-mk-acordeon-cuerpo">');
             // Con varias instancias se listan, para poder elegir una concreta
-            // (FR-015). El chip del grupo inserta siempre la #01.
+            // (FR-015). El boton Agregar del summary inserta siempre la #01.
             if (cont > 1) {
                 var $inst = $('<ul class="ec-mk-instancias">');
                 for (var n = 1; n <= cont; n++) {
@@ -1304,8 +1318,13 @@ jQuery(function ($) {
                     $b.text(et);
                     $inst.append($('<li>').append($b));
                 }
-                $li.append($inst);
+                $cuerpo.append($inst);
+            } else {
+                $cuerpo.append($('<p class="description">')
+                    .text('Una sola instancia: usa el boton Agregar.'));
             }
+            $det.append($cuerpo);
+            $li.append($det);
             // El <li> se construia pero NUNCA se insertaba: el panel "Placeholders"
             // quedaba vacio aunque hubiera grupos (bug: "no me aparecen los
             // placeholders"). Sin este append el forEach descartaba cada nodo.
@@ -2540,7 +2559,10 @@ jQuery(function ($) {
             });
     }
 
-    $ed.on('click', '.ec-mk-grupo', function () {
+    $ed.on('click', '.ec-mk-grupo', function (ev) {
+        // El boton Agregar vive en el summary del acordeon del grupo: sin
+        // preventDefault, agregar tambien plegaria el panel.
+        ev.preventDefault();
         agregarPlaceholder($(this).attr('data-grupo'), 0);
     });
 

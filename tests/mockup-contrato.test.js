@@ -859,6 +859,21 @@ check('el menu ofrece fallback visible y deshabilita lo que no aplica',
         && ed.indexOf('aria-disabled') !== -1
         && ed.indexOf("['agrupar', 'Agrupar seleccion', n > 1]") !== -1);
 
+/* ==== Spec 031 (US6): placeholders en acordeon con el importador (T025-T026) ==== */
+check('el importador de pagina vive en el acordeon Placeholders',
+    /data-ac="placeholders"[\s\S]{0,1200}ec-mk-importar/.test(ed)
+        && ed.indexOf('data-mk="importar-pagina"') !== -1
+        && !/data-ac="capas"[\s\S]{0,900}ec-mk-importar/.test(ed));
+check('cada grupo de placeholders es un acordeon con sus instancias dentro',
+    ed.indexOf('data-grupo-ph') !== -1
+        && ed.indexOf('ec-mk-grupo-ph') !== -1
+        && ed.indexOf('ec-mk-grupo-agregar') !== -1
+        && ed.indexOf('ec-mk-instancia') !== -1
+        && /function pintarGrupos\(\)[\s\S]*?\$ul\.append\(\$li\)/.test(ed));
+check('el boton Agregar no pliega el acordeon del grupo',
+    ed.indexOf("$ed.on('click', '.ec-mk-grupo', function (ev)") !== -1
+        && /on\('click', '\.ec-mk-grupo'[\s\S]{0,240}ev\.preventDefault\(\)/.test(ed));
+
 // El aviso de la consola (pdfs.php) depende de una variable inicializada:
 // sin ella, en PHP 8, `null === ''` nunca es cierto y el aviso no se pintaba.
 var pdfs = leer('admin/pdfs.php');

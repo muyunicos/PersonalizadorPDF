@@ -1026,6 +1026,30 @@ body.ec-c-drawer-abierto { overflow: hidden; }
 .ec-mk-grupo-info { flex: 1; min-width: 0; }
 .ec-mk-grupo-info b { font-weight: 600; }
 
+/* ---- Grupos de placeholders en acordeon (spec 031, FR-012) ---- */
+.ec-mk-grupo-ph { list-style: none; margin: 6px 0 0; }
+.ec-mk-acordeon > summary.ec-mk-grupo-cab {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 12px;
+    color: #2c3338;
+}
+.ec-mk-grupo-cab .ec-mk-grupo-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.ec-mk-grupo-cab .ec-mk-grupo-info b { font-weight: 600; }
+.ec-mk-grupo-agregar {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    background: #fff;
+    padding: 2px 8px;
+    font-size: 11px;
+    color: #2271b1;
+    cursor: pointer;
+}
+.ec-mk-grupo-agregar:hover { border-color: #2271b1; background: #f0f6fb; }
+
 /* ---- Propiedades y ajustes ---- */
 /* Spec 031: los numericos viven bajo el lienzo (.ec-mk-props) y los ajustes
    de capa en el acordeon Ajustes (.ec-mk-props-aj): misma grilla, dos nodos. */
