@@ -460,6 +460,71 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                     && $M::distanciaColor('0000FF', '0000FE') <= 0.15
                     && $M::distanciaColor('0000FF', '00FF00') > 0.15
                     && $M::distanciaColor('ZZZZZZ', '0000FF') === 1.0);
+
+                // --- remapearConfig() (T005/T007) ---
+                $cfg32 = [
+                    'activo' => true,
+                    'productos' => [7, 9],
+                    'bonus' => [['archivo' => 'b.pdf', 'titulo' => 'Extra']],
+                    'tienda' => ['7' => ['activo' => 1]],
+                    'placeholders' => ['0000FF' => ['tipo' => 'texto', 'value' => 'Ana']],
+                ];
+                $nuevos32 = [['id' => '00FF00', 'w' => 463, 'h' => 463, 'cont' => 2, 'pgs' => [0]]];
+                $mapa32 = ['iguales' => [], 'sugeridos' => [['de' => '0000FF', 'a' => '00FF00']]];
+
+                $sinCambios = $M::remapearConfig($cfg32,
+                    ['iguales' => ['0000FF' => '0000FF'], 'sugeridos' => []],
+                    [['id' => '0000FF', 'cont' => 8, 'pgs' => [0]]]);
+                check('032: sin nada que remapear el config vuelve identico',
+                    $sinCambios['config'] === $cfg32 && $sinCambios['avisos'] === []
+                    && $sinCambios['migrados'] === []);
+
+                $re32 = $M::remapearConfig($cfg32, $mapa32, $nuevos32);
+                check('032: placeholders remapeado y el resto intacto',
+                    array_keys($re32['config']['placeholders']) === ['00FF00']
+                    && $re32['config']['placeholders']['00FF00']['value'] === 'Ana'
+                    && $re32['config']['productos'] === [7, 9]
+                    && $re32['config']['bonus'] === $cfg32['bonus']
+                    && $re32['config']['tienda'] === $cfg32['tienda']);
+
+                $colision = $M::remapearConfig(
+                    ['placeholders' => ['0000FF' => ['value' => 'A'], '00FF00' => ['value' => 'B']]],
+                    $mapa32,
+                    $nuevos32);
+                check('032: colision de clave -> se conserva la existente y avisa',
+                    $colision['config']['placeholders'] === ['00FF00' => ['value' => 'B']]
+                    && count($colision['avisos']) === 1);
+
+                $envRe = $M::remapearConfig(
+                    ['envolturas' => ['0000FF' => ['forma' => 9]]],
+                    ['iguales' => ['0000FF' => '0000FF']],
+                    [['id' => '0000FF', 'cont' => 8, 'pgs' => [0]]],
+                    ['grupos' => ['0000FF' => ['formas' => [['usos' => 1], ['usos' => 1]]]]]);
+                check('032: envoltura fuera de rango -> forma 0 + aviso',
+                    $envRe['config']['envolturas']['0000FF']['forma'] === 0
+                    && count($envRe['avisos']) === 1);
+
+                $refsRe = $M::remapearConfig(
+                    ['mockups' => [['id' => 'mockup-1', 'capas' => [
+                        ['tipo' => 'placeholder', 'ref' => '0000FF#3'],
+                        ['tipo' => 'placeholder', 'ref' => 'ABCDEF#3'],
+                        ['tipo' => 'img', 'ref' => 'mock:5'],
+                    ]]]],
+                    $mapa32,
+                    $nuevos32);
+                check('032: ref remapeado y #n fuera de rango baja a la instancia 1',
+                    $refsRe['config']['mockups'][0]['capas'][0]['ref'] === '00FF00'
+                    && $refsRe['config']['mockups'][0]['capas'][2]['ref'] === 'mock:5');
+                check('032: ref huerfano se conserva y se reporta (no se borra)',
+                    $refsRe['config']['mockups'][0]['capas'][1]['ref'] === 'ABCDEF#3'
+                    && in_array('ABCDEF#3', $refsRe['refs_sin_destino'], true));
+
+                $fallback = $M::remapearConfig(
+                    ['mockups' => [['capas' => [['tipo' => 'placeholder', 'ref' => '0000FF#3']]]]],
+                    $mapa32, []);
+                check('032: sin grupos nuevos NO se tocan los refs',
+                    $fallback['config']['mockups'][0]['capas'][0]['ref'] === '0000FF#3'
+                    && $fallback['refs_sin_destino'] === []);
             }
             break;
         case 'desactivar':

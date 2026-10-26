@@ -611,4 +611,150 @@ class Metadata
         $union = $areaA + $areaB - $inter;
         return $union > 0 ? $inter / $union : 0.0;
     }
+
+    /**
+     * Remapea `config.json` al dataset NUEVO (spec 032, T005). PURO.
+     *
+     * Tres superficies (FR-007):
+     *  - `placeholders{id}`: la clave del grupo que cambio de color.
+     *  - `envolturas{gid:{forma:k}}`: revalida `k` contra las formas nuevas (D8):
+     *    fuera de rango o sin formas -> `0` (la forma por defecto) + aviso.
+     *  - `mockups[].capas[].ref` (`{gid}` / `{gid}#n`): remapea el color; si `#n`
+     *    quedo fuera de rango (`cont` menor) baja a la instancia 1 (D7/R7); sin
+     *    destino la capa **se conserva** y se reporta (nunca se borra trabajo).
+     *
+     * **Quirurgico**: si no hay nada que remapear, el config vuelve **identico**
+     * (mismas claves y orden), para que un re-analisis sin cambios no altere el
+     * archivo (lo verifica la fase `reanalizar` del arnes).
+     *
+     * @param array $config     config vigente
+     * @param array $mapa       salida de mapaDeReemplazo() (o los pares aceptados)
+     * @param array $nuevos     grupos del analisis NUEVO (id, cont, ...)
+     * @param array $envolturas envolturas.json NUEVO (grupos.gid.formas)
+     * @return array {config, migrados, avisos, refs_sin_destino}
+     */
+    public static function remapearConfig(array $config, array $mapa, array $nuevos = [], array $envolturas = [])
+    {
+        $remapeo = [];
+        foreach ((array)($mapa['iguales'] ?? []) as $de => $a) {
+            $de = (string)$de;
+            $a = (string)$a;
+            if ($de !== '' && $a !== '' && $de !== $a) {
+                $remapeo[$de] = $a;
+            }
+        }
+        foreach ((array)($mapa['sugeridos'] ?? []) as $p) {
+            $de = (string)($p['de'] ?? '');
+            $a = (string)($p['a'] ?? '');
+            if ($de !== '' && $a !== '' && $de !== $a) {
+                $remapeo[$de] = $a;
+            }
+        }
+
+        $avisos = [];
+        $sinDestino = [];
+
+        // `cont` de cada grupo nuevo: para bajar `#n` fuera de rango.
+        $cont = [];
+        foreach ($nuevos as $g) {
+            $id = (string)($g['id'] ?? '');
+            if (self::idValido($id)) {
+                $cont[$id] = max(1, (int)($g['cont'] ?? 1));
+            }
+        }
+
+        // 1) placeholders: se reescribe SOLO si hay alguna clave que renombrar.
+        $ph = $config['placeholders'] ?? null;
+        if (is_array($ph) && $ph) {
+            $hay = false;
+            foreach (array_keys($ph) as $k) {
+                if (isset($remapeo[(string)$k])) {
+                    $hay = true;
+                    break;
+                }
+            }
+            if ($hay) {
+                $nuevoPh = [];
+                foreach ($ph as $k => $m) {
+                    $k = (string)$k;
+                    $destino = $remapeo[$k] ?? $k;
+                    if ($destino !== $k && (isset($ph[$destino]) || isset($nuevoPh[$destino]))) {
+                        $avisos[] = 'El grupo ' . $destino . ' ya tenia personalizacion:'
+                            . ' se conservo la existente y se descarto la de ' . $k;
+                        continue;
+                    }
+                    $nuevoPh[$destino] = $m;
+                }
+                $config['placeholders'] = $nuevoPh;
+            }
+        }
+
+        // 2) envolturas{gid:{forma:k}}: remapeo del gid + revalidacion de `k` (D8).
+        $env = $config['envolturas'] ?? null;
+        if (is_array($env) && $env) {
+            $formas = [];
+            foreach ((array)($envolturas['grupos'] ?? []) as $gid => $gEnv) {
+                $formas[(string)$gid] = count((array)($gEnv['formas'] ?? []));
+            }
+            $nuevasEnv = [];
+            foreach ($env as $gid => $ov) {
+                $gid = (string)$gid;
+                $destino = $remapeo[$gid] ?? $gid;
+                $k = (int)($ov['forma'] ?? 0);
+                if ($k > 0) {
+                    $total = (int)($formas[$destino] ?? 0);
+                    if ($total <= 0 || $k > $total) {
+                        $k = 0;
+                        $avisos[] = 'Envoltura del grupo ' . $destino
+                            . ' revalidada a la forma por defecto';
+                    }
+                }
+                $nuevasEnv[$destino] = ['forma' => $k];
+            }
+            $config['envolturas'] = $nuevasEnv;
+        }
+
+        // 3) refs de las capas de mockup (`{gid}` / `{gid}#n`).
+        //    Sin `$nuevos` no hay informacion del dataset nuevo: no se toca nada.
+        if ($cont && !empty($config['mockups']) && is_array($config['mockups'])) {
+            foreach ($config['mockups'] as $mi => $mk) {
+                foreach ((array)($mk['capas'] ?? []) as $ci => $capa) {
+                    if ((string)($capa['tipo'] ?? '') !== 'placeholder') {
+                        continue;
+                    }
+                    $ref = strtoupper((string)($capa['ref'] ?? ''));
+                    if (preg_match('/^([0-9A-F]{6})(?:#(\d+))?$/', $ref, $mm) !== 1) {
+                        continue; // `pdf:` / `mock:` / otro: no se toca
+                    }
+                    $gid = $mm[1];
+                    $n = isset($mm[2]) ? (int)$mm[2] : 0;
+                    $destino = $remapeo[$gid] ?? $gid;
+                    if (!isset($cont[$destino])) {
+                        // No existe el grupo destino: la capa SE CONSERVA (D7).
+                        $sinDestino[] = $ref;
+                        continue;
+                    }
+                    $nuevoRef = $destino;
+                    if ($n > 1) {
+                        if ($n <= $cont[$destino]) {
+                            $nuevoRef = $destino . '#' . $n;
+                        } else {
+                            $avisos[] = 'La instancia ' . $gid . '#' . $n
+                                . ' ya no existe: la capa apunta a la primera';
+                        }
+                    }
+                    if ($nuevoRef !== $ref) {
+                        $config['mockups'][$mi]['capas'][$ci]['ref'] = $nuevoRef;
+                    }
+                }
+            }
+        }
+
+        return [
+            'config' => $config,
+            'migrados' => $remapeo,
+            'avisos' => $avisos,
+            'refs_sin_destino' => array_values(array_unique($sinDestino)),
+        ];
+    }
 }

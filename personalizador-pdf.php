@@ -6142,12 +6142,24 @@ JS;
         // analisis.json, que vuelve a su formato original). El editor lo pide
         // bajo demanda (op=envoltura) y la ficha recibe solo las usadas.
         // Grupos vacios = "analizado sin envolturas" (distingue de ausente).
-        Metadata::guardar(Metadata::generarEnvolturas($nombre, $grupos), $motor->ruta_envolturas($nombre));
+        $envolturas = Metadata::generarEnvolturas($nombre, $grupos);
+        Metadata::guardar($envolturas, $motor->ruta_envolturas($nombre));
         // Poda de mapeos huerfanos: placeholders de ids que ya no existen.
         $ids_nuevos = [];
         foreach ($grupos as $g) {
             $ids_nuevos[$g['id']] = true;
         }
+        // spec 032 (T006): el REMAPEO compartido (envolturas{gid} y refs de capa)
+        // corre tambien al re-analizar. Es el mismo PDF: no hay sugerencias, solo
+        // los ids que sobreviven; los que desaparecen se podan mas abajo.
+        $mapaReemplazo = ['iguales' => [], 'sugeridos' => []];
+        foreach ($ids_nuevos as $idN => $_) {
+            if (isset($ids_previos[$idN])) {
+                $mapaReemplazo['iguales'][$idN] = (string)$idN;
+            }
+        }
+        $remapeo = Metadata::remapearConfig($config_previa, $mapaReemplazo, $grupos, $envolturas);
+        $config_previa = $remapeo['config'];
         $mapa = isset($config_previa['placeholders']) && is_array($config_previa['placeholders'])
             ? $config_previa['placeholders'] : [];
         $perdidos = [];
@@ -6175,6 +6187,13 @@ JS;
         ];
         if ($perdidos) {
             $resumen['personalizacion_perdida'] = $perdidos;
+        }
+        // spec 032: lo que el remapeo dejo pendiente o corrigio (informativo).
+        if (!empty($remapeo['avisos'])) {
+            $resumen['remapeo_avisos'] = $remapeo['avisos'];
+        }
+        if (!empty($remapeo['refs_sin_destino'])) {
+            $resumen['refs_sin_destino'] = $remapeo['refs_sin_destino'];
         }
         return $resumen;
     }
@@ -6401,6 +6420,10 @@ JS;
         if (!empty($resumen['personalizacion_perdida'])) {
             // Grupos con personalizacion que desaparecieron del analisis (T019).
             $args['ec_perdidos'] = implode(',', $resumen['personalizacion_perdida']);
+        }
+        if (!empty($resumen['remapeo_avisos'])) {
+            // spec 032: envolturas revalidadas y refs ajustados por el remapeo.
+            $args['ec_avisos'] = implode('; ', $resumen['remapeo_avisos']);
         }
         $this->responder(true, $args);
     }

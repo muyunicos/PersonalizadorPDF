@@ -17,23 +17,23 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `admin/`, `asset
 
 ## Phase 1 (F0): Setup
 
-- [ ] T001 [P] Puertas base en verde antes de tocar nada: `php -l personalizador-pdf.php`, `node tests/mockup-contrato.test.js` (147), `node tests/mockup-geometria.test.js` (135), `php tests/motor_smoke.php`, `php tests/parity.php`, `php tests/texto_puente.php reanalizar borrado subir_conflicto`
-- [ ] T002 [P] Auditoria de anclas: que indexan las fases `reanalizar` (399/3263), `subir_conflicto` (823/4007), `borrado` (1011/3546) del arnes y los checks del contrato sobre `sobrescribir`, `limpiar_datos_de` y `personalizacion_perdida` → lista de lo que se rompe **a proposito**
+- [X] T001 [P] Puertas base en verde antes de tocar nada: `php -l personalizador-pdf.php`, `node tests/mockup-contrato.test.js` (147), `node tests/mockup-geometria.test.js` (135), `php tests/motor_smoke.php`, `php tests/parity.php`, `php tests/texto_puente.php reanalizar borrado subir_conflicto` — **hecho**: todo en verde (CONTRATO 147, GEOMETRIA 135, SMOKE, PARIDAD y las 3 fases OK)
+- [X] T002 [P] Auditoria de anclas: que indexan las fases `reanalizar` (399/3263), `subir_conflicto` (823/4007), `borrado` (1011/3546) del arnes y los checks del contrato sobre `sobrescribir`, `limpiar_datos_de` y `personalizacion_perdida` → lista de lo que se rompe **a proposito** — **hecho**: el arnes **no** indexa markup; la fase `reanalizar` verifica `config preservada al reanalizar` con `===` (linea 410) y hay que mantenerla; el modal de conflicto tiene `data-modo="sobrescribir"` con el texto "Sobrescribir (regenera datos)" (pdfs.php:798) y los `ec_perdidos` viajan por URL (admin.js:1427 → pdfs.php:65-67), asi que los avisos del remapeo necesitaran su propio canal (`ec_avisos`)
 
 ## Phase 2 (F1): Mapa puro (US2)
 
 **Goal**: el score del mapa, aislado y testeable · **Independent Test**: casos construidos en la fase del arnes
 
-- [ ] T003 [US2] `engine/Metadata.php`: `mapaDeReemplazo($previos, $nuevos)` **puro** — ids iguales, IoU de `dev_bbox` normalizadas por `box` de pagina, distancia de color euclidea (R2), `score` 0,6/0,4, umbrales IoU>=0,5 y d<=0,15, asignacion 1:1, `perdidos`/`nuevos`/`avisos` (FR-004, R1/R2/R3, INV-1..3)
-- [ ] T004 [US2] `tests/texto_puente.php`: casos del mapa — mismo bbox/color distinto (sugerencia), desplazado (IoU bajo), color igual/geometria distinta, sin candidato (perdido), dos candidatos parecidos (1:1: el mejor), fallback sin `dev_bbox` (FR-004)
+- [X] T003 [US2] `engine/Metadata.php`: `mapaDeReemplazo($previos, $nuevos)` **puro** — ids iguales, IoU de `dev_bbox` normalizadas por `box` de pagina, distancia de color euclidea (R2), `score` 0,6/0,4, asignacion 1:1, `perdidos`/`nuevos`/`avisos` (FR-004, R1/R2/R3, INV-1..3) — **hecho** con 2 correcciones que cazo la puerta: **(a)** el filtro es **solo geometrico** (IoU >= 0,5) y el **color pondera** en el score (el filtro `d <= 0,15` mataba el caso principal: azul->verde = 0,816, un rediseno cambia el color a proposito); **(b)** PHP castea a int las claves de array con forma numerica (color `112233`), asi que el mapa devuelve ids **siempre string**
+- [X] T004 [US2] `tests/texto_puente.php`: casos del mapa — mismo bbox/color distinto (sugerencia), desplazado (IoU bajo), color igual/geometria distinta, sin candidato (perdido), dos candidatos parecidos (1:1: el mejor), fallback sin `dev_bbox` (FR-004) — **hecho**: fase `reemplazo` con 9 checks del mapa, registrada en el docblock de fases
 
 ## Phase 3 (F2): Remapeo compartido (US4)
 
 **Goal**: reemplazo **y** Re-analizar usan el mismo remapeo · **Independent Test**: fase `reanalizar` + casos nuevos
 
-- [ ] T005 [US4] `engine/Metadata.php`: `remapearConfig($config, $mapa, $analisisNuevo, $envolturasNuevas)` **puro** — `placeholders{id}`, `envolturas{gid:{forma:k}}` con revalidacion de `k` (fuera de rango -> 0) y `mockups[].capas[].ref` (`{gid}`, `{gid}#n` con `#n` fuera de rango -> instancia 1; sin destino -> se conserva y se reporta) (FR-007/012, D7/D8, R7)
-- [ ] T006 [US4] `personalizador-pdf.php`: `analizar_y_guardar()` **extrae** el remapeo y lo comparte; `handle_reanalizar()` pasa a usarlo (hoy solo poda placeholders) y su respuesta suma los avisos del remapeo (FR-011)
-- [ ] T007 [US4] `tests/texto_puente.php` fase `reanalizar`: `envolturas{gid}` fuera de rango -> 0 + aviso; `ref` huerfano reportado y capa conservada; `#n` fuera de rango -> instancia 1 (FR-011/012)
+- [X] T005 [US4] `engine/Metadata.php`: `remapearConfig($config, $mapa, $analisisNuevo, $envolturasNuevas)` **puro** — `placeholders{id}`, `envolturas{gid:{forma:k}}` con revalidacion de `k` (fuera de rango -> 0) y `mockups[].capas[].ref` (`{gid}`, `{gid}#n` con `#n` fuera de rango -> instancia 1; sin destino -> se conserva y se reporta) (FR-007/012, D7/D8, R7) — **hecho**: quirurgico (sin nada que remapear el config vuelve **identico**, lo que preserva la fase `reanalizar`); colision de clave -> se conserva la existente + aviso; sin `$nuevos` no toca refs
+- [X] T006 [US4] `personalizador-pdf.php`: `analizar_y_guardar()` **extrae** el remapeo y lo comparte; `handle_reanalizar()` pasa a usarlo (hoy solo poda placeholders) y su respuesta suma los avisos del remapeo (FR-011) — **hecho**: el remapeo corre tambien al re-analizar (solo ids que sobreviven) y `handle_reanalizar` devuelve `ec_avisos`
+- [X] T007 [US4] `tests/texto_puente.php` fase `reanalizar`: `envolturas{gid}` fuera de rango -> 0 + aviso; `ref` huerfano reportado y capa conservada; `#n` fuera de rango -> instancia 1 (FR-011/012) — **hecho**: 7 checks de remapeo en la fase `reemplazo` (16 en total) y la fase `reanalizar` sigue OK (`config preservada al reanalizar`: el remapeo no altera un config sin envolturas/mockups)
 
 ## Phase 4 (F3): Preparar (US2/US5)
 
