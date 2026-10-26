@@ -874,6 +874,15 @@ check('el boton Agregar no pliega el acordeon del grupo',
     ed.indexOf("$ed.on('click', '.ec-mk-grupo', function (ev)") !== -1
         && /on\('click', '\.ec-mk-grupo'[\s\S]{0,240}ev\.preventDefault\(\)/.test(ed));
 
+/* ==== Spec 031 (US8): clip del tirador de rotacion de capa (T029) ==== */
+check('el tirador de rotacion de capa se recorta al lienzo (paridad)',
+    /function puntoRotacionCapa\(c\)/.test(ed)
+        && /function puntoRotacionCapa\(c\)[\s\S]{0,460}G\.extremoVisible\(/.test(ed)
+        && (ed.match(/puntoRotacionCapa\(c\)/g) || []).length >= 3);
+check('dibujo y hit-test comparten el punto recortado de la capa',
+    ed.indexOf('var rotCapa = puntoRotacionCapa(c);') !== -1
+        && ed.indexOf('var puntoRot = puntoRotacionCapa(c);') !== -1);
+
 // El aviso de la consola (pdfs.php) depende de una variable inicializada:
 // sin ella, en PHP 8, `null === ''` nunca es cierto y el aviso no se pintaba.
 var pdfs = leer('admin/pdfs.php');

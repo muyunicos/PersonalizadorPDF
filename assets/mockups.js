@@ -591,6 +591,23 @@ jQuery(function ($) {
         return G.extremoVisible(centro, punto, LIENZO, 7);
     }
 
+    /**
+     * T029 (spec 031, FR-015): paridad del tirador de rotacion de CAPA con el
+     * grupal. El punto se calcula sobre el rayo centro->tirador (a
+     * max(w,h)/2 + 14) y se RECORTA al lienzo: con una capa grande o pegada al
+     * borde el circulo quedaba fuera del canvas (invisible e inagarrable).
+     * El dibujo y el hit-test comparten esta funcion.
+     */
+    function puntoRotacionCapa(c) {
+        var centro = { x: c.x + c.w / 2, y: c.y + c.h / 2 };
+        var ang = -1.5707963 + ((c.rot || 0) * Math.PI / 180);
+        var radio = Math.max(c.w, c.h) / 2 + 14;
+        return G.extremoVisible(centro, {
+            x: centro.x + radio * Math.cos(ang),
+            y: centro.y + radio * Math.sin(ang)
+        }, LIENZO, 7);
+    }
+
     /** Tiradores, medidas y nombre de la capa seleccionada (T019). */
     function dibujarSeleccion() {
         var c = capa();
@@ -695,12 +712,12 @@ jQuery(function ($) {
             });
         }
         ctx.restore();
-        // Tirador de rotacion (arriba del centro).
+        // Tirador de rotacion: punto recortado al lienzo (T029), el MISMO que usa el
+        // hit-test, asi el circulo se dibuja donde se puede agarrar.
         var rot = G.puntosDeRotacion(c, { x: cx, y: cy - 1 });
-        var ang = -1.5707963 + (c.rot * Math.PI / 180);
-        var radio = Math.max(c.w, c.h) / 2 + 14;
-        var hx = cx + radio * Math.cos(ang);
-        var hy = cy + radio * Math.sin(ang);
+        var puntoRot = puntoRotacionCapa(c);
+        var hx = puntoRot.x;
+        var hy = puntoRot.y;
         ctx.save();
         ctx.strokeStyle = '#2271b1';
         ctx.lineWidth = 1 / f;
@@ -766,11 +783,9 @@ jQuery(function ($) {
             }
             return '';
         }
-        var ang = -1.5707963 + ((c.rot || 0) * Math.PI / 180);
-        var radio = Math.max(c.w, c.h) / 2 + 14;
-        var hx = c.x + c.w / 2 + radio * Math.cos(ang);
-        var hy = c.y + c.h / 2 + radio * Math.sin(ang);
-        if (Math.abs(p.x - hx) <= tol * 1.6 && Math.abs(p.y - hy) <= tol * 1.6) { return 'rotar'; }
+        var rotCapa = puntoRotacionCapa(c);
+        if (Math.abs(p.x - rotCapa.x) <= tol * 1.6
+            && Math.abs(p.y - rotCapa.y) <= tol * 1.6) { return 'rotar'; }
         for (var i = 0; i < G.TIRADORES.length; i++) {
             var pos = G.posicionTirador(c, G.TIRADORES[i]);
             if (Math.abs(p.x - pos.x) <= tol && Math.abs(p.y - pos.y) <= tol) { return G.TIRADORES[i]; }

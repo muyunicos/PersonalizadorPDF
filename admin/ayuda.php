@@ -29,6 +29,17 @@ if (!defined('ABSPATH')) {
 
 <div class="card">
     <h2>Editor de mockups</h2>
+    <p>El panel derecho son <strong>cinco acordeones</strong> (Vistas del PDF, Capas, Ajustes, Imagenes y
+        Placeholders), cerrados al abrir y combinables entre si. Dentro de <strong>Capas</strong>, los
+        placeholders de un mismo grupo se listan juntos en su propio acordeon (con un boton para
+        plegarlo); el <strong>clic derecho</strong> sobre una fila o sobre la cabecera del grupo (o el
+        boton <code>...</code> de cada fila) abre las acciones: duplicar, quitar, agrupar, desagrupar,
+        ocultar y bloquear. Los campos X/Y/ancho/alto/rotacion y los botones de alinear y distribuir
+        viven <strong>bajo el lienzo</strong> y aparecen al seleccionar. Atajos: <strong>Delete</strong>
+        quita la capa activa, <strong>Ctrl+D</strong> (Cmd+D) la duplica, <strong>[</strong> y
+        <strong>]</strong> cambian su orden, las <strong>flechas</strong> la mueven (con Shift, 10 px),
+        <strong>Ctrl/Cmd+Z</strong> deshace y <strong>Escape</strong> cierra el menu contextual.
+        El importador de pagina esta en el acordeon <strong>Placeholders</strong>.</p>
     <p>En la consola de <strong>PDFs</strong>, cada mockup puede incluir capas de imagen y placeholders.
         Selecciona varias con <strong>Ctrl/Cmd + clic</strong> para agruparlas o desagruparlas; cualquier
         miembro de un grupo permite mover, redimensionar y rotar el conjunto. El panel indica

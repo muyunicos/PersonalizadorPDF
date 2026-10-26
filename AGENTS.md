@@ -822,6 +822,29 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   **auto-sanado** si dice `fotos: []` y el servidor responde `sin_cambios`. Puertas: fase `biblioteca`
   del arnes + `tests/biblioteca-contrato.test.js`. Contratos en
   `specs/030-biblioteca-imagenes/contracts/{biblioteca,cliente-biblioteca}.md`.
+- ✅ **Spec 031 `editor-mockups-panel` (implementada 2026-10-26, v4.23.0)**: rediseno del PANEL del
+  editor de mockups (`assets/mockups.js` + `assets/admin.css`), sin tocar datos ni motor. El panel
+  derecho son **5 acordeones cerrados** (Vistas del PDF / Capas / Ajustes / Imagenes / Placeholders);
+  la **transformacion de la seleccion** (x/y/ancho/alto/rotacion + envoltura + alinear + distribuir)
+  vive **bajo el lienzo** (`.ec-mk-transformar`) y aparece con la seleccion; los **ajustes de capa**
+  (filtros/modo/nombre/restablecer/perspectiva) se repintan con `pintarAjustes()` en su acordeon.
+  **Capas agrupadas**: cada `capa.grupo` se lista en un `details.ec-mk-grupo-capas` (cabecera =
+  miniatura + "Grupo (N capas)" que **selecciona** el grupo sin plegar; el plegado tiene chevron
+  propio) y las capas sin grupo van a `.ec-mk-sueltas`; la fila sale de una sola funcion
+  (`filaCapa`) y el array, el orden z y `moverCapa` **no cambian**. **Menu contextual**
+  (`contextmenu` en fila y cabecera, mas el boton `...` de fila): un unico nodo `.ec-mk-menu-ctx`
+  con items `[data-ctx]` y `aria-disabled`; reutiliza las funciones vigentes (`duplicarCapa`,
+  `borrarCapa`, `agruparSeleccion`, `desagruparSeleccion`, toggles oculta/bloqueada) y suma las
+  acciones de grupo (Desagrupar / Ocultar / Mostrar / Quitar el grupo). Cierra por `pointerdown`
+  de fuera, **Escape** (que con el menu abierto cierra SOLO el menu: `stopImmediatePropagation`)
+  y scroll. Los **5** botones sobrantes de Capas (+Imagen, +Placeholder, Subir, Bajar, Duplicar,
+  Quitar, Agrupar, Desagrupar) se retiraron; agregar es un clic en el item del catalogo o en la
+  instancia del PH. **Paridad del tirador de rotacion de CAPA**: nueva `puntoRotacionCapa()` con
+  `G.extremoVisible` (clip radial al lienzo, como el grupal); dibujo y hit-test comparten el punto.
+  **Spec 009 intacta**: los 5 acordeones llevan **clase propia** `.ec-mk-acordeon` para no disparar
+  el confirm de cambios sin guardar (que atrapa `.ec-acordeon > summary`). Puertas: contrato Node
+  147 checks, `EXTREMO`/`GEOMETRIA` 135, y los probes E1-E6 contra `C:\wp-lab` (E1 10/10, E2 13/13,
+  E3 12/12, E4 11/11, E5 9/9, E8 8/8, E6 5/5). Artefactos en `specs/031-editor-mockups-panel/`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
   `admin/ayuda.php`, `modules/LEEME.md` solo resumen y apuntan aqui). El `== Changelog ==`
   de `readme.txt` es historial, no normativa.
@@ -1157,3 +1180,4 @@ el numero a mano. El stub `get_file_data` del arnes esta en `tests/texto_puente.
 | La galeria de fuentes no muestra la causa del fallo ni el boton "Reintentar" (el error queda mudo) | `fuentes-galeria.js`: el `.then()` posterior al `onError` llamaba SIEMPRE a `actualizarBotonHojas({error:false})` (ocultaba el boton) y `render()` -> `rfFooter()` pisaba el status con "Selecciona una fuente" en cada repintado | La causa vive en un `avisoError` **de modulo** que el footer **prefiere** en cada repintado, y el `.then()` no toca la UI si hubo error (RC75). Lo cubre el escenario "motor rechaza => causa + Reintentar" de `galerias.browser.js` (falla sin el fix) |
 | El cliente informa `motor:rechazo` en vez del motivo exacto del motor | `assets/miniaturas.js::persistirSheet` descartaba `data.data` y devolvia `null` ante `success:false` | **Resuelto (RC79)**: el motor conserva la causa en `ThumbEngine.ultimaCausa(scope)` (el valor devuelto sigue siendo `null`, contrato intacto) y `js/api.js` la usa como causa de la UI. Verificado en el gate del lab: con el catalogo no escribible la galeria muestra `motor:sprite:catalogo:no_escribible` |
 | El recorrido manual "no da evidencia" o se corre en el hosting a mano | El repo ya tiene un **laboratorio local** (`C:\wp-lab`: WP+SQLite, `php -S localhost:8091`, plugin por **junction** al repo) con precedentes de recorridos scripteados (`probe.js`, `recorrido-us1-us5.cjs`) | Correr el recorrido **scripteado** contra el lab (Playwright + Chrome; Playwright se instala fuera del repo, en `%TEMP%` + `NODE_PATH`): mide red, archivos y geometria, y deja capturas. Ejemplo vigente: `C:\wp-lab\recorrido-009.cjs` (33/33 de la spec 009) |
+| El boton `×` de un item del catalogo de mockups se come el clic central del item: parece que agregar "no hace nada" (o borra la imagen) | `.ec-mk-mini-x` (borrar) vive DENTRO del `.ec-mk-mini` y el centro del item cae sobre el boton | Al operar por script, apuntar al texto del item (`.ec-mk-mini span`); si molesta a mano, el `×` deberia pasar a la esquina con `position:absolute`. Detectado en la Fase 6 de la spec 031 (probe E4) |
