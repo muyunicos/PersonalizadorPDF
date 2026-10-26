@@ -634,9 +634,8 @@ check('el giro del grupo acumula deltas consecutivos alrededor del centro',
         && /a\.centro, a\.rotacionAcumulada, 0, 0/.test(ed),
     'el giro grupal no debe perder continuidad al cruzar el limite angular');
 check('el tirador de rotacion grupal se mantiene dentro del lienzo sin caer al centro',
-    /function puntoRotacionGrupo\(marco\)[\s\S]{0,350}Math\.max\(margen, Math\.min\(LIENZO - margen, punto\.x\)\)/.test(ed)
-        && /Math\.max\(margen, Math\.min\(LIENZO - margen, punto\.y\)\)/.test(ed)
-        && !/punto = G\.puntoMarco\(marco, 0\.5, 0\.5\)/.test(ed));
+    typeof geometria.extremoVisible === 'function'
+        && /function puntoRotacionGrupo\(marco\)[\s\S]{0,240}G\.extremoVisible\(centro, punto, LIENZO, 7\)/.test(ed));
 check('el redimensionado de imagen conserva proporcion por defecto',
     /var preservarProporcion = c\.tipo === 'img' \|\| ev\.shiftKey/.test(ed)
         && /centrarEje: c\.tipo === 'img' && a\.tipo\.length === 1/.test(ed));

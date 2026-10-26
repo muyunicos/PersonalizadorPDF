@@ -179,6 +179,13 @@ var punto45 = G.puntoMarco(marco45, 0.3, 0.7);
 var local45 = G.coordenadaMarco(marco45, punto45);
 igual('marco orientado: convierte punto global a local (x)', local45.x, marco45.w * 0.3);
 igual('marco orientado: convierte punto global a local (y)', local45.y, marco45.h * 0.7);
+var extremoVisible = G.extremoVisible({ x: 150, y: 150 }, { x: 210, y: -50 }, 300, 7);
+igual('rotacion grupal: tirador fuera del lienzo queda en el borde (y)', extremoVisible.y, 7);
+igual('rotacion grupal: conserva el rumbo al confinar (x)',
+    (extremoVisible.x - 150) / (extremoVisible.y - 150), 60 / -200);
+var extremoDentro = G.extremoVisible({ x: 120, y: 120 }, { x: 180, y: 180 }, 300, 7);
+igual('rotacion grupal: tirador dentro conserva su posicion (x)', extremoDentro.x, 180);
+igual('rotacion grupal: tirador dentro conserva su posicion (y)', extremoDentro.y, 180);
 
 /* ============ Acierto de capa (inversa de rotacion y sesgo) ============ */
 

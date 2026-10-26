@@ -383,6 +383,39 @@
         };
     }
 
+    /** Recorta un segmento al lienzo y conserva el rumbo hacia su extremo. */
+    function extremoVisible(desde, hasta, lado, margen) {
+        var limite = numero(lado, LIENZO);
+        var inset = Math.max(0, Math.min(limite / 2, numero(margen)));
+        var x0 = numero(desde && desde.x);
+        var y0 = numero(desde && desde.y);
+        var dx = numero(hasta && hasta.x) - x0;
+        var dy = numero(hasta && hasta.y) - y0;
+        var t0 = 0;
+        var t1 = 1;
+        var p = [-dx, dx, -dy, dy];
+        var q = [x0 - inset, limite - inset - x0, y0 - inset, limite - inset - y0];
+        for (var i = 0; i < 4; i++) {
+            if (Math.abs(p[i]) < 1e-9) {
+                if (q[i] < 0) { return {
+                    x: acotarNumero(x0 + dx, inset, limite - inset),
+                    y: acotarNumero(y0 + dy, inset, limite - inset)
+                }; }
+                continue;
+            }
+            var t = q[i] / p[i];
+            if (p[i] < 0) { t0 = Math.max(t0, t); }
+            else { t1 = Math.min(t1, t); }
+            if (t0 > t1) {
+                return {
+                    x: acotarNumero(x0 + dx, inset, limite - inset),
+                    y: acotarNumero(y0 + dy, inset, limite - inset)
+                };
+            }
+        }
+        return { x: x0 + t1 * dx, y: y0 + t1 * dy };
+    }
+
     /**
      * Traslada y rota un conjunto alrededor de `centro`, conservando todos
      * los campos de cada capa y las distancias relativas entre ellas.
@@ -568,6 +601,7 @@
         marcoOrientado: marcoOrientado,
         puntoMarco: puntoMarco,
         coordenadaMarco: coordenadaMarco,
+        extremoVisible: extremoVisible,
         transformarGrupo: transformarGrupo,
         escalarGrupo: escalarGrupo,
         alinear: alinear,

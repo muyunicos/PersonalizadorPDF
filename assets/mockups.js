@@ -576,12 +576,9 @@ jQuery(function ($) {
     }
 
     function puntoRotacionGrupo(marco) {
+        var centro = G.puntoMarco(marco, 0.5, 0.5);
         var punto = G.puntoMarco(marco, 0.5, 0, 0, -14);
-        var margen = 7;
-        return {
-            x: Math.max(margen, Math.min(LIENZO - margen, punto.x)),
-            y: Math.max(margen, Math.min(LIENZO - margen, punto.y))
-        };
+        return G.extremoVisible(centro, punto, LIENZO, 7);
     }
 
     /** Tiradores, medidas y nombre de la capa seleccionada (T019). */
