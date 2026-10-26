@@ -195,6 +195,30 @@ igual('distribuir: ancho de hueco esperado', dist[1].x - dist[0].x - 20, (300 - 
 var pocas = G.distribuir(cuatro, [0, 1], 'x', { x: 0, y: 0, w: 300, h: 300 });
 igual('distribuir: con menos de 3 capas no hace nada', pocas[0].x, 0);
 
+/* ============ Grupos ============ */
+
+var grupoCapas = [
+    { x: 15, y: 40, w: 20, h: 20, grupo: 'g-pagina' },
+    { x: 65, y: 40, w: 20, h: 20, grupo: 'g-pagina', rot: 10 },
+    { x: 120, y: 40, w: 20, h: 20 }
+];
+check('grupos: seleccionar un miembro expande todo el grupo',
+    G.expandirGrupos(grupoCapas, [1]).join(',') === '0,1');
+check('grupos: seleccion expandida es unica',
+    G.expandirGrupos(grupoCapas, [1, 0]).join(',') === '0,1');
+var marcoGrupos = G.marco(grupoCapas, [0]);
+igual('grupos: marco incluye todos los miembros', marcoGrupos.x, 15);
+check('grupos: marco incluye el giro del ultimo miembro',
+    marcoGrupos.x + marcoGrupos.w > 85);
+var transformadas = G.transformarGrupo(grupoCapas, [0], { x: 50, y: 50 }, 90, 5, 0);
+igual('grupos: rotacion transforma el centro de la primera capa', transformadas[0].x + 10, 55);
+igual('grupos: rotacion transforma el centro de la primera capa (y)', transformadas[0].y + 10, 25);
+igual('grupos: rotacion transforma el centro de la segunda capa', transformadas[1].x + 10, 55);
+igual('grupos: rotacion transforma el centro de la segunda capa (y)', transformadas[1].y + 10, 75);
+igual('grupos: suma la rotacion a la capa', transformadas[1].rot, 100);
+igual('grupos: no transforma capas ajenas', transformadas[2].x, grupoCapas[2].x);
+igual('grupos: no muta el arreglo original', grupoCapas[0].x, 15);
+
 /* ============ Reordenar (T036) ============ */
 
 var abc = ['a', 'b', 'c', 'd'];
@@ -233,4 +257,3 @@ if (fallos > 0) {
     process.exit(1);
 }
 console.log('GEOMETRIA OK (' + total + ' checks).');
-

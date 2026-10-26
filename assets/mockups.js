@@ -194,6 +194,48 @@ jQuery(function ($) {
         return etiquetaPlaceholder(c.ref);
     }
 
+    function indicesSeleccionados() {
+        var seleccion = (estado.seleccionados || []).slice();
+        if (!seleccion.length && estado.seleccion >= 0) {
+            seleccion.push(estado.seleccion);
+        }
+        return G.expandirGrupos(capas(), seleccion);
+    }
+
+    function seleccionConBloqueadas(indices) {
+        return indices.some(function (i) {
+            return capas()[i] && capas()[i].bloqueada;
+        });
+    }
+
+    function seleccionarCapa(indice, alternar) {
+        var lista = capas();
+        var miembros = G.expandirGrupos(lista, [indice]);
+        if (!miembros.length) {
+            estado.seleccion = -1;
+            estado.seleccionados = [];
+            return;
+        }
+        if (alternar) {
+            var estaCompleto = miembros.every(function (i) {
+                return estado.seleccionados.indexOf(i) !== -1;
+            });
+            estado.seleccionados = estado.seleccionados.filter(function (i) {
+                return miembros.indexOf(i) === -1;
+            });
+            if (!estaCompleto) {
+                estado.seleccionados = estado.seleccionados.concat(miembros);
+                estado.seleccion = indice;
+            } else {
+                estado.seleccion = estado.seleccionados.length
+                    ? estado.seleccionados[estado.seleccionados.length - 1] : -1;
+            }
+        } else if (estado.seleccionados.indexOf(indice) === -1) {
+            estado.seleccionados = miembros.length > 1 ? miembros.slice() : [];
+            estado.seleccion = indice;
+        }
+    }
+
     /* ============ Montaje (T014) ============ */
 
     function plantilla() {
@@ -251,6 +293,17 @@ jQuery(function ($) {
             '          <button type="button" class="button button-small" data-mk="duplicar-capa">Duplicar</button>' +
             '          <button type="button" class="button button-small button-link-delete" data-mk="borrar-capa">Quitar</button>' +
             '        </div>' +
+            '        <div class="ec-mk-acciones ec-mk-grupos-acciones">' +
+            '          <button type="button" class="button button-small" data-mk="agrupar">Agrupar seleccion</button>' +
+            '          <button type="button" class="button button-small" data-mk="desagrupar">Desagrupar seleccion</button>' +
+            '          <span class="description">Selecciona varias capas con Ctrl/Cmd+clic.</span>' +
+            '        </div>' +
+            '        <div class="ec-mk-acciones ec-mk-importar">' +
+            '          <label>Pagina del PDF <input type="number" class="ec-mk-num-pagina" min="1" step="1" value="1" style="width:72px"></label>' +
+            '          <button type="button" class="button button-small" data-mk="importar-pagina">Importar pagina + PH</button>' +
+            '        </div>' +
+            '        <p class="description ec-mk-importar-ayuda">La pagina elegida y sus placeholders se agregan como un grupo movible y rotatable.</p>' +
+            '        <p class="ec-mk-importar-estado" aria-live="polite"></p>' +
             '        <div class="ec-mk-acciones">' +
             '          <button type="button" class="button button-small ec-mk-alin" data-pos="izquierda">Izq.</button>' +
             '          <button type="button" class="button button-small ec-mk-alin" data-pos="centro_h">Centro H</button>' +
@@ -431,6 +484,38 @@ jQuery(function ($) {
         var c = capa();
         if (!c) { return; }
         var f = factor();
+        var seleccion = indicesSeleccionados();
+        if (seleccion.length > 1) {
+            var marcoGrupo = G.marco(capas(), seleccion);
+            if (!marcoGrupo) { return; }
+            var gx = marcoGrupo.x + marcoGrupo.w / 2;
+            var gy = marcoGrupo.y - 14;
+            ctx.save();
+            ctx.strokeStyle = '#2271b1';
+            ctx.lineWidth = 1.5 / f;
+            ctx.setLineDash([4 / f, 3 / f]);
+            ctx.strokeRect(marcoGrupo.x, marcoGrupo.y, marcoGrupo.w, marcoGrupo.h);
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(gx, marcoGrupo.y);
+            ctx.lineTo(gx, gy);
+            ctx.stroke();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(gx, gy, 5 / f, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            var textoGrupo = seleccion.length + ' elementos';
+            ctx.font = '11px sans-serif';
+            var anchoGrupo = ctx.measureText(textoGrupo).width + 10;
+            ctx.fillStyle = 'rgba(255, 255, 255, .92)';
+            ctx.fillRect(marcoGrupo.x, Math.max(0, marcoGrupo.y - 16), anchoGrupo, 14);
+            ctx.fillStyle = '#1d2327';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(textoGrupo, marcoGrupo.x + 5, Math.max(0, marcoGrupo.y - 8.5));
+            ctx.restore();
+            return;
+        }
         var cx = c.x + c.w / 2;
         var cy = c.y + c.h / 2;
         ctx.save();
@@ -498,6 +583,16 @@ jQuery(function ($) {
         var c = capa();
         if (!c || c.bloqueada) { return ''; }
         var tol = 6 / estado.zoom;
+        var seleccion = indicesSeleccionados();
+        if (seleccion.length > 1) {
+            if (seleccionConBloqueadas(seleccion)) { return ''; }
+            var marcoGrupo = G.marco(capas(), seleccion);
+            if (!marcoGrupo) { return ''; }
+            var gx = marcoGrupo.x + marcoGrupo.w / 2;
+            var gy = marcoGrupo.y - 14;
+            return Math.abs(p.x - gx) <= tol * 1.6 && Math.abs(p.y - gy) <= tol * 1.6
+                ? 'rotar-grupo' : '';
+        }
         var ang = -1.5707963 + ((c.rot || 0) * Math.PI / 180);
         var radio = Math.max(c.w, c.h) / 2 + 14;
         var hx = c.x + c.w / 2 + radio * Math.cos(ang);
@@ -514,8 +609,9 @@ jQuery(function ($) {
     /* ============ Manipulacion directa (T016-T018) ============ */
 
     /** Registra un paso en el historial (T041): un gesto, no un mousemove. */
-    function marcarPaso() {
-        estado.pila.push(JSON.stringify(estado.mockups));
+    function marcarPaso(estadoAnterior) {
+        estado.pila.push(typeof estadoAnterior === 'string'
+            ? estadoAnterior : JSON.stringify(estado.mockups));
         if (estado.pila.length > 50) { estado.pila.shift(); }
         estado.redo = [];
     }
@@ -533,18 +629,78 @@ jQuery(function ($) {
         }
     }
 
+    function corregirGrupoEnLienzo(lista, indices) {
+        var marcoGrupo = G.marco(lista, indices);
+        if (!marcoGrupo) { return lista; }
+        var dx = marcoGrupo.w > LIENZO
+            ? LIENZO / 2 - (marcoGrupo.x + marcoGrupo.w / 2)
+            : (marcoGrupo.x < 0 ? -marcoGrupo.x
+                : (marcoGrupo.x + marcoGrupo.w > LIENZO
+                    ? LIENZO - marcoGrupo.x - marcoGrupo.w : 0));
+        var dy = marcoGrupo.h > LIENZO
+            ? LIENZO / 2 - (marcoGrupo.y + marcoGrupo.h / 2)
+            : (marcoGrupo.y < 0 ? -marcoGrupo.y
+                : (marcoGrupo.y + marcoGrupo.h > LIENZO
+                    ? LIENZO - marcoGrupo.y - marcoGrupo.h : 0));
+        return G.transformarGrupo(lista, indices, { x: 0, y: 0 }, 0, dx, dy);
+    }
+
+    function capturarArrastreGrupo(tipo, p) {
+        var indices = indicesSeleccionados();
+        var marcoGrupo = G.marco(capas(), indices);
+        if (!marcoGrupo || !indices.length || seleccionConBloqueadas(indices)) { return null; }
+        var arrastre = {
+            tipo: tipo,
+            inicio: p,
+            indices: indices,
+            originales: JSON.parse(JSON.stringify(capas())),
+            estadoAnterior: JSON.stringify(estado.mockups),
+            centro: { x: marcoGrupo.x + marcoGrupo.w / 2, y: marcoGrupo.y + marcoGrupo.h / 2 }
+        };
+        if (tipo === 'rotar-grupo') {
+            arrastre.anguloInicio = Math.atan2(p.y - arrastre.centro.y, p.x - arrastre.centro.x);
+        }
+        return arrastre;
+    }
+
     lienzo.addEventListener('pointerdown', function (ev) {
         if (!mockup()) { return; }
         var p = aLogico(ev);
+        var estadoAnterior = JSON.stringify(estado.mockups);
         var tir = tiradorEn(p);
         if (tir) {
-            estado.arrastre = { tipo: tir, inicio: p, original: capa() ? Object.assign({}, capa()) : null };
+            estado.arrastre = tir === 'rotar-grupo'
+                ? capturarArrastreGrupo(tir, p)
+                : {
+                    tipo: tir,
+                    inicio: p,
+                    original: capa() ? Object.assign({}, capa()) : null,
+                    estadoAnterior: estadoAnterior
+                };
         } else {
             var i = G.acertarCapa(capas(), p.x, p.y);
-            estado.seleccion = i;
-            estado.seleccionados = [];
             if (i >= 0) {
-                estado.arrastre = { tipo: 'mover', inicio: p, original: Object.assign({}, capas()[i]) };
+                seleccionarCapa(i, ev.ctrlKey || ev.metaKey);
+            } else if (!ev.ctrlKey && !ev.metaKey) {
+                estado.seleccion = -1;
+                estado.seleccionados = [];
+            }
+            if (i >= 0) {
+                var indices = indicesSeleccionados();
+                if (indices.indexOf(i) !== -1 && indices.length > 1) {
+                    if (seleccionConBloqueadas(indices)) {
+                        $ed.find('.ec-mk-alertas').text('Desbloquea todas las capas del grupo para moverlo o rotarlo.');
+                    } else {
+                        estado.arrastre = capturarArrastreGrupo('mover-grupo', p);
+                    }
+                } else if (indices.indexOf(i) !== -1) {
+                    estado.arrastre = {
+                        tipo: 'mover',
+                        inicio: p,
+                        original: Object.assign({}, capas()[i]),
+                        estadoAnterior: estadoAnterior
+                    };
+                }
             }
         }
         refrescar();
@@ -564,6 +720,42 @@ jQuery(function ($) {
             return;
         }
         var a = estado.arrastre;
+        if (a.tipo === 'mover-grupo') {
+            var marcoInicial = G.marco(a.originales, a.indices);
+            if (!marcoInicial) { return; }
+            var dxGrupo = p.x - a.inicio.x;
+            var dyGrupo = p.y - a.inicio.y;
+            if (marcoInicial.w <= LIENZO) {
+                dxGrupo = Math.max(-marcoInicial.x,
+                    Math.min(dxGrupo, LIENZO - marcoInicial.x - marcoInicial.w));
+            } else {
+                dxGrupo = LIENZO / 2 - (marcoInicial.x + marcoInicial.w / 2);
+            }
+            if (marcoInicial.h <= LIENZO) {
+                dyGrupo = Math.max(-marcoInicial.y,
+                    Math.min(dyGrupo, LIENZO - marcoInicial.y - marcoInicial.h));
+            } else {
+                dyGrupo = LIENZO / 2 - (marcoInicial.y + marcoInicial.h / 2);
+            }
+            mockup().capas = G.transformarGrupo(a.originales, a.indices,
+                a.centro, 0, dxGrupo, dyGrupo);
+            estado.guias = [];
+            sinGuardar(false);
+            dibujar();
+            pintarProps();
+            return;
+        }
+        if (a.tipo === 'rotar-grupo') {
+            var anguloActual = Math.atan2(p.y - a.centro.y, p.x - a.centro.x);
+            var deltaAngulo = (anguloActual - a.anguloInicio) * 180 / Math.PI;
+            var giradas = G.transformarGrupo(a.originales, a.indices, a.centro, deltaAngulo, 0, 0);
+            mockup().capas = corregirGrupoEnLienzo(giradas, a.indices);
+            estado.guias = [];
+            sinGuardar(false);
+            dibujar();
+            pintarProps();
+            return;
+        }
         var c = capa();
         if (!c || !a.original) { return; }
         if (a.tipo === 'mover') {
@@ -597,9 +789,10 @@ jQuery(function ($) {
 
     function finArrastre() {
         if (!estado.arrastre) { return; }
+        var estadoAnterior = estado.arrastre.estadoAnterior;
         estado.arrastre = null;
         estado.guias = [];
-        marcarPaso();
+        marcarPaso(estadoAnterior);
         // El gesto se confirma al soltar: aqui se encola el autoguardado.
         sinGuardar();
         dibujar();
@@ -981,6 +1174,210 @@ jQuery(function ($) {
         });
     }
 
+    function nuevoIdGrupo() {
+        return 'g-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9);
+    }
+
+    function agruparSeleccion() {
+        var m = mockup();
+        var indices = indicesSeleccionados();
+        if (!m || indices.length < 2) {
+            $ed.find('.ec-mk-alertas').text('Selecciona al menos dos capas para agrupar.');
+            return;
+        }
+        var estadoAnterior = JSON.stringify(estado.mockups);
+        var grupo = nuevoIdGrupo();
+        indices.forEach(function (i) { m.capas[i].grupo = grupo; });
+        estado.seleccionados = indices;
+        estado.seleccion = indices.indexOf(estado.seleccion) !== -1 ? estado.seleccion : indices[0];
+        marcarPaso(estadoAnterior);
+        sinGuardar();
+        refrescar();
+        $ed.find('.ec-mk-alertas').text('Se agruparon ' + indices.length + ' capas.');
+    }
+
+    function desagruparSeleccion() {
+        var m = mockup();
+        var indices = indicesSeleccionados();
+        var estadoAnterior = JSON.stringify(estado.mockups);
+        var liberadas = 0;
+        if (!m) { return; }
+        indices.forEach(function (i) {
+            if (m.capas[i] && m.capas[i].grupo) {
+                delete m.capas[i].grupo;
+                liberadas++;
+            }
+        });
+        if (!liberadas) {
+            $ed.find('.ec-mk-alertas').text('La seleccion no contiene capas agrupadas.');
+            return;
+        }
+        estado.seleccionados = indices;
+        marcarPaso(estadoAnterior);
+        sinGuardar();
+        refrescar();
+        $ed.find('.ec-mk-alertas').text('Se desagruparon ' + liberadas + ' capas.');
+    }
+
+    function importarPagina() {
+        var numeroPagina = parseInt($ed.find('.ec-mk-num-pagina').val(), 10);
+        var $boton = $ed.find('[data-mk="importar-pagina"]');
+        var $estado = $ed.find('.ec-mk-importar-estado');
+        var cargador = window.pdfjsLib;
+        if (!datos.pdfUrl || !datos.pdf || !cargador) {
+            $estado.text('No esta disponible el PDF o el motor local de lectura. Recarga la consola.')
+                .addClass('ec-error');
+            return;
+        }
+        if (!numeroPagina || numeroPagina < 1) {
+            $estado.text('Indica un numero de pagina valido.').addClass('ec-error');
+            return;
+        }
+        if (!mockup()) { nuevoMockup(null); }
+        var idMockup = mockup().id;
+        $boton.prop('disabled', true);
+        $estado.removeClass('ec-error').text('Leyendo la pagina y ubicando sus placeholders...');
+        cargador.GlobalWorkerOptions.workerSrc = cfg.pdfjsWorkerUrl;
+        var tarea = cargador.getDocument({
+            url: datos.pdfUrl,
+            cMapUrl: cfg.pdfjsCMapUrl,
+            cMapPacked: true,
+            standardFontDataUrl: cfg.pdfjsStandardFontDataUrl
+        });
+        tarea.promise.then(function (documento) {
+            if (numeroPagina > documento.numPages) {
+                throw new Error('El PDF tiene ' + documento.numPages + ' paginas.');
+            }
+            return Promise.all([
+                documento.getPage(numeroPagina),
+                apiMotor('mockup_pagina', { pdf: datos.pdf, pagina: numeroPagina })
+                    .then(function (respuesta) { return respuesta.data; })
+            ]).then(function (resultados) {
+                var pagina = resultados[0];
+                var geometria = resultados[1];
+                var vista = pagina.getViewport({ scale: 1, rotation: 0 });
+                var escalaRaster = Math.min(1600 / vista.width, 1600 / vista.height);
+                var viewport = pagina.getViewport({ scale: escalaRaster, rotation: 0 });
+                var canvasPdf = document.createElement('canvas');
+                canvasPdf.width = Math.ceil(viewport.width);
+                canvasPdf.height = Math.ceil(viewport.height);
+                var contextoPdf = canvasPdf.getContext('2d');
+                if (!contextoPdf) { throw new Error('El navegador no pudo crear el lienzo de importacion.'); }
+                return pagina.render({ canvasContext: contextoPdf, viewport: viewport }).promise
+                    .then(function () {
+                        return new Promise(function (resolve, reject) {
+                            canvasPdf.toBlob(function (blob) {
+                                if (!blob) {
+                                    reject(new Error('No se pudo convertir la pagina del PDF a imagen.'));
+                                    return;
+                                }
+                                resolve({ blob: blob, geometria: geometria, ancho: vista.width, alto: vista.height });
+                            }, 'image/png');
+                        });
+                    });
+            }).then(function (resultado) {
+                if (typeof documento.destroy === 'function') { documento.destroy(); }
+                return resultado;
+            }, function (error) {
+                if (typeof documento.destroy === 'function') { documento.destroy(); }
+                throw error;
+            });
+        }).then(function (resultado) {
+            var titulo = datos.pdf + '-pagina-' + numeroPagina;
+            var archivo = new File([resultado.blob], titulo + '.png', { type: 'image/png' });
+            return apiMotor('alta', {
+                scope: 'mockups',
+                title: titulo,
+                cats: 'pagina-pdf',
+                file: archivo
+            }).then(function (respuesta) {
+                return { resultado: resultado, imagen: respuesta.data };
+            });
+        }).then(function (importado) {
+            var indiceMockup = -1;
+            estado.mockups.forEach(function (m, i) {
+                if (m.id === idMockup) { indiceMockup = i; }
+            });
+            if (indiceMockup < 0) { throw new Error('La vista de destino ya no esta disponible.'); }
+            var imagen = importado.imagen;
+            var resultado = importado.resultado;
+            var marco = {
+                x: (LIENZO - Math.min(LIENZO, LIENZO * resultado.ancho / resultado.alto)) / 2,
+                y: (LIENZO - Math.min(LIENZO, LIENZO * resultado.alto / resultado.ancho)) / 2,
+                w: Math.min(LIENZO, LIENZO * resultado.ancho / resultado.alto),
+                h: Math.min(LIENZO, LIENZO * resultado.alto / resultado.ancho)
+            };
+            var grupoId = nuevoIdGrupo();
+            var nuevas = [{
+                tipo: 'img', ref: 'mock:' + imagen.id, x: marco.x, y: marco.y,
+                w: marco.w, h: marco.h, rot: 0, sesgo: 0, filtros: {}, modo: 'normal',
+                nombre: 'Pagina ' + numeroPagina, oculta: false, bloqueada: false, grupo: grupoId
+            }];
+            var escalaPagina = marco.w / Math.max(1, resultado.ancho);
+            var box = importado.geometria.box || [0, 0, resultado.ancho, resultado.alto];
+            var origenX = parseFloat(box[0]) || 0;
+            var origenY = parseFloat(box[1]) || 0;
+            var anchoPagina = Math.max(1, (parseFloat(box[2]) || resultado.ancho) - origenX);
+            var altoPagina = Math.max(1, (parseFloat(box[3]) || resultado.alto) - origenY);
+            (importado.geometria.grupos || []).forEach(function (grupo) {
+                (grupo.instancias || []).forEach(function (instancia) {
+                    var b = instancia.bbox || [];
+                    if (b.length < 4) { return; }
+                    var w = Math.max(1, (parseFloat(instancia.w) || (b[2] - b[0])) * escalaPagina);
+                    var h = Math.max(1, (parseFloat(instancia.h) || (b[3] - b[1])) * escalaPagina);
+                    var centroX = marco.x + ((parseFloat(b[0]) - origenX + (parseFloat(b[2]) - parseFloat(b[0])) / 2)
+                        / anchoPagina) * marco.w;
+                    var centroY = marco.y + (((parseFloat(b[1]) + parseFloat(b[3])) / 2
+                        + (parseFloat(box[1]) || 0)) / altoPagina) * marco.h;
+                    var rotacion = 0;
+                    if (instancia.quad && instancia.quad.length > 1) {
+                        var dx = parseFloat(instancia.quad[1][0]) - parseFloat(instancia.quad[0][0]);
+                        var dy = parseFloat(instancia.quad[1][1]) - parseFloat(instancia.quad[0][1]);
+                        rotacion = Math.atan2(-dy, dx) * 180 / Math.PI;
+                    }
+                    var ref = String(grupo.id) + (instancia.n > 1 ? '#' + instancia.n : '');
+                    var info = infoEnvoltura(ref);
+                    nuevas.push({
+                        tipo: 'placeholder', ref: ref, x: centroX - w / 2, y: centroY - h / 2,
+                        w: w, h: h, rot: rotacion, sesgo: 0, filtros: {}, modo: 'normal',
+                        nombre: '', oculta: false, bloqueada: false, grupo: grupoId,
+                        envoltura: info.hay
+                    });
+                });
+            });
+            var m = estado.mockups[indiceMockup];
+            var inicio = m.capas.length;
+            var estadoAnterior = JSON.stringify(estado.mockups);
+            Array.prototype.push.apply(m.capas, nuevas);
+            estado.actual = indiceMockup;
+            estado.seleccion = inicio + nuevas.length - 1;
+            estado.seleccionados = nuevas.map(function (_, i) { return inicio + i; });
+            var itemCatalogo = {
+                id: imagen.id, file: imagen.nombre, title: titulo, cats: 'pagina-pdf', url: imagen.url
+            };
+            datos.imagenes = (datos.imagenes || []).filter(function (item) {
+                return String(item.id) !== String(imagen.id);
+            });
+            datos.imagenes.push(itemCatalogo);
+            marcarPaso(estadoAnterior);
+            sinGuardar();
+            refrescar();
+            nuevas.slice(1).forEach(function (c) {
+                var info = infoEnvoltura(c.ref);
+                if (c.envoltura && info.necesita) { pedirEnvoltura(c); }
+            });
+            $estado.text('Pagina importada con ' + (nuevas.length - 1)
+                + ' placeholder(s), todos agrupados.');
+        }).catch(function (error) {
+            var mensaje = error && error.message ? error.message : 'No se pudo importar la pagina.';
+            $estado.text(mensaje).addClass('ec-error');
+        }).then(function () {
+            $boton.prop('disabled', false);
+            pintarCatalogo();
+            dibujar();
+        });
+    }
+
     /** Placeholder del PDF: encuadre inicial a escala, centrado y seleccionado. */
     function agregarPlaceholder(idGrupo, indice) {
         var g = null;
@@ -1205,6 +1602,9 @@ jQuery(function ($) {
         if (accion === 'bajar') { moverCapa(-1); return; }
         if (accion === 'duplicar-capa') { duplicarCapa(); return; }
         if (accion === 'borrar-capa') { borrarCapa(); return; }
+        if (accion === 'agrupar') { agruparSeleccion(); return; }
+        if (accion === 'desagrupar') { desagruparSeleccion(); return; }
+        if (accion === 'importar-pagina') { importarPagina(); return; }
         if (accion === 'guardar') { guardar(); return; }
         if (accion === 'ver-cliente') { verCliente(); return; }
         if (accion === 'reset') {
@@ -1295,18 +1695,7 @@ jQuery(function ($) {
         var i = parseInt($(this).attr('data-i'), 10);
         var acc = String($(ev.target).attr('data-acc') || '');
         if (!acc) {
-            // Sin Ctrl/Cmd: seleccion simple (todo lo anterior se pierde).
-            // Con Ctrl/Cmd: alterna la capa en la seleccion multiple (T034:
-            // las capas a repartir). Si no hay ninguna marcada y se pulsa
-            // Ctrl/Cmd, se abre la seleccion con esa capa.
-            if (ev.ctrlKey || ev.metaKey) {
-                var k = estado.seleccionados.indexOf(i);
-                if (k === -1) { estado.seleccionados.push(i); }
-                else { estado.seleccionados.splice(k, 1); }
-            } else {
-                estado.seleccionados = [];
-            }
-            estado.seleccion = i;
+            seleccionarCapa(i, ev.ctrlKey || ev.metaKey);
             refrescar();
             return;
         }
@@ -1718,4 +2107,3 @@ jQuery(function ($) {
     verCliente();
     window.addEventListener('resize', function () { dibujar(); });
 });
-

@@ -137,6 +137,65 @@ class PMU_Uploads
             . DIRECTORY_SEPARATOR . $nombre . '.pdf';
     }
 
+    /**
+     * Geometria de los placeholders de una pagina, bajo demanda para importar
+     * esa pagina como fondo del editor de mockups.
+     */
+    public function geometria_mockup_pagina($nombre, $pagina)
+    {
+        $nombre = $this->nombre_seguro($nombre, 'mockup_pagina');
+        $pagina = (int)$pagina;
+        if ($pagina < 1) {
+            throw new Exception('motor:mockup_pagina:pagina:invalida');
+        }
+        $ruta = $this->ruta_pdf($nombre);
+        if (!is_file($ruta) || !is_readable($ruta)) {
+            throw new Exception('motor:mockup_pagina:pdf:ausente');
+        }
+        $bytes = @file_get_contents($ruta);
+        if (!is_string($bytes) || $bytes === '') {
+            throw new Exception('motor:mockup_pagina:pdf:ilegible');
+        }
+        $pdf = new \ExtractCorel\Engine\Pdf($bytes);
+        $pdf->load();
+        $paginas = $pdf->getPages();
+        if ($pagina > count($paginas)) {
+            throw new Exception('motor:mockup_pagina:pagina:fuera_de_rango');
+        }
+        $box = $pdf->pageBox($paginas[$pagina - 1]);
+        $gruposDetectados = (new \ExtractCorel\Engine\Detector($pdf))->analizarPdf()['grupos'];
+        $grupos = [];
+        foreach ($gruposDetectados as $grupo) {
+            $instancias = [];
+            foreach ((array)($grupo['instancias'] ?? []) as $indice => $instancia) {
+                if ((int)($instancia['page'] ?? -1) !== $pagina - 1) {
+                    continue;
+                }
+                $fila = [
+                    'n' => $indice + 1,
+                    'bbox' => array_map('floatval', (array)($instancia['bbox'] ?? [])),
+                    'w' => (float)($instancia['w'] ?? 0),
+                    'h' => (float)($instancia['h'] ?? 0),
+                ];
+                if (isset($instancia['dev_quad']) && is_array($instancia['dev_quad'])) {
+                    $fila['quad'] = array_map(function ($punto) {
+                        return array_map('floatval', (array)$punto);
+                    }, $instancia['dev_quad']);
+                }
+                $instancias[] = $fila;
+            }
+            if ($instancias) {
+                $grupos[] = ['id' => (string)$grupo['id'], 'instancias' => $instancias];
+            }
+        }
+        return [
+            'pagina' => $pagina,
+            'total_paginas' => count($paginas),
+            'box' => array_map('floatval', $box),
+            'grupos' => $grupos,
+        ];
+    }
+
 
     /** Analisis inmutable del Detector: uploads/pmu/pdfs/{nombre}/analisis.json (plan 008). */
     public function ruta_analisis($nombre)
@@ -1599,6 +1658,8 @@ class PMU_Uploads
                     'nombre' => substr(trim((string)($c['nombre'] ?? '')), 0, 60),
                     'oculta' => !empty($c['oculta']),
                     'bloqueada' => !empty($c['bloqueada']),
+                    'grupo' => preg_match('/^g-[a-z0-9_-]{1,36}$/', (string)($c['grupo'] ?? ''))
+                        ? (string)$c['grupo'] : '',
                     // Envoltura (PowerClip del PDF): solo tiene sentido en capas
                     // placeholder; en `img` se fuerza a false.
                     'envoltura' => $tipo === 'placeholder' && !empty($c['envoltura']),
@@ -2552,7 +2613,7 @@ return $destino;
             wp_send_json_error('motor:op:falta');
         }
         $op = (string)$_POST['op'];
-        if (!in_array($op, ['listar', 'alta', 'baja', 'editar', 'sprite', 'miniatura', 'envoltura'], true)) {
+        if (!in_array($op, ['listar', 'alta', 'baja', 'editar', 'sprite', 'miniatura', 'envoltura', 'mockup_pagina'], true)) {
             wp_send_json_error('motor:op:invalido:' . $op);
         }
         try {
@@ -2635,10 +2696,14 @@ return $destino;
                     }
                     wp_send_json_success($this->envoltura_datos($pdf, $gid, $n));
                     break;
+                case 'mockup_pagina':
+                    $pdf = (string)$this->param(['pdf', 'nombre'], '');
+                    $pagina = (int)$this->param(['pagina'], 0);
+                    wp_send_json_success($this->geometria_mockup_pagina($pdf, $pagina));
+                    break;
             }
         } catch (Exception $e) {
             wp_send_json_error($e->getMessage());
         }
     }
 }
-

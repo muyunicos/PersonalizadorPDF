@@ -113,7 +113,8 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   ├── mockups.js           ← Editor de mockups del admin (2 columnas, lienzo
 │   │                             ampliable, manipulacion directa; DELEGA el render
 │   │                             en `mockup-render.js` y la geometria en
-│   │                             `mockup-geometria.js`; spec 011)
+│   │                             `mockup-geometria.js`; grupos e importacion
+│   │                             local de pagina PDF (spec 011)
 │   ├── mockup-render.js      ← NUCLEO de composicion del mockup (Canvas 2D):
 │   │                             `PMUMockup.componer/contener/filtroCss/esValida`.
 │   │                             UNICA funcion de render del sistema: la usan el
@@ -122,6 +123,7 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   │                             rotacion, acertar, alinear, distribuir). Sin DOM;
 │   │                             testeada con `node tests/mockup-geometria.test.js`
 │   │                             y `node tests/mockup-contrato.test.js` (cableado)
+│   ├── vendor/pdfjs/         ← PDF.js local (Apache-2.0): raster de paginas PDF para el editor
 │   ├── campo-montar.js      ← Montaje COMPARTIDO de campos (spec 012): lo usan la ficha del
 │   │                          comprador y el preview del admin (una sola lógica, DRY)
 │   ├── cargador-pmu.js      ← Cargador de imágenes del comprador (spec 012): N ranuras
@@ -363,7 +365,8 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   se inventa geometria)) + `pdfs/{nombre}/config.json` (editable: `activo`, `productos`,
   `campos_ids`, `preview_omisible` (bool, default `false` = mockup obligatorio en ficha),
   `mockups[]` (plantillas de vista previa: `capas[]` con `tipo`/`ref`/`x`/`y`/`w`/`h`/
-  `rot`/`sesgo`/`filtros`/`modo`/`nombre`/`oculta`/`bloqueada`; canvas 300x300),
+  `rot`/`sesgo`/`filtros`/`modo`/`nombre`/`oculta`/`bloqueada`/`envoltura` y `grupo`
+  opcional; canvas 300x300),
   `tienda{product_id}` (spec 005: Configuracion
   tienda por asociacion PDFxproducto: `activo`/`validez`/`mensaje_html`/`bloquear`;
   la expresion `validez` se evalua SOLO en el navegador, PHP nunca evalua JS),
@@ -385,7 +388,11 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   acepta en el cliente (el servidor lo normaliza al leer, una sola vez). `capas[].filtros` admite
   `brillo`/`gama`/`contraste`/`saturacion` 0..200, `opacidad` 0..100, `desenfoque` 0..20 y
   `tono` -180..180; el valor igual al default **no se persiste**. `capas[].modo` es
-  `normal`|`multiply`. Todo es opcional: ausente = comportamiento actual.
+  `normal`|`multiply`. `grupo` agrupa capas del editor para mover/rotar juntas; no altera
+  el render del comprador. El editor importa una pagina elegida del PDF como imagen del
+  catalogo `mockups` y sus placeholders con envolturas, inicialmente en el mismo grupo;
+  rasteriza con PDF.js local y consulta la geometria al motor PHP. Todo es opcional:
+  ausente = comportamiento actual.
   Contrato completo: `specs/011-editor-mockups-visual/contracts/mockup-capas.md`.
   Sin `textos.json` y sin `metadata.json`
   (norma ex-008 + decision preview 2026-09-17; la migración `.migrado-007` ya no se ejecuta).
@@ -878,7 +885,7 @@ php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
                               # migracion | nonce [cap] | validez | validez_admin |
                               # validez_admin_mal | ficha* | vista_previa* |
                               # carrito | pool* | fotos | sesion | conciliacion |
-                              # completados | mockups* | mockup_capas |
+                              # completados | mockups* | mockup_capas | mockup_pagina |
                              # mockup_preview | mockup_foto |
                               # mockup_foto_baja | mockup_foto_ajax |
                               # desactivar | reanalizar | envoltura_op | borrado | campo_global | smoke | biblioteca

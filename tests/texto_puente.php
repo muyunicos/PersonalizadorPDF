@@ -450,6 +450,15 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && ($json['data']['envoltura']['par'] ?? null) === 1,
                 'json=' . json_encode($json));
             break;
+        case 'mockup_pagina':
+            check('endpoint de geometria por pagina acepta la operacion', is_array($json)
+                && ($json['success'] ?? false) === true
+                && ($json['data']['pagina'] ?? 0) === 1
+                && ($json['data']['total_paginas'] ?? 0) >= 1
+                && is_array($json['data']['box'] ?? null)
+                && is_array($json['data']['grupos'] ?? null),
+                'json=' . json_encode($json));
+            break;
         case 'mockups_guardar':
             // T008: guardado parcial del editor de mockups.
             check('respuesta JSON success', is_array($json) && $json['success'] === true);
@@ -476,6 +485,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 'handler' => json_encode($leido_mc['mockups']),
                 'mockups' => $leido_mc['mockups'],
                 'capas' => (array)($leido_mc['mockups'][0]['capas'] ?? []),
+                'pagina' => (array)($GLOBALS['test_mc_pagina'] ?? []),
                 'vacio' => array_values(array_filter((array)$leido_mc['mockups'], function ($m) {
                     return (string)($m['id'] ?? '') === 'pendiente';
                 })),
@@ -488,7 +498,16 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && ($capas[0]['ref'] ?? '') === 'pdf:fondo.png');
             check('ref del catalogo con namespace mock:', is_array($mc)
                 && ($capas[1]['ref'] ?? '') === 'mock:7');
+            check('grupo de capas persiste con id valido', is_array($mc)
+                && ($capas[1]['grupo'] ?? '') === 'g-pagina-1');
+            check('id de grupo invalido se descarta', is_array($mc)
+                && ($capas[3]['grupo'] ?? '') === '');
             check('ref con traversal rechazado y capa fuera', is_array($mc) && count($capas) === 4);
+            check('endpoint devuelve geometria de la pagina seleccionada', is_array($mc)
+                && ($mc['pagina']['pagina'] ?? 0) === 1
+                && ($mc['pagina']['total_paginas'] ?? 0) >= 1
+                && is_array($mc['pagina']['box'] ?? null)
+                && is_array($mc['pagina']['grupos'] ?? null));
             check('ajustes ampliados persistidos', is_array($mc)
                 && count((array)($capas[2]['filtros'] ?? [])) === 4
                 && (int)($capas[2]['filtros']['gama'] ?? -1) === 0
@@ -3312,6 +3331,16 @@ switch ($fase) {
         $_REQUEST = $_POST;
         $motor_eo->handle_request(); // exit en wp_send_json_success
         break;
+    case 'mockup_pagina':
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        $_POST = ['op' => 'mockup_pagina', 'pdf' => 'muestra', 'pagina' => 1, '_wpnonce' => 'nonce'];
+        $_REQUEST = $_POST;
+        $p->motor_para_tests()->handle_request(); // exit en wp_send_json_success/error
+        break;
     case 'sesion':
         // T003/T017: ciclo completo del item (draft -> pool -> webp -> promover
         // -> staging -> promover_order) + TTL, borrado quirurgico y estados.
@@ -4075,6 +4104,7 @@ switch ($fase) {
             require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
         }
         $motor_mc = $p->motor_para_tests();
+        $pagina_mc = $motor_mc->geometria_mockup_pagina('muestra', 1);
         $analisis_mc_antes = file_get_contents($motor_mc->ruta_analisis('muestra'));
         $entrada_mc = [
             [
@@ -4085,7 +4115,8 @@ switch ($fase) {
                     ['tipo' => 'img', 'ref' => 'fondo.png', 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300,
                         'filtros' => ['brillo' => 100], 'envoltura' => true],
                     // 1: imagen del catalogo por id numerico.
-                    ['tipo' => 'img', 'ref' => 'mock:7', 'x' => 10, 'y' => 10, 'w' => 50, 'h' => 50],
+                    ['tipo' => 'img', 'ref' => 'mock:7', 'x' => 10, 'y' => 10, 'w' => 50, 'h' => 50,
+                        'grupo' => 'g-pagina-1'],
                     // 2: ajustes ampliados + campos nuevos.
                     ['tipo' => 'placeholder', 'ref' => '0000FF#1', 'x' => 5, 'y' => 5, 'w' => 40, 'h' => 60,
                         'rot' => 400, 'sesgo' => 9, 'nombre' => 'Marco', 'modo' => 'multiply',
@@ -4093,7 +4124,7 @@ switch ($fase) {
                         'filtros' => ['gama' => 0, 'opacidad' => 80, 'desenfoque' => 4.5, 'tono' => -30, 'xxx' => 1]],
                     // 3: fuera de rango -> clamp; modo invalido -> normal.
                     ['tipo' => 'img', 'ref' => 'pdf:marco.png', 'x' => 0, 'y' => 0, 'w' => 10, 'h' => 10,
-                        'modo' => 'inventado',
+                        'modo' => 'inventado', 'grupo' => 'grupo invalido',
                         'filtros' => ['opacidad' => 500, 'desenfoque' => 99, 'tono' => -900]],
                     // 4: traversal -> capa fuera.
                     ['tipo' => 'img', 'ref' => '../fuera', 'x' => 0, 'y' => 0, 'w' => 1, 'h' => 1],
@@ -4110,6 +4141,7 @@ switch ($fase) {
             // asi la fase cubre tambien el camino HTTP, incluida la lectura del
             // JSON escapado por `add_magic_quotes` que rompia el editor en vivo.
             $GLOBALS['test_mc_entrada'] = $entrada_mc;
+            $GLOBALS['test_mc_pagina'] = $pagina_mc;
             $GLOBALS['test_mc_analisis_antes'] = file_get_contents($motor_mc->ruta_analisis('muestra'));
             if (isset($GLOBALS['test_mc_analisis_antes']) && $GLOBALS['test_mc_analisis_antes'] === $analisis_mc_antes) {
                 // ya estaba: no hace falta volver a leerlo

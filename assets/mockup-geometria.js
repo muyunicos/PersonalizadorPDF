@@ -269,6 +269,76 @@
         return encontrado;
     }
 
+    /** Indices unicos de las capas seleccionadas, expandiendo sus grupos. */
+    function expandirGrupos(capas, indices) {
+        var lista = capas || [];
+        var salida = [];
+        var vistos = {};
+        (indices || []).forEach(function (indice) {
+            var capa = lista[indice];
+            if (!capa) { return; }
+            var grupo = capa.grupo ? String(capa.grupo) : '';
+            lista.forEach(function (otra, i) {
+                if (i === indice || (grupo && otra && String(otra.grupo || '') === grupo)) {
+                    if (!vistos[i]) {
+                        vistos[i] = true;
+                        salida.push(i);
+                    }
+                }
+            });
+        });
+        return salida;
+    }
+
+    /** Limites alineados a ejes que contienen las capas seleccionadas. */
+    function marco(capas, indices) {
+        var lista = capas || [];
+        var puntos = [];
+        expandirGrupos(lista, indices).forEach(function (i) {
+            ['nw', 'ne', 'se', 'sw'].forEach(function (tirador) {
+                puntos.push(posicionTirador(lista[i], tirador));
+            });
+        });
+        if (!puntos.length) { return null; }
+        var xs = puntos.map(function (p) { return p.x; });
+        var ys = puntos.map(function (p) { return p.y; });
+        var x = Math.min.apply(Math, xs);
+        var y = Math.min.apply(Math, ys);
+        return {
+            x: x,
+            y: y,
+            w: Math.max.apply(Math, xs) - x,
+            h: Math.max.apply(Math, ys) - y
+        };
+    }
+
+    /**
+     * Traslada y rota un conjunto alrededor de `centro`, conservando todos
+     * los campos de cada capa y las distancias relativas entre ellas.
+     */
+    function transformarGrupo(capas, indices, origen, grados, dx, dy) {
+        var lista = (capas || []).slice();
+        var cx = numero(origen && origen.x);
+        var cy = numero(origen && origen.y);
+        var rad = numero(grados) * Math.PI / 180;
+        var cos = Math.cos(rad);
+        var sin = Math.sin(rad);
+        expandirGrupos(lista, indices).forEach(function (i) {
+            var original = lista[i];
+            var copia = {};
+            Object.keys(original).forEach(function (k) { copia[k] = original[k]; });
+            var centroCapa = centro(original);
+            var px = centroCapa.x - cx;
+            var py = centroCapa.y - cy;
+            var nuevoX = cx + px * cos - py * sin + numero(dx);
+            var nuevoY = cy + px * sin + py * cos + numero(dy);
+            copia.x = nuevoX - numero(original.w, 1) / 2;
+            copia.y = nuevoY - numero(original.h, 1) / 2;
+            copia.rot = acotarNumero(numero(original.rot) + numero(grados), -360, 360);
+            lista[i] = copia;
+        });
+        return lista;
+    }
 
     /* ============ Alineacion y distribucion ============ */
 
@@ -396,10 +466,12 @@
         centro: centro,
         contiene: contiene,
         acertarCapa: acertarCapa,
+        expandirGrupos: expandirGrupos,
+        marco: marco,
+        transformarGrupo: transformarGrupo,
         alinear: alinear,
         distribuir: distribuir,
         reordenar: reordenar,
         normalizarCapa: normalizarCapa
     };
 }));
-

@@ -1246,7 +1246,7 @@ class Personalizador_PDF_Plugin
      */
     public function datos_pdf_render($nombre)
     {
-        $vacio = ['pdf' => '', 'grupos' => [], 'fotos' => [], 'mockups' => [], 'preview_omisible' => false,
+        $vacio = ['pdf' => '', 'pdfUrl' => '', 'grupos' => [], 'fotos' => [], 'mockups' => [], 'preview_omisible' => false,
             'imagenes' => [], 'envolturas' => ['disponible' => false, 'formas' => [], 'defecto' => [], 'usos' => [], 'excepciones' => []]];
         try {
             $nombre = $this->pmu_uploads()->nombre_seguro($nombre, 'ficha_render');
@@ -1308,6 +1308,8 @@ class Personalizador_PDF_Plugin
             }
             return [
                 'pdf' => $nombre,
+                'pdfUrl' => $this->pmu_uploads()->url_ambito('pdfs')
+                    . rawurlencode($nombre) . '/' . rawurlencode($nombre) . '.pdf',
                 'grupos' => $grupos,
                 'fotos' => $this->mockup_fotos_lista($nombre),
                 'mockups' => isset($config['mockups']) ? array_values((array)$config['mockups']) : [],
@@ -5879,6 +5881,13 @@ JS;
             // Nucleo de composicion del mockup (spec 011): lo consumen el
             // editor y la ficha, y es la UNICA funcion de render del sistema.
             wp_enqueue_script(
+                'personalizador-pdf-pdfjs',
+                PERSONALIZADOR_PDF_URL . 'assets/vendor/pdfjs/pdf.min.js',
+                [],
+                PERSONALIZADOR_PDF_VERSION,
+                true
+            );
+            wp_enqueue_script(
                 'personalizador-pdf-mockup-render',
                 PERSONALIZADOR_PDF_URL . 'assets/mockup-render.js',
                 [],
@@ -5895,7 +5904,7 @@ JS;
             wp_enqueue_script(
                 'personalizador-pdf-mockups',
                 PERSONALIZADOR_PDF_URL . 'assets/mockups.js',
-                ['jquery', 'personalizador-pdf', 'personalizador-pdf-mockup-render',
+                ['jquery', 'personalizador-pdf', 'personalizador-pdf-pdfjs', 'personalizador-pdf-mockup-render',
                     'personalizador-pdf-mockup-geometria'],
                 PERSONALIZADOR_PDF_VERSION,
                 true
@@ -5908,6 +5917,9 @@ JS;
             'renderCoreUrl' => PERSONALIZADOR_PDF_URL . 'modules/textmuy/render-core.html',
             'motorUrl' => admin_url('admin-post.php?action=pmu_uploads'),
             'motorNonce' => wp_create_nonce('pmu_uploads'),
+            'pdfjsWorkerUrl' => PERSONALIZADOR_PDF_URL . 'assets/vendor/pdfjs/pdf.worker.min.js',
+            'pdfjsCMapUrl' => PERSONALIZADOR_PDF_URL . 'assets/vendor/pdfjs/cmaps/',
+            'pdfjsStandardFontDataUrl' => PERSONALIZADOR_PDF_URL . 'assets/vendor/pdfjs/standard_fonts/',
             'imagenesBase' => $this->base_imagenes_segura(),
             // Puente TextMuy completo (urls + nonces + inventarios): lo envia
             // assets/admin.js al iframe render-core.html (contrato AGENTS 2.1).

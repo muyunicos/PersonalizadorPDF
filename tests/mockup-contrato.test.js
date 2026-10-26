@@ -88,6 +88,17 @@ check('el editor expone los botones de distribuir', editor.indexOf('ec-mk-dist')
     && editor.indexOf('Distribuir H') !== -1 && editor.indexOf('Distribuir V') !== -1);
 check('el editor lleva el estado de seleccion multiple', editor.indexOf('seleccionados: []') !== -1
     && editor.indexOf('ec-mk-sel') !== -1);
+check('el editor ofrece agrupar y desagrupar las capas seleccionadas',
+    editor.indexOf('data-mk="agrupar"') !== -1
+        && editor.indexOf('data-mk="desagrupar"') !== -1
+        && editor.indexOf('function agruparSeleccion()') !== -1
+        && editor.indexOf('function desagruparSeleccion()') !== -1);
+check('la importacion de pagina obtiene raster local y geometria del motor',
+    editor.indexOf('function importarPagina()') !== -1
+        && editor.indexOf("getDocument({") !== -1
+        && editor.indexOf("apiMotor('mockup_pagina'") !== -1
+        && editor.indexOf("tipo: 'placeholder'") !== -1
+        && editor.indexOf("grupo: grupoId") !== -1);
 
 /* ============ Envolturas (PowerClip del PDF) ============ */
 
@@ -129,6 +140,14 @@ check('comandosEnvoltura mapea 0..1 al rect de la capa', (function () {
 
 var pluginPhp = leer('personalizador-pdf.php');
 var motorPhp = leer('inc/class-pmu-uploads.php');
+check('PDF.js se carga desde assets locales y usa worker local',
+    pluginPhp.indexOf('assets/vendor/pdfjs/pdf.min.js') !== -1
+        && pluginPhp.indexOf('assets/vendor/pdfjs/pdf.worker.min.js') !== -1);
+check('el servidor ofrece geometria PH por pagina de mockup',
+    motorPhp.indexOf('function geometria_mockup_pagina(') !== -1
+        && motorPhp.indexOf("case 'mockup_pagina':") !== -1
+        && /in_array\(\$op,\s*\[[^\]]*'mockup_pagina'/.test(motorPhp)
+        && motorPhp.indexOf("'bbox' => array_map('floatval'") !== -1);
 
 check('el editor trae el toggle de envoltura con su handler', editor.indexOf('ec-mk-envoltura') !== -1
     && editor.indexOf('c.envoltura = activar') !== -1

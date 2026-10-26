@@ -28,6 +28,17 @@ if (!defined('ABSPATH')) {
 </div>
 
 <div class="card">
+    <h2>Editor de mockups</h2>
+    <p>En la consola de <strong>PDFs</strong>, cada mockup puede incluir capas de imagen y placeholders.
+        Selecciona varias con <strong>Ctrl/Cmd + clic</strong> para agruparlas o desagruparlas; cualquier
+        miembro de un grupo permite mover y rotar el conjunto.</p>
+    <p><strong>Importar pagina + PH</strong> rasteriza en el navegador la pagina indicada del PDF y
+        agrega la imagen junto con sus placeholders y envolturas detectadas, ya agrupados. El PDF se
+        procesa localmente con los recursos incluidos en el plugin; la pagina rasterizada se guarda
+        en el catalogo de imagenes de mockup.</p>
+</div>
+
+<div class="card">
     <h2>Test (smoke en vivo)</h2>
     <p>La pestana <strong>Test</strong> verifica la instalacion real (WordPress y WooCommerce activos)
         sin ejecutar procesos externos: version de PHP y extensiones, permisos de escritura en

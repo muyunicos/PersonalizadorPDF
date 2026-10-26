@@ -1,6 +1,6 @@
 # Contract: Capas de mockup y render compartido
 
-**Feature**: 011-editor-mockups-visual | **Version**: 4 (enmienda `004-woocommerce-pdf-personalization/contracts/mockups.md`; v3 envolturas PowerClip, v4 dedup de formas + forma representativa + guia del cargador)
+**Feature**: 011-editor-mockups-visual | **Version**: 5 (enmienda `004-woocommerce-pdf-personalization/contracts/mockups.md`; v3 envolturas PowerClip, v4 dedup de formas + forma representativa + guia del cargador, v5 grupos e importacion de paginas PDF)
 
 Contrato de la composicion de un mockup (`config.json:mockups[]`) y del **nucleo de render
 compartido** que la usan el editor del admin y la ficha del cliente. Especificacion: [../spec.md](../spec.md).
@@ -18,7 +18,7 @@ compartido** que la usan el editor del admin y la ficha del cliente. Especificac
      "filtros": {"brillo": 95, "contraste": 110}},
     {"tipo": "placeholder", "ref": "0000FF#1", "x": 96, "y": 60, "w": 110, "h": 180,
      "rot": -3, "sesgo": 0.05, "oculta": false, "modo": "normal",
-     "filtros": {"opacidad": 90}}
+     "filtros": {"opacidad": 90}, "grupo": "g-pagina-1"}
   ]
 }
 ```
@@ -32,14 +32,30 @@ compartido** que la usan el editor del admin y la ficha del cliente. Especificac
 | `x`,`y`,`w`,`h` | int; `w,h >= 1`; espacio logico 300x300 | = |
 | `rot` | float -360..360 (grados) | = |
 | `sesgo` | float -1..1 | = |
-| `filtros` | object; claves de §1.2; ausente = neutro | **ampliado** |
+| `filtros` | object; claves de §1.4; ausente = neutro | **ampliado** |
 | `modo` | `normal` \| `multiply` (extensible); default `normal` | **nuevo** |
 | `nombre` | string <= 60; default = derivado del `ref` | **nuevo** |
 | `oculta` | bool; default `false` | **nuevo** |
 | `bloqueada` | bool; default `false` | **nuevo** |
 | `envoltura` | bool; default `false`; **solo** `tipo=placeholder` (en `img` el saneo fuerza `false`). Recorta la capa al clip vectorial del hueco en el PDF (PowerClip) | **nuevo (v3)** |
+| `grupo` | opcional; id `g-` + 1..36 caracteres `[a-z0-9_-]`; agrupa capas para seleccion, movimiento y rotacion conjuntos en el editor. Sin efecto en el render de la ficha | **nuevo (v5)** |
 
-### 1.2 Ajustes (`filtros`)
+### 1.3 Grupos e importacion de pagina PDF — v5
+
+- Agrupar asigna el mismo `grupo` a todas las capas seleccionadas; desagrupar elimina ese campo
+  de sus miembros. Al seleccionar cualquier miembro, el editor selecciona el grupo completo.
+- El movimiento conserva las posiciones relativas; la rotacion conjunta se aplica alrededor del
+  centro del marco del grupo y suma el mismo angulo a cada capa. El grupo se mantiene dentro del
+  lienzo cuando es posible.
+- **Importar pagina + PH** recibe el numero de pagina. PDF.js, servido localmente desde el plugin,
+  rasteriza esa pagina como una imagen de catalogo; el motor PHP devuelve las instancias de
+  placeholders de esa pagina usando el `Detector`. Se crean una capa de imagen y una capa por
+  instancia, con referencias PH reales y su estado PowerClip, y todas reciben un mismo `grupo`.
+- La importacion no modifica `analisis.json` ni `envolturas.json`; los datos de geometria y
+  envoltura se consultan bajo demanda. La operacion es local al navegador y al servidor WordPress,
+  sin subir el PDF a un servicio externo.
+
+### 1.4 Ajustes (`filtros`)
 
 | Clave | Rango | Default | Mecanismo |
 |---|---|---|---|
@@ -52,7 +68,7 @@ compartido** que la usan el editor del admin y la ficha del cliente. Especificac
 Valor = default -> se borra al guardar. **`gama` hoy se acepta y no se aplica**: este contrato
 obliga a aplicarla (bug corregido: `class-pmu-uploads.php:729` lo acepta, `filtroCss()` lo ignora).
 
-### 1.3 Enmienda explicita al contrato 004
+### 1.5 Enmienda explicita al contrato 004
 
 El contrato 004 declaraba `capas[].ref` = "id del catalogo `img/` o `mockups/{archivo}`", formato que
 el validador hacia **imposible** (rechazaba cualquier `ref` con `/`, `class-pmu-uploads.php:723`).
@@ -60,7 +76,7 @@ Este contrato lo reemplaza por el namespace `pdf:` / `img:` y aclara la misma re
 catalogo se referencia por **id numerico**, no por nombre de archivo (el nombre puede cambiar en una
 edicion del catalogo; el id no). `ref` plano se tolera como `pdf:`.
 
-### 1.4 Envolturas (PowerClip del PDF) — v4
+### 1.6 Envolturas (PowerClip del PDF) — v4
 
 Un placeholder puede venir **recortado dentro de una forma vectorial** en el PDF (PowerClip de
 CorelDRAW: corazon, estrella, etc.). El procesado ya lo respeta en el PDF final (`Overlay`
@@ -214,4 +230,3 @@ Un ajuste nuevo debe estar en los **dos** lados, o el cliente ve distinto a lo q
   `tests/mockup-contrato.test.js`; la extraccion, en `tests/envolturas.php` (PDF sintetico:
   W, W*, Q, Form XObject y forma densa > ENV_SEG_MAX); el endpoint, en la fase
   `envoltura_op` de `tests/texto_puente.php`.
-
