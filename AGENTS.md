@@ -498,6 +498,11 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   por grupo, se sobrescribe en cada Procesar)
 - Placeholders: sin archivos en disco; marco dibujado en la consola + descarga generada
   al vuelo (`PngWriter::bytes(w, h)`)
+- **Reemplazo del PDF (spec 032)**: `uploads/pmu/tmp/reemplazos/{nombre}/` con `ultimo.json` (el `{ts}`
+  recuperable) y una carpeta por reemplazo `{ts}/` con `nuevo/` (staging: PDF + `analisis.json` +
+  `envolturas.json` nuevos) y `anterior/` (el respaldo: los 4 archivos del producto). **Un solo respaldo**
+  por producto y **fuera del TTL** de la spec 030 (`limpiar_ttl` barre solo `tmp/sesion-*`). Borrar el
+  producto limpia tambien su `tmp/reemplazos/`.
 - **Retencion de `orders/` con referencias (spec 030, §6 P3)**: una fila `origen: ref` puede apuntar a
   **otro pedido** (`orders/{order_id}/...`), asi que **no se purga un pedido referenciado**: antes de
   cualquier purga hay que **materializar** esas filas (copiar el archivo al pedido que lo referencia).
@@ -845,6 +850,25 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   el confirm de cambios sin guardar (que atrapa `.ec-acordeon > summary`). Puertas: contrato Node
   147 checks, `EXTREMO`/`GEOMETRIA` 135, y los probes E1-E6 contra `C:\wp-lab` (E1 10/10, E2 13/13,
   E3 12/12, E4 11/11, E5 9/9, E8 8/8, E6 5/5). Artefactos en `specs/031-editor-mockups-panel/`.
+- ✅ **Spec 032 `reemplazo-pdf` (implementada 2026-10-26, v4.24.0)**: subir una **version nueva** del PDF de
+  un producto **sin perder** la personalizacion, los mockups, los bonus ni las conexiones. **Swap por
+  ARCHIVO** (nunca por carpeta: con no borrarla, todo lo demas sobrevive solo), **staging** previo (si el
+  analisis falla, cero cambios) y **dos pasos** con **modal**: `preparar` devuelve el **mapa**
+  viejo→nuevo (ids iguales + **sugerencias** con IoU de `dev_bbox` normalizada al box de pagina y
+  **distancia de color** euclidea en RGB como PESO, no filtro: un rediseno cambia el color a proposito)
+  y el admin decide **Migrar o Cancelar**. Al migrar: **respaldo** de los 4 archivos en
+  `tmp/reemplazos/{nombre}/{ts}/anterior/`, swap y `config.json` **remapeado** (`placeholders{id}`,
+  `envolturas{gid:{forma:k}}` revalidado y `mockups[].capas[].ref`); un fallo a mitad **restaura del
+  respaldo**. `recuperar` vuelve **byte a byte** y conserva el respaldo. El **mismo remapeo** corre
+  ahora en **Re-analizar** (arregla el bug latente de `envolturas{k}` y refs de capa). Endpoints
+  `admin_post_personalizador_pdf_reemplazar_{preparar,confirmar,recuperar}`; UI en "2. PDFs subidos"
+  (boton por fila, modal del mapa, Recuperar) y el `sobrescribir` del modal de conflicto reescrito a
+  **"Reemplazar (conserva la personalizacion)"** (el camino destructivo se retiro). **Funciones puras**
+  en `Metadata` (`mapaDeReemplazo`/`remapearConfig`/`distanciaColor`). Puertas: fase `reemplazo` del
+  arnes (**24 checks**: mapa + remapeo + la transaccion con md5 + TTL) y contrato Node 147/geometria 135.
+  Ojo: la subida real de un PDF **no** se puede simular en el arnes (`move_uploaded_file` exige un upload
+  real) -> el flujo con subida se prueba en el lab (quickstart R1-R8). Artefactos en
+  `specs/032-reemplazo-pdf/`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
   `admin/ayuda.php`, `modules/LEEME.md` solo resumen y apuntan aqui). El `== Changelog ==`
   de `readme.txt` es historial, no normativa.
@@ -925,7 +949,7 @@ php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
                               # completados | mockups* | mockup_capas | mockup_pagina |
                              # mockup_preview | mockup_foto |
                               # mockup_foto_baja | mockup_foto_ajax |
-                              # desactivar | reanalizar | envoltura_op | borrado | campo_global | smoke | biblioteca
+                              # desactivar | reanalizar | envoltura_op | reemplazo | borrado | campo_global | smoke | biblioteca
 ```
 Los 3 arneses CLI salen de inmediato si no corren por CLI (`PHP_SAPI !== 'cli'`):
 la carpeta `tests/` viaja con el plugin al hosting y no debe ser ejecutable por HTTP.

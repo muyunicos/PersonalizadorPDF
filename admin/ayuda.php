@@ -28,6 +28,21 @@ if (!defined('ABSPATH')) {
 </div>
 
 <div class="card">
+    <h2>Reemplazar un PDF</h2>
+    <p>En <strong>2. PDFs subidos</strong>, el boton <strong>Reemplazar archivo</strong> sube una version
+        nueva del PDF <strong>sin perder</strong> la personalizacion, los mockups ni los bonus. El sistema
+        la analiza primero (no toca nada) y despues muestra un <strong>modal con el mapa</strong>: los
+        grupos que <strong>se conservan solos</strong> (mismo color), los que <strong>se sugieren</strong>
+        migrar (mismo lugar y tamano, con su porcentaje de coincidencia y de parecido de color) y los que
+        <strong>se perderian</strong>. Podes desmarcar sugerencias y pulsar <strong>Migrar la
+        personalizacion</strong>, o <strong>Cancelar</strong> (no cambia absolutamente nada). Antes de
+        aplicar se guarda un <strong>respaldo</strong>: con el boton <strong>Recuperar version
+        anterior</strong> (aparece en la fila despues de reemplazar) volves <em>exactamente</em> al estado
+        previo. Los pedidos ya entregados conservan su archivo; si un cliente vuelve a generar su PDF,
+        se genera con la version nueva.</p>
+</div>
+
+<div class="card">
     <h2>Editor de mockups</h2>
     <p>El panel derecho son <strong>cinco acordeones</strong> (Vistas del PDF, Capas, Ajustes, Imagenes y
         Placeholders), cerrados al abrir y combinables entre si. Dentro de <strong>Capas</strong>, los

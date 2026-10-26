@@ -76,20 +76,20 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `admin/`, `asset
 
 ## Phase 8 (F7): Legado
 
-- [ ] T027 `personalizador-pdf.php`: el modo `sobrescribir` de `handle_subir_pdf` **deja de borrar** (`limpiar_datos_de` sale del camino de reemplazo) y delega en preparar+confirmar (FR-002, F7 del plan)
-- [ ] T028 `personalizador-pdf.php`: eliminar el camino muerto que quedaba (si el flujo nuevo lo deja sin uso) y verificar que **Borrar** sigue borrando todo lo suyo (fase `borrado`)
+- [X] T027 `personalizador-pdf.php`: el modo `sobrescribir` de `handle_subir_pdf` **deja de borrar** (`limpiar_datos_de` sale del camino de reemplazo) y delega en preparar+confirmar (FR-002, F7 del plan) — **hecho**: el camino destructivo se **retiro**; `modo=sobrescribir` responde un mensaje accionable ("usa Reemplazar archivo") sin tocar nada. La consola ya usa el flujo nuevo (D10)
+- [X] T028 `personalizador-pdf.php`: eliminar el camino muerto que quedaba (si el flujo nuevo lo deja sin uso) y verificar que **Borrar** sigue borrando todo lo suyo (fase `borrado`) — **hecho**: `limpiar_datos_de()` sigue vivo solo para **Borrar** (que ademas limpia `tmp/reemplazos/`); la fase `borrado` esta verde y el lint no deja codigo muerto
 
 ## Phase 9 (F8): Puertas
 
-- [ ] T029 Fase `reemplazo` completa en `tests/texto_puente.php` (T011/T015/T020) y **registrada** en la lista de fases de AGENTS §9
-- [ ] T030 Puertas en verde: `php -l personalizador-pdf.php` + todos los PHP, `node tests/mockup-contrato.test.js`, `node tests/mockup-geometria.test.js`, `php tests/motor_smoke.php`, `php tests/parity.php`, `php tests/texto_puente.php reanalizar borrado subir_conflicto reemplazo`, `php tests/sin_lectura.php`, `php tests/campos_migracion.php`, `php tests/certificacion_hoja.php`
-- [ ] T031 Recorrido **R1-R8** en `C:\wp-lab` (quickstart) con hashes de antes/despues y `config.json` comparado contra `.bak-032`; restaurar el producto al terminar
+- [X] T029 Fase `reemplazo` completa en `tests/texto_puente.php` (T011/T015/T020) y **registrada** en la lista de fases de AGENTS §9 — **hecho**: 24 checks y la fase aparece en el docblock del arnes y en AGENTS §9
+- [X] T030 Puertas en verde: `php -l personalizador-pdf.php` + todos los PHP, `node tests/mockup-contrato.test.js`, `node tests/mockup-geometria.test.js`, `php tests/motor_smoke.php`, `php tests/parity.php`, `php tests/texto_puente.php reanalizar borrado subir_conflicto reemplazo`, `php tests/sin_lectura.php`, `php tests/campos_migracion.php`, `php tests/certificacion_hoja.php` — **hecho**: lint de **17 PHP** OK, CONTRATO 147, GEOMETRIA 135, CAMPOS CONTRATO, SELECTOR CONTRATO, CONCILIACION, VALIDEZ, SMOKE, PARIDAD, SIN_LECTURA, CAMPOS V3, CERTIFICACION HOJA y las fases `reemplazo`/`reanalizar`/`borrado`/`admin`/`subir_conflicto` OK
+- [X] T031 Recorrido **R1-R8** en `C:\wp-lab` (quickstart) con hashes de antes/despues y `config.json` comparado contra `.bak-032`; restaurar el producto al terminar — **hecho 17/17** (`C:\wp-lab\probe-032-recorrido.cjs`): R1 preparar con el MISMO PDF -> el modal dice "Se conservan sin cambios: 0000FF, FF0000" y el producto queda intacto; R3 cancelar -> hashes intactos y staging descartado; R4 migrar -> respaldo con los 4 archivos, `productos`/`campos_ids`/`tienda`/`bonus`/`mockups` **conservados**, dataset regenerado, boton Recuperar y notice; R5 recuperar -> los 4 archivos **byte a byte**; R6 PDF invalido -> no abre el modal y cero cambios; **higiene: el producto quedo identico al inicio**. **Lo no cubierto**: el caso "grupo con OTRO color" necesita un PDF redisenado y queda cubierto por los **9 checks puros del mapa** (T004)
 
 ## Phase 10 (F9): Cierre
 
-- [ ] T032 [P] `AGENTS.md`: §5 (ambito `tmp/reemplazos/` + retencion de un respaldo + exclusion del TTL) y §7 (decision: reemplazo sin perdida, swap por archivo, mapa 1:1 con modal y respaldo)
-- [ ] T033 [P] `admin/ayuda.php`: documentar "Reemplazar archivo", el modal del mapa (iguales/sugeridos/perdidos) y "Recuperar la version anterior"
-- [ ] T034 `specs/INDICE.md` con el estado real de la 032 y `tasks.md` al dia; bump de version; commit por fase verificada (norma §10.ter) y **push previo visto bueno** (el push despliega)
+- [X] T032 [P] `AGENTS.md`: §5 (ambito `tmp/reemplazos/` + retencion de un respaldo + exclusion del TTL) y §7 (decision: reemplazo sin perdida, swap por archivo, mapa 1:1 con modal y respaldo) — **hecho**: §5 con el ambito y su retencion, §7 con la entrada de la spec 032 (v4.24.0) y §9 con `reemplazo` en la lista de fases del arnes
+- [X] T033 [P] `admin/ayuda.php`: documentar "Reemplazar archivo", el modal del mapa (iguales/sugeridos/perdidos) y "Recuperar la version anterior" — **hecho**: card "Reemplazar un PDF" antes del editor de mockups
+- [~] T034 `specs/INDICE.md` con el estado real de la 032 y `tasks.md` al dia; bump de version; commit por fase verificada (norma §10.ter) y **push previo visto bueno** (el push despliega) — **hecho**: INDICE al dia, `tasks.md` al dia (33 de 34) y bump a **4.24.0**; commits por fase (F1 `4c2f5b8`, F2 `335aa24`, F3-F5 `2722748`, F6 `7f1c3a9`, F7-F9 el de cierre). **Pendiente: el push** (dispara el deploy por webhook) -> requiere visto bueno
 
 ---
 
