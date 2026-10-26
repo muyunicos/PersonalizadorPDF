@@ -577,13 +577,11 @@ jQuery(function ($) {
 
     function puntoRotacionGrupo(marco) {
         var punto = G.puntoMarco(marco, 0.5, 0, 0, -14);
-        if (punto.y < 7) {
-            punto = G.puntoMarco(marco, 0.5, 0, 0, Math.min(14, marco.h / 2));
-        }
-        if (punto.y > LIENZO - 7) {
-            punto = G.puntoMarco(marco, 0.5, 0.5);
-        }
-        return punto;
+        var margen = 7;
+        return {
+            x: Math.max(margen, Math.min(LIENZO - margen, punto.x)),
+            y: Math.max(margen, Math.min(LIENZO - margen, punto.y))
+        };
     }
 
     /** Tiradores, medidas y nombre de la capa seleccionada (T019). */
@@ -803,7 +801,8 @@ jQuery(function ($) {
             marco: marcoGrupo
         };
         if (tipo === 'rotar-grupo') {
-            arrastre.anguloInicio = Math.atan2(p.y - arrastre.centro.y, p.x - arrastre.centro.x);
+            arrastre.anguloAnterior = Math.atan2(p.y - arrastre.centro.y, p.x - arrastre.centro.x);
+            arrastre.rotacionAcumulada = 0;
         }
         if (tipo.indexOf('perspectiva:') === 0) {
             var puntoIndex = parseInt(tipo.split(':')[1], 10);
@@ -923,8 +922,11 @@ jQuery(function ($) {
         }
         if (a.tipo === 'rotar-grupo') {
             var anguloActual = Math.atan2(p.y - a.centro.y, p.x - a.centro.x);
-            var deltaAngulo = G.deltaAngular(a.anguloInicio, anguloActual);
-            var giradas = G.transformarGrupo(a.originales, a.indices, a.centro, deltaAngulo, 0, 0);
+            a.rotacionAcumulada = Math.max(-360, Math.min(360, a.rotacionAcumulada
+                + G.deltaAngular(a.anguloAnterior, anguloActual)));
+            a.anguloAnterior = anguloActual;
+            var giradas = G.transformarGrupo(a.originales, a.indices,
+                a.centro, a.rotacionAcumulada, 0, 0);
             mockup().capas = giradas;
             estado.guias = [];
             sinGuardar(false);
@@ -963,8 +965,13 @@ jQuery(function ($) {
             if (ev.shiftKey) { c.rot = Math.round(c.rot / 15) * 15; }
             estado.guias = [];
         } else {
+            var preservarProporcion = c.tipo === 'img' || ev.shiftKey;
+            var modoProporcion = c.tipo === 'img'
+                ? (/^[ew]$/.test(a.tipo) ? 'w' : (/^[ns]$/.test(a.tipo) ? 'h' : true))
+                : ev.shiftKey;
             c = G.redimensionarDesdeTirador(a.original, a.tipo, p.x - a.inicio.x, p.y - a.inicio.y, {
-                proporcion: ev.shiftKey,
+                proporcion: preservarProporcion ? modoProporcion : false,
+                centrarEje: c.tipo === 'img' && a.tipo.length === 1,
                 lienzo: LIENZO
             });
             var cc = capa();

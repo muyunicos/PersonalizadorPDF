@@ -1,6 +1,6 @@
 # Contract: Capas de mockup y render compartido
 
-**Feature**: 011-editor-mockups-visual | **Version**: 8 (enmienda `004-woocommerce-pdf-personalization/contracts/mockups.md`; v3 envolturas PowerClip, v4 dedup de formas + forma representativa + guia del cargador, v5 grupos e importacion de paginas PDF, v6 transformaciones fuera del lienzo, v7 perspectiva y propiedades de grupo, v8 marco orientado y giro sin salto)
+**Feature**: 011-editor-mockups-visual | **Version**: 9 (enmienda `004-woocommerce-pdf-personalization/contracts/mockups.md`; v3 envolturas PowerClip, v4 dedup de formas + forma representativa + guia del cargador, v5 grupos e importacion de paginas PDF, v6 transformaciones fuera del lienzo, v7 perspectiva y propiedades de grupo, v8 marco orientado y giro sin salto, v9 giro grupal continuo y escala proporcional de imagenes)
 
 Contrato de la composicion de un mockup (`config.json:mockups[]`) y del **nucleo de render
 compartido** que la usan el editor del admin y la ficha del cliente. Especificacion: [../spec.md](../spec.md).
@@ -53,13 +53,17 @@ compartido** que la usan el editor del admin y la ficha del cliente. Especificac
   sobrepasar cualquier borde del area 300x300; el contenido fuera del area queda recortado solo al
   dibujar la salida. Las coordenadas se limitan a ±3000 px como proteccion frente a valores extremos.
 - El marco de un grupo seleccionado ofrece ocho tiradores de escala uniforme alrededor de su
-  centro y permite dimensiones de hasta 1200 px; las capas bloqueadas impiden transformar el grupo. El control de rotacion permanece
-  dentro del lienzo cuando el borde superior o inferior coincide con el limite.
+  centro y permite dimensiones de hasta 1200 px; las capas bloqueadas impiden transformar el grupo.
+  El tirador de rotacion permanece visible dentro del lienzo aun cuando su posicion natural caiga
+  fuera del area; el giro acumula el delta angular de cada movimiento alrededor del centro del grupo.
 - El marco de grupo se calcula en los ejes de `grupo_rot`; el rectangulo, los ocho tiradores,
   el control de rotacion, el hit-test y los cuatro puntos de perspectiva comparten esa misma
   transformacion. La rasterizacion temporal de perspectiva usa el mismo marco orientado.
 - El tirador de rotacion de una capa individual aplica el delta angular desde el inicio del gesto
   a la rotacion existente; tomar el control no cambia el angulo por si solo. `Shift` ajusta a 15°.
+- Los ocho tiradores de una capa `img` conservan su proporcion actual sin requerir modificador;
+  los tiradores laterales escalan desde el punto medio del lado opuesto. Para placeholders, `Shift`
+  conserva la proporcion como antes.
 - Al insertar una imagen del catalogo, la caja inicial usa sus dimensiones naturales y conserva
   la proporcion, centrada y ajustada al lienzo; no se selecciona una caja cuadrada distinta de
   los limites visibles de la imagen.

@@ -146,7 +146,7 @@
             } else if (op.proporcion === 'w') {
                 escala = w / w0;
             } else {
-                escala = Math.abs(ddx) >= Math.abs(ddy) ? (w / w0) : (h / h0);
+                escala = Math.abs(ddx) / w0 >= Math.abs(ddy) / h0 ? (w / w0) : (h / h0);
             }
             escala = acotarNumero(escala, 0.02, MAX_DIMENSION / Math.max(w0, h0));
             w = w0 * escala;
@@ -164,6 +164,10 @@
             // Tiradores sur/este: anclar arriba/izquierda.
             x = oeste ? x : x0;
             y = norte ? y : y0;
+        }
+        if (op.centrarEje && op.proporcion) {
+            if (oeste || este) { y = y0 + (h0 - h) / 2; }
+            if (norte || sur) { x = x0 + (w0 - w) / 2; }
         }
         return acotar({ x: x, y: y, w: w, h: h }, lado);
     }

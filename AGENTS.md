@@ -396,7 +396,9 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   juntas (capas de hasta 1200 px); `grupo_rot` conserva la orientacion comun del marco, y dibujo,
   hit-test y perspectiva usan sus mismos ejes. El panel y sus controles numericos operan sobre el
   grupo. Cuatro puntos convexos `perspectiva.puntos` aplican homografia al grupo a traves del render compartido,
-  solo para el mockup: no modifican los PNG del pool ni el PDF final. `sesgo` se conserva para capas
+  solo para el mockup: no modifican los PNG del pool ni el PDF final. El tirador de rotacion grupal
+  se mantiene dentro del lienzo y acumula deltas del puntero; las imagenes conservan su proporcion
+  al redimensionar desde cualquier tirador. `sesgo` se conserva para capas
   guardadas, pero ya no se ofrece como control del editor. Alt+clic permite manipular un miembro sin
   cambiar su pertenencia. `x`/`y` aceptan ±3000 px:
   el contenido fuera del area 300x300 queda recortado al renderizar. En la lista ▲/▼, mantener

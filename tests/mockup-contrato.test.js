@@ -625,9 +625,21 @@ check('el editor comprueba los tiradores en GLOBAL',
 check('el giro conserva la rotacion inicial y usa Shift para pasos de 15',
     /a\.original\.rot \+ deltaCapa/.test(ed)
         && /G\.deltaAngular\(a\.anguloInicio, anguloCapa\)/.test(ed)
-        && /G\.deltaAngular\(a\.anguloInicio, anguloActual\)/.test(ed)
         && /ev\.shiftKey\) \{ c\.rot = Math\.round\(c\.rot \/ 15\) \* 15; \}/.test(ed),
     'el primer movimiento no debe sustituir la rotacion por el angulo absoluto del puntero');
+check('el giro del grupo acumula deltas consecutivos alrededor del centro',
+    /anguloAnterior = Math\.atan2\(p\.y - arrastre\.centro\.y/.test(ed)
+        && /rotacionAcumulada[\s\S]{0,120}G\.deltaAngular\(a\.anguloAnterior, anguloActual\)/.test(ed)
+        && /a\.anguloAnterior = anguloActual/.test(ed)
+        && /a\.centro, a\.rotacionAcumulada, 0, 0/.test(ed),
+    'el giro grupal no debe perder continuidad al cruzar el limite angular');
+check('el tirador de rotacion grupal se mantiene dentro del lienzo sin caer al centro',
+    /function puntoRotacionGrupo\(marco\)[\s\S]{0,350}Math\.max\(margen, Math\.min\(LIENZO - margen, punto\.x\)\)/.test(ed)
+        && /Math\.max\(margen, Math\.min\(LIENZO - margen, punto\.y\)\)/.test(ed)
+        && !/punto = G\.puntoMarco\(marco, 0\.5, 0\.5\)/.test(ed));
+check('el redimensionado de imagen conserva proporcion por defecto',
+    /var preservarProporcion = c\.tipo === 'img' \|\| ev\.shiftKey/.test(ed)
+        && /centrarEje: c\.tipo === 'img' && a\.tipo\.length === 1/.test(ed));
 check('los tiradores de grupo usan un marco orientado compartido',
     typeof geometria.marcoOrientado === 'function'
         && editor.indexOf('marcoOrientadoSeleccion') !== -1

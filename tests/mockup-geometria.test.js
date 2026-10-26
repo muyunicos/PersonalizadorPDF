@@ -81,6 +81,17 @@ var prop = G.redimensionarDesdeTirador(base, 'se', 40, 0, { proporcion: true });
 check('tirador con proporcion: caja no se deforma',
     Math.abs((prop.w / prop.h) - 1) < 0.001);
 check('tirador con proporcion: crece', prop.w > 100);
+var imagenHorizontal = G.redimensionarDesdeTirador(
+    { x: 20, y: 30, w: 200, h: 100 }, 'e', 40, 0,
+    { proporcion: 'w', centrarEje: true }
+);
+igual('imagen: tirador lateral conserva proporción', imagenHorizontal.w / imagenHorizontal.h, 2);
+igual('imagen: tirador lateral conserva el eje vertical', imagenHorizontal.y + imagenHorizontal.h / 2, 80);
+var imagenEsquina = G.redimensionarDesdeTirador(
+    { x: 20, y: 30, w: 200, h: 100 }, 'se', 10, 10,
+    { proporcion: true }
+);
+igual('imagen: esquina elige el cambio relativo al tamaño', imagenEsquina.w / imagenEsquina.h, 2);
 var acotado = G.redimensionarDesdeTirador(base, 'se', 5000, 5000, {});
 igual('tirador: admite ampliar hasta el maximo seguro (w)', acotado.w, G.MAX_DIMENSION);
 check('tirador: permite desbordar el lienzo', acotado.x + acotado.w > 300 && acotado.y + acotado.h > 300);
@@ -106,6 +117,9 @@ igual('rotacion: al tomar el tirador el delta inicial es cero',
     G.deltaAngular(-Math.PI / 4, -Math.PI / 4), 0);
 igual('rotacion: cruza el limite angular sin saltar una vuelta',
     G.deltaAngular(179 * Math.PI / 180, -179 * Math.PI / 180), 2);
+var deltaAcumulado = G.deltaAngular(179 * Math.PI / 180, -179 * Math.PI / 180)
+    + G.deltaAngular(-179 * Math.PI / 180, -90 * Math.PI / 180);
+igual('rotacion: delta incremental acumula al cruzar el limite', deltaAcumulado, 91);
 
 /* ============ Posicion de tiradores (local para dibujo, global para hit-test) ============ */
 

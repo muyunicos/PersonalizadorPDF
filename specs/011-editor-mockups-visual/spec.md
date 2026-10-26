@@ -82,7 +82,7 @@ se recarga la pagina y el mockup conserva la posicion.
 **Acceptance Scenarios**:
 
 1. **Given** un mockup con una foto de fondo, **When** el admin arrastra un hueco hasta el centro, **Then** una guia aparece y el hueco queda pegado al centro exacto sin escribir coordenadas.
-2. **Given** un hueco seleccionado, **When** el admin toma un tirador de esquina, **Then** la capa cambia de tamano manteniendo su proporcion mientras se mantiene la tecla de modificacion pulsada, y se ve la medida en pixeles.
+2. **Given** una imagen o un hueco seleccionado, **When** el admin toma un tirador, **Then** una imagen conserva siempre su proporcion y un hueco la conserva mientras se mantiene la tecla de modificacion pulsada; se ve la medida en pixeles.
 3. **Given** un hueco seleccionado, **When** el admin lo arrastra fuera del lienzo, **Then** el lienzo acota la posicion y la capa nunca desaparece del area de trabajo.
 4. **Given** un lienzo ampliado al 200 %, **When** el admin arrastra, **Then** el movimiento sigue al puntero sin desviarse y la composicion resultante es identica a la del 100 %.
 
@@ -229,9 +229,9 @@ resultante es la misma composicion y el mismo tamano que la que recibe el client
   seleccionarla tambien desde la lista de capas (una unica fuente de seleccion).
 - **FR-007**: El sistema DEBE permitir **mover una capa arrastrándola** con el raton, en ambos ejes,
   con el movimiento siguiendo al puntero de forma continua (sin escalones ni desvios por el zoom).
-- **FR-008**: El sistema DEBE permitir **redimensionar una capa desde tiradores** (esquinas y lados)
-  con tiradores de rotacion, y **DEBE** mantener la proporcion cuando se pulse la tecla de
-  modificacion.
+- **FR-008**: El sistema DEBE permitir **redimensionar una capa desde tiradores** (esquinas y lados).
+  Las imagenes DEBEN conservar su proporcion en todo momento; las demas capas DEBEN conservarla
+  cuando se pulse la tecla de modificacion.
 - **FR-009**: El sistema DEBE ofrecer **imanes de alineacion** a centro horizontal, centro vertical y
   bordes del lienzo, con **guias visuales** durante el arrastre, y un **ajuste a la proporcion
   natural** de la imagen y a la proporcion del hueco.
@@ -475,4 +475,3 @@ resultante es la misma composicion y el mismo tamano que la que recibe el client
   PDFs, auto-encuadre inteligente, historial de versiones persistente del mockup y optimizacion de
   rendimiento del lienzo; tambien cualquier cambio en la ficha del cliente mas alla de la paridad de
   composicion exigida en FR-023 a FR-025.
-
