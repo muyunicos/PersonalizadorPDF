@@ -636,6 +636,11 @@ check('el giro del grupo acumula deltas consecutivos alrededor del centro',
 check('el tirador de rotacion grupal se mantiene dentro del lienzo sin caer al centro',
     typeof geometria.extremoVisible === 'function'
         && /function puntoRotacionGrupo\(marco\)[\s\S]{0,240}G\.extremoVisible\(centro, punto, LIENZO, 7\)/.test(ed));
+check('dibujo del tirador grupal: guia y circulo en GLOBAL (contexto normal), no en el rotado del marco',
+    ed.indexOf('var guiaDesde = G.puntoMarco(marcoGrupo, 0.5, 0)') !== -1
+        && ed.indexOf('ctx.arc(rotGrupo.x, rotGrupo.y, 5 / f') !== -1
+        && ed.indexOf('rotLocal.x - marcoGrupo.x') === -1,
+    'el contexto rotado con coordenadaMarco (local a la esquina) deformaba el punto: doble resta de la esquina del marco');
 check('el redimensionado de imagen conserva proporcion por defecto',
     /var preservarProporcion = c\.tipo === 'img' \|\| ev\.shiftKey/.test(ed)
         && /centrarEje: c\.tipo === 'img' && a\.tipo\.length === 1/.test(ed));

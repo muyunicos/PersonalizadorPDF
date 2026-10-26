@@ -599,17 +599,25 @@ jQuery(function ($) {
             ctx.lineWidth = 1.5 / f;
             ctx.setLineDash([4 / f, 3 / f]);
             ctx.strokeRect(-marcoGrupo.w / 2, -marcoGrupo.h / 2, marcoGrupo.w, marcoGrupo.h);
+            ctx.restore();
+            // Guia y tirador de rotacion grupal en GLOBAL directo, fuera del
+            // contexto rotado del marco: rotLocal (coordenadaMarco, local a la
+            // ESQUINA del marco) menos la esquina otra vez desplazaba el punto
+            // (-marcoGrupo.x, -marcoGrupo.y); con el grupo movido o mas grande
+            // que el lienzo el circulo quedaba fuera del canvas (invisible)
+            // aunque el hit-test acertara en el punto correcto.
+            ctx.save();
+            ctx.strokeStyle = '#2271b1';
+            ctx.lineWidth = 1.5 / f;
             ctx.setLineDash([]);
             ctx.beginPath();
-            ctx.moveTo(0, -marcoGrupo.h / 2);
-            var rotLocal = G.coordenadaMarco(marcoGrupo, rotGrupo);
-            ctx.lineTo(rotLocal.x - marcoGrupo.x - marcoGrupo.w / 2,
-                rotLocal.y - marcoGrupo.y - marcoGrupo.h / 2);
+            var guiaDesde = G.puntoMarco(marcoGrupo, 0.5, 0);
+            ctx.moveTo(guiaDesde.x, guiaDesde.y);
+            ctx.lineTo(rotGrupo.x, rotGrupo.y);
             ctx.stroke();
             ctx.fillStyle = '#fff';
             ctx.beginPath();
-            ctx.arc(rotLocal.x - marcoGrupo.x - marcoGrupo.w / 2,
-                rotLocal.y - marcoGrupo.y - marcoGrupo.h / 2, 5 / f, 0, Math.PI * 2);
+            ctx.arc(rotGrupo.x, rotGrupo.y, 5 / f, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
             ctx.restore();
