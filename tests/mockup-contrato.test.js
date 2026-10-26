@@ -840,6 +840,25 @@ check('Capas ya no trae los botones sobrantes, pero las acciones siguen',
         && ed.indexOf('function borrarCapa()') !== -1
         && ed.indexOf('function moverCapa(') !== -1);
 
+/* ==== Spec 031 (US5): menu contextual de capas (T020-T023) ==== */
+check('el menu contextual se abre por clic derecho en fila y cabecera',
+    ed.indexOf("$ed.on('contextmenu', '.ec-mk-capa, .ec-mk-grupo-capas-cab'") !== -1
+        && ed.indexOf('abrirMenuCtx(') !== -1
+        && ed.indexOf('ec-mk-menu-ctx') !== -1);
+check('los items del menu usan las funciones vigentes (cero logica nueva)',
+    /function accionMenuCtx\(accion\)[\s\S]{0,900}duplicarCapa\(\)/.test(ed)
+        && /function accionMenuCtx\(accion\)[\s\S]{0,900}borrarCapa\(\)/.test(ed)
+        && /function accionMenuCtx\(accion\)[\s\S]{0,1400}agruparSeleccion\(\)/.test(ed));
+check('el menu se cierra por fuera, Escape y scroll del panel',
+    ed.indexOf("$(document).on('pointerdown.pmuCtx'") !== -1
+        && ed.indexOf("$(document).on('keydown.pmuCtx'") !== -1
+        && ed.indexOf("$ed.on('scroll.pmuCtx'") !== -1
+        && ed.indexOf('function cerrarMenuCtx()') !== -1);
+check('el menu ofrece fallback visible y deshabilita lo que no aplica',
+    ed.indexOf('ec-mk-capa-ias') !== -1
+        && ed.indexOf('aria-disabled') !== -1
+        && ed.indexOf("['agrupar', 'Agrupar seleccion', n > 1]") !== -1);
+
 // El aviso de la consola (pdfs.php) depende de una variable inicializada:
 // sin ella, en PHP 8, `null === ''` nunca es cierto y el aviso no se pintaba.
 var pdfs = leer('admin/pdfs.php');

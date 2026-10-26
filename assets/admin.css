@@ -836,7 +836,7 @@ body.ec-c-drawer-abierto { overflow: hidden; }
 
 /* ---- Menu contextual del editor (spec 031) ---- */
 .ec-mk-menu-ctx {
-    position: absolute;
+    position: fixed;
     z-index: 185000; /* sobre el editor; bajo el overlay de render (190000) */
     min-width: 190px;
     background: #fff;

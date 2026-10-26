@@ -1190,6 +1190,10 @@ jQuery(function ($) {
         $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="bloquear">')
             .attr('aria-label', (c.bloqueada ? 'Desbloquear' : 'Bloquear') + ' la capa ' + nombreCapa(c))
             .text(c.bloqueada ? '🔒' : '🔓'));
+        $li.append($('<button type="button" class="ec-mk-capa-btn ec-mk-capa-ias">')
+            .attr('aria-label', 'Acciones de la capa ' + nombreCapa(c))
+            .attr('title', 'Duplicar, quitar, agrupar, ocultar o bloquear (tambien clic derecho)')
+            .text('...'));
         return $li;
     }
 
@@ -2301,6 +2305,163 @@ jQuery(function ($) {
         refrescar();
         $ed.find('.ec-mk-alertas').text(mensaje);
     }
+
+    /* ============ Menu contextual de capas (spec 031, T020-T023) ============ */
+
+    var $menuCtx = $ed.find('.ec-mk-menu-ctx');
+
+    function cerrarMenuCtx() {
+        estado.menuCtx = null;
+        $menuCtx.attr('hidden', true).empty();
+    }
+
+    /* Fija la seleccion al grupo entero: es lo que consumen las acciones de la
+       cabecera (Desagrupar / Ocultar / Mostrar / Quitar el grupo). */
+    function fijarSeleccionDeGrupo(g) {
+        var inds = [];
+        capas().forEach(function (c, k) {
+            if (String(c.grupo || '') === g) { inds.push(k); }
+        });
+        if (!inds.length) { return false; }
+        estado.seleccionados = inds.slice();
+        estado.seleccion = inds[0];
+        estado.soloSeleccion = false;
+        return true;
+    }
+
+    function itemsMenuCtx(obj) {
+        if (obj.tipo === 'grupo') {
+            var miembros = capas().filter(function (c) { return String(c.grupo || '') === obj.grupo; });
+            var algunVisible = miembros.some(function (c) { return !c.oculta; });
+            return [
+                ['desagrupar-grupo', 'Desagrupar el grupo', true],
+                [algunVisible ? 'ocultar-grupo' : 'mostrar-grupo',
+                    algunVisible ? 'Ocultar el grupo' : 'Mostrar el grupo', true],
+                ['quitar-grupo', 'Quitar el grupo (' + miembros.length + ')', true]
+            ];
+        }
+        var c = capas()[obj.indice];
+        if (!c) { return []; }
+        var n = indicesSeleccionados().length;
+        return [
+            ['duplicar', 'Duplicar', true],
+            ['quitar', 'Quitar', true],
+            [c.oculta ? 'mostrar' : 'ocultar', c.oculta ? 'Mostrar' : 'Ocultar', true],
+            [c.bloqueada ? 'desbloquear' : 'bloquear', c.bloqueada ? 'Desbloquear' : 'Bloquear', true],
+            ['agrupar', 'Agrupar seleccion', n > 1],
+            ['desagrupar', 'Desagrupar seleccion', !!String(c.grupo || '')]
+        ];
+    }
+
+    function abrirMenuCtx(x, y, obj) {
+        var items = itemsMenuCtx(obj);
+        if (!items.length) { return; }
+        estado.menuCtx = obj;
+        var html = '';
+        items.forEach(function (it) {
+            html += '<button type="button" data-ctx="' + it[0] + '"'
+                + (it[2] ? '' : ' aria-disabled="true"') + '>' + it[1] + '</button>';
+        });
+        $menuCtx.html(html).removeAttr('hidden');
+        var ancho = $menuCtx.outerWidth() || 190;
+        var alto = $menuCtx.outerHeight() || 40;
+        $menuCtx.css({
+            left: Math.max(4, Math.min(x, $(window).width() - ancho - 4)) + 'px',
+            top: Math.max(4, Math.min(y, $(window).height() - alto - 4)) + 'px'
+        });
+    }
+
+    /* Cero logica nueva: cada item llama a la funcion vigente (INV-2). */
+    function accionMenuCtx(accion) {
+        var obj = estado.menuCtx;
+        cerrarMenuCtx();
+        if (!obj || !mockup()) { return; }
+        if (obj.tipo === 'grupo') {
+            if (!fijarSeleccionDeGrupo(obj.grupo)) { return; }
+        } else {
+            seleccionarCapa(obj.indice, false, false);
+        }
+        var indices = indicesSeleccionados();
+        var c = capas()[estado.seleccion];
+        if (!c) { return; }
+        if (accion === 'duplicar') { duplicarCapa(); return; }
+        if (accion === 'quitar' || accion === 'quitar-grupo') { borrarCapa(); return; }
+        if (accion === 'agrupar') { agruparSeleccion(); return; }
+        if (accion === 'desagrupar' || accion === 'desagrupar-grupo') { desagruparSeleccion(); return; }
+        if (accion.indexOf('ocultar') !== -1 || accion.indexOf('mostrar') !== -1) {
+            var ocultar = accion.indexOf('ocultar') !== -1;
+            var antes = JSON.stringify(estado.mockups);
+            indices.forEach(function (k) {
+                if (capas()[k]) { capas()[k].oculta = ocultar; }
+            });
+            marcarPaso(antes);
+            sinGuardar();
+            refrescar();
+            return;
+        }
+        if (accion === 'bloquear' || accion === 'desbloquear') {
+            var bloquear = accion === 'bloquear';
+            var antesB = JSON.stringify(estado.mockups);
+            indices.forEach(function (k) {
+                if (capas()[k]) { capas()[k].bloqueada = bloquear; }
+            });
+            marcarPaso(antesB);
+            sinGuardar();
+            refrescar();
+        }
+    }
+
+    /* Apertura: clic derecho en una fila o en la cabecera de un grupo. En los
+       botones de fila (▲▼ y ...) el menu nativo ya esta suprimido por la
+       pulsacion larga, asi que ahi no se abre. */
+    $ed.on('contextmenu', '.ec-mk-capa, .ec-mk-grupo-capas-cab', function (ev) {
+        if ($(ev.target).closest('.ec-mk-capa-btn, .ec-mk-grupo-capas-toggle').length) { return; }
+        ev.preventDefault();
+        var $fila = $(this).closest('.ec-mk-capa');
+        if ($fila.length) {
+            var i = parseInt($fila.attr('data-i'), 10);
+            if (indicesSeleccionados().indexOf(i) === -1) {
+                seleccionarCapa(i, false, false);
+                refrescar();
+            }
+            abrirMenuCtx(ev.clientX, ev.clientY, { tipo: 'capa', indice: i });
+            return;
+        }
+        var g = String($(this).closest('.ec-mk-grupo-capas').attr('data-grupo-capas') || '');
+        if (g) { abrirMenuCtx(ev.clientX, ev.clientY, { tipo: 'grupo', grupo: g }); }
+    });
+
+    /* Fallback visible sin clic derecho: el boton ... de cada fila. */
+    $ed.on('click', '.ec-mk-capa-ias', function (ev) {
+        ev.stopPropagation();
+        var i = parseInt($(this).closest('.ec-mk-capa').attr('data-i'), 10);
+        if (isNaN(i)) { return; }
+        var r = this.getBoundingClientRect();
+        if (indicesSeleccionados().indexOf(i) === -1) {
+            seleccionarCapa(i, false, false);
+            refrescar();
+        }
+        abrirMenuCtx(r.left, r.bottom + 2, { tipo: 'capa', indice: i });
+    });
+
+    $ed.on('click', '.ec-mk-menu-ctx [data-ctx]', function () {
+        if ($(this).attr('aria-disabled') === 'true') { return; }
+        accionMenuCtx(String($(this).attr('data-ctx')));
+    });
+
+    /* Cierre: fuera del menu, Escape o scroll del panel. */
+    $(document).on('pointerdown.pmuCtx', function (ev) {
+        if (!$(ev.target).closest('.ec-mk-menu-ctx').length) { cerrarMenuCtx(); }
+    });
+    $(document).on('keydown.pmuCtx', function (ev) {
+        if (ev.key !== 'Escape') { return; }
+        // Con el menu abierto, Escape cierra SOLO el menu: el atajo global de
+        // Escape vacia la seleccion, y perderla al cancelar no es lo que el
+        // admin pidio. El handler corre antes que el global (registrado antes).
+        if (estado.menuCtx) { ev.stopImmediatePropagation(); }
+        cerrarMenuCtx();
+    });
+    $ed.on('scroll.pmuCtx', function () { cerrarMenuCtx(); });
 
     /* Recursos: miniaturas del catalogo y placeholders (un clic = capa). */
     $ed.on('click', '.ec-mk-mini', function () {
