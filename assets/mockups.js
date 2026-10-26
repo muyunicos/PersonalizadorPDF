@@ -231,9 +231,29 @@ jQuery(function ($) {
     }
 
     function puntosTiradoresPerspectiva(marco, puntos) {
+        var offsets = [{ x: 8, y: 8 }, { x: -8, y: 8 }, { x: -8, y: -8 }, { x: 8, y: -8 }];
         return puntos.map(function (p, i) {
-            return { indice: i, x: marco.x + p.x * marco.w, y: marco.y + p.y * marco.h };
+            return {
+                indice: i,
+                x: marco.x + p.x * marco.w + offsets[i].x,
+                y: marco.y + p.y * marco.h + offsets[i].y,
+                offsetX: -offsets[i].x,
+                offsetY: -offsets[i].y
+            };
         });
+    }
+
+    function perspectivaConvexa(puntos) {
+        var signo = 0;
+        for (var i = 0; i < 4; i++) {
+            var a = puntos[i], b = puntos[(i + 1) % 4], c = puntos[(i + 2) % 4];
+            var cruz = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+            if (Math.abs(cruz) < 0.0001) { return false; }
+            var actual = cruz > 0 ? 1 : -1;
+            if (signo && actual !== signo) { return false; }
+            signo = actual;
+        }
+        return true;
     }
 
     function seleccionConBloqueadas(indices) {
@@ -753,6 +773,16 @@ jQuery(function ($) {
         if (tipo === 'rotar-grupo') {
             arrastre.anguloInicio = Math.atan2(p.y - arrastre.centro.y, p.x - arrastre.centro.x);
         }
+        if (tipo.indexOf('perspectiva:') === 0) {
+            var puntoIndex = parseInt(tipo.split(':')[1], 10);
+            var tiradoresPersp = puntosTiradoresPerspectiva(
+                marcoGrupo, puntosPerspectiva(indices, arrastre.originales)
+            );
+            var tiradorPersp = tiradoresPersp.filter(function (t) { return t.indice === puntoIndex; })[0];
+            arrastre.perspectivaIndex = puntoIndex;
+            arrastre.offsetPunto = tiradorPersp
+                ? { x: tiradorPersp.offsetX, y: tiradorPersp.offsetY } : { x: 0, y: 0 };
+        }
         if (tipo.indexOf('redimensionar-grupo:') === 0) {
             arrastre.pivote = arrastre.centro;
             arrastre.radioInicio = Math.max(1, Math.hypot(
@@ -822,6 +852,22 @@ jQuery(function ($) {
             return;
         }
         var a = estado.arrastre;
+        if (a.tipo.indexOf('perspectiva:') === 0) {
+            var marcoPerspectiva = G.marco(a.originales, a.indices);
+            if (!marcoPerspectiva || !marcoPerspectiva.w || !marcoPerspectiva.h) { return; }
+            var puntosActuales = puntosPerspectiva(a.indices, a.originales);
+            var nuevoPunto = {
+                x: Math.max(0, Math.min(1, (p.x + a.offsetPunto.x - marcoPerspectiva.x) / marcoPerspectiva.w)),
+                y: Math.max(0, Math.min(1, (p.y + a.offsetPunto.y - marcoPerspectiva.y) / marcoPerspectiva.h))
+            };
+            puntosActuales[a.perspectivaIndex] = nuevoPunto;
+            if (perspectivaConvexa(puntosActuales)) {
+                mockup().capas = asignarPerspectiva(a.originales.slice(), a.indices, puntosActuales);
+                sinGuardar(false);
+                dibujar();
+            }
+            return;
+        }
         if (a.tipo === 'mover-grupo') {
             var dxGrupo = p.x - a.inicio.x;
             var dyGrupo = p.y - a.inicio.y;
@@ -1179,10 +1225,23 @@ jQuery(function ($) {
         }
         $panelProps.removeAttr('hidden');
         var html = '';
-        [['x', 'X', 0], ['y', 'Y', 0], ['w', 'Ancho', 1], ['h', 'Alto', 1],
-            ['rot', 'Rotacion', 1], ['sesgo', 'Sesgo', 0.01]].forEach(function (f) {
+        var indices = indicesSeleccionados();
+        var esGrupo = indices.length > 1;
+        var marcoProps = esGrupo ? G.marco(capas(), indices) : null;
+        if (esGrupo) {
+            html += '<h4 class="ec-mk-props-titulo">Grupo seleccionado (' + indices.length + ' capas)</h4>';
+        } else {
+            html += '<h4 class="ec-mk-props-titulo">Capa seleccionada</h4>';
+        }
+        var camposGeo = esGrupo
+            ? [['x', 'X', marcoProps.x], ['y', 'Y', marcoProps.y],
+                ['w', 'Ancho', marcoProps.w], ['h', 'Alto', marcoProps.h], ['rot', 'Rotacion', c.rot || 0]]
+            : [['x', 'X', c.x], ['y', 'Y', c.y], ['w', 'Ancho', c.w],
+                ['h', 'Alto', c.h], ['rot', 'Rotacion', c.rot || 0]];
+        camposGeo.forEach(function (f) {
             html += '<label>' + f[1] + ' <input type="number" class="ec-mk-geo" data-geo="' + f[0]
-                + '" step="' + f[2] + '" value="' + (Math.round((c[f[0]] || 0) * 100) / 100) + '"></label>';
+                + '" step="' + (f[0] === 'rot' ? 1 : (f[0] === 'w' || f[0] === 'h' ? 1 : 0.1))
+                + '" value="' + (Math.round((f[2] || 0) * 100) / 100) + '"></label>';
         });
         if (c.tipo === 'placeholder') {
             // Envoltura (PowerClip del PDF): recorta la capa al contenedor
@@ -1224,6 +1283,10 @@ jQuery(function ($) {
         html += '<div class="ec-mk-acciones">'
             + '<button type="button" class="button button-small" data-mk="reset">Restablecer ajustes</button>'
             + '</div>';
+        if (esGrupo) {
+            html += '<p class="description ec-mk-perspectiva-ayuda">Arrastra los cuatro puntos rojos del lienzo para deformar el grupo como una sola pieza.</p>'
+                + '<div class="ec-mk-acciones"><button type="button" class="button button-small" data-mk="reset-perspectiva">Restablecer perspectiva</button></div>';
+        }
         $props.html(html);
         $props.find('.ec-mk-modo').val(c.modo || 'normal');
     }
