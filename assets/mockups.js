@@ -1235,6 +1235,7 @@ jQuery(function ($) {
         }
         if (!mockup()) { nuevoMockup(null); }
         var idMockup = mockup().id;
+        var titulo = datos.pdf + '-pagina-' + numeroPagina;
         $boton.prop('disabled', true);
         $estado.removeClass('ec-error').text('Leyendo la pagina y ubicando sus placeholders...');
         cargador.GlobalWorkerOptions.workerSrc = cfg.pdfjsWorkerUrl;
@@ -1283,7 +1284,6 @@ jQuery(function ($) {
                 throw error;
             });
         }).then(function (resultado) {
-            var titulo = datos.pdf + '-pagina-' + numeroPagina;
             var archivo = new File([resultado.blob], titulo + '.png', { type: 'image/png' });
             return apiMotor('alta', {
                 scope: 'mockups',
@@ -1313,13 +1313,17 @@ jQuery(function ($) {
                 w: marco.w, h: marco.h, rot: 0, sesgo: 0, filtros: {}, modo: 'normal',
                 nombre: 'Pagina ' + numeroPagina, oculta: false, bloqueada: false, grupo: grupoId
             }];
+            var geometria = resultado.geometria;
+            if (!geometria || !Array.isArray(geometria.grupos)) {
+                throw new Error('El motor no devolvio la geometria de la pagina.');
+            }
             var escalaPagina = marco.w / Math.max(1, resultado.ancho);
-            var box = importado.geometria.box || [0, 0, resultado.ancho, resultado.alto];
+            var box = geometria.box || [0, 0, resultado.ancho, resultado.alto];
             var origenX = parseFloat(box[0]) || 0;
             var origenY = parseFloat(box[1]) || 0;
             var anchoPagina = Math.max(1, (parseFloat(box[2]) || resultado.ancho) - origenX);
             var altoPagina = Math.max(1, (parseFloat(box[3]) || resultado.alto) - origenY);
-            (importado.geometria.grupos || []).forEach(function (grupo) {
+            geometria.grupos.forEach(function (grupo) {
                 (grupo.instancias || []).forEach(function (instancia) {
                     var b = instancia.bbox || [];
                     if (b.length < 4) { return; }

@@ -99,6 +99,17 @@ check('la importacion de pagina obtiene raster local y geometria del motor',
         && editor.indexOf("apiMotor('mockup_pagina'") !== -1
         && editor.indexOf("tipo: 'placeholder'") !== -1
         && editor.indexOf("grupo: grupoId") !== -1);
+check('la importacion consume la geometria del resultado rasterizado',
+    editor.indexOf('var geometria = resultado.geometria;') !== -1
+        && editor.indexOf('var box = geometria.box ||') !== -1
+        && editor.indexOf('geometria.grupos.forEach') !== -1
+        && editor.indexOf('importado.geometria.box') === -1);
+var importacionPagina = editor.slice(editor.indexOf('function importarPagina()'),
+    editor.indexOf('/** Placeholder del PDF'));
+check('el titulo de la pagina se define en el alcance de toda la importacion',
+    importacionPagina.indexOf('var titulo = datos.pdf + \'-pagina-\' + numeroPagina;') !== -1
+        && importacionPagina.indexOf('var titulo = datos.pdf + \'-pagina-\' + numeroPagina;')
+            < importacionPagina.indexOf('tarea.promise.then'));
 
 /* ============ Envolturas (PowerClip del PDF) ============ */
 
