@@ -149,11 +149,14 @@ check('los botones de orden admiten pulsacion larga con cancelacion y sin doble 
 check('el movimiento de grupo no acota su marco al lienzo',
     editor.indexOf('function corregirGrupoEnLienzo') === -1
         && editor.indexOf('mockup().capas = G.transformarGrupo(a.originales, a.indices,') !== -1);
+// Spec 031 (T018): la barra de acciones de Capas se retiro; agrupar/desagrupar
+// siguen disponibles como funciones y en la Fase 7 se invocan desde el menu
+// contextual (data-ctx), no desde botones del panel.
 check('el editor ofrece agrupar y desagrupar las capas seleccionadas',
-    editor.indexOf('data-mk="agrupar"') !== -1
-        && editor.indexOf('data-mk="desagrupar"') !== -1
-        && editor.indexOf('function agruparSeleccion()') !== -1
-        && editor.indexOf('function desagruparSeleccion()') !== -1);
+    editor.indexOf('function agruparSeleccion()') !== -1
+        && editor.indexOf('function desagruparSeleccion()') !== -1
+        && editor.indexOf('agruparSeleccion();') !== -1
+        && editor.indexOf('desagruparSeleccion();') !== -1);
 check('la importacion de pagina obtiene raster local y geometria del motor',
     editor.indexOf('function importarPagina()') !== -1
         && editor.indexOf("getDocument({") !== -1
@@ -803,8 +806,39 @@ check('T032: el editor ya no tiene codigo de fotos por PDF',
         && ed.indexOf('ec-mk-fotos') === -1
         && ed.indexOf('data-mk="add-foto"') === -1,
     'quedaria un panel vacio y un boton que miente sobre las fotos disponibles');
-check('T032: el boton de imagen usa el catalogo',
-    ed.indexOf('data-mk="add-catalogo">+ Imagen') !== -1);
+// Spec 031 (T017): el boton "+ Imagen" de Capas se retiro (redundante): agregar
+// una imagen del catalogo se hace con un clic en el item (.ec-mk-mini/data-img).
+check('T032/031: el editor agrega imagenes desde el catalogo con un clic',
+    ed.indexOf('data-mk="add-catalogo"') === -1
+        && ed.indexOf("$ed.on('click', '.ec-mk-mini'") !== -1
+        && ed.indexOf("attr('data-img', it.id)") !== -1);
+
+/* ==== Spec 031 (US4): capas agrupadas por grupo (T016-T018) ==== */
+check('pintarCapas agrupa visualmente por capa.grupo (fila unica)',
+    /function filaCapa\(indice\)/.test(ed)
+        && ed.indexOf('ec-mk-sueltas') !== -1
+        && ed.indexOf('ec-mk-grupo-capas') !== -1
+        && ed.indexOf('data-grupo-capas') !== -1);
+check('la agrupacion no reordena el array: una sola fila, orden invertido',
+    /for \(var i = lista\.length - 1; i >= 0; i--\) \{ orden\.push\(i\); \}/.test(ed)
+        && (ed.match(/function filaCapa\(indice\)/g) || []).length === 1
+        && ed.indexOf('sueltas.forEach(function (indice) { $sec.append(filaCapa(indice)); })') !== -1
+        && ed.indexOf('miembros.forEach(function (k) { $cuerpo.append(filaCapa(k)); })') !== -1);
+check('la cabecera del acordeon de grupo selecciona el grupo entero',
+    ed.indexOf("$ed.on('click', '.ec-mk-grupo-capas-cab'") !== -1
+        && ed.indexOf('ec-mk-grupo-capas-toggle') !== -1
+        && ed.indexOf('estado.gruposCerrados') !== -1
+        && ed.indexOf('ev.preventDefault();') !== -1);
+check('Capas ya no trae los botones sobrantes, pero las acciones siguen',
+    ed.indexOf('data-mk="add-catalogo"') === -1
+        && ed.indexOf('data-mk="add-placeholder"') === -1
+        && ed.indexOf('data-mk="subir"') === -1
+        && ed.indexOf('data-mk="bajar"') === -1
+        && ed.indexOf('data-mk="duplicar-capa"') === -1
+        && ed.indexOf('data-mk="borrar-capa"') === -1
+        && ed.indexOf('function duplicarCapa()') !== -1
+        && ed.indexOf('function borrarCapa()') !== -1
+        && ed.indexOf('function moverCapa(') !== -1);
 
 // El aviso de la consola (pdfs.php) depende de una variable inicializada:
 // sin ella, en PHP 8, `null === ''` nunca es cierto y el aviso no se pintaba.

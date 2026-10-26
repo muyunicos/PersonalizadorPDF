@@ -766,6 +766,39 @@ body.ec-c-drawer-abierto { overflow: hidden; }
 .ec-mk-panel-props[hidden], .ec-mk-transformar-acciones[hidden],
 .ec-mk-ajustes[hidden], .ec-mk-ajustes-vacio[hidden] { display: none !important; }
 
+/* ---- Capas agrupadas por grupo (spec 031, FR-006) ---- */
+.ec-mk-capas-ayuda { margin: 6px 0 0; }
+.ec-mk-sueltas, .ec-mk-grupo-item { list-style: none; margin: 4px 0; }
+.ec-mk-sueltas-tit, .ec-mk-grupo-capas-tit {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #787c82;
+}
+.ec-mk-sueltas-tit { display: block; }
+.ec-mk-grupo-capas { border: 1px solid #e0e0e0; border-radius: 6px; background: #fbfbfc; }
+.ec-mk-grupo-capas > summary.ec-mk-grupo-capas-cab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    cursor: pointer;
+    list-style: none;
+}
+.ec-mk-grupo-capas > summary.ec-mk-grupo-capas-cab::-webkit-details-marker { display: none; }
+.ec-mk-grupo-capas-toggle {
+    border: 0;
+    background: none;
+    padding: 0 2px;
+    color: #787c82;
+    cursor: pointer;
+    font-size: 11px;
+    line-height: 1;
+}
+.ec-mk-grupo-capas-toggle:hover { color: #2271b1; }
+.ec-mk-grupo-capas > summary.ec-mk-grupo-capas-cab:hover { background: #f0f6fb; }
+.ec-mk-grupo-capas-cuerpo { padding: 4px 6px 8px; }
+
 /* ---- Acordeones del editor (spec 031) ---- */
 /* Clase PROPIA (no .ec-acordeon): el handler de confirm de cambios sin guardar
    de mockups.js atrapa '.ec-acordeon > summary' y plegar un panel del editor

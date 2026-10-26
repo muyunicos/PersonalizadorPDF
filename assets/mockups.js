@@ -389,21 +389,7 @@ jQuery(function ($) {
             '        <summary class="ec-mk-acordeon-cab">Capas</summary>' +
             '        <div class="ec-mk-acordeon-cuerpo">' +
             '          <ul class="ec-mk-capas"></ul>' +
-            '          <div class="ec-mk-acciones">' +
-            '            <button type="button" class="button button-small" data-mk="add-catalogo">+ Imagen</button>' +
-            '            <button type="button" class="button button-small" data-mk="add-placeholder">+ Placeholder</button>' +
-            '          </div>' +
-            '          <div class="ec-mk-acciones">' +
-            '            <button type="button" class="button button-small" data-mk="subir" title="Subir capa">Subir</button>' +
-            '            <button type="button" class="button button-small" data-mk="bajar" title="Bajar capa">Bajar</button>' +
-            '            <button type="button" class="button button-small" data-mk="duplicar-capa">Duplicar</button>' +
-            '            <button type="button" class="button button-small button-link-delete" data-mk="borrar-capa">Quitar</button>' +
-            '          </div>' +
-            '          <div class="ec-mk-acciones ec-mk-grupos-acciones">' +
-            '            <button type="button" class="button button-small" data-mk="agrupar">Agrupar seleccion</button>' +
-            '            <button type="button" class="button button-small" data-mk="desagrupar">Desagrupar seleccion</button>' +
-            '            <span class="description">Selecciona varias capas con Ctrl/Cmd+clic.</span>' +
-            '          </div>' +
+            '          <p class="description ec-mk-capas-ayuda">Clic selecciona, Ctrl/Cmd+clic suma, Alt+clic entra a un miembro del grupo. Clic derecho (o el boton ...) abre las acciones.</p>' +
             '          <div class="ec-mk-acciones ec-mk-importar">' +
             '            <label>Pagina del PDF <input type="number" class="ec-mk-num-pagina" min="1" step="1" value="1" style="width:72px"></label>' +
             '            <button type="button" class="button button-small" data-mk="importar-pagina">Importar pagina + PH</button>' +
@@ -1168,47 +1154,89 @@ jQuery(function ($) {
             .attr('title', 'Placeholder ' + etiquetaPlaceholder(c.ref));
     }
 
+    /**
+     * Spec 031 (T016, FR-006): la lista de capas agrupa VISUALMENTE por
+     * `capa.grupo` (acordeon por grupo + seccion "Sin grupo"). El array de
+     * capas, el orden z y moverCapa NO cambian: solo se anidan las filas.
+     */
+    function filaCapa(indice) {
+        var c = capas()[indice];
+        if (!c) { return $(''); }
+        var invalida = (estado.avisoCapa || []).indexOf(indice) !== -1;
+        var $li = $('<li>').toggleClass('ec-mk-capa', true)
+            .toggleClass('ec-sel', indice === estado.seleccion)
+            .toggleClass('ec-mk-sel', (estado.seleccionados || []).indexOf(indice) !== -1)
+            .toggleClass('ec-invalida', invalida)
+            .toggleClass('ec-oculta', !!c.oculta)
+            .attr('data-i', indice).attr('tabindex', '0')
+            .attr('role', 'button')
+            .attr('aria-label', nombreCapa(c) + (c.oculta ? ' (oculta)' : '')
+                + (c.bloqueada ? ' (bloqueada)' : ''));
+        $li.append(miniaturaCapa(c));
+        $li.append($('<span class="ec-mk-capa-txt">')
+            .append($('<span class="ec-mk-capa-nombre">').text(nombreCapa(c)))
+            .append(detalleCapa(c)));
+        $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="arriba">')
+            .attr('aria-label', 'Subir la capa ' + nombreCapa(c))
+            .attr('title', 'Clic: subir un nivel. Mantener 1 segundo: enviar arriba del todo.')
+            .text('▲'));
+        $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="abajo">')
+            .attr('aria-label', 'Bajar la capa ' + nombreCapa(c))
+            .attr('title', 'Clic: bajar un nivel. Mantener 1 segundo: enviar abajo del todo.')
+            .text('▼'));
+        $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="ocultar">')
+            .attr('aria-label', (c.oculta ? 'Mostrar' : 'Ocultar') + ' la capa ' + nombreCapa(c))
+            .text(c.oculta ? '◻' : '◼'));
+        $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="bloquear">')
+            .attr('aria-label', (c.bloqueada ? 'Desbloquear' : 'Bloquear') + ' la capa ' + nombreCapa(c))
+            .text(c.bloqueada ? '🔒' : '🔓'));
+        return $li;
+    }
+
     function pintarCapas() {
         var $ul = $ed.find('.ec-mk-capas').empty();
         var lista = capas();
         if (!lista.length) {
             $ul.append('<li class="description">Sin capas: agrega una foto o un placeholder.</li>');
+            return;
         }
+        estado.gruposCerrados = estado.gruposCerrados || {};
         // Se lista de arriba hacia abajo: la ultima del array esta al fondo.
-        for (var i = lista.length - 1; i >= 0; i--) {
-            (function (indice) {
-                var c = lista[indice];
-                var invalida = (estado.avisoCapa || []).indexOf(indice) !== -1;
-                var $li = $('<li>').toggleClass('ec-mk-capa', true)
-                    .toggleClass('ec-sel', indice === estado.seleccion)
-                    .toggleClass('ec-mk-sel', (estado.seleccionados || []).indexOf(indice) !== -1)
-                    .toggleClass('ec-invalida', invalida)
-                    .toggleClass('ec-oculta', !!c.oculta)
-                    .attr('data-i', indice).attr('tabindex', '0')
-                    .attr('role', 'button')
-                    .attr('aria-label', nombreCapa(c) + (c.oculta ? ' (oculta)' : '')
-                        + (c.bloqueada ? ' (bloqueada)' : ''));
-                $li.append(miniaturaCapa(c));
-                $li.append($('<span class="ec-mk-capa-txt">')
-                    .append($('<span class="ec-mk-capa-nombre">').text(nombreCapa(c)))
-                    .append(detalleCapa(c)));
-                $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="arriba">')
-                    .attr('aria-label', 'Subir la capa ' + nombreCapa(c))
-                    .attr('title', 'Clic: subir un nivel. Mantener 1 segundo: enviar arriba del todo.')
-                    .text('▲'));
-                $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="abajo">')
-                    .attr('aria-label', 'Bajar la capa ' + nombreCapa(c))
-                    .attr('title', 'Clic: bajar un nivel. Mantener 1 segundo: enviar abajo del todo.')
-                    .text('▼'));
-                $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="ocultar">')
-                    .attr('aria-label', (c.oculta ? 'Mostrar' : 'Ocultar') + ' la capa ' + nombreCapa(c))
-                    .text(c.oculta ? '◻' : '◼'));
-                $li.append($('<button type="button" class="ec-mk-capa-btn" data-acc="bloquear">')
-                    .attr('aria-label', (c.bloqueada ? 'Desbloquear' : 'Bloquear') + ' la capa ' + nombreCapa(c))
-                    .text(c.bloqueada ? '🔒' : '🔓'));
-                $ul.append($li);
-            }(i));
+        var orden = [];
+        for (var i = lista.length - 1; i >= 0; i--) { orden.push(i); }
+        var sueltas = orden.filter(function (indice) { return !String(lista[indice].grupo || ''); });
+        if (sueltas.length) {
+            var $sec = $('<li class="ec-mk-sueltas">');
+            if (sueltas.length !== orden.length) {
+                $sec.append($('<span class="ec-mk-sueltas-tit">').text('Sin grupo'));
+            }
+            sueltas.forEach(function (indice) { $sec.append(filaCapa(indice)); });
+            $ul.append($sec);
         }
+        var vistos = [];
+        orden.forEach(function (indice) {
+            var g = String(lista[indice].grupo || '');
+            if (!g || vistos.indexOf(g) !== -1) { return; }
+            vistos.push(g);
+            var miembros = orden.filter(function (k) { return String(lista[k].grupo || '') === g; });
+            var abierto = !estado.gruposCerrados[g];
+            var $det = $('<details class="ec-mk-grupo-capas">').attr('data-grupo-capas', g);
+            if (abierto) { $det.attr('open', 'open'); }
+            var $cab = $('<summary class="ec-mk-grupo-capas-cab">')
+                .attr('aria-label', 'Seleccionar el grupo de ' + miembros.length + ' capas');
+            $cab.append($('<button type="button" class="ec-mk-grupo-capas-toggle">')
+                .attr('aria-label', (abierto ? 'Plegar' : 'Desplegar') + ' el grupo')
+                .attr('title', 'Plegar o desplegar el grupo')
+                .text(abierto ? '▾' : '▸'));
+            $cab.append(miniaturaCapa(lista[miembros[0]]));
+            $cab.append($('<span class="ec-mk-grupo-capas-tit">').text(
+                'Grupo (' + miembros.length + ' capa' + (miembros.length === 1 ? '' : 's') + ')'));
+            $det.append($cab);
+            var $cuerpo = $('<div class="ec-mk-grupo-capas-cuerpo">');
+            miembros.forEach(function (k) { $cuerpo.append(filaCapa(k)); });
+            $det.append($cuerpo);
+            $ul.append($('<li class="ec-mk-grupo-item">').append($det));
+        });
     }
 
 
@@ -1902,23 +1930,6 @@ jQuery(function ($) {
         if (accion === 'nuevo') { nuevoMockup(null); return; }
         if (accion === 'duplicar') { if (mockup()) { nuevoMockup(mockup()); } return; }
         if (accion === 'eliminar-mockup') { eliminarMockup(); return; }
-        if (accion === 'add-catalogo') {
-            if (!(datos.imagenes || []).length) {
-                window.alert('Todavia no hay imagenes: arrastra un archivo sobre el lienzo o subilo en "Imagenes de mockup".');
-                return;
-            }
-            $ed.find('.ec-mk-buscar-catalogo').trigger('focus');
-            return;
-        }
-        if (accion === 'add-placeholder') {
-            if (!grupos.length) { window.alert('Este PDF no tiene grupos detectados.'); return; }
-            $ed.find('.ec-mk-grupo').eq(0).trigger('click');
-            return;
-        }
-        if (accion === 'subir') { moverCapa(1); return; }
-        if (accion === 'bajar') { moverCapa(-1); return; }
-        if (accion === 'duplicar-capa') { duplicarCapa(); return; }
-        if (accion === 'borrar-capa') { borrarCapa(); return; }
         if (accion === 'agrupar') { agruparSeleccion(); return; }
         if (accion === 'desagrupar') { desagruparSeleccion(); return; }
         if (accion === 'importar-pagina') { importarPagina(); return; }
@@ -2083,6 +2094,33 @@ jQuery(function ($) {
         if (acc === 'ocultar') { c.oculta = !c.oculta; marcarPaso(); sinGuardar(); refrescar(); return; }
         if (acc === 'bloquear') { c.bloqueada = !c.bloqueada; marcarPaso(); sinGuardar(); refrescar(); }
     });
+    /**
+     * Spec 031 (T019, FR-006): el clic en la cabecera del acordeon selecciona el
+     * grupo completo (sus miembros comparten `capa.grupo`). El acordeon sigue
+     * pudiendo plegarse: el estado es transitorio y sobrevive al repintado.
+     */
+    $ed.on('click', '.ec-mk-grupo-capas-cab', function (ev) {
+        // El summary no pliega por si solo: el plegado tiene su propio boton, asi
+        // que el clic en la cabecera SELECCIONA el grupo sin cerrar el panel.
+        ev.preventDefault();
+        var $det = $(this).closest('.ec-mk-grupo-capas');
+        var g = String($det.attr('data-grupo-capas') || '');
+        if (!g) { return; }
+        estado.gruposCerrados = estado.gruposCerrados || {};
+        if ($(ev.target).closest('.ec-mk-grupo-capas-toggle').length) {
+            var plegar = $det.prop('open') === true;
+            estado.gruposCerrados[g] = plegar;
+            $det.prop('open', !plegar);
+            return;
+        }
+        var i = -1;
+        capas().forEach(function (c, k) {
+            if (i === -1 && String(c.grupo || '') === g) { i = k; }
+        });
+        if (i >= 0) { seleccionarCapa(i, false, false); }
+        refrescar();
+    });
+
     $ed.on('keydown', '.ec-mk-capa', function (ev) {
         if (ev.key === 'Enter' || ev.key === ' ') {
             ev.preventDefault();
