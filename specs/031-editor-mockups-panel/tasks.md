@@ -130,9 +130,9 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `admin/`, `asset
 
 **Independent Test**: quickstart **E4** (parte placeholders)
 
-- [ ] T025 [US6] `plantilla()`: el importador (`.ec-mk-importar` + `.ec-mk-num-pagina` + `data-mk="importar-pagina"` + ayuda + estado) se muda del panel Capas al acordeon Placeholders; handler intacto (FR-012, D6, C-5)
-- [ ] T026 [US6] `pintarGrupos()`: `details.ec-mk-acordeon` por grupo — summary con swatch + etiqueta + conteo + boton Agregar (`.ec-mk-grupo[data-grupo]`, vigente); cuerpo con `.ec-mk-instancias` y `.ec-mk-instancia[data-grupo][data-instancia]` (vigente) (FR-012, R4)
-- [ ] T027 [US6] quickstart: importar pagina 1 desde Placeholders crea el grupo en el lienzo; las instancias quedan dentro del acordeon; los errores de importacion informan igual
+- [X] T025 [US6] `plantilla()`: el importador (`.ec-mk-importar` + `.ec-mk-num-pagina` + `data-mk="importar-pagina"` + ayuda + estado) se muda del panel Capas al acordeon Placeholders; handler intacto (FR-012, D6, C-5) — **hecho** (handler sin cambios)
+- [X] T026 [US6] `pintarGrupos()`: `details.ec-mk-acordeon` por grupo — summary con swatch + etiqueta + conteo + boton Agregar (`.ec-mk-grupo[data-grupo]`, vigente); cuerpo con `.ec-mk-instancias` y `.ec-mk-instancia[data-grupo][data-instancia]` (vigente) (FR-012, R4) — **hecho**: selectores vigentes conservados; el boton Agregar (en el summary) hace `preventDefault` para no plegar el panel al agregar
+- [X] T027 [US6] quickstart: importar pagina 1 desde Placeholders crea el grupo en el lienzo; las instancias quedan dentro del acordeon; los errores de importacion informan igual — **hecho**: E8 8/8 (importo la pagina 1: "Pagina importada con 15 placeholder(s), todos agrupados", 18->34 capas)
 
 ---
 
@@ -142,7 +142,7 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `admin/`, `asset
 
 **Independent Test**: quickstart **E3** (abrir Imagenes, buscar, agregar, borrar)
 
-- [ ] T028 [US7] Acordeon Imagenes: buscador `.ec-mk-buscar-catalogo` + galeria `.ec-mk-catalogo` + borrar (x) (contenido vigente reubicado); verificar que arrastrar un archivo sobre el lienzo sigue funcionando (FR-013)
+- [X] T028 [US7] Acordeon Imagenes: buscador `.ec-mk-buscar-catalogo` + galeria `.ec-mk-catalogo` + borrar (x) (contenido vigente reubicado); verificar que arrastrar un archivo sobre el lienzo sigue funcionando (FR-013) — **hecho**: contenido reubicado en la Fase 4 (E3 verifica buscador + catalogo dentro del acordeon); el borrado y el arrastre no se tocaron (siguen cableados, cubiertos por el contrato). **Hallazgo**: el `×` del item se come el clic central del item (fila nueva en AGENTS §11)
 
 ---
 
@@ -152,10 +152,10 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `admin/`, `asset
 
 **Independent Test**: quickstart **E6** (tinta en el borde) + **E7** (ayuda)
 
-- [ ] T029 [P] [US8] `assets/mockups.js`: nueva `puntoRotacionCapa(c)` con `G.extremoVisible({x:cx,y:cy},{x:hx,y:hy},LIENZO,7)`; `dibujarSeleccion` rama capa (688-706) y `tiradorEn` (759-763) la usan — dibujo y hit-test comparten el punto (FR-015, R6, C-1)
-- [ ] T030 [P] [US8] `admin/ayuda.php` (31-57): documentar menu contextual, atajos, acordeones y el recorte de grupos grandes (FR-016)
-- [ ] T031 [P] [US8] `AGENTS.md`: §2 descripcion del editor actualizada (layout de 5 acordeones + menu contextual) + §11 filas nuevas si aplica (menu no descubrible sin el boton `...`)
-- [ ] T032 [US8] quickstart E6: tinta del tirador de capa en el borde del lienzo (clip radial), paridad con el grupal; hit-test en el mismo punto
+- [X] T029 [P] [US8] `assets/mockups.js`: nueva `puntoRotacionCapa(c)` con `G.extremoVisible({x:cx,y:cy},{x:hx,y:hy},LIENZO,7)`; `dibujarSeleccion` rama capa (688-706) y `tiradorEn` (759-763) la usan — dibujo y hit-test comparten el punto (FR-015, R6, C-1) — **hecho**
+- [X] T030 [P] [US8] `admin/ayuda.php` (31-57): documentar menu contextual, atajos, acordeones y el recorte de grupos grandes (FR-016) — **hecho** (parrafo nuevo al inicio del card "Editor de mockups")
+- [X] T031 [P] [US8] `AGENTS.md`: §2 descripcion del editor actualizada (layout de 5 acordeones + menu contextual) + §11 filas nuevas si aplica (menu no descubrible sin el boton `...`) — **hecho**: entrada de la spec 031 en §7 (con el detalle del panel, el menu, el clip y la clase propia de acordeon) + fila nueva en §11 por el `×` del item del catalogo
+- [X] T032 [US8] quickstart E6: tinta del tirador de capa en el borde del lienzo (clip radial), paridad con el grupal; hit-test en el mismo punto — **hecho**: E6 5/5 (capa completamente fuera por arriba, y=-31: 52 px de tinta en la franja del borde, 0 en el interior, cursor `ec-mk-rotar` en el punto recortado)
 
 ---
 
@@ -163,9 +163,9 @@ Proyecto unico (plugin de WordPress): `personalizador-pdf.php`, `admin/`, `asset
 
 **Purpose**: el contrato Node y el arnes indexan la nueva superficie; cero regresiones
 
-- [ ] T033 `tests/mockup-contrato.test.js`: actualizar a la nueva superficie (agrupar/desagrupar en `data-ctx` del menu; `add-catalogo`/`add-placeholder`/`subir`/`bajar` eliminados reescritos a la intencion; transformacion bajo el lienzo; 5 acordeones cerrados; menu contextual; clip de capa; zoom 100 %) + checks nuevos del contrato de UI (R5, C-1..C-7)
-- [ ] T034 `tests/texto_puente.php`: aplicar la auditoria de T002 — si alguna fase indexa markup eliminado, reescribir a la intencion; correr `mockups`, `mockup_capas`, `mockup_pagina`, `mockup_preview`
-- [ ] T035 Puertas en verde: `node --check assets/mockups.js`, `node tests/mockup-contrato.test.js`, `node tests/mockup-geometria.test.js`, `php -l personalizador-pdf.php`
+- [X] T033 `tests/mockup-contrato.test.js`: actualizar a la nueva superficie (agrupar/desagrupar en `data-ctx` del menu; `add-catalogo`/`add-placeholder`/`subir`/`bajar` eliminados reescritos a la intencion; transformacion bajo el lienzo; 5 acordeones cerrados; menu contextual; clip de capa; zoom 100 %) + checks nuevos del contrato de UI (R5, C-1..C-7) — **hecho**: 147 checks (130 -> 147; 4 reescritos a la intencion)
+- [X] T034 `tests/texto_puente.php`: aplicar la auditoria de T002 — si alguna fase indexa markup eliminado, reescribir a la intencion; correr `mockups`, `mockup_capas`, `mockup_pagina`, `mockup_preview` — **hecho**: la auditoria de T002 confirmo **cero anclas** de markup en el arnes; las 4 fases corren en verde sin cambios
+- [X] T035 Puertas en verde: `node --check assets/mockups.js`, `node tests/mockup-contrato.test.js`, `node tests/mockup-geometria.test.js`, `php -l personalizador-pdf.php` — **hecho** (147 / 135 / lint limpio; `php -l` tambien sobre `admin/ayuda.php`)
 
 ---
 
