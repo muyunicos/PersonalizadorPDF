@@ -1033,6 +1033,7 @@ jQuery(function ($) {
         pintarMockups();
         pintarCapas();
         pintarProps();
+        pintarAjustes();
         pintarCatalogo();
         pintarGrupos();
         pintarAlertas();
@@ -1301,10 +1302,12 @@ jQuery(function ($) {
         var c = capa();
         if (!c) {
             $panelProps.attr('hidden', true);
+            $bloqueAline.attr('hidden', true);
             $props.empty();
             return;
         }
         $panelProps.removeAttr('hidden');
+        $bloqueAline.removeAttr('hidden');
         var html = '';
         var indices = indicesSeleccionados();
         var esGrupo = indices.length > 1;
@@ -1346,7 +1349,25 @@ jQuery(function ($) {
                             + ' para extraerlas.</p>');
             }
         }
-        html += '<div class="ec-mk-seccion">Ajustes (solo el mockup)</div>';
+        $props.html(html);
+    }
+
+    /* Ajustes de la capa (solo el mockup): filtros + modo + nombre + restablecer
+       + perspectiva. La geometria (x/y/w/h/rot) y la envoltura se quedan bajo el
+       lienzo (spec 031, FR-011: los numericos con la seleccion). */
+    function pintarAjustes() {
+        var c = capa();
+        if (!c) {
+            $ajustes.attr('hidden', true);
+            $ajustesVacio.removeAttr('hidden');
+            $propsAj.empty();
+            return;
+        }
+        $ajustes.removeAttr('hidden');
+        $ajustesVacio.attr('hidden', true);
+        var indices = indicesSeleccionados();
+        var esGrupo = indices.length > 1;
+        var html = '<div class="ec-mk-seccion">Ajustes (solo el mockup)</div>';
         AJUSTES.forEach(function (a) {
             var v = valorAjuste(c, a.k);
             html += '<label class="ec-mk-ancho">' + a.etiqueta
@@ -1370,8 +1391,8 @@ jQuery(function ($) {
         } else if (esGrupo) {
             html += '<p class="description ec-mk-perspectiva-ayuda">Agrupa la seleccion para habilitar la perspectiva de cuatro puntos.</p>';
         }
-        $props.html(html);
-        $props.find('.ec-mk-modo').val(c.modo || 'normal');
+        $propsAj.html(html);
+        $propsAj.find('.ec-mk-modo').val(c.modo || 'normal');
     }
 
 

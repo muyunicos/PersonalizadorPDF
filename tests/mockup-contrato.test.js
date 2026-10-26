@@ -94,6 +94,21 @@ check('las propiedades numericas muestran y transforman el grupo seleccionado',
         && editor.indexOf("$ed.on('input', '.ec-mk-geo'") !== -1
         && editor.indexOf("$ed.on('focusout', '.ec-mk-geo'") !== -1
         && editor.indexOf('G.escalarGrupo(originales, indices') !== -1);
+/* ==== Spec 031 (US2/US3): numericos bajo el lienzo, ajustes en su acordeon ==== */
+check('la transformacion de la seleccion vive bajo el lienzo (.ec-mk-transformar)',
+    editor.indexOf('ec-mk-transformar') !== -1
+        && /ec-mk-lienzo[\s\S]{0,600}ec-mk-transformar/.test(editor)
+        && (editor.match(/ec-mk-transformar-acciones/g) || []).length >= 2);
+check('los ajustes de capa viven en el acordeon Ajustes (nodo propio)',
+    editor.indexOf('data-ac="ajustes"') !== -1
+        && editor.indexOf('ec-mk-props-aj') !== -1
+        && /function pintarAjustes\(\)/.test(editor)
+        && editor.indexOf('$ajustes.empty') === -1);
+check('refrescar() repinta tambien los ajustes',
+    /function refrescar\(\)[\s\S]{0,400}pintarAjustes\(\)/.test(editor));
+check('alinear/distribuir se mudaron del panel Capas al bloque bajo el lienzo',
+    !/data-ac="capas"[\s\S]{0,4000}ec-mk-alin/.test(editor)
+        && !/data-ac="capas"[\s\S]{0,4000}ec-mk-dist/.test(editor));
 check('el editor ofrece cuatro controles de perspectiva con reinicio',
     editor.indexOf('puntosTiradoresPerspectiva') !== -1
         && editor.indexOf("return 'perspectiva:' + puntosPersp[tp].indice") !== -1

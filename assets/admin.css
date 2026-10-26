@@ -759,6 +759,13 @@ body.ec-c-drawer-abierto { overflow: hidden; }
 }
 .ec-mk-panel[hidden] { display: none; }
 
+/* ---- Transformacion de la seleccion, bajo el lienzo (spec 031, FR-003) ---- */
+.ec-mk-transformar { margin-top: 10px; }
+.ec-mk-transformar .ec-mk-acciones { margin-top: 6px; flex-wrap: wrap; gap: 6px; }
+/* WordPress fuerza display en .button y le gana al [hidden] del navegador. */
+.ec-mk-panel-props[hidden], .ec-mk-transformar-acciones[hidden],
+.ec-mk-ajustes[hidden], .ec-mk-ajustes-vacio[hidden] { display: none !important; }
+
 /* ---- Acordeones del editor (spec 031) ---- */
 /* Clase PROPIA (no .ec-acordeon): el handler de confirm de cambios sin guardar
    de mockups.js atrapa '.ec-acordeon > summary' y plegar un panel del editor
@@ -987,14 +994,17 @@ body.ec-c-drawer-abierto { overflow: hidden; }
 .ec-mk-grupo-info b { font-weight: 600; }
 
 /* ---- Propiedades y ajustes ---- */
-.ec-mk-props { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
-.ec-mk-props label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: #50575e; }
-.ec-mk-props input[type="number"], .ec-mk-props input[type="text"], .ec-mk-props select {
+/* Spec 031: los numericos viven bajo el lienzo (.ec-mk-props) y los ajustes
+   de capa en el acordeon Ajustes (.ec-mk-props-aj): misma grilla, dos nodos. */
+.ec-mk-props, .ec-mk-props-aj { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+.ec-mk-props label, .ec-mk-props-aj label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: #50575e; }
+.ec-mk-props input[type="number"], .ec-mk-props input[type="text"], .ec-mk-props select,
+.ec-mk-props-aj input[type="number"], .ec-mk-props-aj input[type="text"], .ec-mk-props-aj select {
     width: 100%;
     font-size: 12px;
 }
 .ec-mk-props-titulo, .ec-mk-perspectiva-ayuda { grid-column: 1 / -1; margin: 2px 0; }
-.ec-mk-props .ec-mk-ancho { grid-column: 1 / -1; }
+.ec-mk-props .ec-mk-ancho, .ec-mk-props-aj .ec-mk-ancho { grid-column: 1 / -1; }
 .ec-mk-seccion {
     grid-column: 1 / -1;
     margin-top: 6px;
