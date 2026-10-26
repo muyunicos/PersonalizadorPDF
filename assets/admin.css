@@ -702,7 +702,12 @@ body.ec-c-drawer-abierto { overflow: hidden; }
 @media (max-width: 1100px) {
     .ec-mk-cuerpo { grid-template-columns: minmax(0, 1fr); }
 }
-.ec-mk-izq { padding: 12px; min-width: 0; }
+.ec-mk-izq { padding: 12px; min-width: 300px; }
+/* Spec 031 (US1): el lienzo de 300 px siempre cabe entero; si el ancho util
+   del panel baja de 325 px (300 + padding), el padding horizontal es 0. */
+@media (max-width: 325px) {
+    .ec-mk-izq { padding-left: 0; padding-right: 0; }
+}
 .ec-mk-der {
     border-left: 1px solid #dcdcde;
     background: #fbfbfc;
@@ -753,6 +758,68 @@ body.ec-c-drawer-abierto { overflow: hidden; }
     color: #646970;
 }
 .ec-mk-panel[hidden] { display: none; }
+
+/* ---- Acordeones del editor (spec 031) ---- */
+/* Clase PROPIA (no .ec-acordeon): el handler de confirm de cambios sin guardar
+   de mockups.js atrapa '.ec-acordeon > summary' y plegar un panel del editor
+   dispararia el confirm. Mismo patron visual de la consola, otro nombre. */
+.ec-mk-acordeon {
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    background: #fff;
+    margin-bottom: 8px;
+}
+.ec-mk-acordeon > summary.ec-mk-acordeon-cab {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #646970;
+    list-style: none;
+    user-select: none;
+}
+.ec-mk-acordeon > summary.ec-mk-acordeon-cab::-webkit-details-marker { display: none; }
+.ec-mk-acordeon > summary.ec-mk-acordeon-cab::before {
+    content: "\25B8";
+    color: #787c82;
+    transition: transform .15s;
+}
+.ec-mk-acordeon[open] > summary.ec-mk-acordeon-cab::before { transform: rotate(90deg); }
+.ec-mk-acordeon > summary.ec-mk-acordeon-cab:hover { background: #f6f7f7; }
+.ec-mk-acordeon[open] > summary.ec-mk-acordeon-cab { border-bottom: 1px solid #dcdcde; }
+.ec-mk-acordeon-cuerpo { padding: 10px 12px; }
+
+/* ---- Menu contextual del editor (spec 031) ---- */
+.ec-mk-menu-ctx {
+    position: absolute;
+    z-index: 185000; /* sobre el editor; bajo el overlay de render (190000) */
+    min-width: 190px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .18);
+    padding: 4px 0;
+}
+.ec-mk-menu-ctx[hidden] { display: none; }
+.ec-mk-menu-ctx button {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    background: none;
+    padding: 6px 12px;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+.ec-mk-menu-ctx button:hover { background: #f0f6fb; }
+.ec-mk-menu-ctx button[aria-disabled="true"] { color: #a7aaad; cursor: default; }
 
 
 /* ---- Galeria de mockups ---- */

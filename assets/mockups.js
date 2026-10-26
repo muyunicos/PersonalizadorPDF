@@ -46,7 +46,7 @@ jQuery(function ($) {
         seleccionados: [],
         soloSeleccion: false,
         suprimirClicCapa: 0,
-        zoom: 2,
+        zoom: 1,
         verTexto: true,
         guardado: 'guardado',
         pila: [],
@@ -419,6 +419,7 @@ jQuery(function ($) {
             '      </div>' +
             '    </div>' +
             '  </div>' +
+            '  <div class="ec-mk-menu-ctx" role="menu" hidden></div>' +
             '</div>' +
             '<p class="description">Filtros y encuadre afectan SOLO al mockup: el PNG del pool y el PDF ' +
             'final van limpios (el Motor no aplica filtros).</p>';
