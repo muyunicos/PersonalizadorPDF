@@ -913,6 +913,30 @@ specify integration status                      # esperado: OK; cline (default +
 specify integration upgrade cline --script ps   # diff-aware; --force solo si es deliberado
 ```
 
+### Cline: herramientas y reglas del agente (verificado 2026-10-27, extension v4.1.26)
+
+- **Herramientas vigentes**: `read_files`, `search_codebase`, `run_commands`, `fetch_web_content`,
+  `ask_question` y **`editor`** para editar. Esta build ofrece `editor` **o** `apply_patch`, nunca
+  ambas (la sesion recibio `editor`). `write_to_file` / `replace_in_file` / `execute_command` son
+  **nombres legacy** que ya no existen: un doc que los nombre esta desactualizado.
+- **Plan mode no edita**: si la tarea requiere escribir, pedir Act mode. No intentar escribir por
+  `run_commands` (redirecciones y `Set-Content` estan bloqueados).
+- **Carpetas de reglas que Cline lee**: `AGENTS.md` (raiz), `.clinerules/` y **`.cline/rules/`**
+  (verificado en el bundle: `Agt() = [.clinerules, .cline/rules]`). El escaneo es **NO recursivo** y
+  solo toma `.md`/`.markdown`/`.txt`, asi que `.clinerules/workflows/` **no** se carga como regla
+  (son slash commands). Reglas globales: `%USERPROFILE%\Documents\Cline\Rules`.
+- **Donde van las reglas operativas del agente**: `.cline/rules/00-flujo.md`, **versionado**
+  (`.clinerules/` esta en `.gitignore` y lo gestiona Spec Kit con hashes en
+  `.specify/integrations/cline.manifest.json`). Ese archivo **no repite** normas: solo remite aqui.
+- **Esta version NO soporta reglas condicionales** (`paths:`/`globs` en frontmatter): la doc oficial
+  describe un runtime mas nuevo. No disenar reglas por area; el unico lever real de costo es el
+  tamano de este archivo.
+- **Costo por request**: `AGENTS.md` (119 KB ≈ 30k tokens) se carga entero en cada request;
+  `modules/textmuy/AGENTS.md` (129 KB) **no** se auto-carga (anidado) y se lee solo si se toca el
+  modulo.
+- **Modelo y ventana**: provider `openai-compatible` local (`oc/deepseek-v4-flash-free`), contexto
+  128k, `maxTokens` 8192: los diffs largos se truncan, asi que van ediciones chicas (§10.ter).
+
 ## 9. Cómo probar
 
 ### Entorno PHP (plugin) — desde la raíz del proyecto, tras tocar `engine/` o `admin/`
