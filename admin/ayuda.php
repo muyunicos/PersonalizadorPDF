@@ -60,7 +60,11 @@ if (!defined('ABSPATH')) {
         agregar una capa nueva: la pagina importada ocupa <em>el mismo lugar, tamano y rotacion</em> que
         tenia el destino (se conservan filtros, nombre, visibilidad, bloqueo, envoltura, grupo y
         perspectiva). Sin seleccion, el comportamiento es el de siempre: agrega una capa y su grupo de
-        placeholders. La cantidad de capas no cambia cuando se reemplaza.</p>
+        placeholders. La cantidad de capas no cambia cuando se reemplaza. Una capa <strong>bloqueada</strong>
+        no se reemplaza (el importador avisa y no toca nada).</p>
+    <p><strong>Perspectiva</strong>: con una capa o un grupo seleccionado aparecen cuatro puntos rojos en
+        las esquinas del lienzo; arrastralos para deformar la pieza (homografia). "Restablecer perspectiva"
+        vuelve al rectangulo. Una capa suelta tambien admite perspectiva (no hace falta agruparla).</p>
     <p>En la consola de <strong>PDFs</strong>, cada mockup puede incluir capas de imagen y placeholders.
         Selecciona varias con <strong>Ctrl/Cmd + clic</strong> para agruparlas o desagruparlas; cualquier
         miembro de un grupo permite mover, redimensionar y rotar el conjunto. El panel indica

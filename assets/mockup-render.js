@@ -571,18 +571,19 @@
             compuestas.forEach(function (item) {
                 var gid = item.capa.grupo ? String(item.capa.grupo) : '';
                 var puntos = puntosPerspectiva(item.capa.perspectiva);
-                if (gid && puntos && perspectivaConvexa(puntos) && !esPerspectivaNeutra(puntos)) {
-                    gruposPerspectiva[gid] = gruposPerspectiva[gid]
+                var clavePersp = gid ? 'g:' + gid : 'i:' + item.indice;
+                if (puntos && perspectivaConvexa(puntos) && !esPerspectivaNeutra(puntos)) {
+                    gruposPerspectiva[clavePersp] = gruposPerspectiva[clavePersp]
                         || { puntos: puntos, items: [], rot: numero(item.capa.grupo_rot) };
-                    gruposPerspectiva[gid].items.push(item);
+                    gruposPerspectiva[clavePersp].items.push(item);
                 }
             });
             compuestas.forEach(function (item) {
                 if (!ctx) { return; }
                 if (procesadas[item.indice]) { return; }
                 var gid = item.capa.grupo ? String(item.capa.grupo) : '';
-                var grupoPerspectiva = gid ? gruposPerspectiva[gid] : null;
-                if (grupoPerspectiva && grupoPerspectiva.items.length > 1
+                var grupoPerspectiva = gruposPerspectiva[gid ? 'g:' + gid : 'i:' + item.indice] || null;
+                if (grupoPerspectiva && grupoPerspectiva.items.length >= 1
                     && dibujarPerspectiva(ctx, grupoPerspectiva.items,
                         grupoPerspectiva.puntos, discrepancias, op, grupoPerspectiva.rot)) {
                     grupoPerspectiva.items.forEach(function (miembro) {

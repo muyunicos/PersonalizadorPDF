@@ -112,7 +112,7 @@ check('alinear/distribuir se mudaron del panel Capas al bloque bajo el lienzo',
 check('el editor ofrece cuatro controles de perspectiva con reinicio',
     editor.indexOf('puntosTiradoresPerspectiva') !== -1
         && editor.indexOf("return 'perspectiva:' + puntosPersp[tp].indice") !== -1
-        && editor.indexOf('esGrupoPersistido(seleccion)') !== -1
+        && editor.indexOf('puedePerspectiva(seleccion)') !== -1
         && editor.indexOf('data-mk="reset-perspectiva"') !== -1
         && editor.indexOf('perspectivaConvexa(puntosActuales)') !== -1);
 check('el renderer aplica perspectiva al grupo a traves de una malla de triangulos',
@@ -121,6 +121,18 @@ check('el renderer aplica perspectiva al grupo a traves de una malla de triangul
         && /dibujarPerspectiva\(ctx, grupoPerspectiva\.items/.test(leer('assets/mockup-render.js'))
         && /marcoItems\(items, rot\)/.test(leer('assets/mockup-render.js'))
         && /grupoPerspectiva\.rot/.test(leer('assets/mockup-render.js')));
+check('T010: la perspectiva tambien se aplica a una capa sin grupo', (function () {
+    var r = leer('assets/mockup-render.js');
+    var e = leer('assets/mockups.js');
+    return /var clavePersp = gid \? 'g:' \+ gid : 'i:' \+ item\.indice;/.test(r)
+        && /gruposPerspectiva\[gid \? 'g:' \+ gid : 'i:' \+ item\.indice\]/.test(r)
+        && /grupoPerspectiva\.items\.length >= 1/.test(r)
+        && /function puedePerspectiva\(indices, lista\)/.test(e)
+        && /if \(puedePerspectiva\(indices\)\) \{/.test(e)
+        && /indicesPerspectiva\.length < 1/.test(e);
+})(),
+    'una capa suelta debe deformarse igual que un grupo (US3)');
+
 check('la homografia mapea las cuatro esquinas al cuadrilatero pedido', (function () {
     var q = [{ x: 0.1, y: 0.05 }, { x: 0.9, y: 0.15 },
         { x: 0.8, y: 0.95 }, { x: 0.2, y: 0.85 }];
@@ -1040,9 +1052,11 @@ check('importarPagina usa debeReemplazar y respeta la seleccion',
         && ed.indexOf('planReemplazo.reemplazar') !== -1
         && ed.indexOf('planReemplazo.esGrupo') !== -1);
 check('el reemplazo conserva la geometria (solo cambia ref/tipo/envoltura/nombre)',
-    /c\.ref = 'mock:' \+ imagen\.id/.test(ed)
-        && /c\.tipo = 'img'/.test(ed)
-        && /c\.envoltura = false/.test(ed),
+    /function aplicarReemplazo\(m, plan, ref, nombre\)/.test(ed)
+        && /c\.ref = ref;/.test(ed)
+        && /c\.tipo = 'img';/.test(ed)
+        && /c\.envoltura = false;/.test(ed)
+        && /c\.nombre = nombre;/.test(ed),
     'si la rama de reemplazo tocara x/y/w/h, se perderia la transformacion (FR-002)');
 check('la rama de reemplazo NO reasigna la geometria de la capa destino',
     (function () {
@@ -1058,7 +1072,17 @@ check('sin seleccion el importador agrega como hoy (no regresion)',
     /if \(!planReemplazo\.reemplazar\) \{[\s\S]{0,500}nuevas\.slice\(1\)/.test(ed),
     'la rama de "agregar" debe seguir existiendo (SC-004)');
 check('la fase de reemplazo respeta el grupo (itera los miembros)',
-    /indicesAReemplazar[\s\S]{0,400}String\(c\.grupo \|\| ''\) === gid/.test(ed),
+    /if \(plan\.esGrupo\) \{[\s\S]{0,320}String\(c\.grupo \|\| ''\) === gid\) \{ indices\.push\(idx\); \}/.test(ed),
     'reemplazar un grupo debe cubrir a todos sus miembros (R3)');
+check('T007: una capa bloqueada no se reemplaza (avisa y aborta)',
+    /if \(destino\.bloqueada\) \{[\s\S]{0,220}return null;/.test(ed),
+    'el importador debe respetar el bloqueo de la capa destino (FR-001, R5)');
+check('T008: la imagen del catalogo tambien reemplaza la seleccion',
+    /function agregarCatalogo\(id\)[\s\S]{0,900}debeReemplazar\(\)/.test(ed)
+        && /function agregarCatalogo\(id\)[\s\S]{0,2000}aplicarReemplazo\(m, plan, ref/.test(ed),
+    'agregarCatalogo debe pasar por la misma decision y el mismo helper (US2)');
+check('el alta de catalogo conserva su rama centrada (no regresion)',
+    /if \(plan\.reemplazar\) \{[\s\S]{0,700}var escala = Math\.min\(1, LIENZO \/ Math\.max\(recurso\.w, recurso\.h\)\)/.test(ed),
+    'sin seleccion la imagen del catalogo se sigue centrando en el lienzo (SC-004)');
 
 correr();

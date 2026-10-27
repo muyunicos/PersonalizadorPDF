@@ -213,6 +213,16 @@ jQuery(function ($) {
         });
     }
 
+    /**
+     * Spec 034 (T010): la perspectiva de cuatro puntos se ofrece a una capa
+     * individual o a un grupo persistido (no a una seleccion multiple suelta).
+     */
+    function puedePerspectiva(indices, lista) {
+        if (!indices || indices.length < 1) { return false; }
+        if (indices.length === 1) { return !!(lista || capas())[indices[0]]; }
+        return esGrupoPersistido(indices, lista);
+    }
+
     function giroSeleccion(indices, lista) {
         var capasLista = lista || capas();
         var primera = (indices || []).map(function (i) { return capasLista[i]; })
@@ -668,7 +678,7 @@ jQuery(function ($) {
                 ctx.strokeRect(p.x - 4 / f, p.y - 4 / f, 8 / f, 8 / f);
                 ctx.restore();
             });
-            if (esGrupoPersistido(seleccion) && !seleccionConBloqueadas(seleccion)) {
+            if (puedePerspectiva(seleccion) && !seleccionConBloqueadas(seleccion)) {
                 puntosTiradoresPerspectiva(marcoGrupo, puntosPerspectiva(seleccion)).forEach(function (p) {
                     ctx.save();
                     ctx.beginPath();
@@ -760,7 +770,7 @@ jQuery(function ($) {
             if (seleccionConBloqueadas(seleccion)) { return ''; }
             var marcoGrupo = marcoOrientadoSeleccion(seleccion);
             if (!marcoGrupo) { return ''; }
-            if (esGrupoPersistido(seleccion)) {
+            if (puedePerspectiva(seleccion)) {
                 var puntosPersp = puntosTiradoresPerspectiva(marcoGrupo, puntosPerspectiva(seleccion));
                 for (var tp = 0; tp < puntosPersp.length; tp++) {
                     if (Math.abs(p.x - puntosPersp[tp].x) <= tol * 1.4
@@ -1506,11 +1516,12 @@ jQuery(function ($) {
         html += '<div class="ec-mk-acciones">'
             + '<button type="button" class="button button-small" data-mk="reset">Restablecer ajustes</button>'
             + '</div>';
-        if (esGrupoPersistido(indices)) {
-            html += '<p class="description ec-mk-perspectiva-ayuda">Arrastra los cuatro puntos rojos del lienzo para deformar el grupo como una sola pieza.</p>'
+        if (puedePerspectiva(indices)) {
+            html += '<p class="description ec-mk-perspectiva-ayuda">Arrastra los cuatro puntos rojos del lienzo para deformar '
+                + (indices.length > 1 ? 'el grupo como una sola pieza' : 'esta capa') + '.</p>'
                 + '<div class="ec-mk-acciones"><button type="button" class="button button-small" data-mk="reset-perspectiva">Restablecer perspectiva</button></div>';
         } else if (esGrupo) {
-            html += '<p class="description ec-mk-perspectiva-ayuda">Agrupa la seleccion para habilitar la perspectiva de cuatro puntos.</p>';
+            html += '<p class="description ec-mk-perspectiva-ayuda">Selecciona una capa o un grupo para habilitar la perspectiva de cuatro puntos.</p>';
         }
         $propsAj.html(html);
         $propsAj.find('.ec-mk-modo').val(c.modo || 'normal');
@@ -1551,16 +1562,72 @@ jQuery(function ($) {
     }
 
     /**
+     * Spec 034 (T005/T007): aplica el reemplazo de una seleccion sobre el mockup
+     * destino. Solo cambia `ref`, `tipo`, `envoltura` y `nombre`: la geometria
+     * (x/y/w/h/rot/sesgo), los filtros, `modo`, `oculta`, `bloqueada`, `grupo`,
+     * `grupo_rot` y `perspectiva` quedan intactas (FR-002, D1).
+     *
+     * Devuelve la lista de indices reemplazados, o `null` si no se puede: si el
+     * destino esta bloqueado deja el aviso en `.ec-mk-alertas` y no toca nada
+     * (T007, R5).
+     */
+    function aplicarReemplazo(m, plan, ref, nombre) {
+        if (!m || !m.capas || !plan || !plan.reemplazar) { return null; }
+        var destino = m.capas[plan.destino];
+        if (!destino) { return null; }
+        if (destino.bloqueada) {
+            $ed.find('.ec-mk-alertas').text('La capa destino esta bloqueada; desbloqueala para reemplazarla.');
+            return null;
+        }
+        var indices = [];
+        if (plan.esGrupo) {
+            var gid = String(destino.grupo || '');
+            m.capas.forEach(function (c, idx) {
+                if (String(c.grupo || '') === gid) { indices.push(idx); }
+            });
+        } else {
+            indices = [plan.destino];
+        }
+        indices.forEach(function (idx) {
+            var c = m.capas[idx];
+            if (!c) { return; }
+            c.ref = ref;
+            c.tipo = 'img';
+            c.envoltura = false;
+            c.nombre = nombre;
+        });
+        return indices;
+    }
+
+
+    /**
      * Inserta la imagen del catalogo con su proporcion natural, centrada en el
      * lienzo. Spec 011 (T032): `mockups` es la unica fuente de imagenes.
      */
     function agregarCatalogo(id) {
         var it = (datos.imagenes || []).filter(function (x) { return String(x.id) === String(id); })[0];
         if (!it) { return; }
-        var url = R.urlDeImagen('mock:' + it.id, contexto());
+        var plan = debeReemplazar();
+        var ref = 'mock:' + it.id;
+        var url = R.urlDeImagen(ref, contexto());
         R.imagen(url).then(function (recurso) {
             if (!recurso || !recurso.w || !recurso.h) {
                 $ed.find('.ec-mk-alertas').text('No se pudo cargar la imagen del catalogo para insertarla.');
+                return;
+            }
+            // Spec 034 (T008): con seleccion, la imagen del catalogo REEMPLAZA la
+            // capa/grupo destino conservando su transformacion (FR-007, R7).
+            if (plan.reemplazar) {
+                var m = mockup();
+                var estadoAnterior = JSON.stringify(estado.mockups);
+                var indices = aplicarReemplazo(m, plan, ref, it.title || it.file);
+                if (!indices) { return; }
+                estado.seleccion = plan.destino;
+                estado.seleccionados = indices.slice();
+                marcarPaso(estadoAnterior);
+                sinGuardar();
+                refrescar();
+                $ed.find('.ec-mk-alertas').text('Imagen aplicada a la capa seleccionada (' + indices.length + ' capa(s)).');
                 return;
             }
             var escala = Math.min(1, LIENZO / Math.max(recurso.w, recurso.h));
@@ -1717,22 +1784,12 @@ jQuery(function ($) {
             var m = estado.mockups[indiceMockup];
             var estadoAnterior = JSON.stringify(estado.mockups);
             if (planReemplazo.reemplazar) {
-                var indicesAReemplazar = [];
-                if (planReemplazo.esGrupo) {
-                    var gid = String(capas()[planReemplazo.destino].grupo || '');
-                    capas().forEach(function (c, idx) {
-                        if (String(c.grupo || '') === gid) indicesAReemplazar.push(idx);
-                    });
-                } else {
-                    indicesAReemplazar = [planReemplazo.destino];
+                var indicesAReemplazar = aplicarReemplazo(m, planReemplazo,
+                    'mock:' + imagen.id, 'Pagina ' + numeroPagina);
+                if (!indicesAReemplazar) {
+                    $estado.addClass('ec-error').text('La capa destino esta bloqueada; desbloqueala para reemplazarla.');
+                    return;
                 }
-                indicesAReemplazar.forEach(function (idx) {
-                    var c = m.capas[idx];
-                    c.ref = 'mock:' + imagen.id;
-                    c.tipo = 'img';
-                    c.envoltura = false;
-                    c.nombre = 'Pagina ' + numeroPagina;
-                });
                 estado.actual = indiceMockup;
                 estado.seleccion = planReemplazo.destino;
                 estado.seleccionados = indicesAReemplazar.slice();
@@ -2054,7 +2111,7 @@ jQuery(function ($) {
         if (accion === 'importar-pagina') { importarPagina(); return; }
         if (accion === 'reset-perspectiva') {
             var indicesPerspectiva = indicesSeleccionados();
-            if (indicesPerspectiva.length < 2) { return; }
+            if (indicesPerspectiva.length < 1) { return; }
             var antesPerspectiva = JSON.stringify(estado.mockups);
             mockup().capas = asignarPerspectiva(capas().slice(), indicesPerspectiva,
                 [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }]);
