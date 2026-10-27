@@ -333,3 +333,119 @@ y se conserva, porque es la evidencia de por que no se repite.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
   `admin/ayuda.php`, `modules/LEEME.md` solo resumen y apuntan aqui). El `== Changelog ==`
   de `readme.txt` es historial, no normativa.
+
+## Lecturas de la constitucion (sin enmienda)
+
+Decisiones que se registraron en la constitucion como "lectura de §I/§IV sin enmienda". Se movieron
+aqui el 2026-10-27 (mismo contenido, verificado) para que la constitucion conserve el **procedimiento**
+y no el historial.
+
+**Decision 2026-10-01 (spec 011, editor de mockups: lectura de §I sin enmienda):** el editor de
+mockups **sigue embebido en la pagina de edicion del PDF** (no es overlay ni pestana nueva), en
+**dos columnas**, y **reutiliza el motor del modulo** para el texto estilizado: el render lo produce
+el boton "Probar" de cada grupo (`TextMuyAPI.renderBatch` via `render-core.html`) y el lienzo lo
+consume desde un store cliente (`PersonalizadorPDF.previews`) con cache por hash. NO se crea un
+"modo" ni un iframe nuevo dentro de `modules/textmuy/` y **no hay bump `?v=RCn`**: la decision de la
+spec 004 T008 (Canvas 2D en el plugin) sigue vigente, y lo que §I protege —el render sigue siendo el
+del modulo, el servidor no renderiza y no hay un editor paralelo— se cumple. La composicion del
+mockup tiene **una sola funcion** (`assets/mockup-render.js`), compartida por el editor del admin y
+la ficha del cliente, y el hueco se dibuja **encajado sin deformar** (alineado con la regla tecnica
+vigente: nunca deformar ni recortar). Contrato de datos ampliado de forma **retrocompatible**
+(`capas[].ref` con namespace `pdf:`/`img:`, ajustes y campos opcionales), sin migracion.
+Detalle y alternativas: `specs/011-editor-mockups-visual/research.md` (R14) y
+`contracts/mockup-capas.md`.
+
+**Decision 2026-10-04 (spec 012, campos reutilizables: lectura de §I/§IV sin enmienda):** los campos
+personalizables dejan de ser un `tipo` del placeholder y pasan a ser **entidades del plugin** con
+identidad propia. Cada campo es una carpeta `uploads/pmu/campos/{id}/` (`datos.json` +
+`campo.htm|css|js`) y `campos.json` es **solo el indice**; el `id` se reutiliza en N PDFs. Un campo
+publica un par `{valor, cliente}`: `valor` es lo que consume el PDF y `cliente` la etiqueta que ve el
+comprador, y el sistema **NO traduce nada por si solo** (no hay tabla ni `traducir()`: quien quiera la
+regla la escribe entera en el `global.js`, que es codigo libre del admin). El `campo.js` corre con
+firma `function(ctx, root)` **en el navegador** y el servidor solo lo valida (sandbox): el render sigue
+siendo del cliente, igual que §I protege. Hay un solo **CSS/JS global del plugin**
+(`global.css`/`global.js`), cargado solo en las fichas con al menos un campo y con el CSS prefijado por
+`[data-pmu-panel]` para que no pueda romper la tienda. El cargador de imagenes del comprador
+(`CargadorPMU` sobre `SelectorPMU`, sin tocar su contrato) sube la foto al **item** de su sesion
+(`subidas/{id}.{ext}` + fila en `manifest.subidas[]`, con `id` del **servidor**) y el Motor acepta una
+**imagen por instancia** (`id => [rutas]`), retrocompatible con `id => ruta`.
+
+**Decision 2026-10-04 (D17/D18/D19 — el sistema NUNCA bloquea la compra):** un hueco sin completar NO
+es un error. Con `repetir`, el indice cicla (`i % N`); sin el, las sobrantes quedan **vacias** y el
+hueco conserva su transparencia. Lo que era un `aviso` que frenaba la generacion es ahora una `nota`
+de informe. Aplica igual a texto e imagenes, en cliente y en servidor, y es un cambio de comportamiento
+en produccion pedido explicitamente por el usuario.
+
+**Decision 2026-10-04 (D22 — exportar/importar el catalogo queda FUERA de alcance):** el codigo de
+export/import se removio por completo. `campos.json` + `campos/{id}/` es la unica via de datos y el
+backup es una copia de `uploads/pmu/`, como para los PDFs, las imagenes o los presets.
+
+Detalle y alternativas: `specs/012-campos-consola/spec.md` (D1–D22), `research.md` (R1–R6) y
+`contracts/campos.md` + `contracts/campos-consola.md`.
+
+## Sync Impact Reports historicos (constitucion v2.0.1 - v2.2.1)
+
+Informes de enmienda que el propio flujo define como material temporal ("scratch"). Se conservan
+aqui como registro; la constitucion ya no los arrastra.
+
+## Sync Impact Report (v2.2.1, 2026-10-24)
+
+- **Bump**: PATCH — aclaracion del alcance real de la certificacion de hojas, sin cambio de
+  contrato ni de esquema de datos. Reporte **local**: `.specify/` esta en `.gitignore`, asi que
+  no viaja con el repo.
+- **Modificado**: seccion de almacenamiento (`uploads/pmu/`) — la certificacion `thumbs.sprite_firma`
+  aplica a **todo ambito con catalogo que reciba `firma` no vacia** (`fonts`, `img`,
+  `tm-presets`); `mockups` tiene catalogo pero **no certifica** (no manda firma). La condicion
+  real no es `AMBITOS_GALERIA`.
+- **Estado**: la spec 009 (`galerias-sprite-unificado`) estaba implementada desde RC46 pero su
+  paquete de artefactos habia quedado como borrador; la revision del 2026-10-24 lo reconcilio
+  (T001–T039 con estado real), cerro los huecos de UI/puertas (Reintentar en las tres galerias,
+  asserts de geometria y escenarios de navegador) y enmendo la constitucion del modulo a v3.2.1.
+- **Origen**: `specs/009-galerias-sprite-unificado` (T034 del `tasks.md`).
+
+## Sync Impact Report (v2.2.0, 2026-10-23)
+
+- **Bump**: MINOR — la spec 030 (`biblioteca-imagenes`) amplia §IV con **dos convenciones de
+  `subidas/`** dentro del item existente (familias `{madre}-{n}` con `base` **derivada** y filas
+  `origen: ref` relativas a `uploads/pmu/`) y **una regla de cliente** (la copia de la tira guarda
+  **metadatos, nunca bytes**, revalidada por `revision`). Sin ambito nuevo, sin tablas y sin cambio
+  de estructura: el TTL sigue siendo **por ITEM**.
+- **Modificado**: §IV (arriba). **No** se tocan §I/§II/§III.
+- **Añadido**: `PMU_Sesion` es **duenio unico de la convencion de familia** (`familias`,
+  `familia_de`, `ruta_familia`, `familia_por_sha`, `borrar_familia_dir`): el plugin solo inyecta la
+  URL del endpoint y aporta la identidad (D1/§II). La API publica no cambia (`admin_post_pmu_*` con `op=`).
+- **Impacto en WooCommerce**: ninguno en el flujo ficha→carrito→pedido; suma el vinculo
+  invitado→cuenta al loguearse (`_pmu_sids`, dedupe, tope 20).
+- **Impacto en TextMuy**: ninguno. **Impacto en el motor**: ninguno (el Motor no cambia y el PDF es
+  estructuralmente identico).
+- **Fuente**: spec 030 (`spec.md` D1-D28 + 4 sesiones de clarificaciones, `plan.md`, `research.md`,
+  `data-model.md`, `contracts/biblioteca.md` y `contracts/cliente-biblioteca.md`), fase `biblioteca`
+  del arnes + `tests/biblioteca-contrato.test.js`.
+
+## Sync Impact Report (v2.1.0, 2026-10-04)
+
+- **Bump**: MINOR — aparece un concepto nuevo (los **campos reutilizables** como entidad con id propia),
+  un modulo de cliente nuevo (`assets/cargador-pmu.js`), dos endpoints nuevos
+  (`personalizador_pdf_subida` / `_subida_url`) y **un cambio de comportamiento en produccion**: la
+  conciliacion deja de bloquear la compra.
+- **Añadido**: Amendments de §I/§IV (arriba) — campos v2, par `valor`/`cliente` sin traduccion
+  automatica, `global.css`/`global.js` del plugin, cargador con subida al item, y la regla "nunca
+  bloquea" (D17/D18/D19).
+- **Modificado**: §V "No Backward Compatibility" — se registra la **excepcion** de la migracion v1→v2
+  del catalogo de campos (one-shot, con `.bak`, conserva ids), que es la unica que introduce la 012.
+- **Fuente**: spec 012 (`spec.md` D1–D22, `research.md`, `data-model.md`, contratos).
+- **Impacto en WooCommerce**: ninguno en los hooks; el flujo ficha→carrito→pedido no cambia. El panel
+  del comprador suma el cargador, que sube al item ANTES de la vista previa (el endpoint crea el
+  borrador si todavia no existe y el cliente lo reusa).
+- **Impacto en TextMuy**: ninguno. El render de texto estilizado sigue siendo `RenderCore.renderBatch`
+  en el navegador (§I); el `global.js` del admin es codigo libre, no una extension de la API.
+- **Impacto en el motor**: `Motor`/`Overlay` aceptan N imagenes por grupo. La forma `id => ruta`
+  (string) mantiene comportamiento identico, asi que la consola "Procesar", los pedidos y
+  `motor_smoke`/`parity` no cambian (puertas SMOKE OK + PARIDAD OK sin modificar).
+
+## Sync Impact Report (v2.0.1, 2026-10-01)
+
+- **Bump**: PATCH — actualizacion de hechos en las puertas de validacion: el modulo tiene **16 suites** Node (eran 10 cuando se redacto) y su cache-bust vigente es **RC37** (era RC36). Sin cambio de principios, contratos ni comportamiento.
+- **Modificado**: §Development Workflow / Validation — conteo de suites del modulo (10 -> 16).
+- **Fuente**: auditoria de documentacion 2026-10-01 (`modules/textmuy/tests/*.test.js` = 16 `*.test.js`, `modules/textmuy/index.html` y `render-core.html` con `?v=RC37`, `modules/textmuy/AGENTS.md` §4.6/§9).
+- **Impacto en el plugin**: ninguno (cambio documental). AGENTS.md del plugin sincronizado en el mismo paso (§2.1 RC37, §9 lista de 16 suites, §10 conteo).
