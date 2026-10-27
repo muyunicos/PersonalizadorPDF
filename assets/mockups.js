@@ -793,6 +793,61 @@ jQuery(function ($) {
         return '';
     }
 
+    /**
+     * Spec 034 (T003): determina si la importacion debe reemplazar una seleccion
+     * existente en lugar de agregar una nueva capa/grupo.
+     *
+     * Devuelve:
+     *  { reemplazar: false, destino: null, esGrupo: false }  -> sin seleccion, agregar como nuevo
+     *  { reemplazar: true, destino: <indice>, esGrupo: false } -> reemplazar una capa individual
+     *  { reemplazar: true, destino: <indice>, esGrupo: true }  -> reemplazar un grupo (todos sus miembros)
+     *
+     * Reglas:
+     *  - Una sola capa seleccionada -> reemplazar esa capa.
+     *  - Varias capas con mismo `grupo` -> reemplazar todo el grupo (primer miembro como destino).
+     *  - Varias capas sin grupo comun (o grupos distintos) -> tomar la primera como destino.
+     *  - Sin seleccion -> no reemplazar.
+     */
+    function debeReemplazar() {
+        var seleccion = indicesSeleccionados();
+        if (!seleccion || seleccion.length === 0) {
+            return { reemplazar: false, destino: null, esGrupo: false };
+        }
+
+        var capasLista = capas();
+
+        // Una sola capa seleccionada -> reemplazar esa capa.
+        if (seleccion.length === 1) {
+            return { reemplazar: true, destino: seleccion[0], esGrupo: false };
+        }
+
+        // Verificar si todas las capas seleccionadas comparten el mismo grupo.
+        var grupoId = null;
+        var esGrupoReal = true;
+        for (var i = 0; i < seleccion.length; i++) {
+            var idx = seleccion[i];
+            var c = capasLista[idx];
+            if (!c) {
+                esGrupoReal = false;
+                break;
+            }
+            var g = String(c.grupo || '');
+            if (grupoId === null) {
+                grupoId = g;
+            } else if (g !== grupoId) {
+                esGrupoReal = false;
+                break;
+            }
+        }
+
+        if (esGrupoReal && grupoId !== '') {
+            // Reemplazar todo el grupo, destino es el primer miembro.
+            return { reemplazar: true, destino: seleccion[0], esGrupo: true };
+        }
+
+        // Varias capas sin grupo comun -> tomar la primera como destino.
+        return { reemplazar: true, destino: seleccion[0], esGrupo: false };
+    }
 
     /* ============ Manipulacion directa (T016-T018) ============ */
 
@@ -1586,6 +1641,7 @@ jQuery(function ($) {
         }
         if (!mockup()) { nuevoMockup(null); }
         var idMockup = mockup().id;
+        var planReemplazo = debeReemplazar();
         var titulo = datos.pdf + '-pagina-' + numeroPagina;
         $boton.prop('disabled', true);
         $estado.removeClass('ec-error').text('Leyendo la pagina y ubicando sus placeholders...');
@@ -1658,57 +1714,76 @@ jQuery(function ($) {
                 w: Math.min(LIENZO, LIENZO * resultado.ancho / resultado.alto),
                 h: Math.min(LIENZO, LIENZO * resultado.alto / resultado.ancho)
             };
-            var grupoId = nuevoIdGrupo();
-            var nuevas = [{
-                tipo: 'img', ref: 'mock:' + imagen.id, x: marco.x, y: marco.y,
-                w: marco.w, h: marco.h, rot: 0, sesgo: 0, filtros: {}, modo: 'normal',
-                nombre: 'Pagina ' + numeroPagina, oculta: false, bloqueada: false,
-                grupo: grupoId, grupo_rot: 0
-            }];
-            var geometria = resultado.geometria;
-            if (!geometria || !Array.isArray(geometria.grupos)) {
-                throw new Error('El motor no devolvio la geometria de la pagina.');
-            }
-            var escalaPagina = marco.w / Math.max(1, resultado.ancho);
-            var box = geometria.box || [0, 0, resultado.ancho, resultado.alto];
-            var origenX = parseFloat(box[0]) || 0;
-            var origenY = parseFloat(box[1]) || 0;
-            var anchoPagina = Math.max(1, (parseFloat(box[2]) || resultado.ancho) - origenX);
-            var altoPagina = Math.max(1, (parseFloat(box[3]) || resultado.alto) - origenY);
-            geometria.grupos.forEach(function (grupo) {
-                (grupo.instancias || []).forEach(function (instancia) {
-                    var b = instancia.bbox || [];
-                    if (b.length < 4) { return; }
-                    var w = Math.max(1, (parseFloat(instancia.w) || (b[2] - b[0])) * escalaPagina);
-                    var h = Math.max(1, (parseFloat(instancia.h) || (b[3] - b[1])) * escalaPagina);
-                    var centroX = marco.x + ((parseFloat(b[0]) - origenX + (parseFloat(b[2]) - parseFloat(b[0])) / 2)
-                        / anchoPagina) * marco.w;
-                    var centroY = marco.y + (((parseFloat(b[1]) + parseFloat(b[3])) / 2
-                        + (parseFloat(box[1]) || 0)) / altoPagina) * marco.h;
-                    var rotacion = 0;
-                    if (instancia.quad && instancia.quad.length > 1) {
-                        var dx = parseFloat(instancia.quad[1][0]) - parseFloat(instancia.quad[0][0]);
-                        var dy = parseFloat(instancia.quad[1][1]) - parseFloat(instancia.quad[0][1]);
-                        rotacion = Math.atan2(-dy, dx) * 180 / Math.PI;
-                    }
-                    var ref = String(grupo.id) + (instancia.n > 1 ? '#' + instancia.n : '');
-                    var info = infoEnvoltura(ref);
-                    nuevas.push({
-                        tipo: 'placeholder', ref: ref, x: centroX - w / 2, y: centroY - h / 2,
-                        w: w, h: h, rot: rotacion, sesgo: 0, filtros: {}, modo: 'normal',
-                        nombre: '', oculta: false, bloqueada: false, grupo: grupoId,
-                        grupo_rot: 0,
-                        envoltura: info.hay
+            var m = estado.mockups[indiceMockup];
+            var estadoAnterior = JSON.stringify(estado.mockups);
+            if (planReemplazo.reemplazar) {
+                var indicesAReemplazar = [];
+                if (planReemplazo.esGrupo) {
+                    var gid = String(capas()[planReemplazo.destino].grupo || '');
+                    capas().forEach(function (c, idx) {
+                        if (String(c.grupo || '') === gid) indicesAReemplazar.push(idx);
+                    });
+                } else {
+                    indicesAReemplazar = [planReemplazo.destino];
+                }
+                indicesAReemplazar.forEach(function (idx) {
+                    var c = m.capas[idx];
+                    c.ref = 'mock:' + imagen.id;
+                    c.tipo = 'img';
+                    c.envoltura = false;
+                    c.nombre = 'Pagina ' + numeroPagina;
+                });
+                estado.actual = indiceMockup;
+                estado.seleccion = planReemplazo.destino;
+                estado.seleccionados = indicesAReemplazar.slice();
+            } else {
+                var grupoId = nuevoIdGrupo();
+                var nuevas = [{
+                    tipo: 'img', ref: 'mock:' + imagen.id, x: marco.x, y: marco.y,
+                    w: marco.w, h: marco.h, rot: 0, sesgo: 0, filtros: {}, modo: 'normal',
+                    nombre: 'Pagina ' + numeroPagina, oculta: false, bloqueada: false,
+                    grupo: grupoId, grupo_rot: 0
+                }];
+                var geometria = resultado.geometria;
+                if (!geometria || !Array.isArray(geometria.grupos)) {
+                    throw new Error('El motor no devolvio la geometria de la pagina.');
+                }
+                var escalaPagina = marco.w / Math.max(1, resultado.ancho);
+                var box = geometria.box || [0, 0, resultado.ancho, resultado.alto];
+                var origenX = parseFloat(box[0]) || 0;
+                var origenY = parseFloat(box[1]) || 0;
+                var anchoPagina = Math.max(1, (parseFloat(box[2]) || resultado.ancho) - origenX);
+                var altoPagina = Math.max(1, (parseFloat(box[3]) || resultado.alto) - origenY);
+                geometria.grupos.forEach(function (grupo) {
+                    (grupo.instancias || []).forEach(function (instancia) {
+                        var b = instancia.bbox || [];
+                        if (b.length < 4) { return; }
+                        var w = Math.max(1, (parseFloat(instancia.w) || (b[2] - b[0])) * escalaPagina);
+                        var h = Math.max(1, (parseFloat(instancia.h) || (b[3] - b[1])) * escalaPagina);
+                        var centroX = marco.x + ((parseFloat(b[0]) - origenX + (parseFloat(b[2]) - parseFloat(b[0])) / 2)
+                            / anchoPagina) * marco.w;
+                        var centroY = marco.y + (((parseFloat(b[1]) + parseFloat(b[3])) / 2
+                            + (parseFloat(box[1]) || 0)) / altoPagina) * marco.h;
+                        var rotacion = 0;
+                        if (instancia.quad && instancia.quad.length > 1) {
+                            var dx = parseFloat(instancia.quad[1][0]) - parseFloat(instancia.quad[0][0]);
+                            var dy = parseFloat(instancia.quad[1][1]) - parseFloat(instancia.quad[0][1]);
+                            rotacion = Math.atan2(-dy, dx) * 180 / Math.PI;
+                        }
+                        var ref = String(grupo.id) + (instancia.n > 1 ? '#' + instancia.n : '');
+                        var info = infoEnvoltura(ref);
+                        nuevas.push({
+                            tipo: 'placeholder', ref: ref, x: centroX - w / 2, y: centroY - h / 2,
+                            w: w, h: h, rot: rotacion, sesgo: 0, filtros: {}, modo: 'normal',
+                            nombre: '', oculta: false, bloqueada: false, grupo: grupoId,
+                            grupo_rot: 0,
+                            envoltura: info.hay
+                        });
                     });
                 });
-            });
-            var m = estado.mockups[indiceMockup];
-            var inicio = m.capas.length;
-            var estadoAnterior = JSON.stringify(estado.mockups);
-            Array.prototype.push.apply(m.capas, nuevas);
-            estado.actual = indiceMockup;
-            estado.seleccion = inicio + nuevas.length - 1;
-            estado.seleccionados = nuevas.map(function (_, i) { return inicio + i; });
+                var inicio = m.capas.length;
+                Array.prototype.push.apply(m.capas, nuevas);
+            }
             var itemCatalogo = {
                 id: imagen.id, file: imagen.nombre, title: titulo, cats: 'pagina-pdf', url: imagen.url
             };
@@ -1719,12 +1794,18 @@ jQuery(function ($) {
             marcarPaso(estadoAnterior);
             sinGuardar();
             refrescar();
-            nuevas.slice(1).forEach(function (c) {
-                var info = infoEnvoltura(c.ref);
-                if (c.envoltura && info.necesita) { pedirEnvoltura(c); }
-            });
-            $estado.text('Pagina importada con ' + (nuevas.length - 1)
-                + ' placeholder(s), todos agrupados.');
+            if (!planReemplazo.reemplazar) {
+                nuevas.slice(1).forEach(function (c) {
+                    var info = infoEnvoltura(c.ref);
+                    if (c.envoltura && info.necesita) { pedirEnvoltura(c); }
+                });
+                $estado.text('Pagina importada con ' + (nuevas.length - 1)
+                    + ' placeholder(s), todos agrupados.');
+            } else {
+                $estado.text('Pagina reemplazada en '
+                    + (planReemplazo.esGrupo ? 'el grupo' : 'la capa')
+                    + ' seleccionada (' + indicesAReemplazar.length + ' capa(s)).');
+            }
         }).catch(function (error) {
             var mensaje = error && error.message ? error.message : 'No se pudo importar la pagina.';
             $estado.text(mensaje).addClass('ec-error');

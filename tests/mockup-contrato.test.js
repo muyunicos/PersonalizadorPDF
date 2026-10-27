@@ -1029,4 +1029,36 @@ function fin() {
     }
     console.log('CONTRATO OK (' + total + ' checks).');
 }
+
+/* ==== Spec 034: importar pagina/capa con reemplazo de seleccion ==== */
+check('el editor expone la decision de reemplazo (debeReemplazar)',
+    /function debeReemplazar\(\)/.test(ed)
+        && /function debeReemplazar\(\)[\s\S]{0,600}indicesSeleccionados\(\)/.test(ed),
+    'sin la funcion pura, la importacion no puede decidir entre reemplazar y agregar');
+check('importarPagina usa debeReemplazar y respeta la seleccion',
+    /function importarPagina\(\)[\s\S]{0,1400}debeReemplazar\(\)/.test(ed)
+        && ed.indexOf('planReemplazo.reemplazar') !== -1
+        && ed.indexOf('planReemplazo.esGrupo') !== -1);
+check('el reemplazo conserva la geometria (solo cambia ref/tipo/envoltura/nombre)',
+    /c\.ref = 'mock:' \+ imagen\.id/.test(ed)
+        && /c\.tipo = 'img'/.test(ed)
+        && /c\.envoltura = false/.test(ed),
+    'si la rama de reemplazo tocara x/y/w/h, se perderia la transformacion (FR-002)');
+check('la rama de reemplazo NO reasigna la geometria de la capa destino',
+    (function () {
+        var i = ed.indexOf('planReemplazo.reemplazar');
+        if (i === -1) { return false; }
+        var trozo = ed.slice(i, i + 1600);
+        return !/\.x\s*=\s*/.test(trozo) && !/\.y\s*=\s*/.test(trozo)
+            && !/\.w\s*=\s*/.test(trozo) && !/\.h\s*=\s*/.test(trozo)
+            && !/\.rot\s*=\s*/.test(trozo);
+    })(),
+    'la geometria del destino debe quedar intacta (SC-001)');
+check('sin seleccion el importador agrega como hoy (no regresion)',
+    /if \(!planReemplazo\.reemplazar\) \{[\s\S]{0,500}nuevas\.slice\(1\)/.test(ed),
+    'la rama de "agregar" debe seguir existiendo (SC-004)');
+check('la fase de reemplazo respeta el grupo (itera los miembros)',
+    /indicesAReemplazar[\s\S]{0,400}String\(c\.grupo \|\| ''\) === gid/.test(ed),
+    'reemplazar un grupo debe cubrir a todos sus miembros (R3)');
+
 correr();

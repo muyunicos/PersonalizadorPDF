@@ -869,6 +869,7 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   Ojo: la subida real de un PDF **no** se puede simular en el arnes (`move_uploaded_file` exige un upload
   real) -> el flujo con subida se prueba en el lab (quickstart R1-R8). Artefactos en
   `specs/032-reemplazo-pdf/`.
+- ✅ **Spec 034 `importar-reemplazar-capa` (especificada 2026-10-26, SIN implementar)**: reemplazar la capa/grupo seleccionado con otra capa (pagina PDF o imagen) manteniendo las transformaciones (x/y/w/h/rot/sesgo/filtros/modo/nombre/oculta/bloqueada/envoltura/grupo/grupo_rot/perspectiva); habilitar perspectiva por capa individual (hoy solo grupo); importar pagina + PH pregunta si reemplazar la seleccion actual; destino es la capa/grupo seleccionado (si varias capas no agrupadas, la primera); conserva ubicacion, rotacion y perspectiva. Artefactos en `specs/034-importar-reemplazar-capa/` (spec, plan, research, data-model, contracts/capa-importar, quickstart, tasks).
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
   `admin/ayuda.php`, `modules/LEEME.md` solo resumen y apuntan aqui). El `== Changelog ==`
   de `readme.txt` es historial, no normativa.

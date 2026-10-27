@@ -55,6 +55,12 @@ if (!defined('ABSPATH')) {
         <strong>]</strong> cambian su orden, las <strong>flechas</strong> la mueven (con Shift, 10 px),
         <strong>Ctrl/Cmd+Z</strong> deshace y <strong>Escape</strong> cierra el menu contextual.
         El importador de pagina esta en el acordeon <strong>Placeholders</strong>.</p>
+    <p><strong>Reemplazar una capa o grupo</strong>: si antes de pulsar "Importar pagina + PH" hay una
+        capa (o un grupo) seleccionado, el importador <strong>reemplaza</strong> esa seleccion en vez de
+        agregar una capa nueva: la pagina importada ocupa <em>el mismo lugar, tamano y rotacion</em> que
+        tenia el destino (se conservan filtros, nombre, visibilidad, bloqueo, envoltura, grupo y
+        perspectiva). Sin seleccion, el comportamiento es el de siempre: agrega una capa y su grupo de
+        placeholders. La cantidad de capas no cambia cuando se reemplaza.</p>
     <p>En la consola de <strong>PDFs</strong>, cada mockup puede incluir capas de imagen y placeholders.
         Selecciona varias con <strong>Ctrl/Cmd + clic</strong> para agruparlas o desagruparlas; cualquier
         miembro de un grupo permite mover, redimensionar y rotar el conjunto. El panel indica
