@@ -378,15 +378,14 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `envolturas.json`; 0/ausente = la mas usada; el campo sale en la cabecera del grupo),
   `placeholders[id]` con
   `tipo`/`preset`/`value`/`settings` (la guia de envoltura del cargador **se deduce** del
-  cableado: spec 019 F2; `campos_envoltura` dejo de usarse), `bonus[]` (4.7.0: archivos extra 0..N
+  cableado del hueco), `bonus[]` (archivos extra 0..N
   de la **biblioteca global compartida** `uploads/pmu/bonus/` con catalogo
   `bonus.json`; filas `{archivo, titulo}` (biblioteca; `titulo` vacio =
   titulo por defecto DINAMICO del catalogo, o nombre sin extension) o
   `{url, titulo}` (externa); el archivo se elige por modal, se puede
   reemplazar (conserva referencias) y borrar con escaneo de uso; al comprar
   se congelan en la meta `_pmu_bonus` del line item con el titulo resuelto.
-  **Spec 020 (B5): sin migracion** del layout viejo `pdfs/{nombre}/bonus/`; una `url`
-  relativa en `config.json` se descarta (la biblioteca se referencia con `archivo`).
+  La biblioteca se referencia con `archivo`; una `url` relativa en `config.json` se descarta.
   **Spec 011 (contrato de capa)**: `capas[].ref` lleva **namespace obligatorio** — `pdf:{archivo}`
   (foto del PDF) o `mock:{id}` (id numerico del catalogo); un `ref` plano ya **no** se
   acepta en el cliente (el servidor lo normaliza al leer, una sola vez). `capas[].filtros` admite
@@ -408,8 +407,7 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   rasteriza con PDF.js local y consulta la geometria al motor PHP. Todo es opcional:
   ausente = comportamiento actual.
   Contrato completo: `specs/011-editor-mockups-visual/contracts/mockup-capas.md`.
-  Sin `textos.json` y sin `metadata.json`
-  (norma ex-008 + decision preview 2026-09-17; la migración `.migrado-007` ya no se ejecuta).
+  Sin `textos.json` y sin `metadata.json` (norma ex-008).
 - Fotos de mockups del admin: `pdfs/{nombre}/mockups/` (datos de usuario, sin catálogo);
   las reutilizables viven en el catálogo `img/`.
 - Archivos bonus del admin (4.7.0): biblioteca global `uploads/pmu/bonus/`
@@ -418,8 +416,7 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   la lista vive en `config.json:bonus[]` como `{archivo, titulo}` o
   `{url, titulo}` (externa) y se congela por pedido en `_pmu_bonus`.
 - **Campos reutilizables (specs 012 + 015, formato v3)**: `uploads/pmu/campos/campos.json` es
-  **solo el indice** (vive junto al codigo de los campos, dentro de `uploads/pmu/campos/`;
-  **spec 020 B5: sin migracion** desde el layout viejo en la raiz de `pmu/`)
+  **solo el indice** (vive junto al codigo de los campos, dentro de `uploads/pmu/campos/`)
   (`{version:3, items:[{id,tipo,baja}], meta:{id:{creado,modificado}}}`) y cada campo es una carpeta
   `uploads/pmu/campos/{id}/` con `datos.json` + `campo.htm` + `campo.css` + `campo.js`. El `id` se
   reutiliza en N PDFs y **nunca se recicla**: una baja deja `baja:true` (tombstone) y conserva los
@@ -430,10 +427,7 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   fuera** del formato y de la UI (D9). La pareja `valor`/`cliente` la publica el `campo.js`
   (`function(ctx, root)`) y, si no hay JS, se lee de los `[data-rol]` del HTML; `cliente` **nunca**
   cae a `valor` (el sistema no traduce nada). Contratos: `specs/012.../contracts/campos.md`.
-  **Spec 020 (B1-B3, implementado 2026-10-19)**: eliminadas `texto_ayuda`, `array`, `protegido`
-  (feature completa), el **cargador legacy** (`datos.json:cargador` + `validar_cargador()` +
-  `cargador_desde_texto()` + regla `cargador && !campo.js`) y el write-through (`datos_con_legacy`).
-  El cargador vive **solo** en el `campo.js` (spec 018). **Sin migracion.**
+  El cargador vive **solo** en el `campo.js`.
 - **CSS/JS global del plugin (spec 012)**: `uploads/pmu/campos/global.css` y `global.js`, **uno solo
   para todo el plugin**, editables desde la tarjeta de arriba de la pestana Campos. Se cargan **solo
   en fichas con >=1 campo**; el CSS se inyecta prefijado con `[data-pmu-panel]` y el JS con
@@ -463,8 +457,7 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
 - **Guia de envoltura en el cargador (contrato v4 de la 011 + spec 016 F6)**: **Spec 019 (F2)** la guia
   se **DEDUCE** del **cableado del hueco** (`[campoN]` en `value`/`settings` del grupo con envoltura;
   `campos_envoltura_deducida()`) y, si el PDF tiene **un solo** grupo con envoltura y el campo declara
-  tipo `imagen`, de ese. **No hay `<select>`**: `config.json:campos_envoltura` dejo de usarse (se
-  **limpia** al guardar la config y se borra del formato en la spec 020). La consola solo informa
+  tipo `imagen`, de ese. **No hay `<select>`**: la guia no se configura a mano. La consola solo informa
   "automatica: #gid (del cableado del hueco)". `panel_ficha` resuelve la forma por defecto del grupo y
   publica en el campo (`envoltura` + `envoltura_gid`) y **`grupo_w`/`grupo_h`/`grupo_gid`** (el tamaño
   del grupo base; `analisis.json:grupos` es una **lista**, se busca por `id`) para que la ranura
@@ -530,9 +523,7 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   (promocion por `rename()` solo al confirmarse el pago); PDF final solo tras el pago
   (boton "Descargar" en `mi-cuenta/descargas/`: render cliente + Motor, reintentable;
   registro admin de pedidos "completados" para revisar/regenerar)
-- Migracion historica `.migrado-007` (`uploads/personalizador-pdf/` o `extractor-corel/`
-  → `pdfs/{nombre}/`): ya retirada del codigo (fase `migracion` del arnes lo verifica:
-  sin metodo `migrar_datos_heredados`). Migracion ex-008 pendiente (partir ex-`metadata.json`
+- Migracion ex-008 pendiente (partir ex-`metadata.json`
   en `analisis.json`+`config.json`, mover `tmp/cart/{linea}/` bajo `tmp/sesion-{sid}/{item_key}/`;
   norma preservada en `constitution` §IV).
 - **Archivos TextMuy (datos de usuario, formato unico v5.0)** — ubicacion unica
