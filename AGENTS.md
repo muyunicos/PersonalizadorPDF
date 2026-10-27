@@ -16,11 +16,11 @@
 - [4. Reglas técnicas críticas](#4-reglas-tecnicas-criticas)
 - [5. Formatos y convenciones de nombres](#5-formatos-y-convenciones-de-nombres)
 - [6. Motor PHP (engine/): responsabilidades](#6-motor-php-engine-responsabilidades)
-- [7. Decisiones de diseño ya tomadas](#7-decisiones-de-diseno-ya-tomadas)
+- [7. Decisiones de diseño cerradas (lo que NO se negocia)](#7-decisiones-de-diseño-cerradas-lo-que-no-se-negocia)
 - [8. Dificultades del entorno](#8-dificultades-del-entorno)
 - [9. Cómo probar](#9-como-probar)
 - [10. Reglas para la IA al editar](#10-reglas-para-la-ia-al-editar)
-- [11. Tabla de errores comunes](#11-tabla-de-errores-comunes)
+- [11. Errores comunes (resolver antes de preguntar)](#11-errores-comunes-resolver-antes-de-preguntar)
 
 ---
 
@@ -866,7 +866,25 @@ Al terminar una tarea o cuando se requiera intervencion del usuario:
   DETALLE / LOG / CONSOLA) o por variable de entorno; el `.bat` vuelve al instante
   (lanza en segundo plano y sin consola visible).
 
-## 11. Tabla de errores comunes (resolver antes de preguntar)
+## 11. Errores comunes (resolver antes de preguntar)
+
+**Como se lee esta tabla**: mezcla dos cosas a proposito. Las filas de **trampa** describen algo que
+puede volver a pasar al tocar el codigo; las de **post-mortem** documentan un bug **ya corregido** y
+sirven para reconocer el sintoma si reaparece. Si buscás una regla para escribir codigo, son estas:
+
+- `$('<tag ...')` **sin el `>` de cierre**: jQuery lo lee como selector. `node --check` no lo
+  detecta; lo cubre `tests/mockup-contrato.test.js` (recorre **todos** los literales de los modulos).
+- `is_array($x)` **no** distingue "una spec" de "lista de specs": mirar la clave `tipo`.
+- Leer `$_POST` con `wp_unslash()` **antes** de `json_decode` (WordPress agrega magic quotes).
+- Un archivo de `FormData` viaja en `$_FILES`, **nunca** en `$_POST`.
+- `PMU_Sesion` es lazy: llamar `$this->sesion()` **antes** de usar sus constantes.
+- Cada draw del Overlay en su propio `q ... Q` y con `/ECOp1`, o la imagen sale transparente.
+- `form.getAttribute('action')`, nunca `form.action`.
+- No anidar `<form>` dentro de `ec-form-config` (el HTML descarta el interno).
+- El Motor **no** renderiza texto: si un grupo con texto no aparece en el PDF, el navegador no lo
+  rasterizó (la vista previa **es** el PDF final).
+- Un `foreach` que reusa el nombre de la variable de salida la **pisa** (usar un nombre distinto).
+
 
 | Error | Causa | Solución |
 |---|---|---|
