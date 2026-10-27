@@ -21,14 +21,25 @@ debeReemplazar() -> { reemplazar: boolean, destino: number|null, esGrupo: boolea
 
 **Contrato**: es **pura** (no muta `estado`, no toca el DOM, no hace I/O). Se puede invocar en cualquier momento y devuelve el mismo resultado para el mismo estado.
 
-## 2. Efecto del reemplazo (lo que promete `importarPagina`)
+## 1.bis Función pura de la perspectiva (US3)
+
+```js
+puedePerspectiva(indices, lista?) -> boolean
+```
+
+`true` con **una** capa seleccionada (la capa existe) o con un **grupo persistido** (≥2 capas con el
+mismo `grupo` no vacío). Es la puerta de los tres puntos donde se ofrece la perspectiva: los cuatro
+tiradores del lienzo, el hit-test de esos tiradores y el bloque de Ajustes (`reset-perspectiva`).
+Antes de la 034 exigía ≥2 capas con `grupo`, así que una capa suelta no podía deformarse.
+
+## 2. Efecto del reemplazo (lo que prometen `importarPagina` y `agregarCatalogo`)
 
 | Superficie | Antes | Después |
 |---|---|---|
 | `capas()[destino].ref` | `{color}` / `{color}#n` / `mock:{idViejo}` | `mock:{idNuevo}` |
 | `capas()[destino].tipo` | `placeholder` \| `img` | `img` |
 | `capas()[destino].envoltura` | `true` \| `false` | `false` |
-| `capas()[destino].nombre` | cualquiera | `Pagina N` |
+| `capas()[destino].nombre` | cualquiera | `Pagina N` (importacion) / titulo del catalogo (imagen) |
 | **`x`, `y`, `w`, `h`, `rot`, `sesgo`** | — | **sin cambios (byte a byte)** |
 | **`filtros`, `modo`, `oculta`, `bloqueada`** | — | **sin cambios** |
 | **`grupo`, `grupo_rot`** | — | **sin cambios** |
@@ -47,6 +58,7 @@ debeReemplazar() -> { reemplazar: boolean, destino: number|null, esGrupo: boolea
 | **R5** | Capa destino `bloqueada: true` → **no** se reemplaza; se avisa al admin. |
 | **R6** | `tipo: 'placeholder'` reemplazado → pasa a `tipo: 'img'` y `envoltura: false` (el nuevo recurso es una imagen). |
 | **R7** | El recurso nuevo se sube al catálogo `mockups` (`op=alta`, scope `mockups`) y el `ref` es `mock:<id>`. |
+| **R8** | La perspectiva de cuatro puntos se ofrece con **una** capa o con un grupo (`puedePerspectiva()`); en el render la capa sin `grupo` usa la clave `i:{indice}` y un grupo `g:{gid}`. |
 
 ## 4. Lo que este contrato **no** promete
 
@@ -63,4 +75,4 @@ debeReemplazar() -> { reemplazar: boolean, destino: number|null, esGrupo: boolea
 - Tras reemplazar un grupo, cada miembro conserva su geometría y el grupo su `grupo_rot` (SC-002).
 - Sin selección, la cantidad de capas aumenta (SC-004, no regresión).
 - `analisis.json` no cambia (hash igual) tras cualquier reemplazo de mockup.
-- Las puertas existentes siguen verdes (SC-005): CONTRATO 147, GEOMETRIA 135, `motor_smoke`, `parity`.
+- Las puertas existentes siguen verdes (SC-005): CONTRATO 157, GEOMETRIA 135, `motor_smoke`, `parity`.

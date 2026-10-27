@@ -61,7 +61,9 @@ if (!defined('ABSPATH')) {
         tenia el destino (se conservan filtros, nombre, visibilidad, bloqueo, envoltura, grupo y
         perspectiva). Sin seleccion, el comportamiento es el de siempre: agrega una capa y su grupo de
         placeholders. La cantidad de capas no cambia cuando se reemplaza. Una capa <strong>bloqueada</strong>
-        no se reemplaza (el importador avisa y no toca nada).</p>
+        no se reemplaza (el importador avisa y no toca nada). Lo mismo vale para una imagen del
+        catalogo de mockups: con una capa o un grupo seleccionado, <strong>reemplaza</strong> en vez de
+        agregarse centrada.</p>
     <p><strong>Perspectiva</strong>: con una capa o un grupo seleccionado aparecen cuatro puntos rojos en
         las esquinas del lienzo; arrastralos para deformar la pieza (homografia). "Restablecer perspectiva"
         vuelve al rectangulo. Una capa suelta tambien admite perspectiva (no hace falta agruparla).</p>

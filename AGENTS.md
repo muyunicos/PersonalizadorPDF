@@ -887,5 +887,5 @@ Las **trampas que se repiten al escribir codigo** (leelas antes de tocar nada):
   rasterizo (la vista previa **es** el PDF final).
 - Un `foreach` que reusa el nombre de la variable de salida la **pisa** (usar otro nombre).
 
-La **tabla completa** (76 filas: sintoma -> causa -> solucion, con estas trampas y los post-mortems
+La **tabla completa** (77 filas: sintoma -> causa -> solucion, con estas trampas y los post-mortems
 de bugs ya corregidos) vive en [`docs/errores.md`](./docs/errores.md). Buscala ahi antes de preguntar.
