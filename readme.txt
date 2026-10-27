@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.22.4
+Stable tag: 4.25.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,19 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.25.0 =
+* Spec 034 (en curso): el editor de mockups puede **importar** una pagina del PDF o una imagen **sobre la capa o el grupo seleccionado**, conservando ubicacion, tamano, rotacion, filtros, modo, envoltura, grupo y perspectiva: solo cambia la imagen de origen. Sin seleccion, sigue agregando una capa nueva.
+* La geometria del destino queda intacta (verificado en el laboratorio: 6/6; capa 127/29/39/39 sin cambios, `ref` pasa a `mock:N`).
+
+= 4.24.0 =
+* Spec 032: **reemplazo del PDF** de un producto sin perder la personalizacion, los mockups, los bonus ni las conexiones. El analisis nuevo corre en staging (si falla, cero cambios) y el admin decide **Migrar o Cancelar** viendo el mapa viejo -> nuevo (ids iguales + sugerencias por IoU y distancia de color).
+* Al migrar se respalda el estado anterior en `tmp/reemplazos/{nombre}/{ts}/anterior/` y `config.json` se remapea (`placeholders`, `envolturas` y el `ref` de las capas); un fallo a mitad restaura del respaldo. **Recuperar** vuelve byte a byte.
+* Se retiro el camino destructivo del modal de conflicto: ahora ofrece **Reemplazar (conserva la personalizacion)**.
+
+= 4.23.0 =
+* Spec 031: rediseno del panel del editor de mockups en **5 acordeones** (Vistas del PDF, Capas, Ajustes, Imagenes, Placeholders); la transformacion de la seleccion pasa debajo del lienzo y los ajustes de capa se repintan en su acordeon.
+* Capas agrupadas con cabecera plegable, menu contextual (duplicar, borrar, agrupar, desagrupar, ocultar/bloquear) y **paridad del tirador de rotacion de capa** con el grupal. Se retiraron los botones sobrantes de la lista de capas.
 
 = 4.22.4 =
 * Arreglado (spec 009, T041): cuando el motor **rechazaba** escribir la hoja de miniaturas, la galeria informaba `motor:rechazo` en vez de la causa exacta; ahora se muestra el motivo real (`motor:sprite:catalogo:no_escribible`, etc.) conservado por `ThumbEngine.ultimaCausa`.
@@ -368,47 +381,5 @@ Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}
 * **Contrato**: nueva entrada `urls.presetsBase` en el puente y `PresetManager.presetUrlBase()` en el modulo para leer presets/imagenes desde uploads (retro-compatible; standalone sigue con ruta relativa). Cache-busting `?v=RC9`.
 * Corregido: al renombrar/mover una imagen en la galeria, `catalogo.json` registraba un nombre vacio.
 
-= 3.3.0 =
-* **Galeria de imagenes unificada** (componente `js/galeria.js`): un solo boton "Select" en los importadores de imagen (rellenos, fondos, texturas, iconos) abre un panel con tabs (fondos/iconos/varios), buscador, subida (boton + arrastrar y soltar + pegar) y footer (nombre, categoria, Save, Delete, Select).
-* **Preview en vivo**: en Fill layers (Pattern) y en BACKGROUND, la galeria oculta temporalmente la interfaz, aplica la imagen al instante al hacer click y replica los controles (Fit/Scale/Origin/Repeat o Opacity/Repeat). "Aplicar" persiste; cerrar sin Aplicar revierte al estilo anterior.
-* **Locacion unica uploads/pmu/tm**: imagenes planas + catalogo `img.json` en `wp-content/uploads/pmu/tm/img/` (sin `imagenes/`); la categoria de cada archivo se guarda en la tupla `[id,title,cats,file]`. El CRUD (subir/borrar/renombrar) actualiza el JSON y la tupla.
-* Cache-busting `?v=RC7` en render-core e index; render-core incorpora `js/preset-manager.js` para presets `.txm`.
-
-= 3.2.0 =
-* **Normalizacion de presets del modulo TextMuy**: el formato unico es `.txm` (delta de settings) junto a su miniatura `.webp`, guardados en `modules/textmuy/presets/` del servidor; disponibles en todos los navegadores y en el selector de estilo de cada grupo de un PDF. Los 9 presets base migraron de `.json` (formato TextStudio crudo) a `.txm`.
-* **Un solo panel de presets**: la galeria inferior expandible es la unica UI de presets (guardar, borrar, buscar y migrar). Se eliminan el panel "Presets" y el panel "Local projects (.txm)" de la pestana DOWNLOAD. Boton de migracion unica que sube los presets viejos de localStorage al servidor.
-* **Directorio de imagenes subidas**: las imagenes de rellenos/fondos/texturas se guardan en `wp-content/uploads/pmu/tm/img/` (unificado con el catalogo) via un puente PHP (nonce, capability, validacion de firma y limites de tamano) y quedan reutilizables entre presets con el picker "Mis imagenes".
-* Puente plugin-modulo por postMessage same-origin (handlers `admin_post_personalizador_pdf_textmuy_guardar_preset|borrar_preset|subir_imagen`). El modulo standalone sigue 100% client-side: sin puente, guardar descarga el `.txm` y las imagenes se embeben.
-* Cache-busting de los estaticos del modulo: `?v=RC2` (render-core e index). El render-core incorpora `js/preset-manager.js` para resolver presets `.txm`.
-
-= 3.1.2 =
-* **Corregido**: al procesar con texto estilizado, el envio apuntaba a una URL rota (`[object HTMLInputElement]`) por la colision del `<input name="action">` con la propiedad `form.action` del DOM; ahora se usa siempre el atributo `action` del formulario. Los PDF con texto estilizado procesan y descargan correctamente.
-* Robustez del puente: timeout de 90 s en el envio final (AbortController), overlay cerrado antes de navegar al resultado y log de errores con prefijo `[PersonalizadorPDF]` en la consola para diagnostico.
-
-= 3.1.1 =
-* El boton **Procesar** se habilita con imagen manual o texto estilizado activo en al menos un grupo (antes solo con imagen).
-* Cache-busting de los estaticos del modulo TextMuy (`?v=RCn` en render-core/index) y validacion del contrato del render-core: si el navegador tenia en cache un modulo desactualizado, avisa con recarga Ctrl+F5 en lugar de fallar.
-
-= 3.1.0 =
-* **Texto estilizado por grupo (puente TextMuy)**: en "PDFs y procesamiento" cada grupo puede llevar un texto y un estilo (preset TextMuy); al pulsar **Procesar**, el navegador renderiza el texto al tamano exacto del grupo (PNG transparente) y se incorpora como imagen del grupo en el mismo envio. Un solo click.
-* Nueva seccion "Texto estilizado" en cada grupo: activar/desactivar, texto (max 300 caracteres), selector de estilo (presets base + los guardados en "Estilos de Texto"), vista previa al tamano del hueco y autoguardado.
-* **Render Core** (`modules/textmuy/render-core.html`): motor de render headless del modulo TextMuy (~220 KB sin UI) con API por lotes (`renderBatch`) y cache de presets; el plugin solo consume ese contrato publico.
-* Estado por grupo en el dataset (`default`/`value`/`preset` en `metadata.json`); se borra con el PDF.
-* El motor PHP (engine/) sigue sin cambios: recibe imagenes por grupo como siempre.
-
-= 3.0.0 =
-* El plugin pasa a llamarse **Personalizador PDF** (antes "Extractor Corel"): archivo principal `personalizador-pdf.php`, clase `Personalizador_PDF_Plugin`, slug `personalizador-pdf` y handlers `admin_post_personalizador_pdf_*`.
-* Nueva pestana **Estilos de Texto**: integra el sistema TextMuy como modulo autocontenido en `modules/textmuy/` (editor de estilos de texto client-side en iframe same-origin).
-* Migracion automatica al activar: `uploads/extractor-corel/` -> `uploads/pmu/` sin perder PDFs, datos, imagenes ni salidas.
-* Compatibilidad temporal con hooks y nonces legacy de la 2.0.0 (se eliminan en 3.1).
-* El motor PHP (engine/) no se modifica.
-
-= 2.0.0 =
-* Nueva administracion: consola de PDFs subidos con dataset, imagenes por grupo (subida o galeria de medios), placeholders descargables y boton Procesar.
-* Motor principal (Motor.php): PDF + dataset + imagenes -> PDF editado, con validacion de datos y resumen por grupo.
-* Imagenes reales con encajado (contain): sin deformar ni recortar, margenes transparentes.
-* Soporte de imagenes sin GD: decodificador PNG propio; JPEG exacto incrustado directo (DCTDecode).
-* Corregido: los segundos y siguientes draws en una misma pagina heredaban el CTM acumulado (cm) y se dibujaban mal; ahora cada draw va en su propio par q...Q.
-
-= 1.0.0 =
-* Version inicial: motor PHP completo (deteccion, marcos, overlay) y el plugin para WordPress "Personalizador PDF".
+= 3.3.0 y anteriores =
+* Historial completo en el repositorio (git): versiones 1.0.0 a 3.3.0 (motor PHP, consola, TextMuy y las migraciones de layout ya retiradas).

@@ -5,6 +5,12 @@ output_*.pdf
 tests/salida_*.pdf
 tests/*.tmp
 
+# Reportes GENERADOS por las puertas de auditoria (se regeneran, no se versionan):
+#   php tests/inventario_repo.php   -> docs/inventario-repo.md
+#   npx jscpd --config .jscpd.json  -> docs/jscpd-report.md
+docs/inventario-repo.md
+docs/jscpd-report.md
+
 # Herramientas de desarrollo (composer): jamas se suben al hosting.
 # Anclado a la RAIZ: el `assets/vendor/cropper/` del plugin SI se versiona
 # (Cropper.js 1.6.2 vendoreado, spec 016; el deploy es push a git).

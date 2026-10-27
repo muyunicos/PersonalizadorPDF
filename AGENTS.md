@@ -986,13 +986,15 @@ la carpeta `tests/` viaja con el plugin al hosting y no debe ser ejecutable por 
 ```powershell
 php composer.phar run analisis              # PHPStan nivel 4 (phpstan.neon): codigo muerto,
                                             # ramas muertas y condiciones imposibles
-npx --yes jscpd@4 --config .jscpd.json .    # Bloques clonados PHP/JS -> docs/jscpd-report.md
-php tests/inventario_repo.php               # Archivos/pesos/dependencias -> docs/inventario-repo.md
+npx --yes jscpd@4 --config .jscpd.json .    # Bloques clonados PHP/JS -> docs/jscpd-report.md (no versionado)
+php tests/inventario_repo.php               # Archivos/pesos/dependencias -> docs/inventario-repo.md (no versionado)
 ```
 - `/vendor/` (composer, anclado a la raiz) y `composer.phar` estan en `.gitignore`
-  (jamas se despliegan). `assets/vendor/` quedo **vacio y retirado** en la spec 021
+  (jamas se despliegan). `assets/vendor/cropper/` quedo **vacio y retirado** en la spec 021
   (Cropper.js 1.6.2 era el motor de la 016 y el selector ya no lo usa; lo congela
-  la fase F0 de `tests/selector-contrato.test.js`). `composer.json`,
+  la fase F0 de `tests/selector-contrato.test.js`). En `assets/vendor/pdfjs/` **sigue**
+  el PDF.js local (Apache-2.0), que es dependencia dura del editor de mockups
+  (`pdfjsWorker`/`pdfjsCMaps` en `personalizador-pdf.php`): no borrarlo. `composer.json`,
   `composer.lock`, `phpstan.neon` y `.jscpd.json` si se versionan.
 - Los FP estructurales estan ignorados **con comentario** en `phpstan.neon` (includes de
   `admin/*.php` dentro de metodos de la clase, constantes del plugin, funciones `wc_*`) y
