@@ -34,14 +34,20 @@ Este archivo **no repite** normas del proyecto: solo dice **como trabajar**. El 
    arregla con un script**. Releer el fragmento exacto (`read_files` con rango), usar un
    ancla de **UNA linea y sin espacios iniciales** (AGENTS.md §10.ter, regla 6) y
    reintentar **una** vez.
-2. Si vuelve a fallar: mostrar el fragmento objetivo y **esperar instruccion**. No dividir
+   **El sospechoso nº1 no es el tamaño: es 1 caracter mal copiado.** Tipico: los escapes del
+   output JSON del read (`\"` en el output = `"` en el archivo). Si el fragmento trae comillas o
+   backslashes, verificar el byte real con `Select-String -SimpleMatch` **antes** de editar.
+2. **Un bloque grande que falla se biseca** antes de concluir que la herramienta tiene un limite:
+   probar la mitad; si **cada** mitad entra sola, el problema es de **contenido** (una linea), no
+   de tamaño. Concluir un limite de la herramienta sin bisecar propaga un dato falso.
+3. Si vuelve a fallar: mostrar el fragmento objetivo y **esperar instruccion**. No dividir
    a ciegas ni reescribir el archivo entero.
    Ojo con el **EOL mixto** del repo (CRLF en `AGENTS.md`/`assets/admin.js`, LF en
    `readme.txt`/`engine/*.php`): un ancla multilinea puede fallar por eso aunque el texto
    sea correcto. Ante la duda, anclas de una linea.
-3. `Invalid input` / `expected string, received undefined` / JSON cortado: el tool-call llego
+4. `Invalid input` / `expected string, received undefined` / JSON cortado: el tool-call llego
    incompleto o mal formado. Partir la edicion en pasos mas chicos.
-4. **Dos intentos fallidos = parar.** Explicar la causa y proponer otro enfoque; no loop.
+5. **Dos intentos fallidos = parar.** Explicar la causa y proponer otro enfoque; no loop.
 
 ## Presupuesto de contexto
 

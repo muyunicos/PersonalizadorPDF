@@ -791,14 +791,19 @@ fue el shell: fue usar scripts que reescriben ficheros completos.**
 ### Reglas
 
 1. **Editar SIEMPRE con la herramienta de edicion** (diff exacto del texto). Es lo
-   unico que no sufre escapado de shell. **Nunca** generar ficheros con
+   unico que no sufre escapado de shell. **Nunca** generar **contenido** con
    heredocs de bash, con `Set-Content` sobre un fichero existente, ni con scripts
    de Node o PowerShell que reescriban el fichero entero.
+   **Excepcion acotada (2026-10-27): mover un rango de lineas entre archivos.** Se permite un
+   comando determinista por rango (`ReadAllText`/`Substring`/`WriteAllText`, `-Encoding utf8NoBOM`,
+   **sin heredocs**) **solo si**: (a) el contenido se mueve **tal cual**, sin editarlo; (b) se
+   compara el **hash** del bloque antes y despues; (c) va en un **commit propio**. Sigue prohibido
+   generar contenido nuevo con un script y reescribir un archivo a mano con `Set-Content`.
 2. **Cambios grandes**: en pasos de editor, y `php -l` / `node --check` **despues
    de cada paso**, no al final.
 3. **`run_commands` es para LEER, buscar y verificar** (`Select-String`, `php -l`,
    `node tests/...`, `git`). Si un comando necesita escribir un fichero del repo,
-   es que hay que usar el editor.
+   es que hay que usar el editor (salvo la excepcion de la regla 1).
 4. **Antes de la primera tarea de código**, confirmar el shell:
    `$PSVersionTable.PSVersion` → 7.x. Es un comando barato (§8).
 5. **Si algo se rompe**: `git checkout -- <fichero>` (el árbol está limpio y
@@ -815,6 +820,12 @@ fue el shell: fue usar scripts que reescriben ficheros completos.**
    puede fallar por el fin de linea aunque el texto se vea igual: si un ancla de varias lineas no
    matchea y el texto es correcto, **no es el texto, es el EOL** → partir el cambio en anclas de
    una linea. No cambiar `.gitattributes` a `eol=lf` sin aprobacion: seria un diff masivo de una vez.
+9. **Un `text not found` se biseca antes de concluir un limite de la herramienta**: casi siempre
+   es **1 caracter** mal copiado (tipico: `\"` del output JSON del read contra `"` del archivo).
+   Verificar el byte real con `Select-String -SimpleMatch`; si **cada mitad** del bloque entra sola,
+   el problema es de **contenido**, no de tamaño. **Nunca** documentar un limite de la herramienta
+   sin bisecar: propaga un dato falso (paso el 2026-10-27: se afirmo "acepta ~5 filas" y el bloque
+   que fallaba media 752 caracteres).
 
 ### Commits (2026-10-21)
 
