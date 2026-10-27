@@ -607,14 +607,13 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `repetir` en cada grupo (igual que `datos_pdf_render`); `admin/pdfs.php` pinta el
   checkbox desde `$gm['repetir']`. Antes leia `$m` (variable sin definir) y el checkbox
   SIEMPRE salia desmarcado al recargar (el guardado funcionaba).
-- ✅ **Specs historicos**: 003 archivado (`specs/_archivo/003-galeria-engine/`, superado
-  por 006); 004/005/006 con codigo completo 2026-09-28 (004: 33/34, 005: T001–T011,
+- ✅ **Specs historicos**: 004/005/006 con codigo completo 2026-09-28 (004: 33/34, 005: T001–T011,
   006: 27/29; puertas automaticas en verde) y pendiente solo el recorrido manual
   unificado en WP real (`specs/MANUAL-PENDIENTE-WP-REAL.md`, cubre T030+T012+T017+T029
-  en una sesion; indice en `specs/INDICE.md`); diseno historico 004-2026-09-13 en
-  `specs/004-.../_archivo/`; norma vigente = `constitution` §IV (ex-008); auditoria
+  en una sesion; indice en `specs/INDICE.md`); norma vigente = `constitution` §IV (ex-008); auditoria
   de galeria RC34–RC36 archivada (`specs/_archivo/auditoria-galeria-RC34-RC36.md`,
-  sin backlog propio; canonico `modules/textmuy/AGENTS.md`).
+  sin backlog propio; canonico `modules/textmuy/AGENTS.md`). Las specs obsoletas (003, 007 y el
+  diseno 004-2026-09-13) se retiraron el 2026-10-27: quedan en el historial de git.
 - ✅ **Spec 009 `galerias-sprite-unificado` (implementada RC46–RC74; reconciliada el 2026-10-24)**: unifica
   las tres galerías del editor (imágenes, tipografías, estilos guardados) sobre un único
   mecanismo de lectura certificada (`thumbs.webp` + `thumbs.sprite_firma`) en los tres
