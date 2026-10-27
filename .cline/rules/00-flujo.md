@@ -36,6 +36,9 @@ Este archivo **no repite** normas del proyecto: solo dice **como trabajar**. El 
    reintentar **una** vez.
 2. Si vuelve a fallar: mostrar el fragmento objetivo y **esperar instruccion**. No dividir
    a ciegas ni reescribir el archivo entero.
+   Ojo con el **EOL mixto** del repo (CRLF en `AGENTS.md`/`assets/admin.js`, LF en
+   `readme.txt`/`engine/*.php`): un ancla multilinea puede fallar por eso aunque el texto
+   sea correcto. Ante la duda, anclas de una linea.
 3. `Invalid input` / `expected string, received undefined` / JSON cortado: el tool-call llego
    incompleto o mal formado. Partir la edicion en pasos mas chicos.
 4. **Dos intentos fallidos = parar.** Explicar la causa y proponer otro enfoque; no loop.

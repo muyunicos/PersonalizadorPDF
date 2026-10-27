@@ -1111,6 +1111,11 @@ fue el shell: fue usar scripts que reescriben ficheros completos.**
    la indentacion adivinada).
 7. **Anclas de una linea = lotes seguros**: varias ediciones al mismo archivo en un solo lote entran
    bien **si** cada `old_text` es de una linea y empieza en texto, no en espacios (probado 2026-10-21).
+8. **EOL mixto en el repo (medido 2026-10-27)**: `core.autocrlf=true` y conviven archivos CRLF
+   (`AGENTS.md`, `assets/admin.js`) con LF (`readme.txt`, `engine/*.php`). Un ancla **multilinea**
+   puede fallar por el fin de linea aunque el texto se vea igual: si un ancla de varias lineas no
+   matchea y el texto es correcto, **no es el texto, es el EOL** → partir el cambio en anclas de
+   una linea. No cambiar `.gitattributes` a `eol=lf` sin aprobacion: seria un diff masivo de una vez.
 
 ### Commits (2026-10-21)
 
