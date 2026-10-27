@@ -76,3 +76,14 @@ Este archivo **no repite** normas del proyecto: solo dice **como trabajar**. El 
 - **No** commitear con el lint en rojo; **no** hacer `push` sin aprobacion explicita
   (el push dispara deploy a Hosting).
 - Mensajes, variables e interfaz en espanol, sin tildes en codigo puro.
+
+## Aviso de fin de tarea (solo en la ULTIMA respuesta)
+
+Cuando la respuesta **cierra la tarea** (no queda nada por hacer sin el usuario) o **pide su
+intervencion** (pregunta, decision, bloqueo), el **ultimo tool call de ese turno** es:
+
+    & "$env:LOCALAPPDATA\pmu-aviso\aviso.bat"
+
+No se dispara en los turnos intermedios (mientras sigo trabajando). Si el comando falla, seguir
+con la respuesta y avisarlo UNA vez. Vive fuera del repo (`%LOCALAPPDATA%\pmu-aviso\`): no se
+versiona ni se despliega; sus opciones estan en la cabecera del propio `.bat`.
