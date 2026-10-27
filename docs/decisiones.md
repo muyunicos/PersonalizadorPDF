@@ -9,7 +9,9 @@ y se conserva, porque es la evidencia de por que no se repite.
 
 ---
 
-- ❌ **Sin Python**: backend estrictamente en PHP (la v1 fue Flask + Python; migrada).
+- ❌ **Sin Python ni Node en el servidor**: backend estrictamente en PHP porque el destino es
+  hosting compartido (Hostinger Business, solo PHP). La v1 era Flask + Python y se migro por esto.
+  **Alcance**: lo que se despliega, **no** las herramientas de desarrollo (Node/Composer/PowerShell).
 - ✅ **Único panel UI para presets**: la galería inferior expandible de TextMuy es el único
   punto para buscar/guardar/borrar presets. No recrear los antiguos menús.
 - ✅ **Formato único para presets**: todo preset es `.txm` (delta de settings) + celda

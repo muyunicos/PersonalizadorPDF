@@ -55,7 +55,8 @@ Integra el sistema **TextMuy** (editor de estilos de texto client-side) en la pe
 - **TextMuy**: módulo autocontenido servido en un iframe same-origin. Los grupos del PDF
   pueden llevar "texto + estilo" y TextMuy renderiza la imagen del grupo al pulsar
   Procesar, 100% client-side (Canvas 2D + WebGL).
-- **Motor PHP**: el plugin procesa PDFs en hosting compartido sin Python ni Node. El servicio
+- **Motor PHP**: el plugin procesa PDFs en hosting compartido (**Hostinger Business: solo PHP**)
+  sin Python ni Node en el servidor. El servicio
   IA opcional de la PC es independiente del motor y solo se usa desde Test; el JS de TextMuy
   corre en el navegador.
 - **API (objetivo de negocio, uso principal a futuro)**: procesar compras de PDFs editados
@@ -551,7 +552,11 @@ Estas decisiones **siguen vigentes** y no deben revertirse. El historial complet
 tomo, cuando, y cuales quedaron superadas) vive en [`docs/decisiones.md`](./docs/decisiones.md);
 el estado de cada spec, en [`specs/INDICE.md`](./specs/INDICE.md).
 
-- ❌ **Sin Python**: backend estrictamente en PHP.
+- ❌ **Sin Python ni Node en el servidor**: el plugin se despliega en hosting compartido
+  (**Hostinger Business**) y ahi **solo corre PHP**: no hay Python, Node, `exec()`, procesos en
+  segundo plano ni Composer en runtime. **El alcance es lo que se despliega** (`personalizador-pdf.php`,
+  `engine/`, `inc/`, `admin/`, `assets/`). En **desarrollo** si se usa Node (47 suites + Playwright),
+  Composer/PHPStan, `npx jscpd` y PowerShell. La v1 era Flask + Python y se migro justamente por esto.
 - ✅ **Datos fuera del plugin**: todo lo del administrador vive en `uploads/pmu/` (§5); la carpeta
   del plugin y la del modulo son reemplazables sin perder informacion. Sin contenido de fabrica.
 - ✅ **Sin duplicados**: antes de agregar algo, revisar el arbol y reutilizar. Un solo motor de
@@ -738,7 +743,7 @@ node tests/sprite-canonico.test.js && node tests/fuente-compuesta.test.js && nod
 node tests/fuente-selector.test.js && node tests/integridad-archivos.test.js && node tests/rc-bump.test.js
 Set-Location ..\..
 ```
-(**45 suites** `*.test.js` + `tests/galerias.browser.js`; Node NO corre en el servidor productivo
+(**47 suites** `*.test.js` + 2 de navegador (`galerias.browser.js`, `ficha-pedido.browser.js`); Node NO corre en el servidor productivo
 de WP: es solo testing del módulo. Las ultimas 5 en entrar: `preset-roundtrip`,
 `fuente-compuesta`, `fuente-carga-estados`, `fuente-selector` e `integridad-archivos`;
 `?v=RC75` hoy en ambos HTML.)
@@ -759,14 +764,16 @@ Si al regenerar el módulo el total no cuadra, revisar si entraron o salieron su
   tildes en código puro para evitar problemas de encoding).
 - ❌ NO DEBES: crear nuevos archivos, páginas o motores sin confirmar con el usuario si ya
   existe código que resuelva el problema.
-- ❌ NO DEBES: reintroducir Python.
+- ❌ NO DEBES: introducir Python, Node o `exec()` en el **runtime del plugin** (lo que se
+  despliega). Las herramientas de desarrollo (Node, Composer/PHPStan, `npx`, PowerShell) estan
+  permitidas: son las puertas de §9.
 - ❌ NO DEBES: modificar bases de datos, credenciales o servicios externos, ni desplegar a
   producción sin aprobación explícita del usuario (el push dispara deploy; §2).
 - ❌ NO DEBES: editar a mano `.specify/` ni `.clinerules/` (gestionados por el CLI y
   gitignored): actualizá con `specify integration upgrade cline --script ps` (§8).
 - ✅ El módulo `modules/textmuy/` es un repositorio git propio (`muyunicos/textmuy`, el
   original) que vive dentro de este checkout: se edita directamente y se corren sus tests
-  Node (`node --check` + 45 suites), pero sus commits y push van EN ESE repo; se hace bump
+  Node (`node --check` + 47 suites), pero sus commits y push van EN ESE repo; se hace bump
   `?v=RCn` en ambos HTML al tocar su JS.
 - ❌ NO DEBES: guardar datos generados por el admin dentro de la carpeta del plugin
   (siempre usar `uploads/` según §5).
