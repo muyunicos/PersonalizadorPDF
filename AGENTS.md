@@ -869,7 +869,7 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   Ojo: la subida real de un PDF **no** se puede simular en el arnes (`move_uploaded_file` exige un upload
   real) -> el flujo con subida se prueba en el lab (quickstart R1-R8). Artefactos en
   `specs/032-reemplazo-pdf/`.
-- ✅ **Spec 034 `importar-reemplazar-capa` (especificada 2026-10-26, SIN implementar)**: reemplazar la capa/grupo seleccionado con otra capa (pagina PDF o imagen) manteniendo las transformaciones (x/y/w/h/rot/sesgo/filtros/modo/nombre/oculta/bloqueada/envoltura/grupo/grupo_rot/perspectiva); habilitar perspectiva por capa individual (hoy solo grupo); importar pagina + PH pregunta si reemplazar la seleccion actual; destino es la capa/grupo seleccionado (si varias capas no agrupadas, la primera); conserva ubicacion, rotacion y perspectiva. Artefactos en `specs/034-importar-reemplazar-capa/` (spec, plan, research, data-model, contracts/capa-importar, quickstart, tasks).
+- ✅ **Spec 034 `importar-reemplazar-capa` (especificada 2026-10-26; implementada en curso en 4.25.0: 12/17 tareas cerradas, 1 parcial, 4 pendientes — ver `tasks.md`)**: reemplazar la capa/grupo seleccionado con otra capa (pagina PDF o imagen) manteniendo las transformaciones (x/y/w/h/rot/sesgo/filtros/modo/nombre/oculta/bloqueada/envoltura/grupo/grupo_rot/perspectiva); habilitar perspectiva por capa individual (hoy solo grupo); importar pagina + PH pregunta si reemplazar la seleccion actual; destino es la capa/grupo seleccionado (si varias capas no agrupadas, la primera); conserva ubicacion, rotacion y perspectiva. Artefactos en `specs/034-importar-reemplazar-capa/` (spec, plan, research, data-model, contracts/capa-importar, quickstart, tasks).
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
   `admin/ayuda.php`, `modules/LEEME.md` solo resumen y apuntan aqui). El `== Changelog ==`
   de `readme.txt` es historial, no normativa.
@@ -929,13 +929,16 @@ specify integration upgrade cline --script ps   # diff-aware; --force solo si es
   (`.clinerules/` esta en `.gitignore` y lo gestiona Spec Kit con hashes en
   `.specify/integrations/cline.manifest.json`). Ese archivo **no repite** normas: solo remite aqui.
 - **Esta version NO soporta reglas condicionales** (`paths:`/`globs` en frontmatter): la doc oficial
-  describe un runtime mas nuevo. No disenar reglas por area; el unico lever real de costo es el
-  tamano de este archivo.
-- **Costo por request**: `AGENTS.md` (119 KB ≈ 30k tokens) se carga entero en cada request;
+  describe un runtime mas nuevo. No disenar reglas por area: acortar este archivo tiene un efecto de
+  **foco** (menos dilucion), no de costo (ver el punto siguiente).
+- **Costo por request**: `AGENTS.md` (119 KB ≈ 30k tokens) se carga entero en cada request, pero sobre una ventana de **1M**
+  eso es ~**3%**: el problema no es el costo sino la **dilucion de foco**.
   `modules/textmuy/AGENTS.md` (129 KB) **no** se auto-carga (anidado) y se lee solo si se toca el
   modulo.
-- **Modelo y ventana**: provider `openai-compatible` local (`oc/deepseek-v4-flash-free`), contexto
-  128k, `maxTokens` 8192: los diffs largos se truncan, asi que van ediciones chicas (§10.ter).
+- **Modelo y ventana**: provider **`openrouter`**, modelo `deepseek/deepseek-v4.1-flash-1017`, contexto **1M** y salida
+  **393k** (verificado en `~/.cline/data/globalState.json`, 2026-10-27). La entrada
+  `openai-compatible` de `models.json` (`oc/deepseek-v4-flash-free`, 128k, 8k de salida) es config
+  **vieja** (27-ago) y ese proxy local no escucha: no usarla para diagnosticar.
 
 ## 9. Cómo probar
 

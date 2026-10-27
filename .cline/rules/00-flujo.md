@@ -36,14 +36,15 @@ Este archivo **no repite** normas del proyecto: solo dice **como trabajar**. El 
    reintentar **una** vez.
 2. Si vuelve a fallar: mostrar el fragmento objetivo y **esperar instruccion**. No dividir
    a ciegas ni reescribir el archivo entero.
-3. `Invalid input` / `expected string, received undefined` / JSON cortado: el tool-call se
-   trunco (`maxTokens: 8192`). Partir la edicion en pasos mas chicos.
+3. `Invalid input` / `expected string, received undefined` / JSON cortado: el tool-call llego
+   incompleto o mal formado. Partir la edicion en pasos mas chicos.
 4. **Dos intentos fallidos = parar.** Explicar la causa y proponer otro enfoque; no loop.
 
 ## Presupuesto de contexto
 
 - `AGENTS.md` pesa ~119 KB (~30k tokens) y se carga en **cada** request: no se relee
-  entero, se lee la seccion que la tarea necesita. `modules/textmuy/AGENTS.md` (129 KB) no
+  entero, se lee la seccion que la tarea necesita. Con la ventana de 1M eso es ~3%, asi que el
+  motivo para no releerlo es **foco**, no costo. `modules/textmuy/AGENTS.md` (129 KB) no
   se auto-carga: se lee solo si se toca el modulo.
 - Alrededor del **70%** de la ventana: cerrar con un resumen (estado, archivos tocados,
   pruebas corridas, proximo paso) y continuar en tarea nueva (`/newtask`). Para no perder
