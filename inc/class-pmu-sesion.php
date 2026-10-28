@@ -523,7 +523,8 @@ class PMU_Sesion
      *
      * Reemplaza las filas del grupo (idempotente): re-registrar no acumula.
      *
-     * @param array $ids ids de subida POR INSTANCIA ('' = instancia sin valor)
+     * @param array $entradas entradas POR INSTANCIA: `{id, receta}` o el `id` suelto
+     *                        ('' = instancia sin valor)
      * @return array filas escritas
      */
     public function registrar_fotos($sid, $item_key, $pdf, $grupo, array $entradas)

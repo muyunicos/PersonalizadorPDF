@@ -308,8 +308,10 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
      quitar del carrito borra el item. "Editar" vuelve a la ficha con el item cargado.
      `preview_omisible` NO oculta la vista previa: el comprador puede pedirla igual;
      solo deja de bloquear el boton de comprar mientras las vistas no estan listas.
-   - Pedido → `pedido_item_crear` copia la meta al item Woo y hace staging
-     (`tmp/orders/{id}/`); al pagarse `pedido_promover` lo renombra a `orders/{id}/{item}/`.
+   - Pedido → `pedido_item_crear` copia la meta al item Woo (**sin** staging: el item vive
+     completo en la sesion desde la vista previa); al pagarse `pedido_promover` **mueve** el
+     item a `orders/{cliente}/{order_id}/{item_key}/` y sus originales a
+     `orders/{cliente}/uploads/`. Sin cliente (`customer_id` = 0) **no** promueve y deja causa visible.
      El comprador descarga en `mi-cuenta/descargas/` (una fila por cada PDF aceptado
      del snapshot; `item_generar_pdfs`, idempotente, arma cada PDF desde las filas
      indexadas de `manifest.archivos[]` con `Motor::procesar_pedido`). La pestaña
@@ -473,19 +475,22 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `aria-hidden`): oscurece fuera de la forma y dibuja el contorno, reusando
   `PMUMockup.comandosEnvoltura`. **NUNCA** premascara el PNG (el clip lo aplica el PDF); el
   recorte sigue rectangular. Sin `envoltura` no se agrega DOM; sin `PMUMockup` degrada.
-- **Fotos del comprador (spec 012)**: `tmp/sesion-{sid}/{item_key}/subidas/{id}.{ext}` con fila en
-  `manifest.subidas[]` (`id`, `file`, `mime`, `bytes`). El `{id}` lo genera el **servidor** y el
-  formato sale de la **firma de los bytes** (webp/png/jpg/gif), nunca del nombre que manda el
-  cliente. **Spec 026 (D3)**: si llega un PNG y hay GD, `convertir_webp()` lo convierte a WebP
-  (**q0.85**: la foto del comprador es unseen, el ahorro es ~10x) y **el alfa se preserva**;
-  sin GD se guarda el original tal cual. La carpeta viaja sola al pedido porque las tres mudanzas
-  mueven el arbol entero del item.
-  **Spec 029 (D1)**: la foto **no se copia** al pool: la fila de `archivos[]` la **referencia**
-  (`subidas/{id}.{ext}`, `origen: 'subida'`), asi que el cliente no la descarga, no la rasteriza
-  y no la vuelve a subir (un POST por grupo, solo ids).
-  **Spec 029 (D7)**: `podar_subidas()` borra las **huerfanas** (ni fila ni `valores`): se llama al
-  registrar fotos y en la vista previa, asi reemplazar o quitar una foto borra la vieja en la misma
-  corrida y la basura no viaja al pedido. Sin filas ni valores **no borra nada**.
+- **Fotos del comprador (specs 012 + 035)**: el **ORIGINAL** vive en
+  `tmp/sesion-{sid}/uploads/{id}.{ext}` — carpeta **compartida** por los items de la sesion y
+  deduplicada por contenido — y al pagar se **mueve** a `orders/{cliente}/uploads/{id}.{ext}`.
+  Fila en `manifest.subidas[]` con `origen: 'original'` (`id`, `params` v2, `sha`, `bytes`; **sin**
+  `file`): la ubicacion la resuelve el servidor por **cadena** (`resolver_original`), asi que
+  promover **no** reescribe ninguna fila. El `{id}` lo genera el **servidor** (sha12 de los bytes
+  crudos) y el formato sale de la **firma de los bytes**, nunca del nombre que manda el cliente.
+  **Spec 035 (D2)**: el cap de 2000 px se **revalida** en el servidor (`acotar_original()`);
+  **spec 026 (D3)**: con GD el PNG se convierte a WebP (**q0.85**, y **el alfa se preserva**).
+  **Spec 035 (D9/T024)**: la **composicion NO se sube**. `registrar_fotos()` escribe filas
+  `origen: 'compuesta'` con `file` **determinista** (`img/foto-{pdf}-{gid}-{receta}.webp`) y `orig`
+  (`{id, params}`), y el servidor la **materializa** con `Compositor` al generar el PDF:
+  **el nombre ES el cache**. Los `params` v2 son obligatorios en la fila — `receta` es un hash
+  **irreversible**, sin ellos no hay con que recomponer.
+  **Spec 035 (D13)**: `podar_uploads_sesion()` borra los originales que ningun item de la sesion
+  referencia; `limpiar_ttl` **no** cuenta `uploads/` como item.
 - Catálogo global de campos (formato v1, ya migrado a v3): ver la entrada de arriba.
   `id` auto no reutilizable, `titulo_cliente`, `tipo`, `array`, valor dual
   `valor`(sistema)/`cliente`(etiqueta); detalle en `specs/004.../contracts/campos.md`).
@@ -499,7 +504,7 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   por producto y **fuera del TTL** de la spec 030 (`limpiar_ttl` barre solo `tmp/sesion-*`). Borrar el
   producto limpia tambien su `tmp/reemplazos/`.
 - **Retencion de `orders/` con referencias (spec 030, §6 P3)**: una fila `origen: ref` puede apuntar a
-  **otro pedido** (`orders/{order_id}/...`), asi que **no se purga un pedido referenciado**: antes de
+  **otro pedido** (`orders/{cliente}/{order_id}/...`), asi que **no se purga un pedido referenciado**: antes de
   cualquier purga hay que **materializar** esas filas (copiar el archivo al pedido que lo referencia).
   Hoy nada purga `orders/` (el TTL solo mira `tmp/`), asi que el invariante es documental.
 - Salida de muestra: `tmp/muestras/{nombre}/{nombre}_procesado.pdf` (se sobrescribe)
@@ -520,9 +525,9 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   + `mockup-{id}.webp` congelados 300x300; `draft-{uuid}` →
   `cart_item_key`; mockup obligatorio en ficha antes del add-to-cart, salvo
   `config.json:preview_omisible=true`); `preview_estado` en meta (`ok`|`sin_vista`|`omisible`);
-  canonico comprador = meta del item Woo + espejo `tmp/sesion-{sid}/{item_key}/` para el Motor; staging en
-  `tmp/orders/{order_id}/`, entregable por linea en `orders/{order_id}/{item_key}/`
-  (promocion por `rename()` solo al confirmarse el pago); PDF final solo tras el pago
+  canonico comprador = meta del item Woo + espejo `tmp/sesion-{sid}/{item_key}/` para el Motor;
+  **sin staging**: entregable por linea en `orders/{cliente}/{order_id}/{item_key}/`
+  (promocion por `rename()` solo al confirmarse el pago, con `manifest.cliente`); PDF final solo tras el pago
   (boton "Descargar" en `mi-cuenta/descargas/`: render cliente + Motor, reintentable;
   registro admin de pedidos "completados" para revisar/regenerar)
 - Migracion ex-008 pendiente (partir ex-`metadata.json`
@@ -569,7 +574,15 @@ el estado de cada spec, en [`specs/INDICE.md`](./specs/INDICE.md).
 - ✅ **Presets**: formato unico `.txm` + celda en el sprite del ambito (`thumbs.webp`).
 - ✅ **Modulo TextMuy integrado** en `modules/textmuy/` (repo propio; bump `?v=RCn` al tocar su JS).
 - ✅ **Norma ex-008** (`constitution` §IV): `analisis.json` inmutable + `config.json` editable;
-  sesion por item `tmp/sesion-{sid}/{item_key}/`; entregable en `orders/{order_id}/{item_key}/`.
+  sesion por item `tmp/sesion-{sid}/{item_key}/`; entregable en `orders/{cliente}/{order_id}/{item_key}/`
+  con los originales del cliente en `orders/{cliente}/uploads/`.
+- ✅ **La composicion se materializa bajo demanda** (spec 035): el cliente sube el **original** + la
+  receta; el servidor compone con `engine/Compositor.php` (GD + WebP) al generar el PDF. El **hash** de
+  la receta lo recomputa SIEMPRE el servidor (`receta_de`): el cliente manda los `params`, no el hash.
+  Las filas guardan los `params` v2 porque el hash es **irreversible**.
+- ✅ **Arbol de pedidos por CLIENTE y sin staging** (spec 035): `orders/{cliente}/{order_id}/{item_key}/`
+  + `orders/{cliente}/uploads/`; al pagar el item se **mueve** (rename). `clave_valida()` rechaza `0`
+  (invitado): sin cliente no hay carpeta y el pedido queda sin promover con causa visible.
 - ✅ **Jerarquia documental**: `constitution` > `AGENTS.md` > resto.
 
 ## 8. Dificultades del entorno (IMPORTANTE AL TRABAJAR AQUÍ)

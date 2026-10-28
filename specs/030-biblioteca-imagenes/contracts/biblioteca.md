@@ -1,5 +1,9 @@
 # Contract — Biblioteca de imagenes (spec 030)
 
+> **Nota de supersesion (spec 035, 2026-10-28)**: las fotos se resuelven por **`id`** del original
+> (cadena `orders/{cliente}/uploads/` -> `tmp/sesion-{sid}/uploads/`); `subidas/` ya no existe. El
+> resto del contrato (endpoint, identidad, `op=`) sigue igual.
+
 Endpoint unico: `admin_post_personalizador_pdf_biblioteca` (+ `nopriv`).
 Nonce: `personalizador_pdf_vista_previa`. Identidad: **cookie `pmu_sid`** (spec 014), nunca el `sid`
 del POST. Respuesta JSON. Causas: `api:biblioteca:<motivo>`.

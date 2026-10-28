@@ -131,13 +131,13 @@
 **Purpose**: documentacion normativa, enmienda de la constitucion y cierre
 
 - [X] T037 [P] **APLICADO 2026-10-28 (adelantado a la Fase 2: §IV vigente bloqueaba F3)** — Enmendar `.specify/memory/constitution.md` **§III + §IV**: compositor bajo demanda y "mismo encuadre"; `orders/{cliente}/{order_id}/{item_key}`, `orders/{cliente}/uploads/`, sin `tmp/orders/`, `subidas/` fuera; GD con WebP como requisito. Sync Impact Report, version **3.0.0 (MAJOR)**. Ojo: `.specify/` esta en `.gitignore`, la enmienda **no se versiona**
-- [ ] T038 [P] `AGENTS.md` §2 (mapa), §5 (formatos: carpeta del cliente, `origen: original/compuesta`, pool `img/foto-`) y §7 (decisiones: receta v2, sin staging, sin cuota)
-- [ ] T039 [P] `specs/029-pool-sin-copias/spec.md` y `specs/030-biblioteca-imagenes/spec.md` + `contracts/`: nota de supersesion (el pool guarda `compuesta` + `texto`; `subidas/` desaparece; las fotos del cliente se resuelven por `id` y cadena)
-- [ ] T040 `specs/INDICE.md` (fila 035 -> implementada), `readme.txt` (changelog) y version **solo en la cabecera** de `personalizador-pdf.php` -> 4.27.0
-- [ ] T041 `php tests/inventario_repo.php`, `php tests/estado_pmu.php` y `php tests/sin_lectura.php` en verde
-- [ ] T042 Recorrido completo del `quickstart.md` (E1-E9) en `C:\wp-lab` con evidencia
-- [ ] T043 Cerrar `tasks.md` con el estado real de cada tarea y actualizar `specs/INDICE.md`
-- [ ] T044 Revision de `php composer.phar run analisis` y `npx --yes jscpd@4 --config .jscpd.json .`: sin hallazgos nuevos en el codigo tocado (los previos se dejan)
+- [X] T038 [P] **HECHO** — `AGENTS.md`: §3 (el pedido ya no hace staging), §5 (formato de las fotos del comprador: original en la carpeta compartida, `origen: 'original'/'compuesta'`, `orig {id, params}`, materializacion con `Compositor`, `podar_uploads_sesion`; retencion con la ruta nueva) y §7 (dos decisiones nuevas: composicion bajo demanda + arbol por cliente y sin staging)
+- [X] T039 [P] **HECHO** — notas de supersesion en `specs/029-pool-sin-copias/spec.md` y `specs/030-biblioteca-imagenes/spec.md` + `contracts/biblioteca.md`
+- [X] T040 **HECHO** — `specs/INDICE.md` (035 -> implementada), `readme.txt` (Stable tag **4.27.0** + entrada de changelog + paths del arbol nuevo + GD/WebP como requisito para las fotos) y version **solo en la cabecera** de `personalizador-pdf.php` -> **4.27.0**
+- [X] T041 **HECHO** — `php tests/inventario_repo.php` (0 includes sin resolver), `php tests/estado_pmu.php`, `php tests/sin_lectura.php` y `php tests/inventario_pmu.php --resumen`, todos en verde
+- [ ] T042 Recorrido completo del `quickstart.md` (E1-E9) en `C:\wp-lab` con evidencia (**NECESITA EL LAB**)
+- [X] T043 **HECHO** — `tasks.md` cerrado con el estado real de cada tarea; `specs/INDICE.md` actualizado
+- [X] T044 **HECHO** — `php composer.phar run analisis`: **7 hallazgos, TODOS previos** (verificados con `git blame`: commits del 19-21/10, specs 020/022/endpoint IA). El unico que era mio (un `@param $ids` desactualizado en `registrar_fotos`, de T016) **corregido**. `npx jscpd`: 1,34% de clonado, **PHP 0 clones**, y ningun clon toca archivos de la 035
 
 ---
 

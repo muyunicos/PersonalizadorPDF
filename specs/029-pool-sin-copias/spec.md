@@ -3,6 +3,14 @@
 > Estado: **implementada** (2026-10-20). Release: 4.20.0.
 > Aprovecha la D11 de la **028** (el PNG del comprador ya mide el lienzo) y la
 > 026 (WebP por firma). **El Motor y el formato del pedido no cambian.**
+>
+> **Superada en parte por la 035** (2026-10-28): el pool ya **no** referencia la foto del comprador
+> (`subidas/{id}.{ext}`, `origen: 'subida'`). Ahora la fila `origen: 'compuesta'` apunta a una
+> composicion **determinista** (`img/foto-{pdf}-{gid}-{receta}.webp`) que el servidor **materializa**
+> con `Compositor` desde el ORIGINAL, y `subidas/` desaparece del item (los originales viven en
+> `tmp/sesion-{sid}/uploads/` y luego en `orders/{cliente}/uploads/`). `podar_subidas()` ya no existe:
+> la poda es por sesion (`podar_uploads_sesion()`). La **D1** (no copiar) y la **D2** (el texto se
+> colapsa) siguen vigentes.
 
 ## 1. Problema
 

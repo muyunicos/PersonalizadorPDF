@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.25.0
+Stable tag: 4.27.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -19,7 +19,7 @@ La administracion funciona como consola de trabajo con 6 pestanas:
 1. **PDFs y procesamiento**: se detectan los placeholders, se agrupan por color y se generan `analisis.json` + `config.json` del PDF; se carga una imagen por grupo (computadora o galeria de medios) y se procesa el PDF final.
 2. **Campos**: catalogo reutilizable de campos (`campos.json`) para la tienda (spec 004 / plan 008).
 3. **Estilos de Texto**: editor integrado del sistema TextMuy (100% en el navegador, estilo TextStudio) para disenar estilos de texto y guardarlos como presets `.txm` en el servidor (disponibles en todos los navegadores y en el selector de estilo de cada grupo del PDF). Las imagenes para rellenos y fondos se suben a `uploads/pmu/img/` y se reutilizan entre presets.
-4. **Pedidos**: lista de pedidos completados con sus PDFs; permite revisar y **Regenerar PDF** por linea (entrega en `orders/{order_id}/{item_key}/`).
+4. **Pedidos**: lista de pedidos completados con sus PDFs; permite revisar y **Regenerar PDF** por linea (entrega en `orders/{cliente}/{order_id}/{item_key}/`).
 5. **Test**: smoke test en vivo del sitio (entorno, permisos, catalogos, motor sobre los PDFs subidos, hooks, TextMuy, WooCommerce y render de la consola) con tabla OK/FALLA; avisa si la version instalada cambio desde la ultima corrida. Tambien permite configurar el endpoint HTTPS y el token del servicio opcional de IA en la PC, probar la conexion autenticada y procesar imagenes de prueba en modo Foto o Anime/ilustracion.
 6. **Ayuda**: documentacion interna (resumen; canonico en `AGENTS.md` §5).
 
@@ -29,9 +29,9 @@ A diferencia de la version original (Flask + Python), el motor PDF es **100% PHP
 
 * PHP 7.4 o superior
 * Extension zlib (casi siempre disponible)
-* La extension GD es opcional: sin GD el motor procesa imagenes PNG (8 bits, sin entrelazar) con su decodificador propio; para JPEG/GIF/WebP se necesita GD (o un JPEG cuyo tamano coincida exactamente con el del grupo)
+* La extension GD es opcional para el procesamiento general: sin GD el motor procesa imagenes PNG (8 bits, sin entrelazar) con su decodificador propio; para JPEG/GIF/WebP se necesita GD (o un JPEG cuyo tamano coincida exactamente con el del grupo). Para las **fotos del comprador** GD con soporte WebP es **requisito** (spec 035): el servidor revalida el cap de 2000 px y compone la foto bajo demanda al generar el PDF.
 
-**Datos guardados** (detalle canonico en `AGENTS.md` §5): cada PDF vive en `wp-content/uploads/pmu/pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` inmutable + `config.json` editable con `activo`/`productos`/`campos_ids`/`placeholders[id]`); las pruebas del panel (imagenes aplicadas, salida de muestra) van a `wp-content/uploads/pmu/tmp/muestras/{nombre}/` (se sobrescriben en cada Procesar); ciclo comprador en `tmp/sesion-{sid}/{item_key}/` (un item por compra; la vista previa es obligatoria **salvo `preview_omisible`**), staging en `tmp/orders/{order_id}/` y resultados confirmados en `orders/{order_id}/{item_key}/`; datos TextMuy en `wp-content/uploads/pmu/{fonts,img,tm-presets}/` (catalogos `fonts.json`/`img.json`/`presets.json` + fisicos + `.txm` + `thumbs.webp` por ambito). La carpeta del plugin queda 100% de solo lectura.
+**Datos guardados** (detalle canonico en `AGENTS.md` §5): cada PDF vive en `wp-content/uploads/pmu/pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` inmutable + `config.json` editable con `activo`/`productos`/`campos_ids`/`placeholders[id]`); las pruebas del panel (imagenes aplicadas, salida de muestra) van a `wp-content/uploads/pmu/tmp/muestras/{nombre}/` (se sobrescriben en cada Procesar); ciclo comprador en `tmp/sesion-{sid}/{item_key}/` con los originales compartidos en `tmp/sesion-{sid}/uploads/` (un item por compra; la vista previa es obligatoria **salvo `preview_omisible`**) y resultados confirmados en `orders/{cliente}/{order_id}/{item_key}/` con los originales del cliente en `orders/{cliente}/uploads/` (**sin staging**: al confirmarse el pago el item se mueve); datos TextMuy en `wp-content/uploads/pmu/{fonts,img,tm-presets}/` (catalogos `fonts.json`/`img.json`/`presets.json` + fisicos + `.txm` + `thumbs.webp` por ambito). La carpeta del plugin queda 100% de solo lectura.
 
 **Experiencia del comprador**: en la ficha del producto los campos del admin se montan tal cual (texto, opciones y **cargador de fotos**). Cada foto se ajusta en un editor visual (encuadre, **escala**, **color de fondo** y **recorte por forma de la envoltura**) con un **visor de coleccion** para revisar, eliminar o reemplazar; el **minimo de fotos configurado frena la compra** (en la ficha y en el servidor), y el cargador **nunca agranda** la imagen: guarda la resolucion real de la foto acotada por el hueco.
 
@@ -66,6 +66,12 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.27.0 =
+* Spec 035 (fotos originales del cliente): el comprador sube el **original** (acotado a 2000 px) y el servidor **compone** la foto bajo demanda con GD al generar el PDF, desde el original + la receta del encuadre. La composicion no se sube y, una vez generado el PDF, el original se puede borrar sin romper la regeneracion.
+* El arbol de pedidos pasa a ser **por cliente**: `orders/{cliente}/{order_id}/{item_key}/`, con los originales en `orders/{cliente}/uploads/` (compartidos y deduplicados por contenido). **Sin staging**: al confirmarse el pago el item se **mueve** (rename), no se copia, asi que no se duplica nada.
+* La vista previa se **marca al mostrarse**: las vistas no omisibles van primero, la galeria avisa "Revisa la vista previa" mientras falten y el boton de comprar se habilita al ver la **ultima obligatoria**, no antes; la marca sobrevive la recarga y el cambio de clave del item.
+* GD con soporte WebP pasa a ser **requisito** para las fotos del comprador (el servidor reescala al cap y compone).
 
 = 4.25.0 =
 * Spec 034 (en curso): el editor de mockups puede **importar** una pagina del PDF o una imagen **sobre la capa o el grupo seleccionado**, conservando ubicacion, tamano, rotacion, filtros, modo, envoltura, grupo y perspectiva: solo cambia la imagen de origen. Sin seleccion, sigue agregando una capa nueva.

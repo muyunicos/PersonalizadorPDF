@@ -5,6 +5,11 @@
 > Construye sobre la 012 (subidas del item), la 014 (identidad por cookie), la 021 (visor),
 > la 026/027/028 (formato, transparencia, lienzo) y la 029 (la foto se referencia).
 > **El Motor no se toca** y el formato del pedido no cambia.
+>
+> **Superada en parte por la 035** (2026-10-28): las fotos del cliente se resuelven por **`id`**
+> (cadena `orders/{cliente}/uploads/{id}` -> `tmp/sesion-{sid}/uploads/{id}`), no por `subidas/{id}`;
+> `subidas/` desaparece y `familias()` agrupa por el `id` del original. La tira y el visor
+> (Elegir / Borrar) siguen vigentes.
 
 ## Clarifications
 
