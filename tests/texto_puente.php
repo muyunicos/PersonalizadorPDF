@@ -2045,9 +2045,26 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             }
             break;
         case 'carpeta_cliente':
+            // Spec 035 (T017): la carpeta COMPARTIDA de originales de la sesion.
+            check('dos items distintos en la misma sesion', $GLOBALS['cc_dos_items'] === true);
+            check('la misma foto en DOS items deja UN solo archivo',
+                (int)$GLOBALS['cc_archivos'] === 1,
+                'archivos=' . (int)$GLOBALS['cc_archivos']);
+            check('la misma foto en DOS items devuelve el MISMO id (dedupe por sha)',
+                $GLOBALS['cc_mismo_id'] === true);
+            check('TTL con items vivos: la carpeta compartida NO se borra',
+                $GLOBALS['cc_ttl_vive'] === true);
+            if (array_key_exists('cc_cap_w', $GLOBALS)) {
+                check('cap 2000: una foto de 2600x1300 se acota a 2000x1000 (uniforme)',
+                    (int)$GLOBALS['cc_cap_w'] === 2000 && (int)$GLOBALS['cc_cap_h'] === 1000,
+                    $GLOBALS['cc_cap_w'] . 'x' . $GLOBALS['cc_cap_h']);
+            }
+            check('sin items vivos el TTL se lleva la sesion y sus originales',
+                $GLOBALS['cc_ttl_sin_items'] === true);
+            break;
         case 'traslado':
         case 'rutas':
-            // Spec 035 (T002): esqueleto; los checks llegan con T017/T029.
+            // Spec 035 (T002): esqueleto; los checks llegan con T029.
             break;
         default:
             check('fase desconocida', false);
@@ -4954,10 +4971,58 @@ switch ($fase) {
         break;
 
     case 'carpeta_cliente':
+        // Spec 035 (T017): la carpeta COMPARTIDA de originales de la sesion.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $motor_cc = $p->motor_para_tests();
+        $sesion_cc = new PMU_Sesion($motor_cc);
+        $sid_cc = 'test-cc-0001';
+        $item1_cc = $sesion_cc->crear_draft($sid_cc, ['muestra']);
+        $item2_cc = $sesion_cc->crear_draft($sid_cc, ['muestra']);
+        $GLOBALS['cc_dos_items'] = ((string)$item1_cc !== (string)$item2_cc);
+
+        // 1) Dedupe: la misma foto en DOS items deja UN archivo y el mismo id.
+        $png_cc = sys_get_temp_dir() . '/pd_puente_cc_' . getmypid() . '.png';
+        \ExtractCorel\Engine\PngWriter::write($png_cc, 120, 90);
+        $bytes_cc = (string)file_get_contents($png_cc);
+        $s1_cc = $sesion_cc->guardar_subida($sid_cc, $item1_cc, $bytes_cc);
+        $s2_cc = $sesion_cc->guardar_subida($sid_cc, $item2_cc, $bytes_cc);
+        $dirUp_cc = $motor_cc->dir_sesion_uploads($sid_cc, false);
+        $GLOBALS['cc_archivos'] = is_dir($dirUp_cc)
+            ? count((array)glob($dirUp_cc . DIRECTORY_SEPARATOR . '*')) : 0;
+        $GLOBALS['cc_mismo_id'] = (string)($s1_cc['id'] ?? '') === (string)($s2_cc['id'] ?? '')
+            && (string)($s1_cc['id'] ?? '') !== '';
+
+        // 2) TTL con items vivos: la carpeta compartida NO se borra.
+        $sesion_cc->limpiar_ttl();
+        $ruta1_cc = $sesion_cc->resolver_original((string)($s1_cc['id'] ?? ''), '', $sid_cc);
+        $GLOBALS['cc_ttl_vive'] = is_dir($dirUp_cc) && $ruta1_cc !== '' && is_file($ruta1_cc);
+
+        // 3) Cap 2000: una foto de 2600x1300 se acota a 2000x1000 (uniforme).
+        if (extension_loaded('gd') && function_exists('imagepng')) {
+            $grande_cc = sys_get_temp_dir() . '/pd_puente_cc_big_' . getmypid() . '.png';
+            $im_cc = imagecreatetruecolor(2600, 1300);
+            imagefilledrectangle($im_cc, 0, 0, 2599, 1299, imagecolorallocate($im_cc, 0, 128, 255));
+            imagepng($im_cc, $grande_cc);
+            $s3_cc = $sesion_cc->guardar_subida($sid_cc, $item1_cc, (string)file_get_contents($grande_cc));
+            $GLOBALS['cc_cap_w'] = (int)($s3_cc['w'] ?? 0);
+            $GLOBALS['cc_cap_h'] = (int)($s3_cc['h'] ?? 0);
+            @unlink($grande_cc);
+        }
+
+        // 4) Sin items vivos, la sesion entera (y sus originales) se va.
+        $sesion_cc->borrar_item($sid_cc, $item1_cc);
+        $sesion_cc->borrar_item($sid_cc, $item2_cc);
+        $sesion_cc->limpiar_ttl();
+        $GLOBALS['cc_ttl_sin_items'] = !is_dir($dirUp_cc);
+        break;
+
     case 'traslado':
     case 'rutas':
         // Spec 035 (T002): esqueleto de las fases nuevas. Cada una arma su
-        // entorno aislado cuando llegue su tarea (T017/T029).
+        // entorno aislado cuando llegue su tarea (T029).
         break;
 
 }

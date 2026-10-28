@@ -67,7 +67,7 @@
 ### Implementation for User Story 1
 
 - [X] T008 [P] [US1] Agregar `dir_sesion_uploads($sid, $crear = false)` en `inc/class-pmu-uploads.php` (`uploads/pmu/tmp/sesion-{sid}/uploads/`, `wp_mkdir_p` + validacion de escritura)
-- [ ] T009 [P] [US1] Crear `assets/fotos-pmu.js` (`PMUFotos`): store `pmu_fotos` en IndexedDB con `{sha, blob, w, h, nombre}`, `guardar(archivo)` con cap 2000 px (canvas + WebP q0.85), `obtener(sha)`, `listar()`, `borrar(sha)`, `navigator.storage.persist()` y manejo de cuota
+- [X] T009 [P] [US1] Crear `assets/fotos-pmu.js` (`PMUFotos`): store `pmu_fotos` en IndexedDB con `{clave, sha, blob, w, h, nombre}`, `factorCap`/`medidasAcotadas` (cap 2000 uniforme), `obtener(sha)` via indice, `listar()`, `borrar()`, `marcarSubida()`, `persistir()` con degradacion. **No calcula el sha**: lo da el servidor
 - [X] T010 [US1] Revalidar el cap en `guardar_subida()` (`inc/class-pmu-sesion.php`): `getimagesize()` y, si `max(w,h) > 2000`, reescalar con GD (factor uniforme, alfa preservado); sin GD, `motor:subida:tamano` (`acotar_original()`, constante `LADO_MAX`)
 - [X] T011 [US1] Escribir el original en `dir_sesion_uploads($sid)` con `{id} = substr(sha1(bytes_crudos), 0, 12)`, dedupe por existencia y fila `origen: 'original'` (sin `file`) + `w`/`h`. **Nota**: el prefijo `txt-` de `guardar_imagen()` no hace falta — las composiciones las escribe `registrar_fotos()` como `img/foto-…` y los textos conservan su nombre, asi que no colisionan
 - [X] T012 [US1] Ajustar `handle_subida()` (`personalizador-pdf.php`) para devolver `{id, sha, w, h, url}` del original (crea el draft si no hay item); y `resolver_original($id, $clave, $sid)` resuelve la **cadena** `orders/{clave}/uploads/{id}.*` -> `tmp/sesion-{sid}/uploads/{id}.*` -> cadena vacia (`motor:original:ausente`), para que `handle_subida_url()` y `biblioteca_ruta_imagen()` sirvan la foto desde la ubicacion disponible
@@ -75,8 +75,8 @@
 - [ ] T014 [US1] Disparar la subida al elegir la foto (selector/cargador) y guardar la promesa en `PMU_FICHA.subidas`; el add-to-cart manda **`{id, receta}`** por grupo (no PNG) y deja de subir composiciones
 - [X] T015 [US1] En `limpiar_ttl()` (`inc/class-pmu-sesion.php`) excluir `uploads/` del conteo por item (como `draft-`) y podar los originales que ningun item de la sesion referencia (`podar_uploads_sesion()`, por sesion y sin borrar con datos vacios)
 - [X] T016 [US1] **Eliminar** `podar_subidas()` (y su llamada en `handle_vista_previa`: borraba las filas `original`, que no llevan `file`); `registrar_fotos()` reescrita: acepta `{id, receta}` por instancia y escribe filas `compuesta` con `file` **determinista** (`img/foto-{pdf}-{gid}-{receta}.webp`), sin bytes
-- [ ] T017 [US1] Fase `carpeta_cliente` en `tests/texto_puente.php` (SIGUE ESQUELETO): dedupe por sha, 2 items = 1 archivo, TTL con items vivos, cap 2000 (con y sin GD). **La fase `fotos` YA se reescribio** al modelo 035 (id = sha12, fila `original` sin `file`, composicion declarada con `{id, receta}`, cadena de resolucion)
-- [ ] T018 [US1] Crear `node tests/fotos-contrato.test.js`: cap 2000, dedupe, cuota/desalojo, recuperacion cuando el blob no esta
+- [X] T017 [US1] Fase `carpeta_cliente` en `tests/texto_puente.php`: dedupe (misma foto en 2 items = 1 archivo y mismo id), TTL con items vivos, cap 2000 real (2600x1300 -> 2000x1000) y borrado de la sesion sin items. La fase `fotos` ya se habia reescrito al modelo 035
+- [X] T018 [US1] Crear `node tests/fotos-contrato.test.js`: cap 2000 uniforme (no amplia, no deforma), dedupe por sha, recuperacion cuando el blob no esta y `persistir()` degradando sin navigator (24 checks, con un fake de IndexedDB)
 
 **Checkpoint**: US1 validable sola, todavia sin el arbol nuevo de `orders/`.
 
