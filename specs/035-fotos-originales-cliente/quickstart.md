@@ -59,8 +59,9 @@ php tests/texto_puente.php traslado
 php tests/motor_smoke.php
 ```
 
-**Esperado**: con el original borrado, `item_generar_pdfs()` arma el PDF desde
-`manifest.archivos[]` (composiciones) y devuelve la ruta; `SMOKE OK`.
+**Esperado**: tras la primera generacion, con el original borrado, `item_generar_pdfs()` arma el PDF
+desde el pool (la composicion ya materializada) y devuelve la ruta. Sin composicion **y** sin
+original: el hueco sale transparente con `motor:original:ausente`. `SMOKE OK`.
 
 ## E6 — Refactor de rutas: Pedidos, descargas y regenerar
 
@@ -115,6 +116,8 @@ no borra los originales; sin items, borra la sesion entera (y los originales con
 php -l personalizador-pdf.php
 Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.FullName }
 node tests/receta-contrato.test.js
+php tests/compositor.php
+node tests/compositor-paridad.test.js
 php tests/texto_puente.php receta
 php tests/texto_puente.php carpeta_cliente
 php tests/texto_puente.php traslado

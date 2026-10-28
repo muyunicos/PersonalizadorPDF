@@ -29,7 +29,7 @@ Ubicacion: `tmp/sesion-{sid}/uploads/{id}.webp` mientras la sesion vive;
 |---|---|---|
 | `origen` | enum | `original` (la foto del comprador) · `compuesta` (el bitmap que imprime el Motor) · `ref` (archivo de otro pedido, 030) |
 | `id` | string | `{sha12}` del original (estable entre items y pedidos) |
-| `file` | string | solo `origen: compuesta`: `img/foto-{pdf}-{gid}-{n}.webp` (relativo al item) |
+| `file` | string | solo `origen: compuesta`: `img/foto-{pdf}-{gid}-{receta}.webp` (relativo al item; lo escribe el servidor) |
 | `ref` | string | solo `origen: ref`: relativo al item, validado con `realpath` dentro de `uploads/pmu/` |
 | `madre` | string | familia = el `id` del original; **inmutable** |
 | `receta` | string | hash de la composicion (v2) |
@@ -55,7 +55,7 @@ El Motor no cambia: sigue recibiendo rutas ya resueltas (`$dir . '/' . file`).
 
 ```json
 { "v": 2, "w": 463, "h": 463, "forma": "cuadrado", "modo": "cubrir",
-  "escala": 1.25, "dx": -0.031, "dy": 0.014, "fondo": "transparent",
+  "escala": 1.25, "ox": 0.484, "oy": 0.507, "fondo": "transparent",
   "transp": "no", "rot": 90, "iw": 1600, "ih": 1200, "phsize": 1, "gid": "0000FF" }
 ```
 
@@ -66,7 +66,7 @@ El Motor no cambia: sigue recibiendo rutas ya resueltas (`$dir . '/' . file`).
 | `forma` | `rectangulo`/`circulo`/`cuadrado`/`ovalo`/`auto` |
 | `modo` | `cubrir`/`encajar`/`estirar` (los alias viejos se canonizan) |
 | `escala` | 0.25 - 4 |
-| `dx`,`dy` | fraccion del lienzo (-1..1) |
+| `ox`,`oy` | centro de dibujo normalizado al lienzo (0..1; `0.5` = centro); ya incluye el centro de la forma y el desplazamiento escalado por la Escala |
 | `fondo` | `auto`/`transparent`/`#rrggbb` |
 | `transp` | `si`/`no`/vacio |
 | `rot` | `0`/`90`/`180`/`270` |
@@ -115,8 +115,10 @@ Escritura con `mutar_manifest_dir()` (flock + `.tmp` + `rename`). Lectura **tole
 elige foto     -> IndexedDB (cap 2000)                          [cliente]
 guarda corte   -> composicion en canvas (0 red)                 [cliente]
 add-to-cart    -> original a tmp/sesion-{sid}/uploads/{id}       [origen: original]
-                  composicion y textos a {item}/img/             [origen: compuesta/texto]
+                  textos al pool ({item}/img/txt-)                [origen: texto]
                   marca de visto -> manifest.mockup_vistas
+generacion     -> el Compositor materializa {item}/img/foto-{pdf}-{gid}-{receta}.webp
+                  (si falta) y escribe la fila [origen: compuesta]
 pago           -> rename del item a orders/{cliente}/{order_id}/{item}
                   rename de cada original a orders/{cliente}/uploads (idempotente)
                   manifest.cliente (las filas no cambian)

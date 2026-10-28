@@ -2,7 +2,7 @@
 
 **Input**: `specs/035-fotos-originales-cliente/` (spec, plan, research, data-model, contracts, quickstart)
 
-**Prerequisites**: `plan.md` (fases F0-F5), `spec.md` (D1-D14, §3 contrato, §5 inventario), `research.md` (R1-R12), `data-model.md`, `contracts/fotos-originales.md`
+**Prerequisites**: `plan.md` (fases F0-F5 + F0.5 compositor), `spec.md` (D1-D14, §3 contrato, §5 inventario), `research.md` (R1-R13), `data-model.md`, `contracts/fotos-originales.md`
 
 **Tests**: **obligatorios**. El repo no tiene tests opcionales: cada fase cierra con `php -l` y la puerta de su area (AGENTS §9). Se incluyen como tareas propias.
 
@@ -13,7 +13,7 @@
 | **US1** (P1) | El comprador elige una foto, se sube sola en segundo plano y se reusa en varios items | F1 + F2 |
 | **US2** (P1) | Al pagar, la foto queda en la carpeta del cliente y el pedido se descarga/regenera igual | F3 |
 | **US3** (P2) | La galeria marca la vista al mostrarse y habilita la compra | F4 |
-| Foundational | Receta v2 (identidad de la composicion) | F0 |
+| Foundational | Receta v2 (identidad de la composicion) + compositor | F0 + F0.5 |
 | Polish | Docs, enmienda §IV de la constitucion, version | F5 |
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -39,13 +39,22 @@
 
 **CRITICAL**: ninguna historia empieza hasta que esta fase cierre.
 
-- [ ] T003 [P] Reescribir `receta_de()` v2 en `inc/class-pmu-sesion.php`: claves `v,w,h,forma,modo,escala,dx,dy,fondo,transp,rot,iw,ih,phsize,gid`, hash `sha1(implode('|', valores))[:12]`, y validacion que **rechaza** `v !== 2`, `modo` fuera de `{cubrir,encajar,estirar}`, `escala` fuera de [0.25,4], `rot` fuera de `{0,90,180,270}`, `phsize` fuera de `{0,1,2}`, `gid` fuera de `^[0-9A-F]{6}$`, `dx/dy` fuera de [-1,1]
-- [ ] T004 [P] Extender `_params()` en `assets/selector-pmu.js`: agregar `v:2`, `rot` (valor actual), `phsize` y `gid` de la ranura, y normalizar `dx/dy` a fraccion del lienzo (`dx = px / w`)
+- [ ] T003 [P] Reescribir `receta_de()` v2 en `inc/class-pmu-sesion.php`: claves `v,w,h,forma,modo,escala,ox,oy,fondo,transp,rot,iw,ih,phsize,gid`, hash `sha1(implode('|', valores))[:12]`, y validacion que **rechaza** `v !== 2`, `modo` fuera de `{cubrir,encajar,estirar}`, `escala` fuera de [0.25,4], `rot` fuera de `{0,90,180,270}`, `phsize` fuera de `{0,1,2}`, `gid` fuera de `^[0-9A-F]{6}$`, `ox/oy` fuera de [0,1]
+- [ ] T004 [P] Extender `_params()` en `assets/selector-pmu.js`: agregar `v:2`, `rot` (valor actual), `phsize` y `gid` de la ranura, y **`ox/oy`** = centro de dibujo normalizado, calculado con `origenDibujo(geo, false, desplazamiento, zoom)` dividido por `w`/`h` (reemplaza `dx/dy`; no se porta `geometriaEscena` a PHP)
 - [ ] T005 [P] Crear `tests/receta-contrato.test.js`: receta completa, `rot` 90 != 270, misma composicion por dos caminos = mismo hash, y cada rango invalido rechazado
 - [ ] T006 Fase `receta` en `tests/texto_puente.php`: `receta_de()` acepta la receta del cliente y rechaza con causa los valores fuera de contrato (no corrige en silencio)
 - [ ] T007 Ajustar los consumidores que hoy mandan `w/h` en px: `handle_subida()` (`personalizador-pdf.php:1841`) y `handle_biblioteca()` `op=usar` (`:2248`), para que guarden la receta v2 tal como llega
 
-**Checkpoint**: `node tests/receta-contrato.test.js` y `php tests/texto_puente.php receta` en verde.
+### Compositor (Fase 2.5 del plan)
+
+- [ ] T007a Crear `engine/Compositor.php`: `caja($modo,$iw,$ih,$W,$H)` y `salida($modo,$iw,$ih,$W,$H,$escala)` con la MISMA matematica de `escalaBase` (`assets/selector-pmu.js:195`) y `escalaSalida` (`:238`)
+- [ ] T007b `Compositor::componer($rutaOriginal, $receta)` -> bytes WebP q0.85: lienzo `salida.w x salida.h`, fondo (con `transp:'no'` + `transparent` -> blanco puro), rotacion 90/180/270, escala `caja x escala x k`, centro en `(ox*w, oy*h)`, alfa preservado (`imagealphablending(false)` + `imagesavealpha(true)`)
+- [ ] T007c Crear `tests/compositor.php` (CLI + GD): 3 modos x 4 rotaciones x fondo x `transp`; alfa en toda la imagen; sin GD -> `motor:compositor:gd`
+- [ ] T007d Crear `tests/compositor-paridad.test.js`: matriz `caja`/`salida` JS vs PHP (tolerancia +-1 px)
+- [ ] T007e Agregar en `tests/fixtures/` una foto con alfa y un caso de envoltura descentrada (`ox/oy` distinto de 0.5)
+- [ ] T007f `smoke_checks()`: `extension_loaded('gd')` + `function_exists('imagewebp')` como **requisito**, con causa `motor:compositor:gd`
+
+**Checkpoint**: `node tests/receta-contrato.test.js`, `php tests/texto_puente.php receta`, `php tests/compositor.php` y `node tests/compositor-paridad.test.js` en verde.
 
 ---
 
@@ -60,10 +69,10 @@
 - [ ] T008 [P] [US1] Agregar `dir_sesion_uploads($sid, $crear = false)` en `inc/class-pmu-uploads.php` (`uploads/pmu/tmp/sesion-{sid}/uploads/`, `wp_mkdir_p` + validacion de escritura)
 - [ ] T009 [P] [US1] Crear `assets/fotos-pmu.js` (`PMUFotos`): store `pmu_fotos` en IndexedDB con `{sha, blob, w, h, nombre}`, `guardar(archivo)` con cap 2000 px (canvas + WebP q0.85), `obtener(sha)`, `listar()`, `borrar(sha)`, `navigator.storage.persist()` y manejo de cuota
 - [ ] T010 [US1] Revalidar el cap en `guardar_subida()` (`inc/class-pmu-sesion.php:843`): `getimagesize()` y, si `max(w,h) > 2000`, reescalar con GD; sin GD, `motor:subida:tamano`
-- [ ] T011 [US1] Escribir el original en `dir_sesion_uploads($sid)` con `{id} = substr(sha1(bytes_crudos), 0, 12)`, dedupe por existencia y fila `origen: 'original'` (sin `file`); y `guardar_imagen()` (`inc/class-pmu-sesion.php:384`) acepta `origen: compuesta` con prefijo `img/foto-…` (los textos pasan a `img/txt-…`), con `siguiente_n()`/`limpiar_grupo()` filtrando por prefijo
+- [ ] T011 [US1] Escribir el original en `dir_sesion_uploads($sid)` con `{id} = substr(sha1(bytes_crudos), 0, 12)`, dedupe por existencia y fila `origen: 'original'` (sin `file`); y `guardar_imagen()` (`inc/class-pmu-sesion.php:384`) prefija los textos `img/txt-{pdf}-{gid}-{n}.webp`, con `siguiente_n()`/`limpiar_grupo()` filtrando por prefijo
 - [ ] T012 [US1] Ajustar `handle_subida()` (`personalizador-pdf.php:1784`) para devolver `{id, sha, w, h, url}` del original y crear el draft si no hay item; y `resolver_original($id, $clave, $sid)` resuelve la **cadena** `orders/{clave}/uploads/{id}.webp` -> `tmp/sesion-{sid}/uploads/{id}.webp` -> `motor:original:ausente`, para que `handle_subida_url()` (`:1864`) y `biblioteca_ruta_imagen()` (`:2317`) sirvan la foto desde la ubicacion disponible
 - [ ] T013 [US1] Cola de subida en segundo plano en `assets/tienda.js`: FIFO de a 2, clave `sha` (no reenvia), 2 reintentos con backoff de **1 s y 3 s**, promesa exportada para el add-to-cart
-- [ ] T014 [US1] Disparar la subida al elegir la foto (selector/cargador) y guardar la promesa en `PMU_FICHA.subidas`
+- [ ] T014 [US1] Disparar la subida al elegir la foto (selector/cargador) y guardar la promesa en `PMU_FICHA.subidas`; el add-to-cart manda **`{id, receta}`** por grupo (no PNG) y deja de subir composiciones
 - [ ] T015 [US1] En `limpiar_ttl()` (`inc/class-pmu-sesion.php:1242`) excluir `uploads/` del conteo por item (patron `draft-`) y podar los originales que ningun item de la sesion referencia
 - [ ] T016 [US1] **Eliminar** `podar_subidas()` (`:582`) y `registrar_fotos()` (`:509`) (`subidas/` no existe; la composicion va al pool); `usar_de_biblioteca()` (`:1344`) registra `origen: original` **sin copiar** el archivo
 - [ ] T017 [US1] Fase `carpeta_cliente` en `tests/texto_puente.php`: dedupe por sha, 2 items = 1 archivo, poda por sesion, TTL con items vivos, cap 2000 (con y sin GD)
@@ -86,12 +95,12 @@
 - [ ] T021 [US2] Reescribir `promover_order($order_id, $clave, $sid, $item)` (`:1211`): `rename` del item y de **cada original** (`tmp/sesion-{sid}/uploads/{id}.webp` -> `orders/{clave}/uploads/{id}.webp`, idempotente si ya existe) y `manifest.cliente` en una escritura atomica; **las filas no cambian** (el `id` no cambia, no hay `copy` ni `unlink`)
 - [ ] T022 [US2] Eliminar `pedido_staging_crear()` (`personalizador-pdf.php:2928`) y su hook `woocommerce_checkout_order_processed`
 - [ ] T023 [US2] `pedido_promover()` (`:2965`) pasa `$order->get_customer_id()`; si es `0`, **no** promueve y deja causa visible
-- [ ] T024 [US2] `manifest_item()` (`:3050`), `item_generar_pdfs()` (`:3185`) e `item_regenerar()` (`:3347`) usan `dir_order` + `manifest.cliente` y resuelven el original por **cadena** (`resolver_original`); sin fallback `tmp/orders` ni `orders/{order_id}`
+- [ ] T024 [US2] `manifest_item()` (`:3050`), `item_generar_pdfs()` (`:3185`) e `item_regenerar()` (`:3347`) usan `dir_order` + `manifest.cliente` y resuelven el original por **cadena** (`resolver_original`); `item_generar_pdfs()`/`item_regenerar()` **materializan** con `Compositor::componer()` las `img/foto-{pdf}-{gid}-{receta}.webp` que falten antes de llamar al Motor; sin fallback `tmp/orders` ni `orders/{order_id}`
 - [ ] T025 [US2] `pedidos_completados()` (`:3291`): escaneo de 3 niveles con `ctype_digit`, `cliente` en cada fila y `orders/{cliente}/uploads/` **excluido**
 - [ ] T026 [US2] `biblioteca_contenedores()` (`:2047`) y `biblioteca_peso_identidades()` (`:1951`): escaneo de 3 niveles con `ctype_digit`; y `familias()` (`inc/class-pmu-sesion.php:1023`) agrupa por **`id` del original** (una entrada por foto; `versiones`/`base` dejan de usarse en la tira, D7)
 - [ ] T027 [US2] `resolver_original($id, $clave, $sid)` con `id` (`/^[a-f0-9]{12}$/`) + `is_file` y `clave_valida()` como helper unico; `item_generar_pdfs()` y `biblioteca_ruta_imagen()` lo usan (la fila no lleva `clave`)
 - [ ] T028 [US2] `admin/pedidos.php`: mostrar la columna de cliente que devuelve `pedidos_completados()`
-- [ ] T029 [US2] Fases `traslado` y `rutas` en `tests/texto_puente.php`: arbol nuevo, `manifest.cliente`, `customer_id = 0` no promueve, descarga sin original, Pedidos no lista `uploads/`
+- [ ] T029 [US2] Fases `traslado` y `rutas` en `tests/texto_puente.php`: arbol nuevo, `manifest.cliente`, `customer_id = 0` no promueve, descarga con el original borrado **tras la 1a generacion** (sin composicion y sin original -> `motor:original:ausente`), Pedidos no lista `uploads/`
 - [ ] T030 [US2] Actualizar `tests/ficha-pedido.browser.js:568` (ruta del PDF) y los escaneos de `tests/estado_pmu.php`, `tests/inventario_pmu.php` y `tests/sin_lectura.php`
 - [ ] T031 [US2] Verificar `php tests/motor_smoke.php` + `php tests/parity.php` en verde: **el Motor no cambia**
 
@@ -121,7 +130,7 @@
 
 **Purpose**: documentacion normativa, enmienda de la constitucion y cierre
 
-- [ ] T037 [P] Enmendar `.specify/memory/constitution.md` §IV: `orders/{cliente}/{order_id}/{item_key}`, `orders/{cliente}/uploads/`, sin `tmp/orders/`; agregar Sync Impact Report (MINOR: estructura de datos; sin cambio de principios)
+- [X] T037 [P] **APLICADO 2026-10-28 (adelantado a la Fase 2: §IV vigente bloqueaba F3)** — Enmendar `.specify/memory/constitution.md` **§III + §IV**: compositor bajo demanda y "mismo encuadre"; `orders/{cliente}/{order_id}/{item_key}`, `orders/{cliente}/uploads/`, sin `tmp/orders/`, `subidas/` fuera; GD con WebP como requisito. Sync Impact Report, version **3.0.0 (MAJOR)**. Ojo: `.specify/` esta en `.gitignore`, la enmienda **no se versiona**
 - [ ] T038 [P] `AGENTS.md` §2 (mapa), §5 (formatos: carpeta del cliente, `origen: original/compuesta`, pool `img/foto-`) y §7 (decisiones: receta v2, sin staging, sin cuota)
 - [ ] T039 [P] `specs/029-pool-sin-copias/spec.md` y `specs/030-biblioteca-imagenes/spec.md` + `contracts/`: nota de supersesion (el pool guarda `compuesta` + `texto`; `subidas/` desaparece; las fotos del cliente se resuelven por `id` y cadena)
 - [ ] T040 `specs/INDICE.md` (fila 035 -> implementada), `readme.txt` (changelog) y version **solo en la cabecera** de `personalizador-pdf.php` -> 4.27.0

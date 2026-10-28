@@ -6,31 +6,34 @@
 
 ```json
 { "v": 2, "w": 463, "h": 463, "forma": "cuadrado", "modo": "cubrir",
-  "escala": 1.25, "dx": -0.031, "dy": 0.014, "fondo": "transparent",
+  "escala": 1.25, "ox": 0.484, "oy": 0.507, "fondo": "transparent",
   "transp": "no", "rot": 90, "iw": 1600, "ih": 1200, "phsize": 1, "gid": "0000FF" }
 ```
 
-- **Claves y orden** (los fija `receta_de`): `v,w,h,forma,modo,escala,dx,dy,fondo,transp,rot,iw,ih,phsize,gid`.
+- **Claves y orden** (los fija `receta_de`): `v,w,h,forma,modo,escala,ox,oy,fondo,transp,rot,iw,ih,phsize,gid`.
 - `receta_de()` = `substr(sha1(implode('|', valores)), 0, 12)`. **Solo el servidor** lo calcula.
 - `rot` es **obligatorio**: sin el, 90 y 270 colisionan (bug que esta spec cierra).
-- `dx/dy` en **fraccion del lienzo** (-1..1), no en px.
+- `ox/oy` = **centro de dibujo normalizado** al lienzo (`0.5` = centro). Ya incluye el centro de la
+  forma principal y el desplazamiento escalado por la Escala, asi el compositor no necesita la
+  geometria de la envoltura (`geometriaEscena` es solo JS).
 - Validacion (rechaza con causa, no corrige en silencio): `v === 2`, `modo` en
   `{cubrir,encajar,estirar}`, `escala` en [0.25, 4], `rot` en `{0,90,180,270}`, `phsize` en
-  `{0,1,2}`, `gid` `^[0-9A-F]{6}$`, `dx/dy` en [-1,1].
+  `{0,1,2}`, `gid` `^[0-9A-F]{6}$`, `ox/oy` en [0,1].
 - El lienzo que **vale** es el que deriva el servidor (`analisis.json` + `phsize`); `w/h` de la
   receta es solo el snapshot con el que se compuso.
+- El servidor **recalcula** `k` y el tamano del PNG (`escalaSalida`), no los recibe.
 
 ## C2 — Fila de `manifest.subidas[]`
 
 ```json
-{ "origen": "cliente", "id": "9f2c41ab0d7e", "clave": "45", "madre": "9f2c41ab0d7e",
+{ "origen": "original", "id": "9f2c41ab0d7e", "madre": "9f2c41ab0d7e",
   "receta": "a1b2c3d4e5f6", "sha": "…", "mime": "image/webp", "bytes": 412000, "creado": 1761000000 }
 ```
 
 | `origen` | Campos obligatorios | Prohibidos |
 |---|---|---|
 | `original` | `id` (`^[a-f0-9]{12}$`) | `file`, `ref`, `clave` |
-| `compuesta` (bitmap del Motor) | `id`, `file` = `img/foto-{pdf}-{gid}-{n}.webp` | `ref`, `clave` |
+| `compuesta` (bitmap del Motor) | `id`, `file` = `img/foto-{pdf}-{gid}-{receta}.webp` | `ref`, `clave` |
 | `ref` (030, entre pedidos) | `id`, `ref` | `file`, `clave` |
 
 - `id` = `^[a-f0-9]{12}$`; **deriva del contenido**, nunca lo propone el cliente.
@@ -46,10 +49,9 @@
 | Ruta | Dueno | Regla |
 |---|---|---|
 | `tmp/sesion-{sid}/uploads/{id}.webp` | `PMU_Uploads::dir_sesion_uploads()` | originales de la sesion (1 por `id`, compartidos por items) |
-| `tmp/sesion-{sid}/{item_key}/` | idem | `manifest.json`, `img/` (pool: `txt-` y `foto-`), `mockup-*.webp` |
-| `tmp/sesion-{sid}/{item_key}/` | idem | `manifest.json`, `img/` (pool), `mockup-*.webp` |
+| `tmp/sesion-{sid}/{item_key}/` | idem | `manifest.json`, `img/` (pool: `txt-` del navegador y `foto-` del compositor), `mockup-*.webp` |
 | `orders/{cliente}/{order_id}/{item_key}/` | idem | entregable (misma estructura interna que hoy) |
-| `orders/{cliente}/uploads/{id}.webp` | idem | originales comprados (dedupe por `id`) |
+| `orders/{cliente}/uploads/{id}.webp` | idem | originales comprados (`rename`, sin copias) |
 | `orders/{cliente}/datos.json` | idem | catalogo del cliente |
 
 - `{cliente}` y `{order_id}` son **numericos** (`ctype_digit`); `orders/{cliente}/uploads/` **no** es
@@ -88,11 +90,27 @@
 
 ## C7 — Invariantes
 
-1. **La vista previa es el PDF**: el PDF se arma con la composicion que subio el navegador; no hay
-   compositor PHP.
+1. **La vista previa es el PDF (mismo encuadre)**: el servidor compone con la MISMA receta que vio
+   el comprador; el bitmap no viaja desde el cliente (C8). Ya no es byte a byte.
 2. **Idempotencia**: re-subir el mismo original no duplica (`id` = sha); re-promover no repite
    (`rename` con destino existente = no-op); re-registrar un grupo reemplaza sus filas.
 3. **Sin traversal**: ninguna ruta se arma con texto del cliente sin regex + `is_file`/`realpath`.
-4. **Sin migracion** (filas ni rutas): las filas viejas (`subida`/`ref`/`texto`) se leen igual, pero
-   el arbol `orders/{order_id}/` no (no hay pedidos previos).
-5. **Borrar un original no rompe pedidos**: la composicion vive en el pedido.
+4. **Sin migracion** (filas ni rutas): no hay pedidos ni items previos, y el arbol
+   `orders/{order_id}/` no se lee.
+5. **Borrar un original no rompe la regeneracion** una vez generado el PDF (la composicion queda en
+   `img/`); antes de la primera generacion el hueco sale transparente con `motor:original:ausente`.
+
+## C8 — Compositor (`engine/Compositor.php`)
+
+- **Entrada**: ruta del original (`{id}.webp`) + receta v2 ya validada (C1).
+- **Salida**: bytes WebP q0.85 con alfa, de `salida.w x salida.h` px.
+- **Algoritmo** (misma matematica que `assets/selector-pmu.js`, que es la referencia):
+  1. `caja = escalaBase(modo, iw, ih, w, h)` y `salida = escalaSalida(modo, iw, ih, w, h, escala)`.
+  2. Lienzo `salida.w x salida.h`; si `fondo` no es transparente, se pinta. Con `transp:'no'` y
+     `fondo:'transparent'` el fondo va a **blanco puro** (barrera de la 027).
+  3. El original se dibuja rotado (`rot`), escalado a `caja x escala x k`, centrado en
+     `(ox * w, oy * h)`; lo que sobra del lienzo se recorta.
+- **Idempotente por nombre**: `img/foto-{pdf}-{gid}-{receta}.webp`; si el archivo existe, **no** se
+  recompone (el nombre es el cache).
+- **Sin GD o sin WebP**: causa `motor:compositor:gd`, nunca un archivo a medias.
+- **El Motor no se toca**: el compositor solo produce el archivo que el Motor ya sabe inyectar.

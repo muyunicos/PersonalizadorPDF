@@ -4,8 +4,9 @@
 > Construye sobre la 012 (subidas del item), la 014 (identidad por cookie), la 026
 > (WebP), la 027 (transparencia), la 028 (modos y lienzo), la 029 (la foto se
 > referencia) y la 030 (biblioteca = vista sobre contenedores).
-> **El Motor no se toca.** No hay compositor PHP: la vista previa sigue siendo el
-> bitmap que compone el navegador (028 D6).
+> **El Motor no se toca** (`Pdf`/`Detector`/`Overlay`/`Motor`). Se agrega
+> `engine/Compositor.php`: el navegador manda original + receta y el servidor compone
+> la foto bajo demanda al generar el PDF (D9, enmienda 2026-10-28).
 > **Alcance**: receta v2 + original en el navegador y en la sesion + carpeta del
 > cliente + **refactor de `orders/` a `orders/{cliente}/{order_id}/`** (§5) + **sin
 > staging** (`tmp/orders/` no existe). El mockup optimizado va a la spec 036.
@@ -44,15 +45,15 @@ Hoy, al aceptar el recorte, el navegador compone la imagen y **sube el resultado
 
 | # | Decision |
 |---|----------|
-| **D1** | **Receta v2, completa y versionada**: `v,w,h,forma,modo,escala,dx,dy,fondo,transp,rot,iw,ih,phsize,gid`. `dx/dy` se normalizan al lienzo. El servidor la **revalida** (enum de modo, `escala` 0.25-4, `PH_MAX`, cotas de `dx/dy`) y sigue siendo el unico que calcula el hash (`receta_de`, `inc/class-pmu-sesion.php:1322`). Cierra la colision 90/270. |
+| **D1** | **Receta v2, completa y versionada**: `v,w,h,forma,modo,escala,ox,oy,fondo,transp,rot,iw,ih,phsize,gid`. `ox/oy` = **centro de dibujo normalizado** al lienzo (`0.5` = centro del lienzo; incluye el centro de la forma principal y el desplazamiento ya escalado por la Escala), que es lo que necesita el compositor sin portar `geometriaEscena` a PHP. El servidor la **revalida** (enum de modo, `escala` 0.25-4, `PH_MAX`, cotas de `ox/oy` en [0,1]) y sigue siendo el unico que calcula el hash (`receta_de`, `inc/class-pmu-sesion.php:1322`). Cierra la colision 90/270. |
 | **D2** | **El original se acota a 2000x2000 px al ingerir** (constante unica cliente/servidor, revalidada en el servidor), se guarda en IndexedDB con dedupe por sha y alimenta la vista previa por `objectURL` (0 red). **La subida arranca en segundo plano** al elegir la foto: el navegador es la cache, no el unico lugar. |
-| **D3** | **El original NACE en `tmp/sesion-{sid}/uploads/`** (carpeta de la sesion, compartida por sus items) **en segundo plano desde que se elige la foto**, con dedupe por sha: una foto usada en 3 items se guarda **una vez** y no se reenvia al probar encuadres. La composicion por receta va al **pool del item** (`{item}/img/foto-{pdf}-{gid}-{n}.webp`) al add-to-cart. El add-to-cart **espera solo las subidas pendientes** (aviso "Estamos recibiendo tus archivos, espera..."; en el caso normal no hay espera visible). |
+| **D3** | **El original NACE en `tmp/sesion-{sid}/uploads/`** (carpeta de la sesion, compartida por sus items) **en segundo plano desde que se elige la foto**, con dedupe por sha: una foto usada en 3 items se guarda **una vez** y no se reenvia al probar encuadres. La composicion **no se sube**: el add-to-cart manda `{id, receta}` y el servidor la materializa bajo demanda (D9). El add-to-cart **espera solo las subidas pendientes** (aviso "Estamos recibiendo tus archivos, espera..."; en el caso normal no hay espera visible). |
 | **D4** | **Al pagarse, el servidor MUEVE (sin copias)**: el item `tmp/sesion-{sid}/{item_key}/` pasa a `orders/{cliente}/{order_id}/{item_key}/` (rename) y cada original `tmp/sesion-{sid}/uploads/{id}.webp` a `orders/{cliente}/uploads/{id}.webp` (rename idempotente: si ya existe en la fija, no se repite). Las filas **no cambian**: siguen con `origen: original` + `id`. Se **congela `manifest.cliente`** para que la descarga no dependa de Woo. **Nunca bloquea el pago** (`try/catch` + `log_pedido`, reintento en cada cambio de estado). |
-| **D5** | **La composicion viaja CON el pedido (en `img/`); el original se REFERENCIA solo por `id`.** El PDF sale de la composicion (inmutable), asi que **el original no hace falta para imprimir**: por eso se puede mover sin copias y borrarlo no rompe ningun pedido (solo pierde la reedicion). Resuelve el P3 de la 030 sin materializar. |
+| **D5** | **La composicion se materializa en el item; el original se REFERENCIA solo por `id`.** El PDF sale de la composicion, asi que tras la **primera** generacion el original no hace falta: moverlo sin copias y borrarlo no rompe la regeneracion. Borrarlo **antes** de esa primera generacion deja el hueco con `motor:original:ausente`. Resuelve el P3 de la 030 sin materializar. |
 | **D6** | **Sin staging**: `tmp/orders/` **no existe ni existira**. El item vive en `tmp/sesion-{sid}/` hasta el pago y ahi se mueve. El TTL de 30 dias de un item sin pagar es **politica deseada** (P6 = B): si un pedido `on-hold` se paga despues, la personalizacion ya no existe y Pedidos lo muestra con su causa. |
 | **D7** | **La biblioteca sigue siendo una VISTA** (030 D1): escanea los contenedores del comprador (`tmp/sesion-*` y `orders/{cliente}/{order_id}/*`) y muestra **una entrada por original** (`madre` = `id` del original), no una por composicion. `orders/{cliente}/uploads/` solo aporta lo ya comprado; el escaneo de `orders/` pasa a **3 niveles**. |
 | **D8** | **Sin fusion invitado -> cuenta**: la cuenta es **obligatoria al comprar**, asi que en `pedido_promover()` ya existe `$order->get_customer_id()` y el traslado usa ese `uid`. Un pedido con `customer_id = 0` (manual del admin o historico de invitado) **no se promueve** y queda con causa visible en Pedidos. |
-| **D9** | **Sin compositor PHP.** La vista previa es client-side y el PDF usa el bitmap que compuso el navegador: **"la vista previa es el PDF" se mantiene byte a byte**. La receta se guarda para el futuro (API 010, reparacion), no se usa para imprimir. |
+| **D9** | **Compositor PHP bajo demanda** (DEROGA la version anterior de D9, 2026-10-28): el cliente manda **original + receta**, nunca el bitmap compuesto. `engine/Compositor.php` (GD, requisito) materializa `img/foto-{pdf}-{gid}-{receta}.webp` **al generar el PDF** (descarga y regeneracion), con nombre **determinista por receta**: el nombre **es** el cache (si existe, no recompone) y dos instancias con la misma foto+receta comparten archivo. "La vista previa es el PDF" pasa a **mismo encuadre**, no byte a byte. El texto sigue llegando como PNG del navegador. |
 | **D10** | **Mockup: fuera de esta spec** (va a la 036): `objectURL` local + pintado progresivo, y plano de 2 caras solo con medicion previa. Aca no se toca el camino de mockup de `assets/tienda.js` ni `assets/mockup-render.js`. |
 | **D11** | **La vista se marca al MOSTRARSE, no al pulsar un boton**: cada vista de la galeria queda como vista cuando la galeria la muestra (la inicial cuenta); el add-to-cart se habilita cuando **todas las vistas obligatorias** fueron mostradas. Las vistas **no omisibles** van **primero**, con el mensaje "Revisa la vista previa"; las `preview_omisible` (por PDF) no exigen haber sido vistas. La marca vive en el cliente y se persiste en el add-to-cart con el webp congelado (`mockup_vistas`), sin un POST por navegacion. |
 | **D12** | **Sin migracion y sin compatibilidad de rutas**: no hay pedidos ni items previos (desarrollo con control total), asi que el arbol viejo `orders/{order_id}/` **no** se lee: los 4 puntos de lectura usan solo `orders/{cliente}/{order_id}/`. |
@@ -65,15 +66,17 @@ Hoy, al aceptar el recorte, el navegador compone la imagen y **sube el resultado
 
 ```json
 { "v": 2, "w": 463, "h": 463, "forma": "cuadrado", "modo": "cubrir",
-  "escala": 1.25, "dx": -0.031, "dy": 0.014, "fondo": "transparent",
+  "escala": 1.25, "ox": 0.484, "oy": 0.507, "fondo": "transparent",
   "transp": "no", "rot": 90, "iw": 1600, "ih": 1200, "phsize": 1, "gid": "0000FF" }
 ```
 
-- `dx/dy` en fraccion del lienzo (independiente de la resolucion).
+- `ox/oy` = centro de dibujo en fraccion del lienzo (`0.5` = centro), ya con el centro
+  de la forma y el desplazamiento escalado por la Escala: el compositor dibuja ahi sin
+  conocer la geometria de la envoltura.
 - `rot` en `0|90|180|270`; `v` obliga a recomputar (`receta_de` v2).
-- El servidor **deriva** el lienzo de `analisis.json` + `phsize` para validar; el
-  `w/h` de la receta es solo el snapshot con el que se compuso (sirve ante un
-  Re-analizar o un reemplazo de PDF, spec 032).
+- El servidor **deriva** el lienzo de `analisis.json` + `phsize` para validar, y
+  **recalcula** `k` y el tamano del PNG (`escalaSalida`: `k = min(1, max(iw,ih)/max(caja))`);
+  no los recibe, para que haya una sola fuente de verdad.
 
 ### 3.2 Fila de `manifest.subidas[]`
 
@@ -82,7 +85,7 @@ Hoy, al aceptar el recorte, el navegador compone la imagen y **sube el resultado
 | `origen` | `original` (la foto del comprador), `compuesta` (el bitmap que imprime el Motor, en el pool) o `ref` (archivo de otro pedido, 030) |
 | `id` | `{sha12}` del original (estable entre items y pedidos) |
 | `madre` | familia = el `id` del original; **inmutable** |
-| `file` | solo con `origen: compuesta`: `img/foto-{pdf}-{gid}-{n}.webp` |
+| `file` | solo con `origen: compuesta`: `img/foto-{pdf}-{gid}-{receta}.webp` (**determinista**: la escribe el servidor, no el cliente) |
 | `ref` | solo con `origen: ref`: relativo al item, validado con `realpath` |
 | `receta`, `sha`, `mime`, `bytes`, `creado` | igual que hoy |
 
@@ -93,8 +96,12 @@ valida el `ref` con `realpath` dentro de `uploads/pmu/`. Al promover, las filas 
 **Resolucion por cadena** (`resolver_original($id, $clave, $sid)`): `orders/{clave}/uploads/{id}.webp`
 (fija) -> `tmp/sesion-{sid}/uploads/{id}.webp` (temporal) -> causa `motor:original:ausente`.
 `handle_subida_url()`, `biblioteca_ruta_imagen()` e `item_generar_pdfs()` la usan.
-**Pool**: `{item}/img/txt-{pdf}-{gid}-{n}.webp` (texto) y `{item}/img/foto-{pdf}-{gid}-{n}.webp`
-(composicion); `siguiente_n()` y `limpiar_grupo()` filtran por prefijo.
+**Pool**: `{item}/img/txt-{pdf}-{gid}-{n}.webp` (texto, lo sube el navegador) y
+`{item}/img/foto-{pdf}-{gid}-{receta}.webp` (composicion, la materializa el servidor);
+`siguiente_n()` y `limpiar_grupo()` filtran por prefijo.
+**Materializacion** (D9): la fila `compuesta` la escribe `item_generar_pdfs()` (y
+`item_regenerar()`) justo antes de llamar al Motor, solo si el archivo con ese nombre **no
+existe**: el nombre por receta es el cache. El cliente nunca sube una composicion.
 
 ### 3.3 Carpeta del cliente (`orders/{cliente}/`)
 
@@ -106,7 +113,7 @@ uploads/pmu/
 └── orders/{cliente}/                uid congelado en manifest.cliente
     ├── datos.json                   {version:1, items:[{id,nombre,w,h,bytes,mime,sha,creado,ultimo_uso,favorito}], opciones:{}}
     ├── uploads/{id}.webp            ORIGINALES comprados (el pago los mueve aca)
-    └── {order_id}/{item_key}/       entregable: manifest + img/ (composiciones y textos) + mockups
+    └── {order_id}/{item_key}/       entregable: manifest + img/ (foto- y txt-) + mockups
 ```
 
 - El **nombre original** vive en `datos.json`, nunca en el filesystem (PII,
@@ -128,12 +135,13 @@ uploads/pmu/
 ```
 1. Elige foto      -> cap 2000 px, WebP q0.85, IndexedDB (0 red)
                       + SUBIDA EN SEGUNDO PLANO del original a tmp/sesion-{sid}/uploads/ (1 por sha)
-2. Ajusta/Guarda   -> composicion en canvas; el original no se reenvia (ya esta o viaja en segundo plano)
+2. Ajusta/Guarda   -> la vista previa compone en canvas (solo para ver); se guarda la RECETA
 3. Add-to-cart     -> espera solo lo pendiente ("Estamos recibiendo tus archivos, espera...")
-                      + COMPOSICION y TEXTOS al pool del item (img/); filas; congela mockups
+                      + {id, receta} por grupo + TEXTOS al pool (img/txt-); filas; congela mockups
 4. Pago            -> pedido_promover: rename del item y de cada original (tmp -> orders/{cliente})
                       + manifest.cliente (las filas no cambian: el id no cambia)
-5. Descarga        -> Motor con las composiciones del pedido (no usa el original)
+5. Descarga        -> el Compositor materializa img/foto-{...}-{receta}.webp (si falta) y el Motor
+                      arma el PDF desde el pool
 6. Reedicion       -> original por id: cache -> orders/{cliente}/uploads -> tmp/sesion-*/uploads
 ```
 
@@ -158,10 +166,15 @@ uploads/pmu/
 
 - `node tests/receta-contrato.test.js` (NUEVO): receta v2 completa; `rot` 90 != 270;
   la misma composicion por dos caminos da la misma receta; rangos fuera de contrato
-  se rechazan (`modo`, `escala`, `PH_MAX`, cotas de `dx/dy`).
+  se rechazan (`modo`, `escala`, `PH_MAX`, cotas de `ox/oy`).
+- `php tests/compositor.php` (NUEVO, CLI + GD): 3 modos x 4 rotaciones x fondo x `transp`;
+  el alfa se preserva; el PNG mide el lienzo acotado (`escalaSalida`); sin GD falla con causa.
+- `node tests/compositor-paridad.test.js` (NUEVO): matriz `caja`/`salida` JS vs PHP con
+  tolerancia de +-1 px (`escalaBase`/`escalaSalida` del selector son la referencia).
 - `php tests/texto_puente.php receta|carpeta_cliente|traslado` (fases NUEVAS): el traslado es
   idempotente; dedupe por sha; las filas quedan en `origen: original`; **borrar el
-  original no rompe `item_generar_pdfs`**; el pedido se descarga con traslado pendiente;
+  original tras la 1a generacion no rompe `item_generar_pdfs`** (antes de ella deja
+  `motor:original:ausente`); el pedido se descarga con traslado pendiente;
   un `id` inexistente deja el hueco transparente con `motor:original:ausente`.
 - `node tests/ficha-pedido.browser.js` (ampliada): el add-to-cart sube original +
   composicion; recargar la ficha recupera del servidor; reedicion desde el carrito.
@@ -175,7 +188,8 @@ uploads/pmu/
 - `node tests/ficha-pedido.browser.js`: la galeria pone primero las vistas no omisibles, navegar
   las marca, el boton se habilita al ver la **ultima obligatoria** y no antes; recargar conserva
   la marca (`localStorage`); una vista fallida no bloquea.
-- `php tests/motor_smoke.php` y `php tests/parity.php` en verde: **el Motor no cambia**.
+- `php tests/motor_smoke.php` y `php tests/parity.php` en verde: **el Motor no cambia**
+  (el compositor es codigo nuevo en `engine/`; `Pdf`/`Detector`/`Overlay`/`Motor` intactos).
 
 ## 5. Inventario de cambios (el refactor de `orders/`)
 
@@ -214,13 +228,13 @@ los escaneos.
 | | `guardar_imagen()` (`384`) | Acepta `origen` (`texto`/`compuesta`) y prefija el nombre: `img/txt-…` / `img/foto-…` |
 | | `siguiente_n()` (`355`) y `limpiar_grupo()` (`654`) | Filtran por prefijo (`txt-`/`foto-`) para no mezclar textos y composiciones del mismo grupo |
 | | `podar_subidas()` (`582`) y `registrar_fotos()` (`509`) | **Eliminar** (`subidas/` no existe; la composicion va al pool) |
-| `personalizador-pdf.php` | `handle_pool_png()` (`1644`) | Acepta composiciones (`origen: compuesta`) ademas de textos |
+| | `handle_pool_png()` (`1644`) | **No cambia**: el pool solo recibe TEXTO (la composicion la escribe el servidor) |
 | | `handle_subida()` (`1784`) | Solo originales: devuelve `{id, sha, w, h, url}` |
+| `engine/Compositor.php` | NUEVO | `caja()`/`salida()` (paridad con `escalaBase`/`escalaSalida`) + `componer($original, $receta)`: fondo, rotacion, escala, `ox/oy`, alfa, WebP q0.85 (D9) |
+| `inc/class-pmu-sesion.php` | `item_generar_pdfs()` / `item_regenerar()` | Materializan las composiciones que falten antes del Motor |
 
 ## 6. Fuera de alcance
 
-- **Compositor PHP** (D9): no se compone en el servidor; el Motor sigue recibiendo
-  bitmaps ya compuestos.
 - **Pagina "Mis imagenes"** en Mi cuenta: spec aparte (como en la 030).
 - **Favoritos y "ultimo uso"**: `datos.json` deja los campos; la UI va en spec aparte.
 - **Mockup optimizado** (D10): va a la **spec 036** (`objectURL` + pintado progresivo + plano de 2 caras).
@@ -243,5 +257,6 @@ los escaneos.
 | P5 | Marca de "visto" | **CERRADA (2026-10-27)**: se marca al mostrarse en la galeria (no con un boton); las no omisibles van primero con el aviso y el add-to-cart se habilita al ver la ultima obligatoria (§3.5) |
 | P6 | Pedido `on-hold` pagado despues de 30 dias | **CERRADA = B**: se acepta la perdida de la personalizacion y Pedidos muestra la causa (`motor:descarga:item:ausente`) |
 | P7 | Pedido con `customer_id = 0` | **CERRADA**: no se promueve y queda con causa visible (no se inventa un cliente `0`) |
+| P8 | Compositor PHP (D9 derogada) | **CERRADA (2026-10-28)**: `engine/Compositor.php` compone bajo demanda al generar el PDF; GD con WebP pasa a requisito (verificado en el hosting). "La vista previa es el PDF" = mismo encuadre |
 | P8 | Mockup optimizado | **CERRADA**: va a la spec 036, fuera de esta |
 

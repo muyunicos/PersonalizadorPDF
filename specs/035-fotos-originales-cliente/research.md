@@ -145,17 +145,36 @@ manifest, la ruta es estable y los tests CLI no necesitan stubs de Woo.
 galeria del admin; (b) no ordenar — el comprador puede comprar sin haber visto la importante. Se
 descartan.
 
-## R10 — Como se mantiene "la vista previa es el PDF"
+## R10 — Como se mantiene "la vista previa es el PDF" (enmendado 2026-10-28)
 
-**Decision**: el add-to-cart sigue subiendo la **composicion** (bitmap ya compuesto) por receta; el
-original se sube aparte y **no** se usa para imprimir. El Motor no cambia.
+**Decision**: el add-to-cart manda `{id, receta}` (no el bitmap). El servidor compone la foto **bajo
+demanda** al generar el PDF (`engine/Compositor.php`) y el Motor no cambia. La garantia pasa a ser
+**mismo encuadre**: el compositor usa la MISMA receta y la MISMA matematica (`escalaBase`,
+`escalaSalida`) que el selector, con paridad verificada por `tests/compositor-paridad.test.js`.
 
-**Rationale**: es la unica forma de que el PDF sea byte a byte lo que el comprador vio (028 D6), sin
-un compositor PHP (D9) y sin paridad Canvas/GD.
+**Rationale**: subir el bitmap compuesto cuesta un PNG por grupo y por prueba de encuadre; con el
+original ya en el servidor y la receta como dato declarativo, el bitmap es **derivado** y el nombre
+por receta lo cachea. GD con WebP esta verificado en el hosting (2026-10-28), asi que el camino es
+viable en produccion.
 
-**Alternativas**: (a) componer en PHP desde la receta — rompe el invariante y agrega GD al camino
-critico; (b) recomponer en el navegador al descargar — hoy la descarga es un GET sin navegador.
-Se descartan (la (a) queda como candidata para la API 010).
+**Alternativas**: (a) seguir subiendo el bitmap — descartada: era el estado anterior y no ahorra
+nada ahora que el original viaja igual; (b) recomponer en el navegador al descargar — la descarga es
+un GET sin navegador.
+
+## R13 — Compositor: por que `ox/oy` y no `dx/dy`
+
+**Decision**: la receta lleva `ox/oy` (centro de dibujo **normalizado**) en lugar de `dx/dy`. El
+cliente lo calcula con `origenDibujo()` (que ya conoce `geo.principal` y `geo.margenX/Y`); el
+servidor dibuja en `(ox*w, oy*h)`.
+
+**Rationale**: `assets/selector-pmu.js` exporta `geometriaEscena`, `escalaBase`, `escalaSalida` y
+`origenDibujo`, pero **PHP no tiene ninguna** de las cuatro. Portar `geometriaEscena` (geometria de
+envoltura) duplicaria logica delicada y divergiria con el tiempo. `ox/oy` traslada al cliente la
+unica parte que depende de la forma y deja en el servidor aritmetica plana, verificable por paridad.
+
+**Alternativas**: (a) portar `geometriaEscena` a PHP — duplica y divergge; (b) mandar `dx/dy` y el
+centro de la forma por separado — mas claves y el servidor tendria que combinarlas igual. Se
+descartan.
 
 ## R11 — Como se sube el original en segundo plano
 
