@@ -1290,10 +1290,17 @@ class PMU_Sesion
         $horizonteCarrito = time() - max(1, (int)$horas_carrito) * HOUR_IN_SECONDS;
         foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . 'sesion-*', GLOB_ONLYDIR) as $dirSesion) {
             $vivos = 0;
+            // Spec 035 (D13): `uploads/` es la carpeta COMPARTIDA de originales, no un
+            // item: no cuenta como vivo y su poda es POR SESION (¿algun item la
+            // referencia?), nunca por item.
+            $referencias = [];
             foreach ((array)glob($dirSesion . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $item) {
                 $nombre = basename($item);
                 if (strpos($nombre, 'draft-') === 0) {
                     $vivos++;
+                    continue;
+                }
+                if ($nombre === 'uploads') {
                     continue;
                 }
                 $man = json_decode((string)@file_get_contents($item . DIRECTORY_SEPARATOR . 'manifest.json'), true);
@@ -1305,12 +1312,50 @@ class PMU_Sesion
                     continue;
                 }
                 $vivos++;
+                foreach ((array)(is_array($man) ? ($man['subidas'] ?? []) : []) as $filaS) {
+                    if (is_array($filaS) && (string)($filaS['origen'] ?? '') === 'original'
+                        && isset($filaS['id'])) {
+                        $referencias[(string)$filaS['id']] = true;
+                    }
+                }
             }
+            $this->podar_uploads_sesion($dirSesion, $referencias);
             if ($vivos === 0) {
                 $this->borrar_arbol($dirSesion);
             }
         }
         return $eliminados;
+    }
+
+    /**
+     * Spec 035 (D13): borra los originales de la sesion que ningun item referencia.
+     *
+     * La carpeta es COMPARTIDA: una foto puede usarla otro item, asi que la poda es
+     * por sesion, nunca por item. **Sin referencias no borra nada**: una subida
+     * recien hecha puede no estar todavia en ningun manifest, y perderla seria peor
+     * que dejar un archivo de mas.
+     *
+     * @return array ids borrados
+     */
+    private function podar_uploads_sesion($dirSesion, array $referencias)
+    {
+        $dir = $dirSesion . DIRECTORY_SEPARATOR . 'uploads';
+        if (!is_dir($dir) || !$referencias) {
+            return [];
+        }
+        $borrados = [];
+        foreach ((array)glob($dir . DIRECTORY_SEPARATOR . '*') as $ruta) {
+            if (!is_file($ruta)) {
+                continue;
+            }
+            $id = pathinfo($ruta, PATHINFO_FILENAME);
+            if (isset($referencias[$id])) {
+                continue;
+            }
+            @unlink($ruta);
+            $borrados[] = $id;
+        }
+        return $borrados;
     }
 
     /**
