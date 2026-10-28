@@ -1291,6 +1291,27 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('archivos[] + pool_url normativos', is_array($json) && is_array($json['data']['archivos'] ?? null)
                 && (bool)preg_match('#uploads/pmu/tmp/sesion-[a-z0-9_-]+/draft-[a-z0-9_-]+/$#', (string)($json['data']['pool_url'] ?? '')));
             break;
+        case 'vistos':
+            // Spec 035 (§3.5): la marca de visto viaja con el add-to-cart y sobrevive
+            // el cambio de clave del item.
+            $errV = (string)($GLOBALS['test_vistos_error'] ?? '');
+            check('vistos: sin error', $errV === '', $errV);
+            check('vistos: se anotan en el manifest',
+                ($GLOBALS['test_vistos_1'] ?? []) === ['1', '3'],
+                implode(',', (array)($GLOBALS['test_vistos_1'] ?? [])));
+            check('vistos: la segunda anotacion es UNION (1,3,5 sin duplicar)',
+                ($GLOBALS['test_vistos_2'] ?? []) === ['1', '3', '5'],
+                implode(',', (array)($GLOBALS['test_vistos_2'] ?? [])));
+            check('vistos: un id con forma invalida se ignora sin romper',
+                ($GLOBALS['test_vistos_basura'] ?? null) === []);
+            check('vistos: la ficha publica los del item (para la re-edicion)',
+                ($GLOBALS['test_vistos_ficha'] ?? []) === ['1', '3', '5'],
+                implode(',', (array)($GLOBALS['test_vistos_ficha'] ?? [])));
+            check('vistos: el add-to-cart los ACUMULA al promover (el manifest viaja)',
+                ($GLOBALS['test_vistos_promover'] ?? []) === ['1', '3', '5', '7'],
+                implode(',', (array)($GLOBALS['test_vistos_promover'] ?? [])));
+            break;
+
         case 'composicion':
             // Spec 035 (T024/T029): la composicion se crea bajo demanda y su
             // nombre determinista hace de cache.
@@ -2276,8 +2297,44 @@ switch ($fase) {
         $p->handle_vista_previa(); // exit en wp_send_json_*
         break;
 
+    case 'vistos':
+        // Spec 035 (§3.5): la marca de "visto" sobrevive el cambio de clave del item.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $motor_v = $p->motor_para_tests();
+        $sesion_v = new PMU_Sesion($motor_v);
+        try {
+            $sid_v = 'test-vistos-01';
+            $draft_v = $sesion_v->crear_draft($sid_v, ['muestra']);
+            $sesion_v->anotar_vistos($sid_v, $draft_v, ['1', '3']);
+            $man_v = $sesion_v->leer_manifest($sid_v, $draft_v);
+            $GLOBALS['test_vistos_1'] = (array)($man_v['vistos'] ?? []);
+            // Es UNION (no reemplazo) y no duplica.
+            $sesion_v->anotar_vistos($sid_v, $draft_v, ['3', '5']);
+            $man_v2 = $sesion_v->leer_manifest($sid_v, $draft_v);
+            $GLOBALS['test_vistos_2'] = (array)($man_v2['vistos'] ?? []);
+            // Un id que no puede ser nombre de archivo se ignora sin romper.
+            $GLOBALS['test_vistos_basura'] = $sesion_v->anotar_vistos($sid_v, $draft_v, ['../../etc/passwd', '']);
+            // La ficha publica los vistos del item en edicion.
+            $GLOBALS['test_vistos_ficha'] = $p->vistos_de_item($sid_v, $draft_v);
+            // El add-to-cart los guarda al promover (pmu_vistas).
+            $_POST = [
+                'pmu_sid' => $sid_v,
+                'pmu_item_key' => $draft_v,
+                'pmu_vistas' => json_encode(['7']),
+            ];
+            $_REQUEST = $_POST;
+            $p->carrito_promover('cartitem0001', 4242, 1, 0, null);
+            $man_v3 = $sesion_v->leer_manifest($sid_v, 'cartitem0001');
+            $GLOBALS['test_vistos_promover'] = (array)(is_array($man_v3) ? ($man_v3['vistos'] ?? []) : []);
+        } catch (\Throwable $e) {
+            $GLOBALS['test_vistos_error'] = $e->getMessage();
+        }
+        break;
+
     case 'composicion':
-        // Spec 035 (T024/T029): la composicion se materializa BAJO DEMANDA con
         // `Compositor` (original + receta) y el PDF sale del pool ya compuesto.
         preparar_entorno($testBase, $base);
         if (!class_exists('PMU_Sesion')) {

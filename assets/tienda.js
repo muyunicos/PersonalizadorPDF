@@ -436,6 +436,89 @@
                 mensaje: mensaje,
                 bloqueo: bloqueo || elegibles.length === 0
             };
+        },
+
+        /**
+         * Spec 035 (D11/§3.5): una vista es OBLIGATORIA si su PDF no es
+         * `preview_omisible`. Una vista `fallida` (podada) nunca lo es: no se puede
+         * exigir ver algo que la galeria ya quito.
+         */
+        vistaObligatoria: function (v) {
+            if (!v || v.fallida) {
+                return false;
+            }
+            return !(v.pdfDatos && v.pdfDatos.preview_omisible);
+        },
+
+        /**
+         * Spec 035 (§3.5): ORDEN de la galeria. Las obligatorias van PRIMERO — son
+         * las que bloquean la compra, y dejarlas al final obligaria a recorrer las
+         * que no exigen nada. Orden estable: dentro de cada grupo se respeta el
+         * orden original (el del PDF).
+         */
+        ordenarVistas: function (vistas) {
+            return (vistas || []).slice()
+                .map(function (v, i) {
+                    return { v: v, i: i, p: PURO.vistaObligatoria(v) ? 0 : 1 };
+                })
+                .sort(function (a, b) {
+                    return (a.p - b.p) || (a.i - b.i);
+                })
+                .map(function (x) { return x.v; });
+        },
+
+        /**
+         * Clave de la marca de visto (`mockup_id`). Sin id la vista es TRANSITORIA:
+         * se puede ver pero no persistir ni reconciliar.
+         */
+        claveVisto: function (v) {
+            if (!v || !v.mockup || v.mockup.id === undefined || v.mockup.id === null) {
+                return '';
+            }
+            return String(v.mockup.id);
+        },
+
+        /** Marca una vista como vista. Devuelve un mapa NUEVO (sin mutar el de entrada). */
+        marcarVisto: function (visto, clave) {
+            var out = {};
+            var src = visto || {};
+            Object.keys(src).forEach(function (k) {
+                if (src[k]) { out[k] = true; }
+            });
+            if (clave !== undefined && clave !== null && String(clave) !== '') {
+                out[String(clave)] = true;
+            }
+            return out;
+        },
+
+        /**
+         * Spec 035 (§3.5): obligatorias que FALTAN ver. Es lo unico que bloquea el
+         * add-to-cart por vistas: las omisibles y las `fallida` no cuentan.
+         */
+        faltanVistas: function (vistas, visto) {
+            var n = 0;
+            var marcas = visto || {};
+            (vistas || []).forEach(function (v) {
+                if (!PURO.vistaObligatoria(v)) { return; }
+                var k = PURO.claveVisto(v);
+                if (k === '' || !marcas[k]) { n++; }
+            });
+            return n;
+        },
+
+        /**
+         * Reconciliacion al montar: lo que el localStorage recuerda MAS lo que el
+         * SERVIDOR confirmo al congelar. La union gana, asi el item que cambio de
+         * clave (`draft-{uuid}` -> `cart_item_key`) no vuelve a exigir lo ya visto.
+         */
+        reconciliarVistos: function (visto, publicados) {
+            var out = PURO.marcarVisto(visto, null);
+            (publicados || []).forEach(function (k) {
+                if (k !== undefined && k !== null && String(k) !== '') {
+                    out[String(k)] = true;
+                }
+            });
+            return out;
         }
     };
 
@@ -447,6 +530,77 @@
     /* ==================== Navegador: ficha y vista previa ==================== */
 
     var cfg = global.PMU_TIENDA || {};
+
+    /* ==================== Spec 035 (§3.5): marca de "visto" ==================== */
+
+    /** Clave de localStorage de la marca de visto (una entrada por item). */
+    var CLAVE_VISTAS = 'pmu_vistas_v1';
+
+    /**
+     * Spec 035 (§3.5): marcas guardadas de un item. Sin localStorage (modo
+     * privado) devuelve vacio y la marca vive solo en memoria: la compra NUNCA se
+     * traba por eso.
+     */
+    function leerVistos(itemKey) {
+        var clave = String(itemKey || '');
+        if (clave === '') { return {}; }
+        try {
+            var todo = JSON.parse(global.localStorage.getItem(CLAVE_VISTAS) || '{}');
+            var lista = (todo && todo[clave]) || [];
+            var mapa = {};
+            (Object.prototype.toString.call(lista) === '[object Array]' ? lista : []).forEach(function (k) {
+                mapa[String(k)] = true;
+            });
+            return mapa;
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function guardarVistos(itemKey, mapa) {
+        var clave = String(itemKey || '');
+        if (clave === '') { return; }
+        try {
+            var todo = JSON.parse(global.localStorage.getItem(CLAVE_VISTAS) || '{}');
+            if (!todo || typeof todo !== 'object') { todo = {}; }
+            todo[clave] = Object.keys(mapa || {});
+            global.localStorage.setItem(CLAVE_VISTAS, JSON.stringify(todo));
+        } catch (e) { /* cuota o modo privado: la marca no persiste, no bloquea */ }
+    }
+
+    /**
+     * Spec 035 (D11): leyenda "Revisa la vista previa" + estado del add-to-cart.
+     * UN solo lugar decide las dos cosas, para que no puedan divergir. La galeria
+     * se pasa explicita porque la PRIMERA `mostrar()` corre antes de que
+     * `galeriaActual` quede asignada.
+     */
+    function refrescarVistas(galeria) {
+        var g = galeria || galeriaActual;
+        var faltan = (g && g.vistas) ? PURO.faltanVistas(g.vistas, g.visto) : 0;
+        var panel = raiz();
+        var leyenda = panel ? panel.querySelector('.pmu-gal-revisar') : null;
+        if (leyenda) {
+            leyenda.style.display = faltan > 0 ? 'block' : 'none';
+        }
+        bloquearCarrito(faltan > 0);
+    }
+
+    /**
+     * Spec 035 (§3.5): ids de las vistas OBLIGATORIAS que el comprador ya vio.
+     * Viaja con el add-to-cart: el servidor lo guarda al congelar y lo republica en
+     * la ficha, asi el item que cambia de clave no vuelve a exigirlas.
+     */
+    function vistosActuales() {
+        var g = galeriaActual;
+        if (!g || !g.visto) { return []; }
+        var out = [];
+        (g.vistas || []).forEach(function (v) {
+            if (!PURO.vistaObligatoria(v)) { return; }
+            var k = PURO.claveVisto(v);
+            if (k !== '' && g.visto[k]) { out.push(k); }
+        });
+        return out;
+    }
     var renderCorePromesa = null;
     var ficha = null;
     var galeriaActual = null;
@@ -785,9 +939,13 @@
     }
 
     /** Galeria 300x300 con flechas (T014): placeholders en vivo por vista. */
-    function prepararGaleria(vistas) {
+    function prepararGaleria(vistas, itemKey) {
         var panel = raiz();
         if (!panel) { return null; }
+        // Spec 035 (§3.5): las vistas OBLIGATORIAS van primero (son las que
+        // bloquean la compra) y la marca de visto arranca del localStorage.
+        vistas = PURO.ordenarVistas(vistas || []);
+        var claveItem = String(itemKey || '');
         var gal = panel.querySelector('.pmu-galeria');
         if (!gal) {
             gal = document.createElement('div');
@@ -812,6 +970,13 @@
             contenedor.appendChild(marco);
             v.marco = marco;
         });
+        // Spec 035 (§3.5): leyenda que acompana al comprador mientras falten
+        // obligatorias. Arranca oculta: la enciende `refrescarVistas()`.
+        var revisar = document.createElement('div');
+        revisar.className = 'pmu-gal-revisar';
+        revisar.style.cssText = 'display:none;font-weight:600;font-size:13px;margin:8px 0;';
+        revisar.textContent = 'Revisa la vista previa';
+        gal.appendChild(revisar);
         var nav = document.createElement('div');
         nav.className = 'pmu-galeria-nav';
         nav.style.cssText = 'display:flex;gap:8px;align-items:center;';
@@ -829,12 +994,24 @@
         nav.appendChild(leyenda);
         nav.appendChild(next);
         gal.appendChild(nav);
-        var estado = { vistas: vistas, idx: 0 };
+        var estado = { vistas: vistas, idx: 0, itemKey: claveItem, visto: {} };
+        // Spec 035 (§3.5): lo que el localStorage recuerda MAS lo que el servidor
+        // confirmo al congelar (`manifest.mockup_vistas`, si viaja en la ficha).
+        var publicados = (global.PMU_FICHA && global.PMU_FICHA.sesion && global.PMU_FICHA.sesion.vistos) || [];
+        estado.visto = PURO.reconciliarVistos(leerVistos(claveItem), publicados);
         function mostrar() {
             estado.vistas.forEach(function (v, i) {
                 v.marco.style.display = i === estado.idx ? 'block' : 'none';
             });
             leyenda.textContent = (estado.idx + 1) + ' / ' + estado.vistas.length;
+            // Spec 035 (D11): MOSTRAR es ver. Se marca la vista que quedo visible
+            // (la inicial tambien) y se persiste sin un POST por navegacion.
+            var claveV = PURO.claveVisto(estado.vistas[estado.idx]);
+            if (claveV !== '') {
+                estado.visto = PURO.marcarVisto(estado.visto, claveV);
+                guardarVistos(estado.itemKey, estado.visto);
+            }
+            refrescarVistas(estado);
         }
         prev.addEventListener('click', function () {
             estado.idx = (estado.idx + estado.vistas.length - 1) % estado.vistas.length;
@@ -860,6 +1037,7 @@
                 return 0;
             }
             mostrar();
+            refrescarVistas(estado);   // §3.5: podar una `fallida` puede desbloquear
             return estado.vistas.length;
         };
         galeriaActual = estado;
@@ -1019,6 +1197,10 @@
             inyectar(form, 'pmu_sid', global.PMU_API.sesion.sid);
             inyectar(form, 'pmu_item_key', global.PMU_API.sesion.item_key);
             inyectar(form, 'pmu_mockups', JSON.stringify(webps));
+            // Spec 035 (§3.5): las vistas que el comprador REALMENTE vio. El servidor
+            // las guarda al congelar y las republica en la ficha, asi el item que
+            // cambia de clave (`draft` -> `cart_item_key`) no vuelve a exigirlas.
+            inyectar(form, 'pmu_vistas', JSON.stringify(vistosActuales()));
             // Spec 005 (T009): snapshot declarado = elegibles de este momento.
             inyectar(form, 'pmu_pdfs', JSON.stringify(elegibles().map(function (p) { return p.pdf; })));
         });
@@ -1427,7 +1609,7 @@
                     vistas.push({ mockup: m, pdfDatos: pdfDatos, previo: previo });
                 });
             });
-            var galeria = prepararGaleria(vistas);
+            var galeria = prepararGaleria(vistas, datos.item_key);
             if (!galeria || !galeria.vistas.length) {
                 bloquearCarrito(false); // sin mockups: sin vista previa, venta libre (T021)
                 return null;
@@ -1441,7 +1623,10 @@
                 if (quedan === 0) {
                     mostrarAviso(null, 'No hay vista previa disponible: podes comprar igual y la revisamos antes de la entrega.');
                 }
-                bloquearCarrito(false); // vistas listas (o sin vista): carrito habilitado
+                // Spec 035 (D11): el carrito NO se habilita por haber generado las vistas,
+                // sino cuando no queda ninguna OBLIGATORIA sin ver. Con PDFs
+                // omisibles el resultado es el de siempre (venta libre).
+                refrescarVistas(galeria);
             });
         });
     }

@@ -551,7 +551,15 @@ class Personalizador_PDF_Plugin
                 'endpoint' => admin_url('admin-post.php'),
                 'nonce' => wp_create_nonce('personalizador_pdf_vista_previa'),
             ],
-            'sesion' => $itemEdicion !== '' ? ['sid' => $sid, 'item_key' => $itemEdicion] : null,
+            // Spec 035 (§3.5): en re-edicion, las vistas que el comprador ya MIRO. Con esto
+            // la marca sobrevive el cambio de clave (`draft-{uuid}` -> `cart_item_key`)
+            // sin volver a exigir lo que ya reviso. Se lee el manifest SIN instanciar
+            // `PMU_Sesion` (la ficha no instancia nada: ver el comentario de abajo).
+            'sesion' => $itemEdicion !== '' ? [
+                'sid' => $sid,
+                'item_key' => $itemEdicion,
+                'vistos' => $this->vistos_de_item($sid, $itemEdicion),
+            ] : null,
             // Spec 026 (D3): el cliente solo envia **WebP** si el servidor puede
             // leerlo (GD con `imagecreatefromwebp`); si no, el Motor no podria
             // decodificarlo y el PDF saldria ilegible. La clase se carga aqui
@@ -4453,9 +4461,52 @@ class Personalizador_PDF_Plugin
                     $sesion->guardar_manifest($sid, $item_key, $manifest);
                 }
             }
+            // Spec 035 (§3.5): la marca de "visto" que trae el cliente (las vistas que
+            // MIRO). Se guarda APARTE de `mockup_vistas`, que son las CONGELADAS: la
+            // primera es lo que reviso, la segunda lo que llego a renderizar. Con esto
+            // la ficha no vuelve a exigirlas cuando el item cambie de clave.
+            $vistasPost = isset($_POST['pmu_vistas']) ? json_decode(wp_unslash((string)$_POST['pmu_vistas']), true) : [];
+            if (is_array($vistasPost) && $vistasPost) {
+                try {
+                    $sesion->anotar_vistos($sid, $item_key, $vistasPost);
+                } catch (\Throwable $e) {
+                    // La marca no persiste: el comprador vuelve a revisar. Nunca traba.
+                }
+            }
         } catch (\Throwable $e) {
             // La linea queda con meta; estado_preview() del manifest manda al descargar.
         }
+    }
+
+    /**
+     * Spec 035 (§3.5): ids que el comprador ya VIO en ese item de la sesion.
+     *
+     * Lee el manifest directo (sin instanciar `PMU_Sesion`: la ficha no instancia
+     * nada) y tolera cualquier fallo: sin marca el comprador revisa otra vez, que
+     * es el lado seguro. PUBLICA: el arnes la ejercita sin `exit` (como
+     * `biblioteca_ruta_imagen`).
+     */
+    public function vistos_de_item($sid, $item_key)
+    {
+        try {
+            $ruta = $this->pmu_uploads()->manifest_sesion_item($sid, $item_key);
+        } catch (\Throwable $e) {
+            return [];
+        }
+        if (!is_file($ruta)) {
+            return [];
+        }
+        $manifest = json_decode((string)@file_get_contents($ruta), true);
+        $vistos = (is_array($manifest) && isset($manifest['vistos']) && is_array($manifest['vistos']))
+            ? $manifest['vistos'] : [];
+        $out = [];
+        foreach ($vistos as $v) {
+            $v = (string)$v;
+            if ($v !== '') {
+                $out[] = $v;
+            }
+        }
+        return $out;
     }
 
     /** Decodifica un dataURL a bytes crudos ('' si no es data: valido). */

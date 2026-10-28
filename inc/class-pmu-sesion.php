@@ -171,6 +171,9 @@ class PMU_Sesion
             'archivos' => [],
             'mockup_vistas' => [],
             'mockup_visto' => null,
+            // Spec 035 (§3.5): las vistas que el comprador MIRO (distinto de las
+            // que llego a renderizar). Sobrevive el cambio de clave del item.
+            'vistos' => [],
             'preview_estado' => self::ESTADO_SIN_VISTA,
             'creado' => gmdate('Y-m-d\TH:i:s\Z'),
             'motor' => defined('PERSONALIZADOR_PDF_VERSION') ? PERSONALIZADOR_PDF_VERSION : 'dev',
@@ -1134,6 +1137,42 @@ class PMU_Sesion
             }
         }
         return '';
+    }
+
+    /**
+     * Spec 035 (§3.5): guarda las vistas que el comprador REALMENTE vio.
+     *
+     * Es DISTINTO de `mockup_vistas`, que son las que se CONGELARON (todas las que
+     * el cliente alcanzo a renderizar, las haya mirado o no). Solo esta lista sirve
+     * para no volver a exigir lo ya revisado cuando el item cambia de clave.
+     *
+     * @return array la lista normalizada (vacia si no habia nada usable)
+     */
+    public function anotar_vistos($sid, $item_key, array $ids)
+    {
+        $limpios = [];
+        foreach ($ids as $id) {
+            $id = trim((string)$id);
+            // Forma ESTRICTA de un id de mockup. OJO: `item_seguro()` no sirve aca
+            // porque NO lanza con una ruta: la SANEA (`../../etc/passwd` ->
+            // `etc-passwd`) y guardaria basura como si fuera una vista. La marca vive
+            // en el cliente (no es una frontera de seguridad), pero el manifest no
+            // tiene por que ensuciarse.
+            if ($id === '' || preg_match('/^[A-Za-z0-9_-]{1,40}$/', $id) !== 1) {
+                continue;
+            }
+            if (!in_array($id, $limpios, true)) {
+                $limpios[] = $id;
+            }
+        }
+        if (!$limpios) {
+            return [];
+        }
+        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($limpios) {
+            $previos = isset($manifest['vistos']) && is_array($manifest['vistos']) ? $manifest['vistos'] : [];
+            $manifest['vistos'] = array_values(array_unique(array_merge($previos, $limpios)));
+        });
+        return $limpios;
     }
 
     /** Congela la vista aprobada: mockup-{id}.webp (300x300) en el item. */

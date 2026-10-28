@@ -116,11 +116,11 @@
 
 ### Implementation for User Story 3
 
-- [ ] T032 [P] [US3] `prepararGaleria()` (`assets/tienda.js:740`): ordenar `vistas` por `preview_omisible` ascendente y mostrar la leyenda "Revisa la vista previa" mientras falte una obligatoria
-- [ ] T033 [US3] Marcar `visto` en el `pintar()` de la galeria (incluye la inicial) y persistir en `localStorage['pmu_vistas_v1'][item_key]`; leer y reconciliar al montar; migrar la clave cuando el draft se promueve
-- [ ] T034 [US3] `bloqueos.vistas` (`:445`) pasa a `false` solo cuando no queda ninguna obligatoria sin ver; `bloquearCarrito()` (`:838`) consulta `faltanVistas()`; `carrito_promover` sigue escribiendo `preview_estado` (`ok`/`sin_vista`)
-- [ ] T035 [US3] Una vista podada por error (`fallida`) **no** cuenta como obligatoria
-- [ ] T036 [US3] Ampliar `tests/ficha-pedido.browser.js`: orden, marca por navegacion, habilitacion en la ultima obligatoria (y **no** antes), recarga, vista fallida y el aviso de subidas pendientes
+- [X] T032 [P] [US3] `PURO.ordenarVistas()` (logica PURA en `tienda.js`): obligatorias primero, orden **estable** dentro de cada grupo, sin mutar la entrada. `prepararGaleria(vistas, itemKey)` la aplica y agrega la leyenda `.pmu-gal-revisar` ("Revisa la vista previa"), que arranca oculta
+- [X] T033 [US3] `mostrar()` marca la vista visible (incluye la inicial) via `PURO.marcarVisto` + `guardarVistos` en `localStorage['pmu_vistas_v1'][item_key]`; al montar se reconcilia con `PURO.reconciliarVistos`. **Migracion de clave**: el cliente manda `pmu_vistas` en el add-to-cart, `PMU_Sesion::anotar_vistos()` las guarda en `manifest.vistos` (UNION, aparte de `mockup_vistas` que son las CONGELADAS) y la ficha las republica en `sesion.vistos` (`vistos_de_item()`, lee el manifest SIN instanciar `PMU_Sesion`)
+- [X] T034 [US3] `refrescarVistas(galeria)` es el UNICO lugar que decide leyenda + carrito: `bloquearCarrito(faltan > 0)` con `PURO.faltanVistas()`. Reemplaza el `bloquearCarrito(false)` de fin de generacion (el carrito ya NO se habilita por haber generado, sino por no deber ninguna revision). `carrito_promover` sigue escribiendo `preview_estado`
+- [X] T035 [US3] Una vista `fallida` no obliga: `PURO.vistaObligatoria` la excluye y `podar()` re-evalua con `refrescarVistas(estado)` (podar puede desbloquear)
+- [ ] T036 [US3] **PARCIAL** — la logica pura tiene puerta nueva: `node tests/vistas-contrato.test.js` (**24 checks**: que obliga, orden estable, clave, marca inmutable, faltanVistas con omisibles/fallidas, reconciliacion). La fase `vistos` de `texto_puente.php` cubre el servidor (anotar union, id con forma invalida ignorado, ficha, acumulacion al promover). **Falta** la ampliacion de `tests/ficha-pedido.browser.js` (orden en el DOM, marca por navegacion, habilitacion en la ultima obligatoria, recarga, vista fallida): necesita `C:\wp-lab`
 
 **Checkpoint**: US3 validable sola (es ortogonal a US1/US2; se puede adelantar).
 
