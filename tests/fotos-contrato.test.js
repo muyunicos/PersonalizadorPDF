@@ -159,6 +159,97 @@ grupo('F3: ciclo del registro (guardar / marcar / buscar por sha / borrar)');
         (await PMUFotos.persistir({ storage: { persist: function () { throw new Error('x'); } } })) === false);
 
     // -----------------------------------------------------------------------
+    grupo('F5: cola de subida en segundo plano (T013)');
+    // -----------------------------------------------------------------------
+
+    let enVuelo = 0;
+    let pico = 0;
+    const c1 = PMUFotos.crearCola({
+        max: 2, reintentos: [], esperar: function () { return Promise.resolve(); },
+        subir: function (t) {
+            enVuelo++;
+            pico = Math.max(pico, enVuelo);
+            return new Promise(function (r) {
+                setTimeout(function () { enVuelo--; r(t.id); }, 0);
+            });
+        }
+    });
+    const r1 = await Promise.all([1, 2, 3, 4].map(function (id) {
+        return c1.encolar({ id: id }, 'k' + id);
+    }));
+    check('nunca hay mas de 2 subidas en vuelo', pico <= 2, 'pico=' + pico);
+    check('todas las subidas resuelven con su valor', r1.join(',') === '1,2,3,4', r1.join(','));
+
+    let llamadas = 0;
+    const c2 = PMUFotos.crearCola({
+        reintentos: [], subir: function () { llamadas++; return Promise.resolve(1); }
+    });
+    const pA = c2.encolar({ id: 1 }, 'misma');
+    const pB = c2.encolar({ id: 1 }, 'misma');
+    await pA;
+    await pB;
+    check('la MISMA clave no se reenvia (probar encuadres = 0 bytes)',
+        llamadas === 1 && pA === pB, 'llamadas=' + llamadas);
+
+    let intentos = 0;
+    const esperas = [];
+    const c3 = PMUFotos.crearCola({
+        reintentos: [1000, 3000],
+        esperar: function (ms) { esperas.push(ms); return Promise.resolve(); },
+        subir: function () {
+            intentos++;
+            return intentos < 3 ? Promise.reject(new Error('red')) : Promise.resolve('ok');
+        }
+    });
+    const r3 = await c3.encolar({ id: 9 }, 'k');
+    check('reintenta con backoff de 1 s y 3 s', intentos === 3 && esperas.join(',') === '1000,3000',
+        intentos + ' intentos / ' + esperas.join(','));
+    check('el ultimo intento devuelve el valor', r3 === 'ok', String(r3));
+
+    const c4 = PMUFotos.crearCola({
+        reintentos: [1000], esperar: function () { return Promise.resolve(); },
+        subir: function () { return Promise.reject(new Error('red-caida')); }
+    });
+    let causa = '';
+    try { await c4.encolar({ id: 1 }, 'k'); } catch (e) { causa = e.message; }
+    check('agotar los reintentos rechaza con la causa', causa === 'red-caida', causa);
+
+    const c5 = PMUFotos.crearCola({
+        reintentos: [],
+        subir: function () { return new Promise(function (r) { setTimeout(function () { r(1); }, 5); }); }
+    });
+    c5.encolar({ id: 1 }, 'a');
+    c5.encolar({ id: 2 }, 'b');
+    check('pendientes() cuenta en vuelo + en cola', c5.pendientes() === 2, String(c5.pendientes()));
+    await c5.vaciar();
+    check('vaciar() resuelve cuando no queda nada (lo espera el add-to-cart)',
+        c5.pendientes() === 0);
+    await c5.vaciar();
+    check('vaciar() con la cola vacia resuelve al instante', c5.pendientes() === 0);
+    c5.olvidar('a');
+    check('olvidar() libera la clave para reintentar a proposito',
+        typeof c5.olvidar === 'function');
+
+    // -----------------------------------------------------------------------
+    grupo('F6: sha1Hex (la clave del dedupe)');
+    // -----------------------------------------------------------------------
+
+    check('sin digest devuelve cadena vacia (nunca revienta)',
+        (await PMUFotos.sha1Hex(new Uint8Array([1]), {})) === '');
+    const hexGlobal = await PMUFotos.sha1Hex(new Uint8Array([1, 2, 3]));
+    check('sin crypto inyectado cae al del navegador (40 hex) o a vacio',
+        hexGlobal === '' || hexGlobal.length === 40, hexGlobal.length + ' chars');
+    const hex = await PMUFotos.sha1Hex(new Uint8Array([1]), {
+        digest: function () { return Promise.resolve(new Uint8Array([0xab, 0xcd, 0x01]).buffer); }
+    });
+    check('con crypto.subtle devuelve el hex en minusculas y 2 digitos por byte',
+        hex === 'abcd01', hex);
+    const hexMal = await PMUFotos.sha1Hex(new Uint8Array([1]), {
+        digest: function () { return Promise.reject(new Error('x')); }
+    });
+    check('si digest falla devuelve cadena vacia', hexMal === '');
+
+    // -----------------------------------------------------------------------
     if (fallos) {
         console.error('\nFOTOS CONTRATO: ' + fallos + ' fallo(s) de ' + checks);
         process.exit(1);

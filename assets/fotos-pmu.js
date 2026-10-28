@@ -145,6 +145,123 @@
         });
     }
 
+    /**
+     * sha1 hex (40 chars) de los bytes, con `crypto.subtle`. Devuelve '' si el
+     * navegador no lo tiene (contexto no seguro, navegador viejo): el llamador
+     * decide que hacer sin hash, nunca revienta.
+     */
+    function sha1Hex(bytes, cripto) {
+        var c = cripto || (global.crypto && global.crypto.subtle ? global.crypto.subtle : null);
+        if (!c || typeof c.digest !== 'function' || !bytes) {
+            return Promise.resolve('');
+        }
+        return Promise.resolve(c.digest('SHA-1', bytes)).then(function (buf) {
+            var v = new Uint8Array(buf);
+            var hex = '';
+            for (var i = 0; i < v.length; i++) {
+                hex += ('0' + v[i].toString(16)).slice(-2);
+            }
+            return hex;
+        }).catch(function () { return ''; });
+    }
+
+    /**
+     * Cola FIFO de subidas en SEGUNDO PLANO (spec 035, T013/D2/R8).
+     *
+     * - a lo sumo `max` (2 por defecto) en vuelo: el comprador puede seguir
+     *   ajustando mientras la foto viaja;
+     * - la MISMA clave no se reenvia: probar encuadres de una foto ya subida
+     *   cuesta 0 bytes;
+     * - dos reintentos con backoff (1 s y 3 s): una red que se cae un instante no
+     *   pierde la foto del comprador;
+     * - `vaciar()` resuelve cuando no queda nada: es lo que espera el add-to-cart
+     *   antes de mandar la personalizacion.
+     *
+     * `esperar` se inyecta para no dormir de verdad en los tests.
+     */
+    function crearCola(opciones) {
+        var cfg = opciones || {};
+        var max = Math.max(1, parseInt(cfg.max, 10) || 2);
+        var reintentos = Array.isArray(cfg.reintentos) ? cfg.reintentos : [1000, 3000];
+        var claveDe = (typeof cfg.clave === 'function') ? cfg.clave : function () { return ''; };
+        var subir = (typeof cfg.subir === 'function') ? cfg.subir : null;
+        var esperar = (typeof cfg.esperar === 'function') ? cfg.esperar : function (ms) {
+            return new Promise(function (r) { setTimeout(r, ms); });
+        };
+        var pendientes = [];
+        var enVuelo = 0;
+        var vistas = {};
+        var vacia = null;
+
+        function cerrarSiVacia() {
+            if (enVuelo === 0 && pendientes.length === 0 && vacia) {
+                var r = vacia;
+                vacia = null;
+                r();
+            }
+        }
+
+        function intentar(tarea) {
+            var intento = 0;
+            function paso() {
+                return Promise.resolve()
+                    .then(function () { return subir(tarea); })
+                    .catch(function (e) {
+                        if (intento >= reintentos.length) { throw e; }
+                        var ms = reintentos[intento];
+                        intento++;
+                        return esperar(ms).then(paso);
+                    });
+            }
+            return paso();
+        }
+
+        function arrancar() {
+            while (enVuelo < max && pendientes.length) {
+                var p = pendientes.shift();
+                enVuelo++;
+                (function (envoltorio) {
+                    intentar(envoltorio.tarea).then(function (r) {
+                        enVuelo--;
+                        envoltorio.resolver(r);
+                        arrancar();
+                        cerrarSiVacia();
+                    }, function (e) {
+                        enVuelo--;
+                        envoltorio.rechazar(e);
+                        arrancar();
+                        cerrarSiVacia();
+                    });
+                })(p);
+            }
+        }
+
+        return {
+            /** Encola una subida. La misma clave devuelve la promesa ya en curso. */
+            encolar: function (tarea, clave) {
+                var k = (clave === undefined) ? String(claveDe(tarea) || '') : String(clave || '');
+                if (k !== '' && vistas[k]) { return vistas[k]; }
+                var promesa = new Promise(function (resolver, rechazar) {
+                    pendientes.push({ tarea: tarea, resolver: resolver, rechazar: rechazar });
+                    arrancar();
+                });
+                if (k !== '') { vistas[k] = promesa; }
+                return promesa;
+            },
+            /** Resuelve cuando no queda nada en vuelo ni en cola. */
+            vaciar: function () {
+                if (enVuelo === 0 && pendientes.length === 0) {
+                    return Promise.resolve();
+                }
+                return new Promise(function (r) { vacia = r; });
+            },
+            /** Cuantas quedan (en vuelo + en cola). */
+            pendientes: function () { return enVuelo + pendientes.length; },
+            /** Olvida una clave (para reintentar a proposito o liberar memoria). */
+            olvidar: function (k) { delete vistas[String(k || '')]; }
+        };
+    }
+
     /** Pide almacenamiento persistente (el navegador puede desalojar si no). */
     function persistir(nav) {
         var n = nav || global.navigator;
@@ -171,6 +288,8 @@
         medidasAcotadas: medidasAcotadas,
         idDe: idDe,
         claveLocal: claveLocal,
+        sha1Hex: sha1Hex,
+        crearCola: crearCola,
         abrir: abrir,
         guardarRegistro: guardarRegistro,
         obtener: obtener,
