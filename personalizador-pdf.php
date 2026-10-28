@@ -35,8 +35,10 @@ require_once PERSONALIZADOR_PDF_PATH . 'engine/Metadata.php';
 require_once PERSONALIZADOR_PDF_PATH . 'engine/Imagen.php';
 require_once PERSONALIZADOR_PDF_PATH . 'engine/Overlay.php';
 require_once PERSONALIZADOR_PDF_PATH . 'engine/Motor.php';
+require_once PERSONALIZADOR_PDF_PATH . 'engine/Compositor.php';
 
 use ExtractCorel\Engine\Detector;
+use ExtractCorel\Engine\Compositor;
 use ExtractCorel\Engine\Metadata;
 use ExtractCorel\Engine\Motor;
 use ExtractCorel\Engine\PngWriter;
@@ -4145,11 +4147,14 @@ class Personalizador_PDF_Plugin
     {
         $add('PHP >= 7.4', version_compare(PHP_VERSION, '7.4', '>='), PHP_VERSION);
         $add('Extension zlib', extension_loaded('zlib'), extension_loaded('zlib') ? 'presente' : 'falta');
-        $add('Extension GD (opcional)', true, extension_loaded('gd') ? 'presente' : 'ausente: solo PNG de paleta');
         // Spec 012 (T022b, D14): el cargador de imagenes del comprador depende de
         // GD + WebP. Antes el check solo miraba que GD estuviera presente, asi
         // que un hosting sin WebP se enteraba recien cuando fallaba un pedido.
         $gd = extension_loaded('gd');
+        // Spec 035 (T007f): GD con WebP dejo de ser opcional. El compositor de
+        // fotos la necesita; sin ella el plugin no puede entregar fotos.
+        $add('Extension GD (requisito desde la 035)', $gd,
+            $gd ? 'presente' : 'falta: no se pueden componer las fotos del comprador');
         $leeWebp = $gd && function_exists('imagecreatefromwebp');
         $escribeWebp = $gd && function_exists('imagewebp');
         if (!$gd) {
@@ -4161,6 +4166,9 @@ class Personalizador_PDF_Plugin
             $add('GD + WebP (cargador de imagenes)', true,
                 'GD ' . (defined('GD_VERSION') ? GD_VERSION : '?') . ': lectura y escritura WebP');
         }
+        // Spec 035 (T007f): el COMPOSITOR es lo que arma la foto del pedido.
+        $add('Compositor de fotos (engine/Compositor.php)', Compositor::gd(),
+            Compositor::gd() ? 'GD + WebP listos' : 'motor:compositor:gd');
         $motor = $this->pmu_uploads();
         foreach (['pdfs', 'img', 'tm-presets', 'tmp', 'orders'] as $ambito) {
             $dir = '';

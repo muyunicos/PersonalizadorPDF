@@ -47,12 +47,12 @@
 
 ### Compositor (Fase 2.5 del plan)
 
-- [ ] T007a Crear `engine/Compositor.php`: `caja($modo,$iw,$ih,$W,$H)` y `salida($modo,$iw,$ih,$W,$H,$escala)` con la MISMA matematica de `escalaBase` (`assets/selector-pmu.js:195`) y `escalaSalida` (`:238`)
-- [ ] T007b `Compositor::componer($rutaOriginal, $receta)` -> bytes WebP q0.85: lienzo `salida.w x salida.h`, fondo (con `transp:'no'` + `transparent` -> blanco puro), rotacion 90/180/270, escala `caja x escala x k`, centro en `(ox*w, oy*h)`, alfa preservado (`imagealphablending(false)` + `imagesavealpha(true)`)
-- [ ] T007c Crear `tests/compositor.php` (CLI + GD): 3 modos x 4 rotaciones x fondo x `transp`; alfa en toda la imagen; sin GD -> `motor:compositor:gd`
-- [ ] T007d Crear `tests/compositor-paridad.test.js`: matriz `caja`/`salida` JS vs PHP (tolerancia +-1 px)
-- [ ] T007e Agregar en `tests/fixtures/` una foto con alfa y un caso de envoltura descentrada (`ox/oy` distinto de 0.5)
-- [ ] T007f `smoke_checks()`: `extension_loaded('gd')` + `function_exists('imagewebp')` como **requisito**, con causa `motor:compositor:gd`
+- [X] T007a Crear `engine/Compositor.php`: `caja($modo,$iw,$ih,$W,$H)` y `salida($modo,$iw,$ih,$W,$H,$escala)` con la MISMA matematica de `escalaBase` (`assets/selector-pmu.js:195`) y `escalaSalida` (`:238`)
+- [X] T007b `Compositor::componer($rutaOriginal, $receta)` -> bytes WebP q0.85: lienzo `salida.w x salida.h`, fondo (con `transp:'no'` + `transparent` -> blanco puro), rotacion 90/180/270, escala `caja x escala x k`, centro en `(ox*w, oy*h)`, alfa preservado (`imagealphablending(false)` + `imagesavealpha(true)`)
+- [X] T007c Crear `tests/compositor.php` (CLI + GD): 3 modos x 4 rotaciones x fondo x `transp`; alfa en toda la imagen; sin GD -> `motor:compositor:gd`
+- [X] T007d Crear `tests/compositor-paridad.test.js`: matriz `caja`/`salida` JS vs PHP (tolerancia +-1 px)
+- [X] T007e Imagenes de prueba GENERADAS en runtime (`%TEMP%`, sin binarios en git): mitades roja/azul para la rotacion, franjas de fondo y un `oy` descentrado (`tests/fixtures/` no se toca: es del Motor)
+- [X] T007f `smoke_checks()`: `extension_loaded('gd')` + `function_exists('imagewebp')` como **requisito**, con causa `motor:compositor:gd`
 
 **Checkpoint**: `node tests/receta-contrato.test.js`, `php tests/texto_puente.php receta`, `php tests/compositor.php` y `node tests/compositor-paridad.test.js` en verde.
 
