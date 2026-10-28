@@ -439,9 +439,9 @@ class PMU_Sesion
      * de convertir a WebP, D24). `base` NO se persiste: `PMU_Sesion::familias()` lo
      * **deriva** por area (una sola verdad, sin drift).
      */
-    private function fila_subida($id, $file, $madre, $receta, $sha, $mime, $bytes, $creado, $origen = 'subida')
+    private function fila_subida($id, $file, $madre, $receta, $sha, $mime, $bytes, $creado, $origen = 'subida', $params = [])
     {
-        return [
+        $fila = [
             'id' => (string)$id,
             'file' => (string)$file,
             'mime' => (string)$mime,
@@ -452,6 +452,13 @@ class PMU_Sesion
             'sha' => (string)$sha,
             'origen' => (string)$origen,
         ];
+        // Spec 035 (T024): los PARAMS v2 crudos del recorte, solo en los originales.
+        // `receta` es un hash IRREVERSIBLE: sin los params no se puede recomponer la
+        // composicion al generar el PDF, y la foto del comprador se perderia.
+        if ((string)$origen === 'original' && is_array($params) && $params) {
+            $fila['params'] = $params;
+        }
+        return $fila;
     }
 
     /**
@@ -471,9 +478,9 @@ class PMU_Sesion
         ];
     }
 
-    private function fila_archivo($pdf, $grupo, $indice, $file, $origen, $hash = '')
+    private function fila_archivo($pdf, $grupo, $indice, $file, $origen, $hash = '', $orig = [])
     {
-        return [
+        $fila = [
             'pdf' => (string)$pdf,
             'grupo_id' => (string)$grupo,
             'indice' => max(0, (int)$indice),
@@ -481,6 +488,16 @@ class PMU_Sesion
             'hash' => (string)$hash,
             'origen' => (string)$origen,
         ];
+        // Spec 035 (T024): de que ORIGINAL y con que receta se materializa esta
+        // composicion. El `file` es determinista, asi que el nombre hace de cache;
+        // esto es lo que permite CREARLO cuando falta (Compositor, bajo demanda).
+        if ((string)$origen === 'compuesta' && is_array($orig) && !empty($orig['id'])) {
+            $fila['orig'] = [
+                'id' => strtolower((string)$orig['id']),
+                'params' => (array)($orig['params'] ?? []),
+            ];
+        }
+        return $fila;
     }
 
     /**
@@ -519,43 +536,71 @@ class PMU_Sesion
         // DETERMINISTA por receta, asi que el nombre hace de cache y el archivo lo
         // materializa `Compositor` al generar el PDF (si falta).
         $manifest = $this->leer_manifest($sid, $item_key);
-        $recetas = [];
+        // Spec 035 (T024): de cada ORIGINAL hacen falta la RECETA (hash) y los PARAMS
+        // v2. El hash es IRREVERSIBLE: sin los params no hay forma de recomponer la
+        // composicion al generar el PDF.
+        $originales = [];
         foreach ((array)(is_array($manifest) ? ($manifest['subidas'] ?? []) : []) as $filaS) {
-            if (is_array($filaS) && isset($filaS['id'])
-                && (string)($filaS['receta'] ?? '') !== '') {
-                $recetas[(string)$filaS['id']] = strtolower((string)$filaS['receta']);
+            if (!is_array($filaS) || (string)($filaS['origen'] ?? '') !== 'original') {
+                continue;
             }
+            $idF = strtolower((string)($filaS['id'] ?? ''));
+            $originales[$idF] = [
+                'receta' => strtolower((string)($filaS['receta'] ?? '')),
+                'params' => (array)($filaS['params'] ?? []),
+            ];
         }
         $porInstancia = [];
         foreach (array_values($entradas) as $i => $e) {
+            $params = [];
             if (is_array($e)) {
                 $id = strtolower(trim((string)($e['id'] ?? '')));
-                // Spec 035 (D9): la receta puede llegar como PARAMS crudos (v2): el HASH lo
-                // recomputa SIEMPRE el servidor (`receta_de`), nunca lo propone el
+                // Spec 035 (D9): la receta puede llegar como PARAMS crudos (v2): el HASH
+                // lo recomputa SIEMPRE el servidor (`receta_de`), nunca lo propone el
                 // cliente. Si ya viene como hash 12-hex, se usa tal cual.
                 $receta = $e['receta'] ?? '';
                 if (is_array($receta)) {
-                    $receta = self::receta_de($receta);
+                    $cruda = $receta;
+                    $receta = self::receta_de($cruda);
+                    if ($receta !== '') {
+                        try {
+                            $params = self::receta_validar($cruda);
+                        } catch (Exception $e2) {
+                            $params = [];
+                        }
+                    }
                 }
                 $receta = strtolower(trim((string)$receta));
             } else {
                 $id = strtolower(trim((string)$e));
-                $receta = isset($recetas[$id]) ? $recetas[$id] : '';
+                $receta = isset($originales[$id]) ? $originales[$id]['receta'] : '';
             }
             if (!preg_match('/^[a-f0-9]{12}$/', $id) || !preg_match('/^[a-f0-9]{12}$/', $receta)) {
                 continue;   // instancia sin valor (o foto sin receta conocida)
             }
-            $porInstancia[(int)$i] = 'img/foto-' . $pdf . '-' . $grupo . '-' . $receta . '.webp';
+            if (!$params && isset($originales[$id])) {
+                $params = $originales[$id]['params'];
+            }
+            $porInstancia[(int)$i] = [
+                'file' => 'img/foto-' . $pdf . '-' . $grupo . '-' . $receta . '.webp',
+                'orig' => ['id' => $id, 'params' => $params],
+            ];
         }
         $out = [];
         if ($porInstancia) {
-            $unicos = array_values(array_unique($porInstancia));
-            if (count($unicos) === 1) {
-                $out[] = $this->fila_archivo($pdf, $grupo, 0, $unicos[0], 'compuesta');
+            ksort($porInstancia);
+            $archivos = [];
+            foreach ($porInstancia as $p) {
+                $archivos[$p['file']] = true;
+            }
+            if (count($archivos) === 1) {
+                // Una sola composicion cubre el grupo: UNA fila con `indice` 0 y el
+                // Motor la replica (misma semantica de la 029, ahora con `orig`).
+                $primero = reset($porInstancia);
+                $out[] = $this->fila_archivo($pdf, $grupo, 0, $primero['file'], 'compuesta', '', $primero['orig']);
             } else {
-                ksort($porInstancia);
-                foreach ($porInstancia as $i => $file) {
-                    $out[] = $this->fila_archivo($pdf, $grupo, (int)$i, $file, 'compuesta');
+                foreach ($porInstancia as $i => $p) {
+                    $out[] = $this->fila_archivo($pdf, $grupo, (int)$i, $p['file'], 'compuesta', '', $p['orig']);
                 }
             }
         }
@@ -804,10 +849,24 @@ class PMU_Sesion
         // reescalar (ninguna de las dos es determinista entre versiones).
         $sha = sha1($bytes);
         $id = substr($sha, 0, 12);
-        // Spec 035 (D9): la RECETA del recorte viaja con la subida (`params`) y se
-        // guarda en la fila: es lo que permite declarar la composicion por `id`
-        // (`registrar_fotos`) sin que el cliente tenga que repetirla por instancia.
-        $receta = (is_array($params) && $params) ? self::receta_de($params) : '';
+        // Spec 035 (D9/T024): la RECETA del recorte viaja con la subida (`params`) y se
+        // guarda en la fila con sus PARAMS v2 canonizados. Es lo que permite declarar
+        // la composicion por `id` (`registrar_fotos`) sin que el cliente la repita por
+        // instancia, y lo unico con lo que `Compositor` puede recomponer (el hash es
+        // irreversible).
+        $receta = '';
+        $paramsV2 = [];
+        if (is_array($params) && $params) {
+            $receta = self::receta_de($params);
+            if ($receta !== '') {
+                try {
+                    $paramsV2 = self::receta_validar($params);
+                } catch (Exception $e) {
+                    $receta = '';
+                    $paramsV2 = [];
+                }
+            }
+        }
         // Spec 035 (D2): el cap de 2000 px se REVALIDA en el servidor.
         $bytes = self::acotar_original($bytes);
         // Spec 026 (D3): el servidor convierte a WebP si puede (q0.85: la foto del
@@ -821,7 +880,7 @@ class PMU_Sesion
         $med = @getimagesize($ruta);
         $fila = null;
         $this->mutar_manifest($sid, $item_key,
-            function (&$manifest) use ($item_key, $id, $sha, $img, $ruta, $receta, &$fila) {
+            function (&$manifest) use ($item_key, $id, $sha, $img, $ruta, $receta, $paramsV2, &$fila) {
                 if ((string)($manifest['item_key'] ?? '') !== (string)$item_key) {
                     throw new Exception('motor:sesion:item:ausente');
                 }
@@ -837,6 +896,7 @@ class PMU_Sesion
                         // comprador ve al agregar al carrito.
                         if ($receta !== '') {
                             $filas[$i]['receta'] = $receta;
+                            $filas[$i]['params'] = $paramsV2;
                         }
                         $manifest['subidas'] = $filas;
                         $fila = $filas[$i];
@@ -844,7 +904,7 @@ class PMU_Sesion
                     }
                 }
                 $nueva = $this->fila_subida($id, '', $id, $receta, $sha, $img['mime'],
-                    (int)@filesize($ruta), time(), 'original');
+                    (int)@filesize($ruta), time(), 'original', $paramsV2);
                 $filas[] = $nueva;
                 $manifest['subidas'] = $filas;
                 $fila = $nueva;
@@ -999,6 +1059,70 @@ class PMU_Sesion
             }
         }
         return '';
+    }
+
+    /**
+     * Spec 035 (T024): materializa en el pool las composiciones que FALTAN.
+     *
+     * El nombre (`img/foto-{pdf}-{grupo}-{receta}.webp`) es DETERMINISTA por
+     * receta, asi que **el nombre es el cache**: si el archivo esta, no se
+     * recompone, y dos items con el mismo encuadre comparten los mismos bytes.
+     *
+     * Los bytes los produce `Compositor` desde el ORIGINAL y los params v2 que la
+     * fila guardo al aceptar el recorte. Sin original (o sin params) la instancia
+     * se OMITE y se cuenta: el hueco queda transparente, nunca un PDF roto.
+     *
+     * @return array{creadas: int, faltantes: int}
+     */
+    public function materializar_composiciones($clave, $sid, $dirItem, array $manifest, $pdf)
+    {
+        $creadas = 0;
+        $faltantes = 0;
+        foreach ((array)($manifest['archivos'] ?? []) as $fila) {
+            if (!is_array($fila) || (string)($fila['pdf'] ?? '') !== (string)$pdf) {
+                continue;
+            }
+            if ((string)($fila['origen'] ?? '') !== 'compuesta') {
+                continue;   // el texto ya vive en el pool: no se compone
+            }
+            $rel = (string)($fila['file'] ?? '');
+            if ($rel === '') {
+                continue;
+            }
+            $destino = $dirItem . DIRECTORY_SEPARATOR
+                . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $rel);
+            if (is_file($destino)) {
+                continue;   // el nombre es el cache
+            }
+            $orig = (array)($fila['orig'] ?? []);
+            $id = strtolower((string)($orig['id'] ?? ''));
+            $params = (array)($orig['params'] ?? []);
+            if ($id === '' || !$params) {
+                $faltantes++;
+                continue;
+            }
+            $rutaOrig = $this->resolver_original($id, $clave, $sid);
+            if ($rutaOrig === '') {
+                $faltantes++;
+                continue;
+            }
+            try {
+                $bytes = \ExtractCorel\Engine\Compositor::componer($rutaOrig, self::receta_validar($params));
+            } catch (\Throwable $e) {
+                $faltantes++;
+                continue;
+            }
+            $carpeta = dirname($destino);
+            if (!is_dir($carpeta)) {
+                wp_mkdir_p($carpeta);
+            }
+            if (@file_put_contents($destino, $bytes) === false) {
+                $faltantes++;
+                continue;
+            }
+            $creadas++;
+        }
+        return ['creadas' => $creadas, 'faltantes' => $faltantes];
     }
 
     /** Primer `{base}.{ext}` que exista (el `id` no lleva extension). */

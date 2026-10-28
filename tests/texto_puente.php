@@ -1291,6 +1291,29 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('archivos[] + pool_url normativos', is_array($json) && is_array($json['data']['archivos'] ?? null)
                 && (bool)preg_match('#uploads/pmu/tmp/sesion-[a-z0-9_-]+/draft-[a-z0-9_-]+/$#', (string)($json['data']['pool_url'] ?? '')));
             break;
+        case 'composicion':
+            // Spec 035 (T024/T029): la composicion se crea bajo demanda y su
+            // nombre determinista hace de cache.
+            $errComp = (string)($GLOBALS['test_comp_error'] ?? '');
+            check('composicion: sin error', $errComp === '', $errComp);
+            check('composicion: la crea el servidor (no existia)', !empty($GLOBALS['test_comp_creada']));
+            check('composicion: se guarda en WebP', !empty($GLOBALS['test_comp_webp']));
+            $medC = (array)($GLOBALS['test_comp_medidas'] ?? []);
+            // Spec 028 (D11): el PNG mide el LIENZO pero acotado a la resolucion de la
+            // foto: con 60x40 y lienzo 300x200 sale 60x40 (NUNCA amplia) y el
+            // aspecto 3:2 se conserva. Los 4 restantes del lienzo quedan aqui.
+            check('composicion: nunca amplia (60x40 con lienzo 300x200) y conserva el aspecto',
+                (int)($medC[0] ?? 0) === 60 && (int)($medC[1] ?? 0) === 40,
+                (int)($medC[0] ?? 0) . 'x' . (int)($medC[1] ?? 0));
+            check('composicion: el PDF final sale del pool compuesto',
+                ($GLOBALS['test_comp_pdf'] ?? '') === '%PDF');
+            check('composicion: el nombre es el cache (reusa con el original BORRADO)',
+                !empty($GLOBALS['test_comp_reuso']));
+            check('composicion: sin original ni composicion da causa propia',
+                strpos((string)($GLOBALS['test_comp_causa'] ?? ''), 'motor:descarga:composicion:ausente') !== false,
+                (string)($GLOBALS['test_comp_causa'] ?? ''));
+            break;
+
         case 'completados':
             // T025/T026: listado + PDF final + regeneracion idempotente.
             $comp = isset($GLOBALS['test_completados']) ? (array)$GLOBALS['test_completados'] : [];
@@ -2251,6 +2274,78 @@ switch ($fase) {
         ];
         $_REQUEST = $_POST;
         $p->handle_vista_previa(); // exit en wp_send_json_*
+        break;
+
+    case 'composicion':
+        // Spec 035 (T024/T029): la composicion se materializa BAJO DEMANDA con
+        // `Compositor` (original + receta) y el PDF sale del pool ya compuesto.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $motor_cc = $p->motor_para_tests();
+        try {
+            $claveC = '1';
+            $oidC = 5151;
+            $itemC = 'itemcomp0001';
+            $idC = 'c0ffee123456';
+            $dirC = $motor_cc->dir_order($claveC, $oidC, true) . DIRECTORY_SEPARATOR . $itemC;
+            wp_mkdir_p($dirC . DIRECTORY_SEPARATOR . 'img');
+            // ORIGINAL real (60x40) en la carpeta del CLIENTE.
+            wp_mkdir_p($motor_cc->dir_order_uploads($claveC, true));
+            $pngC = sys_get_temp_dir() . '/pd_puente_comp_' . getmypid() . '.png';
+            \ExtractCorel\Engine\PngWriter::write($pngC, 60, 40);
+            copy($pngC, $motor_cc->dir_order_uploads($claveC) . DIRECTORY_SEPARATOR . $idC . '.png');
+            $paramsC = ['v' => 2, 'w' => 300, 'h' => 200, 'forma' => 'auto', 'modo' => 'cubrir',
+                'escala' => 1, 'ox' => 0.5, 'oy' => 0.5, 'fondo' => 'auto', 'transp' => '',
+                'rot' => 0, 'iw' => 60, 'ih' => 40, 'phsize' => 0, 'gid' => '0000FF'];
+            $recetaC = PMU_Sesion::receta_de($paramsC);
+            $relC = 'img/foto-muestra-0000FF-' . $recetaC . '.webp';
+            file_put_contents($dirC . DIRECTORY_SEPARATOR . 'manifest.json', json_encode([
+                'item_key' => $itemC, 'sid' => 'test-comp-0001', 'cliente' => $claveC,
+                'pdfs' => ['muestra'], 'valores' => [], 'preview_estado' => 'ok',
+                'archivos' => [[
+                    'pdf' => 'muestra', 'grupo_id' => '0000FF', 'indice' => 0,
+                    'file' => $relC, 'hash' => '', 'origen' => 'compuesta',
+                    'orig' => ['id' => $idC, 'params' => $paramsC],
+                ]],
+                'subidas' => [[
+                    'id' => $idC, 'file' => '', 'mime' => 'image/png', 'bytes' => 100,
+                    'creado' => time(), 'madre' => $idC, 'receta' => $recetaC,
+                    'sha' => str_repeat('b', 40), 'origen' => 'original', 'params' => $paramsC,
+                ]],
+            ]));
+            $compC = $dirC . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relC);
+            // 1) Sin la composicion en disco: la crea el servidor y el PDF sale.
+            $rutasC = $p->item_generar_pdfs($claveC, $oidC, $itemC);
+            $GLOBALS['test_comp_pdf'] = (string)file_get_contents((string)($rutasC['muestra'] ?? ''), false, null, 0, 4);
+            $GLOBALS['test_comp_creada'] = is_file($compC);
+            $GLOBALS['test_comp_webp'] = is_file($compC)
+                && strpos((string)@file_get_contents($compC, false, null, 0, 12), 'WEBP') !== false;
+            $GLOBALS['test_comp_medidas'] = is_file($compC) ? (array)@getimagesize($compC) : [];
+            // 2) El NOMBRE es el cache: con el original y la salida BORRADOS, el
+            // segundo encargo reusa la composicion y no necesita el original.
+            clearstatcache();
+            $mtimeC = (int)@filemtime($compC);
+            @unlink($motor_cc->dir_order_uploads($claveC) . DIRECTORY_SEPARATOR . $idC . '.png');
+            @unlink((string)($rutasC['muestra'] ?? ''));
+            clearstatcache();
+            $rutasC2 = $p->item_generar_pdfs($claveC, $oidC, $itemC);
+            clearstatcache();
+            $GLOBALS['test_comp_reuso'] = is_file($compC) && (int)@filemtime($compC) === $mtimeC
+                && (string)file_get_contents((string)($rutasC2['muestra'] ?? ''), false, null, 0, 4) === '%PDF';
+            // 3) Sin original NI composicion: causa propia, nunca un PDF roto.
+            @unlink($compC);
+            @unlink((string)($rutasC2['muestra'] ?? ''));
+            try {
+                $p->item_generar_pdfs($claveC, $oidC, $itemC);
+                $GLOBALS['test_comp_causa'] = 'no-lanzo';
+            } catch (\Throwable $e) {
+                $GLOBALS['test_comp_causa'] = $e->getMessage();
+            }
+        } catch (\Throwable $e) {
+            $GLOBALS['test_comp_error'] = $e->getMessage();
+        }
         break;
 
     case 'completados':

@@ -3198,10 +3198,14 @@ class Personalizador_PDF_Plugin
             throw new \RuntimeException('motor:descarga:manifest:invalido');
         }
         $rutas = [];
+        $sesionRef = $this->sesion();
         foreach (array_values($manifest['pdfs']) as $pdf) {
             $pdf = $motor->nombre_seguro((string)$pdf, 'item_descarga');
             $salida = $dir . DIRECTORY_SEPARATOR . $pdf . '_procesado.pdf';
             if (!is_file($salida)) {
+                // Spec 035 (T024): la foto del comprador se COMPONE aca, desde el
+                // ORIGINAL y su receta, y solo si falta (el nombre es el cache).
+                $composicion = $sesionRef->materializar_composiciones($clave, '', $dir, $manifest, $pdf);
                 $mapa = [];
                 // Spec 012 (T027/T025): un grupo puede tener VARIAS filas (una por
                 // instancia). Antes se guardaba solo la primera (`isset($mapa[$gid])`
@@ -3211,7 +3215,6 @@ class Personalizador_PDF_Plugin
                 // (D17/D18/D19).
                 $porIdx = [];
                 $refsFaltantes = 0;
-                $sesionRef = $this->sesion();
                 foreach ((array) ($manifest['archivos'] ?? []) as $fila) {
                     if (!is_array($fila) || (string) ($fila['pdf'] ?? '') !== $pdf) {
                         continue;
@@ -3251,6 +3254,11 @@ class Personalizador_PDF_Plugin
                 if (!$mapa) {
                     if (!empty($refsFaltantes)) {
                         throw new \RuntimeException('motor:descarga:ref:ausente:' . $pdf);
+                    }
+                    // Spec 035 (T024): la composicion no se pudo materializar (ni
+                    // original ni params): causa propia, distinta del pool vacio.
+                    if (((int)($composicion['faltantes'] ?? 0)) > 0) {
+                        throw new \RuntimeException('motor:descarga:composicion:ausente:' . $pdf);
                     }
                     throw new \RuntimeException('motor:descarga:pool:vacio:' . $pdf);
                 }
