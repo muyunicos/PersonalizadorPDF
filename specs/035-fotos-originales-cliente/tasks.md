@@ -102,7 +102,7 @@
 - [X] T028 [US2] `admin/pedidos.php`: columna **Cliente** (`r['clave']`) junto a Pedido
 - [X] T029 [US2] Fases cubiertas: `pedido` (arbol nuevo, `manifest.cliente`, `customer_id = 0` no promueve con causa, idempotencia, el original viajando a `uploads/` y la resolucion por cadena) y **`composicion`** (nueva): la composicion se crea bajo demanda, sale en WebP, respeta D11 (nunca amplia), el PDF final sale del pool, **el nombre es el cache** y la segunda descarga funciona con el original ya borrado, y sin original ni composicion da la causa `motor:descarga:composicion:ausente`
 - [X] T030 [US2] Actualizados los escaneos y las rutas de los tests (`pedido`, `sesion`, `carrito`, `completados`, `biblioteca`, `admin` + `item_generar_pdfs`/`item_generar_pdf` con `$clave`). **Pendiente**: `tests/ficha-pedido.browser.js:568` (necesita el lab)
-- [ ] T031 [US2] Verificar `php tests/motor_smoke.php` + `php tests/parity.php` en verde: **el Motor no cambia**
+- [X] T031 [US2] Verificado: `php tests/motor_smoke.php` (**SMOKE OK**) y `php tests/parity.php` (**PARIDAD OK**) en verde — **el Motor no cambio**
 
 **Checkpoint**: US2 validable con un pedido de prueba en el lab (`orders/{cliente}/{order_id}/`).
 
