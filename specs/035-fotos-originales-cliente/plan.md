@@ -73,7 +73,7 @@ personalizador-pdf.php
 ├─ biblioteca_contenedores()       2047  escaneo de 3 niveles
 ├─ biblioteca_peso_identidades()   1951  escaneo de 3 niveles
 ├─ panel_ficha()                    545  publica `preview_omisible` por PDF para el orden de §3.5
-├─ handle_subida()                 1784  originales a `tmp/sesion-{sid}/uploads/` + `origen: sesion`
+├─ handle_subida()                 1784  originales a `tmp/sesion-{sid}/uploads/` + `origen: original`
 └─ handle_pool_png()               1644  composiciones (sin cambios de formato)
 inc/class-pmu-uploads.php
 ├─ dir_order()                     1073  firma ($cliente, $order_id, $crear)
@@ -85,7 +85,7 @@ inc/class-pmu-sesion.php
 ├─ promover_order()                1211  ($order_id, $cliente, $sid, $item) + originales + manifest.cliente
 ├─ limpiar_ttl()                   1242  excluir `uploads/` del conteo por item
 ├─ guardar_subida()                 843  dedupe por sha en la carpeta de la sesion
-├─ podar_subidas()                  582  poda por sesion para los originales
+├─ podar_subidas()                  582  ELIMINAR (`subidas/` no existe)
 └─ receta_de()                     1322  v2 (v, rot, phsize, gid, dx/dy normalizados)
 assets/
 ├─ selector-pmu.js                 1117  _params() -> receta v2 (+rot)
@@ -119,7 +119,7 @@ fija el staging). No es un cambio de datos: no hay migracion (D12).
 |---|---|---|---|
 | **F0** | Receta v2 (`receta_de` + `_params` + validacion) | — | `node tests/receta-contrato.test.js` + `texto_puente.php receta` |
 | **F1** | Original en el navegador (`assets/fotos-pmu.js`, cap 2000, IndexedDB) + **subida en segundo plano** al elegir la foto (cola + dedupe por sha) | F0 | `node tests/fotos-contrato.test.js` (nuevo) + navegador |
-| **F2** | Carpeta de sesion compartida (`tmp/sesion-{sid}/uploads/`) + `origen: sesion` + poda/TTL | F1 | `texto_puente.php carpeta_cliente` + `sin_lectura` |
+| **F2** | Carpeta de sesion compartida (`tmp/sesion-{sid}/uploads/`) + `origen: original` + pool `img/foto-` + poda/TTL | F1 | `texto_puente.php carpeta_cliente` + `sin_lectura` |
 | **F3** | Refactor de rutas (`orders/{cliente}/{order_id}/`), `manifest.cliente`, traslado al pagar, sin staging | F2 | `texto_puente.php rutas|traslado` + `ficha-pedido.browser.js` |
 | **F4** | Marca de "visto" por navegacion (§3.5) | — (ortogonal) | `ficha-pedido.browser.js` |
 | **F5** | Docs: `constitution` §IV, `AGENTS.md` §2/§5/§7, 030 (supersesion), INDICE, version | F3 | `php -l` + inventarios |

@@ -46,16 +46,16 @@ Hoy, al aceptar el recorte, el navegador compone la imagen y **sube el resultado
 |---|----------|
 | **D1** | **Receta v2, completa y versionada**: `v,w,h,forma,modo,escala,dx,dy,fondo,transp,rot,iw,ih,phsize,gid`. `dx/dy` se normalizan al lienzo. El servidor la **revalida** (enum de modo, `escala` 0.25-4, `PH_MAX`, cotas de `dx/dy`) y sigue siendo el unico que calcula el hash (`receta_de`, `inc/class-pmu-sesion.php:1322`). Cierra la colision 90/270. |
 | **D2** | **El original se acota a 2000x2000 px al ingerir** (constante unica cliente/servidor, revalidada en el servidor), se guarda en IndexedDB con dedupe por sha y alimenta la vista previa por `objectURL` (0 red). **La subida arranca en segundo plano** al elegir la foto: el navegador es la cache, no el unico lugar. |
-| **D3** | **El original NACE en `tmp/sesion-{sid}/uploads/`** (carpeta de la sesion, compartida por sus items) **en segundo plano desde que se elige la foto**, con dedupe por sha: una foto usada en 3 items se guarda **una vez** y no se reenvia al probar encuadres. La composicion por receta va a `tmp/sesion-{sid}/{item_key}/subidas/` al add-to-cart. El add-to-cart **espera solo las subidas pendientes** (aviso "Estamos recibiendo tus archivos, espera..."; en el caso normal no hay espera visible). |
-| **D4** | **Al pagarse, el servidor MUEVE**: el item `tmp/sesion-{sid}/{item_key}/` pasa a `orders/{cliente}/{order_id}/{item_key}/` (rename) y los originales a `orders/{cliente}/uploads/` (dedupe por sha); las filas pasan a `origen: 'cliente'` con `id` + `clave`. Se **congela `manifest.cliente`** para que la descarga no dependa de Woo. Idempotente y **nunca bloquea el pago** (`try/catch` + `log_pedido`, reintento en cada cambio de estado). |
-| **D5** | **La composicion viaja CON el pedido; el original se REFERENCIA** por `id` + `clave`. El PDF sale de la composicion (inmutable), asi que **borrar un original no rompe ningun pedido**: solo pierde la reedicion. Resuelve el P3 de la 030 sin materializar. |
+| **D3** | **El original NACE en `tmp/sesion-{sid}/uploads/`** (carpeta de la sesion, compartida por sus items) **en segundo plano desde que se elige la foto**, con dedupe por sha: una foto usada en 3 items se guarda **una vez** y no se reenvia al probar encuadres. La composicion por receta va al **pool del item** (`{item}/img/foto-{pdf}-{gid}-{n}.webp`) al add-to-cart. El add-to-cart **espera solo las subidas pendientes** (aviso "Estamos recibiendo tus archivos, espera..."; en el caso normal no hay espera visible). |
+| **D4** | **Al pagarse, el servidor MUEVE (sin copias)**: el item `tmp/sesion-{sid}/{item_key}/` pasa a `orders/{cliente}/{order_id}/{item_key}/` (rename) y cada original `tmp/sesion-{sid}/uploads/{id}.webp` a `orders/{cliente}/uploads/{id}.webp` (rename idempotente: si ya existe en la fija, no se repite). Las filas **no cambian**: siguen con `origen: original` + `id`. Se **congela `manifest.cliente`** para que la descarga no dependa de Woo. **Nunca bloquea el pago** (`try/catch` + `log_pedido`, reintento en cada cambio de estado). |
+| **D5** | **La composicion viaja CON el pedido (en `img/`); el original se REFERENCIA solo por `id`.** El PDF sale de la composicion (inmutable), asi que **el original no hace falta para imprimir**: por eso se puede mover sin copias y borrarlo no rompe ningun pedido (solo pierde la reedicion). Resuelve el P3 de la 030 sin materializar. |
 | **D6** | **Sin staging**: `tmp/orders/` **no existe ni existira**. El item vive en `tmp/sesion-{sid}/` hasta el pago y ahi se mueve. El TTL de 30 dias de un item sin pagar es **politica deseada** (P6 = B): si un pedido `on-hold` se paga despues, la personalizacion ya no existe y Pedidos lo muestra con su causa. |
-| **D7** | **La biblioteca sigue siendo una VISTA** (030 D1): escanea los contenedores del comprador (`tmp/sesion-*` y `orders/{cliente}/{order_id}/*`) y muestra **una entrada por original** (`madre` = sha), no una por composicion. `orders/{cliente}/uploads/` solo aporta lo ya comprado; el escaneo de `orders/` pasa a **3 niveles**. |
+| **D7** | **La biblioteca sigue siendo una VISTA** (030 D1): escanea los contenedores del comprador (`tmp/sesion-*` y `orders/{cliente}/{order_id}/*`) y muestra **una entrada por original** (`madre` = `id` del original), no una por composicion. `orders/{cliente}/uploads/` solo aporta lo ya comprado; el escaneo de `orders/` pasa a **3 niveles**. |
 | **D8** | **Sin fusion invitado -> cuenta**: la cuenta es **obligatoria al comprar**, asi que en `pedido_promover()` ya existe `$order->get_customer_id()` y el traslado usa ese `uid`. Un pedido con `customer_id = 0` (manual del admin o historico de invitado) **no se promueve** y queda con causa visible en Pedidos. |
 | **D9** | **Sin compositor PHP.** La vista previa es client-side y el PDF usa el bitmap que compuso el navegador: **"la vista previa es el PDF" se mantiene byte a byte**. La receta se guarda para el futuro (API 010, reparacion), no se usa para imprimir. |
 | **D10** | **Mockup: fuera de esta spec** (va a la 036): `objectURL` local + pintado progresivo, y plano de 2 caras solo con medicion previa. Aca no se toca el camino de mockup de `assets/tienda.js` ni `assets/mockup-render.js`. |
 | **D11** | **La vista se marca al MOSTRARSE, no al pulsar un boton**: cada vista de la galeria queda como vista cuando la galeria la muestra (la inicial cuenta); el add-to-cart se habilita cuando **todas las vistas obligatorias** fueron mostradas. Las vistas **no omisibles** van **primero**, con el mensaje "Revisa la vista previa"; las `preview_omisible` (por PDF) no exigen haber sido vistas. La marca vive en el cliente y se persiste en el add-to-cart con el webp congelado (`mockup_vistas`), sin un POST por navegacion. |
-| **D12** | **Sin migracion y sin compatibilidad de rutas**: no hay pedidos previos (desarrollo con control total), asi que el arbol viejo `orders/{order_id}/` **no** se lee: los 4 puntos de lectura usan solo `orders/{cliente}/{order_id}/`. Las filas viejas (`origen: subida/ref/texto`) si se siguen leyendo. |
+| **D12** | **Sin migracion y sin compatibilidad de rutas**: no hay pedidos ni items previos (desarrollo con control total), asi que el arbol viejo `orders/{order_id}/` **no** se lee: los 4 puntos de lectura usan solo `orders/{cliente}/{order_id}/`. |
 | **D13** | **La carpeta de sesion compartida no rompe el barrido**: `limpiar_ttl()` **excluye** `tmp/sesion-{sid}/uploads/` del conteo por item (como ya hace con `draft-`), la poda de originales es **por sesion** (¿algun item lo referencia?) y `borrar_item()` no se lleva la carpeta compartida mientras otro item la use. |
 | **D14** | **Aislamiento de `orders/`**: los dos niveles son numericos (`{cliente}` y `{order_id}`) y los escaneos exigen `ctype_digit`; `orders/{cliente}/uploads/` **nunca** se lista como pedido. Ninguna purga futura de `orders/` puede tocar `orders/{cliente}/uploads/`. |
 
@@ -79,34 +79,34 @@ Hoy, al aceptar el recorte, el navegador compone la imagen y **sube el resultado
 
 | Campo | Regla |
 |---|---|
-| `origen` | `subida` (composicion en el item), `sesion` (original en `tmp/sesion-{sid}/uploads/`), `cliente` (original ya comprado en `orders/{cliente}/uploads/`) o `ref` (archivo de otro pedido, 030) |
+| `origen` | `original` (la foto del comprador), `compuesta` (el bitmap que imprime el Motor, en el pool) o `ref` (archivo de otro pedido, 030) |
 | `id` | `{sha12}` del original (estable entre items y pedidos) |
-| `clave` | solo con `origen: cliente`: el `uid` del pedido (`manifest.cliente`); el servidor arma `orders/{clave}/uploads/{id}.webp` |
-| `madre` | familia = el original; **inmutable** |
-| `file` / `ref` | `file` solo con `origen: subida` (`subidas/{id}.webp`); `origen: cliente` **no** usa `ref`: el servidor arma la ruta desde `id` + `clave`; `ref` queda para la 030 (`origen: ref`) |
+| `madre` | familia = el `id` del original; **inmutable** |
+| `file` | solo con `origen: compuesta`: `img/foto-{pdf}-{gid}-{n}.webp` |
+| `ref` | solo con `origen: ref`: relativo al item, validado con `realpath` |
 | `receta`, `sha`, `mime`, `bytes`, `creado` | igual que hoy |
 
-Invariantes: una fila `cliente` **no** protege ningun archivo local (la poda de la
-029 no cambia); `resolver_ref()` (`inc/class-pmu-sesion.php:1299`) valida el `ref`
-con `realpath` dentro de `uploads/pmu/`; al promover, las filas `sesion` pasan a
-`clave` (esto es, `origen: cliente` con el campo `clave`) en la **misma** escritura del manifest
-(nunca quedan apuntando a `tmp/`).
-**Resolucion de archivos**: `resolver_subidas()` resuelve las tres formas — `subida` ->
-`{item}/subidas/{file}`, `sesion` -> `tmp/sesion-{sid}/uploads/{id}.webp`, `cliente` ->
-`orders/{clave}/uploads/{id}.webp` — con `is_file()` y causa explicita; `handle_subida_url()` y
-`biblioteca_ruta_imagen()` usan esa resolucion (sin `file` no hay ruta que adivinar).
+Invariantes: la fila `original` lleva **solo `id`** (sin `file`, sin `ref`, sin `clave`): el
+servidor resuelve la cadena de ubicaciones. `resolver_ref()` (`inc/class-pmu-sesion.php:1299`)
+valida el `ref` con `realpath` dentro de `uploads/pmu/`. Al promover, las filas **no se reescriben**
+(el `id` no cambia).
+**Resolucion por cadena** (`resolver_original($id, $clave, $sid)`): `orders/{clave}/uploads/{id}.webp`
+(fija) -> `tmp/sesion-{sid}/uploads/{id}.webp` (temporal) -> causa `motor:original:ausente`.
+`handle_subida_url()`, `biblioteca_ruta_imagen()` e `item_generar_pdfs()` la usan.
+**Pool**: `{item}/img/txt-{pdf}-{gid}-{n}.webp` (texto) y `{item}/img/foto-{pdf}-{gid}-{n}.webp`
+(composicion); `siguiente_n()` y `limpiar_grupo()` filtran por prefijo.
 
 ### 3.3 Carpeta del cliente (`orders/{cliente}/`)
 
 ```
 uploads/pmu/
 ├── tmp/sesion-{sid}/
-│   ├── uploads/{id}.webp            originales de la sesion (1 por sha, compartidos)
-│   └── {item_key}/                  manifest + subidas/ (composiciones) + img/ + mockups
+│   ├── uploads/{id}.webp            ORIGINALES de la sesion (1 por sha, compartidos)
+│   └── {item_key}/                  manifest + img/ (pool: txt- y foto-) + mockups
 └── orders/{cliente}/                uid congelado en manifest.cliente
     ├── datos.json                   {version:1, items:[{id,nombre,w,h,bytes,mime,sha,creado,ultimo_uso,favorito}], opciones:{}}
-    ├── uploads/{id}.webp            original acotado a 2000 px; `id` = 12 hex del sha
-    └── {order_id}/{item_key}/       entregable (sin cambios internos)
+    ├── uploads/{id}.webp            ORIGINALES comprados (el pago los mueve aca)
+    └── {order_id}/{item_key}/       entregable: manifest + img/ (composiciones y textos) + mockups
 ```
 
 - El **nombre original** vive en `datos.json`, nunca en el filesystem (PII,
@@ -119,9 +119,9 @@ uploads/pmu/
   `biblioteca_contenedores()` y `pedidos_completados()`; se agrega `cliente_valido()`
   (`/^\d{1,12}$/`) y **ninguna** purga futura de `orders/` puede tocar
   `orders/{cliente}/uploads/`.
-- `borrar_item()` (`inc/class-pmu-sesion.php:1178`) sigue borrando el arbol del
-  item en `tmp`; lo que ya se traslado a `orders/{cliente}/uploads/` no se toca, y la
-  carpeta compartida `tmp/sesion-{sid}/uploads/` **no** se borra mientras otro item la use.
+- `borrar_item()` (`inc/class-pmu-sesion.php:1178`) borra el arbol del item en `tmp` (manifest +
+  pool + mockups); los **originales** de `tmp/sesion-{sid}/uploads/` no se tocan mientras otro item
+  de la sesion los use, y los ya movidos a `orders/{cliente}/uploads/` tampoco.
 
 ### 3.4 Flujo
 
@@ -130,11 +130,11 @@ uploads/pmu/
                       + SUBIDA EN SEGUNDO PLANO del original a tmp/sesion-{sid}/uploads/ (1 por sha)
 2. Ajusta/Guarda   -> composicion en canvas; el original no se reenvia (ya esta o viaja en segundo plano)
 3. Add-to-cart     -> espera solo lo pendiente ("Estamos recibiendo tus archivos, espera...")
-                      + COMPOSICION por receta + textos del pool; registra filas; congela mockups
-4. Pago            -> pedido_promover: rename tmp/sesion-{sid}/{item} -> orders/{cliente}/{order_id}/{item}
-                      + mueve originales a orders/{cliente}/uploads/ + filas 'cliente' (id + clave)
-5. Descarga        -> Motor con la composicion del pedido (no depende del original)
-6. Reedicion       -> original desde orders/{cliente}/uploads/ (o IndexedDB si aun no pago)
+                      + COMPOSICION y TEXTOS al pool del item (img/); filas; congela mockups
+4. Pago            -> pedido_promover: rename del item y de cada original (tmp -> orders/{cliente})
+                      + manifest.cliente (las filas no cambian: el id no cambia)
+5. Descarga        -> Motor con las composiciones del pedido (no usa el original)
+6. Reedicion       -> original por id: cache -> orders/{cliente}/uploads -> tmp/sesion-*/uploads
 ```
 
 ### 3.5 Marca de "visto" (galeria)
@@ -160,9 +160,9 @@ uploads/pmu/
   la misma composicion por dos caminos da la misma receta; rangos fuera de contrato
   se rechazan (`modo`, `escala`, `PH_MAX`, cotas de `dx/dy`).
 - `php tests/texto_puente.php receta|carpeta_cliente|traslado` (fases NUEVAS): el traslado es
-  idempotente; dedupe por sha; las filas quedan en `origen: cliente`; **borrar el
+  idempotente; dedupe por sha; las filas quedan en `origen: original`; **borrar el
   original no rompe `item_generar_pdfs`**; el pedido se descarga con traslado pendiente;
-  un `clave` fuera de `/^\d{1,12}$/` se rechaza y un `id` inexistente deja el hueco transparente.
+  un `id` inexistente deja el hueco transparente con `motor:original:ausente`.
 - `node tests/ficha-pedido.browser.js` (ampliada): el add-to-cart sube original +
   composicion; recargar la ficha recupera del servidor; reedicion desde el carrito.
 - `php tests/sin_lectura.php` + `php tests/estado_pmu.php`: leer la galeria no escribe
@@ -170,7 +170,7 @@ uploads/pmu/
 - `php tests/texto_puente.php rutas|carpeta_cliente` (NUEVAS) cubre el **refactor de `orders/`**:
   los dos escaneos listan `orders/{cliente}/{order_id}/{item}` con `ctype_digit` y
   **no** listan `orders/{cliente}/uploads/` como pedido; `cliente_valido()` exige
-  `/^\d{1,12}$/`; `promover_order()` mueve el item y escribe `manifest.cliente`; un
+  `/^\d{1,12}$/`; `promover_order()` mueve el item y los originales y escribe `manifest.cliente`; un
   pedido con `customer_id = 0` **no** se promueve y deja causa visible.
 - `node tests/ficha-pedido.browser.js`: la galeria pone primero las vistas no omisibles, navegar
   las marca, el boton se habilita al ver la **ultima obligatoria** y no antes; recargar conserva
@@ -205,6 +205,17 @@ los escaneos.
 | Tests | `tests/texto_puente.php` | `1401`, `1415`, `2261`, `2487-2530`, `3713-3714`, `4741-4745` |
 | | `tests/ficha-pedido.browser.js` | `568` (ruta del PDF) |
 | | `tests/estado_pmu.php`, `inventario_pmu.php`, `sin_lectura.php` | Escaneos de `orders/` |
+
+### 5.b Cambios del pool (`subidas/` -> `img/`)
+
+| Archivo | Punto | Cambio |
+|---|---|---|
+| `inc/class-pmu-sesion.php` | `guardar_subida()` (`843`) | Escribe el **original** en `tmp/sesion-{sid}/uploads/{id}.webp` (dedupe por `id`); ya no escribe `subidas/` |
+| | `guardar_imagen()` (`384`) | Acepta `origen` (`texto`/`compuesta`) y prefija el nombre: `img/txt-…` / `img/foto-…` |
+| | `siguiente_n()` (`355`) y `limpiar_grupo()` (`654`) | Filtran por prefijo (`txt-`/`foto-`) para no mezclar textos y composiciones del mismo grupo |
+| | `podar_subidas()` (`582`) y `registrar_fotos()` (`509`) | **Eliminar** (`subidas/` no existe; la composicion va al pool) |
+| `personalizador-pdf.php` | `handle_pool_png()` (`1644`) | Acepta composiciones (`origen: compuesta`) ademas de textos |
+| | `handle_subida()` (`1784`) | Solo originales: devuelve `{id, sha, w, h, url}` |
 
 ## 6. Fuera de alcance
 

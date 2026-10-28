@@ -29,15 +29,15 @@
 
 | `origen` | Campos obligatorios | Prohibidos |
 |---|---|---|
-| `subida` (composicion) | `id`, `file` = `subidas/{id}.webp` | `clave`, `ref` |
-| `sesion` (original en la sesion) | `id` | `file`, `ref`, `clave` |
-| `cliente` (original comprado) | `id`, `clave` (`^\d{1,12}$`) | `file`, `ref` |
+| `original` | `id` (`^[a-f0-9]{12}$`) | `file`, `ref`, `clave` |
+| `compuesta` (bitmap del Motor) | `id`, `file` = `img/foto-{pdf}-{gid}-{n}.webp` | `ref`, `clave` |
 | `ref` (030, entre pedidos) | `id`, `ref` | `file`, `clave` |
 
 - `id` = `^[a-f0-9]{12}$`; **deriva del contenido**, nunca lo propone el cliente.
 - `madre` = familia; **inmutable** (no se renombra).
-- **Terminologia**: `clave` es el **campo** de la fila y de `manifest.cliente`; `{cliente}` es el
-  nombre de la carpeta en las rutas. Son el **mismo valor** (el `uid` del pedido).
+- **Terminologia**: la fila `original` lleva **solo `id`**; el `uid` del pedido vive en
+  `manifest.cliente` y en la carpeta `orders/{cliente}/`. La cadena de resolucion lo usa como
+  contexto, nunca la fila.
 - El servidor **nunca** arma una ruta con texto del cliente: `id`/`clave` se validan por regex y el
   archivo se verifica con `is_file()`.
 
@@ -46,7 +46,7 @@
 | Ruta | Dueno | Regla |
 |---|---|---|
 | `tmp/sesion-{sid}/uploads/{id}.webp` | `PMU_Uploads::dir_sesion_uploads()` | originales de la sesion (1 por `id`, compartidos por items) |
-| `tmp/sesion-{sid}/{item_key}/subidas/{id}.webp` | idem | composiciones (una por receta) |
+| `tmp/sesion-{sid}/{item_key}/` | idem | `manifest.json`, `img/` (pool: `txt-` y `foto-`), `mockup-*.webp` |
 | `tmp/sesion-{sid}/{item_key}/` | idem | `manifest.json`, `img/` (pool), `mockup-*.webp` |
 | `orders/{cliente}/{order_id}/{item_key}/` | idem | entregable (misma estructura interna que hoy) |
 | `orders/{cliente}/uploads/{id}.webp` | idem | originales comprados (dedupe por `id`) |

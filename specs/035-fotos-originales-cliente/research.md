@@ -48,28 +48,31 @@ promover; si el mockup se borra del admin, su entrada se ignora (no bloquea).
 
 **Decision**: `promover_order($order_id, $cliente, $sid, $item_key)` ejecuta, en este orden:
 1. `rename(tmp/sesion-{sid}/{item}, orders/{cliente}/{order_id}/{item})` (el arbol del item).
-2. Para cada fila `origen: sesion` del manifest: `copy(tmp/sesion-{sid}/uploads/{id}.webp,
-   orders/{cliente}/uploads/{id}.webp)` **si no existe** (dedupe por sha), y `unlink` del origen.
-3. Reescribir esas filas a `origen: cliente` + `clave` **y** `manifest.cliente`, en una sola
-   escritura atomica (`mutar_manifest_dir`).
+2. Para cada fila `origen: original` del manifest: `rename(tmp/sesion-{sid}/uploads/{id}.webp,
+   orders/{cliente}/uploads/{id}.webp)`; si el destino ya existe (la foto se compro antes), se
+   descarta el temporal.
+3. Escribir `manifest.cliente` en una sola escritura atomica. **Las filas no se tocan**: el `id` no
+   cambia y la resolucion es por cadena.
 
-**Rationale**: el `rename` es atomico y barato; los originales se **copian** (no se mueven) porque
-otro item de la misma sesion puede usarlos. El dedupe por sha evita duplicar una foto comprada
-antes. La reescritura del manifest va **despues** de los archivos: si el proceso muere en el medio,
-las filas siguen apuntando a `tmp/` (que existe) y el reintento es idempotente.
+**Rationale**: el original **no lo necesita ningun item para imprimir** (lo que imprime es la
+composicion del pool), asi que moverlo no rompe a otro item de la sesion. Es un `rename` en el mismo
+filesystem: barato y atomico. La cadena de resolucion (`orders` -> `tmp`) hace que el orden no
+importe: si el proceso muere a la mitad, la fila sigue resolviendo desde `tmp/` y el reintento
+completa el movimiento.
 
-**Alternativas**: (a) mover primero los originales — si falla el `rename` del item quedan filas
-`cliente` sin item; (b) `rename` de los originales — rompe el otro item de la sesion. Se descartan.
+**Alternativas**: (a) copiar y borrar — duplica bytes y agrega un estado intermedio; (b) mover los
+originales antes del item — si falla el `rename` del item, el pedido queda sin item. Se descartan.
 
 ## R4 — Como se resuelve un original desde una fila
 
-**Decision**: `origen: 'cliente'` usa `id` + `clave`; el servidor arma
-`orders/{clave}/uploads/{id}.webp` con `clave` validada por `/^\d{1,12}$/` e `id` por
-`/^[a-f0-9]{12}$/` + `is_file()`. **No** se usa `ref` relativo para fotos del cliente.
+**Decision**: la fila es `origen: 'original'` con **solo `id`**. El servidor resuelve por cadena:
+`orders/{clave}/uploads/{id}.webp` (fija) -> `tmp/sesion-{sid}/uploads/{id}.webp` (temporal), con
+`id` validado por `/^[a-f0-9]{12}$/` y `is_file()`; si no esta en ninguna, `motor:original:ausente`.
+**No** se usa `ref` relativo para fotos del cliente.
 
-**Rationale**: con `ref` la ruta depende de la profundidad del item (`../../`), y la 030 lo eligio
-para que el mismo texto valiera antes y despues de promover. Con el nivel de cliente eso ya no se
-cumple, y `id` + `clave` no admite traversal (no hay ruta del cliente en juego).
+**Rationale**: la fila no necesita saber donde esta el archivo: la ubicacion es un detalle del
+servidor y cambia sola al pagar (rename). Eso elimina `clave` de la fila, el `ref` relativo para
+fotos y cualquier reescritura de filas al promover.
 
 **Compatibilidad**: las filas `origen: 'ref'` de la 030 (entre pedidos) **se conservan** y siguen
 resolviendose con `resolver_ref()` (`realpath` dentro de `uploads/pmu/`).
@@ -92,7 +95,7 @@ rompe la compra por una foto grande. Se descartan.
 
 **Decision**: `guardar_subida()` calcula `sha1` de los bytes **crudos** (antes de convertir) y, si
 `tmp/sesion-{sid}/uploads/{sha12}.webp` ya existe, **no escribe**: devuelve la fila con
-`origen: 'sesion'` y el mismo `id`. El `id` es `substr(sha, 0, 12)`.
+`origen: 'original'` y el mismo `id`. El `id` es `substr(sha, 0, 12)`.
 
 **Rationale**: el `id` deriva del contenido, asi que dos items de la misma sesion que usen la misma
 foto comparten archivo y fila por construccion (no hay que buscar "familias"). El sha crudo es

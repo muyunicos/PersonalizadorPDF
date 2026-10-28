@@ -21,33 +21,32 @@
 | `ultimo_uso` | int | reservado (la UI va en otra spec) |
 
 Ubicacion: `tmp/sesion-{sid}/uploads/{id}.webp` mientras la sesion vive;
-`orders/{cliente}/uploads/{id}.webp` despues del pago (copia con dedupe por `id`).
+`orders/{cliente}/uploads/{id}.webp` despues del pago (**rename**, sin copia ni duplicado).
 
 ## 2. Fila de `manifest.subidas[]`
 
 | Campo | Tipo | Reglas |
 |---|---|---|
-| `origen` | enum | `subida` (composicion en el item) · `sesion` (original en `tmp/sesion-{sid}/uploads/`) · `cliente` (original en `orders/{clave}/uploads/`) · `ref` (archivo de otro pedido, 030) |
+| `origen` | enum | `original` (la foto del comprador) · `compuesta` (el bitmap que imprime el Motor) · `ref` (archivo de otro pedido, 030) |
 | `id` | string | `{sha12}` del original (estable entre items y pedidos) |
-| `clave` | string | solo `origen: cliente`: el `uid` del pedido; `/^\d{1,12}$/` |
-| `file` | string | solo `origen: subida`: `subidas/{id}.webp` (relativo al item) |
+| `file` | string | solo `origen: compuesta`: `img/foto-{pdf}-{gid}-{n}.webp` (relativo al item) |
 | `ref` | string | solo `origen: ref`: relativo al item, validado con `realpath` dentro de `uploads/pmu/` |
-| `madre` | string | familia = el original; **inmutable** |
+| `madre` | string | familia = el `id` del original; **inmutable** |
 | `receta` | string | hash de la composicion (v2) |
 | `sha` | string | `sha1` de los bytes crudos |
 | `mime`, `bytes`, `creado` | string/int/int | igual que hoy |
 
-**Invariantes**: `file` y `ref` son mutuamente excluyentes; `clave` solo existe con `origen: cliente`;
-`origen: cliente` **no** usa `ref` (el servidor arma la ruta); una fila `cliente` no protege ningun
-archivo local (la poda de la 029 no cambia); al promover, `sesion` -> `cliente` en **una** escritura.
+**Invariantes**: la fila `original` lleva **solo `id`** (sin `file`, `ref` ni `clave`); `file` solo
+existe con `origen: compuesta`; `ref` solo con `origen: ref`; al promover las filas **no se
+reescriben** (el `id` no cambia) y el servidor resuelve la ubicacion por cadena.
 
 ## 3. Fila de `manifest.archivos[]` (lo que imprime el Motor)
 
 | Campo | Tipo | Reglas |
 |---|---|---|
 | `pdf`, `grupo_id`, `indice` | string/string/int | sin cambios (029 D3: `indice` = posicion de instancia) |
-| `origen` | enum | `subida` (composicion) · `texto` (pool) · `ref` (030) |
-| `file` / `ref` | string | `subidas/{id}.webp` o la referencia de la 030 |
+| `origen` | enum | `compuesta` (composicion) · `texto` (pool) · `ref` (030) |
+| `file` / `ref` | string | `img/foto-…` / `img/txt-…` o la referencia de la 030 |
 | `hash` | string | receta de la composicion (v2) |
 
 El Motor no cambia: sigue recibiendo rutas ya resueltas (`$dir . '/' . file`).
@@ -115,13 +114,12 @@ Escritura con `mutar_manifest_dir()` (flock + `.tmp` + `rename`). Lectura **tole
 ```
 elige foto     -> IndexedDB (cap 2000)                          [cliente]
 guarda corte   -> composicion en canvas (0 red)                 [cliente]
-add-to-cart    -> original a tmp/sesion-{sid}/uploads/{id}       [origen: sesion]
-                  composicion a tmp/sesion-{sid}/{item}/subidas  [origen: subida]
-                  textos al pool (img/)                          [origen: texto]
+add-to-cart    -> original a tmp/sesion-{sid}/uploads/{id}       [origen: original]
+                  composicion y textos a {item}/img/             [origen: compuesta/texto]
                   marca de visto -> manifest.mockup_vistas
 pago           -> rename del item a orders/{cliente}/{order_id}/{item}
-                  originales a orders/{cliente}/uploads (dedupe por id)
-                  filas sesion -> cliente + manifest.cliente
+                  rename de cada original a orders/{cliente}/uploads (idempotente)
+                  manifest.cliente (las filas no cambian)
 descarga       -> Motor con las filas archivos[] (no usa el original)
 borrar foto    -> no rompe pedidos (la composicion vive en el pedido)
 TTL 30 dias    -> el item y sus originales de sesion vencen (P6 = B)
@@ -129,8 +127,8 @@ TTL 30 dias    -> el item y sus originales de sesion vencen (P6 = B)
 
 ## 9. Reglas de validacion
 
-1. **Ningun** dato del cliente arma una ruta: `id`, `clave` y `gid` se validan por regex y se
-   resuelven contra `uploads/pmu/`.
+1. **Ningun** dato del cliente arma una ruta: `id`, `clave` (contexto) y `gid` se validan por regex
+   y se resuelven contra `uploads/pmu/`.
 2. `receta` y `sha` los calcula el **servidor**; el cliente solo declara parametros.
 3. `max(w,h) <= 2000` se revalida en el servidor (`getimagesize`/GD).
 4. Escritura de manifests **atomica + lock**; lectura **tolerante**.

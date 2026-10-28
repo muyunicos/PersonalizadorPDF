@@ -29,7 +29,7 @@ php tests/texto_puente.php carpeta_cliente
 
 **Esperado**: al elegir la foto, el original se encola en segundo plano y aparece en
 `tmp/sesion-{sid}/uploads/`; dos subidas de los mismos bytes dejan **un** archivo y **una** fila con
-`origen: sesion`; el `id` es `sha12`; una foto de 2500 px se acota a 2000 (o se rechaza con
+`origen: original`; el `id` es `sha12`; una foto de 2500 px se acota a 2000 (o se rechaza con
 `motor:subida:tamano` si no hay GD).
 
 ## E3 — La misma foto en dos items de la sesion
@@ -48,8 +48,9 @@ php tests/texto_puente.php traslado
 ```
 
 **Esperado**: al promover, el item queda en `orders/{cliente}/{order_id}/{item_key}/`; los
-originales en `orders/{cliente}/uploads/{id}.webp`; las filas pasan a `origen: cliente` con `clave`;
-`manifest.cliente` escrito **una** vez; `tmp/orders/` **no** existe; re-promover es no-op.
+originales en `orders/{cliente}/uploads/{id}.webp` (rename); **las filas no cambian**
+(`origen: original` + `id`); `manifest.cliente` escrito **una** vez; `tmp/orders/` **no** existe;
+re-promover es no-op.
 
 ## E5 — La descarga no depende del original
 

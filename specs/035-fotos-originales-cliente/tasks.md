@@ -53,19 +53,19 @@
 
 **Goal**: el comprador elige una foto; se acota a 2000 px, se guarda en IndexedDB y **se sube en segundo plano** a la carpeta de la sesion, donde los items la comparten por sha.
 
-**Independent Test**: `php tests/texto_puente.php carpeta_cliente` + `node tests/fotos-contrato.test.js`: dos subidas de los mismos bytes dejan **un** archivo y **una** fila `origen: sesion`; dos items de la sesion referencian el mismo `id`; `limpiar_ttl()` no borra la carpeta compartida con items vivos.
+**Independent Test**: `php tests/texto_puente.php carpeta_cliente` + `node tests/fotos-contrato.test.js`: dos subidas de los mismos bytes dejan **un** archivo y **una** fila `origen: original`; dos items de la sesion referencian el mismo `id`; `limpiar_ttl()` no borra la carpeta compartida con items vivos.
 
 ### Implementation for User Story 1
 
 - [ ] T008 [P] [US1] Agregar `dir_sesion_uploads($sid, $crear = false)` en `inc/class-pmu-uploads.php` (`uploads/pmu/tmp/sesion-{sid}/uploads/`, `wp_mkdir_p` + validacion de escritura)
 - [ ] T009 [P] [US1] Crear `assets/fotos-pmu.js` (`PMUFotos`): store `pmu_fotos` en IndexedDB con `{sha, blob, w, h, nombre}`, `guardar(archivo)` con cap 2000 px (canvas + WebP q0.85), `obtener(sha)`, `listar()`, `borrar(sha)`, `navigator.storage.persist()` y manejo de cuota
 - [ ] T010 [US1] Revalidar el cap en `guardar_subida()` (`inc/class-pmu-sesion.php:843`): `getimagesize()` y, si `max(w,h) > 2000`, reescalar con GD; sin GD, `motor:subida:tamano`
-- [ ] T011 [US1] Escribir el original en `dir_sesion_uploads($sid)` con `{id} = substr(sha1(bytes_crudos), 0, 12)`, dedupe por existencia y fila `origen: 'sesion'` (sin `file`)
-- [ ] T012 [US1] Ajustar `handle_subida()` (`personalizador-pdf.php:1784`) para devolver `{id, sha, w, h, url}` del original y crear el draft si no hay item; y `resolver_subidas()` (`inc/class-pmu-sesion.php:909`) resuelve `origen: sesion` -> `tmp/sesion-{sid}/uploads/{id}.webp` (con `is_file` y causa), para que `handle_subida_url()` (`:1864`) y `biblioteca_ruta_imagen()` (`:2317`) puedan pintar el original
+- [ ] T011 [US1] Escribir el original en `dir_sesion_uploads($sid)` con `{id} = substr(sha1(bytes_crudos), 0, 12)`, dedupe por existencia y fila `origen: 'original'` (sin `file`); y `guardar_imagen()` (`inc/class-pmu-sesion.php:384`) acepta `origen: compuesta` con prefijo `img/foto-…` (los textos pasan a `img/txt-…`), con `siguiente_n()`/`limpiar_grupo()` filtrando por prefijo
+- [ ] T012 [US1] Ajustar `handle_subida()` (`personalizador-pdf.php:1784`) para devolver `{id, sha, w, h, url}` del original y crear el draft si no hay item; y `resolver_original($id, $clave, $sid)` resuelve la **cadena** `orders/{clave}/uploads/{id}.webp` -> `tmp/sesion-{sid}/uploads/{id}.webp` -> `motor:original:ausente`, para que `handle_subida_url()` (`:1864`) y `biblioteca_ruta_imagen()` (`:2317`) sirvan la foto desde la ubicacion disponible
 - [ ] T013 [US1] Cola de subida en segundo plano en `assets/tienda.js`: FIFO de a 2, clave `sha` (no reenvia), 2 reintentos con backoff de **1 s y 3 s**, promesa exportada para el add-to-cart
 - [ ] T014 [US1] Disparar la subida al elegir la foto (selector/cargador) y guardar la promesa en `PMU_FICHA.subidas`
 - [ ] T015 [US1] En `limpiar_ttl()` (`inc/class-pmu-sesion.php:1242`) excluir `uploads/` del conteo por item (patron `draft-`) y podar los originales que ningun item de la sesion referencia
-- [ ] T016 [US1] Ajustar `podar_subidas()` (`:582`) para que una fila `origen: sesion` no borre el archivo compartido mientras otro item lo use; y `usar_de_biblioteca()` (`:1344`) registra la fila `sesion` **sin copiar** el archivo (hoy copia a `subidas/` cuando la familia vive en `tmp`)
+- [ ] T016 [US1] **Eliminar** `podar_subidas()` (`:582`) y `registrar_fotos()` (`:509`) (`subidas/` no existe; la composicion va al pool); `usar_de_biblioteca()` (`:1344`) registra `origen: original` **sin copiar** el archivo
 - [ ] T017 [US1] Fase `carpeta_cliente` en `tests/texto_puente.php`: dedupe por sha, 2 items = 1 archivo, poda por sesion, TTL con items vivos, cap 2000 (con y sin GD)
 - [ ] T018 [US1] Crear `node tests/fotos-contrato.test.js`: cap 2000, dedupe, cuota/desalojo, recuperacion cuando el blob no esta
 
@@ -77,19 +77,19 @@
 
 **Goal**: al pagarse el pedido, el item se mueve a `orders/{cliente}/{order_id}/{item_key}/` y los originales a `orders/{cliente}/uploads/`; la descarga y la regeneracion siguen funcionando.
 
-**Independent Test**: `php tests/texto_puente.php traslado` + `php tests/texto_puente.php rutas` + `node tests/ficha-pedido.browser.js`: el pedido queda en el arbol nuevo, `manifest.cliente` escrito, filas `origen: cliente`, `tmp/orders/` no existe, el PDF se descarga con el original borrado y Pedidos lista el item.
+**Independent Test**: `php tests/texto_puente.php traslado` + `php tests/texto_puente.php rutas` + `node tests/ficha-pedido.browser.js`: el pedido queda en el arbol nuevo, `manifest.cliente` escrito, **las filas no cambian** (`origen: original` + `id`), `tmp/orders/` no existe, el PDF se descarga con el original borrado y Pedidos lista el item.
 
 ### Implementation for User Story 2
 
 - [ ] T019 [P] [US2] Cambiar `dir_order($cliente, $order_id, $crear)` en `inc/class-pmu-uploads.php` (`orders/{cliente}/{order_id}`) y **eliminar** `dir_tmp_order()` (`:1056`) y `ruta_order_pdf()` (`:1091`, codigo muerto)
 - [ ] T020 [P] [US2] **Eliminar** `staging_order()` en `inc/class-pmu-sesion.php:1191`
-- [ ] T021 [US2] Reescribir `promover_order($order_id, $cliente, $sid, $item)` (`:1211`): `rename` del item, `copy` + dedupe por `id` de los originales y **`unlink` del original de la sesion** tras copiarlo, filas `sesion -> clave` (campo `clave`, nunca `cliente`), `manifest.cliente`, todo idempotente y en una escritura atomica
+- [ ] T021 [US2] Reescribir `promover_order($order_id, $clave, $sid, $item)` (`:1211`): `rename` del item y de **cada original** (`tmp/sesion-{sid}/uploads/{id}.webp` -> `orders/{clave}/uploads/{id}.webp`, idempotente si ya existe) y `manifest.cliente` en una escritura atomica; **las filas no cambian** (el `id` no cambia, no hay `copy` ni `unlink`)
 - [ ] T022 [US2] Eliminar `pedido_staging_crear()` (`personalizador-pdf.php:2928`) y su hook `woocommerce_checkout_order_processed`
 - [ ] T023 [US2] `pedido_promover()` (`:2965`) pasa `$order->get_customer_id()`; si es `0`, **no** promueve y deja causa visible
-- [ ] T024 [US2] `manifest_item()` (`:3050`), `item_generar_pdfs()` (`:3185`) e `item_regenerar()` (`:3347`) usan `dir_order` + `manifest.cliente`; sin fallback `tmp/orders` ni `orders/{order_id}`
+- [ ] T024 [US2] `manifest_item()` (`:3050`), `item_generar_pdfs()` (`:3185`) e `item_regenerar()` (`:3347`) usan `dir_order` + `manifest.cliente` y resuelven el original por **cadena** (`resolver_original`); sin fallback `tmp/orders` ni `orders/{order_id}`
 - [ ] T025 [US2] `pedidos_completados()` (`:3291`): escaneo de 3 niveles con `ctype_digit`, `cliente` en cada fila y `orders/{cliente}/uploads/` **excluido**
 - [ ] T026 [US2] `biblioteca_contenedores()` (`:2047`) y `biblioteca_peso_identidades()` (`:1951`): escaneo de 3 niveles con `ctype_digit`; y `familias()` (`inc/class-pmu-sesion.php:1023`) agrupa por **`id` del original** (una entrada por foto; `versiones`/`base` dejan de usarse en la tira, D7)
-- [ ] T027 [US2] Resolver filas `origen: cliente` por `id` + `clave` (`/^\d{1,12}$/` y `/^[a-f0-9]{12}$/` + `is_file`) en `resolver_subidas()`/`item_generar_pdfs()` y `biblioteca_ruta_imagen()`; `clave_valida()` como helper unico
+- [ ] T027 [US2] `resolver_original($id, $clave, $sid)` con `id` (`/^[a-f0-9]{12}$/`) + `is_file` y `clave_valida()` como helper unico; `item_generar_pdfs()` y `biblioteca_ruta_imagen()` lo usan (la fila no lleva `clave`)
 - [ ] T028 [US2] `admin/pedidos.php`: mostrar la columna de cliente que devuelve `pedidos_completados()`
 - [ ] T029 [US2] Fases `traslado` y `rutas` en `tests/texto_puente.php`: arbol nuevo, `manifest.cliente`, `customer_id = 0` no promueve, descarga sin original, Pedidos no lista `uploads/`
 - [ ] T030 [US2] Actualizar `tests/ficha-pedido.browser.js:568` (ruta del PDF) y los escaneos de `tests/estado_pmu.php`, `tests/inventario_pmu.php` y `tests/sin_lectura.php`
@@ -122,8 +122,8 @@
 **Purpose**: documentacion normativa, enmienda de la constitucion y cierre
 
 - [ ] T037 [P] Enmendar `.specify/memory/constitution.md` §IV: `orders/{cliente}/{order_id}/{item_key}`, `orders/{cliente}/uploads/`, sin `tmp/orders/`; agregar Sync Impact Report (MINOR: estructura de datos; sin cambio de principios)
-- [ ] T038 [P] `AGENTS.md` §2 (mapa), §5 (formatos: carpeta del cliente, `origen: sesion/cliente`) y §7 (decisiones: receta v2, sin staging, sin cuota)
-- [ ] T039 [P] `specs/030-biblioteca-imagenes/spec.md` + `contracts/`: nota de supersesion (la profundidad del `ref` y las fotos del cliente por `id` + `clave`)
+- [ ] T038 [P] `AGENTS.md` §2 (mapa), §5 (formatos: carpeta del cliente, `origen: original/compuesta`, pool `img/foto-`) y §7 (decisiones: receta v2, sin staging, sin cuota)
+- [ ] T039 [P] `specs/029-pool-sin-copias/spec.md` y `specs/030-biblioteca-imagenes/spec.md` + `contracts/`: nota de supersesion (el pool guarda `compuesta` + `texto`; `subidas/` desaparece; las fotos del cliente se resuelven por `id` y cadena)
 - [ ] T040 `specs/INDICE.md` (fila 035 -> implementada), `readme.txt` (changelog) y version **solo en la cabecera** de `personalizador-pdf.php` -> 4.27.0
 - [ ] T041 `php tests/inventario_repo.php`, `php tests/estado_pmu.php` y `php tests/sin_lectura.php` en verde
 - [ ] T042 Recorrido completo del `quickstart.md` (E1-E9) en `C:\wp-lab` con evidencia
