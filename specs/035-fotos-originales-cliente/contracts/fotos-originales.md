@@ -18,7 +18,8 @@
   geometria de la envoltura (`geometriaEscena` es solo JS).
 - Validacion (rechaza con causa, no corrige en silencio): `v === 2`, `modo` en
   `{cubrir,encajar,estirar}`, `escala` en [0.25, 4], `rot` en `{0,90,180,270}`, `phsize` en
-  `{0,1,2}`, `gid` `^[0-9A-F]{6}$`, `ox/oy` en [0,1].
+  `{0,1,2}`, `gid` `^[0-9A-F]{6}$`, `ox/oy` en -4..5 (holgado: el arrastre puede sacar el centro
+  del lienzo y acotarlo moveria la imagen).
 - El lienzo que **vale** es el que deriva el servidor (`analisis.json` + `phsize`); `w/h` de la
   receta es solo el snapshot con el que se compuso.
 - El servidor **recalcula** `k` y el tamano del PNG (`escalaSalida`), no los recibe.

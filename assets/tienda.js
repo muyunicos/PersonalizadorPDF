@@ -98,12 +98,21 @@
             // OJO: si este normalizador no la devuelve, `CargadorPMU` la recibe
             // vacia y la politica del campo se pierde en la ficha.
             var transp = (r.transp === 'si') ? 'si' : ((r.transp === 'no') ? 'no' : '');
+            // Spec 035 (D1): el grupo del hueco viaja en la receta (`gid`) para que
+            // el servidor componga sin adivinar. Sin grupo asociado va vacio y la
+            // receta no valida (el servidor rechaza con causa, no compone a ciegas).
+            var gidRanura = '';
+            if (defCampo && defCampo.grupo_gid) {
+                gidRanura = String(defCampo.grupo_gid).toUpperCase();
+                if (!/^[0-9A-F]{6}$/.test(gidRanura)) { gidRanura = ''; }
+            }
             return {
                 etiqueta: r.etiqueta || '',
                 w: w, h: h, forma: forma,
                 min: min,
                 max: max,
                 phsize: phsize,
+                gid: gidRanura,
                 r: r.r ? 1 : 0,
                 size: size,
                 ox: ox,

@@ -1319,16 +1319,116 @@ class PMU_Sesion
         return $ruta;
     }
 
-    /** Receta canonica de una composicion (spec 030, D7/R2): la recomputa el SERVIDOR. */
+    /** Lienzo maximo de un hueco (px). Espejo de `PH_MAX` en `assets/tienda.js`. */
+    const PH_MAX = 3000;
+
+    /** Claves de la receta v2, en el ORDEN que fija el hash (spec 035, D1). */
+    const RECETA_V2_CLAVES = [
+        'v', 'w', 'h', 'forma', 'modo', 'escala', 'ox', 'oy',
+        'fondo', 'transp', 'rot', 'iw', 'ih', 'phsize', 'gid',
+    ];
+
+    /**
+     * Receta canonica de una composicion (spec 030, D7/R2; v2 en la 035, D1).
+     *
+     * La recomputa el SERVIDOR: el cliente no puede proponer el hash. Devuelve
+     * cadena vacia si la receta no es v2 valida (no lanza: los llamadores
+     * historicos guardan el hash tal cual).
+     */
     public static function receta_de(array $params)
     {
-        $claves = ['w', 'h', 'forma', 'modo', 'escala', 'dx', 'dy', 'fondo', 'transp', 'iw', 'ih'];
+        try {
+            $p = self::receta_validar($params);
+        } catch (Exception $e) {
+            return '';
+        }
         $partes = [];
-        foreach ($claves as $k) {
-            $v = isset($params[$k]) ? $params[$k] : '';
-            $partes[] = is_scalar($v) ? (string)$v : '';
+        foreach (self::RECETA_V2_CLAVES as $k) {
+            $partes[] = (string)$p[$k];
         }
         return substr(sha1(implode('|', $partes)), 0, 12);
+    }
+
+    /**
+     * Valida la receta v2 y devuelve los valores CANONIZADOS (spec 035, D1).
+     *
+     * Rechaza con causa en vez de corregir en silencio: un encuadre distinto al
+     * que vio el comprador es peor que un error visible. `ox/oy` es el centro de
+     * dibujo normalizado (0.5 = centro del lienzo): ya incluye el centro de la
+     * forma y el desplazamiento escalado por la Escala, asi el compositor no
+     * necesita la geometria de la envoltura (que solo existe en JS).
+     *
+     * @throws Exception `motor:receta:<clave>`
+     */
+    public static function receta_validar(array $params)
+    {
+        if ((int)($params['v'] ?? 0) !== 2) {
+            throw new Exception('motor:receta:v');
+        }
+        $modo = strtolower(trim((string)($params['modo'] ?? '')));
+        if (!in_array($modo, ['cubrir', 'encajar', 'estirar'], true)) {
+            throw new Exception('motor:receta:modo');
+        }
+        $escala = (float)($params['escala'] ?? 0);
+        if ($escala < 0.25 || $escala > 4) {
+            throw new Exception('motor:receta:escala');
+        }
+        $rot = (int)($params['rot'] ?? -1);
+        if (!in_array($rot, [0, 90, 180, 270], true)) {
+            throw new Exception('motor:receta:rot');
+        }
+        $phsize = (int)($params['phsize'] ?? -1);
+        if (!in_array($phsize, [0, 1, 2], true)) {
+            throw new Exception('motor:receta:phsize');
+        }
+        $gid = strtoupper(trim((string)($params['gid'] ?? '')));
+        if (!preg_match('/^[0-9A-F]{6}$/', $gid)) {
+            throw new Exception('motor:receta:gid');
+        }
+        $w = (int)($params['w'] ?? 0);
+        $h = (int)($params['h'] ?? 0);
+        if ($w < 1 || $h < 1 || $w > self::PH_MAX || $h > self::PH_MAX) {
+            throw new Exception('motor:receta:lienzo');
+        }
+        $iw = (int)($params['iw'] ?? 0);
+        $ih = (int)($params['ih'] ?? 0);
+        if ($iw < 1 || $ih < 1) {
+            throw new Exception('motor:receta:origen');
+        }
+        $ox = (float)($params['ox'] ?? 0.5);
+        $oy = (float)($params['oy'] ?? 0.5);
+        // El centro puede salir de [0,1] si el comprador arrastra la foto (la
+        // composicion se recorta). Se valida en un rango holgado: atajarlo seria
+        // mover la imagen y romper "la vista previa es el PDF".
+        if ($ox < -4 || $ox > 5 || $oy < -4 || $oy > 5) {
+            throw new Exception('motor:receta:centro');
+        }
+        $fondo = strtolower(trim((string)($params['fondo'] ?? 'auto')));
+        if ($fondo !== 'auto' && $fondo !== 'transparent'
+            && !preg_match('/^#[0-9a-f]{6}$/', $fondo)) {
+            throw new Exception('motor:receta:fondo');
+        }
+        $transp = strtolower(trim((string)($params['transp'] ?? '')));
+        if (!in_array($transp, ['', 'si', 'no'], true)) {
+            throw new Exception('motor:receta:transp');
+        }
+        $forma = strtolower(trim((string)($params['forma'] ?? 'auto')));
+        if (!preg_match('/^[a-z]{3,24}$/', $forma)) {
+            throw new Exception('motor:receta:forma');
+        }
+        return [
+            'v' => 2, 'w' => $w, 'h' => $h, 'forma' => $forma, 'modo' => $modo,
+            'escala' => self::receta_num($escala), 'ox' => self::receta_num($ox),
+            'oy' => self::receta_num($oy), 'fondo' => $fondo, 'transp' => $transp,
+            'rot' => $rot, 'iw' => $iw, 'ih' => $ih, 'phsize' => $phsize, 'gid' => $gid,
+        ];
+    }
+
+    /** Numero canonico de la receta: 3 decimales sin ceros de cola (hash estable). */
+    private static function receta_num($v)
+    {
+        $s = number_format((float)$v, 3, '.', '');
+        return rtrim(rtrim($s, '0'), '.');
     }
 
     /**

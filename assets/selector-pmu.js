@@ -1116,20 +1116,32 @@
      */
     SelectorPMU.prototype._params = function () {
         var dim = this._dimensionesImagen ? this._dimensionesImagen() : { w: 1, h: 1 };
-        var disp = this.desplazamiento || { x: 0, y: 0 };
         var fondo = (this.colorFondo === 'transparent') ? 'transparent' : (this.colorFondo || 'auto');
+        var w = Math.max(1, parseInt(this.config.finalW, 10) || 1);
+        var h = Math.max(1, parseInt(this.config.finalH, 10) || 1);
+        // Spec 035 (D1): `ox/oy` = centro de DIBUJO normalizado al lienzo. Sale de
+        // `origenDibujo`, el unico que conoce el centro de la forma (`geo.principal`)
+        // y el desplazamiento ya escalado por la Escala. El servidor dibuja ahi y NO
+        // necesita `geometriaEscena` (que solo existe en JS). No se acota: acotar
+        // moveria la imagen y la vista previa dejaria de ser el PDF.
+        var geo = this.geo || geometriaEscena(w, h, this.config);
+        var origen = origenDibujo(geo, false, this.desplazamiento, this.zoom);
         return {
-            w: Math.max(1, parseInt(this.config.finalW, 10) || 1),
-            h: Math.max(1, parseInt(this.config.finalH, 10) || 1),
+            v: 2,
+            w: w,
+            h: h,
             forma: String(this.config.forma || 'auto'),
             modo: modoCanonico(this.config.mode),
             escala: this.zoom || 1,
-            dx: disp.x || 0,
-            dy: disp.y || 0,
+            ox: origen.x / w,
+            oy: origen.y / h,
             fondo: fondo,
             transp: String(this.config.transp || ''),
+            rot: this.rotacion || 0,
             iw: dim.w,
-            ih: dim.h
+            ih: dim.h,
+            phsize: Math.max(0, Math.min(2, parseInt(this.config.phsize, 10) || 0)),
+            gid: String(this.config.gid || '').toUpperCase()
         };
     };
 

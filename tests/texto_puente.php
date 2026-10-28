@@ -2011,6 +2011,27 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 check('causa motor:nonce:invalido', strpos($causa, 'motor:nonce:invalido') !== false);
             }
             break;
+        case 'receta':
+            // Spec 035 (T006): la receta v2 la valida el SERVIDOR y el hash lo
+            // calcula el: el cliente no puede proponerlo.
+            check('la receta del cliente da un hash de 12 hex',
+                (string)($GLOBALS['rec_hash'] ?? '') !== ''
+                && strlen((string)$GLOBALS['rec_hash']) === 12);
+            check('la misma receta da el mismo hash', !empty($GLOBALS['rec_igual']));
+            check('cambiar rot cambia el hash (90 != 270)', !empty($GLOBALS['rec_rot']));
+            check('cambiar ox cambia el hash', !empty($GLOBALS['rec_ox']));
+            check('receta_de NO lanza: una receta invalida da cadena vacia',
+                ($GLOBALS['rec_invalida'] ?? null) === '');
+            foreach ((array)($GLOBALS['rec_causas'] ?? []) as $recClave => $recCausa) {
+                check('rechaza ' . $recClave . ' con causa motor:receta:' . $recClave,
+                    $recCausa === 'motor:receta:' . $recClave, (string)$recCausa);
+            }
+            break;
+        case 'carpeta_cliente':
+        case 'traslado':
+        case 'rutas':
+            // Spec 035 (T002): esqueleto; los checks llegan con T017/T029.
+            break;
         default:
             check('fase desconocida', false);
     }
@@ -2751,8 +2772,9 @@ switch ($fase) {
                 'mime' => 'image/webp', 'bytes' => (int)filesize($png_b), 'creado' => time(),
                 'madre' => $madre_b, 'receta' => 'r0', 'origen' => 'subida']],
         ]));
-        $params_b = ['w' => 1000, 'h' => 1000, 'forma' => 'auto', 'modo' => 'cubrir', 'escala' => 1,
-            'dx' => 0, 'dy' => 0, 'fondo' => 'auto', 'transp' => '', 'iw' => 400, 'ih' => 300];
+        $params_b = ['v' => 2, 'w' => 1000, 'h' => 1000, 'forma' => 'auto', 'modo' => 'cubrir',
+            'escala' => 1, 'ox' => 0.5, 'oy' => 0.5, 'fondo' => 'auto', 'transp' => '',
+            'rot' => 0, 'iw' => 400, 'ih' => 300, 'phsize' => 0, 'gid' => '0000FF'];
         $GLOBALS['bib_receta'] = PMU_Sesion::receta_de($params_b);
         $GLOBALS['bib_receta_igual'] = ($GLOBALS['bib_receta'] === PMU_Sesion::receta_de($params_b));
         $otra_b = $params_b;
@@ -4826,6 +4848,58 @@ switch ($fase) {
         $_POST = ['action' => 'personalizador_pdf_reemplazar_preparar', 'archivo' => 'muestra.pdf', '_wpnonce' => 'nonce'];
         $_REQUEST = $_POST;
         $p->handle_reemplazar_preparar();
+        break;
+
+    case 'receta':
+        // Spec 035 (T006): el contrato de la receta v2, del lado del servidor.
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $recBase = ['v' => 2, 'w' => 500, 'h' => 500, 'forma' => 'rectangulo',
+            'modo' => 'cubrir', 'escala' => 1, 'ox' => 0.5, 'oy' => 0.5,
+            'fondo' => 'transparent', 'transp' => '', 'rot' => 0,
+            'iw' => 1600, 'ih' => 1200, 'phsize' => 1, 'gid' => '0000FF'];
+        $GLOBALS['rec_base'] = $recBase;
+        $GLOBALS['rec_hash'] = PMU_Sesion::receta_de($recBase);
+        $GLOBALS['rec_igual'] = ($GLOBALS['rec_hash'] === PMU_Sesion::receta_de($recBase));
+        $recRot = $recBase;
+        $recRot['rot'] = 270;
+        $GLOBALS['rec_rot'] = ($GLOBALS['rec_hash'] !== PMU_Sesion::receta_de($recRot));
+        $recOx = $recBase;
+        $recOx['ox'] = 0.25;
+        $GLOBALS['rec_ox'] = ($GLOBALS['rec_hash'] !== PMU_Sesion::receta_de($recOx));
+        $GLOBALS['rec_invalida'] = PMU_Sesion::receta_de(['w' => 10]);
+        $recCasos = [
+            'v' => ['v' => 1],
+            'modo' => ['modo' => 'deformar'],
+            'escala' => ['escala' => 9],
+            'rot' => ['rot' => 45],
+            'phsize' => ['phsize' => 3],
+            'gid' => ['gid' => 'AZUL'],
+            'lienzo' => ['w' => 99999],
+            'origen' => ['iw' => 0],
+            'centro' => ['ox' => 99],
+            'fondo' => ['fondo' => 'rojo'],
+            'transp' => ['transp' => 'quizas'],
+            'forma' => ['forma' => 'X!'],
+        ];
+        $recCausas = [];
+        foreach ($recCasos as $recClave => $recCambio) {
+            try {
+                PMU_Sesion::receta_validar(array_merge($recBase, $recCambio));
+                $recCausas[$recClave] = 'no-lanzo';
+            } catch (\Throwable $recE) {
+                $recCausas[$recClave] = $recE->getMessage();
+            }
+        }
+        $GLOBALS['rec_causas'] = $recCausas;
+        break;
+
+    case 'carpeta_cliente':
+    case 'traslado':
+    case 'rutas':
+        // Spec 035 (T002): esqueleto de las fases nuevas. Cada una arma su
+        // entorno aislado cuando llegue su tarea (T017/T029).
         break;
 
 }

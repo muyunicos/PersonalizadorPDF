@@ -28,8 +28,8 @@
 
 **Purpose**: verificar la base y dejar los esqueletos de las puertas nuevas
 
-- [ ] T001 Correr las puertas base y confirmar verde: `php -l personalizador-pdf.php`, `Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.FullName }`, `php tests/motor_smoke.php`, `php tests/parity.php`, `php tests/texto_puente.php fotos`, `node tests/selector-contrato.test.js`; y confirmar la **precondicion de cuenta obligatoria** en Woo (sin checkout de invitado), porque `customer_id = 0` no promueve (P7)
-- [ ] T002 Crear los `case` vacios de las fases nuevas en `tests/texto_puente.php`: `receta`, `carpeta_cliente`, `traslado`, `rutas` (deben correr sin error antes de implementar)
+- [X] T001 Correr las puertas base y confirmar verde: `php -l personalizador-pdf.php`, `Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.FullName }`, `php tests/motor_smoke.php`, `php tests/parity.php`, `php tests/texto_puente.php fotos`, `node tests/selector-contrato.test.js`; y confirmar la **precondicion de cuenta obligatoria** en Woo (sin checkout de invitado), porque `customer_id = 0` no promueve (P7)
+- [X] T002 Crear los `case` vacios de las fases nuevas en `tests/texto_puente.php`: `receta`, `carpeta_cliente`, `traslado`, `rutas` (deben correr sin error antes de implementar)
 
 ---
 
@@ -39,11 +39,11 @@
 
 **CRITICAL**: ninguna historia empieza hasta que esta fase cierre.
 
-- [ ] T003 [P] Reescribir `receta_de()` v2 en `inc/class-pmu-sesion.php`: claves `v,w,h,forma,modo,escala,ox,oy,fondo,transp,rot,iw,ih,phsize,gid`, hash `sha1(implode('|', valores))[:12]`, y validacion que **rechaza** `v !== 2`, `modo` fuera de `{cubrir,encajar,estirar}`, `escala` fuera de [0.25,4], `rot` fuera de `{0,90,180,270}`, `phsize` fuera de `{0,1,2}`, `gid` fuera de `^[0-9A-F]{6}$`, `ox/oy` fuera de [0,1]
-- [ ] T004 [P] Extender `_params()` en `assets/selector-pmu.js`: agregar `v:2`, `rot` (valor actual), `phsize` y `gid` de la ranura, y **`ox/oy`** = centro de dibujo normalizado, calculado con `origenDibujo(geo, false, desplazamiento, zoom)` dividido por `w`/`h` (reemplaza `dx/dy`; no se porta `geometriaEscena` a PHP)
-- [ ] T005 [P] Crear `tests/receta-contrato.test.js`: receta completa, `rot` 90 != 270, misma composicion por dos caminos = mismo hash, y cada rango invalido rechazado
-- [ ] T006 Fase `receta` en `tests/texto_puente.php`: `receta_de()` acepta la receta del cliente y rechaza con causa los valores fuera de contrato (no corrige en silencio)
-- [ ] T007 Ajustar los consumidores que hoy mandan `w/h` en px: `handle_subida()` (`personalizador-pdf.php:1841`) y `handle_biblioteca()` `op=usar` (`:2248`), para que guarden la receta v2 tal como llega
+- [X] T003 [P] Reescribir `receta_de()` v2 en `inc/class-pmu-sesion.php`: claves `v,w,h,forma,modo,escala,ox,oy,fondo,transp,rot,iw,ih,phsize,gid`, hash `sha1(implode('|', valores))[:12]`, y validacion que **rechaza** `v !== 2`, `modo` fuera de `{cubrir,encajar,estirar}`, `escala` fuera de [0.25,4], `rot` fuera de `{0,90,180,270}`, `phsize` fuera de `{0,1,2}`, `gid` fuera de `^[0-9A-F]{6}$`, `ox/oy` fuera de [0,1]
+- [X] T004 [P] Extender `_params()` en `assets/selector-pmu.js`: agregar `v:2`, `rot` (valor actual), `phsize` y `gid` de la ranura, y **`ox/oy`** = centro de dibujo normalizado, calculado con `origenDibujo(geo, false, desplazamiento, zoom)` dividido por `w`/`h` (reemplaza `dx/dy`; no se porta `geometriaEscena` a PHP)
+- [X] T005 [P] Crear `tests/receta-contrato.test.js`: receta completa, `rot` 90 != 270, misma composicion por dos caminos = mismo hash, y cada rango invalido rechazado
+- [X] T006 Fase `receta` en `tests/texto_puente.php`: `receta_de()` acepta la receta del cliente y rechaza con causa los valores fuera de contrato (no corrige en silencio)
+- [X] T007 Ajustar los consumidores que hoy mandan `w/h` en px: `handle_subida()` (`personalizador-pdf.php:1841`) y `handle_biblioteca()` `op=usar` (`:2248`), para que guarden la receta v2 tal como llega
 
 ### Compositor (Fase 2.5 del plan)
 

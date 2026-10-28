@@ -73,11 +73,18 @@
             // Spec 027 (D1/D6): la politica de transparencia la declara el
             // campo. `''` = ausente = comportamiento actual (el cliente decide).
             var transp = (r.transp === 'si') ? 'si' : ((r.transp === 'no') ? 'no' : '');
+            // Spec 035 (D1): `phsize` (0..2) y el grupo del hueco viajan al selector
+            // para que la receta v2 los lleve: el servidor compone sin adivinar.
+            var phsize = Math.max(0, Math.min(2, parseInt(r.phsize, 10) || 0));
+            var gid = (typeof r.gid === 'string' && /^[0-9A-Fa-f]{6}$/.test(r.gid))
+                ? r.gid.toUpperCase() : '';
             out.push({
                 etiqueta: r.etiqueta || '',
                 w: w, h: h,
                 forma: forma,
                 min: min, max: max,
+                phsize: phsize,
+                gid: gid,
                 r: r.r ? 1 : 0,
                 size: size,
                 ox: ox,
@@ -360,6 +367,9 @@
                 fondo: r.fondo,
                 // Spec 027 (D3/D6): la politica de transparencia del campo.
                 transp: r.transp,
+                // Spec 035 (D1): la receta v2 necesita el lienzo declarado y el grupo.
+                phsize: r.phsize,
+                gid: r.gid,
                 // Spec 024 (D2): el badge tecnico solo se ve en la consola.
                 tecnico: this.config.tecnico,
                 envoltura: this.config.envoltura || null,

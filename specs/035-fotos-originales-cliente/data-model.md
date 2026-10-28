@@ -66,7 +66,7 @@ El Motor no cambia: sigue recibiendo rutas ya resueltas (`$dir . '/' . file`).
 | `forma` | `rectangulo`/`circulo`/`cuadrado`/`ovalo`/`auto` |
 | `modo` | `cubrir`/`encajar`/`estirar` (los alias viejos se canonizan) |
 | `escala` | 0.25 - 4 |
-| `ox`,`oy` | centro de dibujo normalizado al lienzo (0..1; `0.5` = centro); ya incluye el centro de la forma y el desplazamiento escalado por la Escala |
+| `ox`,`oy` | centro de dibujo normalizado al lienzo (`0.5` = centro; ya incluye el centro de la forma y el desplazamiento escalado por la Escala). Puede salir de 0..1 si el comprador arrastra: el servidor solo ataja valores absurdos (-4..5) |
 | `fondo` | `auto`/`transparent`/`#rrggbb` |
 | `transp` | `si`/`no`/vacio |
 | `rot` | `0`/`90`/`180`/`270` |
