@@ -27,9 +27,10 @@ distinto**; la misma composicion por dos caminos da el **mismo** hash; `v:1` se 
 php tests/texto_puente.php carpeta_cliente
 ```
 
-**Esperado**: dos subidas de los mismos bytes dejan **un** archivo en
-`tmp/sesion-{sid}/uploads/` y **una** fila con `origen: sesion`; el `id` es `sha12`; una foto de
-2500 px se acota a 2000 (o se rechaza con `motor:subida:tamano` si no hay GD).
+**Esperado**: al elegir la foto, el original se encola en segundo plano y aparece en
+`tmp/sesion-{sid}/uploads/`; dos subidas de los mismos bytes dejan **un** archivo y **una** fila con
+`origen: sesion`; el `id` es `sha12`; una foto de 2500 px se acota a 2000 (o se rechaza con
+`motor:subida:tamano` si no hay GD).
 
 ## E3 — La misma foto en dos items de la sesion
 
@@ -83,7 +84,8 @@ node tests/ficha-pedido.browser.js
 
 **Esperado**: las vistas **no omisibles** van primero con el aviso "Revisa la vista previa"; el boton
 sigue deshabilitado hasta ver la **ultima obligatoria**; recargar conserva la marca
-(`localStorage`); una vista fallida no bloquea; el add-to-cart sube original + composicion.
+(`localStorage`); una vista fallida no bloquea; el add-to-cart sube original + composicion; con la
+cola de subidas vacia **no** muestra "Estamos recibiendo tus archivos", y con pendientes si.
 
 ## E8 — Pedido sin `customer_id`
 

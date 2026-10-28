@@ -53,6 +53,12 @@
 - `{cliente}` y `{order_id}` son **numericos** (`ctype_digit`); `orders/{cliente}/uploads/` **no** es
   un pedido y ningun escaneo lo lista como tal.
 - `tmp/orders/` **no existe** (sin staging).
+- **Sin cuota por identidad en esta entrega**: solo medicion (smoke/`estado_pmu`); el cap de
+  2000 px acota el peso por archivo.
+- El original se sube **en segundo plano** desde que se elige la foto (dedupe por sha); el
+  add-to-cart espera solo lo pendiente y, en el caso normal, no muestra espera.
+- **Sin compatibilidad con el arbol viejo**: `orders/{order_id}/` (sin nivel de cliente) **no** se
+  lee; no hay pedidos previos (D12). Los 4 puntos de lectura usan solo `orders/{cliente}/{order_id}/`.
 - Ninguna purga futura de `orders/` puede tocar `orders/{cliente}/uploads/` sin materializar antes
   las composiciones de los pedidos que lo referencian.
 
@@ -85,5 +91,6 @@
 2. **Idempotencia**: re-subir el mismo original no duplica (`id` = sha); re-promover no repite
    (`rename` con destino existente = no-op); re-registrar un grupo reemplaza sus filas.
 3. **Sin traversal**: ninguna ruta se arma con texto del cliente sin regex + `is_file`/`realpath`.
-4. **Sin migracion**: las filas viejas (`subida`/`ref`/`texto`) se leen igual.
+4. **Sin migracion** (filas ni rutas): las filas viejas (`subida`/`ref`/`texto`) se leen igual, pero
+   el arbol `orders/{order_id}/` no (no hay pedidos previos).
 5. **Borrar un original no rompe pedidos**: la composicion vive en el pedido.

@@ -10,6 +10,14 @@
 > cliente + **refactor de `orders/` a `orders/{cliente}/{order_id}/`** (§5) + **sin
 > staging** (`tmp/orders/` no existe). El mockup optimizado va a la spec 036.
 
+## Clarifications
+
+### Session 2026-10-27
+
+- Q: ¿Que debe pasar con los pedidos que ya existen hoy en `orders/{order_id}/` cuando el codigo empiece a buscar en `orders/{cliente}/{order_id}/`? → A: **Nada (D)**: no hay pedidos previos (desarrollo con control total). Sin migracion ni fallback de lectura.
+- Q: Si el navegador ya no tiene el original (IndexedDB desalojado, modo privado o cambio de dispositivo) al pulsar "Anadir al carrito", ¿que debe hacer el sistema? → A: **Subida en segundo plano**: el original se sube mientras el comprador ajusta (arranca al elegir la foto, dedupe por sha); el add-to-cart espera solo lo pendiente con el aviso "Estamos recibiendo tus archivos, espera..." y, en el caso normal, no hay espera visible.
+- Q: ¿Debe haber un limite de fotos o de peso por cliente en `orders/{cliente}/uploads/` en esta entrega, o se mide primero? → A: **Sin cuota (A)**: solo medicion (smoke/`estado_pmu`); el limite se define despues con datos reales (030 P2). El cap de 2000 px ya acota el peso por archivo.
+
 ## 1. Problema
 
 Hoy, al aceptar el recorte, el navegador compone la imagen y **sube el resultado**
@@ -37,8 +45,8 @@ Hoy, al aceptar el recorte, el navegador compone la imagen y **sube el resultado
 | # | Decision |
 |---|----------|
 | **D1** | **Receta v2, completa y versionada**: `v,w,h,forma,modo,escala,dx,dy,fondo,transp,rot,iw,ih,phsize,gid`. `dx/dy` se normalizan al lienzo. El servidor la **revalida** (enum de modo, `escala` 0.25-4, `PH_MAX`, cotas de `dx/dy`) y sigue siendo el unico que calcula el hash (`receta_de`, `inc/class-pmu-sesion.php:1322`). Cierra la colision 90/270. |
-| **D2** | **El original vive en el navegador hasta el add-to-cart**: se acota a **2000x2000 px** al ingerir (constante unica cliente/servidor, revalidada en el servidor), se guarda en IndexedDB con dedupe por sha y alimenta la vista previa por `objectURL` (0 red). |
-| **D3** | **El original NACE en `tmp/sesion-{sid}/uploads/`** (carpeta de la sesion, compartida por sus items) al agregar al carrito; la composicion por receta va a `tmp/sesion-{sid}/{item_key}/subidas/`. Una foto usada en 3 items se guarda **una vez**. Nada viaja durante la edicion. |
+| **D2** | **El original se acota a 2000x2000 px al ingerir** (constante unica cliente/servidor, revalidada en el servidor), se guarda en IndexedDB con dedupe por sha y alimenta la vista previa por `objectURL` (0 red). **La subida arranca en segundo plano** al elegir la foto: el navegador es la cache, no el unico lugar. |
+| **D3** | **El original NACE en `tmp/sesion-{sid}/uploads/`** (carpeta de la sesion, compartida por sus items) **en segundo plano desde que se elige la foto**, con dedupe por sha: una foto usada en 3 items se guarda **una vez** y no se reenvia al probar encuadres. La composicion por receta va a `tmp/sesion-{sid}/{item_key}/subidas/` al add-to-cart. El add-to-cart **espera solo las subidas pendientes** (aviso "Estamos recibiendo tus archivos, espera..."; en el caso normal no hay espera visible). |
 | **D4** | **Al pagarse, el servidor MUEVE**: el item `tmp/sesion-{sid}/{item_key}/` pasa a `orders/{cliente}/{order_id}/{item_key}/` (rename) y los originales a `orders/{cliente}/uploads/` (dedupe por sha); las filas pasan a `origen: 'cliente'` con `id` + `clave`. Se **congela `manifest.cliente`** para que la descarga no dependa de Woo. Idempotente y **nunca bloquea el pago** (`try/catch` + `log_pedido`, reintento en cada cambio de estado). |
 | **D5** | **La composicion viaja CON el pedido; el original se REFERENCIA** por `id` + `clave`. El PDF sale de la composicion (inmutable), asi que **borrar un original no rompe ningun pedido**: solo pierde la reedicion. Resuelve el P3 de la 030 sin materializar. |
 | **D6** | **Sin staging**: `tmp/orders/` **no existe ni existira**. El item vive en `tmp/sesion-{sid}/` hasta el pago y ahi se mueve. El TTL de 30 dias de un item sin pagar es **politica deseada** (P6 = B): si un pedido `on-hold` se paga despues, la personalizacion ya no existe y Pedidos lo muestra con su causa. |
@@ -47,7 +55,7 @@ Hoy, al aceptar el recorte, el navegador compone la imagen y **sube el resultado
 | **D9** | **Sin compositor PHP.** La vista previa es client-side y el PDF usa el bitmap que compuso el navegador: **"la vista previa es el PDF" se mantiene byte a byte**. La receta se guarda para el futuro (API 010, reparacion), no se usa para imprimir. |
 | **D10** | **Mockup: fuera de esta spec** (va a la 036): `objectURL` local + pintado progresivo, y plano de 2 caras solo con medicion previa. Aca no se toca el camino de mockup de `assets/tienda.js` ni `assets/mockup-render.js`. |
 | **D11** | **La vista se marca al MOSTRARSE, no al pulsar un boton**: cada vista de la galeria queda como vista cuando la galeria la muestra (la inicial cuenta); el add-to-cart se habilita cuando **todas las vistas obligatorias** fueron mostradas. Las vistas **no omisibles** van **primero**, con el mensaje "Revisa la vista previa"; las `preview_omisible` (por PDF) no exigen haber sido vistas. La marca vive en el cliente y se persiste en el add-to-cart con el webp congelado (`mockup_vistas`), sin un POST por navegacion. |
-| **D12** | **Sin migracion**: los items y pedidos existentes conservan sus filas (`origen: subida/ref/texto`). La lectura tolera ambos formatos. |
+| **D12** | **Sin migracion y sin compatibilidad de rutas**: no hay pedidos previos (desarrollo con control total), asi que el arbol viejo `orders/{order_id}/` **no** se lee: los 4 puntos de lectura usan solo `orders/{cliente}/{order_id}/`. Las filas viejas (`origen: subida/ref/texto`) si se siguen leyendo. |
 | **D13** | **La carpeta de sesion compartida no rompe el barrido**: `limpiar_ttl()` **excluye** `tmp/sesion-{sid}/uploads/` del conteo por item (como ya hace con `draft-`), la poda de originales es **por sesion** (¿algun item lo referencia?) y `borrar_item()` no se lleva la carpeta compartida mientras otro item la use. |
 | **D14** | **Aislamiento de `orders/`**: los dos niveles son numericos (`{cliente}` y `{order_id}`) y los escaneos exigen `ctype_digit`; `orders/{cliente}/uploads/` **nunca** se lista como pedido. Ninguna purga futura de `orders/` puede tocar `orders/{cliente}/uploads/`. |
 
@@ -114,8 +122,9 @@ uploads/pmu/
 
 ```
 1. Elige foto      -> cap 2000 px, WebP q0.85, IndexedDB (0 red)
-2. Ajusta/Guarda   -> composicion en canvas; nada sube
-3. Add-to-cart     -> sube ORIGINAL (1 por sha) a tmp/sesion-{sid}/uploads/
+                      + SUBIDA EN SEGUNDO PLANO del original a tmp/sesion-{sid}/uploads/ (1 por sha)
+2. Ajusta/Guarda   -> composicion en canvas; el original no se reenvia (ya esta o viaja en segundo plano)
+3. Add-to-cart     -> espera solo lo pendiente ("Estamos recibiendo tus archivos, espera...")
                       + COMPOSICION por receta + textos del pool; registra filas; congela mockups
 4. Pago            -> pedido_promover: rename tmp/sesion-{sid}/{item} -> orders/{cliente}/{order_id}/{item}
                       + mueve originales a orders/{cliente}/uploads/ + filas 'cliente' (id + clave)
@@ -195,7 +204,11 @@ los escaneos.
 - **Pagina "Mis imagenes"** en Mi cuenta: spec aparte (como en la 030).
 - **Favoritos y "ultimo uso"**: `datos.json` deja los campos; la UI va en spec aparte.
 - **Mockup optimizado** (D10): va a la **spec 036** (`objectURL` + pintado progresivo + plano de 2 caras).
-- **Cuota definitiva**: se fija con los numeros del smoke (030 P2), no a ojo.
+- **Cuota por cliente**: **sin cuota en esta entrega** (2026-10-27): solo se mide con el smoke y
+  `estado_pmu`; el limite se define despues con datos reales (030 P2). El cap de 2000 px ya acota el
+  peso por archivo.
+- **Invalidar la marca de visto al editar un mockup**: requiere una firma del mockup que hoy no
+  existe; si el admin cambia las capas, el comprador que ya vio la version anterior no vuelve a verla.
 - **Recuperacion de fotos de un invitado** que perdio la cookie: solo afecta a `tmp/`
   (vence a los 30 dias); spec aparte.
 

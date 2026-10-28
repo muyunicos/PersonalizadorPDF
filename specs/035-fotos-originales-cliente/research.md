@@ -153,3 +153,35 @@ un compositor PHP (D9) y sin paridad Canvas/GD.
 **Alternativas**: (a) componer en PHP desde la receta — rompe el invariante y agrega GD al camino
 critico; (b) recomponer en el navegador al descargar — hoy la descarga es un GET sin navegador.
 Se descartan (la (a) queda como candidata para la API 010).
+
+## R11 — Como se sube el original en segundo plano
+
+**Decision**: la subida del original arranca **al elegir la foto** (no al aceptar el corte ni en el
+add-to-cart): se acota a 2000 px, se guarda en IndexedDB y se encola un POST a `handle_subida`
+(cola FIFO de a 2 en paralelo, con `sha` como clave de dedupe). El add-to-cart hace
+`Promise.all` de la cola y muestra el aviso solo si queda algo pendiente.
+
+**Rationale**: maximiza el tiempo de subida mientras el comprador elige opciones y ajusta el
+recorte; con dedupe por sha, probar 5 encuadres de la misma foto **no reenvia** nada. El aviso es la
+red de seguridad para redes lentas o muchas fotos, no el camino normal.
+
+**Alternativas**: (a) subir al aceptar el corte — menos basura, menos tiempo de subida; (b) subir en
+el add-to-cart — el navegador queda como unico origen y es el escenario que esta clarificacion
+elimina; (c) subir al pagar — el peor momento. Se descartan.
+
+**Fallo de subida**: 2 reintentos con backoff; si sigue fallando, el add-to-cart **bloquea** con
+causa accionable (no se vende un PDF sin la foto que el comprador vio). Una foto descartada deja un
+draft que el TTL borra a las 24 h.
+
+## R12 — Cuota por cliente
+
+**Decision**: **no hay cuota** en esta entrega. Solo se mide: el smoke ya informa el peso por
+identidad (030 P2) y `estado_pmu` da el estado del espejo. El cap de 2000 px acota el peso por
+archivo (un WebP q0.85 ronda 250-500 KB).
+
+**Rationale**: inventar un limite sin datos rechaza compras legitimas o rompe el flujo con un mensaje
+que nadie probo. La medicion existe y es barata; con 2-3 semanas de uso real el numero sale solo.
+
+**Alternativas**: (a) cuota dura por identidad — necesita un valor y una UX de rechazo que no se
+pueden validar todavia; (b) cuota blanda con aviso — agrega UI sin resolver el disco; (c) solo
+limite por archivo — es lo que ya hay (cap 2000). Se descartan por ahora.

@@ -114,7 +114,7 @@ NO se toca: engine/*, modules/textmuy/*, assets/mockup-render.js (mockup -> spec
 | Fase | Contenido | Depende de | Puerta |
 |---|---|---|---|
 | **F0** | Receta v2 (`receta_de` + `_params` + validacion) | — | `node tests/receta-contrato.test.js` + `texto_puente.php receta` |
-| **F1** | Original en el navegador (`assets/fotos-pmu.js`, cap 2000, IndexedDB) | F0 | `node tests/fotos-contrato.test.js` (nuevo) + navegador |
+| **F1** | Original en el navegador (`assets/fotos-pmu.js`, cap 2000, IndexedDB) + **subida en segundo plano** al elegir la foto (cola + dedupe por sha) | F0 | `node tests/fotos-contrato.test.js` (nuevo) + navegador |
 | **F2** | Carpeta de sesion compartida (`tmp/sesion-{sid}/uploads/`) + `origen: sesion` + poda/TTL | F1 | `texto_puente.php carpeta_cliente` + `sin_lectura` |
 | **F3** | Refactor de rutas (`orders/{cliente}/{order_id}/`), `manifest.cliente`, traslado al pagar, sin staging | F2 | `texto_puente.php rutas|traslado` + `ficha-pedido.browser.js` |
 | **F4** | Marca de "visto" por navegacion (§3.5) | — (ortogonal) | `ficha-pedido.browser.js` |
@@ -128,11 +128,13 @@ F4 es ortogonal: se puede adelantar a F1 si conviene cerrar la UX antes.
 |---|---|---|
 | R1 | El refactor de rutas toca 20 puntos (Pedidos, descargas, regenerar, biblioteca) | Fase propia (F3), commit aislado, puertas `rutas`/`traslado`, `customer_id` congelado en el manifest |
 | R2 | El `ref` de la 030 asume la misma profundidad antes y despues de promover | Las fotos del cliente usan `id` + `clave` (sin `ref`); `ref` queda solo para `origen: ref` entre pedidos |
-| R3 | IndexedDB desalojado o modo privado: no hay original al comprar | Verificacion antes de habilitar el pago + recuperacion accionable ("volve a elegir la foto") |
+| R3 | IndexedDB desalojado o modo privado: no hay original en el navegador | **Mitigado por la subida en segundo plano** (el servidor ya lo tiene). Si aun falta, el add-to-cart bloquea con causa accionable ("volve a elegir la foto") |
 | R4 | `limpiar_ttl()` borra `tmp/sesion-{sid}/uploads/` como si fuera un item | Excluirla del conteo (como `draft-`) y podar por sesion; puerta en `texto_puente.php carpeta_cliente` |
 | R5 | Pedido `on-hold` pagado despues de 30 dias pierde la personalizacion | Aceptado (P6 = B); Pedidos muestra `motor:descarga:item:ausente` |
 | R6 | Pedido con `customer_id = 0` | No se promueve; causa visible (P7) |
 | R7 | Doble escritura de la fila al promover (item + originales) | `promover_order` idempotente: si el destino existe, no repite; el manifest se escribe **una** vez |
+| R8 | Varias subidas en vuelo (5 fotos) al pulsar add-to-cart | Cola FIFO de a 2 con `sha` como clave; el add-to-cart espera la cola y muestra el aviso solo si queda algo pendiente; 2 reintentos con backoff |
+| R9 | `orders/{cliente}/uploads/` crece sin techo (sin cuota en esta entrega) | Medicion continua (smoke "peso por identidad" + `estado_pmu`); el limite se fija con datos (030 P2). El cap de 2000 px acota el peso por archivo |
 
 ## Gates (definicion de terminado del plan)
 
