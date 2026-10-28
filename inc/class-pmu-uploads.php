@@ -1003,6 +1003,27 @@ class PMU_Uploads
         return $dir;
     }
 
+    /**
+     * Carpeta de ORIGINALES de la sesion (spec 035, D3): `tmp/sesion-{sid}/uploads/`.
+     *
+     * Es COMPARTIDA por los items de la sesion y deduplicada por `id` (sha12 del
+     * contenido crudo): una foto usada en 3 items se guarda **una vez**. No es la
+     * carpeta de un item, asi que `limpiar_ttl()` la excluye del conteo por item y
+     * la poda es por sesion (¿algun item la referencia?).
+     */
+    public function dir_sesion_uploads($sid, $crear = false)
+    {
+        $sid = $this->sesion_segura($sid, 'dir_sesion_uploads');
+        $dir = $this->dir_sesion($sid, $crear) . DIRECTORY_SEPARATOR . 'uploads';
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        if ($crear && (!is_dir($dir) || !wp_is_writable($dir))) {
+            throw new Exception('motor:dir_sesion_uploads:directorio:no_escribible');
+        }
+        return $dir;
+    }
+
     /** Carpeta del item: uploads/pmu/tmp/sesion-{sid}/{item_key}/ (plan 008, crea si falta). */
     public function dir_sesion_item($sid, $item, $crear = false)
     {

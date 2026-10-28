@@ -74,8 +74,8 @@
 - [ ] T013 [US1] Cola de subida en segundo plano en `assets/tienda.js`: FIFO de a 2, clave `sha` (no reenvia), 2 reintentos con backoff de **1 s y 3 s**, promesa exportada para el add-to-cart
 - [ ] T014 [US1] Disparar la subida al elegir la foto (selector/cargador) y guardar la promesa en `PMU_FICHA.subidas`; el add-to-cart manda **`{id, receta}`** por grupo (no PNG) y deja de subir composiciones
 - [ ] T015 [US1] En `limpiar_ttl()` (`inc/class-pmu-sesion.php:1242`) excluir `uploads/` del conteo por item (patron `draft-`) y podar los originales que ningun item de la sesion referencia
-- [ ] T016 [US1] **Eliminar** `podar_subidas()` (`:582`) y `registrar_fotos()` (`:509`) (`subidas/` no existe; la composicion va al pool); `usar_de_biblioteca()` (`:1344`) registra `origen: original` **sin copiar** el archivo
-- [ ] T017 [US1] Fase `carpeta_cliente` en `tests/texto_puente.php`: dedupe por sha, 2 items = 1 archivo, poda por sesion, TTL con items vivos, cap 2000 (con y sin GD)
+- [ ] T016 [US1] **Eliminar** `podar_subidas()` (`:582`) (`subidas/` no existe); **OJO (2026-10-28)**: `registrar_fotos()` **NO se elimina** — se reescribe para aceptar `{id, receta}` por instancia y escribir filas `compuesta` con `file` **determinista** (`img/foto-{pdf}-{gid}-{receta}.webp`); lo que desaparece es la subida de bytes. `usar_de_biblioteca()` registra `origen: original` **sin copiar** el archivo
+- [ ] T017 [US1] Fase `carpeta_cliente` en `tests/texto_puente.php`: dedupe por sha, 2 items = 1 archivo, poda por sesion, TTL con items vivos, cap 2000 (con y sin GD); **y reescribir la fase `fotos`** (codifica el modelo 029: `subidas/`, `origen: subida`, `podar_subidas`)
 - [ ] T018 [US1] Crear `node tests/fotos-contrato.test.js`: cap 2000, dedupe, cuota/desalojo, recuperacion cuando el blob no esta
 
 **Checkpoint**: US1 validable sola, todavia sin el arbol nuevo de `orders/`.
