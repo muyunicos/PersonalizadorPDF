@@ -89,7 +89,12 @@ Hoy, al aceptar el recorte, el navegador compone la imagen y **sube el resultado
 Invariantes: una fila `cliente` **no** protege ningun archivo local (la poda de la
 029 no cambia); `resolver_ref()` (`inc/class-pmu-sesion.php:1299`) valida el `ref`
 con `realpath` dentro de `uploads/pmu/`; al promover, las filas `sesion` pasan a
-`cliente` en la **misma** escritura del manifest (nunca quedan apuntando a `tmp/`).
+`clave` (esto es, `origen: cliente` con el campo `clave`) en la **misma** escritura del manifest
+(nunca quedan apuntando a `tmp/`).
+**Resolucion de archivos**: `resolver_subidas()` resuelve las tres formas — `subida` ->
+`{item}/subidas/{file}`, `sesion` -> `tmp/sesion-{sid}/uploads/{id}.webp`, `cliente` ->
+`orders/{clave}/uploads/{id}.webp` — con `is_file()` y causa explicita; `handle_subida_url()` y
+`biblioteca_ruta_imagen()` usan esa resolucion (sin `file` no hay ruta que adivinar).
 
 ### 3.3 Carpeta del cliente (`orders/{cliente}/`)
 
@@ -142,6 +147,10 @@ uploads/pmu/
 - **Persistencia**: `localStorage` por `item_key` + `mockup_id` (sobrevive la recarga); el servidor
   lo confirma al congelar (`manifest.mockup_vistas`), sin peticiones durante la navegacion.
 - **Vista fallida**: una vista podada por error (`fallida`) **no** cuenta como obligatoria.
+- **`preview_estado`**: se sigue escribiendo en `carrito_promover` — `ok` si se congelaron los
+  mockups de las vistas obligatorias, `sin_vista` si falto alguna; `omisible` no cambia (030).
+- **Clave local**: si el item pasa de `draft-{uuid}` a `cart_item_key`, la entrada de
+  `localStorage` se migra en el mismo paso (no se pierde la marca por el rename).
 - **Fuera de esta spec**: montar la galeria automaticamente al completar los campos (sin boton)
   es de la 036; aca el disparo no cambia.
 

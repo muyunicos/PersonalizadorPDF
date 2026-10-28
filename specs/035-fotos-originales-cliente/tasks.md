@@ -28,7 +28,7 @@
 
 **Purpose**: verificar la base y dejar los esqueletos de las puertas nuevas
 
-- [ ] T001 Correr las puertas base y confirmar verde: `php -l personalizador-pdf.php`, `Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.FullName }`, `php tests/motor_smoke.php`, `php tests/parity.php`, `php tests/texto_puente.php fotos`, `node tests/selector-contrato.test.js`
+- [ ] T001 Correr las puertas base y confirmar verde: `php -l personalizador-pdf.php`, `Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.FullName }`, `php tests/motor_smoke.php`, `php tests/parity.php`, `php tests/texto_puente.php fotos`, `node tests/selector-contrato.test.js`; y confirmar la **precondicion de cuenta obligatoria** en Woo (sin checkout de invitado), porque `customer_id = 0` no promueve (P7)
 - [ ] T002 Crear los `case` vacios de las fases nuevas en `tests/texto_puente.php`: `receta`, `carpeta_cliente`, `traslado`, `rutas` (deben correr sin error antes de implementar)
 
 ---
@@ -61,11 +61,11 @@
 - [ ] T009 [P] [US1] Crear `assets/fotos-pmu.js` (`PMUFotos`): store `pmu_fotos` en IndexedDB con `{sha, blob, w, h, nombre}`, `guardar(archivo)` con cap 2000 px (canvas + WebP q0.85), `obtener(sha)`, `listar()`, `borrar(sha)`, `navigator.storage.persist()` y manejo de cuota
 - [ ] T010 [US1] Revalidar el cap en `guardar_subida()` (`inc/class-pmu-sesion.php:843`): `getimagesize()` y, si `max(w,h) > 2000`, reescalar con GD; sin GD, `motor:subida:tamano`
 - [ ] T011 [US1] Escribir el original en `dir_sesion_uploads($sid)` con `{id} = substr(sha1(bytes_crudos), 0, 12)`, dedupe por existencia y fila `origen: 'sesion'` (sin `file`)
-- [ ] T012 [US1] Ajustar `handle_subida()` (`personalizador-pdf.php:1784`) para devolver `{id, sha, w, h, url}` del original y crear el draft si no hay item
-- [ ] T013 [US1] Cola de subida en segundo plano en `assets/tienda.js`: FIFO de a 2, clave `sha` (no reenvia), 2 reintentos con backoff, promesa exportada para el add-to-cart
+- [ ] T012 [US1] Ajustar `handle_subida()` (`personalizador-pdf.php:1784`) para devolver `{id, sha, w, h, url}` del original y crear el draft si no hay item; y `resolver_subidas()` (`inc/class-pmu-sesion.php:909`) resuelve `origen: sesion` -> `tmp/sesion-{sid}/uploads/{id}.webp` (con `is_file` y causa), para que `handle_subida_url()` (`:1864`) y `biblioteca_ruta_imagen()` (`:2317`) puedan pintar el original
+- [ ] T013 [US1] Cola de subida en segundo plano en `assets/tienda.js`: FIFO de a 2, clave `sha` (no reenvia), 2 reintentos con backoff de **1 s y 3 s**, promesa exportada para el add-to-cart
 - [ ] T014 [US1] Disparar la subida al elegir la foto (selector/cargador) y guardar la promesa en `PMU_FICHA.subidas`
 - [ ] T015 [US1] En `limpiar_ttl()` (`inc/class-pmu-sesion.php:1242`) excluir `uploads/` del conteo por item (patron `draft-`) y podar los originales que ningun item de la sesion referencia
-- [ ] T016 [US1] Ajustar `podar_subidas()` (`:582`) para que una fila `origen: sesion` no borre el archivo compartido mientras otro item lo use
+- [ ] T016 [US1] Ajustar `podar_subidas()` (`:582`) para que una fila `origen: sesion` no borre el archivo compartido mientras otro item lo use; y `usar_de_biblioteca()` (`:1344`) registra la fila `sesion` **sin copiar** el archivo (hoy copia a `subidas/` cuando la familia vive en `tmp`)
 - [ ] T017 [US1] Fase `carpeta_cliente` en `tests/texto_puente.php`: dedupe por sha, 2 items = 1 archivo, poda por sesion, TTL con items vivos, cap 2000 (con y sin GD)
 - [ ] T018 [US1] Crear `node tests/fotos-contrato.test.js`: cap 2000, dedupe, cuota/desalojo, recuperacion cuando el blob no esta
 
@@ -83,13 +83,13 @@
 
 - [ ] T019 [P] [US2] Cambiar `dir_order($cliente, $order_id, $crear)` en `inc/class-pmu-uploads.php` (`orders/{cliente}/{order_id}`) y **eliminar** `dir_tmp_order()` (`:1056`) y `ruta_order_pdf()` (`:1091`, codigo muerto)
 - [ ] T020 [P] [US2] **Eliminar** `staging_order()` en `inc/class-pmu-sesion.php:1191`
-- [ ] T021 [US2] Reescribir `promover_order($order_id, $cliente, $sid, $item)` (`:1211`): `rename` del item, `copy` + dedupe por `id` de los originales, filas `sesion -> cliente` con `clave`, `manifest.cliente`, todo idempotente y en una escritura atomica
+- [ ] T021 [US2] Reescribir `promover_order($order_id, $cliente, $sid, $item)` (`:1211`): `rename` del item, `copy` + dedupe por `id` de los originales y **`unlink` del original de la sesion** tras copiarlo, filas `sesion -> clave` (campo `clave`, nunca `cliente`), `manifest.cliente`, todo idempotente y en una escritura atomica
 - [ ] T022 [US2] Eliminar `pedido_staging_crear()` (`personalizador-pdf.php:2928`) y su hook `woocommerce_checkout_order_processed`
 - [ ] T023 [US2] `pedido_promover()` (`:2965`) pasa `$order->get_customer_id()`; si es `0`, **no** promueve y deja causa visible
 - [ ] T024 [US2] `manifest_item()` (`:3050`), `item_generar_pdfs()` (`:3185`) e `item_regenerar()` (`:3347`) usan `dir_order` + `manifest.cliente`; sin fallback `tmp/orders` ni `orders/{order_id}`
 - [ ] T025 [US2] `pedidos_completados()` (`:3291`): escaneo de 3 niveles con `ctype_digit`, `cliente` en cada fila y `orders/{cliente}/uploads/` **excluido**
-- [ ] T026 [US2] `biblioteca_contenedores()` (`:2047`) y `biblioteca_peso_identidades()` (`:1951`): escaneo de 3 niveles con `ctype_digit`
-- [ ] T027 [US2] Resolver filas `origen: cliente` por `id` + `clave` (`/^\d{1,12}$/` y `/^[a-f0-9]{12}$/` + `is_file`) en `item_generar_pdfs()`; `clave_valida()` como helper unico
+- [ ] T026 [US2] `biblioteca_contenedores()` (`:2047`) y `biblioteca_peso_identidades()` (`:1951`): escaneo de 3 niveles con `ctype_digit`; y `familias()` (`inc/class-pmu-sesion.php:1023`) agrupa por **`id` del original** (una entrada por foto; `versiones`/`base` dejan de usarse en la tira, D7)
+- [ ] T027 [US2] Resolver filas `origen: cliente` por `id` + `clave` (`/^\d{1,12}$/` y `/^[a-f0-9]{12}$/` + `is_file`) en `resolver_subidas()`/`item_generar_pdfs()` y `biblioteca_ruta_imagen()`; `clave_valida()` como helper unico
 - [ ] T028 [US2] `admin/pedidos.php`: mostrar la columna de cliente que devuelve `pedidos_completados()`
 - [ ] T029 [US2] Fases `traslado` y `rutas` en `tests/texto_puente.php`: arbol nuevo, `manifest.cliente`, `customer_id = 0` no promueve, descarga sin original, Pedidos no lista `uploads/`
 - [ ] T030 [US2] Actualizar `tests/ficha-pedido.browser.js:568` (ruta del PDF) y los escaneos de `tests/estado_pmu.php`, `tests/inventario_pmu.php` y `tests/sin_lectura.php`
@@ -109,7 +109,7 @@
 
 - [ ] T032 [P] [US3] `prepararGaleria()` (`assets/tienda.js:740`): ordenar `vistas` por `preview_omisible` ascendente y mostrar la leyenda "Revisa la vista previa" mientras falte una obligatoria
 - [ ] T033 [US3] Marcar `visto` en el `pintar()` de la galeria (incluye la inicial) y persistir en `localStorage['pmu_vistas_v1'][item_key]`; leer y reconciliar al montar; migrar la clave cuando el draft se promueve
-- [ ] T034 [US3] `bloqueos.vistas` (`:445`) pasa a `false` solo cuando no queda ninguna obligatoria sin ver; `bloquearCarrito()` (`:838`) consulta `faltanVistas()`
+- [ ] T034 [US3] `bloqueos.vistas` (`:445`) pasa a `false` solo cuando no queda ninguna obligatoria sin ver; `bloquearCarrito()` (`:838`) consulta `faltanVistas()`; `carrito_promover` sigue escribiendo `preview_estado` (`ok`/`sin_vista`)
 - [ ] T035 [US3] Una vista podada por error (`fallida`) **no** cuenta como obligatoria
 - [ ] T036 [US3] Ampliar `tests/ficha-pedido.browser.js`: orden, marca por navegacion, habilitacion en la ultima obligatoria (y **no** antes), recarga, vista fallida y el aviso de subidas pendientes
 

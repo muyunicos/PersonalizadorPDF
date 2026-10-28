@@ -109,6 +109,10 @@ NO se toca: engine/*, modules/textmuy/*, assets/mockup-render.js (mockup -> spec
 | §IV: `orders/{cliente}/{order_id}/{item_key}` en lugar de `orders/{order_id}/{item_key}` | El negocio pide una carpeta por cliente con sus originales y la cuenta es obligatoria al comprar. Sin el nivel de cliente, la biblioteca de originales no tiene un lugar estable fuera del pedido | Un ambito hermano `clientes/{uid}/`: evita la enmienda pero duplica el arbol de datos del cliente |
 | §IV: `tmp/orders/` (staging) **desaparece** | El item vive en `tmp/sesion-{sid}/` hasta el pago y ahi se mueve; copiar al crear el pedido es I/O y bytes duplicados. La perdida por TTL es politica aceptada (P6 = B) | Mantener el staging: protege pedidos `on-hold` > 30 dias, pero duplica el arbol y contradice la decision del negocio |
 
+**Severidad de la enmienda**: **MAJOR** (`constitution` 2.3.0 -> **3.0.0**), porque se enmienda un
+principio (§IV) **y** se elimina una etapa del ciclo de vida (la decision 2026-09-17, linea 64, que
+fija el staging). No es un cambio de datos: no hay migracion (D12).
+
 ## Fases (orden de ejecucion)
 
 | Fase | Contenido | Depende de | Puerta |
@@ -144,7 +148,8 @@ F4 es ortogonal: se puede adelantar a F1 si conviene cerrar la UX antes.
 - [ ] `php tests/motor_smoke.php` + `php tests/parity.php` en verde (el Motor no cambia)
 - [ ] `php tests/sin_lectura.php` + `php tests/estado_pmu.php` en verde
 - [ ] `node tests/ficha-pedido.browser.js` en verde (galeria + traslado + descarga)
-- [ ] `constitution` §IV enmendada con Sync Impact Report
+- `constitution` §IV **y** la decision 2026-09-17 (ciclo de vida unico) enmendadas, con Sync Impact
+  Report y version **3.0.0** (MAJOR: se enmienda un principio y se elimina una etapa del ciclo)
 
 ## Re-check post-design (Phase 1)
 

@@ -169,9 +169,9 @@ red de seguridad para redes lentas o muchas fotos, no el camino normal.
 el add-to-cart — el navegador queda como unico origen y es el escenario que esta clarificacion
 elimina; (c) subir al pagar — el peor momento. Se descartan.
 
-**Fallo de subida**: 2 reintentos con backoff; si sigue fallando, el add-to-cart **bloquea** con
-causa accionable (no se vende un PDF sin la foto que el comprador vio). Una foto descartada deja un
-draft que el TTL borra a las 24 h.
+**Fallo de subida**: 2 reintentos con backoff de **1 s y 3 s**; si sigue fallando, el add-to-cart
+**bloquea** con causa accionable (no se vende un PDF sin la foto que el comprador vio). Una foto
+descartada deja un draft que el TTL borra a las 24 h.
 
 ## R12 — Cuota por cliente
 

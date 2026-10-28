@@ -89,6 +89,9 @@ cola de subidas vacia **no** muestra "Estamos recibiendo tus archivos", y con pe
 
 ## E8 — Pedido sin `customer_id`
 
+**Antes**: confirmar en Woo que el checkout **exige cuenta** (sin checkout de invitado). Si no,
+todo pedido nace con `customer_id = 0` y no se promueve.
+
 ```powershell
 php tests/texto_puente.php traslado
 ```

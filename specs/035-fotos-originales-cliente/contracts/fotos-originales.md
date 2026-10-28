@@ -36,6 +36,8 @@
 
 - `id` = `^[a-f0-9]{12}$`; **deriva del contenido**, nunca lo propone el cliente.
 - `madre` = familia; **inmutable** (no se renombra).
+- **Terminologia**: `clave` es el **campo** de la fila y de `manifest.cliente`; `{cliente}` es el
+  nombre de la carpeta en las rutas. Son el **mismo valor** (el `uid` del pedido).
 - El servidor **nunca** arma una ruta con texto del cliente: `id`/`clave` se validan por regex y el
   archivo se verifica con `is_file()`.
 
