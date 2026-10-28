@@ -513,15 +513,30 @@ class PMU_Sesion
         if (!preg_match('/^[0-9A-F]{6}$/', $grupo)) {
             throw new Exception('motor:sesion:grupo:invalido');
         }
-        // Spec 035 (D9): el cliente manda `{id, receta}` por INSTANCIA; no hay bytes.
-        // El `file` es DETERMINISTA por receta, asi que el nombre hace de cache y el
-        // archivo lo materializa `Compositor` al generar el PDF (si falta).
+        // Spec 035 (D9): el cliente manda `{id, receta}` por INSTANCIA; tambien se
+        // acepta solo el `id` (formato de la 029): en ese caso la receta se resuelve
+        // de la fila `original`, que la guardo al aceptar el recorte. El `file` es
+        // DETERMINISTA por receta, asi que el nombre hace de cache y el archivo lo
+        // materializa `Compositor` al generar el PDF (si falta).
+        $manifest = $this->leer_manifest($sid, $item_key);
+        $recetas = [];
+        foreach ((array)(is_array($manifest) ? ($manifest['subidas'] ?? []) : []) as $filaS) {
+            if (is_array($filaS) && isset($filaS['id'])
+                && (string)($filaS['receta'] ?? '') !== '') {
+                $recetas[(string)$filaS['id']] = strtolower((string)$filaS['receta']);
+            }
+        }
         $porInstancia = [];
         foreach (array_values($entradas) as $i => $e) {
-            $id = is_array($e) ? strtolower(trim((string)($e['id'] ?? ''))) : '';
-            $receta = is_array($e) ? strtolower(trim((string)($e['receta'] ?? ''))) : '';
+            if (is_array($e)) {
+                $id = strtolower(trim((string)($e['id'] ?? '')));
+                $receta = strtolower(trim((string)($e['receta'] ?? '')));
+            } else {
+                $id = strtolower(trim((string)$e));
+                $receta = isset($recetas[$id]) ? $recetas[$id] : '';
+            }
             if (!preg_match('/^[a-f0-9]{12}$/', $id) || !preg_match('/^[a-f0-9]{12}$/', $receta)) {
-                continue;   // instancia sin valor: el hueco queda transparente
+                continue;   // instancia sin valor (o foto sin receta conocida)
             }
             $porInstancia[(int)$i] = 'img/foto-' . $pdf . '-' . $grupo . '-' . $receta . '.webp';
         }
@@ -782,6 +797,10 @@ class PMU_Sesion
         // reescalar (ninguna de las dos es determinista entre versiones).
         $sha = sha1($bytes);
         $id = substr($sha, 0, 12);
+        // Spec 035 (D9): la RECETA del recorte viaja con la subida (`params`) y se
+        // guarda en la fila: es lo que permite declarar la composicion por `id`
+        // (`registrar_fotos`) sin que el cliente tenga que repetirla por instancia.
+        $receta = (is_array($params) && $params) ? self::receta_de($params) : '';
         // Spec 035 (D2): el cap de 2000 px se REVALIDA en el servidor.
         $bytes = self::acotar_original($bytes);
         // Spec 026 (D3): el servidor convierte a WebP si puede (q0.85: la foto del
@@ -795,7 +814,7 @@ class PMU_Sesion
         $med = @getimagesize($ruta);
         $fila = null;
         $this->mutar_manifest($sid, $item_key,
-            function (&$manifest) use ($item_key, $id, $sha, $img, $ruta, &$fila) {
+            function (&$manifest) use ($item_key, $id, $sha, $img, $ruta, $receta, &$fila) {
                 if ((string)($manifest['item_key'] ?? '') !== (string)$item_key) {
                     throw new Exception('motor:sesion:item:ausente');
                 }
@@ -807,12 +826,17 @@ class PMU_Sesion
                         $filas[$i]['mime'] = $img['mime'];
                         $filas[$i]['bytes'] = (int)@filesize($ruta);
                         $filas[$i]['sha'] = $sha;
+                        // La receta vigente es la ULTIMA que se acepto: es la que el
+                        // comprador ve al agregar al carrito.
+                        if ($receta !== '') {
+                            $filas[$i]['receta'] = $receta;
+                        }
                         $manifest['subidas'] = $filas;
                         $fila = $filas[$i];
                         return;
                     }
                 }
-                $nueva = $this->fila_subida($id, '', $id, '', $sha, $img['mime'],
+                $nueva = $this->fila_subida($id, '', $id, $receta, $sha, $img['mime'],
                     (int)@filesize($ruta), time(), 'original');
                 $filas[] = $nueva;
                 $manifest['subidas'] = $filas;

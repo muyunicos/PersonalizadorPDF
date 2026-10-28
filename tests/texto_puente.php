@@ -1508,6 +1508,14 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('el pool queda VACIO: la composicion se materializa al generar el PDF',
                 (int)$GLOBALS['fotos_img_archivos'] === 0,
                 'img=' . (int)$GLOBALS['fotos_img_archivos']);
+            check('la subida guarda la receta en la fila del original',
+                $GLOBALS['fotos_compat_receta'] === true);
+            check('compatibilidad: con SOLO el id, la receta sale de la fila original',
+                (int)$GLOBALS['fotos_compat_filas'] === 1
+                && preg_match('#^img/foto-muestra-0000FF-[a-f0-9]{12}\\.webp$#',
+                    (string)$GLOBALS['fotos_compat_file']) === 1,
+                'filas=' . (int)$GLOBALS['fotos_compat_filas']
+                . ' file=' . (string)$GLOBALS['fotos_compat_file']);
             check('mixto (2 recetas en 3 instancias): una fila por instancia',
                 $GLOBALS['fotos_mixto_indices'] === [0, 1, 2],
                 'indices=' . implode(',', (array)$GLOBALS['fotos_mixto_indices']));
@@ -2744,6 +2752,15 @@ switch ($fase) {
         $GLOBALS['fotos_unif_file'] = isset($unif[0]['file']) ? (string)$unif[0]['file'] : '';
         $imgFt = $motor_ft->dir_sesion_item_img($sid_ft, $draft_ft, false);
         $GLOBALS['fotos_img_archivos'] = is_dir($imgFt) ? count((array)glob($imgFt . '/*')) : 0;
+
+        // 3b) Compatibilidad (formato 029): con SOLO el `id`, la receta se resuelve de
+        // la fila `original`, que la guardo al aceptar el recorte.
+        $subR = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt, '', $baseRec);
+        $GLOBALS['fotos_compat_receta'] = ((string)($subR['receta'] ?? '') === (string)$recA);
+        $compat = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF',
+            [(string)$subR['id'], (string)$subR['id']]);
+        $GLOBALS['fotos_compat_filas'] = count($compat);
+        $GLOBALS['fotos_compat_file'] = isset($compat[0]['file']) ? (string)$compat[0]['file'] : '';
 
         // 4) Mixto: 2 recetas en 3 instancias -> una fila por instancia.
         $mixto = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', [
