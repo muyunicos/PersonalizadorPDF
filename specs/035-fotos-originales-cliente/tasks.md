@@ -90,18 +90,18 @@
 
 ### Implementation for User Story 2
 
-- [ ] T019 [P] [US2] Cambiar `dir_order($cliente, $order_id, $crear)` en `inc/class-pmu-uploads.php` (`orders/{cliente}/{order_id}`) y **eliminar** `dir_tmp_order()` (`:1056`) y `ruta_order_pdf()` (`:1091`, codigo muerto)
-- [ ] T020 [P] [US2] **Eliminar** `staging_order()` en `inc/class-pmu-sesion.php:1191`
-- [ ] T021 [US2] Reescribir `promover_order($order_id, $clave, $sid, $item)` (`:1211`): `rename` del item y de **cada original** (`tmp/sesion-{sid}/uploads/{id}.webp` -> `orders/{clave}/uploads/{id}.webp`, idempotente si ya existe) y `manifest.cliente` en una escritura atomica; **las filas no cambian** (el `id` no cambia, no hay `copy` ni `unlink`)
-- [ ] T022 [US2] Eliminar `pedido_staging_crear()` (`personalizador-pdf.php:2928`) y su hook `woocommerce_checkout_order_processed`
-- [ ] T023 [US2] `pedido_promover()` (`:2965`) pasa `$order->get_customer_id()`; si es `0`, **no** promueve y deja causa visible
-- [ ] T024 [US2] `manifest_item()` (`:3050`), `item_generar_pdfs()` (`:3185`) e `item_regenerar()` (`:3347`) usan `dir_order` + `manifest.cliente` y resuelven el original por **cadena** (`resolver_original`); `item_generar_pdfs()`/`item_regenerar()` **materializan** con `Compositor::componer()` las `img/foto-{pdf}-{gid}-{receta}.webp` que falten antes de llamar al Motor; sin fallback `tmp/orders` ni `orders/{order_id}`
-- [ ] T025 [US2] `pedidos_completados()` (`:3291`): escaneo de 3 niveles con `ctype_digit`, `cliente` en cada fila y `orders/{cliente}/uploads/` **excluido**
-- [ ] T026 [US2] `biblioteca_contenedores()` (`:2047`) y `biblioteca_peso_identidades()` (`:1951`): escaneo de 3 niveles con `ctype_digit`; y `familias()` (`inc/class-pmu-sesion.php:1023`) agrupa por **`id` del original** (una entrada por foto; `versiones`/`base` dejan de usarse en la tira, D7)
-- [ ] T027 [US2] `resolver_original($id, $clave, $sid)` con `id` (`/^[a-f0-9]{12}$/`) + `is_file` y `clave_valida()` como helper unico; `item_generar_pdfs()` y `biblioteca_ruta_imagen()` lo usan (la fila no lleva `clave`)
-- [ ] T028 [US2] `admin/pedidos.php`: mostrar la columna de cliente que devuelve `pedidos_completados()`
-- [ ] T029 [US2] Fases `traslado` y `rutas` en `tests/texto_puente.php`: arbol nuevo, `manifest.cliente`, `customer_id = 0` no promueve, descarga con el original borrado **tras la 1a generacion** (sin composicion y sin original -> `motor:original:ausente`), Pedidos no lista `uploads/`
-- [ ] T030 [US2] Actualizar `tests/ficha-pedido.browser.js:568` (ruta del PDF) y los escaneos de `tests/estado_pmu.php`, `tests/inventario_pmu.php` y `tests/sin_lectura.php`
+- [X] T019 [P] [US2] `dir_order(clave, order_id, crear)` en `inc/class-pmu-uploads.php` = `orders/{clave}/{order_id}`; **nuevos** `dir_order_cliente()` + `dir_order_uploads()` y `clave_valida()` (helper UNICO, rechaza `0` = invitado); **eliminados** `dir_tmp_order()`, `ruta_order_pdf()` (codigo muerto) y `copiar_arbol()` (quedo sin llamadores)
+- [X] T020 [P] [US2] **Eliminado** `staging_order()` en `inc/class-pmu-sesion.php`
+- [X] T021 [US2] `promover_order($order_id, $clave, $sid, $item)` reescrita: **el DESTINO se mira ANTES que el origen** (bug propio: al revés rompia el reintento, porque la sesion ya no tiene el item), `manifest.cliente` antes del rename (viaja con el arbol), y `mover_originales()` traslada los originales a `orders/{clave}/uploads/` con dedupe (si ya esta, descarta el de la sesion). Las filas no cambian. Helper nuevo `ids_originales($manifest)`, reusado por `limpiar_ttl`
+- [X] T022 [US2] Eliminado `pedido_staging_crear()` y su hook `woocommerce_checkout_order_processed`
+- [X] T023 [US2] `pedido_promover()` pasa `$order->get_customer_id()`; si no es valido (`0` = invitado) **no** promueve y deja causa visible en el log, sin marcar cambios
+- [ ] T024 [US2] **Rutas HECHAS** (`manifest_item`/`item_generar_pdfs`/`item_generar_pdf`/`item_regenerar` reciben `$clave` y usan `dir_order()`, sin fallback a `tmp/orders`; `descargas_cliente`, `entregar_por_tema` y `congelar_bonus_item` resuelven el cliente del pedido). **FALTA la materializacion**: `Compositor::componer()` de las `img/foto-{pdf}-{gid}-{receta}.webp` que falten. Requiere guardar los **params** v2 en la fila (`registrar_fotos` los tiene cuando el cliente manda `{id, receta}`; `guardar_subida` los recibe) porque `receta_de` es un hash IRREVERSIBLE: sin los params no se puede recomponer
+- [X] T025 [US2] `pedidos_completados()`: escaneo de 3 niveles con `ctype_digit` (deja fuera `orders/{clave}/uploads/` sin nombrarla), `clave` en cada fila
+- [X] T026 [US2] `biblioteca_peso_identidades()` (nivel extra solo en `orders`) y `biblioteca_contenedores()` (3 niveles, tope de 10 sobre los PEDIDOS) con `ctype_digit`. **Ojo**: `familias()` sigue agrupando por `madre` (el `id` del original es `madre` en las filas 035), asi que D7 ya se cumple sin tocarla
+- [X] T027 [US2] `resolver_original()` usa `PMU_Uploads::clave_valida()` (helper unico) + `dir_order_uploads()`; `item_generar_pdfs()` y `biblioteca_ruta_imagen()` lo usan
+- [X] T028 [US2] `admin/pedidos.php`: columna **Cliente** (`r['clave']`) junto a Pedido
+- [ ] T029 [US2] Fases `traslado` y `rutas` en `tests/texto_puente.php`: **PARCIAL** — la fase `pedido` ya cubre arbol nuevo, `manifest.cliente`, `customer_id = 0` no promueve, idempotencia, el original viajando a `uploads/` y la resolucion por cadena; **falta** una fase propia `rutas` con la descarga tras borrar el original
+- [X] T030 [US2] Actualizados los escaneos y las rutas de los tests (`pedido`, `sesion`, `carrito`, `completados`, `biblioteca`, `admin` + `item_generar_pdfs`/`item_generar_pdf` con `$clave`). **Pendiente**: `tests/ficha-pedido.browser.js:568` (necesita el lab)
 - [ ] T031 [US2] Verificar `php tests/motor_smoke.php` + `php tests/parity.php` en verde: **el Motor no cambia**
 
 **Checkpoint**: US2 validable con un pedido de prueba en el lab (`orders/{cliente}/{order_id}/`).

@@ -127,9 +127,6 @@ class Personalizador_PDF_Plugin
 
         // Spec 004 (T022/T023): ciclo del pedido y descarga del PDF final.
         add_action('woocommerce_checkout_create_order_line_item', [$this, 'pedido_item_crear'], 10, 4);
-        // RC4.6.16: el staging se crea AQUI, cuando el pedido ya tiene ID real
-        // (en create_order_line_item get_id() daba 0 y el staging fallaba).
-        add_action('woocommerce_checkout_order_processed', [$this, 'pedido_staging_crear'], 10, 3);
         add_action('woocommerce_order_status_processing', [$this, 'pedido_promover'], 10, 1);
         add_action('woocommerce_order_status_completed', [$this, 'pedido_promover'], 10, 1);
         add_filter('woocommerce_customer_get_downloadable_products', [$this, 'descargas_cliente'], 10, 1);
@@ -1959,31 +1956,44 @@ class Personalizador_PDF_Plugin
             if (!is_dir($raiz)) {
                 continue;
             }
+            // Spec 035 (D5): `orders` suma un nivel (el cliente). `tmp` conserva
+            // los 2 de siempre (`sesion-{sid}/{item}`).
+            $esOrders = ($ambito === 'orders');
             foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $nivel1) {
-                foreach ((array)glob($nivel1 . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirItem) {
-                    $man = json_decode((string)@file_get_contents($dirItem . DIRECTORY_SEPARATOR . 'manifest.json'), true);
-                    if (!is_array($man) || empty($man['subidas'])) {
+                $nivel2s = $esOrders
+                    ? (array)glob($nivel1 . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR)
+                    : [$nivel1];
+                foreach ($nivel2s as $nivel2) {
+                    // `orders/{clave}/uploads/` no es un pedido: `ctype_digit` lo
+                    // deja fuera sin nombrarlo.
+                    if ($esOrders && !ctype_digit(basename($nivel2))) {
                         continue;
                     }
-                    $items++;
-                    $sid = (string)($man['sid'] ?? '');
-                    if (!isset($porSid[$sid])) {
-                        $porSid[$sid] = ['fotos' => 0, 'bytes' => 0, 'contenedores' => 0];
-                    }
-                    $porSid[$sid]['contenedores']++;
-                    foreach ((array)$man['subidas'] as $fila) {
-                        if (!is_array($fila)) {
+                    foreach ((array)glob($nivel2 . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirItem) {
+                        $man = json_decode((string)@file_get_contents($dirItem . DIRECTORY_SEPARATOR . 'manifest.json'), true);
+                        if (!is_array($man) || empty($man['subidas'])) {
                             continue;
                         }
-                        $fotos++;
-                        $porSid[$sid]['fotos']++;
-                        $n = (int)($fila['bytes'] ?? 0);
-                        if ($n < 1 && !empty($fila['file'])) {
-                            $n = (int)@filesize($dirItem . DIRECTORY_SEPARATOR
-                                . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string)$fila['file']));
+                        $items++;
+                        $sid = (string)($man['sid'] ?? '');
+                        if (!isset($porSid[$sid])) {
+                            $porSid[$sid] = ['fotos' => 0, 'bytes' => 0, 'contenedores' => 0];
                         }
-                        $bytes += $n;
-                        $porSid[$sid]['bytes'] += $n;
+                        $porSid[$sid]['contenedores']++;
+                        foreach ((array)$man['subidas'] as $fila) {
+                            if (!is_array($fila)) {
+                                continue;
+                            }
+                            $fotos++;
+                            $porSid[$sid]['fotos']++;
+                            $n = (int)($fila['bytes'] ?? 0);
+                            if ($n < 1 && !empty($fila['file'])) {
+                                $n = (int)@filesize($dirItem . DIRECTORY_SEPARATOR
+                                    . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string)$fila['file']));
+                            }
+                            $bytes += $n;
+                            $porSid[$sid]['bytes'] += $n;
+                        }
                     }
                 }
             }
@@ -2082,9 +2092,19 @@ class Personalizador_PDF_Plugin
             }
         }
         $raiz = $motor->dir_ambito('orders');
-        // Spec 030 (velocidad): los `order_id` crecen -> miro solo los 10 mas nuevos
-        // (antes se recorria el arbol COMPLETO de pedidos en cada apertura).
-        $dirsOrder = (array)glob($raiz . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR);
+        // Spec 035 (D5): el arbol suma el nivel del CLIENTE, asi que el tope de 10
+        // se aplica a los PEDIDOS (los `order_id` crecen -> miro los mas nuevos).
+        $dirsOrder = [];
+        foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirClave) {
+            if (!ctype_digit(basename($dirClave))) {
+                continue;   // `orders/{clave}/uploads/` no es un cliente
+            }
+            foreach ((array)glob($dirClave . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirPedido) {
+                if (ctype_digit(basename($dirPedido))) {
+                    $dirsOrder[] = $dirPedido;
+                }
+            }
+        }
         rsort($dirsOrder, SORT_STRING);
         foreach (array_slice($dirsOrder, 0, 10) as $dirOrder) {
             $oid = (int)basename($dirOrder);
@@ -2721,13 +2741,15 @@ class Personalizador_PDF_Plugin
         }
         try {
             $oid = (int)$order->get_id();
-            $manifest = $this->manifest_item($oid, (string)$item_key);
+            // Spec 035 (D5): el arbol es por cliente y el pedido lo conoce.
+            $cliente = (string)(int)$order->get_customer_id();
+            $manifest = $this->manifest_item($cliente, $oid, (string)$item_key);
             $pdfs = is_array($manifest) ? array_values((array)($manifest['pdfs'] ?? [])) : [];
             if (!$pdfs) {
                 return;
             }
             // Genera/reusa el PDF final de cada PDF aceptado del snapshot.
-            $rutas = $this->item_generar_pdfs($oid, (string)$item_key);
+            $rutas = $this->item_generar_pdfs($cliente, $oid, (string)$item_key);
             $aceptados = [];
             foreach ($pdfs as $pdf) {
                 $seguro = $this->pmu_uploads()->nombre_seguro((string)$pdf, 'descarga');
@@ -2763,7 +2785,9 @@ class Personalizador_PDF_Plugin
                 || !method_exists($lineItem, 'update_meta_data')) {
                 return;
             }
-            $manifest = $this->manifest_item((int)$order_id, (string)$item_key);
+            $cliente = (is_object($order) && method_exists($order, 'get_customer_id'))
+                ? (string)(int)$order->get_customer_id() : '';
+            $manifest = $this->manifest_item($cliente, (int)$order_id, (string)$item_key);
             $pdfs = is_array($manifest) ? array_values((array)($manifest['pdfs'] ?? [])) : [];
             if (!$pdfs) {
                 return;
@@ -2904,62 +2928,24 @@ class Personalizador_PDF_Plugin
             $item->add_meta_data('_pmu_pdfs', wp_json_encode(array_values((array)($manifest['pdfs'] ?? []))));
             // Spec 005 (T009/T022): auditoria de lo declarado y no aceptado.
             $item->add_meta_data('_pmu_pdfs_descartados', wp_json_encode(array_values((array)($manifest['pdfs_descartados'] ?? []))));
-            // RC4.6.16: el staging NO se hace aca. En woocommerce_checkout_create_
-            // order_line_item el pedido todavia no tiene ID (get_id() = 0), y
-            // dir_tmp_order(0) lanza motor:dir_tmp_order:pedido:invalido -> el
-            // staging nunca se creaba y el pedido no llegaba a orders/. Ahora el
-            // staging se crea en pedido_staging_crear() (woocommerce_checkout_
-            // order_processed, con el order_id real) y, como red de seguridad, en
-            // pedido_promover() (crea al vuelo si falta). La identidad para ambas
-            // sale de la metadata del item de mas abajo (_pmu_sid/_pmu_item_key),
-            // que SI persiste; ya no dependemos de _pmu_items del pedido.
+            // Spec 035 (D6): el ciclo es DIRECTO, sin staging. En
+            // woocommerce_checkout_create_order_line_item el pedido todavia no
+            // tiene ID (get_id() = 0), asi que no se toca el disco: el item vive
+            // en la sesion y `pedido_promover()` lo mueve entero al confirmarse
+            // el pago, con el `order_id` y el cliente ya reales. La identidad sale
+            // de la metadata del item (_pmu_sid/_pmu_item_key), que SI persiste;
+            // ya no dependemos de _pmu_items del pedido.
         } catch (\Throwable $e) {
             $this->log_pedido('item_crear:falla ' . $e->getMessage());
         }
     }
 
     /**
-     * RC4.6.16: crea el staging del pedido (tmp/orders/{order_id}/{item_key}/)
-     * cuando el checkout YA asigno el ID real. Recorre los line items y usa la
-     * metadata que dejo pedido_item_crear (_pmu_sid/_pmu_item_key), que es la que
-     * persiste de forma confiable. Idempotente (staging_order no duplica).
-     */
-    public function pedido_staging_crear($order_id, $posted_data = null, $order = null)
-    {
-        if (!function_exists('wc_get_order')) {
-            return;
-        }
-        $order = $order ?: wc_get_order($order_id);
-        if (!$order || !method_exists($order, 'get_items')) {
-            return;
-        }
-        $sesion = $this->sesion();
-        foreach ($order->get_items() as $lineItem) {
-            if (!method_exists($lineItem, 'get_meta')) {
-                continue;
-            }
-            $itemKey = (string)$lineItem->get_meta('_pmu_item_key', true);
-            $sid = (string)$lineItem->get_meta('_pmu_sid', true);
-            if ($itemKey === '' || $sid === '') {
-                continue;
-            }
-            try {
-                $sesion->staging_order((int)$order->get_id(), $itemKey, $sid);
-            } catch (\Throwable $e) {
-                $this->log_pedido(sprintf(
-                    'staging:falla order=%d item=%s err=%s',
-                    (int)$order->get_id(),
-                    $itemKey,
-                    $e->getMessage()
-                ));
-            }
-        }
-    }
-
-    /**
-     * T022: al confirmarse el pago, los items del pedido pasan de staging a
-     * entregable (`orders/{order_id}/{item_key}/` por rename). Idempotente y
-     * reintentable en cada cambio de estado.
+     * Spec 035 (D6): al confirmarse el pago, cada item personalizado se MUEVE de
+     * la sesion al entregable (`orders/{clave}/{order_id}/{item_key}/`), junto con
+     * sus originales (`orders/{clave}/uploads/`). Ya no hay staging: el item esta
+     * completo desde la vista previa. Idempotente y reintentable en cada cambio de
+     * estado.
      */
     public function pedido_promover($order_id)
     {
@@ -2971,6 +2957,18 @@ class Personalizador_PDF_Plugin
             return;
         }
         $sesion = $this->sesion();
+        // Spec 035 (D5): el arbol es por CLIENTE. Sin cliente (invitado: id 0) no
+        // hay carpeta, asi que NO se promueve y queda la causa VISIBLE en el log.
+        // El pedido se recupera re-guardando el estado cuando el cliente se cree.
+        $clave = method_exists($order, 'get_customer_id')
+            ? (string)(int)$order->get_customer_id() : '';
+        if (!$this->pmu_uploads()->clave_valida($clave)) {
+            $this->log_pedido(sprintf(
+                'promover:sin-cliente order=%d (invitado: no se promueve)',
+                (int)$order_id
+            ));
+            return;
+        }
         $cambios = false;
         // RC4.6.16: la identidad sale de cada LINE ITEM (_pmu_sid/_pmu_item_key),
         // que persiste de forma confiable. Ya NO dependemos de _pmu_items del
@@ -3002,10 +3000,10 @@ class Personalizador_PDF_Plugin
             }
             $oid = (int)$order->get_id();
             try {
-                // Red de seguridad: si el staging no se creo en el checkout
-                // (order_id era 0), se crea aca, ahora que el ID es real.
-                $sesion->staging_order($oid, $itemKey, $sid);
-                $sesion->promover_order($oid, $itemKey);
+                // Spec 035 (D6): SIN staging. El item vive completo en la sesion
+                // desde la vista previa, asi que se mueve entero al entregable y
+                // sus originales a la carpeta del cliente.
+                $sesion->promover_order($oid, $clave, $sid, $itemKey);
                 $cambios = true;
                 // Spec 017 (D4): con el tema activo, publica el PDF en _urls_files
                 // para que email + mi-cuenta/descargas/ los entregue el tema.
@@ -3045,19 +3043,16 @@ class Personalizador_PDF_Plugin
         }
     }
 
-    /** Manifest canonico de un item entregado o aun en staging. */
-    private function manifest_item($order_id, $item_key)
+    /** Manifest canonico de un item entregado (spec 035: `orders/{clave}/{oid}/{item}/`). */
+    private function manifest_item($clave, $order_id, $item_key)
     {
         $order_id = (int)$order_id;
-        if ($order_id < 1) {
+        $motor = $this->pmu_uploads();
+        if ($order_id < 1 || !$motor->clave_valida($clave)) {
             return null;
         }
-        $motor = $this->pmu_uploads();
         $item_key = $motor->item_seguro($item_key, 'item_manifest');
-        $dir = $motor->dir_ambito('orders') . DIRECTORY_SEPARATOR . $order_id . DIRECTORY_SEPARATOR . $item_key;
-        if (!is_dir($dir)) {
-            $dir = $motor->dir_tmp_order($order_id) . DIRECTORY_SEPARATOR . $item_key;
-        }
+        $dir = $motor->dir_order($clave, $order_id) . DIRECTORY_SEPARATOR . $item_key;
         if (!is_dir($dir)) {
             return null;
         }
@@ -3097,9 +3092,11 @@ class Personalizador_PDF_Plugin
                 continue;
             }
             $itemsPedido = (array)$order->get_meta('_pmu_items');
+            // Spec 035 (D5): el arbol es por cliente y el pedido lo conoce.
+            $cliente = (string)(int)$order->get_customer_id();
             foreach ($itemsPedido as $itemKey => $estado) {
                 try {
-                    $manifest = $this->manifest_item($oid, (string)$itemKey);
+                    $manifest = $this->manifest_item($cliente, $oid, (string)$itemKey);
                     $pdfs = is_array($manifest) ? array_values((array)($manifest['pdfs'] ?? [])) : [];
                 } catch (\Throwable $e) {
                     continue;
@@ -3161,8 +3158,11 @@ class Personalizador_PDF_Plugin
         if (!$dueno && !$porClave && !$esAdmin) {
             wp_die('Permiso denegado');
         }
+        // Spec 035 (D5): ojo, en este scope `$clave` es la order_key (permiso);
+        // el CLIENTE del arbol de pedidos es otro dato.
+        $cliente = (string)(int)$order->get_customer_id();
         try {
-            $ruta = $this->item_generar_pdf($order_id, $itemKey, $pdfSolicitado);
+            $ruta = $this->item_generar_pdf($cliente, $order_id, $itemKey, $pdfSolicitado);
         } catch (\Throwable $e) {
             wp_die('No se pudo preparar la descarga: ' . esc_html($e->getMessage()));
         }
@@ -3181,15 +3181,15 @@ class Personalizador_PDF_Plugin
      *
      * @return array<string,string> mapa pdf => ruta final
      */
-    public function item_generar_pdfs($order_id, $item_key)
+    public function item_generar_pdfs($clave, $order_id, $item_key)
     {
         $order_id = (int)$order_id;
         $motor = $this->pmu_uploads();
-        $item_key = $motor->item_seguro($item_key, 'item_descarga');
-        $dir = $motor->dir_ambito('orders') . DIRECTORY_SEPARATOR . $order_id . DIRECTORY_SEPARATOR . $item_key;
-        if (!is_dir($dir)) {
-            $dir = $motor->dir_tmp_order($order_id) . DIRECTORY_SEPARATOR . $item_key;
+        if (!$motor->clave_valida($clave)) {
+            throw new \RuntimeException('motor:descarga:cliente:invalido');
         }
+        $item_key = $motor->item_seguro($item_key, 'item_descarga');
+        $dir = $motor->dir_order($clave, $order_id) . DIRECTORY_SEPARATOR . $item_key;
         if (!is_dir($dir)) {
             throw new \RuntimeException('motor:descarga:item:ausente');
         }
@@ -3265,9 +3265,9 @@ class Personalizador_PDF_Plugin
     }
 
     /** Genera/reusa un PDF concreto; si no se indica, conserva el primer PDF. */
-    public function item_generar_pdf($order_id, $item_key, $pdf = '')
+    public function item_generar_pdf($clave, $order_id, $item_key, $pdf = '')
     {
-        $rutas = $this->item_generar_pdfs($order_id, $item_key);
+        $rutas = $this->item_generar_pdfs($clave, $order_id, $item_key);
         if ($pdf !== '') {
             $pdf = $this->pmu_uploads()->nombre_seguro((string)$pdf, 'item_descarga');
             if (!isset($rutas[$pdf])) {
@@ -3295,16 +3295,26 @@ class Personalizador_PDF_Plugin
         } catch (\Throwable $e) {
             return $out;
         }
-        foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirOrder) {
-            $order_id = (int)basename($dirOrder);
-            if ($order_id < 1) {
+        foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirClave) {
+            $clave = basename($dirClave);
+            // Spec 035 (D5): nivel 1 = CLIENTE. `ctype_digit` deja fuera
+            // `uploads/` (la carpeta compartida de originales) sin nombrarla.
+            if (!ctype_digit($clave) || (int)$clave < 1) {
                 continue;
             }
-            foreach ((array)glob($dirOrder . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirItem) {
-                $item = basename($dirItem);
-                $manifest = json_decode((string)@file_get_contents($dirItem . DIRECTORY_SEPARATOR . 'manifest.json'), true);
-                $valores = [];
-        $urls = []; // mapa id -> url (spec 030, D23)
+            foreach ((array)glob($dirClave . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirOrder) {
+                if (!ctype_digit(basename($dirOrder))) {
+                    continue;
+                }
+                $order_id = (int)basename($dirOrder);
+                if ($order_id < 1) {
+                    continue;
+                }
+                foreach ((array)glob($dirOrder . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirItem) {
+                    $item = basename($dirItem);
+                    $manifest = json_decode((string)@file_get_contents($dirItem . DIRECTORY_SEPARATOR . 'manifest.json'), true);
+                    $valores = [];
+                    $urls = []; // mapa id -> url (spec 030, D23)
                 foreach ((array)($manifest['valores'] ?? []) as $cid => $par) {
                     $campo = $this->campo_por_id((int)$cid);
                     $nombreCli = (is_array($campo) && isset($campo['datos']['nombre']))
@@ -3319,6 +3329,8 @@ class Personalizador_PDF_Plugin
                     $salida = basename($pdfOut);
                 }
                 $out[] = [
+                    // Spec 035 (D5): el cliente es parte de la identidad del item.
+                    'clave' => (int)$clave,
                     'order_id' => $order_id,
                     'item_key' => $item,
                     'estado' => is_array($manifest) ? (string)($manifest['preview_estado'] ?? 'sin_vista') : 'motor:descarga:manifest:invalido',
@@ -3330,6 +3342,7 @@ class Personalizador_PDF_Plugin
                     'valores' => $valores,
                     'salida' => $salida,
                 ];
+                }
             }
         }
         usort($out, function ($a, $b) {
@@ -3350,14 +3363,22 @@ class Personalizador_PDF_Plugin
         $item = isset($_POST['item_key']) ? $this->pmu_uploads()->item_seguro((string)$_POST['item_key'], 'item_regenerar') : '';
         try {
             $motor = $this->pmu_uploads();
-            $dir = $motor->dir_ambito('orders') . DIRECTORY_SEPARATOR . $order_id . DIRECTORY_SEPARATOR . $item;
-            if ($order_id < 1 || $item === '' || !is_dir($dir)) {
+            // Spec 035 (D5): el arbol es por CLIENTE. La consola no manda el
+            // cliente en el POST, asi que se resuelve del pedido.
+            $order = function_exists('wc_get_order') ? wc_get_order($order_id) : null;
+            $cliente = ($order && method_exists($order, 'get_customer_id'))
+                ? (string)(int)$order->get_customer_id() : '';
+            if ($order_id < 1 || $item === '' || !$motor->clave_valida($cliente)) {
+                throw new \RuntimeException('motor:regenerar:item:ausente');
+            }
+            $dir = $motor->dir_order($cliente, $order_id) . DIRECTORY_SEPARATOR . $item;
+            if (!is_dir($dir)) {
                 throw new \RuntimeException('motor:regenerar:item:ausente');
             }
             foreach ((array)glob($dir . DIRECTORY_SEPARATOR . '*_procesado.pdf') as $previo) {
                 @unlink($previo);
             }
-            $this->item_generar_pdfs($order_id, $item);
+            $this->item_generar_pdfs($cliente, $order_id, $item);
         } catch (\Throwable $e) {
             $this->responder(false, [], $e->getMessage());
         }
@@ -4568,32 +4589,6 @@ class Personalizador_PDF_Plugin
         }
         ksort($canonica);
         return $canonica;
-    }
-
-    /**
-     * Promocion de staging a entregable (T031b): tmp/orders/{order_id}/ pasa a
-     * orders/{order_id}/ por rename() atomico. Solo al confirmarse el pago
-     * (el cableado al hook vive en spec 004).
-     */
-    public function orden_promover($order_id)
-    {
-        $order_id = (int)$order_id;
-        if ($order_id < 1) {
-            throw new \RuntimeException('Pedido invalido para promover.');
-        }
-        $motor = $this->pmu_uploads();
-        $origen = $motor->dir_tmp_order($order_id);
-        if (!is_dir($origen)) {
-            throw new \RuntimeException('Sin staging para el pedido ' . $order_id . '.');
-        }
-        $destino = $motor->dir_ambito('orders', true) . DIRECTORY_SEPARATOR . $order_id;
-        if (is_dir($destino) || is_file($destino)) {
-            throw new \RuntimeException('El pedido ' . $order_id . ' ya tiene entregable.');
-        }
-        if (!@rename($origen, $destino)) {
-            throw new \RuntimeException('No se pudo promover el pedido ' . $order_id . '.');
-        }
-        return $destino;
     }
 
     /** Lee el analisis inmutable de un PDF (plan 008): analisis.json. Devuelve null si no hay geometria valida. */

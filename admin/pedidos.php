@@ -4,9 +4,10 @@ if (!defined('ABSPATH')) {
 }
 /** @var Personalizador_PDF_Plugin $this */
 
-// Inventario de pedidos entregados (`orders/{order_id}/{item_key}/`): estado,
-// snapshot declarado (pdfs[] / pdfs_descartados[]), pool, vistas congeladas,
-// etiquetas del cliente (solo lectura) y salida. 004/T025 + 005/T010.
+// Inventario de pedidos entregados (`orders/{cliente}/{order_id}/{item_key}/`):
+// estado, snapshot declarado (pdfs[] / pdfs_descartados[]), pool, vistas
+// congeladas, etiquetas del cliente (solo lectura), cliente y salida.
+// 004/T025 + 005/T010 + 035/T028.
 
 $post_url = admin_url('admin-post.php');
 $completados = $this->pedidos_completados();
@@ -20,7 +21,7 @@ $completados = $this->pedidos_completados();
         <table class="widefat striped">
             <thead>
                 <tr>
-                    <th>Pedido</th><th>Item</th><th>Estado</th><th>PDFs aceptados</th><th>PDFs descartados</th><th>Pool</th><th>Vistas</th>
+                    <th>Pedido</th><th>Cliente</th><th>Item</th><th>Estado</th><th>PDFs aceptados</th><th>PDFs descartados</th><th>Pool</th><th>Vistas</th>
                     <th>Personalizacion</th><th>Salida</th><th>Acciones</th>
                 </tr>
             </thead>
@@ -28,6 +29,8 @@ $completados = $this->pedidos_completados();
             <?php foreach ($completados as $r) : ?>
                 <tr>
                     <td>#<?php echo (int)$r['order_id']; ?></td>
+                    <?php // Spec 035 (T028): el arbol es por CLIENTE: se muestra para saber donde vive el item. ?>
+                    <td>#<?php echo (int)($r['clave'] ?? 0); ?></td>
                     <td><code><?php echo esc_html($r['item_key']); ?></code></td>
                     <td><?php echo esc_html($r['estado']); ?></td>
                     <td>

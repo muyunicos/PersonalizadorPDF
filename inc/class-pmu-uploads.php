@@ -1073,31 +1073,66 @@ class PMU_Uploads
         return $dir;
     }
 
-    /** Staging del pedido: uploads/pmu/tmp/orders/{order_id}/ */
-    public function dir_tmp_order($order_id, $crear = false)
+    /**
+     * Clave de cliente valida para el arbol de pedidos (spec 035, D5): el ID de
+     * usuario de WordPress. `0` (invitado) NO vale: sin cliente no hay carpeta,
+     * y el pedido se queda sin promover con causa visible. Helper UNICO: lo usan
+     * `dir_order*` y `resolver_original`.
+     */
+    public static function clave_valida($clave)
     {
-        $order_id = (int)$order_id;
-        if ($order_id < 1) {
-            throw new Exception('motor:dir_tmp_order:pedido:invalido');
+        $clave = trim((string)$clave);
+        if ($clave === '' || preg_match('/^\d{1,12}$/', $clave) !== 1) {
+            return false;
         }
-        $dir = $this->dir_tmp_sub('orders', $crear) . DIRECTORY_SEPARATOR . $order_id;
+        // `0` es el invitado de WooCommerce: NO tiene carpeta. Sin este corte el
+        // regex lo daria por bueno y el pedido de un invitado crearia `orders/0/`.
+        return ((int)$clave) > 0;
+    }
+
+    /** Carpeta del CLIENTE: uploads/pmu/orders/{clave}/ (spec 035, D5). */
+    public function dir_order_cliente($clave, $crear = false)
+    {
+        if (!self::clave_valida($clave)) {
+            throw new Exception('motor:dir_order:cliente:invalido');
+        }
+        $dir = $this->dir_ambito('orders', $crear) . DIRECTORY_SEPARATOR . (string)(int)$clave;
         if ($crear && !is_dir($dir)) {
             wp_mkdir_p($dir);
         }
         if ($crear && (!is_dir($dir) || !wp_is_writable($dir))) {
-            throw new Exception('motor:dir_tmp_order:directorio:no_escribible');
+            throw new Exception('motor:dir_order_cliente:directorio:no_escribible');
         }
         return $dir;
     }
 
-    /** Carpeta del pedido confirmado: uploads/pmu/orders/{order_id}/ */
-    public function dir_order($order_id, $crear = false)
+    /**
+     * Originales del cliente: uploads/pmu/orders/{clave}/uploads/ (spec 035, D3).
+     *
+     * COMPARTIDA por todos sus pedidos y deduplicada por `id`: la misma foto en
+     * varios pedidos se guarda una vez. Un pedido la referencia por `id`; borrar
+     * un pedido NO la borra.
+     */
+    public function dir_order_uploads($clave, $crear = false)
+    {
+        $dir = $this->dir_order_cliente($clave, $crear) . DIRECTORY_SEPARATOR . 'uploads';
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        if ($crear && (!is_dir($dir) || !wp_is_writable($dir))) {
+            throw new Exception('motor:dir_order_uploads:directorio:no_escribible');
+        }
+        return $dir;
+    }
+
+    /** Carpeta del pedido confirmado: uploads/pmu/orders/{clave}/{order_id}/ */
+    public function dir_order($clave, $order_id, $crear = false)
     {
         $order_id = (int)$order_id;
         if ($order_id < 1) {
             throw new Exception('motor:dir_order:pedido:invalido');
         }
-        $dir = $this->dir_ambito('orders', $crear) . DIRECTORY_SEPARATOR . $order_id;
+        $dir = $this->dir_order_cliente($clave, $crear) . DIRECTORY_SEPARATOR . $order_id;
         if ($crear && !is_dir($dir)) {
             wp_mkdir_p($dir);
         }
@@ -1105,19 +1140,6 @@ class PMU_Uploads
             throw new Exception('motor:dir_order:directorio:no_escribible');
         }
         return $dir;
-    }
-
-
-    /** Salida final de una linea: orders/{order_id}/{pdf}/{pdf}_procesado.pdf */
-    public function ruta_order_pdf($order_id, $pdf)
-    {
-        $order_id = (int)$order_id;
-        if ($order_id < 1) {
-            throw new Exception('motor:ruta_order_pdf:pedido:invalido');
-        }
-        $pdf = $this->nombre_seguro($pdf, 'ruta_order_pdf');
-        return $this->dir_ambito('orders') . DIRECTORY_SEPARATOR . $order_id
-            . DIRECTORY_SEPARATOR . $pdf . DIRECTORY_SEPARATOR . $pdf . '_procesado.pdf';
     }
 
     public function tiene_catalogo($ambito)

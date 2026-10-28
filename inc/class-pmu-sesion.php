@@ -976,10 +976,13 @@ class PMU_Sesion
         if (!preg_match('/^[a-f0-9]{12}$/', $id)) {
             return '';
         }
-        $raiz = rtrim(str_replace('\\', '/', $this->motor->dir_pmu()), '/');
+        // Spec 035 (D4/T027): la clave valida es el helper UNICO (`clave_valida`):
+        // el arbol es `orders/{clave}/uploads/` y `0` (invitado) no tiene carpeta.
         $clave = trim((string)$clave);
-        if ($clave !== '' && preg_match('/^\d{1,12}$/', $clave)) {
-            $ruta = $this->archivo_con_extension($raiz . '/orders/' . $clave . '/uploads/' . $id);
+        if (PMU_Uploads::clave_valida($clave)) {
+            $ruta = $this->archivo_con_extension(
+                $this->motor->dir_order_uploads($clave) . DIRECTORY_SEPARATOR . $id
+            );
             if ($ruta !== '') {
                 return $ruta;
             }
@@ -1243,52 +1246,84 @@ class PMU_Sesion
     }
 
     /**
-     * Copia el item a staging: tmp/orders/{order_id}/{item_key}/ (al crearse
-     * el pedido). Idempotente: si el staging ya existe, lo devuelve.
+     * Traslada los ORIGINALES que el item referencia a `orders/{clave}/uploads/`
+     * (spec 035, D5). Idempotente: si el archivo ya esta en la carpeta del cliente
+     * (otro pedido suyo lo subio antes) se descarta el de la sesion SIN copiar; la
+     * dedupe por `id` es la que hace que la misma foto viva una sola vez.
+     *
+     * Una vez movido, `resolver_original()` lo encuentra por la rama `orders/`: el
+     * `id` es el mismo, asi que ninguna fila cambia de contenido.
      */
-    public function staging_order($order_id, $item_key, $sid)
+    private function mover_originales($sid, $clave, $item)
     {
-        $origen = $this->motor->dir_sesion_item($sid, $item_key);
-        if (!is_dir($origen)) {
-            throw new Exception('motor:sesion:item:ausente');
+        $ids = self::ids_originales($this->leer_manifest($sid, $item));
+        if (!$ids) {
+            return 0;
         }
-        $staging = $this->motor->dir_tmp_order($order_id, true) . DIRECTORY_SEPARATOR
-            . $this->motor->item_seguro($item_key, 'sesion:staging_order');
-        if (is_dir($staging)) {
-            return $staging;
+        $origenDir = $this->motor->dir_sesion_uploads($sid);
+        $destinoDir = $this->motor->dir_order_uploads($clave, true);
+        $movidos = 0;
+        foreach (array_keys($ids) as $id) {
+            foreach ((array)glob($origenDir . DIRECTORY_SEPARATOR . $id . '.*') as $ruta) {
+                if (!is_file($ruta)) {
+                    continue;
+                }
+                $destino = $destinoDir . DIRECTORY_SEPARATOR . basename($ruta);
+                if (is_file($destino)) {
+                    @unlink($ruta);      // ya esta en la carpeta del cliente
+                    continue;
+                }
+                if (@rename($ruta, $destino)) {
+                    $movidos++;
+                }
+            }
         }
-        $this->copiar_arbol($origen, $staging);
-        return $staging;
+        return $movidos;
     }
 
     /**
-     * Promueve el staging a entregable: tmp/orders/{order_id}/{item_key}/ ->
-     * orders/{order_id}/{item_key}/ por rename (solo al confirmarse el pago).
-     * Flag .promocionando en el staging ante reintentos (rename a medias).
+     * Promueve el item al entregable (spec 035, D5/D6): el arbol
+     * `tmp/sesion-{sid}/{item_key}/` se MUEVE a
+     * `orders/{clave}/{order_id}/{item_key}/` por `rename`, y los originales que
+     * referencia pasan a `orders/{clave}/uploads/`.
+     *
+     * Se llama al CONFIRMARSE el pago. Ya no hay staging: el item esta completo en
+     * la sesion desde la vista previa, asi que mover es todo. Idempotente ante
+     * reintentos (si el destino existe, ya estaba promovido).
+     *
+     * `manifest.cliente` se escribe ANTES del rename, sobre el manifest de la
+     * sesion: el manifiesto VIAJA con el arbol, asi que es una sola escritura y el
+     * destino nace con la clave puesta.
      */
-    public function promover_order($order_id, $item_key)
+    public function promover_order($order_id, $clave, $sid, $item)
     {
-        $item_key = $this->motor->item_seguro($item_key, 'sesion:promover_order');
+        $item = $this->motor->item_seguro($item, 'sesion:promover_order');
         $order_id = (int)$order_id;
         if ($order_id < 1) {
-            throw new Exception('motor:sesion:promocion:pendiente');
+            throw new Exception('motor:sesion:promocion:pedido:invalido');
         }
-        $origen = $this->motor->dir_tmp_order($order_id) . DIRECTORY_SEPARATOR . $item_key;
+        if (!$this->motor->clave_valida($clave)) {
+            // Spec 035 (D5): sin cliente (invitado) no hay carpeta. Causa VISIBLE:
+            // el pedido queda sin promover y se reintenta si el cliente se registra.
+            throw new Exception('motor:sesion:promocion:cliente:invalido');
+        }
+        $destino = $this->motor->dir_order($clave, $order_id, true) . DIRECTORY_SEPARATOR . $item;
+        // El DESTINO primero: si ya esta promovido, la sesion ya no tiene el item
+        // (el rename se lo llevo) y mirar el origen primero romperia el reintento.
+        if (is_dir($destino)) {
+            return $destino;   // ya promovido (idempotente)
+        }
+        $origen = $this->motor->dir_sesion_item($sid, $item);
         if (!is_dir($origen)) {
             throw new Exception('motor:sesion:item:ausente');
         }
-        if (is_file($origen . DIRECTORY_SEPARATOR . '.promocionando')) {
-            throw new Exception('motor:sesion:promocion:pendiente');
-        }
-        $destino = $this->motor->dir_order($order_id, true) . DIRECTORY_SEPARATOR . $item_key;
-        if (is_dir($destino)) {
-            return $destino; // ya promovido (idempotente)
-        }
-        @file_put_contents($origen . DIRECTORY_SEPARATOR . '.promocionando', '1');
+        $this->mutar_manifest($sid, $item, function (&$manifest) use ($clave) {
+            $manifest['cliente'] = (string)(int)$clave;
+        });
+        $this->mover_originales($sid, $clave, $item);
         if (!@rename($origen, $destino)) {
-            throw new Exception('motor:sesion:promocion:pendiente');
+            throw new Exception('motor:sesion:promocion:falla');
         }
-        @unlink($destino . DIRECTORY_SEPARATOR . '.promocionando');
         return $destino;
     }
 
@@ -1343,12 +1378,9 @@ class PMU_Sesion
                     continue;
                 }
                 $vivos++;
-                foreach ((array)(is_array($man) ? ($man['subidas'] ?? []) : []) as $filaS) {
-                    if (is_array($filaS) && (string)($filaS['origen'] ?? '') === 'original'
-                        && isset($filaS['id'])) {
-                        $referencias[(string)$filaS['id']] = true;
-                    }
-                }
+                // Spec 035 (D13): la lista de originales que el item referencia
+                // sale del helper unico (el mismo que usa el traslado al pagar).
+                $referencias = array_merge($referencias, self::ids_originales($man));
             }
             $this->podar_uploads_sesion($dirSesion, $referencias);
             if ($vivos === 0) {
@@ -1356,6 +1388,30 @@ class PMU_Sesion
             }
         }
         return $eliminados;
+    }
+
+    /**
+     * Ids de los ORIGINALES que un manifest referencia (spec 035, D3).
+     *
+     * Un `id` se comparte entre items de la sesion y entre pedidos del cliente,
+     * asi que el manifest es la UNICA lista de lo que el item necesita: la usan
+     * la poda por sesion, el traslado al pagar y la materializacion.
+     *
+     * @return array id => true
+     */
+    public static function ids_originales($manifest)
+    {
+        $out = [];
+        foreach ((array)(is_array($manifest) ? ($manifest['subidas'] ?? []) : []) as $fila) {
+            if (!is_array($fila) || (string)($fila['origen'] ?? '') !== 'original') {
+                continue;
+            }
+            $id = strtolower((string)($fila['id'] ?? ''));
+            if (preg_match('/^[a-f0-9]{12}$/', $id)) {
+                $out[$id] = true;
+            }
+        }
+        return $out;
     }
 
     /**
@@ -1683,29 +1739,6 @@ class PMU_Sesion
         return $borrados;
     }
     /* ==================== Ayudantes de arbol ==================== */
-
-    private function copiar_arbol($origen, $destino)
-    {
-        if (!is_dir($origen) || !wp_mkdir_p($destino)) {
-            throw new Exception('motor:sesion:directorio:no_escribible');
-        }
-        $it = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($origen, FilesystemIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::SELF_FIRST
-        );
-        foreach ($it as $item) {
-            $dest = $destino . DIRECTORY_SEPARATOR . $it->getSubPathName();
-            if ($item->isDir()) {
-                if (!is_dir($dest) && !@mkdir($dest, 0775, true)) {
-                    throw new Exception('motor:sesion:directorio:no_escribible');
-                }
-            } elseif (basename((string)$item->getPathname()) === '.manifest.lock') {
-                continue; // lock de escritura del manifest: no viaja al pedido
-            } elseif (!@copy($item->getPathname(), $dest)) {
-                throw new Exception('motor:sesion:directorio:no_escribible');
-            }
-        }
-    }
 
     private function borrar_arbol($dir)
     {

@@ -1001,22 +1001,25 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 && preg_match('/-1\.[a-z0-9]+$/i', (string)$s['f1']['file']) === 1
                 && preg_match('/-2\.[a-z0-9]+$/i', (string)$s['f2']['file']) === 1);
             check('hash del llamador anotado', is_array($s) && $s['f1']['hash'] === sha1('Ana|neon-glow||300x200'));
-            check('archivos fisicos en img/', is_array($s) && is_file($s['dir_item'] . '/img/' . basename($s['f1']['file'])) && is_file($s['dir_item'] . '/img/' . basename($s['f2']['file'])));
+            check('archivos fisicos en img/ (sobrevivieron al traslado)', is_array($s) && is_file($s['entregable'] . '/img/' . basename($s['f1']['file'])) && is_file($s['entregable'] . '/img/' . basename($s['f2']['file'])));
             // Spec 026 (T013): numeracion mixta correcta (los dos archivos del
             // grupo se numeran 1 y 2, sin pisarse) y en WebP.
             check('spec 026: el pool guarda WebP y numera sin pisar', is_array($s)
                 && (string)$s['f1']['file'] === 'img/muestra-0000FF-1.webp'
                 && (string)$s['f2']['file'] === 'img/muestra-0000FF-2.webp',
                 is_array($s) ? $s['f1']['file'] . ' / ' . $s['f2']['file'] : '');
-            check('webp congelado en el item', is_array($s) && is_file($s['dir_item'] . '/mockup-fiesta.webp'));
-            check('promover renombra sin cambiar sid', is_array($s) && is_dir($s['dir_item']) && !is_dir($s['dir_draft']));
+            check('webp congelado en el item (viaja al entregable)', is_array($s) && is_file($s['entregable'] . '/mockup-fiesta.webp'));
+            check('promover renombra sin cambiar sid', is_array($s) && is_dir($s['entregable']) && !is_dir($s['dir_draft']) && (string)($s['man_final']['sid'] ?? '') === (string)$s['sid']);
             check('manifest promovido con item_key nuevo', is_array($s) && is_array($s['man_item']) && $s['man_item']['item_key'] === 'abc123def456' && $s['man_item']['sid'] === $s['sid']);
             check('archivos[] = 2 filas con indice y file', is_array($s) && is_array($s['man_item']['archivos']) && count($s['man_item']['archivos']) === 2 && $s['man_item']['archivos'][0]['file'] === 'img/muestra-0000FF-1.webp' && $s['man_item']['archivos'][0]['indice'] === 0);
             check('estado ok', is_array($s) && $s['estado'] === 'ok');
-            check('staging consumido por la promocion', is_array($s) && !is_dir($s['staging']) && is_dir($s['entregable']));
-            check('entregable promovido por rename', is_array($s) && is_dir($s['entregable']) && !is_dir($s['staging']) && is_file($s['entregable'] . '/mockup-fiesta.webp'));
+            check('el item SALE de la sesion al promover', is_array($s) && !is_dir($s['dir_item']) && is_dir($s['entregable']));
+            check('entregable con cliente en el manifest y su webp', is_array($s) && is_dir($s['entregable'])
+                && is_file($s['entregable'] . '/mockup-fiesta.webp')
+                && (int)($s['man_final']['cliente'] ?? 0) === 1);
             check('borrado quirurgico de otro item', is_array($s) && isset($s['dir_otro']) && !is_dir($s['dir_otro']));
-            check('ttl elimino solo el draft vencido', is_array($s) && $s['ttl_eliminados'] === 1 && is_dir($s['dir_item']));
+            check('ttl elimino solo el draft vencido (el entregable vive fuera de tmp)',
+                is_array($s) && $s['ttl_eliminados'] === 1 && is_dir($s['entregable']));
             break;
         case 'conciliacion':
             // 004/T024: el analisis sigue inmutable y un draft sin pool no habilita carrito.
@@ -1399,8 +1402,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 'item=' . (string)($c['meta_item_key'] ?? ''));
             check('checkout copia _pmu_sid al line item (cookie)',
                 ($c['meta_sid'] ?? '') !== '');
-            check('order_processed crea el staging del item', !empty($c['staging_ok']));
-            check('pago promueve el staging a orders/', !empty($c['orders_ok']));
+            check('sin staging: el item espera en la sesion', !empty($c['staging_ok']));
+            check('pago promueve el item a orders/<cliente>/', !empty($c['orders_ok']));
             check('item marcado entregado tras el pago',
                 is_array($c['pmu_items_final'] ?? null) && ($c['pmu_items_final']['abc123def456'] ?? '') === 'entregado');
             // RC4.6.16: la clave fantasma 0 de _pmu_items NO se promueve.
@@ -2000,11 +2003,17 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('omisible sin mockups queda false', isset($GLOBALS['test_mockups_sin']) && $GLOBALS['test_mockups_sin']['preview_omisible'] === false && $GLOBALS['test_mockups_sin']['mockups'] === []);
             break;
         case 'pedido':
-            // T031b: staging promovido a entregable por rename.
+            // Spec 035 (D5/D6): el item se mueve al arbol del cliente, con sus originales.
             $err_o = isset($GLOBALS['test_pedido_error']) ? (string)$GLOBALS['test_pedido_error'] : '';
-            check('promocion sin error', $err_o === '' && !empty($GLOBALS['test_pedido_ok']));
-            check('nota.txt en orders/4242/', !empty($GLOBALS['test_pedido_ok']));
-            check('doble promocion rechazada', strpos((string)($GLOBALS['test_pedido_doble'] ?? ''), '4242') !== false);
+            check('promocion sin error', $err_o === '' && !empty($GLOBALS['test_pedido_ok']), $err_o);
+            check('el item SALE de la sesion (sin staging)', !empty($GLOBALS['test_pedido_ok']));
+            check('manifest.cliente escrito en el entregable', ($GLOBALS['test_pedido_cliente'] ?? '') === '1');
+            check('el original viaja a orders/{clave}/uploads/', !empty($GLOBALS['test_pedido_original']));
+            check('promover es idempotente (mismo destino)', ($GLOBALS['test_pedido_doble'] ?? false) === true);
+            check('invitado (cliente 0) no promueve, con causa visible',
+                strpos((string)($GLOBALS['test_pedido_invitado'] ?? ''), 'cliente:invalido') !== false);
+            check('el original se resuelve por la cadena orders/ -> sesion/',
+                !empty($GLOBALS['test_pedido_resuelve']));
             break;
         case 'mockup_alta':
             // Spec 011 (T032): el alta del catalogo de mockups recibe el archivo
@@ -2257,7 +2266,7 @@ switch ($fase) {
             'campos_ids' => [$cid_k],
             'placeholders' => ['0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => '[campo1]', 'settings' => '', 'repetir' => false]],
         ]);
-        $dirK = $motor_k->dir_ambito('orders', true) . DIRECTORY_SEPARATOR . '4242' . DIRECTORY_SEPARATOR . 'item-abc';
+        $dirK = $motor_k->dir_order('1', 4242, true) . DIRECTORY_SEPARATOR . 'item-abc';
         wp_mkdir_p($dirK . DIRECTORY_SEPARATOR . 'img');
         $dirOtroK = $motor_k->dir_ambito('pdfs', true) . DIRECTORY_SEPARATOR . 'otro';
         wp_mkdir_p($dirOtroK);
@@ -2279,8 +2288,8 @@ switch ($fase) {
             'preview_estado' => 'ok',
         ]));
         $GLOBALS['test_completados'] = $p->pedidos_completados();
-        $GLOBALS['test_completados_rutas'] = $p->item_generar_pdfs(4242, 'item-abc');
-        $rutaK = $p->item_generar_pdf(4242, 'item-abc');
+        $GLOBALS['test_completados_rutas'] = $p->item_generar_pdfs('1', 4242, 'item-abc');
+        $rutaK = $p->item_generar_pdf('1', 4242, 'item-abc');
         $GLOBALS['test_completados_pdf'] = is_file($rutaK) ? (string)file_get_contents($rutaK, false, null, 0, 4) : '';
         $GLOBALS['test_order'] = new TestPMUOrder(4242, ['_pmu_items' => ['item-abc' => 'entregado']]);
         $GLOBALS['test_descargas'] = $p->descargas_cliente([
@@ -2289,7 +2298,7 @@ switch ($fase) {
         $GLOBALS['test_completados_pdf'] = is_file($rutaK) ? (string)file_get_contents($rutaK, false, null, 0, 4) : '';
         clearstatcache();
         $mK = filemtime($rutaK);
-        $rutaK2 = $p->item_generar_pdf(4242, 'item-abc');
+        $rutaK2 = $p->item_generar_pdf('1', 4242, 'item-abc');
         $GLOBALS['test_completados_idem'] = ($rutaK2 === $rutaK && filemtime($rutaK2) === $mK);
         $_POST = [
             'action' => 'personalizador_pdf_item_regenerar',
@@ -2542,14 +2551,14 @@ switch ($fase) {
             [], // custom cart data perdidos: DEBE resolver por cookie + $clave
             $orderCiclo
         );
-        // pedido_item_crear YA NO toca _pmu_items ni crea staging: solo metadata
-        // del line item. El staging se crea en pedido_staging_crear (order_processed).
+        // Spec 035 (D6): pedido_item_crear solo escribe metadata del line item; el
+        // item sigue en la SESION hasta que el pago lo promueva. Ya no hay staging
+        // ni `woocommerce_checkout_order_processed`.
         $GLOBALS['test_carrito']['meta_item_key'] = (string)$itemCiclo->get_meta('_pmu_item_key', true);
         $GLOBALS['test_carrito']['meta_sid'] = (string)$itemCiclo->get_meta('_pmu_sid', true);
-        $p->pedido_staging_crear(4242, [], $orderCiclo);
-        $dirStagingCiclo = $motor_c->dir_tmp_order(4242) . DIRECTORY_SEPARATOR . 'abc123def456';
-        $GLOBALS['test_carrito']['staging_ok'] = is_dir($dirStagingCiclo)
-            && is_file($dirStagingCiclo . DIRECTORY_SEPARATOR . 'manifest.json');
+        $dirSesionCiclo = $motor_c->dir_sesion_item($sid_c, 'abc123def456');
+        $GLOBALS['test_carrito']['staging_ok'] = is_dir($dirSesionCiclo)
+            && is_file($dirSesionCiclo . DIRECTORY_SEPARATOR . 'manifest.json');
         // RC4.6.16 - caso del pedido real #29079: _pmu_items del pedido quedaba
         // con la clave fantasma 0. Sembramos _pmu_items corrupto para probar que
         // la promocion lo IGNORA (la identidad sale del line item, no de ahi) y
@@ -2561,8 +2570,8 @@ switch ($fase) {
         $p->pedido_promover(4242);
         // El fantasma 0 NO debe haberse promovido a orders/.
         $GLOBALS['test_carrito']['fantasma_ignorado'] =
-            !is_dir($motor_c->dir_ambito('orders') . DIRECTORY_SEPARATOR . '4242' . DIRECTORY_SEPARATOR . '0');
-        $dirOrdersCiclo = $motor_c->dir_ambito('orders') . DIRECTORY_SEPARATOR . '4242' . DIRECTORY_SEPARATOR . 'abc123def456';
+            !is_dir($motor_c->dir_ambito('orders') . DIRECTORY_SEPARATOR . '1' . DIRECTORY_SEPARATOR . '4242' . DIRECTORY_SEPARATOR . '0');
+        $dirOrdersCiclo = $motor_c->dir_ambito('orders') . DIRECTORY_SEPARATOR . '1' . DIRECTORY_SEPARATOR . '4242' . DIRECTORY_SEPARATOR . 'abc123def456';
         $GLOBALS['test_carrito']['orders_ok'] = is_dir($dirOrdersCiclo)
             && is_file($dirOrdersCiclo . DIRECTORY_SEPARATOR . 'manifest.json');
         $GLOBALS['test_carrito']['pmu_items_final'] = (array)$orderCiclo->get_meta('_pmu_items');
@@ -2594,7 +2603,7 @@ switch ($fase) {
         $GLOBALS['test_order'] = $orderR17;
         $p->pedido_promover(4243);
         unset($GLOBALS['test_order']);
-        $dirOrdersR17 = $motor_c->dir_ambito('orders') . DIRECTORY_SEPARATOR . '4243' . DIRECTORY_SEPARATOR . $draft_r17;
+        $dirOrdersR17 = $motor_c->dir_ambito('orders') . DIRECTORY_SEPARATOR . '1' . DIRECTORY_SEPARATOR . '4243' . DIRECTORY_SEPARATOR . $draft_r17;
         $GLOBALS['test_carrito']['r17_orders_ok'] = is_dir($dirOrdersR17)
             && is_file($dirOrdersR17 . DIRECTORY_SEPARATOR . 'manifest.json');
         $GLOBALS['test_carrito']['r17_orders_hash_woo_ok'] = !is_dir(
@@ -2843,7 +2852,7 @@ switch ($fase) {
         $bytes_b = (string)file_get_contents($png_b);
         $sub_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b);
         // Pedido ya entregado del MISMO comprador (origen estable -> se REFERENCIA).
-        $itemOrder_b = $motor_b->dir_ambito('orders') . '/4242/item-pedido';
+        $itemOrder_b = $motor_b->dir_order('1', 4242, true) . DIRECTORY_SEPARATOR . 'item-pedido';
         @mkdir($itemOrder_b . '/subidas', 0775, true);
         $madre_b = 'aaaabbbbcccc';
         @copy($png_b, $itemOrder_b . '/subidas/' . $madre_b . '.webp');
@@ -3658,9 +3667,10 @@ switch ($fase) {
             $GLOBALS['test_sesion']['dir_item'] = $sesion->dir_item($sid, 'abc123def456');
             $GLOBALS['test_sesion']['man_item'] = $sesion->leer_manifest($sid, 'abc123def456');
             $GLOBALS['test_sesion']['estado'] = $sesion->estado_preview($sid, 'abc123def456');
-            $sesion->staging_order(4242, 'abc123def456', $sid);
-            $GLOBALS['test_sesion']['staging'] = $sesion->staging_order(4242, 'abc123def456', $sid);
-            $GLOBALS['test_sesion']['entregable'] = $sesion->promover_order(4242, 'abc123def456');
+            // Spec 035 (D6): SIN staging. El item se MUEVE de la sesion al entregable y
+            // `manifest.cliente` queda escrito antes del rename (viaja con el arbol).
+            $GLOBALS['test_sesion']['entregable'] = $sesion->promover_order(4242, '1', $sid, 'abc123def456');
+            $GLOBALS['test_sesion']['man_final'] = $sesion->leer_manifest_dir($GLOBALS['test_sesion']['entregable']);
             // Borrado quirurgico de OTRO item: se crea, se borra y no debe quedar.
             $otro = $sesion->crear_draft($sid, ['muestra']);
             $dirOtro = $sesion->dir_item($sid, $otro);
@@ -3688,12 +3698,18 @@ switch ($fase) {
         if (!class_exists('PMU_Sesion')) {
             require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
         }
-        $dirAd = $p->motor_para_tests()->dir_ambito('orders', true) . DIRECTORY_SEPARATOR . '4242' . DIRECTORY_SEPARATOR . 'item-abc';
+        $dirAd = $p->motor_para_tests()->dir_order('1', 4242, true) . DIRECTORY_SEPARATOR . 'item-abc';
         wp_mkdir_p($dirAd);
         file_put_contents($dirAd . DIRECTORY_SEPARATOR . 'manifest.json', json_encode([
             'item_key' => 'item-abc',
+            'sid' => 'test-admin-0001',
+            'cliente' => '1',
             'pdfs' => ['muestra'],
-            'valores' => [],
+            // Spec 005 (T010): 'Ana' (valor de campo) y 'otro' (descartado) son lo
+            // que la tabla de Pedidos tiene que pintar. Se siembran AQUI para que
+            // el render no dependa de restos de otra fase.
+            'valores' => ['1' => ['valor' => 'Ana', 'cliente' => 'Ana']],
+            'pdfs_descartados' => ['otro'],
             'archivos' => [],
             'preview_estado' => 'sin_vista',
         ]));
@@ -4852,24 +4868,54 @@ switch ($fase) {
         break;
 
     case 'pedido':
-        // T031b: staging tmp/orders/{id}/ promovido a orders/{id}/ por rename.
+        // Spec 035 (D5/D6): `promover_order` MUEVE el item de la sesion al arbol
+        // del cliente y traslada sus originales a `orders/{clave}/uploads/`.
+        // Ya no hay staging: el item nace completo en la sesion.
         preparar_entorno($testBase, $base);
         $motor_o = $p->motor_para_tests();
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $sesion_p = new PMU_Sesion($motor_o);
         try {
-            $staging = $motor_o->dir_tmp_order(4242, true);
-            file_put_contents($staging . DIRECTORY_SEPARATOR . 'nota.txt', 'staging');
-            $GLOBALS['test_pedido_destino'] = $p->orden_promover(4242);
-            $GLOBALS['test_pedido_ok'] = is_file($motor_o->dir_ambito('orders') . DIRECTORY_SEPARATOR . '4242' . DIRECTORY_SEPARATOR . 'nota.txt')
-                && !is_dir($staging);
+            $sidP = 'test-prom-' . substr(sha1((string)getmypid()), 0, 8);
+            $itemP = 'itemprom0001';
+            $idPatch = 'abcdef123456';
+            $dirItemP = $motor_o->dir_sesion_item($sidP, $itemP, true);
+            wp_mkdir_p($motor_o->dir_sesion_uploads($sidP, true));
+            file_put_contents($motor_o->dir_sesion_uploads($sidP) . DIRECTORY_SEPARATOR . $idPatch . '.webp', 'ORIGINAL');
+            file_put_contents($dirItemP . DIRECTORY_SEPARATOR . 'manifest.json', json_encode([
+                'item_key' => $itemP,
+                'sid' => $sidP,
+                'creado' => gmdate('Y-m-d\TH:i:s\Z'),
+                'subidas' => [[
+                    'id' => $idPatch, 'file' => '', 'mime' => 'image/webp', 'bytes' => 8,
+                    'creado' => time(), 'madre' => $idPatch, 'receta' => '',
+                    'sha' => str_repeat('a', 40), 'origen' => 'original',
+                ]],
+            ]));
+            $GLOBALS['test_pedido_destino'] = $sesion_p->promover_order(4242, '1', $sidP, $itemP);
+            $GLOBALS['test_pedido_ok'] = is_dir($GLOBALS['test_pedido_destino']) && !is_dir($dirItemP);
+            $finalP = $sesion_p->leer_manifest_dir($GLOBALS['test_pedido_destino']);
+            $GLOBALS['test_pedido_cliente'] = (string)(is_array($finalP) ? ($finalP['cliente'] ?? '') : '');
+            // El ORIGINAL viaja a la carpeta del cliente: ni copia ni perdida.
+            $GLOBALS['test_pedido_original'] = is_file(
+                    $motor_o->dir_order_uploads('1') . DIRECTORY_SEPARATOR . $idPatch . '.webp'
+                ) && !is_file($motor_o->dir_sesion_uploads($sidP) . DIRECTORY_SEPARATOR . $idPatch . '.webp');
+            // Idempotente: promover dos veces devuelve el mismo destino.
+            $GLOBALS['test_pedido_doble'] = $sesion_p->promover_order(4242, '1', $sidP, $itemP)
+                === $GLOBALS['test_pedido_destino'];
+            // Sin cliente (invitado) NO promueve y deja causa VISIBLE.
+            try {
+                $sesion_p->promover_order(4244, '0', $sidP, $itemP);
+                $GLOBALS['test_pedido_invitado'] = 'no-lanzo';
+            } catch (\Throwable $e) {
+                $GLOBALS['test_pedido_invitado'] = $e->getMessage();
+            }
+            // La resolucion del original por la CADENA ya lo encuentra en orders/.
+            $GLOBALS['test_pedido_resuelve'] = $sesion_p->resolver_original($idPatch, '1', $sidP) !== '';
         } catch (\Throwable $e) {
             $GLOBALS['test_pedido_error'] = $e->getMessage();
-        }
-        // Promover dos veces debe fallar (sin staging / destino existente).
-        try {
-            $p->orden_promover(4242);
-            $GLOBALS['test_pedido_doble'] = 'no-lanzo';
-        } catch (\Throwable $e) {
-            $GLOBALS['test_pedido_doble'] = $e->getMessage();
         }
         break;
 
