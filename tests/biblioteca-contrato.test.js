@@ -99,9 +99,10 @@ check('usar() solo invalida la copia cuando hay fila escrita',
     /if \(json\.data && json\.data\.fila\) \{ invalidar\(\); \}/.test(bib));
 
 console.log('== Params de receta en el selector (T014/D7) ==');
-check('el selector sabe sus params con los 11 campos del servidor',
+check('el selector sabe sus params con los 15 campos de la receta v2',
     /prototype\._params = function/.test(sel) && /modo: modoCanonico\(this\.config\.mode\)/.test(sel)
-    && /dx: disp\.x \|\| 0/.test(sel) && /iw: dim\.w/.test(sel));
+    && /v: 2/.test(sel) && /ox: origen\.x \/ w/.test(sel) && /rot: this\.rotacion \|\| 0/.test(sel)
+    && /iw: dim\.w/.test(sel));
 
 console.log('== Elegir en el selector (T014/D8) ==');
 check('el selector tiene el guard de Elegir, la etiqueta y la fuente de biblioteca',

@@ -439,7 +439,7 @@ class PMU_Sesion
      * de convertir a WebP, D24). `base` NO se persiste: `PMU_Sesion::familias()` lo
      * **deriva** por area (una sola verdad, sin drift).
      */
-    private function fila_subida($id, $file, $madre, $receta, $sha, $mime, $bytes, $creado)
+    private function fila_subida($id, $file, $madre, $receta, $sha, $mime, $bytes, $creado, $origen = 'subida')
     {
         return [
             'id' => (string)$id,
@@ -450,7 +450,7 @@ class PMU_Sesion
             'madre' => (string)$madre,
             'receta' => (string)$receta,
             'sha' => (string)$sha,
-            'origen' => 'subida',
+            'origen' => (string)$origen,
         ];
     }
 
@@ -506,41 +506,34 @@ class PMU_Sesion
      * @param array $ids ids de subida POR INSTANCIA ('' = instancia sin valor)
      * @return array filas escritas
      */
-    public function registrar_fotos($sid, $item_key, $pdf, $grupo, array $ids)
+    public function registrar_fotos($sid, $item_key, $pdf, $grupo, array $entradas)
     {
         $pdf = $this->motor->nombre_seguro($pdf, 'sesion:registrar_fotos');
         $grupo = strtoupper((string)$grupo);
         if (!preg_match('/^[0-9A-F]{6}$/', $grupo)) {
             throw new Exception('motor:sesion:grupo:invalido');
         }
-        $manifest = $this->leer_manifest($sid, $item_key);
-        $porId = [];
-        foreach ((array)(is_array($manifest) ? ($manifest['subidas'] ?? []) : []) as $fila) {
-            if (!is_array($fila) || !isset($fila['id'], $fila['file'])) {
-                continue;
-            }
-            $file = (string)$fila['file'];
-            // Defensa: la fila del manifest apunta a `subidas/` (D14).
-            if (preg_match('#^subidas/[A-Za-z0-9._-]+$#', $file) === 1) {
-                $porId[(string)$fila['id']] = $file;
-            }
-        }
+        // Spec 035 (D9): el cliente manda `{id, receta}` por INSTANCIA; no hay bytes.
+        // El `file` es DETERMINISTA por receta, asi que el nombre hace de cache y el
+        // archivo lo materializa `Compositor` al generar el PDF (si falta).
         $porInstancia = [];
-        foreach (array_values($ids) as $i => $id) {
-            $id = (string)$id;
-            if ($id !== '' && isset($porId[$id])) {
-                $porInstancia[(int)$i] = $porId[$id];
+        foreach (array_values($entradas) as $i => $e) {
+            $id = is_array($e) ? strtolower(trim((string)($e['id'] ?? ''))) : '';
+            $receta = is_array($e) ? strtolower(trim((string)($e['receta'] ?? ''))) : '';
+            if (!preg_match('/^[a-f0-9]{12}$/', $id) || !preg_match('/^[a-f0-9]{12}$/', $receta)) {
+                continue;   // instancia sin valor: el hueco queda transparente
             }
+            $porInstancia[(int)$i] = 'img/foto-' . $pdf . '-' . $grupo . '-' . $receta . '.webp';
         }
         $out = [];
         if ($porInstancia) {
             $unicos = array_values(array_unique($porInstancia));
             if (count($unicos) === 1) {
-                $out[] = $this->fila_archivo($pdf, $grupo, 0, $unicos[0], 'subida');
+                $out[] = $this->fila_archivo($pdf, $grupo, 0, $unicos[0], 'compuesta');
             } else {
                 ksort($porInstancia);
                 foreach ($porInstancia as $i => $file) {
-                    $out[] = $this->fila_archivo($pdf, $grupo, (int)$i, $file, 'subida');
+                    $out[] = $this->fila_archivo($pdf, $grupo, (int)$i, $file, 'compuesta');
                 }
             }
         }
@@ -556,85 +549,7 @@ class PMU_Sesion
             }
             $manifest['archivos'] = array_merge($resto, $out);
         });
-        // Spec 029 (D7): con las filas recien reemplazadas y los valores frescos
-        // (los escribio la vista previa), lo que no usa nadie sobra.
-        $this->podar_subidas($sid, $item_key);
         return $out;
-    }
-
-    /**
-     * Spec 029 (D7): borra las subidas HUERFANAS del item.
-     *
-     * Huerfana = no la usa ninguna fila de `archivos[]` con `origen: 'subida'`
-     * (lo que el Motor va a insertar en el PDF) **ni** ningun `valores` del
-     * manifest (lo que muestran las ranuras del cargador, que la vista previa
-     * acaba de refrescar). Se llama al registrar fotos y al abrir la vista
-     * previa: reemplazar o quitar una foto borra el archivo viejo en la misma
-     * corrida, y la basura deja de viajar al pedido (`copiar_arbol` mueve el
-     * arbol entero).
-     *
-     * **Nunca borra con datos vacios**: sin filas ni valores no toca nada, asi
-     * una foto recien subida (que todavia puede no estar en ninguno de los dos)
-     * no se pierde.
-     *
-     * @return array ids borrados
-     */
-    public function podar_subidas($sid, $item_key)
-    {
-        // Sin item no hay nada que podar (y `mutar_manifest` lanzaria).
-        if (!is_array($this->leer_manifest($sid, $item_key))) {
-            return [];
-        }
-        $borrados = [];
-        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, &$borrados) {
-            $filas = (array)($manifest['subidas'] ?? []);
-            if (!$filas) {
-                return;
-            }
-            // En uso por las FILAS: es exactamente lo que el PDF va a usar.
-            $enUso = [];
-            foreach ((array)($manifest['archivos'] ?? []) as $f) {
-                if (is_array($f) && (string)($f['origen'] ?? '') === 'subida') {
-                    $enUso[basename((string)($f['file'] ?? ''))] = true;
-                }
-            }
-            // En uso por los VALORES: es lo que el comprador ve en las ranuras.
-            $texto = '';
-            foreach ((array)($manifest['valores'] ?? []) as $par) {
-                if (!is_array($par)) {
-                    continue;
-                }
-                $v = isset($par['valor']) ? $par['valor'] : '';
-                $texto .= ' ' . (is_array($v) ? implode(' ', array_map('strval', $v)) : (string)$v);
-            }
-            // Nunca con datos VACIOS: sin filas ni valores no hay estado del que
-            // deducir nada (una foto recien subida puede no estar en ninguno de
-            // los dos todavia). Un campo vaciado SI deja rastro (`valor: []`
-            // produce el separador), asi que ese caso si poda.
-            if (!$enUso && $texto === '') {
-                return;
-            }
-            $dir = $this->dir_subidas($sid, $item_key, false);
-            $quedan = [];
-            foreach ($filas as $fila) {
-                if (!is_array($fila) || !isset($fila['id'], $fila['file'])) {
-                    continue;
-                }
-                $id = (string)$fila['id'];
-                $archivo = basename((string)$fila['file']);
-                if (isset($enUso[$archivo]) || ($texto !== '' && strpos($texto, $id) !== false)) {
-                    $quedan[] = $fila;
-                    continue;
-                }
-                $ruta = $dir . DIRECTORY_SEPARATOR . $archivo;
-                if (is_file($ruta)) {
-                    @unlink($ruta);
-                }
-                $borrados[] = $id;
-            }
-            $manifest['subidas'] = $quedan;
-        });
-        return $borrados;
     }
 
     /**
@@ -840,64 +755,122 @@ class PMU_Sesion
      * ver `firma_imagen()`) y se convierte a WebP si el servidor puede (spec 026
      * D3). Devuelve ['id','file','mime','bytes'].
      */
+    /**
+     * Guarda el ORIGINAL del comprador (spec 035, D2/D3).
+     *
+     * Nace en `tmp/sesion-{sid}/uploads/{id}.{ext}`, COMPARTIDO por los items de la
+     * sesion y deduplicado por `id` = 12 hex del sha1 de los bytes CRUDOS: una foto
+     * usada en 3 items se guarda una vez y probar encuadres no reenvia nada.
+     *
+     * `$item_key` se conserva porque la fila `origen: original` vive en el manifest
+     * del item que la usa (varios items de la sesion la comparten por `id`).
+     * `$madre`/`$params` se aceptan por compatibilidad: la familia es el propio `id`
+     * y la receta la fija el add-to-cart.
+     *
+     * @return array fila de `manifest.subidas[]` + `w`/`h` del original guardado
+     */
     public function guardar_subida($sid, $item_key, $bytes, $madre = '', $params = [])
     {
         $bytes = (string)$bytes;
         if ($bytes === '' || strlen($bytes) > self::TOPE_SUBIDA_BYTES) {
             throw new Exception('motor:subida:vacia');
         }
-        $firma = self::firma_imagen($bytes);
-        if ($firma === null) {
+        if (self::firma_imagen($bytes) === null) {
             throw new Exception('motor:subida:formato:invalido');
         }
-        // Spec 030 (T019/D24): el `sha` es del contenido **CRUDO**, calculado ANTES
-        // de convertir a WebP (la conversion no es determinista entre versiones).
+        // Spec 030 (D24): el `sha` es del contenido CRUDO, ANTES de convertir ni
+        // reescalar (ninguna de las dos es determinista entre versiones).
         $sha = sha1($bytes);
-        // Spec 030 (D8/D24): la RECETA de la composicion que se sube (los mismos `params`
-        // que validara `op=usar`). Sin ella, una familia nacida de una subida no podria
-        // reconocer su propia composicion y `Elegir` nunca daria 0 bytes.
-        $recetaFam = (is_array($params) && $params) ? self::receta_de($params) : '';
-        // Spec 026 (D3): el servidor convierte a WebP si puede. La foto del
-        // comprador es unseen: calidad 0.85 (D4).
+        $id = substr($sha, 0, 12);
+        // Spec 035 (D2): el cap de 2000 px se REVALIDA en el servidor.
+        $bytes = self::acotar_original($bytes);
+        // Spec 026 (D3): el servidor convierte a WebP si puede (q0.85: la foto del
+        // comprador es unseen y el ahorro es ~10x).
         $img = self::convertir_webp($bytes, 85);
-        $bytes = $img['bytes'];
-        $firma = ['ext' => $img['ext'], 'mime' => $img['mime']];
-        $salida = null;
-        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $bytes, $firma, $sha, $madre, $recetaFam, &$salida) {
-            if ((string)($manifest['item_key'] ?? '') !== (string)$item_key) {
-                throw new Exception('motor:sesion:item:ausente');
-            }
-            $dir = $this->dir_subidas($sid, $item_key, true);
-            // Spec 030 (T019/D5): con una familia conocida (dedupe por `sha`, D24) se
-            // reusa su `madre` y se numera la version `{madre}-{n}` (primer `n` libre
-            // del item), igual que en `usar_de_biblioteca()`.
-            $madreFam = (string)$madre;
-            $id = substr(str_replace('-', '', $this->uuid4()), 0, 12);
-            if ($madreFam !== '') {
-                $usados = [];
-                foreach ((array)($manifest['subidas'] ?? []) as $s) {
-                    if (is_array($s) && isset($s['id'])) {
-                        $usados[(string)$s['id']] = true;
+        $dir = $this->motor->dir_sesion_uploads($sid, true);
+        $ruta = $dir . DIRECTORY_SEPARATOR . $id . '.' . $img['ext'];
+        if (!is_file($ruta) && @file_put_contents($ruta, $img['bytes']) === false) {
+            throw new Exception('motor:dir_sesion_uploads:directorio:no_escribible');
+        }
+        $med = @getimagesize($ruta);
+        $fila = null;
+        $this->mutar_manifest($sid, $item_key,
+            function (&$manifest) use ($item_key, $id, $sha, $img, $ruta, &$fila) {
+                if ((string)($manifest['item_key'] ?? '') !== (string)$item_key) {
+                    throw new Exception('motor:sesion:item:ausente');
+                }
+                $filas = isset($manifest['subidas']) && is_array($manifest['subidas'])
+                    ? array_values($manifest['subidas']) : [];
+                // Dedupe: la misma foto N veces en el item deja UNA fila.
+                foreach ($filas as $i => $s) {
+                    if (is_array($s) && (string)($s['id'] ?? '') === $id) {
+                        $filas[$i]['mime'] = $img['mime'];
+                        $filas[$i]['bytes'] = (int)@filesize($ruta);
+                        $filas[$i]['sha'] = $sha;
+                        $manifest['subidas'] = $filas;
+                        $fila = $filas[$i];
+                        return;
                     }
                 }
-                $id = $madreFam;
-                $n = 1;
-                while (isset($usados[$id])) {
-                    $n++;
-                    $id = $madreFam . '-' . $n;
-                }
-            }
-            $file = 'subidas/' . $id . '.' . $firma['ext'];
-            if (@file_put_contents($dir . DIRECTORY_SEPARATOR . $id . '.' . $firma['ext'], $bytes) === false) {
-                throw new Exception('motor:sesion:subidas:no_escribible');
-            }
-            $filas = isset($manifest['subidas']) && is_array($manifest['subidas'])
-                ? array_values($manifest['subidas']) : [];
-            $filas[] = $this->fila_subida($id, $file, ($madreFam !== '' ? $madreFam : $id), $recetaFam, $sha, $firma['mime'], strlen($bytes), time());
-            $manifest['subidas'] = $filas;
-            $salida = ['id' => $id, 'file' => $file, 'mime' => $firma['mime'], 'bytes' => strlen($bytes)];
-        });
-        return $salida;
+                $nueva = $this->fila_subida($id, '', $id, '', $sha, $img['mime'],
+                    (int)@filesize($ruta), time(), 'original');
+                $filas[] = $nueva;
+                $manifest['subidas'] = $filas;
+                $fila = $nueva;
+            });
+        $fila['w'] = is_array($med) ? (int)$med[0] : 0;
+        $fila['h'] = is_array($med) ? (int)$med[1] : 0;
+        return $fila;
+    }
+
+    /** Lado maximo del original (espejo del cap del cliente, spec 035 D2). */
+    const LADO_MAX = 2000;
+
+    /**
+     * Revalida el cap de 2000 px del original (spec 035, D2).
+     *
+     * El cliente ya acota, pero puede mentir. Con GD se reescala con factor
+     * UNIFORME (nunca deforma); sin GD no se puede reescalar y se rechaza con causa:
+     * guardar una foto gigante "porque el cliente dijo que estaba bien" no es una
+     * opcion.
+     */
+    private static function acotar_original($bytes)
+    {
+        $med = @getimagesizefromstring($bytes);
+        if (!is_array($med) || (int)$med[0] < 1 || (int)$med[1] < 1) {
+            return $bytes;
+        }
+        $w0 = (int)$med[0];
+        $h0 = (int)$med[1];
+        if ($w0 <= self::LADO_MAX && $h0 <= self::LADO_MAX) {
+            return $bytes;
+        }
+        if (!extension_loaded('gd') || !function_exists('imagewebp')) {
+            throw new Exception('motor:subida:tamano');
+        }
+        $src = @imagecreatefromstring($bytes);
+        if ($src === false) {
+            throw new Exception('motor:subida:formato:invalido');
+        }
+        $k = self::LADO_MAX / max($w0, $h0);
+        $w = max(1, (int)round($w0 * $k));
+        $h = max(1, (int)round($h0 * $k));
+        $dst = imagecreatetruecolor($w, $h);
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        imagefilledrectangle($dst, 0, 0, $w - 1, $h - 1,
+            imagecolorallocatealpha($dst, 0, 0, 0, 127));
+        imagealphablending($dst, true);
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $w, $h, $w0, $h0);
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        ob_start();
+        $ok = imagewebp($dst, null, 85);
+        $out = ob_get_clean();
+        if (!$ok || $out === false || $out === '') {
+            throw new Exception('motor:subida:tamano');
+        }
+        return $out;
     }
 
     /**
@@ -919,17 +892,15 @@ class PMU_Sesion
             }
             if (isset($fila['ref']) && (string)$fila['ref'] !== '') {
                 $porId[(string)$fila['id']] = ['ref' => (string)$fila['ref']];
-            } elseif (isset($fila['file'])) {
+            } elseif ((string)($fila['origen'] ?? '') === 'original') {
+                // Spec 035: la fila lleva SOLO `id`; la ubicacion la resuelve el servidor.
+                $porId[(string)$fila['id']] = ['original' => true];
+            } elseif (isset($fila['file']) && (string)$fila['file'] !== '') {
                 $porId[(string)$fila['id']] = ['file' => (string)$fila['file']];
             }
         }
-        // La foto vive en `{item}/subidas/` (D14), NO en la raiz del item.
-        // Antes se usaba `dir_item()` + `basename()`, que le arrancaba la
-        // carpeta `subidas/` y buscaba el archivo en la raiz (donde no esta):
-        // `handle_subida_url` respondia `motor:subida:archivo:ausente`, el
-        // cliente recibia null y la vista previa NUNCA mostraba la foto del
-        // comprador (el hueco quedaba transparente). `basename()` se conserva
-        // como defensa anti-traversal por si el manifest fuera editado a mano.
+        // `subidas/` solo existe en items LEGADOS: los nuevos guardan el original en
+        // `tmp/sesion-{sid}/uploads/` (compartido) y la composicion en `img/`.
         $dirSub = $this->dir_subidas($sid, $item_key, false);
         $out = [];
         foreach ($ids as $id) {
@@ -946,9 +917,65 @@ class PMU_Sesion
                 }
                 continue;
             }
+            if (isset($porId[$id]['original'])) {
+                $ruta = $this->resolver_original($id, (string)($manifest['cliente'] ?? ''), $sid);
+                if ($ruta !== '') {
+                    $out[$id] = $ruta;
+                }
+                continue;
+            }
             $out[$id] = $dirSub . DIRECTORY_SEPARATOR . basename($porId[$id]['file']);
         }
         return $out;
+    }
+
+    /**
+     * Resuelve un ORIGINAL por `id` en la CADENA de ubicaciones (spec 035, D4).
+     *
+     * `orders/{clave}/uploads/{id}.*` (fija: ya pagado) -> `tmp/sesion-{sid}/uploads/{id}.*`
+     * (temporal). La fila lleva SOLO `id`: la ubicacion la decide el servidor, asi
+     * promover no reescribe ninguna fila.
+     *
+     * Devuelve cadena vacia si no esta en ninguna: el llamador deja el hueco
+     * transparente con `motor:original:ausente`, nunca un PDF roto.
+     */
+    public function resolver_original($id, $clave = '', $sid = '')
+    {
+        $id = strtolower(trim((string)$id));
+        if (!preg_match('/^[a-f0-9]{12}$/', $id)) {
+            return '';
+        }
+        $raiz = rtrim(str_replace('\\', '/', $this->motor->dir_pmu()), '/');
+        $clave = trim((string)$clave);
+        if ($clave !== '' && preg_match('/^\d{1,12}$/', $clave)) {
+            $ruta = $this->archivo_con_extension($raiz . '/orders/' . $clave . '/uploads/' . $id);
+            if ($ruta !== '') {
+                return $ruta;
+            }
+        }
+        if ((string)$sid !== '') {
+            try {
+                $dir = $this->motor->dir_sesion_uploads($sid, false);
+            } catch (Exception $e) {
+                return '';
+            }
+            $ruta = $this->archivo_con_extension($dir . DIRECTORY_SEPARATOR . $id);
+            if ($ruta !== '') {
+                return $ruta;
+            }
+        }
+        return '';
+    }
+
+    /** Primer `{base}.{ext}` que exista (el `id` no lleva extension). */
+    private function archivo_con_extension($baseSinExt)
+    {
+        foreach ((array)glob($baseSinExt . '.*') as $ruta) {
+            if (is_file($ruta)) {
+                return $ruta;
+            }
+        }
+        return '';
     }
 
     /** Congela la vista aprobada: mockup-{id}.webp (300x300) en el item. */

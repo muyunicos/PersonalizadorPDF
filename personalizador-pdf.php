@@ -1523,11 +1523,9 @@ class Personalizador_PDF_Plugin
                     $sesion->guardar_manifest($sid, $item, $manifest);
                 }
             }
-            $manifest = $sesion->leer_manifest($sid, $item);
-            // Spec 029 (D7): los `valores` ya son los frescos, asi que aca se
-            // pueden podar las subidas que no usa nadie (cubre los items sin
-            // grupos de imagen y cualquier resto de una edicion anterior).
-            $sesion->podar_subidas($sid, $item);
+            // Spec 035: ya no hay `subidas/` que podar. Los originales viven en la
+            // carpeta COMPARTIDA de la sesion (otro item puede usar la misma foto) y
+            // la composicion se materializa al generar el PDF.
         } catch (\Throwable $e) {
             wp_send_json_error($e->getMessage());
         }
@@ -1674,17 +1672,16 @@ class Personalizador_PDF_Plugin
             if (!$valido || !preg_match('/^[0-9A-F]{6}$/', $grupo)) {
                 throw new \RuntimeException('motor:pool:grupo:invalido');
             }
-            // Spec 029 (D1): las FOTOS se **registran**, no se copian. El cliente
-            // manda los ids de subida POR INSTANCIA (`fotos` = JSON) y el servidor
-            // escribe las filas apuntando a `subidas/{id}.{ext}`: cero bytes por
-            // la red y cero copias en disco (la foto subida YA es la imagen
-            // compuesta: el selector la rasteriza al lienzo, spec 028 D11).
+            // Spec 035 (D9): las fotos se **declaran** con `{id, receta}` por
+            // instancia. El servidor NO recibe bytes: la composicion la materializa
+            // `Compositor` al generar el PDF, con nombre determinista por receta (el
+            // nombre es el cache y dos instancias iguales comparten archivo).
             if (isset($_POST['fotos'])) {
-                $ids = json_decode((string) wp_unslash($_POST['fotos']), true);
-                if (!is_array($ids)) {
+                $entradas = json_decode((string) wp_unslash($_POST['fotos']), true);
+                if (!is_array($entradas)) {
                     throw new \RuntimeException('motor:pool:fotos:invalido');
                 }
-                wp_send_json_success(['filas' => $sesion->registrar_fotos($sid, $item, $pdf, $grupo, $ids)]);
+                wp_send_json_success(['filas' => $sesion->registrar_fotos($sid, $item, $pdf, $grupo, $entradas)]);
             }
             $bytes = '';
             if (isset($_FILES['png']) && is_array($_FILES['png']) && !empty($_FILES['png']['tmp_name'])) {

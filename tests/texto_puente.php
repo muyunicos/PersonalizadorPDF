@@ -327,8 +327,10 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('TTL: lo comprado (orders/) no se toca', !empty($GLOBALS['bib_ttl_order_intacto']));
         check('TTL: la referencia a orders/ sigue resolviendo', !empty($GLOBALS['bib_ttl_ref_ok']));
         check('US2: el sha del contenido encuentra la familia (D24)', !empty($GLOBALS['bib_sha_familia']));
-        check('US2: con familia conocida se reusa su madre', !empty($GLOBALS['bib_fam_1']));
-        check('US2: la segunda entra como version {madre}-2 (D5)', !empty($GLOBALS['bib_fam_2']));
+        check('US2: el id lo deriva el servidor del contenido (no la madre propuesta)',
+            !empty($GLOBALS['bib_fam_1']));
+        check('US2: los mismos bytes dan el MISMO id (sin versiones {madre}-n)',
+            !empty($GLOBALS['bib_fam_2']));
         check('T021: el contenido ya subido devuelve su familia (dedupe)', !empty($GLOBALS['bib_dedupe_madre']));
         check('T021: un contenido nuevo devuelve cadena vacia (no bloquea)', !empty($GLOBALS['bib_dedupe_nuevo']));
         check('T035: el login anota el sid en _pmu_sids (una sola vez)', !empty($GLOBALS['bib_vinculo']));
@@ -1482,40 +1484,52 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 'ext=' . $ext_p);
             break;
         case 'fotos':
-            // Spec 029 (D1/D2/D3): las fotos del comprador se REGISTRAN (la fila
-            // apunta a `subidas/`), no se copian al pool; y cuando todas las
-            // instancias usan la misma foto queda UNA fila (el Motor la replica
-            // a todo el grupo).
-            check('uniforme: UNA fila para todo el grupo',
+            // Spec 035 (D2/D3/D9): el ORIGINAL se sube una vez (id = sha12, carpeta
+            // compartida de la sesion) y la COMPOSICION se DECLARA con `{id, receta}`;
+            // el archivo lo materializa el compositor al generar el PDF.
+            check('la subida devuelve id = sha12 y las medidas del original',
+                preg_match('/^[a-f0-9]{12}$/', (string)$GLOBALS['fotos_id_a']) === 1
+                && (int)$GLOBALS['fotos_w'] === 120 && (int)$GLOBALS['fotos_h'] === 90,
+                $GLOBALS['fotos_id_a'] . ' ' . $GLOBALS['fotos_w'] . 'x' . $GLOBALS['fotos_h']);
+            check('los mismos bytes dan el MISMO id (dedupe por sha)',
+                $GLOBALS['fotos_id_a'] === $GLOBALS['fotos_id_b']);
+            check('dos subidas de los mismos bytes dejan UN archivo en la sesion',
+                (int)$GLOBALS['fotos_uploads_archivos'] === 1,
+                'archivos=' . (int)$GLOBALS['fotos_uploads_archivos']);
+            check('la fila del original lleva SOLO id (sin file)',
+                $GLOBALS['fotos_fila_original'] === true);
+            check('uniforme: 3 instancias con la misma receta dejan UNA fila',
                 (int)$GLOBALS['fotos_unif_filas'] === 1,
                 'filas=' . (int)$GLOBALS['fotos_unif_filas']);
-            check('la fila apunta a la SUBIDA y el pool `img/` queda sin archivos',
-                preg_match('#^subidas/[A-Za-z0-9._-]+\.(webp|png)$#', (string)$GLOBALS['fotos_unif_file']) === 1
-                && (int)$GLOBALS['fotos_img_archivos'] === 0,
-                'file=' . (string)$GLOBALS['fotos_unif_file']
-                . ' img=' . (int)$GLOBALS['fotos_img_archivos']);
-            check('el archivo referenciado EXISTE en el item (sin copia)',
-                $GLOBALS['fotos_ref_existe'] === true);
-            check('mixto (2 fotos en 3 instancias): una fila por instancia con el indice de instancia',
+            check('la fila es compuesta y el nombre es determinista por receta',
+                preg_match('#^img/foto-muestra-0000FF-[a-f0-9]{12}\\.webp$#',
+                    (string)$GLOBALS['fotos_unif_file']) === 1,
+                'file=' . (string)$GLOBALS['fotos_unif_file']);
+            check('el pool queda VACIO: la composicion se materializa al generar el PDF',
+                (int)$GLOBALS['fotos_img_archivos'] === 0,
+                'img=' . (int)$GLOBALS['fotos_img_archivos']);
+            check('mixto (2 recetas en 3 instancias): una fila por instancia',
                 $GLOBALS['fotos_mixto_indices'] === [0, 1, 2],
                 'indices=' . implode(',', (array)$GLOBALS['fotos_mixto_indices']));
-            check('id desconocido: se omite (no se inventa la ruta)',
+            check('dos recetas distintas dan dos archivos distintos',
+                (int)$GLOBALS['fotos_mixto_archivos'] === 2,
+                'archivos=' . (int)$GLOBALS['fotos_mixto_archivos']);
+            check('instancia sin receta: se omite (el hueco queda transparente)',
+                (int)$GLOBALS['fotos_sin_receta_filas'] === 1);
+            check('id que no es sha12: se omite (no se inventa la ruta)',
                 (int)$GLOBALS['fotos_desconocido_filas'] === 1);
             check('re-registrar el grupo reemplaza (idempotente)',
                 (int)$GLOBALS['fotos_re_filas'] === 1);
             check('un grupo vaciado borra sus filas (sin fotos fantasma)',
                 (int)$GLOBALS['fotos_vaciado_filas'] === 0);
-            // Spec 029 (D7): poda de subidas huerfanas.
-            check('D7: se podan las huerfanas (resto del ciclo anterior y subida sin uso)',
-                $GLOBALS['fotos_poda_huerfanas'] === true);
-            check('D7: se conservan las que usan una FILA (E) o los VALORES (D)',
-                $GLOBALS['fotos_poda_vivas'] === true);
-            check('D7: el manifest no referencia archivos borrados',
-                (int)$GLOBALS['fotos_poda_filas_subidas'] === 3);
-            check('D7: la poda es idempotente (la segunda pasada no borra nada)',
-                (int)$GLOBALS['fotos_poda_idempotente'] === 0);
-            check('D7: sin datos NO poda (una foto recien subida no se pierde)',
-                (int)$GLOBALS['fotos_poda_vacio'] === 0);
+            check('el gid entra en el nombre: el mismo par en otro grupo no colisiona',
+                $GLOBALS['fotos_gid_distinto'] === true);
+            check('resolver_original encuentra el original en la sesion',
+                $GLOBALS['fotos_resuelve'] === true);
+            check('resolver_original con un id inexistente da cadena vacia',
+                $GLOBALS['fotos_resuelve_ausente'] === true);
+            check('resolver_original rechaza un id que no es sha12 (sin traversal)',
+                $GLOBALS['fotos_resuelve_invalido'] === true);
             // Estado final = lo que dejo el ENDPOINT (POST con `fotos` = JSON).
             $dirF = $testBase . '/uploads/pmu/tmp/sesion-test-8f2a/' . (string)$GLOBALS['test_item_fotos'];
             $manF = json_decode((string)@file_get_contents($dirF . '/manifest.json'), true);
@@ -1523,13 +1537,12 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             foreach ((array)(is_array($manF) ? ($manF['archivos'] ?? []) : []) as $ff) {
                 if (is_array($ff) && (string)($ff['grupo_id'] ?? '') === '0000FF') { $filasF[] = $ff; }
             }
-            check('endpoint (`fotos`=JSON): registra 1 fila con origen subida',
+            check('endpoint (`fotos`=JSON con {id,receta}): 1 fila compuesta',
                 count($filasF) === 1
-                && (string)($filasF[0]['origen'] ?? '') === 'subida'
-                && preg_match('#^subidas/#', (string)($filasF[0]['file'] ?? '')) === 1,
+                && (string)($filasF[0]['origen'] ?? '') === 'compuesta'
+                && preg_match('#^img/foto-muestra-0000FF-[a-f0-9]{12}\\.webp$#',
+                    (string)($filasF[0]['file'] ?? '')) === 1,
                 'filas=' . count($filasF));
-            check('el Motor recibe una RUTA real (el PDF no depende de una copia)',
-                count($filasF) === 1 && is_file($dirF . '/' . (string)$filasF[0]['file']));
             break;
         case 'overrides':
             // Spec 015 (T016/T018): el JSON de overrides resueltos entra en la
@@ -1820,18 +1833,21 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         case 'campo_subida':
             // 012/F6 (T021/T022, D14/D15/FR-035).
             $su = isset($GLOBALS['test_campo_subida']) ? $GLOBALS['test_campo_subida'] : null;
-            check('subida: sin error', is_array($su) && (string)($su['error'] ?? '') === '');
-            check('subida: el webp queda como subidas/{id}.webp',
-                isset($su['a']) && $su['a']['file'] === 'subidas/' . $su['a']['id'] . '.webp'
-                && $su['a']['mime'] === 'image/webp',
-                isset($su['a']) ? (string)$su['a']['file'] : 'sin fila');
+            check('subida: sin error', is_array($su) && (string)($su['error'] ?? '') === '',
+                (string)($su['error'] ?? 'no-array'));
+            check('subida: el original queda como {id}.webp en la carpeta compartida',
+                isset($su['a']) && (string)($su['a']['origen'] ?? '') === 'original'
+                && (string)($su['a']['file'] ?? 'x') === ''
+                && (string)($su['a']['mime'] ?? '') === 'image/webp'
+                && (string)($su['ruta_a'] ?? '') !== ''
+                && basename((string)$su['ruta_a']) === (string)$su['a']['id'] . '.webp',
+                isset($su['a']) ? (string)$su['a']['origen'] . ' / ' . basename((string)($su['ruta_a'] ?? '')) : 'sin fila');
             // Spec 026 (D3): un PNG que llega del cliente se CONVIERTE a WebP
-            // (el servidor tiene GD). El nombre sigue siendo coherente con la
-            // firma de lo guardado.
+            // (el servidor tiene GD). El nombre sale de la firma de lo guardado.
             check('spec 026: un PNG del cliente se convierte a WebP en el servidor',
-                isset($su['b']) && $su['b']['file'] === 'subidas/' . $su['b']['id'] . '.webp'
-                && $su['b']['mime'] === 'image/webp',
-                isset($su['b']) ? (string)$su['b']['file'] . ' (' . (string)$su['b']['mime'] . ')' : 'sin fila');
+                isset($su['b']) && (string)($su['b']['mime'] ?? '') === 'image/webp'
+                && basename((string)($su['ruta_b'] ?? '')) === (string)$su['b']['id'] . '.webp',
+                isset($su['b']) ? basename((string)($su['ruta_b'] ?? '')) . ' (' . (string)$su['b']['mime'] . ')' : 'sin fila');
             // Spec 026 (T014): el ALFA sobrevive a la conversion (es la base de
             // la politica de transparencia de la 027).
             check('spec 026: la conversion conserva el alfa real',
@@ -1841,9 +1857,9 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('subida: los archivos fisicos existen', !empty($su['existe_fisico']));
             check('subida: manifest.subidas[] trae 2 filas',
                 is_array($su['man_subidas']) && count($su['man_subidas']) === 2);
-            check('subida: la fila trae id/file/mime',
+            check('subida: la fila trae id/origen/mime',
                 is_array($su['man_subidas']) && isset($su['man_subidas'][0]['id'],
-                    $su['man_subidas'][0]['file'], $su['man_subidas'][0]['mime']));
+                    $su['man_subidas'][0]['origen'], $su['man_subidas'][0]['mime']));
             check('subida: formato invalido rechazado',
                 (string)($su['err_fmt'] ?? '') === 'motor:subida:formato:invalido',
                 (string)($su['err_fmt'] ?? ''));
@@ -1856,10 +1872,11 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             // La ruta resuelta DEBE apuntar a un archivo real (bug: la buscaba
             // en la raiz del item, no en subidas/ -> motor:subida:archivo:ausente
             // y la foto no se veia en la vista previa).
-            check('subida: la ruta resuelta apunta a un archivo REAL (subidas/)',
+            check('subida: la ruta resuelta apunta a un archivo REAL (carpeta de la sesion)',
                 !empty($su['resuelto_existe']),
                 'ruta=' . (string) (isset($su['a']) && isset($su['resueltas'][$su['a']['id']]) ? $su['resueltas'][$su['a']['id']] : ''));
-            check('FR-035: la subida viaja al item promovido', !empty($su['existe_destino']));
+            check('el original sigue disponible tras promover (el traslado a orders/ es T021)',
+                !empty($su['existe_destino']));
             check('FR-035: el manifest promovido conserva subidas[]',
                 is_array($su['man_destino'] ?? null) && count((array)($su['man_destino']['subidas'] ?? [])) >= 2,
                 'filas=' . count((array)(is_array($su['man_destino'] ?? null) ? ($su['man_destino']['subidas'] ?? []) : [])));
@@ -2661,8 +2678,10 @@ switch ($fase) {
         break;
 
     case 'fotos':
-        // Spec 029 (D1/D2/D3): registro de las fotos del comprador SIN copiarlas
-        // al pool (`subidas/` es el original y el Motor lo lee de ahi).
+        // Spec 035 (D2/D3/D9): el ORIGINAL se sube una vez (id = sha12, carpeta
+        // compartida de la sesion) y la COMPOSICION se DECLARA con `{id, receta}`.
+        // El archivo de la composicion lo materializa el compositor al generar el
+        // PDF, con nombre determinista: aca NO se sube ningun bitmap.
         preparar_entorno($testBase, $base);
         if (!class_exists('PMU_Sesion')) {
             require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
@@ -2675,72 +2694,101 @@ switch ($fase) {
         $pngFt = sys_get_temp_dir() . '/pd_puente_fotos_' . getmypid() . '.png';
         \ExtractCorel\Engine\PngWriter::write($pngFt, 120, 90);
         $bytesFt = (string)file_get_contents($pngFt);
+
+        // 1) El original: id = sha12 y las medidas reales del archivo guardado.
         $subA = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt);
-        // 1) Uniforme: 3 instancias con la MISMA foto -> 1 fila.
-        $unif = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF',
-            [$subA['id'], $subA['id'], $subA['id']]);
+        $GLOBALS['fotos_id_a'] = (string)($subA['id'] ?? '');
+        $GLOBALS['fotos_w'] = (int)($subA['w'] ?? 0);
+        $GLOBALS['fotos_h'] = (int)($subA['h'] ?? 0);
+        $GLOBALS['fotos_fila_original'] = !isset($subA['file']) || (string)$subA['file'] === '';
+
+        // 2) Dedupe: los mismos bytes NO crean otro id ni otro archivo.
+        $subB = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt);
+        $GLOBALS['fotos_id_b'] = (string)($subB['id'] ?? '');
+        $dirUp_ft = $motor_ft->dir_sesion_uploads($sid_ft, false);
+        $GLOBALS['fotos_uploads_archivos'] = is_dir($dirUp_ft)
+            ? count((array)glob($dirUp_ft . DIRECTORY_SEPARATOR . '*')) : 0;
+
+        // Dos recetas VALIDAS distintas (rot 0 y rot 90).
+        $baseRec = ['v' => 2, 'w' => 463, 'h' => 463, 'forma' => 'rectangulo',
+            'modo' => 'cubrir', 'escala' => 1, 'ox' => 0.5, 'oy' => 0.5,
+            'fondo' => 'transparent', 'transp' => '', 'rot' => 0,
+            'iw' => 120, 'ih' => 90, 'phsize' => 0, 'gid' => '0000FF'];
+        $recA = PMU_Sesion::receta_de($baseRec);
+        $recB = PMU_Sesion::receta_de(array_merge($baseRec, ['rot' => 90]));
+
+        // 3) Uniforme: 3 instancias con la misma receta -> UNA fila.
+        $unif = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', [
+            ['id' => $subA['id'], 'receta' => $recA],
+            ['id' => $subA['id'], 'receta' => $recA],
+            ['id' => $subA['id'], 'receta' => $recA],
+        ]);
         $GLOBALS['fotos_unif_filas'] = count($unif);
         $GLOBALS['fotos_unif_file'] = isset($unif[0]['file']) ? (string)$unif[0]['file'] : '';
         $imgFt = $motor_ft->dir_sesion_item_img($sid_ft, $draft_ft, false);
         $GLOBALS['fotos_img_archivos'] = is_dir($imgFt) ? count((array)glob($imgFt . '/*')) : 0;
-        $GLOBALS['fotos_ref_existe'] = $GLOBALS['fotos_unif_file'] !== '' && is_file(
-            $sesion_ft->dir_subidas($sid_ft, $draft_ft, false) . DIRECTORY_SEPARATOR
-            . basename($GLOBALS['fotos_unif_file'])
-        );
-        // 2) Mixto: 2 fotos distintas en 3 instancias -> una fila por instancia.
-        //    B se sube ACA: al cerrar el paso 1 la poda (D7) borra lo que no usa
-        //    nadie, asi que una subida que todavia no se registro es huerfana.
-        $subB = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt);
-        $mixto = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF',
-            [$subA['id'], $subB['id'], $subA['id']]);
+
+        // 4) Mixto: 2 recetas en 3 instancias -> una fila por instancia.
+        $mixto = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', [
+            ['id' => $subA['id'], 'receta' => $recA],
+            ['id' => $subA['id'], 'receta' => $recB],
+            ['id' => $subA['id'], 'receta' => $recA],
+        ]);
         $GLOBALS['fotos_mixto_indices'] = array_map(function ($f) {
             return (int)$f['indice'];
         }, $mixto);
-        // 3) Un id desconocido se omite (esa instancia queda transparente).
-        $desc = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF',
-            [$subA['id'], 'no-existe-999']);
+        $GLOBALS['fotos_mixto_archivos'] = count(array_unique(array_map(function ($f) {
+            return (string)$f['file'];
+        }, $mixto)));
+
+        // 5) Una instancia SIN receta se omite (el hueco queda transparente).
+        $sinRec = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', [
+            ['id' => $subA['id'], 'receta' => $recA],
+            ['id' => $subA['id'], 'receta' => ''],
+        ]);
+        $GLOBALS['fotos_sin_receta_filas'] = count($sinRec);
+
+        // 6) Un id que no es sha12 se omite (no se inventa la ruta).
+        $desc = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', [
+            ['id' => $subA['id'], 'receta' => $recA],
+            ['id' => 'no-existe-999', 'receta' => $recA],
+        ]);
         $GLOBALS['fotos_desconocido_filas'] = count($desc);
-        // 4) Re-registrar el grupo reemplaza (no acumula filas).
-        $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', [$subA['id']]);
-        $re = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', [$subA['id']]);
+
+        // 7) Re-registrar reemplaza (idempotente) y vaciar borra las filas.
+        $unaSola = [['id' => $subA['id'], 'receta' => $recA]];
+        $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', $unaSola);
+        $re = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', $unaSola);
         $GLOBALS['fotos_re_filas'] = count($re);
-        // 4b) Un grupo VACIADO tiene que borrar sus filas (si no, el PDF seguiria
-        // usando la foto que el comprador saco).
         $vaciado = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', []);
         $GLOBALS['fotos_vaciado_filas'] = count($vaciado);
-        // 5) D7: poda por uso. VALORES = [A, D]; FILAS = E (00FF00) y A (0000FF).
-        //    B (resto del ciclo anterior) y C (nunca usada) sobran.
-        $subC = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt);
-        $subD = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt);
-        $subE = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt);
-        $man_ft = $sesion_ft->leer_manifest($sid_ft, $draft_ft);
-        $man_ft['valores'] = ['1' => ['valor' => [$subA['id'], $subD['id']], 'cliente' => '']];
-        $sesion_ft->guardar_manifest($sid_ft, $draft_ft, $man_ft);
-        // E se registra PRIMERO y NO esta en los valores: la protege la FILA.
-        $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '00FF00', [$subE['id']]);
-        $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', [$subA['id']]);
-        $dirSub_ft = $sesion_ft->dir_subidas($sid_ft, $draft_ft, false);
-        $GLOBALS['fotos_poda_huerfanas'] = !is_file($dirSub_ft . DIRECTORY_SEPARATOR . basename($subB['file']))
-            && !is_file($dirSub_ft . DIRECTORY_SEPARATOR . basename($subC['file']));
-        $GLOBALS['fotos_poda_vivas'] = is_file($dirSub_ft . DIRECTORY_SEPARATOR . basename($subA['file']))
-            && is_file($dirSub_ft . DIRECTORY_SEPARATOR . basename($subD['file']))
-            && is_file($dirSub_ft . DIRECTORY_SEPARATOR . basename($subE['file']));
-        $GLOBALS['fotos_poda_filas_subidas'] = count((array)(
-            $sesion_ft->leer_manifest($sid_ft, $draft_ft)['subidas'] ?? []
-        ));
-        $GLOBALS['fotos_poda_idempotente'] = count($sesion_ft->podar_subidas($sid_ft, $draft_ft));
-        // Sin datos (item nuevo: ni filas ni valores) NO se poda nada.
-        $draft2_ft = $sesion_ft->crear_draft($sid_ft, ['muestra']);
-        $sesion_ft->guardar_subida($sid_ft, $draft2_ft, $bytesFt);
-        $GLOBALS['fotos_poda_vacio'] = count($sesion_ft->podar_subidas($sid_ft, $draft2_ft));
+        // 8) El gid entra en el nombre: el mismo par en otro grupo no colisiona.
+        $otro = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '00FF00', $unaSola);
+        $GLOBALS['fotos_gid_distinto'] = isset($otro[0]['file'], $re[0]['file'])
+            && (string)$otro[0]['file'] !== (string)$re[0]['file']
+            && strpos((string)$otro[0]['file'], '-00FF00-') !== false;
+
+        // 9) resolver_original: la cadena encuentra el original en la sesion.
+        $rutaOrig = $sesion_ft->resolver_original($subA['id'], '', $sid_ft);
+        $GLOBALS['fotos_resuelve'] = $rutaOrig !== '' && is_file($rutaOrig)
+            && strpos(str_replace('\\', '/', $rutaOrig), '/sesion-' . $sid_ft . '/uploads/') !== false;
+        $GLOBALS['fotos_resuelve_ausente'] =
+            $sesion_ft->resolver_original('000000000000', '', $sid_ft) === '';
+        $GLOBALS['fotos_resuelve_invalido'] =
+            $sesion_ft->resolver_original('../../etc/passwd', '', $sid_ft) === '';
+
         $GLOBALS['test_item_fotos'] = $draft_ft;
-        // 5) Endpoint real: registro uniforme por POST (sin bytes).
+        // 10) Endpoint real: declaracion uniforme por POST (sin bytes).
         $_POST = [
             'action' => 'personalizador_pdf_pool',
             'item_key' => $draft_ft,
             'pdf' => 'muestra',
             'grupo' => '0000FF',
-            'fotos' => json_encode([$subA['id'], $subA['id'], $subA['id']]),
+            'fotos' => json_encode([
+                ['id' => $subA['id'], 'receta' => $recA],
+                ['id' => $subA['id'], 'receta' => $recA],
+                ['id' => $subA['id'], 'receta' => $recA],
+            ]),
             '_wpnonce' => 'nonce',
         ];
         $_REQUEST = $_POST;
@@ -2869,8 +2917,14 @@ switch ($fase) {
         $GLOBALS['bib_sha_familia'] = ($sesion_b->familia_por_sha($contenedoresBib_b, sha1($bytes_b)) !== '');
         $subFam_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b, 'familiatest');
         $subFam2_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b, 'familiatest');
-        $GLOBALS['bib_fam_1'] = is_array($subFam_b) && ($subFam_b['id'] === 'familiatest');
-        $GLOBALS['bib_fam_2'] = is_array($subFam2_b) && ($subFam2_b['id'] === 'familiatest-2');
+        // Spec 035: el id lo deriva el SERVIDOR del contenido (sha12). La "madre"
+        // que propone el cliente se ignora: la misma foto es el mismo original, asi
+        // que no hay versiones `{madre}-n`.
+        $GLOBALS['bib_fam_1'] = is_array($subFam_b)
+            && preg_match('/^[a-f0-9]{12}$/', (string)$subFam_b['id']) === 1
+            && (string)$subFam_b['id'] !== 'familiatest';
+        $GLOBALS['bib_fam_2'] = is_array($subFam2_b)
+            && (string)$subFam2_b['id'] === (string)$subFam_b['id'];
         // Spec 030 (T021): el seam que usa `handle_subida`: contenido ya subido ->
         // su familia; contenido nuevo -> '' (y la subida sigue normal, sin bloquear).
         $GLOBALS['bib_dedupe_madre'] = ($p->biblioteca_madre_por_contenido($bytes_b) !== '');
@@ -4596,8 +4650,10 @@ switch ($fase) {
             // Y un PNG de verdad, para probar que el formato sale de la FIRMA
             // y no del nombre que manda el cliente (D14).
             $b = $ses->guardar_subida($sid, $draft, \ExtractCorel\Engine\PngWriter::bytes(4, 4));
-            $dirDraft = $ses->dir_item($sid, $draft);
             $man = $ses->leer_manifest($sid, $draft);
+            // Spec 035: el archivo del original se resuelve por CADENA desde el `id`.
+            $rutaA = $ses->resolver_original((string) $a['id'], '', $sid);
+            $rutaB = $ses->resolver_original((string) $b['id'], '', $sid);
 
             $errFmt = '';
             try { $ses->guardar_subida($sid, $draft, 'esto no es una imagen'); }
@@ -4607,7 +4663,7 @@ switch ($fase) {
             catch (\Throwable $e) { $errVacia = $e->getMessage(); }
 
             $resueltas = $ses->resolver_subidas($sid, $draft, [$a['id'], 'id-inventado']);
-            $existeFisico = is_file($dirDraft . '/' . $a['file']) && is_file($dirDraft . '/' . $b['file']);
+            $existeFisico = $rutaA !== '' && is_file($rutaA) && $rutaB !== '' && is_file($rutaB);
 
             // Spec 026 (T014): el ALFA debe sobrevivir a la conversion PNG->WebP
             // (es la base de la politica de transparencia de la 027). Se mide el
@@ -4629,7 +4685,8 @@ switch ($fase) {
                 $cT = imagecolorat($imT, 0, 0);
                 $alfaAntes = (int) (($cT >> 24) & 0x7F);
                 $c = $ses->guardar_subida($sid, $draft, $bytesT);
-                $guardado = (string) @file_get_contents($dirDraft . '/' . $c['file']);
+                $rutaC = $ses->resolver_original((string) $c['id'], '', $sid);
+                $guardado = (string) @file_get_contents($rutaC);
                 $imG = imagecreatefromstring($guardado);
                 $cG = imagecolorat($imG, 0, 0);
                 $alfaDespues = (int) (($cG >> 24) & 0x7F);
@@ -4650,13 +4707,14 @@ switch ($fase) {
 
             $GLOBALS['test_campo_subida'] = [
                 'a' => $a, 'b' => $b,
+                'ruta_a' => $rutaA, 'ruta_b' => $rutaB,
                 'man_subidas' => isset($man['subidas']) ? $man['subidas'] : [],
                 'err_fmt' => $errFmt, 'err_vacia' => $errVacia,
                 'resueltas' => $resueltas,
                 'resuelto_existe' => $resueltoExiste,
                 'ids_distintos' => ((string) $a['id'] !== (string) $b['id']),
                 'existe_fisico' => $existeFisico,
-                'existe_destino' => is_file($destino . '/' . $a['file']),
+                'existe_destino' => $rutaA !== '' && is_file($rutaA),
                 'man_destino' => $ses->leer_manifest($sid, 'cart-abc'),
                 // Spec 026 (T014).
                 'alfa_conservado' => $alfaConservado,
