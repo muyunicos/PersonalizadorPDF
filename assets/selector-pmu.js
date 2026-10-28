@@ -1662,7 +1662,7 @@
         this._subiendo = true;
         this._estado('subiendo');
 
-        var terminar = function (blob, tipo) {
+        var terminar = function (blob, tipo, blobOrig) {
             if (!blob) {
                 self._subiendo = false;
                 if (ok) { ok.disabled = false; ok.textContent = 'Subir'; }
@@ -1708,7 +1708,7 @@
             };
 
             if (typeof self.config.subirAsync === 'function') {
-                Promise.resolve(self.config.subirAsync(blob, meta)).then(function () {
+                Promise.resolve(self.config.subirAsync(blobOrig || blob, meta)).then(function () {
                     if (typeof self.onSelectCallback === 'function') { self.onSelectCallback(url, meta); }
                     finalizarExito();
                 }, function (err) {
@@ -1739,7 +1739,15 @@
         // sabe codificar WebP, `toBlob` cae a PNG en silencio y se entrega el
         // PNG tal cual (D2): el flujo nunca se rompe.
         if (lienzo.toBlob) {
-            lienzoAWebP(lienzo, 0.85, terminar);
+            lienzoAWebP(lienzo, 0.85, function (blobRec, tipoRec) {
+                // Spec 035 (T014/D2): ademas del recorte se genera el ORIGINAL
+                // acotado (segunda codificacion en memoria, sin red). El recorte
+                // se queda en el navegador; al servidor viaja el original.
+                if (!blobRec) { terminar(null, tipoRec); return; }
+                self._conOriginal(function (blobOrig, tipoOrig) {
+                    terminar(blobRec, tipoRec, blobOrig);
+                });
+            });
         } else {
             // Sin `toBlob` (navegador muy viejo): PNG (el servidor lo convertira).
             var bin = atob(lienzo.toDataURL('image/png').split(',')[1]);
@@ -1747,6 +1755,42 @@
             for (var i = 0; i < bin.length; i++) { bytes[i] = bin.charCodeAt(i); }
             terminar(new Blob([bytes], { type: 'image/png' }), 'png');
         }
+    };
+
+    /**
+     * Spec 035 (T014/D2): lienzo con la foto ORIGINAL acotada al cap de
+     * `PMUFotos` (2000 px de lado mayor, factor uniforme). Es lo que viaja al
+     * servidor: la foto entera, sin recortar, para poder recomponerla despues a
+     * otra resolucion. Sin la biblioteca de fotos se usa el tamano natural.
+     */
+    SelectorPMU.prototype._lienzoOriginal = function () {
+        var img = this.imagen;
+        if (!img || !img.naturalWidth || !img.naturalHeight) { return null; }
+        var w = img.naturalWidth;
+        var h = img.naturalHeight;
+        if (global.PMUFotos && typeof global.PMUFotos.medidasAcotadas === 'function') {
+            var m = global.PMUFotos.medidasAcotadas(w, h);
+            if (m && m.w > 0 && m.h > 0) { w = m.w; h = m.h; }
+        }
+        var doc = (this.raiz && this.raiz.ownerDocument) || global.document;
+        if (!doc || typeof doc.createElement !== 'function') { return null; }
+        var cv = doc.createElement('canvas');
+        cv.width = w;
+        cv.height = h;
+        var cx = cv.getContext ? cv.getContext('2d') : null;
+        if (!cx) { return null; }
+        cx.drawImage(img, 0, 0, w, h);
+        return cv;
+    };
+
+    /**
+     * Blob del ORIGINAL acotado (`cb(null, '')` si no se puede generar: la
+     * subida sigue con el recorte, nunca se rompe).
+     */
+    SelectorPMU.prototype._conOriginal = function (cb) {
+        var lienzo = this._lienzoOriginal();
+        if (!lienzo || !lienzo.toBlob) { cb(null, ''); return; }
+        lienzoAWebP(lienzo, 0.85, cb);
     };
 
     /** Ultimo recorte generado (el llamador lo sube al pool del item). */

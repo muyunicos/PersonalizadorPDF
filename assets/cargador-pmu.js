@@ -460,6 +460,16 @@
         })).then(function (res) {
             btn.disabled = false;
             var id = res && res.id;
+            // Spec 035 (T014/D2): el recorte recien compuesto se queda en el
+            // navegador (objectURL) y se publica para que la vista previa dibuje
+            // sin red y sin subir copias. La receta es la misma que viajo con la
+            // subida: `tienda.js` la manda por instancia al registrar el grupo.
+            if (id && typeof self.config.onRecorte === 'function') {
+                var selPub = self.selectores[indice];
+                self.config.onRecorte(String(id),
+                    (selPub && selPub.ultimaUrl) || '',
+                    (selPub && typeof selPub._params === 'function') ? selPub._params() : null);
+            }
             if (!id) {
                 self._error('El servidor no devolvio la imagen.');
                 throw new Error('El servidor no devolvio la imagen.');

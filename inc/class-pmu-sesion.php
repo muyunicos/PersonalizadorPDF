@@ -530,7 +530,14 @@ class PMU_Sesion
         foreach (array_values($entradas) as $i => $e) {
             if (is_array($e)) {
                 $id = strtolower(trim((string)($e['id'] ?? '')));
-                $receta = strtolower(trim((string)($e['receta'] ?? '')));
+                // Spec 035 (D9): la receta puede llegar como PARAMS crudos (v2): el HASH lo
+                // recomputa SIEMPRE el servidor (`receta_de`), nunca lo propone el
+                // cliente. Si ya viene como hash 12-hex, se usa tal cual.
+                $receta = $e['receta'] ?? '';
+                if (is_array($receta)) {
+                    $receta = self::receta_de($receta);
+                }
+                $receta = strtolower(trim((string)$receta));
             } else {
                 $id = strtolower(trim((string)$e));
                 $receta = isset($recetas[$id]) ? $recetas[$id] : '';

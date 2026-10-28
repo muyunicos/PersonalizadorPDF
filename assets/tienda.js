@@ -491,7 +491,46 @@
      * D7): si no hay, el servidor crea un borrador y lo devuelve, y el cliente
      * lo guarda para que la vista previa lo reusa en vez de abrir otro.
      */
+    var colaUpload = null;
+
+    /**
+     * Cola UNICA de subidas del comprador (spec 035, T013): a lo sumo 2 en vuelo
+     * y 2 reintentos con backoff (1 s y 3 s). Sin la biblioteca de fotos degrada
+     * a ejecucion directa (nunca se pierde la subida).
+     */
+    function colaDeSubidas() {
+        if (colaUpload) { return colaUpload; }
+        var crear = (global.PMUFotos && typeof global.PMUFotos.crearCola === 'function')
+            ? global.PMUFotos.crearCola : null;
+        if (crear) {
+            colaUpload = crear({
+                max: 2,
+                // Sin clave de dedupe: cada subida es una foto distinta. El dedupe
+                // por sha llega con la subida al ELEGIR (D2), que aun no esta cableada.
+                clave: function () { return ''; },
+                subir: function (t) { return subirFotoCrudo(t.blob, t.campo, t.onItem, t.ctx); }
+            });
+        } else {
+            colaUpload = {
+                encolar: function (t) { return subirFotoCrudo(t.blob, t.campo, t.onItem, t.ctx); },
+                vaciar: function () { return Promise.resolve(); },
+                pendientes: function () { return 0; }
+            };
+        }
+        return colaUpload;
+    }
+
+    /**
+     * Sube la foto al item (spec 035, T014/D2): viaja el ORIGINAL —ya acotado por
+     * el selector— y la receta del recorte, no la composicion. Pasa por la cola
+     * compartida; el selector espera su promesa, asi que la UX no cambia.
+     */
     function subirFoto(blob, campo, onItem, ctx) {
+        return colaDeSubidas().encolar({ blob: blob, campo: campo, onItem: onItem, ctx: ctx });
+    }
+
+    /** Subida cruda (un POST). La cola decide cuando se llama. */
+    function subirFotoCrudo(blob, campo, onItem, ctx) {
         var ses = (global.PMU_API && global.PMU_API.sesion) || {};
         var fd = new FormData();
         fd.append('action', 'personalizador_pdf_subida');
@@ -1069,7 +1108,16 @@
         fd.append('item_key', itemKey);
         fd.append('pdf', pdf);
         fd.append('grupo', gid);
-        fd.append('fotos', JSON.stringify(ids));
+        // Spec 035 (T014/D2): cada instancia viaja con su RECETA cuando se conoce
+        // (el recorte que el comprador acaba de ver): el servidor guarda esa
+        // composicion exacta. Sin receta conocida viaja solo el id y el servidor
+        // la resuelve de la fila del original (formato de la 029).
+        var entradas = (ids || []).map(function (id) {
+            var s = String(id || '');
+            var r = (s !== '') ? recetaLocal(s) : null;
+            return r ? { id: s, receta: r } : s;
+        });
+        fd.append('fotos', JSON.stringify(entradas));
         return postAjax(fd).then(function (json) {
             if (!json || !json.success) {
                 throw new Error((json && json.data) || 'motor:pool:falla');
@@ -1106,9 +1154,52 @@
         return out;
     }
 
+    /**
+     * Spec 035 (T014/D2): objectURL del recorte compuesto en ESTA pestana. La
+     * foto que el comprador acaba de ajustar se dibuja sin pedir nada al
+     * servidor (0 red) y sin subir una copia. `null` tras recargar, o para una
+     * foto que viene de otro item.
+     */
+    function recorteLocal(id) {
+        var mapa = (global.PMU_FICHA && global.PMU_FICHA.recortes) || null;
+        return (mapa && mapa[String(id)]) ? String(mapa[String(id)]) : null;
+    }
+
+    /** Receta publicada de una foto subida (la que viajo con su subida). */
+    function recetaLocal(id) {
+        var mapa = (global.PMU_FICHA && global.PMU_FICHA.recetas) || null;
+        return (mapa && mapa[String(id)]) ? mapa[String(id)] : null;
+    }
+
+    /**
+     * Publica el recorte local de una foto recien subida; lo llama el cargador
+     * (una vez por foto). El mapa vive en `PMU_FICHA` y muere con la pestana.
+     */
+    function anotarRecorte(id, url, receta) {
+        var clave = String(id || '');
+        if (clave === '') { return; }
+        global.PMU_FICHA = global.PMU_FICHA || {};
+        if (url) {
+            global.PMU_FICHA.recortes = global.PMU_FICHA.recortes || {};
+            global.PMU_FICHA.recortes[clave] = String(url);
+        }
+        if (receta) {
+            global.PMU_FICHA.recetas = global.PMU_FICHA.recetas || {};
+            global.PMU_FICHA.recetas[clave] = receta;
+        }
+    }
+
     /** URL de la foto subida `id` (null si no existe en el manifest). */
     function urlDeSubida(sid, itemKey, id) {
-        if (!sid || !itemKey || !id) { return Promise.resolve(null); }
+        if (!id) { return Promise.resolve(null); }
+        // Spec 035 (T014/D2): el recorte de ESTA pestana manda sobre la foto del
+        // servidor (que desde la 035 guarda el ORIGINAL, sin recortar): la tira de
+        // la ranura y la vista previa muestran lo que el comprador compuso, sin un
+        // solo POST. Sin recorte local (recarga, re-edicion) se resuelve por el
+        // servidor. Unico punto de verdad: lo usan `registrarFotos` y la ficha.
+        var localRec = recorteLocal(id);
+        if (localRec) { return Promise.resolve(localRec); }
+        if (!sid || !itemKey) { return Promise.resolve(null); }
         // Spec 030 (D23/T046): si la ficha ya publico la URL de esa foto (mapa `id -> url` de
         // lo cargado), se reusa: navegar el visor o repintar la tira cuesta **0 POST**.
         var mapa = (window.PMU_FICHA && PMU_FICHA.urls) || null;
@@ -1390,6 +1481,15 @@
         api.subirFoto = function (blob, campo, ctx) {
             return subirFoto(blob, campo ? (campo.id || campo) : campo, null, ctx);
         };
+        // Spec 035 (T013/D2): el add-to-cart espera lo que este en vuelo antes de
+        // mandar la personalizacion. `PMU_FICHA.subidas` es la puerta publica que
+        // consume US3 para el aviso "Estamos recibiendo tus archivos".
+        api.subidas = {
+            vaciar: function () { return colaDeSubidas().vaciar(); },
+            pendientes: function () { return colaDeSubidas().pendientes(); }
+        };
+        global.PMU_FICHA = global.PMU_FICHA || {};
+        global.PMU_FICHA.subidas = api.subidas;
         // Spec 030 (D23): mapa id -> url por pagina. La miniatura, el visor y el
         // recorte usan la MISMA URL, asi que el navegador la sirve de su cache y
         // navegar no hace NINGUNA peticion (antes cada paso pedia la URL por POST
@@ -1491,6 +1591,9 @@
                 ranuras: ranuras,
                 envoltura: envoltura,
                 idsIniciales: idsIniciales,
+                // Spec 035 (T014/D2): el cargador publica el recorte local de cada
+                // foto subida (objectURL) para que la vista previa dibuje sin red.
+                onRecorte: function (id, url, receta) { anotarRecorte(id, url, receta); },
                 urlDe: api.urlDeSubida,
                 subir: function (blob, ctx) { return api.subirFoto(blob, cid, ctx); },
                 // Spec 030 (T014/D8): Elegir sin recomponer. Devuelve `{fila}` o

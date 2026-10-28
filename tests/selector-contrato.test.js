@@ -193,7 +193,11 @@ console.log('\n== F2e: imagenes en WebP con fallback por firma (spec 026) ==');
 const tiendaSrc = fs.readFileSync(path.join(RAIZ, 'assets', 'tienda.js'), 'utf8');
 check('Spec 026: el selector emite WebP con fallback a PNG (solo si el servidor lo soporta)',
   typeof puro.esWebP === 'function'
-  && /lienzoAWebP\(lienzo, 0\.85, terminar\)/.test(selSrc)
+  // Spec 035 (T014/D2): la codificacion se parte en DOS llamadas a q0.85 — el
+  // recorte (vista previa local) y el ORIGINAL acotado (lo que viaja al servidor).
+  && /lienzoAWebP\(lienzo, 0\.85, terminar\)/.test(selSrc) === false
+  && (selSrc.match(/lienzoAWebP\([^,]+, 0\.85,/g) || []).length === 2
+  && /prototype\._lienzoOriginal = function/.test(selSrc)
   && /servidorSoportaWebP\(\) \? 'image\/webp' : 'image\/png', q\);/.test(selSrc)
   && /webp_soportado === false/.test(selSrc)
   && /meta\.type = 'image\/png'/.test(selSrc) === false);
@@ -202,10 +206,13 @@ check('Spec 026 D10: el meta.type refleja el tipo REAL del blob (no un png fijo)
   && /type: mime,/.test(selSrc));
 // Spec 029 (D1): las fotos ya NO se copian al pool: se REGISTRAN (la fila
 // apunta a `subidas/`), asi que el cliente no las descarga ni las rasteriza.
+// Spec 035 (T014/D2): el payload mantiene el id (029) y suma la RECETA por
+// instancia cuando se conoce; el hash lo recomputa el servidor, nunca el cliente.
 check('Spec 029 D1: la foto se REGISTRA (sin copia ni rasterizado en el cliente)',
   tiendaSrc.indexOf('rasterizar') === -1 && tiendaSrc.indexOf('function subirFotos') === -1
   && /function registrarFotos/.test(tiendaSrc)
-  && /fd\.append\('fotos', JSON\.stringify\(ids\)\)/.test(tiendaSrc)
+  && /fd\.append\('fotos', JSON\.stringify\(entradas\)\)/.test(tiendaSrc)
+  && /return r \? \{ id: s, receta: r \} : s;/.test(tiendaSrc)
   && /fila_archivo\(/.test(fs.readFileSync(path.join(RAIZ, 'inc', 'class-pmu-sesion.php'), 'utf8')));
 // Spec 029 (D2): el texto del grupo se colapsa a UNA entrada cuando todas las
 // instancias llevan lo mismo (el Motor la replica).
