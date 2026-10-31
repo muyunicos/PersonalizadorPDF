@@ -7,6 +7,13 @@
 > Las puertas automaticas ya estan en verde (ver §0); esto es solo verificacion con datos reales.
 > Limpieza al cerrar: solo `tmp/sesion-*`, `tmp/muestras/*`, `tmp/orders/*` de prueba.
 > **Nunca** `orders/` (entregables), ni `pdfs/`, ni catalogos del editor.
+> **Actualizado el 2026-10-31**: la via vigente es **scriptear el recorrido en el laboratorio**
+> (`C:\wp-lab`) y dejar que el hosting solo **confirme el deploy** (`AGENTS.md` §9). Ya salieron
+> de este archivo y son **puerta del repo**: la 009 (`tests/galerias-sprite.browser.js`, **32/32**)
+> y la 030 + la 035 (`tests/ficha-pedido.browser.js`, **47/47**, con el escenario US3 de vistas
+> obligatorias); ambas **revalidadas el 2026-10-31**. Lo que sigue listado abajo (004, 005, 006, 012,
+> 016, 018, 019) **no** tiene puerta todavia: se recorre en el lab y, al cerrarse, conviene
+> convertirlo en script como se hizo con la 009, la 030 y la 035.
 
 ## 0. Puertas automaticas (previas, ya verdes — repetir antes de empezar)
 

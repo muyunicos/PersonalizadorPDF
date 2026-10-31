@@ -92,7 +92,7 @@ y se conserva, porque es la evidencia de por que no se repite.
   por **Application Passwords** del núcleo + `manage_options` + HTTPS (no usa `seguridad()`).
   Entregable en el ámbito `api/{job_id}/` (ver §5) con TTL de 7 días, idempotencia por `job_id` y
   respuesta síncrona. Errores con la convención `api:<op>:<motivo>`. Artefactos en
-  `specs/010-api-wordpress/` (`spec.md`, `contracts/api.md`); pendiente `plan.md` + `tasks.md`.
+  `specs/010-api-wordpress/` (`spec.md`, `contracts/api.md`, `plan.md`); pendiente `data-model.md` + `quickstart.md` + `tasks.md`.
   Al implementarla: amendá la constitución (Sync Impact Report), subí `Requires at least` de
   `readme.txt` a **5.6** (Application Passwords) y agregá las fases al arnés `texto_puente.php`.
 - ✅ **Spec 018 `campos-consola-v4` (implementada 2026-10-19)**: el cargador se declara en el campo
@@ -103,7 +103,7 @@ y se conserva, porque es la evidencia de por que no se repite.
   `.ec-c-nombre-txt`. **Sin migración**: un campo con `cargador` y sin `campo.js` sigue montándose por
   el sistema (`cargador && !campo.js`); al pegarle la plantilla nueva entra solo. Sostiene **N campos
   de imagen por producto/PDF**. Artefactos en `specs/018-campos-consola-v4/` (T001-T023 cerradas;
-  pendiente T024: changelog + bump a 4.9.0 y recorrido WP real).
+  T024 cerrada: el changelog y el bump se hicieron (la version vigente es la cabecera de `personalizador-pdf.php`, hoy 4.27.0); el recorrido manual sigue en `specs/MANUAL-PENDIENTE-WP-REAL.md`).
 
 - ✅ **Spec 019 `ranura-adaptativa` (implementada 2026-10-19)**: la ranura del cargador puede
   **tomar el tamaño del hueco** con `phsize: 0|1|2` (0 = default, el comportamiento actual;
@@ -114,7 +114,7 @@ y se conserva, porque es la evidencia de por que no se repite.
   de `analisis.json`) y `validar_cargador()` conserva `phsize`. **`escala: 'sin-ampliar'` sigue
   fuera** (no ampliar la foto exige tocar `engine/Imagen.php` + `tienda.js:rasterizar`, o el Motor
   re-amplía): va como spec aparte. Artefactos en `specs/019-ranura-adaptativa/` (D1-D9,
-  FR-001..009, T001-T015 cerradas; pendiente T016: release 4.10.0 + recorrido WP real).
+  FR-001..009, T001-T015 cerradas; T016 cerrada: el release se hizo (la version vigente es la cabecera de `personalizador-pdf.php`); el recorrido manual sigue en `specs/MANUAL-PENDIENTE-WP-REAL.md`).
 - ✅ **Spec 020 `limpieza-legacy` (implementada 2026-10-19, v4.11.0)**: regla del
   negocio — **en desarrollo no hay migraciones ni retrocompatibilidad** (el admin borra los campos
   viejos y regenera los PDFs). Se eliminaron: `protegido` (feature completa, D1), `array` del
@@ -329,7 +329,7 @@ y se conserva, porque es la evidencia de por que no se repite.
   Ojo: la subida real de un PDF **no** se puede simular en el arnes (`move_uploaded_file` exige un upload
   real) -> el flujo con subida se prueba en el lab (quickstart R1-R8). Artefactos en
   `specs/032-reemplazo-pdf/`.
-- ✅ **Spec 034 `importar-reemplazar-capa` (especificada 2026-10-26; implementada en curso en 4.25.0: 12/17 tareas cerradas, 1 parcial, 4 pendientes — ver `tasks.md`)**: reemplazar la capa/grupo seleccionado con otra capa (pagina PDF o imagen) manteniendo las transformaciones (x/y/w/h/rot/sesgo/filtros/modo/nombre/oculta/bloqueada/envoltura/grupo/grupo_rot/perspectiva); habilitar perspectiva por capa individual (hoy solo grupo); importar pagina + PH pregunta si reemplazar la seleccion actual; destino es la capa/grupo seleccionado (si varias capas no agrupadas, la primera); conserva ubicacion, rotacion y perspectiva. Artefactos en `specs/034-importar-reemplazar-capa/` (spec, plan, research, data-model, contracts/capa-importar, quickstart, tasks).
+- ✅ **Spec 034 `importar-reemplazar-capa` (especificada 2026-10-26; implementada 4.26.0 — 17/17 `[X]` — y verificada en el laboratorio: R1/R3 6/6 + R4/R5/R8 7/7)**: reemplazar la capa/grupo seleccionado con otra capa (pagina PDF o imagen) manteniendo las transformaciones (x/y/w/h/rot/sesgo/filtros/modo/nombre/oculta/bloqueada/envoltura/grupo/grupo_rot/perspectiva); habilitar perspectiva por capa individual (hoy solo grupo); importar pagina + PH pregunta si reemplazar la seleccion actual; destino es la capa/grupo seleccionado (si varias capas no agrupadas, la primera); conserva ubicacion, rotacion y perspectiva. Artefactos en `specs/034-importar-reemplazar-capa/` (spec, plan, research, data-model, contracts/capa-importar, quickstart, tasks).
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
   `admin/ayuda.php`, `modules/LEEME.md` solo resumen y apuntan aqui). El `== Changelog ==`
   de `readme.txt` es historial, no normativa.

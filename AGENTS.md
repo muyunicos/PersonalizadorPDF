@@ -233,7 +233,7 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
    `op=` de presets/imágenes/fuentes). Sin puente el editor NO opera: muestra un
    error accionable y hace cero peticiones locales (no hay modo standalone).
 5. **Versionado de estáticos (cache-bust)**: `render-core.html` e `index.html` referencian
-   sus scripts internos con `?v=RCn` (**RC74 hoy**): al cambiar cualquier JS del módulo,
+   sus scripts internos con `?v=RCn` (**RC81 hoy**): al cambiar cualquier JS del módulo,
    subir el número en ambos HTML.
 6. **Galería**: manejada internamente por el módulo (`js/galeria.js`), con preview en vivo.
    La lectura es **canónica y certificada** en los **tres** ámbitos (`fonts`, `img`, `tm-presets`):
@@ -662,7 +662,12 @@ php tests/certificacion_hoja.php  # Certificacion del sprite (debe decir "CERTIF
 node tests/campos-contrato.test.js  # Montaje de campos + cargador (spec 012): "CAMPOS CONTRATO OK"
 node tests/selector-contrato.test.js  # Contrato del selector visual (spec 016): "SELECTOR CONTRATO OK"
 node tests/biblioteca-contrato.test.js  # Biblioteca del comprador (spec 030): "BIBLIOTECA CONTRATO OK (N checks)"
-node tests/conciliacion.js    # `PURO.conciliarGrupo` (spec 012, D17-D19): "CONCILIACION OK"
+node tests/conciliacion.js    # `PURO.conciliarGrupo` (spec 012, D17-D19) + reparto por ranura: "CONCILIACION OK"
+node tests/receta-contrato.test.js  # Receta v2 del recorte (spec 035): "RECETA CONTRATO OK (21 checks)"
+node tests/vistas-contrato.test.js  # Orden/marca de las vistas obligatorias (035): "VISTAS CONTRATO OK (24 checks)"
+node tests/fotos-contrato.test.js   # Original acotado a 2000 px + dedupe por sha (035): "FOTOS CONTRATO OK (38 checks)"
+node tests/compositor-paridad.test.js  # Compositor PHP vs cliente (035): "COMPOSITOR PARIDAD OK (6 checks)"
+php tests/compositor.php      # Compositor PHP bajo demanda (spec 035): "COMPOSITOR OK (19 checks)"
 php tests/motor_smoke.php     # Smoke del motor (debe decir "SMOKE OK")
 php tests/parity.php          # Oráculo del detector (debe decir "PARIDAD OK")
 php tests/envolturas.php      # Envolturas PowerClip (debe decir "ENVOLTURAS OK")
@@ -688,7 +693,8 @@ php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
                               # completados | mockups* | mockup_capas | mockup_pagina |
                              # mockup_preview | mockup_foto |
                               # mockup_foto_baja | mockup_foto_ajax |
-                              # desactivar | reanalizar | envoltura_op | reemplazo | borrado | campo_global | smoke | biblioteca
+                              # desactivar | reanalizar | envoltura_op | reemplazo | borrado | campo_global | smoke | biblioteca |
+                              # receta | carpeta_cliente | traslado [pedido] | rutas | composicion | vistos (035)
 ```
 Los 3 arneses CLI salen de inmediato si no corren por CLI (`PHP_SAPI !== 'cli'`):
 la carpeta `tests/` viaja con el plugin al hosting y no debe ser ejecutable por HTTP.
@@ -719,10 +725,10 @@ Los recorridos de aceptación de cada spec se corren en el **laboratorio local**
 y tema montados por *junction*) con Chrome + Playwright **sin instalar nada en el repo**: arranque,
 credenciales, scripteado, higiene de datos y las trampas conocidas están en
 `docs/entorno-desarrollo.md` §9. Vigentes: **`tests/galerias-sprite.browser.js`** (spec 009: galerias y
-hojas, **32/32**) y **`tests/ficha-pedido.browser.js`** (ficha → pedido → `orders/{id}/{item}/…_procesado.pdf`,
-**26/26**). Ambas cubren caminos que ninguna otra puerta cubria (`assets/tienda.js`, galerias/hojas) y
+hojas, **32/32**) y **`tests/ficha-pedido.browser.js`** (ficha → pedido → `orders/{cliente}/{order_id}/{item}/…_procesado.pdf`,
+**47/47**). Ambas cubren caminos que ninguna otra puerta cubria (`assets/tienda.js`, galerias/hojas) y
 la de ficha-pedido ademas la **biblioteca del comprador** (spec 030: tira, `Elegir` 0 bytes, version,
-dedupe y visor compartido). **Fallan con la causa accionable** si al lab le falta una precondicion (lab apagado, producto sin
+dedupe y visor compartido) y el escenario de vistas obligatorias de la 035 (orden, marca al mostrarse, re-edicion desde el carrito). **Fallan con la causa accionable** si al lab le falta una precondicion (lab apagado, producto sin
 `_pmu_pdf_slugs`, catalogo `img/` ausente, **presets v1 en lugar de v2**, COD sin `enable_for_virtual`).
 La de galerias tiene modo **`PMU_SOLO_UI=1`** (+ `PMU_BASE=<hosting>`) para correr contra el hosting
 sin leer el disco del lab.
@@ -731,7 +737,7 @@ sin leer el disco del lab.
 $env:NODE_PATH = "$env:TEMP\pmu-pw\node_modules"
 $env:TEXTMUY_CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 node tests/galerias-sprite.browser.js       # 32/32 (mutan/restauran datos del lab)
-node tests/ficha-pedido.browser.js          # 26/26 (crea un pedido de prueba)
+node tests/ficha-pedido.browser.js          # 47/47 (crea un pedido de prueba)
 pwsh C:\wp-lab\arrancar.ps1                 # (si el lab esta apagado)
 ```
 
@@ -757,10 +763,10 @@ node tests/sprite-canonico.test.js && node tests/fuente-compuesta.test.js && nod
 node tests/fuente-selector.test.js && node tests/integridad-archivos.test.js && node tests/rc-bump.test.js
 Set-Location ..\..
 ```
-(**47 suites** `*.test.js` + 2 de navegador (`galerias.browser.js`, `ficha-pedido.browser.js`); Node NO corre en el servidor productivo
+(**47 suites** `*.test.js` + 2 de navegador (`galerias.browser.js`, `text-tab.browser.js`); Node NO corre en el servidor productivo
 de WP: es solo testing del módulo. Las ultimas 5 en entrar: `preset-roundtrip`,
 `fuente-compuesta`, `fuente-carga-estados`, `fuente-selector` e `integridad-archivos`;
-`?v=RC75` hoy en ambos HTML.)
+`?v=RC81` hoy en ambos HTML.)
 
 `tests/galerias.browser.js` es la única prueba con **navegador real** (Playwright + Chrome vía
 la variable de entorno `TEXTMUY_CHROME`): valida el DOM de las galerías (celdas, descargas,
