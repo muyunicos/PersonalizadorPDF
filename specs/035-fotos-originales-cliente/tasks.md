@@ -135,7 +135,7 @@
 - [X] T039 [P] **HECHO** — notas de supersesion en `specs/029-pool-sin-copias/spec.md` y `specs/030-biblioteca-imagenes/spec.md` + `contracts/biblioteca.md`
 - [X] T040 **HECHO** — `specs/INDICE.md` (035 -> implementada), `readme.txt` (Stable tag **4.27.0** + entrada de changelog + paths del arbol nuevo + GD/WebP como requisito para las fotos) y version **solo en la cabecera** de `personalizador-pdf.php` -> **4.27.0**
 - [X] T041 **HECHO** — `php tests/inventario_repo.php` (0 includes sin resolver), `php tests/estado_pmu.php`, `php tests/sin_lectura.php` y `php tests/inventario_pmu.php --resumen`, todos en verde
-- [ ] T042 Recorrido completo del `quickstart.md` (E1-E9) en `C:\wp-lab` con evidencia (**NECESITA EL LAB**)
+- [X] T042 **HECHO** — recorrido E1-E9 completo en `C:\wp-lab` (WP+Woo reales) con evidencia en `quickstart.md`: E1-E6/E8/E9 por CLI y **E7 con navegador (`FICHA->PEDIDO 47/47`)**; el bloque "Puertas completas" corre sus **18 gates en verde**. En el recorrido se corrigieron **dos desajustes contrato-codigo** (el spec/quickstart documentaban `motor:original:ausente` y `motor:sesion:promocion:sin:cliente`, el codigo emitia otros) y se crearon las fases que el contrato nombraba y no existian: **`traslado`** (E4/E8, alias de `pedido`) y **`rutas`** (E6)
 - [X] T043 **HECHO** — `tasks.md` cerrado con el estado real de cada tarea; `specs/INDICE.md` actualizado
 - [X] T044 **HECHO** — `php composer.phar run analisis`: **7 hallazgos, TODOS previos** (verificados con `git blame`: commits del 19-21/10, specs 020/022/endpoint IA). El unico que era mio (un `@param $ids` desactualizado en `registrar_fotos`, de T016) **corregido**. `npx jscpd`: 1,34% de clonado, **PHP 0 clones**, y ningun clon toca archivos de la 035
 

@@ -1466,7 +1466,7 @@ class PMU_Sesion
         if (!$this->motor->clave_valida($clave)) {
             // Spec 035 (D5): sin cliente (invitado) no hay carpeta. Causa VISIBLE:
             // el pedido queda sin promover y se reintenta si el cliente se registra.
-            throw new Exception('motor:sesion:promocion:cliente:invalido');
+            throw new Exception('motor:sesion:promocion:sin:cliente');
         }
         $destino = $this->motor->dir_order($clave, $order_id, true) . DIRECTORY_SEPARATOR . $item;
         // El DESTINO primero: si ya esta promovido, la sesion ya no tiene el item

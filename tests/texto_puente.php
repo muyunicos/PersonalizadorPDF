@@ -1331,8 +1331,22 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('composicion: el nombre es el cache (reusa con el original BORRADO)',
                 !empty($GLOBALS['test_comp_reuso']));
             check('composicion: sin original ni composicion da causa propia',
-                strpos((string)($GLOBALS['test_comp_causa'] ?? ''), 'motor:descarga:composicion:ausente') !== false,
+                strpos((string)($GLOBALS['test_comp_causa'] ?? ''), 'motor:original:ausente') !== false,
                 (string)($GLOBALS['test_comp_causa'] ?? ''));
+            break;
+
+        case 'rutas':
+            // Spec 035 (E6): el arbol nuevo en los escaneos y en la descarga.
+            $errRt = (string)($GLOBALS['test_rutas_error'] ?? '');
+            check('rutas (E6): sin error', $errRt === '', $errRt);
+            check('rutas (E6): `pedidos_completados()` lista `orders/{clave}/{order_id}/{item}`',
+                !empty($GLOBALS['test_rutas_item']), json_encode($GLOBALS['test_rutas_lista'] ?? null));
+            check('rutas (E6): `orders/{clave}/uploads/` NO se lista como pedido',
+                !empty($GLOBALS['test_rutas_uploads_fuera']));
+            $pdfRt = (string)($GLOBALS['test_rutas_pdf'] ?? '');
+            check('rutas (E6): la descarga encuentra el item y arma el PDF',
+                $pdfRt !== '' && is_file($pdfRt)
+                && (string)@file_get_contents($pdfRt, false, null, 0, 5) === '%PDF-', $pdfRt);
             break;
 
         case 'completados':
@@ -2047,6 +2061,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('omisible sin mockups queda false', isset($GLOBALS['test_mockups_sin']) && $GLOBALS['test_mockups_sin']['preview_omisible'] === false && $GLOBALS['test_mockups_sin']['mockups'] === []);
             break;
         case 'pedido':
+        case 'traslado':
             // Spec 035 (D5/D6): el item se mueve al arbol del cliente, con sus originales.
             $err_o = isset($GLOBALS['test_pedido_error']) ? (string)$GLOBALS['test_pedido_error'] : '';
             check('promocion sin error', $err_o === '' && !empty($GLOBALS['test_pedido_ok']), $err_o);
@@ -2055,9 +2070,15 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('el original viaja a orders/{clave}/uploads/', !empty($GLOBALS['test_pedido_original']));
             check('promover es idempotente (mismo destino)', ($GLOBALS['test_pedido_doble'] ?? false) === true);
             check('invitado (cliente 0) no promueve, con causa visible',
-                strpos((string)($GLOBALS['test_pedido_invitado'] ?? ''), 'cliente:invalido') !== false);
+                strpos((string)($GLOBALS['test_pedido_invitado'] ?? ''), 'motor:sesion:promocion:sin:cliente') !== false);
             check('el original se resuelve por la cadena orders/ -> sesion/',
                 !empty($GLOBALS['test_pedido_resuelve']));
+            // E4 (spec §4 + quickstart): sin staging y sin reescritura de filas.
+            check('traslado (E4): no hay staging (`tmp/orders/` no existe)',
+                !empty($GLOBALS['test_pedido_sin_staging']));
+            check('traslado (E4): las filas NO cambian (`origen: original`, mismo `id` y `file` vacio)',
+                !empty($GLOBALS['test_pedido_fila_intacta']),
+                json_encode($GLOBALS['test_pedido_fila'] ?? null));
             break;
         case 'mockup_alta':
             // Spec 011 (T032): el alta del catalogo de mockups recibe el archivo
@@ -5028,6 +5049,7 @@ switch ($fase) {
         break;
 
     case 'pedido':
+    case 'traslado':   // nombre del CONTRATO (spec §4 + quickstart E4/E8)
         // Spec 035 (D5/D6): `promover_order` MUEVE el item de la sesion al arbol
         // del cliente y traslada sus originales a `orders/{clave}/uploads/`.
         // Ya no hay staging: el item nace completo en la sesion.
@@ -5074,8 +5096,72 @@ switch ($fase) {
             }
             // La resolucion del original por la CADENA ya lo encuentra en orders/.
             $GLOBALS['test_pedido_resuelve'] = $sesion_p->resolver_original($idPatch, '1', $sidP) !== '';
+            // E4: sin staging (`tmp/orders/` no existe) y las FILAS no cambiaron: el `id`
+            // es el mismo, el `origen` sigue siendo `original` y el `file` sigue
+            // VACIO (promover no reescribe la fila con una ruta: la ubicacion la
+            // resuelve el servidor por `id`).
+            $GLOBALS['test_pedido_sin_staging'] = !is_dir(
+                $motor_o->dir_ambito('tmp') . DIRECTORY_SEPARATOR . 'orders');
+            $filaP = [];
+            foreach ((array)(is_array($finalP) ? ($finalP['subidas'] ?? []) : []) as $f) {
+                if (is_array($f)) { $filaP = $f; }
+            }
+            $GLOBALS['test_pedido_fila'] = $filaP;
+            $GLOBALS['test_pedido_fila_intacta'] = ((string)($filaP['id'] ?? '') === $idPatch)
+                && ((string)($filaP['origen'] ?? '') === 'original')
+                && ((string)($filaP['file'] ?? '') === '');
         } catch (\Throwable $e) {
             $GLOBALS['test_pedido_error'] = $e->getMessage();
+        }
+        break;
+
+    case 'rutas':
+        // Spec 035 (E6): el arbol nuevo de `orders/` en los ESCANEOS y en la descarga.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $motor_rt = $p->motor_para_tests();
+        try {
+            $motor_rt->guardar_config('muestra', [
+                'activo' => true,
+                'placeholders' => ['0000FF' => ['tipo' => 'texto', 'preset' => 'neon-glow', 'value' => 'Fijo', 'settings' => '']],
+            ]);
+            $dirRt = $motor_rt->dir_order('1', 4242, true) . DIRECTORY_SEPARATOR . 'item-rutas';
+            wp_mkdir_p($dirRt . DIRECTORY_SEPARATOR . 'img');
+            // El original del cliente vive en `uploads/`, HERMANO de los pedidos: el
+            // escaneo de Pedidos no puede confundirlo con un item.
+            wp_mkdir_p($motor_rt->dir_order_uploads('1', true));
+            file_put_contents($motor_rt->dir_order_uploads('1') . DIRECTORY_SEPARATOR . 'aaaa11112222.webp', 'ORIGINAL');
+            $pngRt = sys_get_temp_dir() . '/pd_puente_rutas_' . getmypid() . '.png';
+            \ExtractCorel\Engine\PngWriter::write($pngRt, 80, 60);
+            copy($pngRt, $dirRt . DIRECTORY_SEPARATOR . 'img' . DIRECTORY_SEPARATOR . 'muestra-0000FF-1.png');
+            file_put_contents($dirRt . DIRECTORY_SEPARATOR . 'manifest.json', json_encode([
+                'item_key' => 'item-rutas', 'sid' => 'test-rutas-1', 'cliente' => '1',
+                'pdfs' => ['muestra'], 'valores' => [], 'preview_estado' => 'ok',
+                'archivos' => [['pdf' => 'muestra', 'grupo_id' => '0000FF', 'indice' => 0,
+                    'file' => 'img/muestra-0000FF-1.png', 'hash' => 'h', 'origen' => 'texto']],
+                'subidas' => [['id' => 'aaaa11112222', 'mime' => 'image/webp', 'bytes' => 8,
+                    'creado' => time(), 'madre' => 'aaaa11112222', 'receta' => '',
+                    'sha' => str_repeat('d', 40), 'origen' => 'original']],
+            ]));
+            $listaRt = $p->pedidos_completados();
+            $GLOBALS['test_rutas_lista'] = $listaRt;
+            $GLOBALS['test_rutas_item'] = false;
+            $GLOBALS['test_rutas_uploads_fuera'] = true;
+            foreach ((array)$listaRt as $r) {
+                $ikRt = (string)($r['item_key'] ?? '');
+                if ($ikRt === 'uploads' || $ikRt === 'aaaa11112222') {
+                    $GLOBALS['test_rutas_uploads_fuera'] = false;
+                }
+                if ($ikRt === 'item-rutas' && (int)($r['order_id'] ?? 0) === 4242
+                    && (int)($r['clave'] ?? 0) === 1) {
+                    $GLOBALS['test_rutas_item'] = true;
+                }
+            }
+            $GLOBALS['test_rutas_pdf'] = $p->item_generar_pdf('1', 4242, 'item-rutas');
+        } catch (\Throwable $e) {
+            $GLOBALS['test_rutas_error'] = $e->getMessage();
         }
         break;
 

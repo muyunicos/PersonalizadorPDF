@@ -55,7 +55,7 @@ re-promover es no-op.
 ## E5 — La descarga no depende del original
 
 ```powershell
-php tests/texto_puente.php traslado
+php tests/texto_puente.php composicion
 php tests/motor_smoke.php
 ```
 
@@ -116,12 +116,17 @@ no borra los originales; sin items, borra la sesion entera (y los originales con
 php -l personalizador-pdf.php
 Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.FullName }
 node tests/receta-contrato.test.js
+node tests/vistas-contrato.test.js
 php tests/compositor.php
 node tests/compositor-paridad.test.js
+node tests/conciliacion.js
 php tests/texto_puente.php receta
 php tests/texto_puente.php carpeta_cliente
 php tests/texto_puente.php traslado
 php tests/texto_puente.php rutas
+php tests/texto_puente.php composicion
+php tests/texto_puente.php vistos
+php tests/texto_puente.php biblioteca
 php tests/motor_smoke.php
 php tests/parity.php
 php tests/sin_lectura.php
@@ -131,3 +136,35 @@ node tests/ficha-pedido.browser.js
 
 **Esperado**: todo en verde y `git status` limpio. Si algo falla, la causa esta en el mensaje
 (`motor:*` / `api:biblioteca:*`): no se inventa un fallback silencioso.
+
+---
+
+## Evidencia del recorrido (T042, 2026-10-28)
+
+Corrido en el **laboratorio** (`C:\wp-lab`, WordPress + WooCommerce reales) con Chrome + Playwright:
+
+| Escenario | Puerta | Resultado |
+|---|---|---|
+| E1 | `node tests/receta-contrato.test.js` + fase `receta` | OK |
+| E2 / E3 / E9 | fase `carpeta_cliente` | OK |
+| E4 / E8 | fase `traslado` (alias: `pedido`) | OK |
+| E5 | fase `composicion` + `motor_smoke` | OK |
+| E6 | fase `rutas` + `sin_lectura` + `estado_pmu` | OK |
+| E7 | `node tests/ficha-pedido.browser.js` | **47/47 OK** |
+
+Bloque "Puertas completas": **18 corridas, todas en verde**.
+
+### Lo que encontro el recorrido (y el arnes no)
+
+Los dos son **de la puesta en marcha**, no del diseno, y quedaron corregidos **con puerta**:
+
+1. **Re-edicion desde el carrito**: el cargador GUARDABA los ids planos (`idsPlanos`) y al restaurar
+   esperaba `[[id]]`, asi que la foto del comprador no volvia y el `min` volvia a **bloquear la
+   compra** — en silencio. Ahora `PURO.repartirPorRanura()` (`tests/conciliacion.js`, 7 asserts).
+   Ninguna puerta cubria ese camino: la re-edicion **nunca** se habia recorrido en un navegador.
+2. **Biblioteca vacia**: `familias()` y `ruta_familia()` exigian `file` en la fila de `subidas[]` y la
+   035 se lo quito (la ubicacion la resuelve el servidor por `id`): TODA foto se salteaba y
+   `op=listar` devolvia **0 familias**. La fase `biblioteca` sembraba el formato **viejo**, por eso
+   pasaba en verde mientras la realidad estaba rota; ahora siembra el formato real.
+
+Moraleja anotada en los dos casos: un test con datos obsoletos no verifica nada — valida una ficcion.

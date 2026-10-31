@@ -3266,7 +3266,7 @@ class Personalizador_PDF_Plugin
                     // Spec 035 (T024): la composicion no se pudo materializar (ni
                     // original ni params): causa propia, distinta del pool vacio.
                     if (((int)($composicion['faltantes'] ?? 0)) > 0) {
-                        throw new \RuntimeException('motor:descarga:composicion:ausente:' . $pdf);
+                        throw new \RuntimeException('motor:original:ausente:' . $pdf);
                     }
                     throw new \RuntimeException('motor:descarga:pool:vacio:' . $pdf);
                 }
