@@ -3005,15 +3005,21 @@ switch ($fase) {
         $sub_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b);
         // Pedido ya entregado del MISMO comprador (origen estable -> se REFERENCIA).
         $itemOrder_b = $motor_b->dir_order('1', 4242, true) . DIRECTORY_SEPARATOR . 'item-pedido';
-        @mkdir($itemOrder_b . '/subidas', 0775, true);
+        wp_mkdir_p($itemOrder_b);
         $madre_b = 'aaaabbbbcccc';
-        @copy($png_b, $itemOrder_b . '/subidas/' . $madre_b . '.webp');
+        // Spec 035: el ORIGINAL vive en la carpeta del CLIENTE (compartida) y la fila
+        // NO lleva `file`: la ubicacion la resuelve el servidor por `id` (cadena
+        // `orders/{clave}/uploads/` -> `tmp/sesion-{sid}/uploads/`). Asi quedan los
+        // pedidos reales, y es lo que la biblioteca tiene que saber leer.
+        wp_mkdir_p($motor_b->dir_order_uploads('1', true));
+        @copy($png_b, $motor_b->dir_order_uploads('1') . DIRECTORY_SEPARATOR . $madre_b . '.webp');
         file_put_contents($itemOrder_b . '/manifest.json', json_encode([
-            'item_key' => 'item-pedido', 'sid' => $sid_b, 'pdfs' => ['muestra'],
+            'item_key' => 'item-pedido', 'sid' => $sid_b, 'cliente' => '1', 'pdfs' => ['muestra'],
             'valores' => [], 'archivos' => [], 'preview_estado' => 'ok',
-            'subidas' => [['id' => $madre_b, 'file' => 'subidas/' . $madre_b . '.webp',
+            'subidas' => [['id' => $madre_b,
                 'mime' => 'image/webp', 'bytes' => (int)filesize($png_b), 'creado' => time(),
-                'madre' => $madre_b, 'receta' => 'r0', 'origen' => 'subida']],
+                'madre' => $madre_b, 'receta' => 'r0', 'sha' => str_repeat('c', 40),
+                'origen' => 'original']],
         ]));
         $params_b = ['v' => 2, 'w' => 1000, 'h' => 1000, 'forma' => 'auto', 'modo' => 'cubrir',
             'escala' => 1, 'ox' => 0.5, 'oy' => 0.5, 'fondo' => 'auto', 'transp' => '',
@@ -3031,7 +3037,8 @@ switch ($fase) {
         $GLOBALS['bib_copia_fila'] = (is_array($filaTmp_b) && ($filaTmp_b['origen'] ?? '') === 'subida'
             && ($filaTmp_b['madre'] ?? '') === 'ffff11112222' && ($filaTmp_b['file'] ?? '') !== '' );
         $antes2_b = count((array)glob($dirSub_b . '/*'));
-        $filaOrd_b = $sesion_b->usar_de_biblioteca($sid_b, $draft_b, 'muestra', '0000FF', $madre_b, 1, $params_b, $itemOrder_b . '/subidas/' . $madre_b . '.webp');
+        $filaOrd_b = $sesion_b->usar_de_biblioteca($sid_b, $draft_b, 'muestra', '0000FF', $madre_b, 1, $params_b,
+            $motor_b->dir_order_uploads('1') . DIRECTORY_SEPARATOR . $madre_b . '.webp');
         $GLOBALS['bib_ref_sin_copia'] = (count((array)glob($dirSub_b . '/*')) === $antes2_b);
         $GLOBALS['bib_ref_fila'] = (is_array($filaOrd_b) && ($filaOrd_b['origen'] ?? '') === 'ref'
             && strpos((string)($filaOrd_b['ref'] ?? ''), 'orders/') === 0);
@@ -3098,7 +3105,8 @@ switch ($fase) {
         $GLOBALS['bib_ttl_abandonado'] = !is_dir($dirAbandonado_b);
         $GLOBALS['bib_ttl_reciente'] = is_dir($dirReciente_b);
         $GLOBALS['bib_ttl_huerfana'] = !is_dir($dirHuerfana_b);
-        $GLOBALS['bib_ttl_order_intacto'] = is_file($itemOrder_b . '/subidas/' . $madre_b . '.webp');
+        $GLOBALS['bib_ttl_order_intacto'] = is_file(
+            $motor_b->dir_order_uploads('1') . DIRECTORY_SEPARATOR . $madre_b . '.webp');
         $GLOBALS['bib_ttl_ref_ok'] = is_file($sesion_b->resolver_ref($sesion_b->dir_item($sid_b, $draft_b), (string)($filaOrd_b['ref'] ?? '')));
         $GLOBALS['bib_ttl_sesion_viva'] = is_dir($motor_b->dir_ambito('tmp') . '/sesion-' . $sid_b);
         // Spec 030 (T018/T021): el dedupe por `sha` y el reuso de familia (D5/D24).

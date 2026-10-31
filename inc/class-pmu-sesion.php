@@ -1258,12 +1258,8 @@ class PMU_Sesion
                 if ($madre === '') {
                     $madre = $id;
                 }
-                $file = (string)($fila['file'] ?? '');
-                if ($file === '') {
-                    continue;
-                }
-                $ruta = $c['dir'] . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $file);
-                if (!is_file($ruta)) {
+                $ruta = $this->ruta_fila_subida($c, $fila);
+                if ($ruta === '') {
                     continue;
                 }
                 $w = (int)($fila['w'] ?? 0);
@@ -1370,7 +1366,7 @@ class PMU_Sesion
         $area = -1;
         foreach ($contenedores as $c) {
             foreach ((array)($c['manifest']['subidas'] ?? []) as $fila) {
-                if (!is_array($fila) || !isset($fila['id'], $fila['file'])) {
+                if (!is_array($fila) || !isset($fila['id'])) {
                     continue;
                 }
                 $id = (string)$fila['id'];
@@ -1381,9 +1377,10 @@ class PMU_Sesion
                 if ($suya !== $madre) {
                     continue;
                 }
-                $ruta = $c['dir'] . DIRECTORY_SEPARATOR
-                    . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string)$fila['file']);
-                if (!is_file($ruta)) {
+                // Spec 035: las filas `original` NO llevan `file`: se resuelven por
+                // `id` contra la carpeta del cliente / de la sesion.
+                $ruta = $this->ruta_fila_subida($c, $fila);
+                if ($ruta === '') {
                     continue;
                 }
                 $dim = @getimagesize($ruta);
@@ -1607,6 +1604,36 @@ class PMU_Sesion
             $borrados[] = $id;
         }
         return $borrados;
+    }
+
+    /**
+     * Ruta FISICA del archivo de una fila de `subidas[]`.
+     *
+     * Spec 035: una fila `origen: 'original'` NO lleva `file` (la ubicacion la
+     * resuelve el servidor por `id`), asi que se busca por la CADENA
+     * `orders/{clave}/uploads/` -> `tmp/sesion-{sid}/uploads/`. Las filas viejas
+     * (con `file` relativo al contenedor) siguen resolviendose igual.
+     *
+     * Devuelve '' si no existe: el llamador OMITE la foto, nunca inventa una ruta.
+     * Sin esto, `familias()` y `ruta_familia()` salteaban TODA fila 035 y la
+     * biblioteca quedaba vacia (lo cazo el laboratorio, no el arnes).
+     */
+    private function ruta_fila_subida(array $contenedor, array $fila)
+    {
+        $file = (string)($fila['file'] ?? '');
+        if ($file !== '') {
+            $ruta = (string)$contenedor['dir'] . DIRECTORY_SEPARATOR
+                . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $file);
+            return is_file($ruta) ? $ruta : '';
+        }
+        $id = strtolower((string)($fila['id'] ?? ''));
+        if ($id === '') {
+            return '';
+        }
+        // `clave` viaja en el manifest desde la 035; `sid` lo trae el contenedor.
+        $clave = (string)($contenedor['manifest']['cliente'] ?? '');
+        $ruta = $this->resolver_original($id, $clave, (string)($contenedor['sid'] ?? ''));
+        return ($ruta !== '' && is_file($ruta)) ? $ruta : '';
     }
 
     /**
@@ -1879,6 +1906,11 @@ class PMU_Sesion
                     continue;
                 }
                 $ids[$id] = true;
+                // Spec 035: las filas `original` NO llevan `file` (el archivo vive en
+                // `tmp/sesion-{sid}/uploads/` o `orders/{clave}/uploads/`, COMPARTIDO
+                // por los items y pedidos del comprador): borrar la familia de ESTE
+                // item no puede llevarse el original de los otros. Se quitan las
+                // filas; el original lo limpia la poda por sesion / TTL.
                 $archivo = basename((string)($fila['file'] ?? '' ));
                 if ($archivo !== '' ) {
                     $ruta = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . 'subidas' . DIRECTORY_SEPARATOR . $archivo;
@@ -1891,8 +1923,18 @@ class PMU_Sesion
             $manifest['subidas'] = $quedan;
             $archivos = [];
             foreach ((array)($manifest['archivos'] ?? []) as $fila) {
-                $idFila = (is_array($fila) && (string)($fila['origen'] ?? '') === 'subida')
-                    ? (string)($fila['id'] ?? '') : '';
+                $idFila = '';
+                if (is_array($fila)) {
+                    $origenFila = (string)($fila['origen'] ?? '');
+                    if ($origenFila === 'subida') {
+                        $idFila = (string)($fila['id'] ?? '');
+                    } elseif ($origenFila === 'compuesta') {
+                        // Spec 035: la fila compuesta no lleva `id`; el original va en
+                        // `orig.id`. Sin esto, borrar la familia dejaba el grupo pintando
+                        // la foto que el comprador acababa de sacar.
+                        $idFila = (string)($fila['orig']['id'] ?? '');
+                    }
+                }
                 if ($idFila !== '' && isset($ids[$idFila])) {
                     continue;
                 }

@@ -38,6 +38,9 @@ const BASE = process.env.PMU_BASE || 'http://localhost:8091';
 const PRODUCTO = process.env.PMU_PRODUCTO || BASE + '/product/sticker-circular-6cm-lab/';
 const PMU = process.env.PMU_LAB_UPLOADS || 'C:\\wp-lab\\wordpress\\wp-content\\uploads\\pmu';
 const CAPT = process.env.PMU_CAPTURAS || 'C:\\wp-lab\\capturas';
+// Spec 035: el arbol de pedidos es por CLIENTE (`orders/{clave}/{order_id}/...`).
+// El usuario de prueba del lab es `lab`, id 1.
+const CLAVE_LAB = process.env.PMU_CLAVE || '1';
 const FOTO = (process.env.PMU_TEMP || 'C:\\wp-lab') + '\\ficha-foto-prueba.png';
 const CHROME = process.env.TEXTMUY_CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
@@ -251,7 +254,8 @@ async function precondiciones(page) {
     try {
         const page = await ctx.newPage();
         const errores = [];
-        page.on('pageerror', (e) => errores.push('PAGEERROR: ' + e.message));
+        page.on('pageerror', (e) => errores.push('PAGEERROR: '
+            + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' <- ') : (e && e.message))));
         page.on('console', (m) => { if (m.type() === 'error' && !/favicon/i.test(m.text())) errores.push('ERROR: ' + m.text().slice(0, 160)); });
         await page.addInitScript(() => {
             window.__rechazos = [];
@@ -297,7 +301,11 @@ async function precondiciones(page) {
         await page.screenshot({ path: CAPT + '\\ficha-inicial.png' });
 
         // ---- Cargador: subir la foto (spec 012 + 026 + 030)
-        const antesSubidas = listarRec(PMU + '\\tmp').filter((f) => f.ruta.indexOf('subidas') >= 0).length;
+        // Spec 035: la foto del comprador entra a la carpeta **COMPARTIDA** de la sesion
+// (`tmp/sesion-{sid}/uploads/`), no a `{item}/subidas/` (ubicacion pre-035). El
+// regex exige `sesion-*/uploads/`, para no confundirse con `wp-content/uploads`.
+        const esOriginalSesion = (f) => /[\\/]sesion-[^\\/]+[\\/]uploads[\\/][^\\/]+$/.test(f.ruta);
+        const antesSubidas = listarRec(PMU + '\\tmp').filter(esOriginalSesion).length;
         await page.locator('[data-pmu-panel]').getByRole('button', { name: 'Cargar imagen' }).first().click();
         await page.waitForSelector('.spmu-modal', { state: 'visible', timeout: 20000 });
         await esperar(800);
@@ -311,10 +319,10 @@ async function precondiciones(page) {
             if (await noBtn.count()) { await noBtn.click().catch(() => { }); } else { await page.keyboard.press('Escape'); }
         }
         await esperar(1500);
-        const subidas = listarRec(PMU + '\\tmp').filter((f) => f.ruta.indexOf('subidas') >= 0);
+        const subidas = listarRec(PMU + '\\tmp').filter(esOriginalSesion);
         const subidaOk = cuenta(log, 'personalizador_pdf_subida') >= 1 || cuenta(log, 'personalizador_pdf_biblioteca') >= 1;
         check('cargador: POST de subida (subida o biblioteca de la spec 030)', subidaOk, JSON.stringify(log.posts));
-        check('cargador (spec 012/026): la foto de esta corrida entro al item',
+        check('cargador (spec 035): la foto de esta corrida entro a la carpeta de la sesion',
             subidas.length === antesSubidas + 1,
             'antes=' + antesSubidas + ' despues=' + subidas.length + ' | nueva=' + (subidas[subidas.length - 1] ? subidas[subidas.length - 1].ruta.split('\\').pop() : '-'));
         const estado = await page.evaluate(() => ({
@@ -418,8 +426,13 @@ async function precondiciones(page) {
         await subirOtra(page);
         await cerrarOverlays(page);
         const famDespues = familiasItem();
+        // E4 (spec 035, D3/D7): re-encuadrar la MISMA foto recompone la misma imagen: el
+        // `id` del original no cambia (el contenido es el mismo, se deduplica) y la
+        // receta vigente se ACTUALIZA en la fila. Ya NO entra un archivo `{madre}-2`:
+        // eso era el modelo pre-035, donde cada recorte era un archivo propio.
         const versionadas = Object.keys(famDespues).filter((m) => /-2\./.test(famDespues[m].join(' ')));
-        check('biblioteca (030/E4): con otra Escala entra una VERSION de la misma familia', versionadas.length >= 1,
+        check('biblioteca (035/D3/D7): re-encuadrar NO crea familia ni version nueva',
+            versionadas.length === 0 && Object.keys(famDespues).length === Object.keys(famAntes).length,
             'familias=' + Object.keys(famDespues).length + ' antes=' + Object.keys(famAntes).length + ' | version=' + JSON.stringify(versionadas.slice(0, 2)));
 
         // E6.1: dedupe por contenido. Subir la MISMA foto otra vez NO crea otra familia.
@@ -487,12 +500,25 @@ async function precondiciones(page) {
             mockup ? mockup.ruta.split('\\').slice(-2).join('/') + ' (' + Math.round(mockup.bytes / 1024) + ' KB)' : '(sin mockup)');
         await page.screenshot({ path: CAPT + '\\carrito.png' });
 
-        // ---- Checkout: invitado + contra reembolso (spec 014)
+        // ---- Checkout: CLIENTE LOGUEADO + contra reembolso (spec 014)
+        // Spec 035 (D8): la cuenta es OBLIGATORIA al comprar. Un pedido con
+        // `customer_id = 0` (invitado) NO se promueve: sin cliente no hay carpeta
+        // `orders/{clave}/`. El recorrido real es el del cliente logueado, que es
+        // ademas el unico que puede descargar desde mi-cuenta/descargas/.
+        const iniciarSesion = async (pg) => {
+            await pg.goto(BASE + '/wp-login.php', { waitUntil: 'domcontentloaded' });
+            await pg.fill('#user_login', 'lab').catch(() => { });
+            await pg.fill('#user_pass', 'labpass123').catch(() => { });
+            await Promise.all([
+                pg.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 90000 }).catch(() => null),
+                pg.click('#wp-submit').catch(() => { }),
+            ]);
+            await esperar(1500);
+        };
+        await iniciarSesion(page);
         await page.goto(BASE + '/checkout/', { waitUntil: 'domcontentloaded' });
         await esperar(2500);
         await cerrarModalPais(page);
-        const invitado = page.locator('button:has-text("Continuar como invitado"), a:has-text("Continuar como invitado")').first();
-        if (await invitado.count()) { await invitado.click({ force: true }).catch(() => { }); await esperar(2500); }
         await page.waitForSelector('#billing_first_name', { state: 'attached', timeout: 20000 }).catch(() => { });
         const emailComprador = 'comprador-lab+' + Date.now() + '@localhost.test';
         const campos = {
@@ -560,12 +586,12 @@ async function precondiciones(page) {
         let pdf = [];
         if (oid) {
             for (let i = 0; i < 40; i++) {
-                pdf = listarRec(PMU + '\\orders\\' + oid).filter((f) => /_procesado\.pdf$/i.test(f.ruta));
+                pdf = listarRec(PMU + '\\orders\\' + CLAVE_LAB + '\\' + oid).filter((f) => /_procesado\.pdf$/i.test(f.ruta));
                 if (pdf.length) break;
                 await esperar(1000);
             }
         }
-        check('pedido (spec 004/017): el PDF procesado quedo en orders/{id}/', pdf.length >= 1,
+        check('pedido (spec 035): el PDF procesado quedo en orders/{clave}/{id}/', pdf.length >= 1,
             pdf.length ? pdf.map((f) => f.ruta.split('orders\\')[1] + ' (' + Math.round(f.bytes / 1024) + ' KB)').join(' ') : '(sin PDF)');
         if (pdf.length) {
             const cab = fs.readFileSync(pdf[0].ruta).slice(0, 5).toString('latin1');
