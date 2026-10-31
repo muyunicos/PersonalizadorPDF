@@ -519,7 +519,14 @@
                 }
             });
             return out;
-        }
+        },
+
+        /**
+         * Spec 012 (fix): reparte una lista PLANA de ids entre las RANURAS. El
+         * cargador GUARDA plano (`idsPlanos`) y al restaurar espera `[[id]]`: sin
+         * esta conversion la foto guardada no volvia al re-editar desde el carrito.
+         */
+        repartirPorRanura: repartirPorRanura
     };
 
     // Node (tests/conciliacion.js): exporta SOLO la logica pura, sin DOM.
@@ -714,6 +721,29 @@
             }
             return json.data;
         });
+    }
+
+    /**
+     * Spec 012 (fix): reparte una lista PLANA de ids entre las RANURAS, respetando
+     * el `max` de cada una. Si ya viene por ranura (cada entrada una lista) se
+     * devuelve tal cual.
+     *
+     * Hace falta porque las dos puntas NO hablaban el mismo idioma: el cargador
+     * GUARDA plano (`CargadorPMU.ids()` -> `idsPlanos`) y al restaurar esperaba
+     * `[[id]]`. Con `'id'` en vez de `['id']` el `Array.isArray` daba falso y la
+     * foto guardada NUNCA se restauraba: al re-editar desde el carrito el cargador
+     * arrancaba vacio y el `min` volvia a bloquear la compra.
+     */
+    function repartirPorRanura(ids, ranuras) {
+        if (!Array.isArray(ids)) { return null; }
+        if (ids.some(function (x) { return Array.isArray(x); })) { return ids; }
+        var out = [];
+        var resto = ids.slice();
+        (ranuras || []).forEach(function (r) {
+            var max = Math.max(1, parseInt(r && r.max, 10) || 1);
+            out.push(resto.splice(0, max));
+        });
+        return out;
     }
 
     /**
@@ -1775,7 +1805,10 @@
             var cargador = new window.CargadorPMU(el, {
                 ranuras: ranuras,
                 envoltura: envoltura,
-                idsIniciales: idsIniciales,
+                // Spec 012 (fix): el valor guardado llega PLANO (`ids()` -> `idsPlanos`) y el
+                // cargador restaura una entrada por RANURA. Aca `ranuras` ya esta armada;
+                // sin esta conversion la foto guardada nunca se restauraba.
+                idsIniciales: repartirPorRanura(idsIniciales, ranuras),
                 // Spec 035 (T014/D2): el cargador publica el recorte local de cada
                 // foto subida (objectURL) para que la vista previa dibuje sin red.
                 onRecorte: function (id, url, receta) { anotarRecorte(id, url, receta); },
@@ -1857,5 +1890,34 @@
         iniciar();
     }
 
-    global.PMU_Tienda = { iniciar: iniciar, montarCampos: montarCampos, puro: PURO };
+    global.PMU_Tienda = {
+        iniciar: iniciar,
+        montarCampos: montarCampos,
+        puro: PURO,
+        /**
+         * Spec 035 (§3.5): estado de la galeria en SOLO LECTURA, para el recorrido
+         * de navegador (que no puede ver las clausuras). Devuelve el ORDEN real de
+         * las vistas, cuales son obligatorias, cuales quedaron vistas y cuantas
+         * faltan. No expone nada escribible: la galeria sigue siendo la unica que
+         * decide.
+         */
+        galeria: function () {
+            if (!galeriaActual) { return null; }
+            return {
+                vistas: galeriaActual.vistas.map(function (v) {
+                    return {
+                        id: PURO.claveVisto(v),
+                        pdf: (v.pdfDatos && v.pdfDatos.pdf) || '',
+                        omisible: !!(v.pdfDatos && v.pdfDatos.preview_omisible),
+                        fallida: !!v.fallida,
+                        obligatoria: PURO.vistaObligatoria(v)
+                    };
+                }),
+                idx: galeriaActual.idx,
+                visto: Object.keys(galeriaActual.visto || {}),
+                faltan: PURO.faltanVistas(galeriaActual.vistas, galeriaActual.visto),
+                itemKey: galeriaActual.itemKey || ''
+            };
+        }
+    };
 })(typeof window !== 'undefined' ? window : globalThis);

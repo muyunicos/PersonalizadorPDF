@@ -7,7 +7,16 @@
 var assert = require('assert');
 var PURO = require('../assets/tienda.js');
 
-// resolverPlantilla: sustituye [campoN] por el valor dual del campo.
+// Spec 012 (fix): el campo GUARDA los ids PLANOS (`CargadorPMU.ids()`) y el
+// cargador restaura UNA ENTRADA POR RANURA. Sin esta conversion la foto guardada
+// no volvia al re-editar desde el carrito y el `min` bloqueaba la compra.
+assert.deepStrictEqual(PURO.repartirPorRanura(['a'], [{ max: 1 }]), [['a']]);
+assert.deepStrictEqual(PURO.repartirPorRanura(['a', 'b'], [{ max: 1 }, { max: 1 }]), [['a'], ['b']]);
+assert.deepStrictEqual(PURO.repartirPorRanura(['a', 'b', 'c'], [{ max: 2 }, { max: 2 }]), [['a', 'b'], ['c']]);
+assert.deepStrictEqual(PURO.repartirPorRanura([], [{ max: 1 }]), [[]]);
+assert.deepStrictEqual(PURO.repartirPorRanura([['a']], [{ max: 1 }]), [['a']]);   // ya por ranura: tal cual
+assert.strictEqual(PURO.repartirPorRanura(null, [{ max: 1 }]), null);
+assert.strictEqual(PURO.repartirPorRanura('a', [{ max: 1 }]), null);
 assert.strictEqual(
     PURO.resolverPlantilla('Hola [campo1], saludos [campo2]', { 1: { valor: 'Ana' }, 2: { valor: 'B' } }),
     'Hola Ana, saludos B'

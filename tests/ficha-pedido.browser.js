@@ -197,7 +197,79 @@ async function esperarTira(page, minis) {
     }
     return r;
 }
-const subidasArchivos = () => listarRec(PMU + '\\tmp').filter((f) => f.ruta.indexOf('subidas') >= 0 && !/\.lock$/.test(f.ruta));
+/**
+ * Spec 035: el ORIGINAL del comprador vive en la carpeta COMPARTIDA de la sesion
+ * (`tmp/sesion-{sid}/uploads/`), no en `{item}/subidas/` (ubicacion pre-035). El
+ * regex exige `sesion-{sid}/uploads/`, para no confundirse con `wp-content/uploads`.
+ */
+const esOriginalSesion = (f) => /[\\/]sesion-[^\\/]+[\\/]uploads[\\/][^\\/]+$/.test(f.ruta);
+const subidasArchivos = () => listarRec(PMU + '\\tmp').filter((f) => esOriginalSesion(f));
+
+/* ---------- Spec 035 (§3.5): marca de "visto" (recorrido de navegador) ---------- */
+/** Estado de la galeria via el hook de SOLO LECTURA de `tienda.js`. */
+const galeriaEstado = (page) => page.evaluate(() => {
+    const g = (window.PMU_Tienda && window.PMU_Tienda.galeria) ? window.PMU_Tienda.galeria() : null;
+    return g ? { vistas: g.vistas, idx: g.idx, visto: g.visto, faltan: g.faltan, itemKey: g.itemKey } : null;
+});
+/** La leyenda solo cuenta si esta REALMENTE en pantalla (`display` + `offsetParent`). */
+const leyendaVistas = (page) => page.evaluate(() => {
+    const e = document.querySelector('.pmu-gal-revisar');
+    if (!e) { return { existe: false, visible: false, texto: '' }; }
+    const st = window.getComputedStyle(e);
+    return { existe: true, visible: st.display !== 'none' && e.offsetParent !== null, texto: e.textContent.trim() };
+});
+/** Marcas guardadas en localStorage (una entrada por item_key). */
+const marcasLocales = (page) => page.evaluate(() => {
+    try {
+        const todo = JSON.parse(window.localStorage.getItem('pmu_vistas_v1') || '{}');
+        const items = Object.keys(todo);
+        return { items: items.length, itemKey: items[0] || '', marcas: items.length ? (todo[items[0]] || []) : [] };
+    } catch (e) { return null; }
+});
+const botonCarrito = (page) => page.evaluate(() => {
+    const b = document.querySelector('.single_add_to_cart_button');
+    return b ? b.disabled : null;
+});
+/** Espera a que la galeria tenga `n` vistas armadas (o se agota el tiempo). */
+const esperarGaleria = async (page, n) => {
+    for (let i = 0; i < 200; i++) {
+        const g = await galeriaEstado(page);
+        if (g && g.vistas.length === n) return g;
+        await esperar(500);
+    }
+    return await galeriaEstado(page);
+};
+/**
+ * Siembra el escenario de US3 en el lab y devuelve el RESTAURADOR. El lab traia
+ * `circulo6cm` OMISIBLE y `sincampos` sin mockups: sin vistas obligatorias el
+ * carrito nunca se bloquea y US3 no seria verificable. Se deja 2 obligatorias
+ * (circulo6cm) + 1 omisible (sincampos), y se restaura al terminar.
+ */
+const sembrarUS3 = () => {
+    const dir = PMU + '\\pdfs\\';
+    const leer = (pdf) => JSON.parse(fs.readFileSync(dir + pdf + '\\config.json', 'utf8'));
+    const escribir = (pdf, j) => fs.writeFileSync(dir + pdf + '\\config.json', JSON.stringify(j, null, 1));
+    const original = { circulo6cm: leer('circulo6cm'), sincampos: leer('sincampos') };
+    const c = JSON.parse(JSON.stringify(original.circulo6cm));
+    c.preview_omisible = false;                       // ahora OBLIGA
+    c.mockups = c.mockups || [];
+    while (c.mockups.length < 2) {                    // 2 vistas obligatorias
+        const m = JSON.parse(JSON.stringify(c.mockups[0]));
+        m.id = 'mockup-' + (c.mockups.length + 1);
+        c.mockups.push(m);
+    }
+    escribir('circulo6cm', c);
+    const s = JSON.parse(JSON.stringify(original.sincampos));
+    s.preview_omisible = true;                        // queda EXIMIDA
+    const ms = JSON.parse(JSON.stringify(c.mockups[0]));
+    ms.id = 'mockup-s1';
+    s.mockups = [ms];
+    escribir('sincampos', s);
+    return () => {
+        escribir('circulo6cm', original.circulo6cm);
+        escribir('sincampos', original.sincampos);
+    };
+};
 
 /* ---------- Precondiciones (fallan con la accion exacta) ---------- */
 async function precondiciones(page) {
@@ -251,6 +323,9 @@ async function precondiciones(page) {
         { name: 'muyu_stay_here', value: 'localhost', domain: 'localhost', path: '/' },
     ]);
     let fallas = 0;
+    // Spec 035 (§3.5): restaurador del escenario US3 sembrado en el lab. Se declara
+    // aca para que el `finally` lo pueda correr aunque el recorrido falle a mitad.
+    let restaurarUS3 = null;
     try {
         const page = await ctx.newPage();
         const errores = [];
@@ -301,10 +376,6 @@ async function precondiciones(page) {
         await page.screenshot({ path: CAPT + '\\ficha-inicial.png' });
 
         // ---- Cargador: subir la foto (spec 012 + 026 + 030)
-        // Spec 035: la foto del comprador entra a la carpeta **COMPARTIDA** de la sesion
-// (`tmp/sesion-{sid}/uploads/`), no a `{item}/subidas/` (ubicacion pre-035). El
-// regex exige `sesion-*/uploads/`, para no confundirse con `wp-content/uploads`.
-        const esOriginalSesion = (f) => /[\\/]sesion-[^\\/]+[\\/]uploads[\\/][^\\/]+$/.test(f.ruta);
         const antesSubidas = listarRec(PMU + '\\tmp').filter(esOriginalSesion).length;
         await page.locator('[data-pmu-panel]').getByRole('button', { name: 'Cargar imagen' }).first().click();
         await page.waitForSelector('.spmu-modal', { state: 'visible', timeout: 20000 });
@@ -449,6 +520,11 @@ async function precondiciones(page) {
             familiasAntes6 + ' -> ' + familiasDespues6 + ' familias');
         page.screenshot({ path: CAPT + '\\biblioteca-tira.png' }).catch(() => { });
 
+        // Spec 035 (§3.5): SIEMBRA del escenario de US3 (2 obligatorias + 1 omisible).
+        // Va aca, ANTES de la vista previa, porque el servidor lee `config.json` al
+        // responder. El restaurador corre en el `finally`.
+        restaurarUS3 = sembrarUS3();
+
         // ---- Vista previa: galeria 300x300 + mockup (spec 004/011) y pool (spec 029)
         const op = page.locator('.pmu-opciones-btn');
         if (await op.count()) { await op.last().click().catch(() => { }); await esperar(400); }
@@ -475,8 +551,78 @@ async function precondiciones(page) {
         const fotosItem = listarRec(PMU + '\\tmp').filter((f) => f.ruta.indexOf('sesion-') >= 0 && f.ruta.indexOf('\\subidas\\') >= 0);
         check('vista previa (spec 029): el pool guarda lo GENERADO y referencia la foto',
             generados.length >= 1 && fotosItem.length >= 1, 'pool(img/)=' + generados.length + ' | subidas/=' + fotosItem.length);
-        const addTras = await page.evaluate(() => { const b = document.querySelector('.single_add_to_cart_button'); return b ? b.disabled : null; });
-        check('vista previa (spec 004): con el mockup listo el carrito se habilita', addTras === false, 'disabled=' + addTras);
+        const addTras = await botonCarrito(page);
+
+        /* ---- US3 (spec 035 §3.5): la vista previa se marca al MOSTRARSE ---- */
+        const g0 = await esperarGaleria(page, 3);
+        check('US3 (§3.5): la galeria arma las obligatorias PRIMERO',
+            !!g0 && g0.vistas.length === 3
+            && g0.vistas.slice(0, 2).every((v) => v.obligatoria === true && v.omisible === false)
+            && g0.vistas[2].omisible === true,
+            JSON.stringify(g0 && g0.vistas));
+        check('US3 (D11): MOSTRAR la inicial ya la marca (no hay boton de ver)',
+            !!g0 && g0.visto.length === 1 && g0.visto[0] === g0.vistas[0].id,
+            JSON.stringify(g0 && g0.visto));
+        check('US3 (D11): con una obligatoria sin ver el carrito esta BLOQUEADO (no antes de la ultima)',
+            !!g0 && g0.faltan === 1 && addTras === true,
+            'faltan=' + (g0 && g0.faltan) + ' disabled=' + addTras);
+        const ley0 = await leyendaVistas(page);
+        check('US3 (§3.5): la leyenda "Revisa la vista previa" se ve mientras falten',
+            ley0.visible === true && /Revisa la vista previa/i.test(ley0.texto), JSON.stringify(ley0));
+        await page.screenshot({ path: CAPT + '\\us3-falta-una.png' });
+
+        // Navegar a la SEGUNDA obligatoria: verla completa la revision.
+        await page.locator('.pmu-gal-next').first().click();
+        await esperar(1200);
+        const g1 = await galeriaEstado(page);
+        const addVer = await botonCarrito(page);
+        check('US3 (D11): navegar MARCA la vista (ya no falta ninguna obligatoria)',
+            !!g1 && g1.faltan === 0 && g1.visto.length >= 2, JSON.stringify(g1 && g1.visto));
+        check('US3 (D11): el carrito se habilita AL VER LA ULTIMA obligatoria',
+            addVer === false, 'disabled=' + addVer);
+        check('US3 (§3.5): la leyenda desaparece con la revision completa',
+            (await leyendaVistas(page)).visible === false);
+        const ls = await marcasLocales(page);
+        check('US3 (§3.5): la marca queda en localStorage, por item',
+            !!ls && ls.items === 1 && ls.marcas.length >= 2 && ls.itemKey === (g1 && g1.itemKey),
+            JSON.stringify(ls));
+        await page.screenshot({ path: CAPT + '\\us3-completa.png' });
+
+        // Recarga del MISMO item (la via del "Editar" del carrito): la marca sobrevive
+        // y el carrito NO vuelve a bloquear. OJO: sin `?pmu_item_key=` la ficha arranca
+        // un item NUEVO y las marcas son de otro item (por eso el parametro).
+        const itemKeyUs3 = (g1 && g1.itemKey) || '';
+        await page.goto(PRODUCTO + '?pmu_item_key=' + encodeURIComponent(itemKeyUs3), { waitUntil: 'domcontentloaded' });
+        await esperar(3000);
+        await cerrarModalPais(page);
+        await page.getByRole('button', { name: 'Vista previa' }).first().click();
+        const g2 = await esperarGaleria(page, 3);
+        await esperar(1500);
+        // El carrito combina TRES bloqueos (spec 022: `vistas` + `validez` + `minimos`).
+        // El de vistas ya no aplica (`faltan=0`); el de minimos depende de que el
+        // cargador termine de restaurar la foto del item, que es asincrono (resuelve
+        // las URLs por POST). Se espera a que el panel asiente, no se mide en el aire.
+        let addRecarga = true;
+        for (let i = 0; i < 60; i++) {
+            addRecarga = await botonCarrito(page);
+            if (addRecarga === false) break;
+            await esperar(500);
+        }
+        check('US3 (§3.5): al RECARGAR el mismo item la marca se conserva y el carrito arranca habilitado',
+            !!g2 && g2.faltan === 0 && addRecarga === false,
+            'faltan=' + (g2 && g2.faltan) + ' disabled=' + addRecarga
+            + ' | item ' + itemKeyUs3 + ' -> ' + (g2 && g2.itemKey)
+            + ' | valores.1=' + JSON.stringify(await page.evaluate(() => {
+                const v = (window.PMU_FICHA && PMU_FICHA.valores) ? (PMU_FICHA.valores['1'] || PMU_FICHA.valores[1]) : null;
+                return v ? v.valor : '(sin campo 1)';
+            }))
+            + ' | sesion=' + JSON.stringify(await page.evaluate(() => (window.PMU_FICHA && PMU_FICHA.sesion) ? Object.keys(PMU_FICHA.sesion) : null))
+            + ' | panel=' + JSON.stringify(await page.evaluate(() => ({
+                minis: document.querySelectorAll('[data-pmu-panel] .cpmu-mini').length,
+                faltaMin: (() => { const e = document.querySelector('.cpmu-falta'); return (e && !e.hidden) ? e.textContent.trim() : null; })(),
+                avisoMin: (() => { const t = [...document.querySelectorAll('[data-pmu-panel] *')].map((e) => e.textContent || '').find((x) => /Faltan \d+ foto/i.test(x)); return t ? t.trim().slice(0, 70) : null; })(),
+                otroAviso: (() => { const t = [...document.querySelectorAll('[data-pmu-panel] *')].map((e) => e.textContent || '').find((x) => /stock|no disponible|no cumple/i.test(x)); return t ? t.trim().slice(0, 70) : null; })()
+            }))));
         await page.screenshot({ path: CAPT + '\\ficha-vista-previa.png' });
 
         // ---- Carrito (spec 004): 1 linea con la personalizacion + mockup congelado
@@ -599,6 +745,8 @@ async function precondiciones(page) {
         }
         check('sin errores de pagina en la ficha/carrito/checkout', errores.length === 0, errores.slice(0, 3).join(' | '));
     } finally {
+        // Spec 035: el lab queda como estaba (los `config.json` sembrados se reponen).
+        try { if (typeof restaurarUS3 === 'function') { restaurarUS3(); } } catch (e) { /* evidencia opcional */ }
         await browser.close();
     }
     fallas = resultados.filter((r) => !r.ok).length;
