@@ -70,12 +70,12 @@
 
 **Independent Test**: E2 de `quickstart.md` (aparece `pdfs/{nombre}/mockups/{mockup_id}.webp`; la ficha hace **1** descarga por mockup; al editar capas se regenera).
 
-- [ ] T013 [US2] Aplanar en el editor: en `assets/mockups.js`, al guardar, exportar a **WebP** la composicion de las capas `tipo: img` **visibles** (filtros/efectos/deformaciones incluidos) y subirla con el guardado (usa el Canvas ya existente; sin render nuevo)
-- [ ] T014 [US2] Servidor: en `personalizador-pdf.php` (handler de mockups, ~`:5393-5430`) guardar el aplanado en `pdfs/{nombre}/mockups/{mockup_id}.webp` con el **id saneado** (`nombre_seguro`); no romper si falta
-- [ ] T015 [US2] Ficha: en `assets/tienda.js` `componerMockup()` (`:907`) pasar a `PMUMockup.componer` **1** capa `img` (el aplanado) + los `placeholder`; degradar con **causa visible** si el bitmap falta
-- [ ] T016 [US2] Regeneracion: el aplanado se **reescribe** en cada guardado de capas (cubre mover/cambiar una capa y guardar)
-- [ ] T017 [US2] Fase `aplanado` en `tests/texto_puente.php`: la ruta es `pdfs/{nombre}/mockups/{mockup_id}.webp`; un id invalido se rechaza; ausente no rompe
-- [ ] T018 [US2] Gate: `node --check assets/mockups.js` + `node tests/mockup-contrato.test.js` + `php tests/texto_puente.php aplanado` en verde
+- [X] T013 [US2] Aplanar en el editor: en `assets/mockups.js`, al guardar, exportar a **WebP** la composicion de las capas `tipo: img` **visibles** (filtros/efectos/deformaciones incluidos) y subirla con el guardado (usa el Canvas ya existente; sin render nuevo)
+- [X] T014 [US2] Servidor: en `personalizador-pdf.php` (handler de mockups, ~`:5393-5430`) guardar el aplanado en `pdfs/{nombre}/mockups/{mockup_id}.webp` con el **id saneado** (`nombre_seguro`); no romper si falta
+- [X] T015 [US2] Ficha: en `assets/tienda.js` `componerMockup()` (`:907`) pasar a `PMUMockup.componer` **1** capa `img` (el aplanado) + los `placeholder`; degradar con **causa visible** si el bitmap falta — **hecho con FALLBACK**: sin aplanado (mockup aun sin regenerar) se conserva la composicion por capas, asi que ningun mockup existente se rompe; el servidor publica `aplanado: null` y el bitmap se regenera al guardar. Nota: el servidor **excluye** el `{id}.webp` de la lista de fotos del admin (`mockup_fotos_lista`) para que el artefacto no figure ni se pueda borrar como foto.
+- [X] T016 [US2] Regeneracion: el aplanado se **reescribe** en cada guardado de capas (cubre mover/cambiar una capa y guardar)
+- [X] T017 [US2] Fase `aplanado` en `tests/texto_puente.php`: la ruta es `pdfs/{nombre}/mockups/{mockup_id}.webp`; un id invalido se rechaza; ausente no rompe
+- [X] T018 [US2] Gate: `node --check assets/mockups.js` + `node tests/mockup-contrato.test.js` + `php tests/texto_puente.php aplanado` en verde
 
 **Checkpoint**: US2 entregable sola (mockup servido aplanado).
 

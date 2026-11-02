@@ -2029,6 +2029,35 @@ jQuery(function ($) {
         temporizadorGuardado = setTimeout(function () { guardar(); }, 1500);
     }
 
+    /**
+     * Spec 036 (T013/D10): aplanado del mockup ACTUAL a WebP — SOLO las capas
+     * `img` VISIBLES, con sus filtros y deformaciones, SIN placeholders ni marcas
+     * del editor. Es el fondo que sirve la ficha del cliente: 1 descarga por
+     * mockup en vez de N capas. Devuelve `null` si no hay nada que aplanar o el
+     * navegador no soporta `toBlob`: el guardado de las capas NUNCA depende de
+     * esto (el aplanado es DERIVADO y se regenera en cada guardado, T016).
+     */
+    function aplanarMockup(m) {
+        if (!R || typeof R.componer !== 'function' || !m) { return Promise.resolve(null); }
+        var capas = (m.capas || []).filter(function (c) {
+            return c && c.tipo === 'img' && !c.oculta;
+        });
+        if (!capas.length) { return Promise.resolve(null); }
+        var c = document.createElement('canvas');
+        c.width = LIENZO;
+        c.height = LIENZO;
+        return R.componer(c.getContext('2d'), capas, {
+            resolver: resolverCapa,
+            contexto: contexto(),
+            lienzo: LIENZO
+        }).then(function () {
+            return new Promise(function (resolver) {
+                if (typeof c.toBlob !== 'function') { resolver(null); return; }
+                c.toBlob(function (blob) { resolver(blob || null); }, 'image/webp', 0.85);
+            });
+        }).catch(function () { return null; });
+    }
+
     function guardar() {
         if (!api || !mockup()) {
             if (!api) {
@@ -2040,14 +2069,28 @@ jQuery(function ($) {
         if (temporizadorGuardado) { clearTimeout(temporizadorGuardado); }
         estado.guardado = 'guardando';
         pintarEstado();
-        var pares = [
-            ['archivo', datos.pdf + '.pdf'],
-            ['mockups', JSON.stringify(estado.mockups)],
-            // Fuente unica de la marca: se lee del control vivo, no de la
-            // copia congelada al cargar (bug corregido, FR-037).
-            ['preview_omisible', $ed.find('.ec-mk-omisible').prop('checked') ? '1' : '0']
-        ];
-        api('personalizador_pdf_mockups', pares, cfg.nonceAccion ? cfg.nonceAccion.mockups : (cfg.nonceMockups || ''))
+        // Fuente unica de la marca: se lee del control vivo, no de la
+        // copia congelada al cargar (bug corregido, FR-037).
+        var omisible = $ed.find('.ec-mk-omisible').prop('checked') ? '1' : '0';
+        var jsonMockups = JSON.stringify(estado.mockups);
+        var m = mockup();
+        // Spec 036 (T013/T016/D10): el mockup APLANADO viaja en el MISMO guardado
+        // (WebP de las capas `img` visibles). El id es el del mockup que se acaba
+        // de guardar: el servidor escribe pdfs/{nombre}/mockups/{id}.webp. Sin
+        // bitmap (no hay capas img, o el navegador no lo soporta) el guardado de
+        // las capas sigue igual y la ficha degrada con causa visible.
+        aplanarMockup(m).then(function (blob) {
+            var fd = new FormData();
+            fd.append('archivo', datos.pdf + '.pdf');
+            fd.append('mockups', jsonMockups);
+            fd.append('preview_omisible', omisible);
+            if (blob) {
+                fd.append('aplanado_id', String((m && m.id) || ''));
+                fd.append('aplanado', blob, 'aplanado.webp');
+            }
+            return api('personalizador_pdf_mockups', fd,
+                cfg.nonceAccion ? cfg.nonceAccion.mockups : (cfg.nonceMockups || ''));
+        })
             .then(function () {
                 estado.guardado = 'guardado';
                 // El servidor es la autoridad: se refleja lo que guardo.

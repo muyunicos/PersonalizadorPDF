@@ -364,6 +364,9 @@ class Personalizador_PDF_Plugin
     {
         $motor = $this->pmu_uploads();
         $out = [];
+        // Spec 036 (T014/T015): el bitmap APLANADO de un mockup (`{mockup_id}.webp`)
+        // no es una foto del admin: se excluye de esta lista.
+        $aplanados = $this->aplanados_mockups($nombre);
         try {
             $dir = $motor->dir_mockups($nombre);
         } catch (\Throwable $e) {
@@ -379,10 +382,78 @@ class Personalizador_PDF_Plugin
                 continue;
             }
             $file = basename($ruta);
+            if (isset($aplanados[$file])) {
+                continue;
+            }
             $out[$file] = $base . rawurlencode($file);
         }
         ksort($out);
         return $out;
+    }
+
+    private function aplanados_mockups($nombre)
+    {
+        $out = [];
+        $motor = $this->pmu_uploads();
+        try {
+            $config = $motor->leer_config($nombre);
+        } catch (\Throwable $e) {
+            return $out;
+        }
+        $ids = [];
+        foreach ((array)(isset($config['mockups']) ? $config['mockups'] : []) as $m) {
+            if (!is_array($m) || !isset($m['id'])) {
+                continue;
+            }
+            try {
+                $ids[] = $motor->nombre_seguro((string)$m['id'], 'aplanados_mockups');
+            } catch (\Throwable $e) {
+                continue;
+            }
+        }
+        if (!$ids) {
+            return $out;
+        }
+        try {
+            $nombre_seg = $motor->nombre_seguro($nombre, 'aplanados_mockups');
+            $dir = $motor->dir_mockups($nombre_seg);
+        } catch (\Throwable $e) {
+            return $out;
+        }
+        if (!is_dir($dir)) {
+            return $out;
+        }
+        $base = $motor->url_ambito('pdfs') . rawurlencode($nombre_seg) . '/mockups/';
+        foreach ($ids as $id) {
+            $file = $id . '.webp';
+            if (is_file($dir . DIRECTORY_SEPARATOR . $file)) {
+                $out[$file] = $base . rawurlencode($file);
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Mockups de la ficha con la URL de su bitmap APLANADO (spec 036, T015/D10).
+     * Ausente (`null`) = todavia no se regenero: el cliente cae a la composicion
+     * por capas (la vista no se rompe) y la consola lo regenera al guardar.
+     * No se persiste: `aplanado` es DERIVADO (el normalizador lo descarta).
+     */
+    private function mockups_con_aplanado($nombre, $config)
+    {
+        $mockups = isset($config['mockups']) ? array_values((array)$config['mockups']) : [];
+        if (!$mockups) {
+            return $mockups;
+        }
+        $aplanados = $this->aplanados_mockups($nombre);
+        foreach ($mockups as $i => $m) {
+            if (!is_array($m)) {
+                continue;
+            }
+            $file = (isset($m['id']) ? (string)$m['id'] : '') . '.webp';
+            $mockups[$i]['aplanado'] = isset($aplanados[$file]) ? $aplanados[$file] : null;
+        }
+        return $mockups;
     }
 
     /* ==================== Woo: asociacion producto <-> PDF (spec 004, T010) ==================== */
@@ -1323,7 +1394,7 @@ class Personalizador_PDF_Plugin
                     . rawurlencode($nombre) . '/' . rawurlencode($nombre) . '.pdf',
                 'grupos' => $grupos,
                 'fotos' => $this->mockup_fotos_lista($nombre),
-                'mockups' => isset($config['mockups']) ? array_values((array)$config['mockups']) : [],
+                'mockups' => $this->mockups_con_aplanado($nombre, $config),
                 'preview_omisible' => !empty($config['preview_omisible']),
                 // Spec 011: catalogo global de imagenes como fuente valida de
                 // capas del mockup (capas con `ref = "img:{id}"`). Solo lectura:
@@ -5427,7 +5498,48 @@ JS;
         if (!$ok) {
             $this->responder(false, [], 'No se pudieron guardar los mockups.');
         }
+        // Spec 036 (T014/D10): el editor manda ademas el mockup APLANADO (WebP de
+        // sus capas `img` visibles). Es DERIVADO y OPCIONAL: si falta, la ficha
+        // degrada con causa visible y la consola lo regenera al abrir el editor.
+        // Nunca hace fallar el guardado de las capas.
+        $this->guardar_aplanado_mockup($nombre, isset($_POST['aplanado_id']) ? $_POST['aplanado_id'] : '', $_FILES['aplanado'] ?? null);
         $this->responder(true, ['mockups' => count($mockups)]);
+    }
+
+    /**
+     * Guarda el bitmap aplanado de un mockup (spec 036, T014/D10):
+     * `pdfs/{nombre}/mockups/{mockup_id}.webp`.
+     *
+     * El `id` sale del JSON que el editor acaba de guardar y se sanea con
+     * `nombre_seguro` antes de tocar el disco (lanza si no valida: se atrapa).
+     * Devuelve false —sin ruido— si falta el archivo, el id o el destino: el
+     * aplanado es un artefacto derivado, no un requisito del guardado.
+     */
+    private function guardar_aplanado_mockup($nombre, $id, $file)
+    {
+        if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            return false;
+        }
+        try {
+            $id_seguro = $this->pmu_uploads()->nombre_seguro((string)$id, 'aplanado_mockup');
+        } catch (\Throwable $e) {
+            return false;
+        }
+        // El id viene del config YA saneado (`config_mockups`): si no es
+        // exactamente su forma segura, se RECHAZA (nada de sanear a ciegas un
+        // `../` hacia un nombre valido: el artefacto seria un huerfano).
+        if ($id_seguro !== strtolower(trim((string)$id)) || !preg_match('/^[a-z0-9_-]+$/', $id_seguro)) {
+            return false;
+        }
+        $bytes = @file_get_contents((string)($file['tmp_name'] ?? ''));
+        if ($bytes === false || $bytes === '') {
+            return false;
+        }
+        $dir = $this->pmu_uploads()->dir_mockups($nombre, true);
+        if (!is_dir($dir)) {
+            return false;
+        }
+        return @file_put_contents($dir . DIRECTORY_SEPARATOR . $id_seguro . '.webp', $bytes) !== false;
     }
 
     /* ==================== Bonus por PDF 0..N (spec 018) ==================== */

@@ -941,6 +941,11 @@
         function resolver(capa) {
             if (!capa) { return null; }
             if (capa.tipo === 'img') {
+                // Spec 036 (T015/D10): el fondo del cliente es el bitmap APLANADO
+                // que ya resolvio el servidor (1 descarga por mockup).
+                if (capa.ref === 'aplanado') {
+                    return (mockup && mockup.aplanado) ? { url: mockup.aplanado } : null;
+                }
                 var url = window.PMUMockup.urlDeImagen(capa.ref, {
                     fotos: fotos, imagenes: imagenes
                 });
@@ -957,7 +962,20 @@
             return null;
         }
 
-        return window.PMUMockup.componer(ctx, (mockup && mockup.capas) || [], {
+        // Spec 036 (T015/D10): al cliente se le pasa UNA capa `img` (el bitmap
+        // APLANADO, sin filtros: ya vienen horneados) + los `placeholder`. Sin
+        // aplanado (mockup todavia sin regenerar) se conserva la composicion por
+        // capas: la vista del comprador NO se rompe.
+        var capasMockup = [];
+        if (mockup && mockup.aplanado) {
+            capasMockup.push({ tipo: 'img', ref: 'aplanado', x: 0, y: 0, w: 300, h: 300, rot: 0 });
+            ((mockup.capas) || []).forEach(function (c) {
+                if (c && c.tipo === 'placeholder') { capasMockup.push(c); }
+            });
+        } else {
+            capasMockup = (mockup && mockup.capas) || [];
+        }
+        return window.PMUMockup.componer(ctx, capasMockup, {
             resolver: resolver,
             contexto: { fotos: fotos, imagenes: imagenes, grupos: datos.grupos || [] },
             // RC4.6.11: la vista del CLIENTE nunca muestra la caja neutra gris

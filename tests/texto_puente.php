@@ -2164,8 +2164,46 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 preg_match('/renderCore\(\);/', $tie_rc) !== 1);
             break;
         case 'aplanado':
+            // Spec 036 (T017/US2): el bitmap APLANADO del mockup (D10/C2).
+            $dir_ap = (string)($GLOBALS['test_ap_dir'] ?? '');
+            $ruta_ap = $dir_ap === '' ? '' : $dir_ap . DIRECTORY_SEPARATOR . 'vistas.webp';
+            check('la ruta del aplanado es pdfs/{nombre}/mockups/{mockup_id}.webp',
+                $dir_ap !== '' && substr($dir_ap, -7) === 'mockups' && is_file($ruta_ap), $ruta_ap);
+            check('el aplanado se guarda BYTE A BYTE (sin recomprimir)',
+                is_file($ruta_ap) && (string)@file_get_contents($ruta_ap) === (string)($GLOBALS['test_ap_bytes'] ?? null));
+            check('un id invalido (traversal) se rechaza',
+                ($GLOBALS['test_ap_invalido'] ?? null) === false);
+            check('sin id no se escribe', ($GLOBALS['test_ap_sin_id'] ?? null) === false);
+            check('sin archivo NO rompe el guardado (derivado)',
+                ($GLOBALS['test_ap_sin_archivo'] ?? null) === false);
+            check('nada se escribio fuera de la carpeta del ambito',
+                ($GLOBALS['test_ap_fuera'] ?? null) === true);
+            check('regeneracion (T016): el MISMO id se reescribe y gana la ULTIMA version',
+                (string)($GLOBALS['test_ap_previo'] ?? null) === (string)($GLOBALS['test_ap_bytes2'] ?? '')
+                && (string)@file_get_contents($ruta_ap) === (string)($GLOBALS['test_ap_bytes'] ?? null));
+            check('el handler responde JSON success con el aplanado presente',
+                is_array($json) && $json['success'] === true);
+            // El aplanado es DERIVADO: no vive en config.json y si en los datos
+            // de la ficha (con URL), pero NUNCA en la lista de fotos del admin.
+            $cfg_ap = $p->motor_para_tests()->leer_config('muestra');
+            $m_ap = [];
+            foreach ((array)($cfg_ap['mockups'] ?? []) as $uno_ap) {
+                if (isset($uno_ap['id']) && (string)$uno_ap['id'] === 'vistas') { $m_ap = $uno_ap; }
+            }
+            check('el aplanado NO se persiste en config.json', !array_key_exists('aplanado', $m_ap));
+            $datos_ap = $p->datos_pdf_render('muestra');
+            $m_ap2 = [];
+            foreach ((array)($datos_ap['mockups'] ?? []) as $uno_ap) {
+                if (isset($uno_ap['id']) && (string)$uno_ap['id'] === 'vistas') { $m_ap2 = $uno_ap; }
+            }
+            check('datos_pdf_render publica la URL del aplanado',
+                isset($m_ap2['aplanado']) && strpos((string)$m_ap2['aplanado'], '/mockups/vistas.webp') !== false,
+                (string)($m_ap2['aplanado'] ?? '(null)'));
+            check('el aplanado NO aparece como foto del admin',
+                !isset($datos_ap['fotos']['vistas.webp']));
+            break;
         case 'cola_subida':
-            // Spec 036 (T002): esqueleto; los checks llegan con cada US.
+            // Spec 036 (T002): esqueleto; los checks llegan con US3.
             break;
         default:
             check('fase desconocida', false);
@@ -5355,6 +5393,68 @@ switch ($fase) {
 
     case 'red_carga':
     case 'aplanado':
+        // Spec 036 (T017/US2): el bitmap aplanado del mockup en el guardado real.
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        $motor_ap = $p->motor_para_tests();
+        $capas_ap = [['tipo' => 'img', 'ref' => 'pdf:fondo.png', 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300]];
+        $motor_ap->guardar_config('muestra', [
+            'activo' => true,
+            'mockups' => [['id' => 'vistas', 'titulo' => '', 'capas' => $capas_ap]],
+        ]);
+        $dir_ap = $motor_ap->dir_mockups('muestra', true);
+        // Fase re-ejecutable: limpia lo que pudo dejar una corrida anterior.
+        @unlink($dir_ap . DIRECTORY_SEPARATOR . 'fuera.webp');
+        @unlink($dir_ap . DIRECTORY_SEPARATOR . 'vistas.webp');
+        // Bytes FALSOS pero deterministas: la fase mide la RUTA y la copia, no el
+        // contenido (el WebP real lo produce el canvas del navegador).
+        $bytes_ap = "RIFF\x00\x00\x00\x00WEBPVP8 " . str_repeat('x', 64);
+        $tmp_ap = sys_get_temp_dir() . '/pd_puente_aplanado_' . getmypid() . '.webp';
+        @file_put_contents($tmp_ap, $bytes_ap);
+        $file_ap = [
+            'name' => 'aplanado.webp', 'type' => 'image/webp', 'tmp_name' => $tmp_ap,
+            'error' => UPLOAD_ERR_OK, 'size' => strlen($bytes_ap),
+        ];
+        // 1) Id invalido, sin id y sin archivo: NINGUNO rompe ni escribe.
+        $rm_ap = new ReflectionMethod(get_class($p), 'guardar_aplanado_mockup');
+        $rm_ap->setAccessible(true);
+        $GLOBALS['test_ap_invalido'] = $rm_ap->invoke($p, 'muestra', '../fuera', $file_ap);
+        $GLOBALS['test_ap_sin_id'] = $rm_ap->invoke($p, 'muestra', '', $file_ap);
+        $GLOBALS['test_ap_sin_archivo'] = $rm_ap->invoke($p, 'muestra', 'vistas', null);
+        $GLOBALS['test_ap_fuera'] = !is_file($dir_ap . DIRECTORY_SEPARATOR . 'fuera.webp')
+            && !is_file(dirname($dir_ap) . DIRECTORY_SEPARATOR . 'fuera.webp')
+            && !is_file(dirname(dirname($dir_ap)) . DIRECTORY_SEPARATOR . 'fuera.webp');
+        // 3) Regeneracion (T016): el MISMO id dos veces = reescritura. La ultima gana:
+        // se escribe primero una version distinta y el handler la pisa con la suya.
+        $bytes_ap2 = "RIFF\x00\x00\x00\x00WEBPVP8 " . str_repeat('y', 96);
+        $tmp_ap2 = sys_get_temp_dir() . '/pd_puente_aplanado2_' . getmypid() . '.webp';
+        @file_put_contents($tmp_ap2, $bytes_ap2);
+        $file_ap2 = [
+            'name' => 'aplanado.webp', 'type' => 'image/webp', 'tmp_name' => $tmp_ap2,
+            'error' => UPLOAD_ERR_OK, 'size' => strlen($bytes_ap2),
+        ];
+        $rm_ap->invoke($p, 'muestra', 'vistas', $file_ap2);
+        $GLOBALS['test_ap_bytes2'] = $bytes_ap2;
+        $GLOBALS['test_ap_previo'] = (string)@file_get_contents($dir_ap . DIRECTORY_SEPARATOR . 'vistas.webp');
+        // 2) Camino REAL: el guardado del editor (handler) con el aplanado.
+        $GLOBALS['test_ap_dir'] = $dir_ap;
+        $GLOBALS['test_ap_bytes'] = $bytes_ap;
+        $_FILES = ['aplanado' => $file_ap];
+        $_POST = [
+            'action' => 'personalizador_pdf_mockups',
+            'archivo' => 'muestra.pdf',
+            'preview_omisible' => '0',
+            'aplanado_id' => 'vistas',
+            'mockups' => add_magic_quotes_simulado(json_encode([['id' => 'vistas', 'titulo' => '', 'capas' => $capas_ap]])),
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_mockups_guardar(); // exit en wp_send_json_success
+        break;
+
     case 'cola_subida':
         // Spec 036 (T002): esqueleto de las fases nuevas. Cada una arma su
         // entorno aislado cuando llegue su tarea.
