@@ -330,6 +330,7 @@ y se conserva, porque es la evidencia de por que no se repite.
   real) -> el flujo con subida se prueba en el lab (quickstart R1-R8). Artefactos en
   `specs/032-reemplazo-pdf/`.
 - ✅ **Spec 034 `importar-reemplazar-capa` (especificada 2026-10-26; implementada 4.26.0 — 17/17 `[X]` — y verificada en el laboratorio: R1/R3 6/6 + R4/R5/R8 7/7)**: reemplazar la capa/grupo seleccionado con otra capa (pagina PDF o imagen) manteniendo las transformaciones (x/y/w/h/rot/sesgo/filtros/modo/nombre/oculta/bloqueada/envoltura/grupo/grupo_rot/perspectiva); habilitar perspectiva por capa individual (hoy solo grupo); importar pagina + PH pregunta si reemplazar la seleccion actual; destino es la capa/grupo seleccionado (si varias capas no agrupadas, la primera); conserva ubicacion, rotacion y perspectiva. Artefactos en `specs/034-importar-reemplazar-capa/` (spec, plan, research, data-model, contracts/capa-importar, quickstart, tasks).
+- 🚧 **Spec 036 `mockup-optimizado` (ficha optimizada) (en implementacion 2026-11-02, v4.28.0)**: la ficha carga **solo lo que se usa** (imagenes del cliente al abrir el modal; motor minimo de TextMuy solo con campo de texto); el mockup del **cliente** se sirve **aplanado** (1 bitmap `pdfs/{nombre}/mockups/{mockup_id}.webp` + los placeholders con sus envolturas) mientras el del **admin** sigue editable con capas; la subida va **en segundo plano** y el boton de compra se habilita al **vaciarse la cola** ("ultima version manda" para los textos, WebP y tamano maximo); **no hay boton "Vista previa"**: la galeria se **auto-monta** al completar los campos y se **repinta** al editar (enmienda de `constitution` §I, MAJOR 4.0.0). El visto **no** se invalida (una vez visto, visto: se retiro la idea de la "firma" del mockup). **El Motor no se toca.** Artefactos en `specs/036-mockup-optimizado/`.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
   `admin/ayuda.php`, `modules/LEEME.md` solo resumen y apuntan aqui). El `== Changelog ==`
   de `readme.txt` es historial, no normativa.
@@ -382,6 +383,29 @@ backup es una copia de `uploads/pmu/`, como para los PDFs, las imagenes o los pr
 
 Detalle y alternativas: `specs/012-campos-consola/spec.md` (D1–D22), `research.md` (R1–R6) y
 `contracts/campos.md` + `contracts/campos-consola.md`.
+
+## Sync Impact Report (v4.0.0, 2026-11-02)
+
+- **Bump**: **MAJOR** (3.0.0 -> 4.0.0). Cambia un principio NON-NEGOTIABLE (§I) en su flujo de UI.
+  Reporte **local**: `.specify/` esta en `.gitignore`, asi que **no viaja con el repo**; queda aca como
+  registro (mismo criterio que el reporte v2.2.1).
+- **Modificado** (§I): el flujo "boton 'Vista previa' + leyenda; al pulsarlo se oculta el boton y aparece
+  la galeria" y la regla "sin live re-render" se **reemplazan** por la **galeria auto-montada** al
+  completar los campos y su **repintado** al editar (ya **no** hay boton). Se agrega: el mockup del
+  cliente se sirve **aplanado** (`pdfs/{nombre}/mockups/{mockup_id}.webp` + los placeholders con sus
+  envolturas), el boton de compra se habilita al **vaciarse la cola de subida**, y la ficha carga
+  **solo** lo que se usa (imagenes del cliente al abrir el modal; motor minimo de TextMuy solo con campo
+  de texto).
+- **Vigente del §I**: el mockup sigue siendo **obligatorio** y el visto bueno sigue siendo **agregar al
+  carrito**; `preview_omisible` y el congelado del `mockup-{id}.webp` 300x300 no cambian.
+- **Supersede**: la decision 2026-09-17 queda enmendada **solo** en su flujo de UI (boton + "sin live
+  re-render").
+- **Impacto en codigo**: `personalizador-pdf.php` (`assets_ficha_condicional()`, handler de mockups),
+  `assets/tienda.js` (auto-montaje, gate de subidas, repintado, mockup aplanado), `assets/fotos-pmu.js`
+  (cola de subida) y `assets/mockups.js` (aplanado). **El Motor (`Pdf`/`Detector`/`Overlay`/`Motor`) no
+  cambia.**
+- **Spec**: [036-mockup-optimizado](../specs/036-mockup-optimizado/spec.md) (D7-D11 +
+  `contracts/ficha-red.md`).
 
 ## Sync Impact Reports historicos (constitucion v2.0.1 - v2.2.1)
 
