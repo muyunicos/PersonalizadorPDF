@@ -29,9 +29,9 @@
 
 **Purpose**: verificar la base y dejar los esqueletos de las puertas nuevas
 
-- [ ] T001 Correr las puertas base y confirmar verde: `php -l personalizador-pdf.php`, `Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.FullName }`, `node --check assets/tienda.js`, `node --check assets/fotos-pmu.js`, `node --check assets/mockups.js`, `node tests/mockup-contrato.test.js`, `node tests/mockup-geometria.test.js`, `node tests/vistas-contrato.test.js`, `php tests/motor_smoke.php`, `php tests/parity.php`
-- [ ] T002 [P] Crear los `case` vacios de las fases nuevas en `tests/texto_puente.php`: `red_carga`, `aplanado`, `cola_subida` (deben correr sin error antes de implementar)
-- [ ] T003 [P] Crear el esqueleto de `tests/cola-subida.test.js` (debe correr y decir `COLA SUBIDA OK (0 checks)`)
+- [X] T001 Correr las puertas base y confirmar verde: `php -l personalizador-pdf.php`, `Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.FullName }`, `node --check assets/tienda.js`, `node --check assets/fotos-pmu.js`, `node --check assets/mockups.js`, `node tests/mockup-contrato.test.js`, `node tests/mockup-geometria.test.js`, `node tests/vistas-contrato.test.js`, `php tests/motor_smoke.php`, `php tests/parity.php`
+- [X] T002 [P] Crear los `case` vacios de las fases nuevas en `tests/texto_puente.php`: `red_carga`, `aplanado`, `cola_subida` (deben correr sin error antes de implementar)
+- [X] T003 [P] Crear el esqueleto de `tests/cola-subida.test.js` (debe correr y decir `COLA SUBIDA OK (0 checks)`)
 
 ---
 

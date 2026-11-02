@@ -2148,6 +2148,11 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         case 'rutas':
             // Spec 035 (T002): esqueleto; los checks llegan con T029.
             break;
+        case 'red_carga':
+        case 'aplanado':
+        case 'cola_subida':
+            // Spec 036 (T002): esqueleto; los checks llegan con cada US.
+            break;
         default:
             check('fase desconocida', false);
     }
@@ -5332,6 +5337,13 @@ switch ($fase) {
     case 'rutas':
         // Spec 035 (T002): esqueleto de las fases nuevas. Cada una arma su
         // entorno aislado cuando llegue su tarea (T029).
+        break;
+
+    case 'red_carga':
+    case 'aplanado':
+    case 'cola_subida':
+        // Spec 036 (T002): esqueleto de las fases nuevas. Cada una arma su
+        // entorno aislado cuando llegue su tarea.
         break;
 
 }
