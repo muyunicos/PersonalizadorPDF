@@ -46,8 +46,7 @@ class PMU_Uploads
     ];
 
     private $galeria;
-    /** Migracion one-shot de la libreria bonus (4.7.0) ya ejecutada en este request. */
-    private $bonus_migrado = false; // (spec 020 B5: sin migracion)
+    
 
     private function get_galeria()
     {
@@ -807,7 +806,7 @@ class PMU_Uploads
             . DIRECTORY_SEPARATOR . 'config.json';
     }
 
-    /** Asegura un subdirectorio bajo tmp/ (muestras|cart|orders). */
+    
     /**
      * Raiz de un subambito de tmp/: uploads/pmu/tmp/{sub}/ (lectura de rutas
      * para PMU_Sesion::limpiar_ttl; escritura pasa por metodos especificos).

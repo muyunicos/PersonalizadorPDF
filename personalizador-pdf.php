@@ -2578,7 +2578,7 @@ class Personalizador_PDF_Plugin
             $par = $valores[(string)$cid] ?? $valores[(int)$cid] ?? null;
             $ids = is_array($par) && isset($par['valor']) ? $par['valor'] : [];
             if (!is_array($ids)) {
-                $ids = $ids === '' || $ids === null ? [] : [$ids];
+                $ids = $ids === '' ? [] : [$ids];
             }
             $reales = 0;
             foreach ($ids as $id) {
@@ -2886,7 +2886,7 @@ class Personalizador_PDF_Plugin
 
     /**
      * T022: al crearse el pedido se copia la meta del item y se hace el staging
-     * (`tmp/orders/{order_id}/{item_key}/`). Fail-safe: nunca tumba el checkout.
+     * (`orders/{cliente}/{order_id}/{item_key}/`). Fail-safe: nunca tumba el checkout.
      */
     public function pedido_item_crear($item, $clave, $values, $order = null)
     {
@@ -3736,7 +3736,8 @@ class Personalizador_PDF_Plugin
             if (!isset($tarea['tipo']) || !is_string($tarea['tipo'])) {
                 $this->responder(false, [], 'Cada tarea requiere un tipo de tarea como cadena.');
             }
-            $tipo = sanitize_key((string)($tarea['tipo'] ?? ''));
+            // responder() es @return never: este punto solo se alcanza con 'tipo' string.
+            $tipo = sanitize_key((string)$tarea['tipo']);
             $claves = [
                 'detectar' => ['tipo'],
                 'mejorar' => ['tipo', 'modelo', 'ancho', 'alto', 'alfa', 'si_categoria'],
@@ -3978,7 +3979,7 @@ class Personalizador_PDF_Plugin
             $this->responder(false, [], 'La imagen debe pesar entre 1 byte y 10 MB.');
         }
         $info = @getimagesize((string)$archivo['tmp_name']);
-        $mime = is_array($info) ? (string)($info['mime'] ?? '') : '';
+        $mime = is_array($info) ? (string)$info['mime'] : '';
         if (!in_array($mime, ['image/png', 'image/jpeg', 'image/gif', 'image/webp'], true)) {
             $this->responder(false, [], 'El archivo debe ser una imagen PNG, JPG, GIF o WebP valida.');
         }
@@ -4021,11 +4022,11 @@ class Personalizador_PDF_Plugin
                 : 'La PC no pudo procesar la imagen (HTTP ' . $codigo . ').');
         }
         $infoSalida = $salida !== '' ? @getimagesizefromstring($salida) : false;
-        $anchoSalida = is_array($infoSalida) ? (int)($infoSalida[0] ?? 0) : 0;
-        $altoSalida = is_array($infoSalida) ? (int)($infoSalida[1] ?? 0) : 0;
+        $anchoSalida = is_array($infoSalida) ? (int)$infoSalida[0] : 0;
+        $altoSalida = is_array($infoSalida) ? (int)$infoSalida[1] : 0;
         if (substr($salida, 0, 8) !== "\x89PNG\r\n\x1a\n" || !is_array($infoSalida)
             || $anchoSalida < 1 || $altoSalida < 1
-            || ($esPipeline && ($anchoSalida > 3000 || $altoSalida > 3000 || $anchoSalida * $altoSalida > 30000000))
+            || ($esPipeline && ($anchoSalida > 3000 || $altoSalida > 3000)) // el area ya queda acotada por esos dos topes (9 MP)
             || (!$esPipeline && ($anchoSalida !== $ancho || $altoSalida !== $alto))) {
             $this->responder(false, [], 'La PC no devolvio un PNG valido con las dimensiones solicitadas.');
         }

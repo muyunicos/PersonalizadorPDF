@@ -77,7 +77,7 @@ class PMU_Sesion
      * Lee el manifest de un item por DIRECTORIO (spec 030, R3).
      *
      * La consolidacion del pedido trabaja con items que ya no viven bajo la
-     * sesion (`tmp/orders/{order}/` y `orders/{order}/`), asi que las variantes
+     * sesion (`orders/{cliente}/{order_id}/{item}/`), asi que las variantes
      * por `sid` + `item_key` no sirven: estas tres funciones son el mismo patron
      * (lectura tolerante, escritura atomica y lock `flock`) sobre un `$dir`.
      */
