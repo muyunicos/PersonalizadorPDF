@@ -522,6 +522,22 @@
         },
 
         /**
+         * Spec 036 (T006/R9): el UNICO predicado de "listo" de la ficha. Lo
+         * consumen el auto-montaje (D3/D4) y el gate del boton (D8/D9):
+         *   - `faltanFotos`: suma de los huecos sin completar (el `min` de las
+         *     ranuras, spec 022);
+         *   - `subidas`: cuantos archivos quedan en la cola (0 = todo subido);
+         *   - `validez`: false SOLO si la validez (spec 005) rechaza la compra.
+         * Un campo OPCIONAL vacio no impide montar; un error de validez si.
+         */
+        estaCompleto: function (estado) {
+            var e = estado || {};
+            if ((parseInt(e.faltanFotos, 10) || 0) > 0) { return false; }
+            if ((parseInt(e.subidas, 10) || 0) > 0) { return false; }
+            return e.validez !== false;
+        },
+
+        /**
          * Spec 012 (fix): reparte una lista PLANA de ids entre las RANURAS. El
          * cargador GUARDA plano (`idsPlanos`) y al restaurar espera `[[id]]`: sin
          * esta conversion la foto guardada no volvia al re-editar desde el carrito.
@@ -1086,6 +1102,31 @@
     function bloquearCarrito(bloquear) {
         bloqueos.vistas = !!bloquear;
         refrescarCarrito();
+    }
+
+    /**
+     * Spec 036 (T006/R9): el estado REAL de "listo" en la ficha. Los tres insumos
+     * ya existen: `faltanFoto` (spec 022), `PMU_FICHA.subidas.pendientes()` (035) y
+     * `bloqueos.validez` (005). UN solo lugar lo arma, para que el auto-montaje
+     * (D3/D4) y el gate del boton (D8) no puedan divergir.
+     */
+    function estaCompleto() {
+        var faltan = 0;
+        Object.keys(faltanFoto).forEach(function (cid) {
+            faltan += Math.max(0, parseInt(faltanFoto[cid], 10) || 0);
+        });
+        var subidas = 0;
+        try {
+            if (global.PMU_FICHA && global.PMU_FICHA.subidas
+                && typeof global.PMU_FICHA.subidas.pendientes === 'function') {
+                subidas = parseInt(global.PMU_FICHA.subidas.pendientes(), 10) || 0;
+            }
+        } catch (e) { subidas = 0; }
+        return PURO.estaCompleto({
+            faltanFotos: faltan,
+            subidas: subidas,
+            validez: bloqueos.validez
+        });
     }
 
     /** Spec 005 (T008) + spec 022 (D2): el boton combina todo lo que bloquea. */

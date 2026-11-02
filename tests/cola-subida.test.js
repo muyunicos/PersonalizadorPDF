@@ -23,5 +23,16 @@ function check(nombre, cond, dato) {
 // TODO (US3): concurrencia acotada / orden FIFO / dedupe / ultima version
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// == 0: predicado unico "completo" (spec 036, T006/R9) ==
+// ---------------------------------------------------------------------------
+const PURO = require('../assets/tienda.js');
+check('sin estado = completo (nada que esperar)', PURO.estaCompleto() === true);
+check('un hueco sin completar NO esta completo', PURO.estaCompleto({ faltanFotos: 1 }) === false);
+check('una subida en vuelo NO esta completo', PURO.estaCompleto({ subidas: 2 }) === false);
+check('validez que rechaza NO esta completo', PURO.estaCompleto({ validez: false }) === false);
+check('todo subido + sin faltantes + validez OK = completo',
+    PURO.estaCompleto({ faltanFotos: 0, subidas: 0, validez: true }) === true);
+
 console.log('\nCOLA SUBIDA OK (' + checks + ' checks)');
 if (fallos) { process.exit(1); }

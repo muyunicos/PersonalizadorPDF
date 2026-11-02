@@ -43,7 +43,7 @@
 
 - [X] T004 Enmendar `constitution` §I: reemplazar el flujo "boton Vista previa + leyenda; al pulsarlo se oculta el boton; **sin live re-render**" por el **auto-montaje** y el **repintado al editar**; agregar el bloque **Sync Impact Report** y subir la version a **4.0.0** (MAJOR)
 - [X] T005 Registrar la enmienda y la decision del negocio (Clarification Q1) en `docs/decisiones.md` (entrada 2026-11-02, spec 036)
-- [ ] T006 Definir el **predicado unico "completo"** en `assets/tienda.js`: `minimos` satisfechos (`assets/tienda.js:1837`) **y** `PMU_FICHA.subidas.pendientes() == 0` (`:1702`) **y** validez OK; lo consumen el auto-montaje (US4) y el gate del boton (US3)
+- [X] T006 Definir el **predicado unico "completo"** en `assets/tienda.js`: `minimos` satisfechos (`assets/tienda.js:1837`) **y** `PMU_FICHA.subidas.pendientes() == 0` (`:1702`) **y** validez OK; lo consumen el auto-montaje (US4) y el gate del boton (US3)
 
 **Checkpoint**: gobernanza alineada y predicado listo.
 
