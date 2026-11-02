@@ -254,13 +254,13 @@ node C:\Users\Jonatan\Documents\GitHub\personalizador-pdf\tests\galerias-sprite.
                                             # (`C:\wp-lab\recorrido-009.cjs` es un wrapper)
                                             # modo hosting: PMU_SOLO_UI=1 + PMU_BASE=<sitio>
 node C:\Users\Jonatan\Documents\GitHub\personalizador-pdf\tests\ficha-pedido.browser.js
-                                            # PUERTA del plugin: ficha -> pedido -> PDF (26/26)
+                                            # PUERTA del plugin: ficha -> pedido -> PDF (47/47)
                                             # (`C:\wp-lab\recorrido-ficha-pedido.cjs` es un wrapper)
 node C:\wp-lab\probe-ficha.cjs               # volcado del DOM de la ficha (diagnostico)
 node C:\wp-lab\probe-modal.cjs               # volcado del modal del cargador
 ```
 
-**Estado de los recorridos (2026-10-24)**
+**Estado de los recorridos (2026-10-31)**
 
 - `recorrido-009.cjs`: **33/33 OK** (SC-001/002/003/004/005/006/007/009 + FR-009). Evidencia:
   `capturas/e*.png` y `capturas/recorrido-009.json`.
@@ -269,17 +269,17 @@ node C:\wp-lab\probe-modal.cjs               # volcado del modal del cargador
   certificacion; con hoja ⇒ 0 descargas; alta ⇒ 1 celda + 1 escritura; geometria (2 columnas, alto
   `round(ancho·h/w) ±2`); no existen los botones retirados; reentrancia ⇒ 1 escritura. **Precondicion
   nueva**: el catalogo `img/` del lab debe existir (se copia del espejo del repo: el lab no lo trae).
-- **Puerta del plugin `tests/ficha-pedido.browser.js`: 26/26 OK** (2026-10-24) — vive en el repo
+- **Puerta del plugin `tests/ficha-pedido.browser.js`: 47/47 OK** (2026-10-31) — vive en el repo
   (el `.cjs` del lab quedo como *wrapper* de una linea, para no duplicar lógica). Cubre
   `assets/tienda.js` con WP+Woo reales y **verifica precondiciones con causa accionable** antes de
   recorrer. Detalle del circuito cubierto:
   ficha con panel y formulario,
   `PMU_FICHA` (2 PDFs / 2 campos), campos montados, **cargador subiendo la foto** (queda `.webp` en
-  `subidas/`, spec 026), **mínimo de fotos bloqueando el carrito** con su aviso (spec 022), **Vista
+  `tmp/sesion-{sid}/uploads/`, spec 026 + 035), **mínimo de fotos bloqueando el carrito** con su aviso (spec 022), **Vista
   previa** (`admin-ajax`) con la **galería 300x300 y el canvas del mockup** (spec 011), **pool `img/`**
   (spec 029) y **`mockup-{id}.webp` congelado** al agregar (spec 004), carrito con la personalización,
-  checkout con COD y el resumen, **pedido creado** (`order-received/22`) y **`orders/{id}/{item}/`** con
-  `manifest.json` + `subidas/` + `img/` + **`{pdf}_procesado.pdf` (119 KB)** al descargar.
+  checkout con COD y el resumen, **pedido creado** (`order-received/{id}`) y **`orders/{cliente}/{order_id}/{item}/`** con
+  `manifest.json` + `img/` + **`{pdf}_procesado.pdf`** al descargar (el original vive en `orders/{cliente}/uploads/`, spec 035).
   **Investigación de la galería del mockup (a pedido)**: **no era un defecto del plugin** —el motor daba
   la causa exacta y desbloquear la venta mostrando "No hay vista previa disponible" es la conducta
   documentada en T021—, era **dato viejo del lab**: sus presets son **v1** y el módulo exige **v2**

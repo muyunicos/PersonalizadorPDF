@@ -31,8 +31,8 @@ y se conserva, porque es la evidencia de por que no se repite.
   muestras idempotentes en `tmp/muestras/{nombre}/`; ciclo comprador en `tmp/cart/`
   (legacy) + `tmp/sesion-{sid}/{item_key}/` (vigente, mockup obligatorio en ficha
   `draft-{uuid}` → `cart_item_key` salvo `preview_omisible=true`; canonico = meta item Woo +
-  espejo sesion), staging en `tmp/orders/` y entregable en
-  `orders/{order_id}/{item_key}/` (PDF final solo tras el pago, boton "Descargar" en
+  espejo sesion), **sin staging** (`tmp/orders/` retirado por la spec 035) y entregable en
+  `orders/{cliente}/{order_id}/{item_key}/` (PDF final solo tras el pago, boton "Descargar" en
   Descargas + registro admin "completados"); migracion `.migrado-007` ya retirada. La consola nunca muestra la pagina de error critico por fallos
   de recursos del motor (aviso con causa, HTTP 200).
 - ✅ **Conciliacion ex-008 (normativa, preservada en `constitution` §IV)** + **spec 005
