@@ -55,12 +55,12 @@
 
 **Independent Test**: E1 de `quickstart.md` (0 peticiones de imagenes del cliente y 0 carga de `render-core.html` sin interaccion).
 
-- [ ] T007 [US1] Volver condicional el encolado en `personalizador-pdf.php` (`assets_ficha_condicional()`, ~`:814`): `assets/biblioteca-pmu.js`/`assets/visor-pmu.js` **no** se encolan si el PDF no tiene campos de imagen
-- [ ] T008 [US1] Quitar/condicionar el "calentado" de la biblioteca para que las **imagenes del cliente** se pidan **solo** al abrir el modal (`assets/tienda.js` + `assets/biblioteca-pmu.js`)
-- [ ] T009 [US1] Condicionar la carga del motor minimo de texto en `assets/tienda.js` (`renderCore()`, `:778`): **no** instanciar `modules/textmuy/render-core.html` si el PDF no tiene ningun campo de tipo `texto`
-- [ ] T010 [US1] Fase `red_carga` en `tests/texto_puente.php`: el panel no encola la biblioteca sin campos de imagen y no arranca el motor de texto sin campo `texto`
-- [ ] T011 [US1] Extender `tests/ficha-pedido.browser.js` con E1 (0 red al cargar; las miniaturas del comprador aparecen al abrir el modal)
-- [ ] T012 [US1] Gate: `php -l personalizador-pdf.php` + `node --check assets/tienda.js` + `node tests/ficha-pedido.browser.js` en verde
+- [~] T007 ~~Volver condicional el encolado en `personalizador-pdf.php` (`assets_ficha_condicional()`, ~`:814`): `assets/biblioteca-pmu.js`/`assets/visor-pmu.js` **no** se encolan si el PDF no tiene campos de imagen~~ — **NO se hace** (ver nota): el requerimiento del negocio es de **DATOS** (0 descargas de imagenes del comprador) y se cubre en **T008**; volver condicionales/lazy esos scripts rompe el grafo de dependencias de WP (`cargador`/`tienda` dependen de `visor`) y la decision SINCRONICA del modal (spec 030 4a, `selector-pmu.js:775`) sin beneficio medido (una ficha con campos los carga igual).
+- [X] T008 [US1] Quitar/condicionar el "calentado" de la biblioteca para que las **imagenes del cliente** se pidan **solo** al abrir el modal (`assets/tienda.js` + `assets/biblioteca-pmu.js`)
+- [X] T009 [US1] Condicionar la carga del motor minimo de texto en `assets/tienda.js` (`renderCore()`, `:778`): **no** instanciar `modules/textmuy/render-core.html` si el PDF no tiene ningun campo de tipo `texto` — **YA cumplido** (lazy desde la 011): `renderCore()` solo corre bajo `nuevos.length` (`assets/tienda.js:1547-1551`). T010 lo fija con una puerta.
+- [X] T010 [US1] Fase `red_carga` en `tests/texto_puente.php`: el panel no encola la biblioteca sin campos de imagen y no arranca el motor de texto sin campo `texto`
+- [X] T011 [US1] Extender `tests/ficha-pedido.browser.js` con E1 (0 red al cargar; las miniaturas del comprador aparecen al abrir el modal)
+- [X] T012 [US1] Gate: `php -l personalizador-pdf.php` + `node --check assets/tienda.js` + `node tests/ficha-pedido.browser.js` en verde
 
 **Checkpoint**: US1 entregable sola (menos red al abrir).
 

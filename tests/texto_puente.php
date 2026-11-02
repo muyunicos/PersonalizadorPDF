@@ -2149,6 +2149,20 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             // Spec 035 (T002): esqueleto; los checks llegan con T029.
             break;
         case 'red_carga':
+            // Spec 036 (T010/US1): red al cargar la ficha (D7). El arnes no tiene DOM,
+            // asi que los checks son ESTATICOS sobre el JS que sirve la ficha.
+            $bib_rc = (string)@file_get_contents(dirname(__DIR__) . '/assets/biblioteca-pmu.js');
+            $tie_rc = (string)@file_get_contents(dirname(__DIR__) . '/assets/tienda.js');
+            check('biblioteca-pmu.js y tienda.js se pueden leer', $bib_rc !== '' && $tie_rc !== '');
+            check('D7: la biblioteca NO se calienta en `load` (0 red al abrir)',
+                strpos($bib_rc, "addEventListener('load', function () { calentar(); })") === false);
+            check('D7: el calentado corre con el primer gesto dentro del panel',
+                strpos($bib_rc, "closest('[data-pmu-panel]')") !== false);
+            check('D7: el motor de texto solo se carga si hay texto NUEVO que renderizar',
+                preg_match('/var promesaRender = nuevos\.length\s*\n\s*\? renderCore\(\)\.then/', $tie_rc) === 1);
+            check('D7: tienda.js no arranca el motor de texto de forma incondicional',
+                preg_match('/renderCore\(\);/', $tie_rc) !== 1);
+            break;
         case 'aplanado':
         case 'cola_subida':
             // Spec 036 (T002): esqueleto; los checks llegan con cada US.

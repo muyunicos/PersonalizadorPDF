@@ -88,7 +88,7 @@ check('usar() postea op=usar con item/pdf/grupo/indice/params e invalida la copi
 console.log('== Auto-open condicionado (4a clarificacion) ==');
 check('el selector de archivos se auto-abre SOLO si la biblioteca esta vacia',
     /bibVacia/.test(sel) && /PMUBiblioteca\.cache/.test(sel));
-check('la copia de la tira se calienta al cargar la ficha (una por pagina)',
+check('calentar() solo corre con URL y fetch (spec 036 D7: con el primer gesto, NO en load)',
     /if \(config\(\)\.url && typeof global\.fetch === 'function'\)/.test(bib));
 
 console.log('== Elegir: la receta la decide el servidor (D8) ==');
@@ -133,9 +133,10 @@ check('T035: los hooks del vinculo estan registrados (wp_login + Woo 8.8+)',
 console.log('== Endpoint de la biblioteca (fix 4.22.0) ==');
 check('el endpoint viaja en PMU_FICHA.biblioteca (no depende del orden de carga)',
     /'biblioteca' => \[\s*'endpoint' => admin_url\('admin-post\.php'\)/.test(plugin));
-check('config() no cachea endpoint vacio y el calentado va en load',
+check('config() no cachea endpoint vacio y el calentado NO va en load (spec 036 D7)',
     /if \(cfg && cfg\.url\) \{ return cfg; \}/.test(bib)
-    && /addEventListener\('load', function \(\) \{ calentar\(\); \}\)/.test(bib));
+    && !/addEventListener\('load', function \(\) \{ calentar\(\); \}\)/.test(bib)
+    && /closest\('\[data-pmu-panel\]'\)/.test(bib));
 
 console.log('== Copia envenenada: auto-sanado (2026-10-23) ==');
 check('la copia local es v2 y pedir() se auto-sana de una copia vacia',

@@ -373,6 +373,16 @@ async function precondiciones(page) {
         check('ficha: cargador expuesto + Vista previa', ficha.btnCargar && ficha.btnPreview);
         check('ficha (spec 022): el carrito arranca bloqueado por el min de fotos', !!ficha.add && ficha.add.disabled === true, JSON.stringify(ficha.add));
         check('ficha (spec 022): aviso de faltantes visible', !!ficha.aviso, ficha.aviso || '(sin aviso)');
+        // ---- E1 (spec 036, D7): 0 red al cargar la ficha, ANTES de tocar nada.
+        // Las imagenes del comprador se piden al abrir el modal y el motor de texto
+        // (TextMuy) solo se instancia si hay texto NUEVO que renderizar.
+        check('E1 (spec 036/D7): al abrir la ficha NO se pide la biblioteca (0 op=listar)',
+            ops(log, ':listar') === 0, JSON.stringify(log.ops));
+        check('E1 (spec 036/D7): al abrir la ficha no hay POST de vista previa ni de subida',
+            cuenta(log, 'personalizador_pdf_vista_previa') === 0
+            && log.posts.filter((a) => /_subida/.test(a)).length === 0, JSON.stringify(log.posts));
+        const motorE1 = await page.evaluate(() => !!document.querySelector('iframe[title="Motor de render TextMuy"]'));
+        check('E1 (spec 036/D7): el motor de texto NO se instancio al abrir', motorE1 === false);
         await page.screenshot({ path: CAPT + '\\ficha-inicial.png' });
 
         // ---- Cargador: subir la foto (spec 012 + 026 + 030)

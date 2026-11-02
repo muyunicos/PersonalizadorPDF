@@ -260,10 +260,25 @@
 
     // El ancho decide cuantas miniaturas entran: al cambiar el tamaño se repinta
     // (sin volver a pedir nada) para que la tira siga sin scroll.
-    // Spec 030 (T015 / 4a clarificacion): el modal decide en SINCRONICO si auto-abre el
-    // selector (solo con la biblioteca vacia), asi que la copia de la tira se calienta al
-    // cargar la ficha. Es UNA por pagina: `desde=<revision>` hace gratis las siguientes.
-    if (global.addEventListener) { global.addEventListener('load', function () { calentar(); }); } else { calentar(); }
+    // Spec 036 (T008/D7): la biblioteca NO se pide al cargar la ficha (0 red). Antes, el
+    // `load` disparaba `op=listar` y bajaba las fotos del comprador sin que nadie las
+    // mirara. Ahora se traen cuando el comprador INTERACTUA con el panel de
+    // personalizacion (en la practica, al abrir el modal de carga). Se conserva la
+    // decision SINCRONICA del modal (spec 030, 4a: "auto-abre el selector solo con la
+    // biblioteca vacia"): el primer gesto dentro de `[data-pmu-panel]` calienta la copia
+    // UNA vez, antes del click que abre el modal.
+    (function () {
+        var doc = global.document;
+        if (!doc || !doc.addEventListener) { calentar(); return; }
+        var hecho = false;
+        var una = function () { if (!hecho) { hecho = true; calentar(); } };
+        ['pointerdown', 'focusin', 'touchstart'].forEach(function (ev) {
+            doc.addEventListener(ev, function (e) {
+                var t = e && e.target;
+                if (t && typeof t.closest === 'function' && t.closest('[data-pmu-panel]')) { una(); }
+            }, true);
+        });
+    }());
     /** Spec 030 (4a): el calentado corre con la pagina cargada (los globals ya estan). */
     function calentar() {
         if (config().url && typeof global.fetch === 'function') {
