@@ -61,7 +61,7 @@ function listarRec(dir) {
     return out;
 }
 function espiar(page) {
-    const log = { posts: [], ops: [], respuestas: {} };
+    const log = { posts: [], ops: [], respuestas: {}, vistaPrevia: 0, vistaPreviaResp: null };
     page.on('request', (req) => {
         const u = req.url();
         if (req.method() !== 'POST') return;
@@ -73,12 +73,19 @@ function espiar(page) {
         const mo = /name="op"\r?\n\r?\n([^\r\n]+)/.exec(b) || /[?&]op=([^&\r\n]+)/.exec(u);
         log.posts.push(accion);
         log.ops.push(accion + (mo ? ':' + decodeURIComponent(mo[1]) : ''));
+        // Spec 036 (T025/D3): contador ACUMULADO de vistas previas. `limpiar(log)`
+        // borra `posts` entre fases, pero el auto-montaje puede haber disparado
+        // antes: esto mide "hubo vista previa" aunque el log se haya limpiado.
+        if (accion === 'personalizador_pdf_vista_previa') { log.vistaPrevia++; }
         req.__accion = accion;
     });
     page.on('response', async (res) => {
         const req = res.request();
         if (!req.__accion) return;
-        try { log.respuestas[req.__accion] = await res.json(); } catch (e) { /* no JSON */ }
+        try {
+            log.respuestas[req.__accion] = await res.json();
+            if (req.__accion === 'personalizador_pdf_vista_previa') { log.vistaPreviaResp = log.respuestas[req.__accion]; }
+        } catch (e) { /* no JSON */ }
     });
     return log;
 }
@@ -370,7 +377,7 @@ async function precondiciones(page) {
         }));
         check('ficha: panel + formulario de compra', ficha.panel && ficha.form);
         check('ficha: PMU_FICHA con PDFs y campos', !!ficha.pmu && ficha.pmu.pdfs >= 1 && ficha.pmu.campos >= 1, JSON.stringify(ficha.pmu));
-        check('ficha: cargador expuesto + Vista previa', ficha.btnCargar && ficha.btnPreview);
+        check('ficha: cargador expuesto y SIN boton "Vista previa" (spec 036/D3)', ficha.btnCargar && ficha.btnPreview === false, JSON.stringify({ cargar: ficha.btnCargar, previa: ficha.btnPreview }));
         check('ficha (spec 022): el carrito arranca bloqueado por el min de fotos', !!ficha.add && ficha.add.disabled === true, JSON.stringify(ficha.add));
         check('ficha (spec 022): aviso de faltantes visible', !!ficha.aviso, ficha.aviso || '(sin aviso)');
         // ---- E1 (spec 036, D7): 0 red al cargar la ficha, ANTES de tocar nada.
@@ -384,6 +391,12 @@ async function precondiciones(page) {
         const motorE1 = await page.evaluate(() => !!document.querySelector('iframe[title="Motor de render TextMuy"]'));
         check('E1 (spec 036/D7): el motor de texto NO se instancio al abrir', motorE1 === false);
         await page.screenshot({ path: CAPT + '\\ficha-inicial.png' });
+
+        // Spec 035 (§3.5) + 036: SIEMBRA del escenario de US3 (2 obligatorias + 1
+        // omisible) ANTES de completar la ficha. Con el auto-montaje (036/D3) la
+        // galeria nace del PRIMER montaje: si se sembrara despues, ya estaria
+        // montada con el config viejo. El restaurador corre en el `finally`.
+        restaurarUS3 = sembrarUS3();
 
         // ---- Cargador: subir la foto (spec 012 + 026 + 030)
         const antesSubidas = listarRec(PMU + '\\tmp').filter(esOriginalSesion).length;
@@ -530,16 +543,18 @@ async function precondiciones(page) {
             familiasAntes6 + ' -> ' + familiasDespues6 + ' familias');
         page.screenshot({ path: CAPT + '\\biblioteca-tira.png' }).catch(() => { });
 
-        // Spec 035 (§3.5): SIEMBRA del escenario de US3 (2 obligatorias + 1 omisible).
-        // Va aca, ANTES de la vista previa, porque el servidor lee `config.json` al
-        // responder. El restaurador corre en el `finally`.
-        restaurarUS3 = sembrarUS3();
+        // (El sembrado del escenario de US3 se movio al inicio de la ficha: el
+        // auto-montaje de la spec 036 monta con el config ya sembrado.)
 
         // ---- Vista previa: galeria 300x300 + mockup (spec 004/011) y pool (spec 029)
         const op = page.locator('.pmu-opciones-btn');
         if (await op.count()) { await op.last().click().catch(() => { }); await esperar(400); }
-        log.posts.length = 0;
-        await page.getByRole('button', { name: 'Vista previa' }).first().click();
+        // Spec 036 (T025/D3): la galeria se monta SOLA. No se resetea el log de POSTs:
+        // el auto-montaje puede haber disparado durante la carga de fotos, y lo que
+        // se verifica es que hubo vista previa sin pulsar nada.
+        const diagMontaje = await page.evaluate(() => (window.PMU_API && window.PMU_API.montaje) ? window.PMU_API.montaje() : null);
+        check('E4 (spec 036/D3): la galeria se monto SOLA al completar la ficha (sin pulsar nada)',
+            !!diagMontaje && diagMontaje.completo === true && diagMontaje.hecho === true, JSON.stringify(diagMontaje));
         let galeria = null;
         for (let i = 0; i < 160; i++) {
             galeria = await page.evaluate(() => {
@@ -550,9 +565,9 @@ async function precondiciones(page) {
             if (galeria) break;
             await esperar(500);
         }
-        check('vista previa: POST de vista previa (admin-ajax)', cuenta(log, 'personalizador_pdf_vista_previa') >= 1, JSON.stringify(log.posts));
+        check('vista previa: POST de vista previa (admin-ajax)', log.vistaPrevia >= 1, 'acumuladas=' + log.vistaPrevia);
         check('vista previa (spec 011): galeria 300x300 con el canvas del mockup', !!galeria && (galeria.w === 300 || !!galeria.img), JSON.stringify(galeria));
-        const vista = log.respuestas['personalizador_pdf_vista_previa'] || null;
+        const vista = log.vistaPreviaResp || null;
         const pdfsResp = vista && vista.data && vista.data.pdfs ? vista.data.pdfs : null;
         const conMock = pdfsResp ? pdfsResp.filter((p) => (p.mockups || []).length).length : 0;
         check('vista previa: la respuesta trae mockups de los PDFs elegibles', conMock >= 1,
@@ -598,6 +613,26 @@ async function precondiciones(page) {
             JSON.stringify(ls));
         await page.screenshot({ path: CAPT + '\\us3-completa.png' });
 
+        // ---- E4 (spec 036/T026/D4): EDITAR un campo con la galeria visible REPINTA
+        // en el lugar (misma galeria, sin boton). Se cambia lo que el campo publica
+        // en `PMU_API.estado` y se pide el repintado por la API publica; la clave
+        // usada es desconocida para el servidor, que la DESCARTA (sin efectos en el
+        // item). Va al final del bloque US3: el repintado reinicia el indice.
+        const antesRep = log.vistaPrevia;
+        const repintado = await page.evaluate(() => {
+            const api = window.PMU_API;
+            if (!api || !api.estado || !api.repintar) return false;
+            api.estado['__repintado036'] = { valor: 'x', cliente: 'x' };
+            api.repintar();
+            return true;
+        });
+        await esperar(6000);
+        const galRep = await galeriaEstado(page);
+        const btnRep = await page.getByRole('button', { name: 'Vista previa' }).count();
+        check('E4 (spec 036/T026): al EDITAR un campo la galeria se REPINTA en el lugar',
+            repintado === true && log.vistaPrevia > antesRep && !!galRep && btnRep === 0,
+            'posts+' + (log.vistaPrevia - antesRep) + ' vistas=' + (galRep ? galRep.vistas.length : 0));
+
         // Recarga del MISMO item (la via del "Editar" del carrito): la marca sobrevive
         // y el carrito NO vuelve a bloquear. OJO: sin `?pmu_item_key=` la ficha arranca
         // un item NUEVO y las marcas son de otro item (por eso el parametro).
@@ -605,7 +640,8 @@ async function precondiciones(page) {
         await page.goto(PRODUCTO + '?pmu_item_key=' + encodeURIComponent(itemKeyUs3), { waitUntil: 'domcontentloaded' });
         await esperar(3000);
         await cerrarModalPais(page);
-        await page.getByRole('button', { name: 'Vista previa' }).first().click();
+        // Spec 036 (T025/D3): al recargar el MISMO item la ficha queda completa y el
+        // auto-montaje la monta solo: no hay boton que pulsar.
         const g2 = await esperarGaleria(page, 3);
         await esperar(1500);
         // El carrito combina TRES bloqueos (spec 022: `vistas` + `validez` + `minimos`).

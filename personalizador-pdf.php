@@ -644,7 +644,7 @@ class Personalizador_PDF_Plugin
         ]);
         $html = '<div class="pmu-panel" data-pmu-panel data-pdf="' . esc_attr($slugs[0]) . '">';
         $html .= '<p class="pmu-panel-titulo"><strong>Personaliza tu diseno</strong></p>';
-        $html .= '<p class="pmu-panel-ayuda">Completa los campos y pulsa "Vista previa" para ver el resultado antes de comprar.</p>';
+        $html .= '<p class="pmu-panel-ayuda">Completa los campos: la vista previa aparece sola antes de comprar.</p>';
         if ($itemEdicion !== '') {
             $html .= '<p class="pmu-panel-edicion">Estas editando tu personalizacion guardada: la vista previa se regenerara solo donde cambiaste algo.</p>';
         }
@@ -2544,7 +2544,7 @@ class Personalizador_PDF_Plugin
                 }
             }
             if (function_exists('wc_add_notice')) {
-                wc_add_notice('Completa tu personalizacion y genera la vista previa antes de agregar al carrito.', 'error');
+                wc_add_notice('Completa tu personalizacion antes de agregar al carrito.', 'error');
             }
             return false;
         }

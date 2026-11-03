@@ -104,10 +104,10 @@
 
 **Independent Test**: E4 de `quickstart.md` (al completar los `min` la galeria aparece **sin pulsar nada**; al editar un campo se repinta **en el lugar**).
 
-- [ ] T025 [US4] Auto-montaje: en `assets/tienda.js` montar la galeria cuando el predicado "completo" (T006) pase, usando `generarVista()` (`:1607`); **quitar** el boton "Vista previa" (`:1865-1883`)
-- [ ] T026 [US4] Repintado: con la galeria visible, **repintar** al cambiar un campo (no ocultar la galeria ni volver un boton); reusa el pintado progresivo (D1)
-- [ ] T027 [US4] Tolerancia (D5): si el montaje falla, habilitar el carrito con el aviso actual ("podes comprar igual...")
-- [ ] T028 [US4] Gate: `node tests/vistas-contrato.test.js` + `node tests/ficha-pedido.browser.js` (auto-montaje + repintado) en verde
+- [X] T025 [US4] Auto-montaje: en `assets/tienda.js` montar la galeria cuando el predicado "completo" (T006) pase, usando `generarVista()` (`:1607`); **quitar** el boton "Vista previa" (`:1865-1883`) — `autoMontar()`/`agendarMontaje()` (debounce 400 ms, firma de `PMU_API.valores()` para no repintar sin cambios) + textos del panel y aviso `wc_add_notice` actualizados. **BUG corregido**: `estaCompleto()` pasaba `validez: bloqueos.validez` (polaridad invertida: `true` = BLOQUEADO) y la ficha completa NUNCA montaba; lo atrapo la puerta de navegador.
+- [X] T026 [US4] Repintado: con la galeria visible, **repintar** al cambiar un campo (no ocultar la galeria ni volver un boton); reusa el pintado progresivo (D1) — `agendarMontaje()` desde `refrescarMinimos`, `aplicarFiltro`, el fin de la cola de fotos y el del pool; `prepararGaleria` recrea el contenido del MISMO contenedor (repintado en el lugar). API publica `PMU_API.repintar()`. Evidencia: check E4/T026 del lab (`posts+1`, `vistas=3`, sin boton).
+- [X] T027 [US4] Tolerancia (D5): si el montaje falla, habilitar el carrito con el aviso actual ("podes comprar igual...") — el `catch` de `autoMontar()` muestra el aviso y llama `bloquearCarrito(false)`; ademas `Promise.resolve().then(...)` evita que un throw sincono deje `montaje.enCurso` colgado (la ficha no quedaba muda para siempre).
+- [X] T028 [US4] Gate: `node tests/vistas-contrato.test.js` + `node tests/ficha-pedido.browser.js` (auto-montaje + repintado) en verde — `VISTAS CONTRATO OK (24)` + `FICHA->PEDIDO 52/52 OK` (checks nuevos E4/D3 y E4/T026). El test se adapto: sin boton, contador ACUMULADO de vistas previas (`limpiar(log)` lo borraba) y sembrado de US3 movido al inicio de la ficha.
 
 **Checkpoint**: US4 entregable sola (ficha sin boton).
 

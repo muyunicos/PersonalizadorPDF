@@ -726,7 +726,7 @@
                     // Spec 036 (T022): el boton se bloquea al arrancar la cola y se
                     // libera solo cuando NO queda ninguna subida (fotos o textos).
                     refrescarCarrito();
-                    var fin = function () { refrescarCarrito(); };
+                    var fin = function () { refrescarCarrito(); agendarMontaje(); };
                     return subirFotoCrudo(t.blob, t.campo, t.onItem, t.ctx).then(function (r) {
                         fin();
                         return r;
@@ -1183,7 +1183,10 @@
         return PURO.estaCompleto({
             faltanFotos: faltan,
             subidas: subidas,
-            validez: bloqueos.validez
+            // OJO con la polaridad: `bloqueos.validez === true` significa BLOQUEADO
+            // (la validez rechaza), y el predicado pide "la validez ACEPTA la compra".
+            // Sin negar, la ficha completa nunca montaba (lo atrapo la puerta 036).
+            validez: !bloqueos.validez
         });
     }
 
@@ -1228,6 +1231,7 @@
             }
         }
         refrescarCarrito();
+        agendarMontaje();
         return faltan;
     }
 
@@ -1277,6 +1281,7 @@
         }
         bloqueos.validez = !!res.bloqueo;
         refrescarCarrito();
+        agendarMontaje();
         return res;
     }
 
@@ -1728,6 +1733,9 @@
                 var fin = function () {
                     poolEnVuelo = Math.max(0, poolEnVuelo - 1);
                     refrescarCarrito();
+                    // Spec 036 (T025): con la cola vacia la ficha puede quedar
+                    // "completa": se intenta el auto-montaje.
+                    agendarMontaje();
                 };
                 promesa.then(fin, fin);
                 if (firma !== '') {
@@ -1851,7 +1859,62 @@
         });
     }
 
-    /** Punto de entrada (T012/T014/T016 + spec 005): campos + filtro + "Vista previa". */
+    /**
+     * Spec 036 (T025/T026/D3/D4): la galeria es AUTO-MONTADA.
+     *
+     * No hay boton "Vista previa": se monta sola cuando el predicado unico
+     * "completo" (T006) pasa, y al editar un campo se REPINTA en el lugar
+     * (`prepararGaleria` recrea el contenido del MISMO contenedor). La firma de
+     * los valores evita repintados sin cambios (y el bucle pintar -> evento ->
+     * pintar). Un fallo NUNCA bloquea la venta (D5).
+     */
+    var montaje = { enCurso: false, hecho: false, firma: null };
+    var temporizadorMontaje = null;
+
+    /** Firma del estado de los campos: solo se repinta si algo cambio de verdad. */
+    function firmaFicha() {
+        var valores = (global.PMU_API && global.PMU_API.valores) ? global.PMU_API.valores() : {};
+        try {
+            return JSON.stringify(valores || {});
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function autoMontar() {
+        if (!ficha || !global.PMU_API) { return; }
+        if (montaje.enCurso) { return; }
+        if (!estaCompleto()) { return; }
+        var firma = firmaFicha();
+        if (montaje.hecho && montaje.firma === firma) { return; }
+        montaje.enCurso = true;
+        montaje.firma = firma;
+        // `Promise.resolve().then(...)`: un throw SINCRONO de `generarVista()` no
+        // deja `enCurso` colgado (y se reporta como fallo de montaje).
+        Promise.resolve().then(function () { return generarVista(); }).then(function () {
+            montaje.enCurso = false;
+            montaje.hecho = true;
+        }, function (e) {
+            montaje.enCurso = false;
+            // Un fallo se puede reintentar al siguiente cambio de los campos.
+            montaje.firma = null;
+            if (window.console && console.warn) { console.warn('[PersonalizadorPDF]', e); }
+            mostrarAviso(null, (e && e.message) || 'No se pudo generar la vista previa.');
+            // D5: la venta NUNCA queda bloqueada por un fallo de montaje.
+            bloquearCarrito(false);
+        });
+    }
+
+    /** Agrupa los cambios seguidos (tecleo, varias fotos) en UN solo montaje. */
+    function agendarMontaje() {
+        if (temporizadorMontaje) { clearTimeout(temporizadorMontaje); }
+        temporizadorMontaje = setTimeout(function () {
+            temporizadorMontaje = null;
+            autoMontar();
+        }, 400);
+    }
+
+    /** Punto de entrada (T012/T014/T016 + spec 005): campos + filtro + auto-montaje. */
     function iniciar() {
         var panel = raiz();
         if (!panel) { return null; }
@@ -1893,6 +1956,21 @@
             vaciar: function () { return colaDeSubidas().vaciar(); },
             pendientes: function () { return colaDeSubidas().pendientes(); }
         };
+        // Spec 036 (T025): estado del auto-montaje (diagnostico y puertas).
+        api.montaje = function () {
+            return {
+                completo: estaCompleto(),
+                faltan: Object.keys(faltanFoto).map(function (cid) { return faltanFoto[cid]; })
+                    .reduce(function (a, b) { return a + (parseInt(b, 10) || 0); }, 0),
+                subidas: subidasPendientes(),
+                validez: !bloqueos.validez,
+                enCurso: montaje.enCurso,
+                hecho: montaje.hecho
+            };
+        };
+        // Spec 036 (T026/D4): repinta la galeria si algo cambio (lo llama cualquier
+        // editor de campo; no hace nada si la firma de los valores es la misma).
+        api.repintar = function () { agendarMontaje(); };
         global.PMU_FICHA = global.PMU_FICHA || {};
         global.PMU_FICHA.subidas = api.subidas;
         // Spec 030 (D23): mapa id -> url por pagina. La miniatura, el visor y el
@@ -2052,25 +2130,11 @@
         // crea en el servidor al agregar (preview_estado=omisible).
         bloquearCarrito(!ficha.preview_omisible);
         engancharCarrito();
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'pmu-btn-previa';
-        btn.textContent = 'Vista previa';
-        btn.addEventListener('click', function () {
-            btn.disabled = true;
-            var leyenda = document.createElement('p');
-            leyenda.className = 'pmu-leyenda';
-            leyenda.textContent = 'Verifica tu personalizacion antes de continuar con la compra.';
-            panel.appendChild(leyenda);
-            generarVista().catch(function (e) {
-                if (window.console && console.warn) { console.warn('[PersonalizadorPDF]', e); }
-                mostrarAviso(null, (e && e.message) || 'No se pudo generar la vista previa.');
-                bloquearCarrito(false); // V-7: la venta nunca queda bloqueada (T021 pule esto)
-            }).then(function () {
-                btn.disabled = false;
-            });
-        });
-        panel.appendChild(btn);
+        // Spec 036 (T025/D3): NO hay boton "Vista previa". La galeria se monta SOLA en
+        // cuanto la ficha queda "completa" (predicado unico, T006) y se repinta en
+        // el lugar al editar (T026). Al abrir una personalizacion ya completa
+        // (re-edicion desde el carrito) el primer montaje sale sin pulsar nada.
+        agendarMontaje();
         return api;
     }
 
