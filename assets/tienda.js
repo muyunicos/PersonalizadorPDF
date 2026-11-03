@@ -239,6 +239,23 @@
          * @param {Function} fn Tarea que devuelve una promesa.
          * @returns {Promise} La tarea encolada (rechaza igual que fn).
          */
+        /**
+         * Spec 036 (T020/D9): marca de version de un SLOT (`pdf|gid|indice`).
+         * Cada llamada sube la generacion: la ultima que se encola es la vigente
+         * y las anteriores se descartan sin gastar red.
+         * @returns {number} la version otorgada a esta subida.
+         */
+        marcaSlot: function (mapa, clave) {
+            var m = mapa || {};
+            m[clave] = (parseInt(m[clave], 10) || 0) + 1;
+            return m[clave];
+        },
+
+        /** true si `marca` sigue siendo la version vigente del slot. */
+        slotVigente: function (mapa, clave, marca) {
+            return (parseInt((mapa || {})[clave], 10) || 0) === (parseInt(marca, 10) || 0);
+        },
+
         enCola: function (colas, clave, fn) {
             var mapa = colas || {};
             var anterior = mapa[clave] || Promise.resolve();
@@ -628,7 +645,7 @@
     var ficha = null;
     var galeriaActual = null;
     var filtroActual = null;
-    var bloqueos = { vistas: false, validez: false, minimos: false };
+    var bloqueos = { vistas: false, validez: false, minimos: false, subidas: false };
     // Spec 022: el `min` de las ranuras bloquea la compra. `minimos` es lo que
     // el navegador DECLARA al servidor ({campo: total exigido}) y `faltanFoto`
     // lo que falta ahora mismo por campo ({campo: N}).
@@ -638,6 +655,26 @@
     // mismo grupo entre instancias Y entre vistas (RC4.6.11). La carrera
     // anterior dejaba el pool sin filas y la capa del mockup gris.
     var colasPool = {};
+    // Spec 036 (T019/T020, D9): "la ULTIMA version manda" por CREACION
+    // (`pdf|gid|indice`) y dedupe por CONTENIDO (el hash del render). Re-renderizar
+    // el mismo hueco no vuelve a subir ni lo viejo ni lo que ya subio.
+    var colasSlot = {};
+    var generacionSlot = {};
+    var subidasPorHash = {};
+    // Spec 036 (T022/D8): subidas del POOL en vuelo. El gate del boton mira TODA
+    // la cola: fotos (`PMU_FICHA.subidas`) + textos (este contador).
+    var poolEnVuelo = 0;
+    /** Subidas en vuelo de toda la ficha (fotos + creaciones del pool). */
+    function subidasPendientes() {
+        var n = poolEnVuelo;
+        try {
+            if (global.PMU_FICHA && global.PMU_FICHA.subidas
+                && typeof global.PMU_FICHA.subidas.pendientes === 'function') {
+                n += parseInt(global.PMU_FICHA.subidas.pendientes(), 10) || 0;
+            }
+        } catch (e) { /* sin cola de fotos: se cuenta lo del pool */ }
+        return n;
+    }
 
     function raiz() {
         return document.querySelector('[data-pmu-panel]') || null;
@@ -685,7 +722,16 @@
                 // Sin clave de dedupe: cada subida es una foto distinta. El dedupe
                 // por sha llega con la subida al ELEGIR (D2), que aun no esta cableada.
                 clave: function () { return ''; },
-                subir: function (t) { return subirFotoCrudo(t.blob, t.campo, t.onItem, t.ctx); }
+                subir: function (t) {
+                    // Spec 036 (T022): el boton se bloquea al arrancar la cola y se
+                    // libera solo cuando NO queda ninguna subida (fotos o textos).
+                    refrescarCarrito();
+                    var fin = function () { refrescarCarrito(); };
+                    return subirFotoCrudo(t.blob, t.campo, t.onItem, t.ctx).then(function (r) {
+                        fin();
+                        return r;
+                    }, function (e) { fin(); throw e; });
+                }
             });
         } else {
             colaUpload = {
@@ -1133,13 +1179,7 @@
         Object.keys(faltanFoto).forEach(function (cid) {
             faltan += Math.max(0, parseInt(faltanFoto[cid], 10) || 0);
         });
-        var subidas = 0;
-        try {
-            if (global.PMU_FICHA && global.PMU_FICHA.subidas
-                && typeof global.PMU_FICHA.subidas.pendientes === 'function') {
-                subidas = parseInt(global.PMU_FICHA.subidas.pendientes(), 10) || 0;
-            }
-        } catch (e) { subidas = 0; }
+        var subidas = subidasPendientes();
         return PURO.estaCompleto({
             faltanFotos: faltan,
             subidas: subidas,
@@ -1150,7 +1190,11 @@
     /** Spec 005 (T008) + spec 022 (D2): el boton combina todo lo que bloquea. */
     function refrescarCarrito() {
         var b = botonWoo();
-        if (b) { b.disabled = !!(bloqueos.vistas || bloqueos.validez || bloqueos.minimos); }
+        if (!b) { return; }
+        // Spec 036 (T022/D8): `subidas` = la cola (fotos + textos) NO esta vacia.
+        // El boton se habilita recien cuando se vacia.
+        bloqueos.subidas = subidasPendientes() > 0;
+        b.disabled = !!(bloqueos.vistas || bloqueos.validez || bloqueos.minimos || bloqueos.subidas);
     }
 
     /**
@@ -1499,6 +1543,55 @@
      * cae a PNG **en silencio** si el navegador no sabe codificar WebP: nunca
      * se inventa el formato.
      */
+    /**
+     * Spec 036 (T021/D9, P7): las creaciones de TextMuy viajan en **WebP** y al
+     * cap maximo de las fotos (`PMUFotos.medidasAcotadas`, factor UNIFORME: nunca
+     * deforma). Sin canvas o sin WebP se devuelve el blob ORIGINAL: el Motor
+     * encaja igual (contain) y la vista previa sigue siendo el PDF.
+     */
+    function acotarYWebp(blob, w, h) {
+        if (!blob || typeof document === 'undefined' || typeof Image === 'undefined') {
+            return Promise.resolve(blob);
+        }
+        var medir = (global.PMUFotos && typeof global.PMUFotos.medidasAcotadas === 'function')
+            ? global.PMUFotos.medidasAcotadas : null;
+        return new Promise(function (resolver) {
+            var url = null;
+            try {
+                url = URL.createObjectURL(blob);
+            } catch (e) {
+                resolver(blob);
+                return;
+            }
+            var cerrar = function (valor) {
+                try { URL.revokeObjectURL(url); } catch (e) { /* nada */ }
+                resolver(valor);
+            };
+            var img = new Image();
+            img.onerror = function () { cerrar(blob); };
+            img.onload = function () {
+                try {
+                    var iw = img.naturalWidth || w || 1;
+                    var ih = img.naturalHeight || h || 1;
+                    var m = medir ? medir(iw, ih) : { w: iw, h: ih };
+                    var c = document.createElement('canvas');
+                    c.width = m.w;
+                    c.height = m.h;
+                    c.getContext('2d').drawImage(img, 0, 0, m.w, m.h);
+                    if (typeof c.toBlob !== 'function') { cerrar(blob); return; }
+                    c.toBlob(function (out) {
+                        // Sin soporte de WebP, `toBlob` cae a PNG EN SILENCIO: se
+                        // devuelve el original (no se recomprime de gusto).
+                        cerrar((out && out.type === 'image/webp') ? out : blob);
+                    }, 'image/webp', 0.85);
+                } catch (e) {
+                    cerrar(blob);
+                }
+            };
+            img.src = url;
+        });
+    }
+
     function tipoDeBlob(blob) {
         if (!blob) { return ''; }
         return (blob.size >= 12 && blob.type === 'image/webp') ? 'webp' : 'png';
@@ -1597,8 +1690,8 @@
             // COMPLETO (sin render parcial): asi una re-edicion con hashes
             // reusados no borra las filas que conserva del pool.
             var regeneraCompleto = nuevos.length === pendientes.length;
-            var subirUna = function (item, limpiar) {
-                return subirPool(sid, itemKey, pdfDatos.pdf, item.p.gid, item.blob, {
+            var subirPool2 = function (item, limpiar, blob) {
+                return subirPool(sid, itemKey, pdfDatos.pdf, item.p.gid, blob, {
                     valor: item.p.texto, preset: item.p.g.preset, settings: item.p.g.settings, w: item.p.g.w, h: item.p.g.h,
                     // Spec 029 (D3): POSICION de la instancia. La entrada que
                     // colapsa el grupo (D2) va con 0: el Motor la replica.
@@ -1606,7 +1699,45 @@
                     // FR-005 (T016): el MISMO string que entro al hash del
                     // cliente; el servidor lo concatena igual en hash_pool().
                     ovClave: item.p.ovClave
-                }, limpiar, tipoDeBlob(item.blob));
+                }, limpiar, tipoDeBlob(blob));
+            };
+            /**
+             * Spec 036 (T019-T021, D9): la subida de UNA creacion de texto.
+             *
+             * - SLOT `pdf|gid|indice`: serializa y aplica "la ultima version manda"
+             *   (una re-edicion del mismo hueco descarta la corrida anterior sin
+             *   gastar red);
+             * - CONTENIDO (hash del render): el mismo texto nunca se sube dos veces;
+             * - WebP + cap maximo (P7) antes de viajar.
+             */
+            var subirUna = function (item, limpiar) {
+                var claveSlot = String(pdfDatos.pdf) + '|' + String(item.p.gid) + '|' + String(item.p.i);
+                var marca = PURO.marcaSlot(generacionSlot, claveSlot);
+                var firma = String(item.p.hash || '');
+                if (firma !== '' && subidasPorHash[firma]) { return subidasPorHash[firma]; }
+                poolEnVuelo++;
+                refrescarCarrito();
+                var promesa = PURO.enCola(colasSlot, claveSlot, function () {
+                    if (!PURO.slotVigente(generacionSlot, claveSlot, marca)) {
+                        return Promise.resolve({ descartada: true });
+                    }
+                    return acotarYWebp(item.blob, item.p.g.w, item.p.g.h).then(function (blob) {
+                        return subirPool2(item, limpiar, blob);
+                    });
+                });
+                var fin = function () {
+                    poolEnVuelo = Math.max(0, poolEnVuelo - 1);
+                    refrescarCarrito();
+                };
+                promesa.then(fin, fin);
+                if (firma !== '') {
+                    subidasPorHash[firma] = promesa;
+                    // Si falla, se libera la firma: un reintento tiene que poder subir.
+                    promesa.catch(function () {
+                        if (subidasPorHash[firma] === promesa) { delete subidasPorHash[firma]; }
+                    });
+                }
+                return promesa;
             };
             var subidas = Object.keys(porGrupo).map(function (gid) {
                 var lista = porGrupo[gid];

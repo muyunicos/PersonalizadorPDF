@@ -185,12 +185,18 @@
         var reintentos = Array.isArray(cfg.reintentos) ? cfg.reintentos : [1000, 3000];
         var claveDe = (typeof cfg.clave === 'function') ? cfg.clave : function () { return ''; };
         var subir = (typeof cfg.subir === 'function') ? cfg.subir : null;
+        // Spec 036 (T019/D9): firma de CONTENIDO (el sha de la foto o el hash de la
+        // creacion). El mismo contenido no se sube dos veces (0 bytes).
+        var dedupeDe = (typeof cfg.dedupe === 'function') ? cfg.dedupe : function () { return ''; };
         var esperar = (typeof cfg.esperar === 'function') ? cfg.esperar : function (ms) {
             return new Promise(function (r) { setTimeout(r, ms); });
         };
         var pendientes = [];
         var enVuelo = 0;
-        var vistas = {};
+        var vistas = {};          // clave del SLOT -> promesa vigente
+        var porContenido = {};    // firma del CONTENIDO -> promesa (T019)
+        var generacion = {};      // clave del SLOT -> version vigente (T020)
+        var enVueloPorClave = {}; // clave del SLOT -> true mientras corre
         var vacia = null;
 
         function cerrarSiVacia() {
@@ -216,18 +222,58 @@
             return paso();
         }
 
+        /** Suelta el slot: la siguiente version de la misma clave puede arrancar. */
+        function liberarClave(envoltorio) {
+            if (envoltorio.clave !== '') { delete enVueloPorClave[envoltorio.clave]; }
+        }
+
+        /** Borra los indices que apuntaban a un envoltorio que quedo sin efecto. */
+        function olvidarMarca(p) {
+            if (p.clave !== '' && vistas[p.clave] === p.promesa) { delete vistas[p.clave]; }
+            if (p.firma !== '' && porContenido[p.firma] === p.promesa) { delete porContenido[p.firma]; }
+        }
+
+        /**
+         * Primer envoltorio en orden FIFO que PUEDE arrancar (spec 036, T020).
+         * Una clave con otra subida en vuelo espera (serializacion: asi "la ultima
+         * version manda" en el servidor); una version superada sale ya, para
+         * descartarse sin gastar red.
+         */
+        function elegible() {
+            for (var i = 0; i < pendientes.length; i++) {
+                var p = pendientes[i];
+                if (p.clave === '') { return i; }
+                if (p.gen !== generacion[p.clave]) { return i; }
+                if (!enVueloPorClave[p.clave]) { return i; }
+            }
+            return -1;
+        }
+
         function arrancar() {
-            while (enVuelo < max && pendientes.length) {
-                var p = pendientes.shift();
+            while (enVuelo < max) {
+                var elige = elegible();
+                if (elige < 0) { return; }
+                var p = pendientes.splice(elige, 1)[0];
+                // Spec 036 (T020/D9): una subida REEMPLAZADA no gasta red. Se
+                // resuelve `false` para que el llamador sepa que no subio nada.
+                if (p.clave !== '' && p.gen !== generacion[p.clave]) {
+                    olvidarMarca(p);
+                    p.resolver(false);
+                    cerrarSiVacia();
+                    continue;
+                }
+                if (p.clave !== '') { enVueloPorClave[p.clave] = true; }
                 enVuelo++;
                 (function (envoltorio) {
                     intentar(envoltorio.tarea).then(function (r) {
                         enVuelo--;
+                        liberarClave(envoltorio);
                         envoltorio.resolver(r);
                         arrancar();
                         cerrarSiVacia();
                     }, function (e) {
                         enVuelo--;
+                        liberarClave(envoltorio);
                         envoltorio.rechazar(e);
                         arrancar();
                         cerrarSiVacia();
@@ -237,15 +283,38 @@
         }
 
         return {
-            /** Encola una subida. La misma clave devuelve la promesa ya en curso. */
-            encolar: function (tarea, clave) {
+            /**
+             * Encola una subida (spec 036, D9).
+             *
+             * `clave` = el SLOT (`pdf|gid|indice` o lo que defina el llamador):
+             *   - sin `reemplazar`, la misma clave NO se reenvia (0 bytes);
+             *   - con `opciones.reemplazar`, la ultima version MANDA: la anterior
+             *     se descarta si no arranco (resuelve `false`) y las dos nunca
+             *     corren a la vez (serializadas por clave).
+             * `opciones.dedupe` = firma del CONTENIDO (sha/hash): el mismo
+             *   contenido devuelve la promesa ya en curso, suba o no el slot.
+             */
+            encolar: function (tarea, clave, opciones) {
                 var k = (clave === undefined) ? String(claveDe(tarea) || '') : String(clave || '');
-                if (k !== '' && vistas[k]) { return vistas[k]; }
+                var opt = opciones || {};
+                var firma = (opt.dedupe === undefined) ? String(dedupeDe(tarea) || '') : String(opt.dedupe || '');
+                if (firma !== '' && porContenido[firma]) { return porContenido[firma]; }
+                if (k !== '' && !opt.reemplazar && vistas[k]) { return vistas[k]; }
+                var gen = 1;
+                if (k !== '') {
+                    gen = (generacion[k] || 0) + 1;
+                    generacion[k] = gen;
+                }
+                var envoltorio = { tarea: tarea, clave: k, gen: gen, firma: firma, promesa: null, resolver: null, rechazar: null };
                 var promesa = new Promise(function (resolver, rechazar) {
-                    pendientes.push({ tarea: tarea, resolver: resolver, rechazar: rechazar });
+                    envoltorio.resolver = resolver;
+                    envoltorio.rechazar = rechazar;
+                    pendientes.push(envoltorio);
                     arrancar();
                 });
+                envoltorio.promesa = promesa;
                 if (k !== '') { vistas[k] = promesa; }
+                if (firma !== '') { porContenido[firma] = promesa; }
                 return promesa;
             },
             /** Resuelve cuando no queda nada en vuelo ni en cola. */

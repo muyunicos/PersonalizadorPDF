@@ -87,12 +87,12 @@
 
 **Independent Test**: E3 de `quickstart.md` (con varias imagenes y textos el boton esta **deshabilitado** mientras hay pendientes; cambiar un texto **reemplaza** la version anterior).
 
-- [ ] T019 [US3] Cola en `assets/fotos-pmu.js` (`PMUFotos.crearCola`): concurrencia **acotada**, orden **FIFO**, **dedupe** por `sha` y **reintentos** con backoff
-- [ ] T020 [US3] "Ultima version manda": **serializar** las subidas de una misma creacion (`pdf`-`gid`-`indice`) y **reemplazar** la anterior (en `assets/tienda.js` `subirPool` `:864` + `assets/fotos-pmu.js`)
-- [ ] T021 [US3] Subir las creaciones de TextMuy en **WebP** y al **cap maximo predefinido** (P7: mismo criterio que las fotos) en `assets/tienda.js` (`tipoDeBlob`/`subirPool`)
-- [ ] T022 [US3] Gate del boton: agregar `subidas` a `bloqueos` y usarlo en `refrescarCarrito()` (`assets/tienda.js:615`/`:1092`) con `api.subidas.pendientes()`; habilitar **al vaciarse**
-- [ ] T023 [US3] Puerta Node nueva `tests/cola-subida.test.js`: N archivos (concurrencia acotada, orden FIFO, dedupe, ultima version reemplaza)
-- [ ] T024 [US3] Gate: `node tests/cola-subida.test.js` + `node tests/ficha-pedido.browser.js` (gate + ultima version) en verde
+- [X] T019 [US3] Cola en `assets/fotos-pmu.js` (`PMUFotos.crearCola`): concurrencia **acotada**, orden **FIFO**, **dedupe** por `sha` y **reintentos** con backoff
+- [X] T020 [US3] "Ultima version manda": **serializar** las subidas de una misma creacion (`pdf`-`gid`-`indice`) y **reemplazar** la anterior (en `assets/tienda.js` `subirPool` `:864` + `assets/fotos-pmu.js`) — **hecho en la COLA** (`crearCola` con `opciones.reemplazar`: serializa por clave y descarta la version superada resolviendo `false`, sin gastar red) + `PURO.marcaSlot`/`PURO.slotVigente` en el camino del pool (`subirUna` encola por slot `pdf|gid|indice`). El `limpiar` por grupo (`colasPool`) queda intacto.
+- [X] T021 [US3] Subir las creaciones de TextMuy en **WebP** y al **cap maximo predefinido** (P7: mismo criterio que las fotos) en `assets/tienda.js` (`tipoDeBlob`/`subirPool`) — `acotarYWebp()` usa `PMUFotos.medidasAcotadas` (mismo `LADO_MAX` 2000 y factor UNIFORME); si el navegador no codifica WebP devuelve el blob original. **P7 confirmado por implementacion**: el cap es el de la foto.
+- [X] T022 [US3] Gate del boton: agregar `subidas` a `bloqueos` y usarlo en `refrescarCarrito()` (`assets/tienda.js:615`/`:1092`) con `api.subidas.pendientes()`; habilitar **al vaciarse** — `subidasPendientes()` suma la cola de fotos (`PMU_FICHA.subidas`) **y** el contador `poolEnVuelo` (textos), asi el boton espera TODA la cola (US3 Goal). Se libera al terminar cada subida.
+- [X] T023 [US3] Puerta Node nueva `tests/cola-subida.test.js`: N archivos (concurrencia acotada, orden FIFO, dedupe, ultima version reemplaza) — **22 checks** (`COLA SUBIDA OK (22 checks)`).
+- [X] T024 [US3] Gate: `node tests/cola-subida.test.js` + `node tests/ficha-pedido.browser.js` (gate + ultima version) en verde — `COLA SUBIDA OK (22)` + `FICHA->PEDIDO 50/50`, sin errores de pagina; ademas `CONCILIACION`, `VISTAS/FOTOS/RECETA/CAMPOS/SELECTOR/BIBLIOTECA CONTRATO`, `COMPOSITOR PARIDAD` y las fases `pool/vista_previa/carrito/fotos` del arnes.
 
 **Checkpoint**: US3 entregable sola (compra asegurada tras subir todo).
 
