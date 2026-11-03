@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.28.0
+Stable tag: 4.28.1
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,15 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.28.1 =
+* Spec 036 (enmienda D12): el mockup aplanado del cliente ahora trae **fondo blanco opaco** y la
+  **silueta de cada placeholder perforada** (alfa 0). La ficha dibuja los placeholders **debajo** y
+  el aplanado **encima**, asi la foto del comprador se ve por el hueco y el fondo no la tapa.
+  **1 archivo, 1 descarga por mockup**; sin bandas ni mascara aparte.
+* Un PH con **perspectiva** no se puede perforar: el editor avisa y el aplanado lo tapa (limitacion
+  aceptada). El bug del rectangulo gris dentro del aplanado queda corregido (`huecosTransparentes`
+  + fondo blanco).
 
 = 4.28.0 =
 * Spec 036 (ficha optimizada): la ficha abre con **0 descargas de imagenes del cliente** y sin el motor de texto si no hay campos de texto.

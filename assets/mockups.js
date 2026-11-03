@@ -55,7 +55,10 @@ jQuery(function ($) {
         arrastre: null,
         guias: [],
         // Caché de envolturas pedidas bajo demanda: clave `{gid}#{n}`.
-        envs: {}
+        envs: {},
+        // Enmienda D12: PH que el aplanado no pudo perforar (perspectiva).
+        // { id: mockupId, saltadas: [{indice, ref, motivo}] }
+        huecosSaltadas: null
     };
 
     function normalizarMockup(m) {
@@ -1129,6 +1132,12 @@ jQuery(function ($) {
                 }).join(', ') + '. Se conservan: volve a subir la foto o re-analiza el PDF.'));
         }
         var m = mockup();
+        var hs = estado.huecosSaltadas;
+        if (m && hs && hs.id === m.id && hs.saltadas && hs.saltadas.length) {
+            $a.append($('<p class="ec-mk-alerta-foto ec-mk-alerta-hueco">').text(
+                hs.saltadas.length + ' hueco(s) con perspectiva: el aplanado no puede perforarlos. ' +
+                'Quita la perspectiva de ese grupo/capa para que la foto se vea por el hueco.'));
+        }
         if (m && m.avisos && m.avisos.length) {
             $a.append($('<p class="ec-mk-alerta-foto">').text(m.avisos[0]));
         }
@@ -2030,30 +2039,53 @@ jQuery(function ($) {
     }
 
     /**
-     * Spec 036 (T013/D10): aplanado del mockup ACTUAL a WebP — SOLO las capas
-     * `img` VISIBLES, con sus filtros y deformaciones, SIN placeholders ni marcas
-     * del editor. Es el fondo que sirve la ficha del cliente: 1 descarga por
-     * mockup en vez de N capas. Devuelve `null` si no hay nada que aplanar o el
-     * navegador no soporta `toBlob`: el guardado de las capas NUNCA depende de
-     * esto (el aplanado es DERIVADO y se regenera en cada guardado, T016).
+     * Spec 036 (T013/D10 + enmienda 2026-11-03, D12): aplanado del mockup
+     * ACTUAL a WebP. Fondo BLANCO opaco + TODAS las capas `img` visibles (marco
+     * incluido, con filtros y deformaciones) y, encima de lo compuesto, la
+     * silueta de cada PH BORRADA (alfa 0): el HUECO por donde se ve la foto del
+     * comprador. Un solo archivo, sin bandas ni mascara aparte.
+     *
+     * Devuelve `{blob, huecos}` o `null` si el nucleo no puede aplanar. El
+     * guardado de las capas NUNCA depende de esto (el aplanado es DERIVADO y se
+     * regenera en cada guardado, T016).
      */
     function aplanarMockup(m) {
-        if (!R || typeof R.componer !== 'function' || !m) { return Promise.resolve(null); }
+        if (!R || typeof R.componer !== 'function' || typeof R.siluetas !== 'function' || !m) {
+            return Promise.resolve(null);
+        }
         var capas = (m.capas || []).filter(function (c) {
             return c && c.tipo === 'img' && !c.oculta;
         });
-        if (!capas.length) { return Promise.resolve(null); }
         var c = document.createElement('canvas');
         c.width = LIENZO;
         c.height = LIENZO;
-        return R.componer(c.getContext('2d'), capas, {
+        var ctx = c.getContext('2d');
+        if (!ctx) { return Promise.resolve(null); }
+        // Enmienda D12: el aplanado es el FONDO del mockup, no una capa
+        // transparente. Fondo BLANCO opaco; los huecos se perforan despues.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, LIENZO, LIENZO);
+        var datosCtx = contexto();
+        return R.componer(ctx, capas, {
             resolver: resolverCapa,
-            contexto: contexto(),
-            lienzo: LIENZO
+            contexto: datosCtx,
+            lienzo: LIENZO,
+            // El blanco no se borra: el fondo se pinta arriba.
+            limpiar: false,
+            // P0: un recurso `img` roto deja BLANCO, nunca el gris de encuadre.
+            huecosTransparentes: true
         }).then(function () {
+            // El hueco va DESPUES de las capas: borra la silueta de cada PH
+            // sobre lo ya compuesto (deja alfa 0 donde va la foto).
+            var huecos = R.siluetas(ctx, m.capas || [], { contexto: datosCtx });
             return new Promise(function (resolver) {
-                if (typeof c.toBlob !== 'function') { resolver(null); return; }
-                c.toBlob(function (blob) { resolver(blob || null); }, 'image/webp', 0.85);
+                if (typeof c.toBlob !== 'function') {
+                    resolver({ blob: null, huecos: huecos });
+                    return;
+                }
+                c.toBlob(function (blob) {
+                    resolver({ blob: blob || null, huecos: huecos });
+                }, 'image/webp', 0.85);
             });
         }).catch(function () { return null; });
     }
@@ -2079,7 +2111,9 @@ jQuery(function ($) {
         // de guardar: el servidor escribe pdfs/{nombre}/mockups/{id}.webp. Sin
         // bitmap (no hay capas img, o el navegador no lo soporta) el guardado de
         // las capas sigue igual y la ficha degrada con causa visible.
-        aplanarMockup(m).then(function (blob) {
+        aplanarMockup(m).then(function (aplanado) {
+            var blob = aplanado ? aplanado.blob : null;
+            var huecos = aplanado ? aplanado.huecos : null;
             var fd = new FormData();
             fd.append('archivo', datos.pdf + '.pdf');
             fd.append('mockups', jsonMockups);
@@ -2089,13 +2123,24 @@ jQuery(function ($) {
                 fd.append('aplanado', blob, 'aplanado.webp');
             }
             return api('personalizador_pdf_mockups', fd,
-                cfg.nonceAccion ? cfg.nonceAccion.mockups : (cfg.nonceMockups || ''));
+                cfg.nonceAccion ? cfg.nonceAccion.mockups : (cfg.nonceMockups || '')).then(function (respuesta) {
+                // Enmienda D12: si el aplanado no pudo perforar un PH con
+                // perspectiva, el editor lo avisa (el bitmap lo taparia).
+                if (aplanado && huecos) {
+                    estado.huecosSaltadas = {
+                        id: String((m && m.id) || ''),
+                        saltadas: huecos.saltadas || []
+                    };
+                }
+                return respuesta;
+            });
         })
             .then(function () {
                 estado.guardado = 'guardado';
                 // El servidor es la autoridad: se refleja lo que guardo.
                 datos.preview_omisible = $ed.find('.ec-mk-omisible').prop('checked') === true;
                 pintarEstado();
+                pintarAlertas();
             })
             .catch(function (e) {
                 var msg = (e instanceof Error && e.message) ? e.message : 'No se pudo guardar (red).';

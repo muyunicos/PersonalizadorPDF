@@ -71,7 +71,7 @@
 **Independent Test**: E2 de `quickstart.md` (aparece `pdfs/{nombre}/mockups/{mockup_id}.webp`; la ficha hace **1** descarga por mockup; al editar capas se regenera).
 
 - [X] T013 [US2] Aplanar en el editor: en `assets/mockups.js`, al guardar, exportar a **WebP** la composicion de las capas `tipo: img` **visibles** (filtros/efectos/deformaciones incluidos) y subirla con el guardado (usa el Canvas ya existente; sin render nuevo)
-- [X] T014 [US2] Servidor: en `personalizador-pdf.php` (handler de mockups, ~`:5393-5430`) guardar el aplanado en `pdfs/{nombre}/mockups/{mockup_id}.webp` con el **id saneado** (`nombre_seguro`); no romper si falta — **LIMITACION ACEPTADA (2026-11-03)**: si el admin quita **todas** las capas `img` visibles y guarda, no se manda bitmap y el `{id}.webp` anterior **no se borra** (la ficha seguiria mostrando el fondo viejo hasta el proximo guardado con imagenes o hasta borrar el mockup). Caso raro: **desestimado con el usuario**; no se agrega `aplanado_vacio` ni borrado automatico. Los aplanados de mockups BORRADOS quedan como archivos inertes (el consumidor solo lista ids vigentes), aunque figuran como foto del admin.
+- [X] T014 [US2] Servidor: en `personalizador-pdf.php` (handler de mockups, ~`:5393-5430`) guardar el aplanado en `pdfs/{nombre}/mockups/{mockup_id}.webp` con el **id saneado** (`nombre_seguro`); no romper si falta — **RESUELTA por la enmienda D12 (2026-11-03)**: aunque el admin quite **todas** las capas `img`, se manda un bitmap blanco (con los huecos) y el `{id}.webp` anterior se reemplaza; no queda fondo viejo. Los aplanados de mockups BORRADOS quedan como archivos inertes (el consumidor solo lista ids vigentes), aunque figuran como foto del admin.
 - [X] T015 [US2] Ficha: en `assets/tienda.js` `componerMockup()` (`:907`) pasar a `PMUMockup.componer` **1** capa `img` (el aplanado) + los `placeholder`; degradar con **causa visible** si el bitmap falta — **hecho con FALLBACK**: sin aplanado (mockup aun sin regenerar) se conserva la composicion por capas, asi que ningun mockup existente se rompe; el servidor publica `aplanado: null` y el bitmap se regenera al guardar. Nota: el servidor **excluye** el `{id}.webp` de la lista de fotos del admin (`mockup_fotos_lista`) para que el artefacto no figure ni se pueda borrar como foto.
 - [X] T016 [US2] Regeneracion: el aplanado se **reescribe** en cada guardado de capas (cubre mover/cambiar una capa y guardar)
 - [X] T017 [US2] Fase `aplanado` en `tests/texto_puente.php`: la ruta es `pdfs/{nombre}/mockups/{mockup_id}.webp`; un id invalido se rechaza; ausente no rompe — **+ puerta de navegador `tests/aplanado.browser.js` (20 checks, `APLANADO OK`)**: prueba el **PRODUCTOR REAL** (el canvas del editor del admin → WebP con firma RIFF/WEBP decodificable a 300x300), que el editor sale de "sin guardar" y que **T016 regenera** el bitmap al cambiar capas. **PENDIENTE (honesto, no maquillado)**: el conteo de red del comprador ("1 descarga por mockup", E2) queda marcado `PENDIENTE` en la puerta: en ese escenario sintetico `generarPdf` deja la galeria en "Generando vista previa" (1/1) sin emitir la request del bitmap y **el diagnostico descarta al servidor** (la respuesta de `vista_previa` SI trae el mockup). Cerrarlo requiere el camino `?pmu_item_key=` de `ficha-pedido.browser.js` (item ya completo, sin subida de foto en la misma corrida).
@@ -119,6 +119,28 @@
 - [X] T030 [P] Actualizar `specs/INDICE.md` con la 036 (estado + artefactos normativos)
 - [X] T031 Bump de version en la **cabecera** de `personalizador-pdf.php` (unica fuente, §10.bis) y en el `Stable tag` de `readme.txt` — **4.27.0 → 4.28.0** (+ entrada `= 4.28.0 =` en el changelog)
 - [X] T032 Cierre: correr TODAS las puertas de `AGENTS.md` §9 + el recorrido del lab (`node tests/ficha-pedido.browser.js`) y registrar la evidencia en `quickstart.md` §5 — tabla completa registrada (`FICHA->PEDIDO 52/52`, `COLA SUBIDA OK (22)`, `FASE aplanado OK (11)`, lint y demas puertas en verde) + los 4 hallazgos reales que atraparon las puertas.
+
+## Enmienda 2026-11-03 — Hueco en el aplanado (D12)
+
+**Diseno A** (acordado con el usuario): un solo WebP con fondo BLANCO opaco + todas las capas `img`
+visibles y la silueta de cada PH borrada (alfa 0); la ficha dibuja los PH **debajo** y el aplanado
+**encima**. Limitaciones aceptadas: nada puede pisar dentro del hueco, un PH `multiply` pierde el
+multiplicado, posible halo de 1 px con envolturas organicas y un PH con perspectiva no se perfora
+(aviso en el editor).
+
+- [X] T033 [US2] Nucleo `PMUMockup.siluetas(ctx, capas, {contexto})`: `destination-out`, mismo stack
+  (translate/rot/sesgo/envoltura) y salto de PH con perspectiva (propia o del grupo).
+- [X] T034 [US2] Productor `aplanarMockup`: fondo BLANCO + `componer(..., {limpiar:false,
+  huecosTransparentes:true})` sobre todas las capas `img` visibles + `siluetas` con los PH; devuelve
+  `{blob, huecos}`. **Cierra la limitacion de T014**: aun sin capas `img` se genera el bitmap blanco
+  con los huecos y el `{id}.webp` anterior se reemplaza.
+- [X] T035 [US2] Consumidor `componerMockup`: PH **debajo**, aplanado **encima**; el editor avisa los
+  PH con perspectiva (`huecosSaltadas` -> `.ec-mk-alerta-hueco`).
+- [X] T036 [P] Contrato `ficha-red.md` C2 + `AGENTS.md` §5 + `spec.md` (D12/P10) + `docs/decisiones.md`
+  + `specs/INDICE.md` + `quickstart.md` E2.
+- [X] T037 Puertas: `node tests/mockup-contrato.test.js` (**177 checks**),
+  `node tests/aplanado.browser.js` (`APLANADO OK: 22/22`: hueco alfa 0 + fondo opaco),
+  `node tests/ficha-pedido.browser.js` (52/52), `php tests/texto_puente.php aplanado` (11) + lint.
 
 ---
 

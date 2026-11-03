@@ -414,10 +414,15 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   Sin `textos.json` y sin `metadata.json` (norma ex-008).
 - Fotos de mockups del admin: `pdfs/{nombre}/mockups/` (datos de usuario, sin catálogo);
   las reutilizables viven en el catálogo `img/`.
-- **Mockup APLANADO del cliente (spec 036, D10)**: `pdfs/{nombre}/mockups/{mockup_id}.webp` es un
-  artefacto **DERIVADO** (NO vive en `config.json`): el editor del admin exporta el **WebP** de las
-  capas `img` VISIBLES en **cada** guardado (`aplanarMockup`) y la ficha lo sirve como **1 capa
-  `img`** + los `placeholder` (1 descarga por mockup). El servidor lo publica al leer
+- **Mockup APLANADO del cliente (spec 036, D10 + enmienda D12)**: `pdfs/{nombre}/mockups/{mockup_id}.webp`
+  es un artefacto **DERIVADO** (NO vive en `config.json`): el editor del admin exporta el **WebP** de
+  **TODO** el mockup visible en **cada** guardado (`aplanarMockup`): fondo **BLANCO opaco** + todas las
+  capas `img` VISIBLES (marco incluido) y la **silueta de cada PH borrada (alfa 0)** = el **hueco**
+  (`PMUMockup.siluetas`, `destination-out`). La ficha compone **PH primero (abajo) y el aplanado
+  encima** (1 descarga por mockup): la foto del comprador se ve **por el hueco** y el fondo no la tapa.
+  **Sin bandas ni mascara aparte**. Limitaciones aceptadas: nada puede pisar dentro del hueco, un PH
+  `multiply` pierde el multiplicado, posible halo de 1 px con envolturas organicas y un PH con
+  **perspectiva** no se perfora (el editor **avisa**). El servidor lo publica al leer
   (`mockups_con_aplanado`/`aplanados_mockups`) y lo **excluye** de la lista de fotos del admin; el
   `id` se **rechaza** si no es ya su forma segura. Ausente = la ficha cae a la composicion por capas
   (ningun mockup previo se rompe) y la consola lo regenera al guardar.
@@ -755,7 +760,7 @@ $env:NODE_PATH = "$env:TEMP\pmu-pw\node_modules"
 $env:TEXTMUY_CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 node tests/galerias-sprite.browser.js       # 32/32 (mutan/restauran datos del lab)
 node tests/ficha-pedido.browser.js          # 47/47 (crea un pedido de prueba)
-node tests/aplanado.browser.js              # mockup APLANADO real (spec 036): productor + T016
+node tests/aplanado.browser.js              # mockup APLANADO real (spec 036): productor + hueco (D12) + T016
 pwsh C:\wp-lab\arrancar.ps1                 # (si el lab esta apagado)
 ```
 

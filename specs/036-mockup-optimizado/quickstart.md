@@ -24,13 +24,16 @@ php tests/parity.php
 3. Abrir el modal de carga de imagenes: recien ahi aparecen las miniaturas (las del comprador).
 4. Repetir con un campo de tipo `texto`: el motor de texto aparece **solo** cuando hay ese campo.
 
-## 2. Mockup aplanado (D10) — E2
+## 2. Mockup aplanado y su hueco (D10/D12) — E2
 
 1. En el admin, abrir el editor de mockups de un PDF con mockups y guardar.
-2. Esperado: aparece **1** archivo `pdfs/{nombre}/mockups/{mockup_id}.webp` (aplanado).
-3. Abrir la ficha: **1** sola descarga por mockup; el mockup se ve **igual** que en el editor.
+2. Esperado: **1** archivo `pdfs/{nombre}/mockups/{mockup_id}.webp` con fondo **BLANCO opaco** y la
+   silueta de cada PH **transparente** (alfa 0) = el **hueco**.
+3. Abrir la ficha: **1** sola descarga por mockup; la foto del comprador se ve **por el hueco** y el
+   fondo no la tapa (los PH van debajo, el aplanado encima).
 4. Editar las capas y guardar: el `.webp` se **regenera**; la ficha muestra la version nueva.
 5. Borrar el `.webp` a mano y abrir la ficha: degrada con **causa visible** (no rompe).
+6. Un PH con **perspectiva**: el editor **avisa**; el aplanado no puede perforarlo (limitacion D12).
 
 ## 3. Cola y gate del boton (D8/D9) — E3
 
@@ -95,3 +98,17 @@ un campo **repinta**: `posts+1`, `vistas=3`, sin boton) y "sin boton Vista previ
    siempre): la cadena se arma con `Promise.resolve().then(...)`.
 4. `let fallos = 0` del test de reintentos **ensombrecia** el contador global de la puerta (salida
    `exit 1` con todo OK): renombrado a `intentosRed`.
+
+### Enmienda 2026-11-03 (D12) — v4.28.1
+
+| Puerta | Resultado |
+|---|---|
+| `node tests/mockup-contrato.test.js` | `CONTRATO OK (177 checks)` |
+| `php tests/texto_puente.php aplanado` | `FASE aplanado OK (11 checks)` |
+| `node tests/aplanado.browser.js` (lab) | **`APLANADO OK: 22/22`** — centro del PH **alfa 0**, fondo **alfa 255 rgb 255,255,255**, WebP 300x300 y regeneracion T016 |
+| `node tests/ficha-pedido.browser.js` (lab) | **`FICHA->PEDIDO: 52/52 OK`** — el orden PH + aplanado no rompe la composicion |
+| `php -l` + `node --check` de los JS tocados | OK |
+
+El productor ahora devuelve `{blob, huecos}`; `siluetas` usa `destination-out` con el mismo stack de
+transformacion/envoltura. **Cierra la limitacion de T014**: aun sin capas `img` se genera un bitmap
+blanco con los huecos.

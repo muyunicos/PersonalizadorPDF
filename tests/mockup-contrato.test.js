@@ -349,21 +349,50 @@ check('normalizarCapa conserva los campos extra de la capa', (function () {
 function ctxFalso() {
     var ops = [];
     var transforms = [];
-    return {
+    var composites = [];
+    var rellenos = [];
+    var estadoCtx = {
+        globalCompositeOperation: 'source-over',
+        globalAlpha: 1,
+        filter: 'none',
+        fillStyle: '#000'
+    };
+    var pila = [];
+    var ctx = {
         ops: ops,
         transforms: transforms,
+        composites: composites,
+        rellenos: rellenos,
         setTransform: function () {
             transforms.push(Array.prototype.slice.call(arguments));
             ops.push('setTransform');
         },
         clearRect: function () { ops.push('clearRect'); },
-        save: function () { ops.push('save'); },
-        restore: function () { ops.push('restore'); },
+        save: function () {
+            pila.push({
+                globalCompositeOperation: estadoCtx.globalCompositeOperation,
+                globalAlpha: estadoCtx.globalAlpha,
+                filter: estadoCtx.filter,
+                fillStyle: estadoCtx.fillStyle
+            });
+            ops.push('save');
+        },
+        restore: function () {
+            var previo = pila.pop();
+            if (previo) { estadoCtx = previo; }
+            ops.push('restore');
+        },
         translate: function () { ops.push('translate'); },
         rotate: function () { ops.push('rotate'); },
         transform: function () { ops.push('transform'); },
         strokeRect: function () { ops.push('strokeRect'); },
-        fillRect: function () { ops.push('fillRect'); },
+        fillRect: function (x, y, w, h) {
+            rellenos.push({
+                compuesto: estadoCtx.globalCompositeOperation,
+                args: [x, y, w, h]
+            });
+            ops.push('fillRect');
+        },
         beginPath: function () { ops.push('beginPath'); },
         moveTo: function () { ops.push('moveTo'); },
         lineTo: function () { ops.push('lineTo'); },
@@ -382,6 +411,28 @@ function ctxFalso() {
                 Math.round(x) + ',' + Math.round(y) + ',' + Math.round(w) + ',' + Math.round(h));
         }
     };
+    // Las propiedades del contexto se guardan/restauran como en un canvas real:
+    // `siluetas` necesita que `destination-out` no se filtre fuera del save().
+    Object.defineProperty(ctx, 'globalCompositeOperation', {
+        get: function () { return estadoCtx.globalCompositeOperation; },
+        set: function (valor) {
+            estadoCtx.globalCompositeOperation = valor;
+            composites.push(valor);
+        }
+    });
+    Object.defineProperty(ctx, 'globalAlpha', {
+        get: function () { return estadoCtx.globalAlpha; },
+        set: function (valor) { estadoCtx.globalAlpha = valor; }
+    });
+    Object.defineProperty(ctx, 'filter', {
+        get: function () { return estadoCtx.filter; },
+        set: function (valor) { estadoCtx.filter = valor; }
+    });
+    Object.defineProperty(ctx, 'fillStyle', {
+        get: function () { return estadoCtx.fillStyle; },
+        set: function (valor) { estadoCtx.fillStyle = valor; }
+    });
+    return ctx;
 }
 
 function capa(tipo, ref, extra) {
@@ -1085,4 +1136,111 @@ check('el alta de catalogo conserva su rama centrada (no regresion)',
     /if \(plan\.reemplazar\) \{[\s\S]{0,700}var escala = Math\.min\(1, LIENZO \/ Math\.max\(recurso\.w, recurso\.h\)\)/.test(ed),
     'sin seleccion la imagen del catalogo se sigue centrando en el lienzo (SC-004)');
 
+/* ============ Enmienda 2026-11-03 (spec 036, D12): hueco en el aplanado ============ */
+
+var edAplanado = leer('assets/mockups.js');
+var tiendaAplanado = leer('assets/tienda.js');
+var coreAplanado = leer('assets/mockup-render.js');
+
+check('D12: el nucleo exporta siluetas() para perforar el hueco',
+    typeof R.siluetas === 'function');
+check('D12: el aplanado pinta fondo BLANCO opaco antes de componer',
+    edAplanado.indexOf("ctx.fillStyle = '#ffffff'") !== -1
+        && edAplanado.indexOf('ctx.fillRect(0, 0, LIENZO, LIENZO)') !== -1);
+check('D12: el aplanado compone TODAS las capas img con limpiar:false y huecosTransparentes',
+    /R\.componer\(ctx, capas,[\s\S]{0,500}limpiar: false[\s\S]{0,200}huecosTransparentes: true/.test(edAplanado));
+check('D12: el aplanado perfora los PH DESPUES de componer (siluetas con todo el mockup)',
+    /R\.componer\(ctx, capas,[\s\S]{0,900}R\.siluetas\(ctx, m\.capas \|\| \[\], \{ contexto: datosCtx \}\)/.test(edAplanado));
+check('D12: la ficha dibuja los PH DEBAJO y el aplanado ENCIMA',
+    /if \(mockup && mockup\.aplanado\) \{[\s\S]{0,500}c\.tipo === 'placeholder'[\s\S]{0,500}ref: 'aplanado'/.test(tiendaAplanado),
+    'si el aplanado se dibuja antes que los PH, el fondo tapa la foto');
+check('D12: el editor avisa los PH con perspectiva que no se pueden perforar',
+    edAplanado.indexOf('ec-mk-alerta-hueco') !== -1
+        && edAplanado.indexOf('huecosSaltadas') !== -1);
+check('D12: el core documenta el stack de siluetas (destination-out + envoltura)',
+    coreAplanado.indexOf("ctx.globalCompositeOperation = 'destination-out'") !== -1
+        && coreAplanado.indexOf('trazarEnvoltura(ctx, comandosEnvoltura(env, {') !== -1);
+
+pruebas.push(function () {
+    var ctx = ctxFalso();
+    var r = R.siluetas(ctx, [
+        capa('img', 'mock:1'),
+        capa('placeholder', '0000FF', { x: 10, y: 20, w: 100, h: 50 })
+    ], { contexto: {} });
+    check('D12/siluetas: perfora SOLO el PH (no las capas img)',
+        r.perforadas.length === 1 && r.perforadas[0] === 1 && r.saltadas.length === 0,
+        JSON.stringify(r));
+    check('D12/siluetas: usa destination-out',
+        ctx.composites.indexOf('destination-out') !== -1, ctx.composites.join(','));
+    check('D12/siluetas: rellena la caja LOCAL del PH',
+        ctx.rellenos.length === 1
+            && ctx.rellenos[0].compuesto === 'destination-out'
+            && ctx.rellenos[0].args[0] === -50 && ctx.rellenos[0].args[1] === -25
+            && ctx.rellenos[0].args[2] === 100 && ctx.rellenos[0].args[3] === 50,
+        JSON.stringify(ctx.rellenos));
+    check('D12/siluetas: restaura el composite al salir',
+        ctx.globalCompositeOperation === 'source-over', ctx.globalCompositeOperation);
+});
+
+pruebas.push(function () {
+    var ctx = ctxFalso();
+    var g = [{ id: '0000FF', cont: 1, envs: { '1': envEjemplo } }];
+    var r = R.siluetas(ctx, [
+        capa('placeholder', '0000FF', { envoltura: true, rot: 30, sesgo: 0.2 })
+    ], { contexto: { grupos: g } });
+    var iClip = ctx.ops.indexOf('clip:nonzero');
+    var iFill = ctx.ops.indexOf('fillRect');
+    check('D12/siluetas: aplica el stack de componer (translate/rot/sesgo)',
+        ctx.ops.indexOf('translate') !== -1 && ctx.ops.indexOf('rotate') !== -1
+            && ctx.ops.indexOf('transform') !== -1, ctx.ops.join('|'));
+    check('D12/siluetas: recorta el hueco con la envoltura antes de borrar',
+        iClip !== -1 && iFill !== -1 && iClip < iFill && r.perforadas.length === 1,
+        ctx.ops.join('|'));
+});
+
+pruebas.push(function () {
+    var ctx = ctxFalso();
+    var puntos = [{ x: 0.1, y: 0.05 }, { x: 0.9, y: 0.1 },
+        { x: 0.95, y: 0.9 }, { x: 0.05, y: 0.95 }];
+    var r = R.siluetas(ctx, [
+        capa('placeholder', '0000FF', { oculta: true }),
+        capa('placeholder', '00FF00', { perspectiva: { puntos: puntos } }),
+        capa('placeholder', 'FF0000', { grupo: 'g-persp' }),
+        capa('img', 'mock:1', { grupo: 'g-persp', perspectiva: { puntos: puntos } }),
+        capa('placeholder', '0000FF', { grupo: 'g-plano' }),
+        capa('img', 'mock:2', { grupo: 'g-plano' })
+    ], { contexto: {} });
+    check('D12/siluetas: no perfora un PH oculto', r.perforadas.indexOf(0) === -1);
+    check('D12/siluetas: salta el PH con perspectiva propia',
+        r.saltadas.some(function (s) { return s.indice === 1 && s.motivo === 'perspectiva'; }),
+        JSON.stringify(r.saltadas));
+    check('D12/siluetas: salta el PH de un grupo con perspectiva',
+        r.saltadas.some(function (s) { return s.indice === 2; }), JSON.stringify(r.saltadas));
+    check('D12/siluetas: perfora el PH de un grupo SIN perspectiva',
+        r.perforadas.length === 1 && r.perforadas[0] === 4, JSON.stringify(r));
+});
+
+pruebas.push(function () {
+    var r = R.siluetas(null, [capa('placeholder', '0000FF')], {});
+    check('D12/siluetas: sin contexto 2D no rompe',
+        r.perforadas.length === 0 && r.saltadas.length === 0, JSON.stringify(r));
+});
+
+pruebas.push(function () {
+    var ctx = ctxFalso();
+    return R.componer(ctx, [
+        capa('placeholder', '0000FF', { x: 0, y: 0, w: 100, h: 100 }),
+        capa('img', 'aplanado', { x: 0, y: 0, w: 300, h: 300 })
+    ], {
+        resolver: function (c) { return { url: c.ref }; },
+        contexto: { grupos: [{ id: '0000FF', cont: 1 }] },
+        lienzo: 300,
+        huecosTransparentes: true
+    }).then(function () {
+        var dibujos = ctx.ops.filter(function (o) { return o.indexOf('drawImage') === 0; });
+        check('D12: el aplanado se dibuja DESPUES del PH (la foto se ve por el hueco)',
+            dibujos.length === 2 && dibujos[0].indexOf('0000FF') !== -1
+                && dibujos[1].indexOf('aplanado') !== -1, dibujos.join(' | '));
+    });
+});
 correr();

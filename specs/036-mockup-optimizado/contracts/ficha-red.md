@@ -16,15 +16,24 @@
 - Las imagenes del cliente (`assets/biblioteca-pmu.js` / `assets/visor-pmu.js`) **no** se cargan hasta
   abrir el modal.
 
-## C2 — Mockup aplanado (D10)
+## C2 — Mockup aplanado (D10 + enmienda D12)
 
 - **Artefacto**: `pdfs/{nombre}/mockups/{mockup_id}.webp`.
 - **Productor**: el **editor del admin** (`assets/mockups.js`) al guardar (Canvas -> WebP).
-- **Contenido**: solo capas `tipo: img` **visibles**, con sus filtros/efectos/deformaciones.
-- **Nunca** incluye los placeholders: van **encima**, con el PNG del comprador.
+- **Contenido**: **TODO** el mockup visible en **un solo WebP**: fondo **BLANCO opaco** + todas las
+  capas `tipo: img` visibles (marco incluido, con filtros/efectos/deformaciones) y la **silueta de
+  cada `placeholder` borrada (alfa 0)** = el **HUECO**. `PMUMockup.siluetas` hace el borrado con
+  `destination-out` y el mismo stack de transformacion/envoltura que `componer`.
+- **Los placeholders NO se dibujan encima**: van **DEBAJO** del aplanado. La ficha compone
+  `[PH..., aplanado]`; la foto del comprador se ve **por el hueco** y el fondo no la tapa.
+- **Un solo archivo**, sin bandas ni mascara aparte: **1 descarga por mockup**.
+- **Limitaciones aceptadas (Diseno A)**: nada puede pisar dentro del hueco; un PH con
+  `modo: multiply` pierde el multiplicado; posible halo de 1 px en el borde con envolturas organicas;
+  un PH con **perspectiva** no se perfora (el editor **avisa** y el aplanado lo tapa).
 - **Invalidacion**: cambio de capas -> regeneracion en el mismo guardado (sin flag persistido).
 - **Ausente**: la ficha degrada con **causa visible**; la consola lo regenera al abrir el editor.
-- Al cliente se le pasa a `PMUMockup.componer` una lista con **1** capa `img` + los `placeholder`.
+- Al cliente se le pasa a `PMUMockup.componer` los `placeholder` **primero** y **1** capa `img`
+  (el aplanado) **al final**.
 
 ## C3 — Gate del boton (D8)
 

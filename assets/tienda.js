@@ -1008,16 +1008,17 @@
             return null;
         }
 
-        // Spec 036 (T015/D10): al cliente se le pasa UNA capa `img` (el bitmap
-        // APLANADO, sin filtros: ya vienen horneados) + los `placeholder`. Sin
-        // aplanado (mockup todavia sin regenerar) se conserva la composicion por
-        // capas: la vista del comprador NO se rompe.
+        // Spec 036 (T015/D10 + enmienda 2026-11-03, D12): el aplanado trae el
+        // fondo BLANCO con la silueta de cada PH perforada (alfa 0). El cliente
+        // dibuja PRIMERO los PH (la foto del comprador) y DESPUES el aplanado
+        // ENCIMA: la foto se ve por el hueco y el fondo no la tapa. Sin aplanado
+        // (mockup todavia sin regenerar) se conserva la composicion por capas.
         var capasMockup = [];
         if (mockup && mockup.aplanado) {
-            capasMockup.push({ tipo: 'img', ref: 'aplanado', x: 0, y: 0, w: 300, h: 300, rot: 0 });
             ((mockup.capas) || []).forEach(function (c) {
                 if (c && c.tipo === 'placeholder') { capasMockup.push(c); }
             });
+            capasMockup.push({ tipo: 'img', ref: 'aplanado', x: 0, y: 0, w: 300, h: 300, rot: 0 });
         } else {
             capasMockup = (mockup && mockup.capas) || [];
         }

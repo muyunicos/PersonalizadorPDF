@@ -1,6 +1,7 @@
 # Spec 036 — Ficha optimizada: red, pintado progresivo y auto-montaje
 
-> Estado: **borrador** (2026-11-02). Release prevista: **4.28.0**.
+> Estado: **implementada** (2026-11-03) + **enmienda D12** (2026-11-03).
+> Release: **4.28.0** (base) / **4.28.1** (enmienda: hueco en el aplanado).
 > Construye sobre la 011 (nucleo de render compartido `assets/mockup-render.js`, editor + ficha),
 > la 012/018 (montaje de campos y `CargadorPMU`), la 022 (minimos de ranuras), la 030 (cache de
 > URLs y visor) y la 035 (receta v2, `objectURL` local del recorte y marca de "visto" al
@@ -27,6 +28,17 @@
 - Q: ¿Que significa "cargar imagen de fondo, contenedores e info de placeholders" al abrir la ficha con mockups? → A: El mockup del **cliente** se sirve **aplanado**: se carga **un solo bitmap** por mockup (todas las capas visibles `tipo: img`, ya con sus filtros/efectos/deformaciones) y **encima** se superponen los **placeholders** con sus **envolturas**. El mockup del **admin** sigue siendo el rejunte editable de capas. Ambos **se ven iguales**; cambia como se sirven (D10).
 
 - Q: ¿Donde se guarda el bitmap aplanado de cada mockup? → A: Junto al PDF, en `pdfs/{nombre}/mockups/{mockup_id}.webp` (el ambito `mockups` de ese PDF, que ya existe para las fotos del admin) (D10).
+### Session 2026-11-03 (enmienda D12 — hueco en el aplanado)
+
+- Q: El aplanado de D10 deja los PH **encima** y solo compone capas `img`; si un PH no tiene foto se
+  ve el fondo, y un elemento que pisa dentro del hueco queda tapado por la foto. ¿Como se sirve el
+  hueco? → A: **Diseno A**: **un solo WebP** con **fondo BLANCO opaco** + **todas** las capas `img`
+  visibles (marco incluido) y la **silueta de cada PH borrada (alfa 0)**. En la ficha los PH se
+  dibujan **DEBAJO** y el aplanado **ENCIMA**: la foto del comprador se ve **por el hueco**. Sin
+  bandas ni mascara aparte. Limitaciones **aceptadas**: (a) nada puede pisar dentro del hueco; (b) un
+  PH con `modo: multiply` pierde el multiplicado; (c) posible halo de 1 px en el borde con envolturas
+  organicas; (d) un PH con **perspectiva** no se puede perforar (el editor avisa y el aplanado lo
+  tapa).
 
 ## 1. El problema (verificado en el codigo)
 
@@ -73,8 +85,9 @@
 | **D7** | **Red al cargar la ficha (carga perezosa)**: al abrir el producto solo se descarga lo que se va a usar: (a) las **imagenes del cliente** se cargan **solo** si el comprador abre el modal de carga (si no, 0 descargas); (b) el **motor minimo de texto (TextMuy)** se carga **solo** si hay un campo de tipo `texto`; (c) si el PDF tiene mockups, se carga **un solo bitmap aplanado** por mockup + la **info de los placeholders** (transform + **envoltura**) que se superponen encima (D10). |
 | **D8** | **Subida en segundo plano + gate de la cola**: se suben **solo** los originales de imagen que el comprador cargo y sus **creaciones de TextMuy**, todo redimensionado al **tamano maximo predefinido** y en **WebP**. Todo viaja **mientras** se completa el formulario; el boton **"Agregar al carrito" se habilita recien cuando la cola queda vacia**. Si el comprador **cambia un texto** de TextMuy, **la ultima version reemplaza** la subida (una sola version por creacion). |
 | **D9** | **Cola de subida revisada**: la cola debe sostener **muchos archivos** (multiples opciones + varias cargas de imagenes): concurrencia acotada, orden FIFO, dedupe por contenido y reintentos (§3.6). |
-| **D10** | **Mockup aplanado para el cliente** (misma vista, servido distinto): el **editor del admin** aplana las capas **visibles** (`tipo: img`, con sus filtros/efectos/deformaciones) a **un solo bitmap WebP por mockup**; ese bitmap vive en `pdfs/{nombre}/mockups/{mockup_id}.webp` y se **regenera cuando cambian las capas**. El **cliente** carga ese bitmap + la info de los placeholders (transform + **envoltura**) y superpone el PNG del comprador mediante el nucleo; el mockup del **admin** sigue siendo el rejunte editable de capas. Los dos **se ven iguales**. |
+| **D10** | **Mockup aplanado para el cliente** (misma vista, servido distinto): el **editor del admin** aplana las capas **visibles** (`tipo: img`, con sus filtros/efectos/deformaciones) a **un solo bitmap WebP por mockup**; ese bitmap vive en `pdfs/{nombre}/mockups/{mockup_id}.webp` y se **regenera cuando cambian las capas**. El **cliente** carga ese bitmap + la info de los placeholders (transform + **envoltura**) y superpone el PNG del comprador mediante el nucleo; el mockup del **admin** sigue siendo el rejunte editable de capas. Los dos **se ven iguales**. **Enmendada por D12 (2026-11-03)**: el aplanado pasa a fondo BLANCO opaco con la silueta de cada PH perforada y la ficha dibuja los PH debajo. |
 | **D11** | **Plano de 2 caras: gateado**: **no** entra en esta entrega salvo que la medicion previa (§7 P1) lo justifique; si entra, se apoya en la homografia del nucleo y **no** toca al Motor ni el bitmap del pool. |
+| **D12** | **Hueco en el aplanado (enmienda 2026-11-03, Diseno A)**: el aplanado de D10 pasa a ser **un solo WebP** con **fondo BLANCO opaco** + **todas** las capas `img` visibles (marco incluido) y la **silueta de cada PH borrada (alfa 0)** (`PMUMockup.siluetas`, `destination-out`, mismo stack de transformacion/envoltura). La ficha compone **PH primero (abajo) y aplanado encima**: la foto del comprador se ve **por el hueco**. Sin bandas, sin mascara aparte, **1 descarga por mockup**. Limitaciones aceptadas: (a) nada puede pisar dentro del hueco; (b) un PH con `modo: multiply` pierde el multiplicado; (c) posible halo de 1 px en el borde con envolturas organicas; (d) un PH con **perspectiva** no se perfora: el editor **avisa** y el aplanado lo tapa. |
 
 ## 3. Contrato
 
@@ -103,13 +116,15 @@
 
 - **Imagenes del cliente**: 0 descargas al abrir; se piden **solo** al abrir el modal de carga.
 - **Motor minimo de TextMuy**: se encola **solo** si la ficha tiene un campo de tipo `texto`.
-- **Mockups del cliente**: se carga **una sola imagen aplanada** por mockup (el "fondo": las capas
-  `tipo: img` visibles ya compuestas, con sus filtros/efectos/deformaciones) + la **info de los
-  placeholders** (transform + **envoltura**) que se superponen **encima** con el PNG del comprador.
-  **No** se descargan las capas sueltas ni el marco editable.
+- **Mockups del cliente**: se carga **una sola imagen aplanada** por mockup: fondo **BLANCO opaco**
+  + **todas** las capas `tipo: img` visibles (marco incluido, con sus filtros/efectos/deformaciones) y
+  la **silueta de cada PH borrada (alfa 0)** = el **hueco**. La ficha compone **PH primero (abajo) y
+  el aplanado encima**: la foto del comprador se ve **por el hueco** y el fondo no la tapa. **No** se
+  descargan las capas sueltas ni el marco editable.
 - **Aplanado**: lo produce el **editor del admin** al guardar el mockup (Canvas -> WebP), vive en
   `pdfs/{nombre}/mockups/{mockup_id}.webp` y se **regenera** cuando cambian las capas; el render del
-  cliente reusa `PMUMockup.componer` con esa unica capa `img` + los placeholders.
+  cliente reusa `PMUMockup.componer` (PH + 1 capa `img` al final) y `PMUMockup.siluetas` perfora el
+  hueco en el productor. **1 archivo, sin bandas ni mascara aparte**.
 
 ### 3.5 Subida en segundo plano y habilitacion (D8)
 
@@ -141,6 +156,8 @@
   modal y sin campo `texto` no se descargan imagenes ni el motor de texto).
 - Puerta **nueva**: el mockup del cliente se sirve **aplanado** (1 bitmap + placeholders) y el
   aplanado se **regenera** al cambiar las capas del mockup.
+- `node tests/aplanado.browser.js` (lab): productor real + **hueco** (centro del PH con alfa 0 y
+  fondo opaco fuera) + regeneracion del bitmap al cambiar capas.
 - `php tests/motor_smoke.php` + `php tests/parity.php` en verde: **el Motor no cambia**.
 - `php -l` del area y `node --check` de los JS tocados.
 
@@ -174,3 +191,4 @@
 | **P7** | Tamano maximo de las creaciones de TextMuy | **Supuesto (corregir)**: mismo criterio que las fotos (el cap predefinido vigente, hoy 2000 px) |
 | **P8** | Relacion entre el gate de "visto" (035 D11) y el gate de la cola | **Supuesto (corregir)**: el gate de visto se satisface solo (la galeria se muestra sin boton); el gate efectivo pasa a ser "cola vacia" |
 | **P9** | Donde vive el bitmap aplanado del mockup (D10) | **CERRADA (2026-11-02)**: en `pdfs/{nombre}/mockups/{mockup_id}.webp` (el ambito `mockups` del PDF) |
+| **P10** | PH con perspectiva en el aplanado | **CERRADA (2026-11-03)**: se **salta** con aviso en el editor; el aplanado no puede perforar una silueta deformada. Limitacion documentada de D12. |

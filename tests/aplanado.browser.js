@@ -224,7 +224,7 @@ async function esperarCambio(pdf, id, hashPrevio, ms) {
         await clickMini(0);
         await esperar(800);
         // Caso REAL del admin: el mockup tambien lleva su placeholder (hueco) del grupo.
-        // El aplanado NO lo incluye (solo capas `img`); el cliente lo dibuja ENCIMA.
+        // El aplanado lo PERFORA (alfa 0) y el cliente dibuja los PH DEBAJO.
         await page.evaluate(() => {
             const b = document.querySelector('.ec-mk-grupo-agregar');
             if (b) { b.click(); }
@@ -255,6 +255,65 @@ async function esperarCambio(pdf, id, hashPrevio, ms) {
         }, BASE + '/wp-content/uploads/pmu/pdfs/' + PDF + '/mockups/' + id + '.webp?t=' + Date.now());
         check('productor: el WebP decodifica a 300x300 (el lienzo normativo)', !!dim && dim.w === 300 && dim.h === 300,
             dim ? dim.w + 'x' + dim.h : 'no decodifica');
+// ---- Enmienda D12: el aplanado tiene el HUECO del PH (alfa 0) y el
+        // fondo BLANCO opaco fuera. Se lee la geometria REAL que guardo el editor.
+        const cfgAplanado = leerJson(cfgPath(PDF));
+        const mockupGuardado = ((cfgAplanado && cfgAplanado.mockups) || [])
+            .find((m) => String(m && m.id) === id);
+        const capasGuardadas = (mockupGuardado && mockupGuardado.capas) || [];
+        const phsGuardados = capasGuardadas.filter((c) => c && c.tipo === 'placeholder' && !c.oculta);
+        const phGuardado = phsGuardados[0];
+        let pixelesHueco = null;
+        if (phGuardado && !phGuardado.envoltura
+            && Number(phGuardado.w) >= 10 && Number(phGuardado.h) >= 10) {
+            const centro = {
+                x: Math.round(Number(phGuardado.x || 0) + Number(phGuardado.w || 0) / 2),
+                y: Math.round(Number(phGuardado.y || 0) + Number(phGuardado.h || 0) / 2)
+            };
+            const dentroDePh = (x, y) => phsGuardados.some((c) => x >= Number(c.x || 0)
+                && x <= Number(c.x || 0) + Number(c.w || 0)
+                && y >= Number(c.y || 0) && y <= Number(c.y || 0) + Number(c.h || 0));
+            let fuera = null;
+            [[2, 2], [297, 2], [2, 297], [297, 297], [150, 2], [2, 150], [297, 150], [150, 297]]
+                .some((p) => {
+                    if (!dentroDePh(p[0], p[1])) { fuera = { x: p[0], y: p[1] }; return true; }
+                    return false;
+                });
+            pixelesHueco = await page.evaluate(async ({ url, centro, fuera }) => {
+                const img = new Image();
+                img.src = url;
+                try { await img.decode(); } catch (e) { return null; }
+                const c = document.createElement('canvas');
+                c.width = img.naturalWidth;
+                c.height = img.naturalHeight;
+                const g = c.getContext('2d');
+                g.drawImage(img, 0, 0);
+                const a = g.getImageData(centro.x, centro.y, 1, 1).data;
+                const b = fuera ? g.getImageData(fuera.x, fuera.y, 1, 1).data : null;
+                return {
+                    alfaHueco: a[3],
+                    alfaFondo: b ? b[3] : null,
+                    rgbFondo: b ? [b[0], b[1], b[2]] : null
+                };
+            }, {
+                url: BASE + '/wp-content/uploads/pmu/pdfs/' + PDF + '/mockups/' + id + '.webp?t=' + Date.now(),
+                centro: centro,
+                fuera: fuera
+            });
+        } else if (phGuardado && phGuardado.envoltura) {
+            pendiente('productor: PH con envoltura; el hueco se verifica con la forma',
+                true, 'envoltura=1');
+        } else if (phGuardado) {
+            pendiente('productor: PH demasiado chico para muestrear el hueco',
+                true, Number(phGuardado.w) + 'x' + Number(phGuardado.h));
+        }
+        if (pixelesHueco) {
+            check('productor: el centro del PH es TRANSPARENTE (el HUECO del aplanado)',
+                pixelesHueco.alfaHueco < 8, 'alfa=' + pixelesHueco.alfaHueco);
+            check('productor: fuera del hueco el aplanado es OPACO (fondo blanco)',
+                pixelesHueco.alfaFondo === null || pixelesHueco.alfaFondo > 247,
+                'alfa=' + pixelesHueco.alfaFondo + ' rgb=' + JSON.stringify(pixelesHueco.rgbFondo));
+        }
         await page.screenshot({ path: CAPT + '\\aplanado-editor.png' }).catch(() => { });
 
         // ---- T016: cambiar las capas REGENERA el bitmap (mismo id, otro contenido)

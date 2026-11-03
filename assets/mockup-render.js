@@ -634,6 +634,90 @@
         });
     }
 
+/**
+     * Spec 036 (enmienda 2026-11-03, D12): perfora en el canvas ya compuesto
+     * la silueta de cada placeholder. Es el HUECO del aplanado del cliente:
+     * fuera del hueco el bitmap es el fondo (blanco opaco + capas `img`),
+     * dentro queda alfa 0 y la foto del comprador se ve por ahi.
+     *
+     * Usa el MISMO stack de transformacion que `componer` (translate + rot +
+     * sesgo + clip de la envoltura) con `destination-out`: no duplica la
+     * geometria ni inventa un segundo motor. No resuelve imagenes.
+     *
+     * `capas` es la lista COMPLETA del mockup (no solo los PH): asi se puede
+     * detectar un grupo con perspectiva y saltarlo entero.
+     *
+     * Devuelve `{perforadas, saltadas}`:
+     * - perforadas: indices de los PH cuya silueta se borro;
+     * - saltadas: [{indice, ref, motivo}] de los PH que NO se pueden perforar
+     *   (perspectiva, propia o del grupo). El editor avisa: el aplanado los
+     *   taparia y la foto no se veria por ese hueco.
+     */
+    function siluetas(ctx, capas, opciones) {
+        var op = opciones || {};
+        var lista = capas || [];
+        var perforadas = [];
+        var saltadas = [];
+        if (!ctx || typeof ctx.fillRect !== 'function') {
+            return { perforadas: perforadas, saltadas: saltadas };
+        }
+
+        // Un grupo con perspectiva se dibuja con la malla de `componer`; el
+        // stack plano de esta funcion no puede reproducirla. Se marca el
+        // grupo y se saltan TODOS sus PH (el aviso es del editor).
+        var gruposPersp = {};
+        lista.forEach(function (capa) {
+            if (!capa || capa.oculta || !capa.grupo) { return; }
+            var puntos = puntosPerspectiva(capa.perspectiva);
+            if (puntos && perspectivaConvexa(puntos) && !esPerspectivaNeutra(puntos)) {
+                gruposPersp[String(capa.grupo)] = true;
+            }
+        });
+
+        lista.forEach(function (capa, indice) {
+            if (!capa || capa.tipo !== 'placeholder' || capa.oculta) { return; }
+            var gid = capa.grupo ? String(capa.grupo) : '';
+            var puntos = puntosPerspectiva(capa.perspectiva);
+            var propia = puntos && perspectivaConvexa(puntos) && !esPerspectivaNeutra(puntos);
+            if (propia || (gid && gruposPersp[gid])) {
+                saltadas.push({ indice: indice, ref: capa.ref, motivo: 'perspectiva' });
+                return;
+            }
+            var caja = {
+                x: numero(capa.x), y: numero(capa.y),
+                w: Math.max(1, numero(capa.w, 1)),
+                h: Math.max(1, numero(capa.h, 1))
+            };
+            var env = null;
+            if (capa.envoltura && op.contexto) {
+                env = envolturaDeRef(capa.ref, op.contexto.grupos);
+            }
+            ctx.save();
+            // El borrado usa el alfa del relleno: 1 en todo el hueco.
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.globalAlpha = 1;
+            ctx.filter = 'none';
+            ctx.translate(caja.x + caja.w / 2, caja.y + caja.h / 2);
+            if (numero(capa.rot) !== 0) {
+                ctx.rotate(numero(capa.rot) * Math.PI / 180);
+            }
+            if (numero(capa.sesgo) !== 0) {
+                ctx.transform(1, 0, acotar(numero(capa.sesgo), -1, 1), 1, 0, 0);
+            }
+            if (env) {
+                trazarEnvoltura(ctx, comandosEnvoltura(env, {
+                    x: -caja.w / 2, y: -caja.h / 2, w: caja.w, h: caja.h
+                }));
+                ctx.clip(env.par ? 'evenodd' : 'nonzero');
+            }
+            ctx.fillStyle = '#000';
+            ctx.fillRect(-caja.w / 2, -caja.h / 2, caja.w, caja.h);
+            ctx.restore();
+            perforadas.push(indice);
+        });
+
+        return { perforadas: perforadas, saltadas: saltadas };
+    }
     return {
         LIENZO: LIENZO,
         // Nombre canonico (contracts/mockup-capas.md 2): `componer`. `composicion`
@@ -651,6 +735,8 @@
         cajaNeutra: cajaNeutra,
         envolturaDeRef: envolturaDeRef,
         comandosEnvoltura: comandosEnvoltura,
-        trazarEnvoltura: trazarEnvoltura
+        trazarEnvoltura: trazarEnvoltura,
+        // Enmienda D12: hueco del aplanado (destination-out sobre los PH).
+        siluetas: siluetas
     };
 }));
