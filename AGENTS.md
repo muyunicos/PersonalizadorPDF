@@ -110,7 +110,7 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 ├── assets/
 │   ├── admin.css            ← Estilos de consola + editor de mockups + iframe
 │   ├── admin.js             ← Interfaz, validaciones y puente RenderCore
-│   ├── tienda.js            ← Ficha Woo: campos, "Vista previa", galería, add-to-cart
+│   ├── tienda.js            ← Ficha Woo: campos, auto-montaje de la galeria, add-to-cart
 │   ├── mockups.js           ← Editor de mockups del admin (2 columnas, lienzo
 │   │                             ampliable, manipulacion directa; DELEGA el render
 │   │                             en `mockup-render.js` y la geometria en
@@ -297,7 +297,7 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
      `panel_ficha_html()` + `PMU_FICHA`) si el producto lleva `_pmu_pdf_slugs` (lista;
    spec 005, con respaldo tolerante del singular `_pmu_pdf_slug`) y el PDF está
      activo con grupos; también existe el shortcode `[pmu_personalizar pdf="slug"]`.
-   - "Vista previa" → `handle_vista_previa` crea/reusa el item (`tmp/sesion-{sid}/`,
+   - **Auto-montaje** (spec 036, D3) → **no** hay boton "Vista previa": al quedar "completo" la galeria se monta SOLA (y se **repinta** al editar cada campo); `handle_vista_previa` crea/reusa el item (`tmp/sesion-{sid}/`,
      cookie `pmu_sid`), renderiza con RenderCore (`tienda.js`, paralelo), sube los PNG al
      pool por `handle_pool_png` (hash `sha1(valor|preset|settings|WxH)`; `limpiar=1`
      reemplaza el grupo) y compone los mockups 300x300 en la galería. Re-edición desde
@@ -306,7 +306,7 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
      + `carrito_promover` (rename a `{cart_item_key}`,
      congela `mockup-{id}.webp` y marca `preview_estado=ok`). Cantidad fija 1;
      quitar del carrito borra el item. "Editar" vuelve a la ficha con el item cargado.
-     `preview_omisible` NO oculta la vista previa: el comprador puede pedirla igual;
+     `preview_omisible` NO impide el auto-montaje (la galeria se muestra igual):
      solo deja de bloquear el boton de comprar mientras las vistas no estan listas.
    - Pedido → `pedido_item_crear` copia la meta al item Woo (**sin** staging: el item vive
      completo en la sesion desde la vista previa); al pagarse `pedido_promover` **mueve** el

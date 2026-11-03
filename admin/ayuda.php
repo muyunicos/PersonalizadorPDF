@@ -218,11 +218,13 @@ if (!defined('ABSPATH')) {
             el listado de la consola es su espejo). En la ficha del producto aparece el
             panel del comprador con los campos del catalogo elegidos en
             "Configuracion tienda".</li>
-        <li><strong>"Vista previa"</strong>: el cliente completa los campos y genera la vista
-            previa: mockups 300x300 con su personalizacion (render cliente TextMuy + pool en
-            <code>uploads/pmu/tmp/sesion-{sid}/{item_key}/img/</code>). El boton
-            "Agregar al carrito" queda bloqueado hasta que las vistas terminan
-            (salvo <code>preview_omisible=true</code>).</li>
+        <li><strong>Vista previa automatica</strong>: al completar los campos (minimos de las
+            ranuras satisfechos y cola de subida vacia) la galeria <strong>se monta sola</strong>
+            con los mockups 300x300 (render cliente TextMuy + pool en
+            <code>uploads/pmu/tmp/sesion-{sid}/{item_key}/img/</code>) y se
+            <strong>repinta</strong> al cambiar un campo. <strong>No hay boton "Vista previa"</strong>.
+            El boton "Agregar al carrito" queda bloqueado mientras haya subidas pendientes o
+            vistas obligatorias sin ver (salvo <code>preview_omisible=true</code>).</li>
         <li><strong>Validez y snapshot</strong>: en la consola, "Configuracion tienda"
             permite activar cada asociacion y escribir una expresion JS opcional
             (<code>campo1 === 'libelulas' &amp;&amp; campo2 === 'a4'</code>), un mensaje
