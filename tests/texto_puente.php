@@ -2280,6 +2280,19 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('apagada, guardar no toca disco (cotizador:inactivo)',
                 strpos((string)($GLOBALS['cot_apagado_guardar'] ?? ''), 'cotizador:inactivo') !== false,
                 (string)($GLOBALS['cot_apagado_guardar'] ?? ''));
+            $pc2 = (array)($GLOBALS['cot_pdf'] ?? []);
+            check('con plantilla el item lleva pdfs = [slug]',
+                (array)($pc2['pdfs'] ?? []) === ['muestra'], json_encode($pc2['pdfs'] ?? null));
+            check('con plantilla el estado YA no es omisible',
+                ($pc2['estado'] ?? '') === 'ok', (string)($pc2['estado'] ?? ''));
+            check('con plantilla el contexto sigue siendo cotizador',
+                ($pc2['contexto'] ?? '') === 'cotizador');
+            $mkC = (array)($GLOBALS['cot_mockups'] ?? []);
+            check('op=mockups devuelve los del Editor del PDF',
+                ($mkC['pdf'] ?? '') === 'muestra' && (int)($mkC['grupos'] ?? 0) > 0, json_encode($mkC));
+            check('op=mockups de un PDF inexistente -> cotizador:pdf:ausente',
+                strpos((string)($GLOBALS['cot_mockups_ausente'] ?? ''), 'cotizador:pdf:ausente') !== false,
+                (string)($GLOBALS['cot_mockups_ausente'] ?? ''));
             break;
         case 'cola_subida':
             // Spec 036 (T002): esqueleto; los checks llegan con US3.
@@ -5729,6 +5742,32 @@ switch ($fase) {
             $GLOBALS['cot_apagado_guardar'] = $e->getMessage();
         }
         $GLOBALS['test_cotizador_off'] = false;
+
+        // 11) Enmienda v2: PLANTILLA importada (PDF) y mockups del Editor.
+        $itemPdf = $sesC->crear_draft($sidC, ['muestra'], 'cotizador');
+        $manPdf = $sesC->leer_manifest($sidC, $itemPdf);
+        $GLOBALS['cot_pdf'] = [
+            'item' => $itemPdf,
+            'pdfs' => (array)(is_array($manPdf) ? ($manPdf['pdfs'] ?? []) : []),
+            'estado' => (string)(is_array($manPdf) ? ($manPdf['preview_estado'] ?? '') : ''),
+            'contexto' => (string)(is_array($manPdf) ? ($manPdf['contexto'] ?? '') : ''),
+        ];
+        try {
+            $mkC = $cotC->mockups_de_pdf('muestra');
+            $GLOBALS['cot_mockups'] = [
+                'pdf' => (string)($mkC['pdf'] ?? ''),
+                'grupos' => count((array)($mkC['grupos'] ?? [])),
+                'revision' => (string)($mkC['revision'] ?? ''),
+            ];
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_mockups'] = ['error' => $e->getMessage()];
+        }
+        try {
+            $cotC->mockups_de_pdf('no-existe');
+            $GLOBALS['cot_mockups_ausente'] = 'no-lanzo';
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_mockups_ausente'] = $e->getMessage();
+        }
         break;
 
 }

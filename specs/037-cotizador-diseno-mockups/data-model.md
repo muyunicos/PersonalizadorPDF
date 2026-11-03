@@ -26,21 +26,22 @@
 - `diseno.w/h` son los pixeles del sticker (`1..3000`); `diseno.receta` es `^[a-f0-9]{12}$`.
 - Topes operativos: **60 ideas por identidad**; al superarlo se rechaza la nueva con causa.
 
-### Mockup del cotizador — `datos_config.json:mockups[]`
+### Plantilla del cotizador — `datos_config.json:plantillas[]`
 
 | Campo | Regla |
 |---|---|
-| `id` | string estable |
-| `categoria` | clave de `shapesCatalog` (ej. `Circulares`) |
-| `size` | opcional; si esta, aplica solo a ese tamano |
-| `fondo` | URL absoluta o relativa a los assets del cotizador |
-| `hueco` | `{x, y, w, h, rot}` en el espacio logico **300x300** |
-| `forma` | `auto` \| `rectangulo` \| `circulo` \| `cuadrado` \| `ovalo` (v1: `rectangulo` para "Formas") |
-| `visible` | bool |
+| `id` | string estable (el admin puede duplicar) |
+| `titulo` | `<= 60`; **se muestra al cliente** |
+| `categoria` | `Circulares` \| `Rectangulares` \| `Formas` ("A Medida" comparte Formas) |
+| `pdf` | slug de un PDF **importado** en el plugin (opcional); si falta, el item no entrega PDF |
+| `rango` | opcional `{minX,maxX,minY,maxY}` en cm: aplica **solo** si el PH cae dentro (los tamanos intermedios se resuelven solos) |
+| `visible` | bool (default `true`) |
+| `orden` | int; define el orden en el admin y en la tira |
 
-- **No** se guarda en el plugin: viaja al navegador con el catalogo del cotizador (R10).
-- Un mockup sin `fondo` o con `hueco.w/h < 1` **no se publica** (FR-035).
-
+- El **mockup** (capas + envolturas) NO vive aca: es el del PDF (`pdfs/{slug}/config.json:mockups[]` +
+  `pdfs/{slug}/mockups/*.webp`), editado con el **Editor de mockups** del plugin y servido por `op=mockups`.
+- La **forma del hueco es automatica** (envoltura del placeholder): no se configura.
+- Sin `pdf` no hay plantilla de impresion: el item nace `pdfs = []` y `preview_estado = omisible` (FR-037).
 ### Diseno del pedido — `manifest.contexto` + metas del line item
 
 | Elemento | Regla |

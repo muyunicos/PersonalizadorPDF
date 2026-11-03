@@ -333,7 +333,7 @@ pegada en la conversación o en el quickstart. Si una puerta falla, la causa va 
 
 ## Estado de implementacion (2026-11-03)
 
-**36 de 40 tareas cerradas** con sus puertas en verde. Lo que quedo abierto es, **todo**, el
+**43 de 47 tareas cerradas** con sus puertas en verde. Lo que quedo abierto es, **todo**, el
 recorrido de navegador del laboratorio (`C:\wp-lab` + Playwright), que necesita un WordPress con el
 cotizador desplegado y un pedido real:
 
@@ -359,3 +359,33 @@ cotizador desplegado y un pedido real:
   entero, y `orders/{cliente}/customs/` no entra nunca en el barrido (solo recorre `tmp/`).
 - **T017**: `DesignFields.tsx` envuelve el `CargadorPMU` del plugin (que abre el `SelectorPMU`), con
   `subir`/`urlDe`/`onChange` como contrato; si los modulos no cargan, degrada a un input nativo.
+## Phase 8: Correcciones v2 (2026-11-03) — PDF, mockups del Editor y descargas
+
+**Origen**: Enmienda v2 de `spec.md` (D11-D14, FR-036..FR-042). Reemplaza el modelo local de mockup por el
+Editor del plugin y hace **condicional** el PDF del item.
+
+- [X] T040 [US1] `calculadora/src/core/plantillas.ts`: `resolvePlantillaFor({categoria,sizeCm}, plantillas)`
+      con **rango X/Y** (los tamanos intermedios caen dentro), `aplicableA()`, `duplicarPlantilla()` y
+      `moverPlantilla()`; asserts en `calculadora/tests/core.test.js` (rango, duplicado, orden).
+- [X] T041 [P] [US2] Fachada: `op=mockups` (subconjunto de `datos_pdf_render()`, cacheado por `revision`)
+      y `op=pdfs` (solo admin: `[{slug, tiene_mockups, grupos}]`) en `inc/class-pmu-cotizador.php`
+      (contrato C5.2/C5.3).
+- [X] T042 [US3] PDF condicional (FR-037): `handle_subida` acepta `pdf`; `crear_draft` arma
+      `pdfs=[slug]` + `preview_estado=ok` cuando hay plantilla y `pdfs=[]` + `omisible` cuando no;
+      `pedido_promover()` usa el flujo NORMAL (entrega + bonus) si el item tiene PDF y `promover_linea()`
+      si no (contrato C5.5).
+- [X] T043 [US1] `calculadora/src/components/AdminPlantillasPanel.tsx` (reemplaza `AdminMockupsPanel`):
+      tarjetas con `titulo`, `categoria`, `pdf` (select de `op=pdfs`), `rango` min/max X e Y opcional,
+      `visible`, **subir/bajar** y **duplicar**; avisa si la categoria no tiene PDF (FR-040/FR-041).
+- [X] T044 [US2] `MockupPreview` + `DesignStep`: el preview usa las **capas del Editor** (`op=mockups`) con
+      `PMUMockup.componer` y envolturas; sin mockup cae a marco neutro y la **subida sigue disponible**
+      (FR-036/FR-039). Se borran `MockupDef`/`MockupHueco` y `sanitizeMockups` -> `sanitizePlantillas`.
+- [X] T045 [US3] Descargas en el resumen del pedido (FR-038): **imagen procesada** (siempre) y **PDF**
+      (solo con plantilla), por `op=descargar` con autorizacion por pedido (contrato C5.4).
+- [X] T046 Gate v2: `php tests/texto_puente.php cotizador` con plantilla **y** sin plantilla,
+      `node tests/cotizador-contrato.test.js`, `npm run typecheck`, `npm test`, `npm run build` y el bloque
+      "Puertas completas" del quickstart.
+
+
+**Enmienda v2 aplicada (2026-11-03)** — D11-D14 / FR-036..FR-042 (T040-T046): el arte se sube sin mockup, el PDF es una plantilla importada por categoria+tamano, los mockups son los del Editor del plugin (op=mockups) y el catalogo de plantillas tiene titulo, categoria, rango X/Y, orden y duplicar. Nota: la fase icha_edicion esta roja por un check **preexistente** (legado del campo imagen), ajeno a la 037.
+

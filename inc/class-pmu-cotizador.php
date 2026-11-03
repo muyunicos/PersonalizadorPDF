@@ -937,6 +937,20 @@ class PMU_Cotizador
                 wp_send_json_success($this->historial());
                 return;
             }
+            // Enmienda v2 (contrato C5): mockups del Editor, catalogo de plantillas
+            // y descarga de la imagen procesada.
+            if ($op === 'mockups') {
+                wp_send_json_success($this->mockups_de_pdf(self::param('pdf')));
+                return;
+            }
+            if ($op === 'pdfs') {
+                wp_send_json_success(['ok' => true, 'pdfs' => $this->catalogo_pdfs()]);
+                return;
+            }
+            if ($op === 'descargar') {
+                $this->descargar();
+                return;
+            }
             if ($op === 'imagen') {
                 $this->servir_imagen();
                 return;
@@ -982,7 +996,8 @@ class PMU_Cotizador
         if ($order_id > 0) {
             // Camino del PEDIDO (T027): el bloque "Diseno" del pedido sirve el
             // original del item, autorizado por pedido (duenio o admin).
-            $this->servir_diseno_pedido($order_id, self::param('item_key'));
+            $rutaOrden = $this->ruta_diseno_pedido($order_id, self::param('item_key'));
+            $this->emitir($rutaOrden);
             return;
         }
         if (!preg_match(self::RE_IDEA, $idea_id)) {
@@ -1017,12 +1032,15 @@ class PMU_Cotizador
     }
 
     /**
-     * Sirve el ORIGINAL de un item de pedido (T027, bloque "Diseno").
+     * Resuelve el ORIGINAL de un item de pedido (T027, bloque "Diseno").
      *
      * Autoriza por pedido: el duenio de la cuenta o quien puede editar el pedido.
      * El archivo se resuelve por `_mu_diseno_id` (nunca por una ruta del request).
+     *
+     * @return string ruta absoluta del original
+     * @throws Exception `cotizador:idea:ausente` | `cotizador:idea:ajena`
      */
-    private function servir_diseno_pedido($order_id, $item_key)
+    private function ruta_diseno_pedido($order_id, $item_key)
     {
         if (!function_exists('wc_get_order')) {
             throw new Exception('cotizador:idea:ausente');
@@ -1050,15 +1068,126 @@ class PMU_Cotizador
             $sid = (string)$item->get_meta('_pmu_sid', true);
             $ruta = $id !== '' ? $this->sesion()->resolver_original($id, (string)$duenio, $sid) : '';
             if ($ruta !== '' && is_file($ruta)) {
-                $this->emitir($ruta);
+                return $ruta;
             }
             break;
         }
         throw new Exception('cotizador:idea:ausente');
     }
 
+    /**
+     * Descarga la IMAGEN PROCESADA del item (contrato C5.4, FR-038).
+     *
+     * Reusa la autorizacion por pedido de `ruta_diseno_pedido()` y sirve el
+     * original como adjunto. El PDF no pasa por aca: el resumen enlaza directo a
+     * `admin_post_personalizador_pdf_item_descargar`, que ya lo genera y sirve.
+     */
+    private function descargar()
+    {
+        $order_id = (int)self::param('order_id');
+        $item_key = strtolower(trim((string)self::param('item_key')));
+        if ($order_id < 1 || $item_key === '') {
+            throw new Exception('cotizador:idea:ausente');
+        }
+        $this->emitir($this->ruta_diseno_pedido($order_id, $item_key), true);
+    }
+
+    /**
+     * Mockups del Editor del PDF (contrato C5.2, FR-039).
+     *
+     * Devuelve el MISMO subconjunto que `datos_pdf_render()` (`mockups`, `grupos`,
+     * `imagenes`, `envolturas`): el comprador compone con `PMUMockup.componer`
+     * exactamente como la ficha, con los placeholders y las envolturas del PDF.
+     *
+     * @throws Exception `cotizador:pdf:ausente`
+     */
+    public function mockups_de_pdf($pdf)
+    {
+        $vacio = ['activo' => $this->activo(), 'pdf' => '', 'mockups' => [], 'grupos' => [],
+            'imagenes' => [], 'envolturas' => [], 'revision' => ''];
+        if (!$this->activo()) {
+            return $vacio;
+        }
+        $slug = '';
+        try {
+            $slug = $this->motor()->nombre_seguro((string)$pdf, 'cotizador:mockups');
+        } catch (\Throwable $e) {
+            $slug = '';
+        }
+        // `dir_pdf()` LANZA si la carpeta no existe (no es un getter): la
+        // existencia se comprueba aca y cualquier fallo es `pdf:ausente`.
+        $existe = false;
+        if ($slug !== '') {
+            try {
+                $existe = is_dir($this->motor()->dir_pdf($slug));
+            } catch (\Throwable $e) {
+                $existe = false;
+            }
+        }
+        if (!$existe) {
+            throw new Exception('cotizador:pdf:ausente');
+        }
+        $plugin = class_exists('Personalizador_PDF_Plugin') ? \Personalizador_PDF_Plugin::instance() : null;
+        if (!$plugin || !method_exists($plugin, 'datos_pdf_render')) {
+            throw new Exception('cotizador:pdf:ausente');
+        }
+        $datos = (array)$plugin->datos_pdf_render($slug);
+        $mockups = (array)($datos['mockups'] ?? []);
+        return [
+            'activo' => true,
+            'pdf' => $slug,
+            'mockups' => $mockups,
+            'grupos' => (array)($datos['grupos'] ?? []),
+            'imagenes' => (array)($datos['imagenes'] ?? []),
+            'envolturas' => (array)($datos['envolturas'] ?? []),
+            'revision' => substr(sha1((string)wp_json_encode($mockups)), 0, 12),
+        ];
+    }
+
+    /**
+     * Catalogo de plantillas del cotizador (contrato C5.3): PDFs importados que
+     * tienen mockups. Solo admin (es el `select` del panel).
+     *
+     * @throws Exception `cotizador:permiso`
+     */
+    private function catalogo_pdfs()
+    {
+        if (!function_exists('current_user_can') || !current_user_can('manage_options')) {
+            throw new Exception('cotizador:permiso');
+        }
+        $raiz = $this->motor()->dir_ambito('pdfs');
+        if (!is_dir($raiz)) {
+            return [];
+        }
+        $out = [];
+        foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dir) {
+            $slug = basename($dir);
+            try {
+                $cfg = $this->motor()->leer_config($slug);
+            } catch (\Throwable $e) {
+                continue;
+            }
+            $mockups = is_array($cfg) ? (array)($cfg['mockups'] ?? []) : [];
+            if (!$mockups) {
+                continue; // sin mockups no sirve como plantilla del cotizador
+            }
+            $ids = [];
+            foreach ($mockups as $mockup) {
+                $id = is_array($mockup) ? (string)($mockup['id'] ?? '') : '';
+                if ($id !== '') {
+                    $ids[] = $id;
+                }
+            }
+            $out[] = ['slug' => $slug, 'titulo' => $slug, 'mockups' => $ids, 'tiene_mockups' => true];
+        }
+        usort($out, function ($a, $b) {
+            return strcmp($a['slug'], $b['slug']);
+        });
+        return $out;
+    }
+
     /** Respuesta binaria con cache privada (no pasa por CDN ni cache publica). */
-    private function emitir($ruta)
+    private function emitir($ruta, $descarga = false)
     {
         $mime = 'image/webp';
         $info = @getimagesize($ruta);
@@ -1069,6 +1198,9 @@ class PMU_Cotizador
             header('Content-Type: ' . $mime);
             header('Cache-Control: private, max-age=604800');
             header('Content-Length: ' . (string)@filesize($ruta));
+            if ($descarga) {
+                header('Content-Disposition: attachment; filename="diseno-' . basename($ruta) . '"');
+            }
         }
         readfile($ruta);
         exit;

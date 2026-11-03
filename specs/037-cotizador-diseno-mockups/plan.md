@@ -2,7 +2,7 @@
 
 **Rama**: (sin rama: el repo despliega desde `main`)
 **Spec**: [spec.md](./spec.md)
-**Estado**: implementada (2026-11-03, 36/40 tareas; ver "Estado de implementacion" en tasks.md)
+**Estado**: implementada (2026-11-03, 43/47 tareas; ver "Estado de implementacion" en tasks.md)
 **Creado**: 2026-11-03
 
 ---
@@ -175,3 +175,21 @@ de `customs/` (T000).
 No hay violaciones que justificar: la feature reusa el motor de render, el selector, la cola, la
 biblioteca y el compositor existentes. El unico agregado estructural es `customs/` (T000) y una
 clase de fachada.
+## Correcciones v2 (2026-11-03) — PDF de produccion y mockups reusados
+
+Decidido por el negocio despues de la primera implementacion. **Cambia el eje**: el cotizador **si** tiene
+PDF cuando hay una plantilla importada para la categoria+tamano.
+
+| Antes (v1) | Ahora (v2) |
+|---|---|
+| `manifest.pdfs = []` siempre; `preview_estado = omisible` | **Con plantilla**: `pdfs = [slug]` + flujo normal del Motor (entrega PDF). **Sin plantilla**: `pdfs = []` + `omisible` |
+| Mockup = `fondo + hueco + forma` en `datos_config.json` | Mockup = **el del Editor de mockups del PDF** (capas + envolturas), servido por `op=mockups` |
+| La subida dependia de que hubiera mockup | La subida es **siempre** posible (el mockup es accesorio) |
+| Panel nuevo `AdminMockupsPanel` | **Catálogo de plantillas** (`titulo`, `categoria`, `pdf`, `rango X/Y`, `orden`, `duplicar`) + Editor del plugin |
+
+- **Rectangulares / A Medida**: sin plantilla hoy; la plancha generada al vuelo queda para una fase
+  posterior (FR-042).
+- **No** se toca el Motor: se reusa con el PDF importado. El unico codigo nuevo de servidor es
+  `op=mockups` / `op=pdfs` / `op=descargar` en la fachada y el condicional de promocion.
+- Descargas del resumen: **imagen procesada** (siempre) y **PDF** (solo con plantilla), reusando
+  `handle_item_descargar`.

@@ -119,3 +119,59 @@ Respuesta:
 
 Ningun error se convierte en un fallback silencioso: el cliente recibe la causa y la UI degrada
 (D9).
+## C5 — Extension v2: PDF, mockups del Editor y descargas
+
+Agregado por la Enmienda v2 de la spec (2026-11-03). No cambia C0-C4; agrega superficie.
+
+### C5.1 — `pdf` en la subida
+
+`personalizador_pdf_subida` acepta `pdf` (slug de un PDF del plugin) ademas de `contexto`:
+
+- **con `pdf`** (existe `pdfs/{slug}/`): el item nace `pdfs = [slug]`, `contexto = 'cotizador'` y
+  `preview_estado = 'ok'`. El arte se compone server-side en el placeholder y el pedido **entrega PDF**.
+- **sin `pdf`**: como v1 (`pdfs = []`, `preview_estado = 'omisible'`).
+- El slug se valida con `PMU_Uploads::nombre_seguro($pdf, 'subida')`: nunca una ruta del cliente.
+
+### C5.2 — `op=mockups` (mockups del Editor, FR-039)
+
+```http
+POST admin-post.php  action=pmu_cotizador&op=mockups&pdf=circulares-6cm&_wpnonce=...
+```
+
+Respuesta (subconjunto de `datos_pdf_render()`):
+
+```json
+{"ok": true, "pdf": "circulares-6cm", "revision": "a1b2c3d4e5f6",
+ "mockups": [{"id": "frente", "titulo": "Frente", "capas": [...]}],
+ "grupos": [{"id": "0000FF", "w": 709, "h": 709}],
+ "imagenes": {"fondo.webp": "https://.../uploads/pmu/..."},
+ "envolturas": [...]}
+```
+
+- El comprador lo usa para componer con `PMUMockup.componer` (misma forma que `tienda.js`).
+- Cachea por `revision`; una respuesta sin cambios no viaja la lista.
+- **No** es admin-only: es el mockup que ve el cliente.
+
+### C5.3 — `op=pdfs` (catalogo de plantillas, admin)
+
+Solo `manage_options`. Devuelve `[{slug, nombre, tiene_mockups, grupos}]`, leido de `PMU_Uploads::listar()`
+(ambito `pdfs`) + `leer_config()`. Es lo que alimenta el select de plantilla del panel.
+
+### C5.4 — `op=descargar` (FR-038)
+
+| `tipo` | Fuente | Respuesta |
+|---|---|---|
+| `imagen` | arte compuesto del item (`Compositor` sobre el original + receta) | adjunto `diseno-{id}.webp` |
+| `pdf` | `handle_item_descargar` del plugin (item promovido) | adjunto PDF |
+
+- Autoriza por pedido (duenio o `edit_shop_order`), igual que `servir_diseno_pedido`.
+- Sin plantilla, `tipo=pdf` responde `cotizador:pdf:ausente` (el item no tiene PDF): la UI oculta el boton.
+- Nunca se expone una ruta absoluta.
+
+### C5.5 — Promocion condicional (FR-037)
+
+En `pedido_promover()`, para `_mu_origen = 'cotizador'`:
+
+- **`manifest.pdfs = []`** -> `promover_linea()` (item + originales + adopcion; **sin** PDF ni bonus).
+- **`manifest.pdfs != []`** -> camino **normal**: `promover_order()` + `entregar_por_tema()` +
+  `congelar_bonus_item()`. El item es un PDF como cualquier otro.

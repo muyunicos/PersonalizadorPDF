@@ -186,3 +186,7 @@ node tests/cotizador-pedido.browser.js
 
 > Al cerrar la spec se completa esta tabla con el **resultado real** de cada puerta (patron de la
 > 036: la evidencia se registra en `quickstart.md`, no en un archivo aparte).
+| v2 - Plantillas | `npm test` + `--paridad` | **OK** - 27 tests (rango X/Y, duplicar, orden) y 31 checks del contrato |
+| v2 - PDF condicional | `php tests/texto_puente.php cotizador` | **OK** - con plantilla `pdfs=[slug]`/`ok`; sin plantilla `pdfs=[]`/`omisible` (46 checks) |
+| v2 - Mockups del Editor | `cotizador --paridad` / `op=mockups` | **OK** - `mockups_de_pdf('muestra')` devuelve grupos; inexistente -> `cotizador:pdf:ausente` |
+

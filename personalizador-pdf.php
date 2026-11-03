@@ -1948,8 +1948,28 @@ class Personalizador_PDF_Plugin
                 // `cot-{8 hex}` y nace con `preview_estado = 'omisible'`.
                 $contexto = sanitize_key(wp_unslash((string) ($_POST['contexto'] ?? '')));
                 $pdf = sanitize_file_name(wp_unslash((string) ($_POST['pdf'] ?? '')));
-                $pdfs = ($contexto === 'cotizador' || $pdf === '')
-                    ? [] : [$this->pmu_uploads()->nombre_seguro($pdf, 'subida')];
+                // Spec 037 Enmienda v2: en el COTIZADOR, `pdf` es la PLANTILLA importada de
+                // esa categoria+tamano (slug sin `.pdf`). En la ficha sigue siendo el
+                // nombre del PDF del panel (comportamiento de siempre): no se toca.
+                $pdfs = [];
+                if ($contexto === 'cotizador') {
+                    if ($pdf !== '') {
+                        $slug = preg_replace('/\.pdf$/i', '', $pdf);
+                        $slug = $this->pmu_uploads()->nombre_seguro((string) $slug, 'subida');
+                        // `dir_pdf()` LANZA si no existe: se comprueba con try/catch.
+                        $existePlantilla = false;
+                        try {
+                            $existePlantilla = is_dir($this->pmu_uploads()->dir_pdf($slug));
+                        } catch (\Throwable $e) {
+                            $existePlantilla = false;
+                        }
+                        if ($existePlantilla) {
+                            $pdfs = [$slug];
+                        }
+                    }
+                } elseif ($pdf !== '') {
+                    $pdfs = [$this->pmu_uploads()->nombre_seguro($pdf, 'subida')];
+                }
                 $item = $sesion->crear_draft($sid, $pdfs, $contexto);
                 $creado = true;
             }
@@ -3089,15 +3109,33 @@ class Personalizador_PDF_Plugin
         }
         $itemKey = (string)$item->get_meta('_pmu_item_key', true);
         $orderId = is_object($order) && method_exists($order, 'get_id') ? (int)$order->get_id() : 0;
-        $url = admin_url('admin-post.php') . '?action=pmu_cotizador&op=imagen&tipo=original'
+        $nonce = wp_create_nonce(PMU_Cotizador::NONCE);
+        // FR-038: imagen procesada SIEMPRE; PDF solo si el item tiene plantilla.
+        $urlImg = admin_url('admin-post.php') . '?action=pmu_cotizador&op=descargar'
             . '&order_id=' . (int)$orderId
             . '&item_key=' . rawurlencode($itemKey)
-            . '&_wpnonce=' . rawurlencode(wp_create_nonce(PMU_Cotizador::NONCE));
+            . '&_wpnonce=' . rawurlencode($nonce);
+        $tienePdf = false;
+        try {
+            $clave = method_exists($order, 'get_customer_id') ? (string)(int)$order->get_customer_id() : '';
+            $dir = $this->pmu_uploads()->dir_order($clave, (int)$orderId) . DIRECTORY_SEPARATOR . $itemKey;
+            $man = $this->sesion()->leer_manifest_dir($dir);
+            $tienePdf = is_array($man) && (array)($man['pdfs'] ?? []) !== [];
+        } catch (\Throwable $e) {
+            $tienePdf = false;
+        }
+        $urlPdf = admin_url('admin-post.php') . '?action=personalizador_pdf_item_descargar'
+            . '&order_id=' . (int)$orderId
+            . '&item_key=' . rawurlencode($itemKey);
         echo '<div class="pmu-diseno-pedido" style="margin-top:6px;font-size:12px;line-height:1.5">'
             . '<strong>Diseno del cotizador</strong><br>'
-            . '<a href="' . esc_url($url) . '" target="_blank" rel="noopener">'
-            . 'Descargar archivo original</a><br>'
-            . '<span style="color:#64748b">diseno ' . esc_html($diseno)
+            . '<a href="' . esc_url($urlImg) . '" target="_blank" rel="noopener">'
+            . 'Descargar imagen procesada</a>';
+        if ($tienePdf) {
+            echo '<br><a href="' . esc_url($urlPdf) . '" target="_blank" rel="noopener">'
+                . 'Descargar PDF listo para imprimir</a>';
+        }
+        echo '<br><span style="color:#64748b">diseno ' . esc_html($diseno)
             . ' &middot; item ' . esc_html($itemKey) . '</span>'
             . '</div>';
     }
@@ -3165,19 +3203,25 @@ class Personalizador_PDF_Plugin
             // Se promueve (item + originales + adopcion de customs) y se saltea el
             // ciclo de entrega, que es lo que ensuciaria el pedido y la consola.
             if ((string)$lineItem->get_meta('_mu_origen', true) === PMU_Cotizador::CONTEXTO) {
-                try {
-                    if ($this->cotizador()->promover_linea($oid, $itemKey) !== '') {
-                        $cambios = true;
+                // Enmienda v2: con PLANTILLA el item se entrega como cualquier PDF
+                // (cae al camino normal de abajo); sin plantilla no hay que entregar.
+                $manCot = $sesion->leer_manifest($sid, $itemKey);
+                $pdfsCot = is_array($manCot) ? (array)($manCot['pdfs'] ?? []) : [];
+                if (!$pdfsCot) {
+                    try {
+                        if ($this->cotizador()->promover_linea($oid, $itemKey) !== '') {
+                            $cambios = true;
+                        }
+                    } catch (\Throwable $e) {
+                        $this->log_pedido(sprintf(
+                            'promover:cotizador order=%d item=%s err=%s',
+                            $oid,
+                            $itemKey,
+                            $e->getMessage()
+                        ));
                     }
-                } catch (\Throwable $e) {
-                    $this->log_pedido(sprintf(
-                        'promover:cotizador order=%d item=%s err=%s',
-                        $oid,
-                        $itemKey,
-                        $e->getMessage()
-                    ));
+                    continue;
                 }
-                continue;
             }
             try {
                 // Spec 035 (D6): SIN staging. El item vive completo en la sesion

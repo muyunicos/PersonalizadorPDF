@@ -372,3 +372,58 @@ uploads/pmu/
 *Spec 037 generada con `/speckit-specify` (2026-11-03). Las preguntas de alcance quedaron cerradas
 en Clarifications. Plan y tareas en [plan.md](./plan.md) y [tasks.md](./tasks.md) (T000 primero);
 se implementa con `/speckit-implement`.*
+## Enmienda v2 (2026-11-03) — PDF de produccion y mockups reusados
+
+> Corrige la spec con lo definido por el negocio despues de la primera implementacion.
+> **Supersede** (solo lo que dice aca): D3 (`preview_estado = omisible` pasa a ser **solo cuando no hay
+> plantilla**), la parte de D6 que hacia del mockup un requisito, y el "fuera de alcance" del Anexo A
+> sobre la plancha.
+
+### D11 — El arte se sube SIEMPRE; el mockup es accesorio
+
+Subir el diseno **no depende** de que exista un mockup ni una plantilla: el mockup solo ilustra. Sin mockup
+el paso se muestra con un marco neutro y el comprador sube, compra y el taller recibe el archivo igual.**FR-036**.
+
+### D12 — PDF de produccion POR CATEGORIA + TAMANO (importado, no generado)
+
+El cotizador usa el **Motor** del plugin con un PDF **importado** desde la consola (flujo existente "Subir
+PDF"): una plantilla por opcion (ej. `circulares-6cm`). El original del comprador entra en el placeholder y
+el Motor entrega el **PDF listo para imprimir** (composicion server-side, §III). La plantilla se asocia a
+**categoria + tamano** en el catalogo del cotizador. **Rectangulares / A Medida**: la plancha "al vuelo"
+queda para una fase posterior (hoy se sube el arte y se entrega la imagen procesada). **FR-037/38/42**.
+
+### D13 — Los mockups del cotizador SON los del "Editor de mockups"
+
+No hay editor nuevo: el admin define los mockups en el **Editor de mockups** del PDF importado (capas,
+filtros, **placeholders inteligentes con envolturas automaticas**) y el cotizador los **consume** por
+`op=mockups` con la misma forma que `datos_pdf_render()`. La **forma del hueco es siempre automatica**.
+**FR-039**.
+
+### D14 — Catalogo "Mockups del cotizador"
+
+Cada entrada: `id`, `titulo` (visible al cliente), `categoria` (**Circulares | Rectangulares | Formas/A
+Medida**), `pdf` (plantilla importada, opcional), `rango` opcional (`minX,maxX,minY,maxY` en cm) que la
+hace aplicable **solo** a los tamanos dentro del rango (los intermedios se resuelven solos), `visible` y
+`orden`; se puede **duplicar** y **reordenar**. **FR-040/FR-041**.
+
+### Functional Requirements (nuevos)
+
+- **FR-036**: subir el arte nunca depende de un mockup ni de una plantilla.
+- **FR-037**: si categoria+tamano tiene plantilla, el item nace con `manifest.pdfs = [plantilla]` y el
+  pedido entrega **PDF** con el flujo normal del Motor; sin plantilla, `pdfs = []` y `preview_estado = omisible`.
+- **FR-038**: desde el resumen del pedido (cliente y admin) se descargan **la imagen procesada** (siempre) y
+  el **PDF** (solo si el item tiene plantilla), sin exponer rutas absolutas.
+- **FR-039**: el mockup que ve el comprador es el del Editor de mockups del PDF (capas + envolturas),
+  servido por `op=mockups`; la forma del hueco es automatica.
+- **FR-040**: cada entrada del catalogo tiene titulo, categoria, plantilla opcional, rango opcional en X
+  e Y, `visible` y `orden`.
+- **FR-041**: duplicar y reordenar entradas del catalogo desde el admin.
+- **FR-042**: sin plantilla, el PDF de produccion se genera al vuelo (rectangulares / A Medida).
+  **Fuera de esta entrega**: fase posterior.
+
+### Criterios de exito (nuevos)
+
+- **SC-009**: un comprador sin mockup configurado sube su arte, compra y el vendedor descarga la imagen
+  procesada: 0 pasos extra, 0 errores.
+- **SC-010**: con plantilla, el PDF del pedido se descarga desde el resumen y tiene el arte compuesto en el
+  placeholder (no el bitmap del cliente).

@@ -189,9 +189,12 @@ class PMU_Sesion
             'motor' => defined('PERSONALIZADOR_PDF_VERSION') ? PERSONALIZADOR_PDF_VERSION : 'dev',
         ];
         if ($contexto !== '') {
+            // Spec 037 Enmienda v2 (FR-037): con PLANTILLA importada el item es un
+            // PDF como cualquier otro (`pdfs = [slug]`, entrega normal del Motor);
+            // sin plantilla no hay PDF: solo la imagen procesada (`omisible`).
             $manifest['contexto'] = $contexto;
-            $manifest['pdfs'] = [];
-            $manifest['preview_estado'] = self::ESTADO_OMISIBLE;
+            $manifest['pdfs'] = $limpios;
+            $manifest['preview_estado'] = $limpios ? self::ESTADO_OK : self::ESTADO_OMISIBLE;
         }
         $this->guardar_manifest($sid, $item, $manifest);
         return $item;
