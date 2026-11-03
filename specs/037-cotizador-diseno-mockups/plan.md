@@ -2,7 +2,7 @@
 
 **Rama**: (sin rama: el repo despliega desde `main`)
 **Spec**: [spec.md](./spec.md)
-**Estado**: implementada (2026-11-03, 34/40 tareas; ver "Estado de implementacion" en tasks.md)
+**Estado**: implementada (2026-11-03, 36/40 tareas; ver "Estado de implementacion" en tasks.md)
 **Creado**: 2026-11-03
 
 ---

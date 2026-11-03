@@ -182,7 +182,7 @@ node tests/cotizador-pedido.browser.js
 | Regresion plugin | `receta` / `fotos` / `biblioteca` / `cola` / `mockup` / `vistas` | **OK** — 21 / 38 / 40 / 22 / 177 / 24 checks |
 | Motor | `motor_smoke` + `parity` | **OK** — `SMOKE OK` + `PARIDAD OK` (el Motor no cambio) |
 | Consumidor | `npm run typecheck` + `npm test` + `npm run build` + `npm run reglas` | **OK** — 26 tests, build OK, reglas regeneradas |
-| E10 | `cotizador-pedido.browser.js` (lab) | **pendiente** — falta el recorrido de navegador (T038) |
+| E10 | `node tests/cotizador-pedido.browser.js` | **escrito, pendiente de lab** — sin `PMU_COTIZADOR_URL` sale 0 y declara `PENDIENTE`; cubre el conteo de red (0/32/+23 KB), `tienda.js`/`campo-montar.js` = 0 y el payload con `diseno` |
 
 > Al cerrar la spec se completa esta tabla con el **resultado real** de cada puerta (patron de la
 > 036: la evidencia se registra en `quickstart.md`, no en un archivo aparte).

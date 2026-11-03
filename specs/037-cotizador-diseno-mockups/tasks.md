@@ -137,7 +137,7 @@ ve el mockup del producto; el boton de compra espera a la cola.
 **Independent Test**: `quickstart` E3 — subir una imagen, ver el mockup 300x300, cambiar de
 forma/tamano y ver que el hueco se re-resuelve sin volver a subir.
 
-- [ ] T017 [US2] `calculadora/src/components/DesignFields.tsx`: wrapper React de `CargadorPMU` +
+- [X] T017 [US2] `calculadora/src/components/DesignFields.tsx`: wrapper React de `CargadorPMU` +
       `SelectorPMU` sobre un `ref` (1 ranura: `w/h` del sticker, `forma` de la categoria,
       `min: 0`, `max: 1`), `subir` → endpoint `personalizador_pdf_subida` con `_wpnonce`,
       `item_key` (`cot-*`) y `params` (receta de T007/T011). El reuso de una imagen ya subida sale
@@ -151,7 +151,7 @@ forma/tamano y ver que el hueco se re-resuelve sin volver a subir.
 - [X] T020 [US2] `calculadora/src/App.tsx`: `diseno` en el estado del pedido (`{id, itemKey, sid,
       w, h, receta}`); al cambiar forma/tamano/material se recalcula `w/h`, `gid` y receta y el
       mockup se repinta **sin** volver a subir (FR-005/FR-007)
-- [ ] T021 [US2] `calculadora/src/components/OrderSummary.tsx` + `MobileSummaryBar.tsx`: el boton
+- [X] T021 [US2] `calculadora/src/components/OrderSummary.tsx` + `MobileSummaryBar.tsx`: el boton
       COMPRAR se deshabilita solo con `pendientes() > 0` (texto "Subiendo tu diseno...") y se
       habilita al vaciarse la cola; el resumen muestra "Diseno cargado" con la miniatura (FR-014)
 - [X] T022 [US2] `calculadora/src/components/DesignStep.tsx`: degradacion (D9) — si
@@ -333,16 +333,16 @@ pegada en la conversación o en el quickstart. Si una puerta falla, la causa va 
 
 ## Estado de implementacion (2026-11-03)
 
-**34 de 40 tareas cerradas** con sus puertas en verde. Lo que quedo abierto, con la causa:
+**36 de 40 tareas cerradas** con sus puertas en verde. Lo que quedo abierto es, **todo**, el
+recorrido de navegador del laboratorio (`C:\wp-lab` + Playwright), que necesita un WordPress con el
+cotizador desplegado y un pedido real:
 
 | Tarea | Estado | Causa / que falta |
 |---|---|---|
-| **T017** (US2) | parcial | La subida del ORIGINAL funciona (React + `fetch` al endpoint `personalizador_pdf_subida` con `contexto=cotizador` y receta sintetica), pero **no** envuelve `CargadorPMU`/`SelectorPMU`: falta el recorte interactivo (modo/zoom/rotacion) y el reuso "Elegir ya subida" de `PMUBiblioteca`. |
-| **T021** (US2) | pendiente | `OrderSummary`/`MobileSummaryBar` no conocen `pendientes()`: el boton COMPRAR no espera la cola. El arte es opcional, asi que no bloquea; falta el texto "Subiendo tu diseno..." y la miniatura en el resumen. |
-| **T023** (US2) | pendiente | Gate de navegador del laboratorio (`quickstart` E3): no se corrio. |
-| **T035** (US4) | parcial | `--ideas` y `npm run typecheck` en verde; el recorrido de navegador (guardar/recargar/marcar/borrar) no se corrio. |
-| **T038** (Polish) | pendiente | `tests/cotizador-pedido.browser.js` no se escribio (requiere el laboratorio `C:\wp-lab` + Playwright). |
-| **T039** (Polish) | parcial | Bloque "Puertas completas" del quickstart: todo en verde **salvo** `node tests/cotizador-pedido.browser.js`. |
+| **T023** (US2) | parcial | Gate de navegador de E3 (subir JPG grande / PNG transparente / recargar / `pendientes()` / "Elegir ya subida"): `tests/cotizador-pedido.browser.js` ya cubre E10 + el payload, pero el E3 completo no se corrio. |
+| **T035** (US4) | parcial | `--ideas` y `npm run typecheck` en verde; el recorrido de navegador (guardar, recargar, marcar, borrar) no se corrio. |
+| **T038** (Polish) | parcial | `tests/cotizador-pedido.browser.js` esta escrito y **sale 0 en modo pendiente** sin `PMU_COTIZADOR_URL`; falta correrlo contra el laboratorio y completar la tabla de evidencia con el resultado real. |
+| **T039** (Polish) | parcial | El bloque "Puertas completas" de `quickstart.md` corre entero y en verde (la puerta de navegador se auto-declara pendiente); falta el recorrido real. |
 
 **Desvios de implementacion (documentados):**
 
@@ -357,3 +357,5 @@ pegada en la conversación o en el quickstart. Si una puerta falla, la causa va 
   el original de un pedido autorizado) porque la tira necesita bytes sin rutas absolutas (C7).
 - **T036**: el TTL del invitado se poda **por idea** (`limpiar_customs_dir`), no como un item
   entero, y `orders/{cliente}/customs/` no entra nunca en el barrido (solo recorre `tmp/`).
+- **T017**: `DesignFields.tsx` envuelve el `CargadorPMU` del plugin (que abre el `SelectorPMU`), con
+  `subir`/`urlDe`/`onChange` como contrato; si los modulos no cargan, degrada a un input nativo.
