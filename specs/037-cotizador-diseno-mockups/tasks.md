@@ -39,18 +39,18 @@ sin quien lo defina no se ve, y el editor sin mockup no muestra nada).
 
 **Purpose**: confirmar la base en verde y dejar los esqueletos de las puertas nuevas.
 
-- [ ] T001 Correr las puertas base y confirmar verde: `php -l personalizador-pdf.php`,
+- [X] T001 Correr las puertas base y confirmar verde: `php -l personalizador-pdf.php`,
       `Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.FullName }`,
       `node --check assets/selector-pmu.js`, `node --check assets/mockup-render.js`,
       `node tests/receta-contrato.test.js`, `node tests/fotos-contrato.test.js`,
       `node tests/biblioteca-contrato.test.js`, `php tests/motor_smoke.php`,
       `php tests/parity.php`, `php tests/sin_lectura.php`, `php tests/estado_pmu.php`
-- [ ] T002 [P] Crear el esqueleto de `tests/cotizador-contrato.test.js` con los casos `--contexto`,
+- [X] T002 [P] Crear el esqueleto de `tests/cotizador-contrato.test.js` con los casos `--contexto`,
       `--ideas` y `--paridad`: debe correr y decir `CONTEXTO OK (0 checks)` (contrato:
       `contracts/puente-cotizador.md` C0/C1). `--paridad` (I1) compara
       `PMU_Sesion::receta_cotizador` (PHP) con `calculadora/src/core/mockups.ts`: mismas entradas
       -> mismo `gid` y mismas medidas (`size -> px`)
-- [ ] T003 [P] Agregar el `case` vacio `cotizador` a `tests/texto_puente.php`: debe correr sin
+- [X] T003 [P] Agregar el `case` vacio `cotizador` a `tests/texto_puente.php`: debe correr sin
       error y decir `FASE cotizador OK (0 checks)` (contrato: `contracts/customs.md` C4-C6)
 
 ---
@@ -62,30 +62,30 @@ cierra.**
 
 **⚠️ CRITICAL**: US1 no puede empezar (ni US2/US3/US4) hasta que esta fase termine.
 
-- [ ] T000 **T000 — Gobernanza (MINOR)**: `constitution` **ya** enmendada a **4.1.0** (2026-11-03:
+- [X] T000 **T000 — Gobernanza (MINOR)**: `constitution` **ya** enmendada a **4.1.0** (2026-11-03:
       §I acota el alcance del cotizador y §IV suma `customs/`, con su Sync Impact Report). Resta:
       agregar la linea de `customs/` en `AGENTS.md` §5 y registrar la decision en
       `docs/decisiones.md` (entrada 2026-11-03, spec 037). **No** cambia principios.
-- [ ] T004 Contexto en los datos: en `inc/class-pmu-sesion.php` (`crear_draft()`,
+- [X] T004 Contexto en los datos: en `inc/class-pmu-sesion.php` (`crear_draft()`,
       `guardar_subida()`) escribir `manifest.contexto = 'cotizador'` cuando el origen lo pida,
       con `manifest.pdfs = []` y `manifest.preview_estado = 'omisible'`. **No** tocar
       `subidas[].origen` (`data-model.md` "Diseno del pedido")
-- [ ] T005 Fachada `inc/class-pmu-cotizador.php`: `activo()` (filtro `pmu_cotizador_activo`),
+- [X] T005 Fachada `inc/class-pmu-cotizador.php`: `activo()` (filtro `pmu_cotizador_activo`),
       `contexto()` y `assets()` (encola **solo** `mockup-render`, `selector`, `visor`,
       `biblioteca`, `cargador`, `fotos`; **nunca** `tienda.js` ni `campo-montar.js`); incluirla en
       `personalizador-pdf.php` (contrato C1)
-- [ ] T006 [P] Rutas: `PMU_Uploads::dir_sesion_customs($sid, $crear)` y
+- [X] T006 [P] Rutas: `PMU_Uploads::dir_sesion_customs($sid, $crear)` y
       `dir_order_customs($clave, $crear)` en `inc/class-pmu-uploads.php` (mismas guardas que
       `dir_order_uploads()`; `customs/` **sin** `manifest.json`) (`contracts/customs.md` C1)
-- [ ] T007 Receta sintetica en `inc/class-pmu-sesion.php`: `receta_cotizador($categoria, $size,
+- [X] T007 Receta sintetica en `inc/class-pmu-sesion.php`: `receta_cotizador($categoria, $size,
       $diseno)` con `gid` = 6 hex de `sha1(categoria|size)` (mayusculas), `phsize = 0`, `w/h`
       = px a 300 ppp (`1..3000`), `fondo = '#ffffff'`, `transp = 'no'`; validar con
       `receta_validar()` (research R6). Va **despues** de T004 (mismo archivo). El `gid` y
       `size -> px` deben coincidir con `calculadora/src/core/mockups.ts` (assert de paridad en T002)
-- [ ] T008 `engine/Compositor.php`: aceptar **lienzo explicito** cuando `contexto = 'cotizador'`
+- [X] T008 `engine/Compositor.php`: aceptar **lienzo explicito** cuando `contexto = 'cotizador'`
       (no hay `analisis.json`); `personalizador-pdf.php` (`handle_subida`/`handle_vista_previa`)
       pasa el lienzo validado (`1..3000`). Sin lienzo, comportamiento actual intacto (research R5)
-- [ ] T009 [P] `calculadora/src/hooks/usePmuAssets.ts`: loader diferido de los 6 modulos
+- [X] T009 [P] `calculadora/src/hooks/usePmuAssets.ts`: loader diferido de los 6 modulos
       (`<script>` on-demand + `preload` al abrir el paso), inyeccion de
       `window.PMU_TIENDA = {...contexto:'cotizador'}` y del contenedor
       `<div data-pmu-panel data-pmu-contexto="cotizador">`. Cero descargas al cargar (D10/R9).
@@ -105,26 +105,26 @@ categoria, con override por tamano, y ve una vista previa fiel antes de publicar
 **Independent Test**: `plan` US1 — armar fondo + hueco, guardar, recargar y ver que la vista
 previa coincide. Del lado del consumidor: `npm run typecheck` + `npm test`.
 
-- [ ] T010 [P] [US1] `calculadora/src/types/index.ts`: `MockupDef` (`id`, `titulo`, `categoria`,
+- [X] T010 [P] [US1] `calculadora/src/types/index.ts`: `MockupDef` (`id`, `titulo`, `categoria`,
       `size?`, `fondo`, `hueco{x,y,w,h,rot}`, `forma`, `visible`) + `AppData.mockups?:
       MockupDef[]` (`data-model.md` "Mockup del cotizador")
-- [ ] T011 [P] [US1] `calculadora/src/core/mockups.ts` (puro): `sizeToPx(size)` (cm → px a 300 ppp),
+- [X] T011 [P] [US1] `calculadora/src/core/mockups.ts` (puro): `sizeToPx(size)` (cm → px a 300 ppp),
       `gidPara(categoria, size)` (6 hex, **igual formula que T007**), `formaForCategoria()`
       (`rectangulo` en v1 para "Formas") y `resolveMockupFor(order, mockups)` (override por
       tamano > categoria > null). Agregar 8 asserts en `calculadora/tests/core.test.js`
-- [ ] T012 [P] [US1] `calculadora/src/core/validation.ts`: `sanitizeMockups()` — `hueco.x/y` en
+- [X] T012 [P] [US1] `calculadora/src/core/validation.ts`: `sanitizeMockups()` — `hueco.x/y` en
       `0..300`, `hueco.w/h` en `1..300`, ids unicos, descarta sin `fondo` o con `visible:false`,
       y **warning** por cada descarte (mismo criterio "repara y avisa")
-- [ ] T013 [US1] `calculadora/src/components/AdminMockupsPanel.tsx`: lienzo 300x300, fondo con
+- [X] T013 [US1] `calculadora/src/components/AdminMockupsPanel.tsx`: lienzo 300x300, fondo con
       `window.wp.media` (patron de `AdminGalleryPanel.tsx:30-54`), hueco arrastrable/redimensionable
       y vista previa con `window.PMUMockup.componer` usando la imagen de muestra. Avisa cuando el
       hueco esta fuera del lienzo (FR-035)
-- [ ] T014 [US1] `calculadora/src/components/AdminTabs.tsx` + `App.tsx`: pestana **Mockups** y
+- [X] T014 [US1] `calculadora/src/components/AdminTabs.tsx` + `App.tsx`: pestana **Mockups** y
       handlers (`updateMockup`, `addMockup`, `removeMockup`); `assets/guardar_datos.php`: seccion
       `mockups` con las validaciones de T012 (lista, ids unicos, topes)
-- [ ] T015 [US1] `calculadora/assets/datos_config.json`: agregar `mockups: []`; verificar que
+- [X] T015 [US1] `calculadora/assets/datos_config.json`: agregar `mockups: []`; verificar que
       `scripts/generar-reglas.js` sigue corriendo sin cambios
-- [ ] T016 [US1] Gate: `cd calculadora; npm run typecheck; npm test; npm run build` + guardar en
+- [X] T016 [US1] Gate: `cd calculadora; npm run typecheck; npm test; npm run build` + guardar en
       Admin, recargar y confirmar que el mockup sobrevive (sin warnings nuevos)
 
 ---
@@ -142,19 +142,19 @@ forma/tamano y ver que el hueco se re-resuelve sin volver a subir.
       `min: 0`, `max: 1`), `subir` → endpoint `personalizador_pdf_subida` con `_wpnonce`,
       `item_key` (`cot-*`) y `params` (receta de T007/T011). El reuso de una imagen ya subida sale
       del `CargadorPMU` + `PMUBiblioteca` (FR-009)
-- [ ] T018 [US2] `calculadora/src/components/DesignStep.tsx`: Paso 4 "Tu diseno" en `App.tsx`
+- [X] T018 [US2] `calculadora/src/components/DesignStep.tsx`: Paso 4 "Tu diseno" en `App.tsx`
       (se habilita con forma + tamano), miniatura con **Cambiar / Quitar**, aviso de subida en
       curso y estado vacio. **Sin** aviso de resolucion (D8)
-- [ ] T019 [US2] `calculadora/src/components/MockupPreview.tsx`: estado vacio **por CSS** (fondo
+- [X] T019 [US2] `calculadora/src/components/MockupPreview.tsx`: estado vacio **por CSS** (fondo
       `<img>` + hueco) y, con arte, `window.PMUMockup.componer` (300x300, `huecosTransparentes:
       true`); ampliar con `ImageLightbox`
-- [ ] T020 [US2] `calculadora/src/App.tsx`: `diseno` en el estado del pedido (`{id, itemKey, sid,
+- [X] T020 [US2] `calculadora/src/App.tsx`: `diseno` en el estado del pedido (`{id, itemKey, sid,
       w, h, receta}`); al cambiar forma/tamano/material se recalcula `w/h`, `gid` y receta y el
       mockup se repinta **sin** volver a subir (FR-005/FR-007)
 - [ ] T021 [US2] `calculadora/src/components/OrderSummary.tsx` + `MobileSummaryBar.tsx`: el boton
       COMPRAR se deshabilita solo con `pendientes() > 0` (texto "Subiendo tu diseno...") y se
       habilita al vaciarse la cola; el resumen muestra "Diseno cargado" con la miniatura (FR-014)
-- [ ] T022 [US2] `calculadora/src/components/DesignStep.tsx`: degradacion (D9) — si
+- [X] T022 [US2] `calculadora/src/components/DesignStep.tsx`: degradacion (D9) — si
       `PMU_TIENDA`/la fachada no responden, el Paso 4 se oculta (o avisa) y el cotizador sigue
       cotizando y comprando; ofrecer el canal alternativo
 - [ ] T023 [US2] Gate navegador (lab): `specs/037-cotizador-diseno-mockups/quickstart.md` E3 —
@@ -171,23 +171,23 @@ re-guardar el estado no duplica nada.
 **Independent Test**: `quickstart` E7/E8 — pedido con diseno en el lab, archivo recuperable desde
 el pedido sin abrir el cotizador.
 
-- [ ] T024 [P] [US3] `inc/class-pmu-cotizador.php`: `promover_linea($order_id, $item_key)` que
+- [X] T024 [P] [US3] `inc/class-pmu-cotizador.php`: `promover_linea($order_id, $item_key)` que
       reusa `mover_originales()` + `rename` de `PMU_Sesion` y **no** llama a `entregar_por_tema()`
       ni `congelar_bonus_item()` (contrato C3, research R7)
-- [ ] T025 [US3] `personalizador-pdf.php`: en los hooks `woocommerce_order_status_processing` /
+- [X] T025 [US3] `personalizador-pdf.php`: en los hooks `woocommerce_order_status_processing` /
       `_completed`, derivar a `promover_linea()` los line items con `_mu_origen = 'cotizador'` y
       **saltear** `pedido_promover()` para esos items; adoptar los customs del invitado a
       `orders/{cliente}/customs/` (idempotente)
-- [ ] T026 [P] [US3] `calculadora/woocommerce-plugin/plugin-calculadora-cart-integration.php`:
+- [X] T026 [P] [US3] `calculadora/woocommerce-plugin/plugin-calculadora-cart-integration.php`:
       aceptar `diseno` en `calculator_data` y guardar `_pmu_sid`, `_pmu_item_key`,
       `_mu_diseno_id` y `_mu_origen = 'cotizador'` en el cart item y en
       `woocommerce_checkout_create_order_line_item`
-- [ ] T027 [US3] Bloque "Diseno" en el pedido: `display_order_item_meta()` (admin y cliente) con
+- [X] T027 [US3] Bloque "Diseno" en el pedido: `display_order_item_meta()` (admin y cliente) con
       original + mockup aprobado y enlace de descarga; sin exponer rutas absolutas
-- [ ] T028 [US3] Fase `cotizador` de `tests/texto_puente.php` (T003): alta de custom, promocion,
+- [X] T028 [US3] Fase `cotizador` de `tests/texto_puente.php` (T003): alta de custom, promocion,
       idempotencia al re-promover, `customer_id = 0` sin promocion, adopcion invitado->cliente y
       borrado sin huerfanos (`contracts/customs.md` C4-C6)
-- [ ] T029 [US3] Gate: `php tests/texto_puente.php cotizador` + `php tests/sin_lectura.php` +
+- [X] T029 [US3] Gate: `php tests/texto_puente.php cotizador` + `php tests/sin_lectura.php` +
       `php tests/estado_pmu.php` (los escaneos ignoran `customs/`) + `php -l` del plugin
 
 ---
@@ -199,29 +199,29 @@ cualquier item; borrado de los propios; precio recalculado al cargar.
 
 **Independent Test**: `quickstart` E4/E5/E6 — guardar un custom, recargar, marcarlo, borrarlo.
 
-- [ ] T030 [P] [US4] `inc/class-pmu-cotizador.php`: `guardar_idea()`, `listar_ideas()`,
+- [X] T030 [P] [US4] `inc/class-pmu-cotizador.php`: `guardar_idea()`, `listar_ideas()`,
       `favorito()`, `borrar_idea()` + endpoint `admin_post_pmu_cotizador` (+`nopriv`) con
       `op=listar|guardar|favorito|borrar|historial`; nonce `personalizador_pdf_vista_previa`,
       identidad por cookie (contrato C2, `customs.md` C2-C5). `historial` lee Woo (`wc_get_orders`
       por `customer_id` + `_calculator_order_code`/`_mu_diseno_id`) y **no** persiste copia
       (FR-023). `favorito` escribe `idea.json` (custom) o `orders/{cliente}/customs/favoritos.json`
       (tienda/historial). Escritura atomica de `idea.json`; tope de 60 ideas
-- [ ] T031 [P] [US4] `calculadora/src/hooks/useClientIdeas.ts`: `listar/guardar/favorito/borrar`
+- [X] T031 [P] [US4] `calculadora/src/hooks/useClientIdeas.ts`: `listar/guardar/favorito/borrar`
       contra el endpoint + cache de metadatos en `localStorage` (patron `PMUBiblioteca`) y
       invalidacion tras guardar/borrar
-- [ ] T032 [US4] `calculadora/src/components/MiniGallery.tsx`: tira unificada (tienda + customs +
+- [X] T032 [US4] `calculadora/src/components/MiniGallery.tsx`: tira unificada (tienda + customs +
       historial) con la misma tarjeta; estrella en cualquier item y comparador **puro** (favorito,
       orden, fecha) con 5 asserts en `tests/core.test.js`; nombre configurable (Anexo C de la spec).
       Al reusar un custom se restaura tambien su `diseno` (id/itemKey/sid, FR-022) y se genera la
       `descripcion` automatica con material/forma/tamano/formato/planchas (FR-026)
-- [ ] T033 [US4] `calculadora/src/components/MiniGallery.tsx`: borrado de customs propios con
+- [X] T033 [US4] `calculadora/src/components/MiniGallery.tsx`: borrado de customs propios con
       confirmacion, invalidacion de cache y sin huerfanos (FR-025); el historial no se borra
-- [ ] T034 [US4] `calculadora/src/components/MiniGallery.tsx` + `App.tsx`: precio recalculado al
+- [X] T034 [US4] `calculadora/src/components/MiniGallery.tsx` + `App.tsx`: precio recalculado al
       cargar con `galleryPricing` contra el catalogo vigente; badge "actualizado" cuando difiere
       del guardado (D7/FR-027)
 - [ ] T035 [US4] Gate: `node tests/cotizador-contrato.test.js --ideas` + navegador (guardar,
       recargar, marcar, borrar) + `npm run typecheck`
-- [ ] T036 [US4] Retencion (FR-032): fijar el TTL de `tmp/sesion-{sid}/customs/` (el vigente de
+- [X] T036 [US4] Retencion (FR-032): fijar el TTL de `tmp/sesion-{sid}/customs/` (el vigente de
       drafts/carrito) y garantizar que `limpiar_ttl()` **no** toca `orders/{cliente}/customs/`; en
       `inc/class-pmu-sesion.php` + assert en la fase `cotizador` de `tests/texto_puente.php`
       (`contracts/customs.md` C6)
@@ -232,7 +232,7 @@ cualquier item; borrado de los propios; precio recalculado al cargar.
 
 **Purpose**: documentacion, evidencia del lab y cierre.
 
-- [ ] T037 [P] Docs: `AGENTS.md` §5 (ruta `customs/`) y §9 (puertas nuevas), `specs/INDICE.md`
+- [X] T037 [P] Docs: `AGENTS.md` §5 (ruta `customs/`) y §9 (puertas nuevas), `specs/INDICE.md`
       (estado real de la 037) y version **4.29.0** en la cabecera del plugin
 - [ ] T038 [P] `tests/cotizador-pedido.browser.js` (lab, Playwright): recorrido E1-E10 de
       `quickstart.md` punta a punta; completar la tabla de evidencia del quickstart con el
@@ -329,3 +329,31 @@ pegada en la conversación o en el quickstart. Si una puerta falla, la causa va 
 - Evitar: tareas vagas, dos tareas sobre el mismo archivo en paralelo, dependencias cruzadas que
   rompan la independencia de las historias.
 - Fuera de alcance (no generar tareas): vista de plancha A4 y PDF de producción (fase posterior).
+---
+
+## Estado de implementacion (2026-11-03)
+
+**34 de 40 tareas cerradas** con sus puertas en verde. Lo que quedo abierto, con la causa:
+
+| Tarea | Estado | Causa / que falta |
+|---|---|---|
+| **T017** (US2) | parcial | La subida del ORIGINAL funciona (React + `fetch` al endpoint `personalizador_pdf_subida` con `contexto=cotizador` y receta sintetica), pero **no** envuelve `CargadorPMU`/`SelectorPMU`: falta el recorte interactivo (modo/zoom/rotacion) y el reuso "Elegir ya subida" de `PMUBiblioteca`. |
+| **T021** (US2) | pendiente | `OrderSummary`/`MobileSummaryBar` no conocen `pendientes()`: el boton COMPRAR no espera la cola. El arte es opcional, asi que no bloquea; falta el texto "Subiendo tu diseno..." y la miniatura en el resumen. |
+| **T023** (US2) | pendiente | Gate de navegador del laboratorio (`quickstart` E3): no se corrio. |
+| **T035** (US4) | parcial | `--ideas` y `npm run typecheck` en verde; el recorrido de navegador (guardar/recargar/marcar/borrar) no se corrio. |
+| **T038** (Polish) | pendiente | `tests/cotizador-pedido.browser.js` no se escribio (requiere el laboratorio `C:\wp-lab` + Playwright). |
+| **T039** (Polish) | parcial | Bloque "Puertas completas" del quickstart: todo en verde **salvo** `node tests/cotizador-pedido.browser.js`. |
+
+**Desvios de implementacion (documentados):**
+
+- **T032**: la tira unificada vive en `calculadora/src/components/TiraIdeas.tsx` (componente nuevo)
+  en vez de reescribir `MiniGallery.tsx`. Motivo: `MiniGallery` conserva su lightbox de la tienda y
+  se usa como **degradacion** cuando el puente no esta disponible (D9). El comportamiento es el de
+  la spec: una tarjeta, tres origenes, estrella en todos, precio recalculado.
+- **T008**: no hizo falta tocar `engine/Compositor.php`: el lienzo del cotizador viaja **explicito**
+  en la receta (`w/h`), que es justo lo que `componer()` ya lee. La receta la sintetiza
+  `PMU_Sesion::receta_cotizador()` y la valida `receta_validar()`.
+- **T030**: el endpoint agrega `op=imagen` (sirve `mockup.webp` y, con `order_id`+`item_key`,
+  el original de un pedido autorizado) porque la tira necesita bytes sin rutas absolutas (C7).
+- **T036**: el TTL del invitado se poda **por idea** (`limpiar_customs_dir`), no como un item
+  entero, y `orders/{cliente}/customs/` no entra nunca en el barrido (solo recorre `tmp/`).

@@ -359,6 +359,17 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   así que persiste la hoja por la rama simple. La condición real **no** es `AMBITOS_GALERIA`
   (esa era la ambigüedad del tasks original de la 009). Puerta: `php tests/certificacion_hoja.php`.
   `pdfs/`, `orders/` y `tmp/` son ámbitos de datos del motor, sin catálogo ni sprite.
+- **Customs del cotizador (spec 037)**: `orders/{cliente}/customs/` (cliente) y
+  `tmp/sesion-{sid}/customs/` (invitado), con `{idea_id}/idea.json` + `{idea_id}/mockup.webp`
+  (300x300) y `favoritos.json` para la estrella de items de tienda/historial. **Nunca** llevan
+  `manifest.json`: eso los deja fuera de los escaneos de pedidos (`pedidos_completados()`) y de la
+  biblioteca (`biblioteca_contenedores()`), que exigen nivel numerico y leen ese archivo. El
+  invitado los escribe en `tmp/` y se **adoptan** a `orders/{cliente}/customs/` en la primera compra
+  (idempotente). `orders/{cliente}/customs/` **no** tiene TTL automatico (`limpiar_ttl()` solo
+  recorre `tmp/`); las ideas del invitado vencen como un item de carrito (30 d), por idea. El item
+  del cotizador (`cot-{8 hex}`) nace con `manifest.contexto = 'cotizador'`, `pdfs = []` y
+  `preview_estado = 'omisible'`, y al pagar se promueve con `PMU_Cotizador::promover_linea()`
+  (item + originales + adopcion), **sin** entregar PDFs ni congelar bonus.
 - Datasets PDF: `pdfs/{nombre}/analisis.json` (geometría inmutable del Detector: grupos
   `id`/`w`/`h`/`cont`/`pgs`; **sin envolturas**: su formato original nunca cambia)
   + `pdfs/{nombre}/envolturas.json` (archivo DERIVADO, formas DEDUPLICADAS: `formas[]`

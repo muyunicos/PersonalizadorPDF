@@ -173,12 +173,16 @@ node tests/cotizador-pedido.browser.js
 
 | Escenario | Puerta | Resultado |
 |---|---|---|
-| E0 | `php -l` + `motor_smoke` | pendiente |
-| E1 | `cotizador-contrato --contexto` | pendiente |
-| E2 / E4 / E6 / E7 / E8 | `texto_puente cotizador` | pendiente |
-| E5 | `cotizador-contrato --ideas` | pendiente |
-| E9 | `sin_lectura` + `estado_pmu` + `inventario` | pendiente |
-| E10 | `cotizador-pedido.browser.js` (lab) | pendiente |
+| E0 | `php -l` + `motor_smoke` | **OK** — `No syntax errors` (plugin + admin/engine/inc) y `SMOKE OK` (2026-11-03) |
+| E1 | `node tests/cotizador-contrato.test.js --contexto` | **OK** — 5 checks; el global `--` todo suma **31 checks** |
+| E2 / E4 / E6 / E7 / E8 | `php tests/texto_puente.php cotizador` | **OK** — `FASE cotizador OK` (43 checks) |
+| E5 | `node tests/cotizador-contrato.test.js --ideas` | **OK** — 10 checks (estrella, orden, borrado, adopcion, retencion) |
+| Paridad (I1) | `node tests/cotizador-contrato.test.js --paridad` | **OK** — 16 checks; mismo fixture que `calculadora/tests/core.test.js` |
+| E9 | `sin_lectura` + `estado_pmu` + `inventario` | **OK** — `SIN_LECTURA OK`, `Estado inicial completo`, `customs/` no aparece |
+| Regresion plugin | `receta` / `fotos` / `biblioteca` / `cola` / `mockup` / `vistas` | **OK** — 21 / 38 / 40 / 22 / 177 / 24 checks |
+| Motor | `motor_smoke` + `parity` | **OK** — `SMOKE OK` + `PARIDAD OK` (el Motor no cambio) |
+| Consumidor | `npm run typecheck` + `npm test` + `npm run build` + `npm run reglas` | **OK** — 26 tests, build OK, reglas regeneradas |
+| E10 | `cotizador-pedido.browser.js` (lab) | **pendiente** — falta el recorrido de navegador (T038) |
 
 > Al cerrar la spec se completa esta tabla con el **resultado real** de cada puerta (patron de la
 > 036: la evidencia se registra en `quickstart.md`, no en un archivo aparte).

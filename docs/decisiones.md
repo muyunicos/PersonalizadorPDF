@@ -479,3 +479,25 @@ aqui como registro; la constitucion ya no los arrastra.
 - **Modificado**: §Development Workflow / Validation — conteo de suites del modulo (10 -> 16).
 - **Fuente**: auditoria de documentacion 2026-10-01 (`modules/textmuy/tests/*.test.js` = 16 `*.test.js`, `modules/textmuy/index.html` y `render-core.html` con `?v=RC37`, `modules/textmuy/AGENTS.md` §4.6/§9).
 - **Impacto en el plugin**: ninguno (cambio documental). AGENTS.md del plugin sincronizado en el mismo paso (§2.1 RC37, §9 lista de 16 suites, §10 conteo).
+## Sync Impact Report (v4.1.0, 2026-11-03)
+
+- **Bump**: MINOR (4.0.0 -> 4.1.0). Se **acota** el alcance del mockup obligatorio (§I) y se agrega
+  una ruta de datos (§IV); ningun principio se redefine.
+- **Añadido**: `orders/{cliente}/customs/` (ideas/favoritos del comprador: `idea.json` +
+  `mockup.webp`, **sin** `manifest.json`) y `tmp/sesion-{sid}/customs/` (invitado), adoptadas en la
+  primera compra de forma idempotente. No es un ambito nuevo ni un catalogo: sin `manifest.json` los
+  escaneos de pedidos y de la biblioteca lo ignoran (exigen nivel numerico y leen ese archivo).
+- **Modificado**: §I — el cotizador de stickers es un consumidor externo **sin PDF**: sus items
+  nacen con `preview_estado = 'omisible'` y `manifest.pdfs = []`; el mockup 300x300 es informativo y
+  el arte es opcional. La ficha de un PDF **no** cambia (mockup obligatorio + visto bueno por
+  add-to-cart).
+- **Fuente**: spec 037 (`spec.md` D1-D10, `research.md` R1-R13, `contracts/puente-cotizador.md`,
+  `contracts/customs.md`).
+- **Impacto en WooCommerce**: filtro `pmu_cotizador_activo` (apagado sin deploy); endpoint
+  `admin_post_pmu_cotizador` (`op=listar|guardar|favorito|borrar|historial|imagen`);
+  `pedido_promover()` deriva los items con `_mu_origen = 'cotizador'` a
+  `PMU_Cotizador::promover_linea()` (sin `entregar_por_tema()` ni bonus) y el bloque "Diseno" del
+  pedido se sirve por `op=imagen&order_id=`.
+- **Impacto en el motor**: **ninguno**. `Pdf`/`Detector`/`Overlay`/`Motor` no cambian; el lienzo del
+  cotizador es explicito en la receta (`w/h`) y el arte se compone con `engine/Compositor.php`.
+  Sin migracion (§V).
