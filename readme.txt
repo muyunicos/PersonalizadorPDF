@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.27.0
+Stable tag: 4.28.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,12 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.28.0 =
+* Spec 036 (ficha optimizada): la ficha abre con **0 descargas de imagenes del cliente** y sin el motor de texto si no hay campos de texto.
+* El mockup del cliente se sirve **aplanado**: el editor del admin exporta un **WebP** con las capas de imagen visibles y la ficha descarga **1 bitmap por mockup** (los placeholders siguen encima, con la foto del comprador).
+* La cola de subida sube todo en segundo plano con **dedupe por contenido**, reintentos y **"la ultima version manda"**: cambiar un texto reemplaza la version anterior sin volver a subir nada. Las creaciones de texto viajan en **WebP** y al cap maximo (2000 px).
+* El boton de comprar se habilita **solo con la cola vacia** (fotos + textos) y la vista previa **se monta sola**: ya no hay boton "Vista previa" y al editar un campo la galeria se repinta en el lugar. Un fallo de montaje **nunca** bloquea la venta.
 
 = 4.27.0 =
 * Spec 035 (fotos originales del cliente): el comprador sube el **original** (acotado a 2000 px) y el servidor **compone** la foto bajo demanda con GD al generar el PDF, desde el original + la receta del encuadre. La composicion no se sube y, una vez generado el PDF, el original se puede borrar sin romper la regeneracion.

@@ -51,3 +51,38 @@ php tests/parity.php
 
 - Capturas en `C:\wp-lab\capturas\`; registrar en `specs/036-mockup-optimizado/quickstart.md` §5.
 - Higiene: limpiar solo `tmp/sesion-*` y `tmp/muestras/*` de prueba; **nunca** `orders/` ni `pdfs/`.
+
+### Registro (2026-11-03, v4.28.0) — 32/32 `[X]`
+
+| Puerta | Resultado |
+|---|---|
+| `php -l` (plugin + `admin/` + `engine/` + `inc/`) | OK (sin errores) |
+| `node tests/cola-subida.test.js` (nueva, T023) | `COLA SUBIDA OK (22 checks)` |
+| `php tests/texto_puente.php aplanado` (nueva, T017) | `FASE aplanado OK (11 checks)` |
+| `php tests/texto_puente.php red_carga` (US1) | `FASE red_carga OK (5 checks)` |
+| `node tests/vistas-contrato.test.js` | `VISTAS CONTRATO OK (24 checks)` |
+| `node tests/mockup-contrato.test.js` | `CONTRATO OK (157 checks)` |
+| `node tests/fotos-contrato.test.js` | `FOTOS CONTRATO OK (38 checks)` |
+| `node tests/receta-contrato.test.js` | `RECETA CONTRATO OK (21 checks)` |
+| `node tests/conciliacion.js` / `validez.js` / `compositor-paridad` | `CONCILIACION OK` / `VALIDEZ OK` / `COMPOSITOR PARIDAD OK (6)` |
+| `node tests/campos-contrato` / `selector-contrato` / `biblioteca-contrato` | OK (40 checks en biblioteca) |
+| `php tests/motor_smoke.php` / `parity.php` / `envolturas.php` | `SMOKE OK` / `PARIDAD OK` / `ENVOLTURAS OK` |
+| `php tests/certificacion_hoja.php` / `sin_lectura.php` / `campos_migracion.php` | `CERTIFICACION HOJA OK` / `SIN_LECTURA OK` / `CAMPOS V3 OK` |
+| `php tests/compositor.php` | `COMPOSITOR OK (19 checks)` |
+| Arnés `texto_puente.php`: `pool`, `vista_previa`, `carrito`, `fotos`, `ficha`, `mockups`, `mockup_capas`, `mockup_preview`, `mockup_foto` | todas OK |
+| **Recorrido del lab** `node tests/ficha-pedido.browser.js` | **`FICHA->PEDIDO: 52/52 OK`** |
+
+Checks nuevos del recorrido: `E1/D7` (0 red al abrir: sin biblioteca, sin POST de subida/vista previa
+y sin motor de texto), `E4/D3` (la galeria se monto **sola**: `completo`+`hecho`), `E4/T026` (editar
+un campo **repinta**: `posts+1`, `vistas=3`, sin boton) y "sin boton Vista previa".
+
+**Hallazgos reales que atraparon las puertas**:
+
+1. `estaCompleto()` pasaba `validez: bloqueos.validez` con la **polaridad invertida** (`true` =
+   BLOQUEADO) y la ficha completa **nunca** montaba → lo atrapo la puerta de navegador (E4).
+2. `nombre_seguro('../fuera')` **saneaba** a `fuera` en vez de rechazar y dejaba un artefacto
+   huerfano: el aplanado ahora **rechaza** un id que no sea ya su forma segura.
+3. Un throw **sincrono** de `generarVista()` dejaba `montaje.enCurso` colgado (ficha muda para
+   siempre): la cadena se arma con `Promise.resolve().then(...)`.
+4. `let fallos = 0` del test de reintentos **ensombrecia** el contador global de la puerta (salida
+   `exit 1` con todo OK): renombrado a `intentosRed`.

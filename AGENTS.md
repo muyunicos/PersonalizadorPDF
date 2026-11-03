@@ -414,6 +414,19 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   Sin `textos.json` y sin `metadata.json` (norma ex-008).
 - Fotos de mockups del admin: `pdfs/{nombre}/mockups/` (datos de usuario, sin catálogo);
   las reutilizables viven en el catálogo `img/`.
+- **Mockup APLANADO del cliente (spec 036, D10)**: `pdfs/{nombre}/mockups/{mockup_id}.webp` es un
+  artefacto **DERIVADO** (NO vive en `config.json`): el editor del admin exporta el **WebP** de las
+  capas `img` VISIBLES en **cada** guardado (`aplanarMockup`) y la ficha lo sirve como **1 capa
+  `img`** + los `placeholder` (1 descarga por mockup). El servidor lo publica al leer
+  (`mockups_con_aplanado`/`aplanados_mockups`) y lo **excluye** de la lista de fotos del admin; el
+  `id` se **rechaza** si no es ya su forma segura. Ausente = la ficha cae a la composicion por capas
+  (ningun mockup previo se rompe) y la consola lo regenera al guardar.
+- **Red al cargar la ficha (spec 036, D7/D8/D3)**: **0** imagenes del cliente (se piden al abrir el
+  modal), **0** motor de texto si no hay campo `texto` (es lazy) y **1** bitmap aplanado por mockup.
+  El boton de comprar se habilita solo con `bloqueos` en falso: `vistas`, `validez`, `minimos` y
+  `subidas` (cola de fotos + contador del pool). La galeria se **monta sola** al quedar "completo"
+  (predicado unico `PURO.estaCompleto`, ojo con la polaridad de `validez`) y se **repinta** al
+  editar: **no** hay boton "Vista previa". Un fallo de montaje **nunca** bloquea la venta (D5).
 - Archivos bonus del admin (4.7.0): biblioteca global `uploads/pmu/bonus/`
   (compartida por todos los PDFs) + catalogo `bonus/bonus.json`
   (`{version, items:[{archivo, titulo}]}`, titulos por defecto dinamicos);
@@ -663,6 +676,9 @@ node tests/campos-contrato.test.js  # Montaje de campos + cargador (spec 012): "
 node tests/selector-contrato.test.js  # Contrato del selector visual (spec 016): "SELECTOR CONTRATO OK"
 node tests/biblioteca-contrato.test.js  # Biblioteca del comprador (spec 030): "BIBLIOTECA CONTRATO OK (N checks)"
 node tests/conciliacion.js    # `PURO.conciliarGrupo` (spec 012, D17-D19) + reparto por ranura: "CONCILIACION OK"
+node tests/cola-subida.test.js # Cola de subida del comprador (spec 036, D9): concurrencia acotada,
+                              # FIFO, dedupe por contenido/slot y "la ultima version manda":
+                              # "COLA SUBIDA OK (22 checks)"
 node tests/receta-contrato.test.js  # Receta v2 del recorte (spec 035): "RECETA CONTRATO OK (21 checks)"
 node tests/vistas-contrato.test.js  # Orden/marca de las vistas obligatorias (035): "VISTAS CONTRATO OK (24 checks)"
 node tests/fotos-contrato.test.js   # Original acotado a 2000 px + dedupe por sha (035): "FOTOS CONTRATO OK (38 checks)"
@@ -694,7 +710,8 @@ php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
                              # mockup_preview | mockup_foto |
                               # mockup_foto_baja | mockup_foto_ajax |
                               # desactivar | reanalizar | envoltura_op | reemplazo | borrado | campo_global | smoke | biblioteca |
-                              # receta | carpeta_cliente | traslado [pedido] | rutas | composicion | vistos (035)
+                              # receta | carpeta_cliente | traslado [pedido] | rutas | composicion | vistos (035) |
+                              # red_carga | aplanado (036)
 ```
 Los 3 arneses CLI salen de inmediato si no corren por CLI (`PHP_SAPI !== 'cli'`):
 la carpeta `tests/` viaja con el plugin al hosting y no debe ser ejecutable por HTTP.

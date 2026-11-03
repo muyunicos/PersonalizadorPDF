@@ -115,10 +115,10 @@
 
 **Purpose**: documentacion, indice y version (F5)
 
-- [ ] T029 [P] Actualizar `AGENTS.md` §5 (mockup aplanado en `pdfs/{nombre}/mockups/{mockup_id}.webp`; red al cargar de la ficha) y §9 (puertas nuevas)
-- [ ] T030 [P] Actualizar `specs/INDICE.md` con la 036 (estado + artefactos normativos)
-- [ ] T031 Bump de version en la **cabecera** de `personalizador-pdf.php` (unica fuente, §10.bis) y en el `Stable tag` de `readme.txt`
-- [ ] T032 Cierre: correr TODAS las puertas de `AGENTS.md` §9 + el recorrido del lab (`node tests/ficha-pedido.browser.js`) y registrar la evidencia en `quickstart.md` §5
+- [X] T029 [P] Actualizar `AGENTS.md` §5 (mockup aplanado en `pdfs/{nombre}/mockups/{mockup_id}.webp`; red al cargar de la ficha) y §9 (puertas nuevas)
+- [X] T030 [P] Actualizar `specs/INDICE.md` con la 036 (estado + artefactos normativos)
+- [X] T031 Bump de version en la **cabecera** de `personalizador-pdf.php` (unica fuente, §10.bis) y en el `Stable tag` de `readme.txt` — **4.27.0 → 4.28.0** (+ entrada `= 4.28.0 =` en el changelog)
+- [X] T032 Cierre: correr TODAS las puertas de `AGENTS.md` §9 + el recorrido del lab (`node tests/ficha-pedido.browser.js`) y registrar la evidencia en `quickstart.md` §5 — tabla completa registrada (`FICHA->PEDIDO 52/52`, `COLA SUBIDA OK (22)`, `FASE aplanado OK (11)`, lint y demas puertas en verde) + los 4 hallazgos reales que atraparon las puertas.
 
 ---
 
