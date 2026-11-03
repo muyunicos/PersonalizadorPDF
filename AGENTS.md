@@ -755,6 +755,7 @@ $env:NODE_PATH = "$env:TEMP\pmu-pw\node_modules"
 $env:TEXTMUY_CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 node tests/galerias-sprite.browser.js       # 32/32 (mutan/restauran datos del lab)
 node tests/ficha-pedido.browser.js          # 47/47 (crea un pedido de prueba)
+node tests/aplanado.browser.js              # mockup APLANADO real (spec 036): productor + T016
 pwsh C:\wp-lab\arrancar.ps1                 # (si el lab esta apagado)
 ```
 

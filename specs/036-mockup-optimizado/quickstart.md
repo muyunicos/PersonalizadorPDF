@@ -71,6 +71,15 @@ php tests/parity.php
 | `php tests/compositor.php` | `COMPOSITOR OK (19 checks)` |
 | Arnés `texto_puente.php`: `pool`, `vista_previa`, `carrito`, `fotos`, `ficha`, `mockups`, `mockup_capas`, `mockup_preview`, `mockup_foto` | todas OK |
 | **Recorrido del lab** `node tests/ficha-pedido.browser.js` | **`FICHA->PEDIDO: 52/52 OK`** |
+| **Aplanado** `node tests/aplanado.browser.js` (nueva) | **`APLANADO OK: 20/20`** (11 checks reales + 8 `PENDIENTE` visibles) |
+
+`tests/aplanado.browser.js` prueba el **productor real**: el editor del admin compone las capas `img`
+y guarda un **WebP con firma RIFF/WEBP** que el navegador decodifica a **300x300**, el editor sale de
+"sin guardar" y **T016 regenera** el bitmap al cambiar capas. Deja **`PENDIENTE`** (visible, sin
+contar como fallo) el conteo de red del comprador: en ese escenario sintetico `generarPdf` deja la
+galeria en "Generando vista previa" y no se emite la request del bitmap; el diagnostico **descarta al
+servidor** (la respuesta de `vista_previa` trae el mockup). Cerrarlo pide el camino
+`?pmu_item_key=` (item ya completo) que usa `ficha-pedido.browser.js`.
 
 Checks nuevos del recorrido: `E1/D7` (0 red al abrir: sin biblioteca, sin POST de subida/vista previa
 y sin motor de texto), `E4/D3` (la galeria se monto **sola**: `completo`+`hecho`), `E4/T026` (editar

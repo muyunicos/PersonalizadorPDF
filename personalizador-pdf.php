@@ -776,7 +776,7 @@ class Personalizador_PDF_Plugin
             'pdf' => $nombre,
             'campos' => $elegidos,
             'placeholders' => isset($config['placeholders']) ? (array)$config['placeholders'] : [],
-            'mockups' => isset($config['mockups']) ? (array)$config['mockups'] : [],
+            'mockups' => $this->mockups_con_aplanado($nombre, $config),
             'preview_omisible' => !empty($config['preview_omisible']),
         ];
     }
