@@ -36,6 +36,10 @@ require_once PERSONALIZADOR_PDF_PATH . 'engine/Imagen.php';
 require_once PERSONALIZADOR_PDF_PATH . 'engine/Overlay.php';
 require_once PERSONALIZADOR_PDF_PATH . 'engine/Motor.php';
 require_once PERSONALIZADOR_PDF_PATH . 'engine/Compositor.php';
+// Spec 037: fachada del cotizador. Se carga siempre (solo define constantes y
+// metodos): asi las referencias a `PMU_Cotizador::CONTEXTO` de los hooks de
+// pedido nunca dependen del orden en que se toque la fachada.
+require_once PERSONALIZADOR_PDF_PATH . 'inc/class-pmu-cotizador.php';
 
 use ExtractCorel\Engine\Detector;
 use ExtractCorel\Engine\Compositor;
@@ -136,6 +140,11 @@ class Personalizador_PDF_Plugin
         // Spec 030 (D19): endpoint unico de la biblioteca (op=imagen|listar|usos|usar|borrar).
         add_action('admin_post_personalizador_pdf_biblioteca', [$this, 'handle_biblioteca']);
         add_action('admin_post_nopriv_personalizador_pdf_biblioteca', [$this, 'handle_biblioteca']);
+        // Spec 037 (C2): endpoint unico del cotizador de stickers.
+        add_action('admin_post_pmu_cotizador', [$this, 'handle_cotizador']);
+        add_action('admin_post_nopriv_pmu_cotizador', [$this, 'handle_cotizador']);
+        // Spec 037 (T027): bloque "Diseno" en el pedido (admin y cliente).
+        add_action('woocommerce_order_item_meta_end', [$this, 'pedido_item_diseno_html'], 10, 3);
         // Spec 030 (T035/D3): al loguearse, el `sid` del invitado se anota en su cuenta
         // (`_pmu_sids`): su historial lo sigue en cualquier dispositivo. Nunca al reves.
         add_action('wp_login', [$this, 'vinculo_sid_usuario'], 10, 2);
@@ -189,6 +198,12 @@ class Personalizador_PDF_Plugin
         return $this->pmu_uploads();
     }
 
+    /** Expone la fachada del cotizador al arnes (fase `cotizador`). Solo CLI de desarrollo. */
+    public function cotizador_para_tests()
+    {
+        return $this->cotizador();
+    }
+
     /** Sesion del comprador (PMU_Sesion, inc/class-pmu-sesion.php) sobre el motor unico. */
     private function sesion()
     {
@@ -196,6 +211,33 @@ class Personalizador_PDF_Plugin
             require_once PERSONALIZADOR_PDF_PATH . 'inc' . DIRECTORY_SEPARATOR . 'class-pmu-sesion.php';
         }
         return new PMU_Sesion($this->pmu_uploads());
+    }
+
+    /**
+     * Fachada del cotizador de stickers (spec 037, D5/R2): `inc/class-pmu-cotizador.php`.
+     *
+     * Un solo objeto por request; delega en `PMU_Sesion`/`PMU_Uploads` (un dueno por
+     * dato, §II) y concentra el contrato del puente en un archivo verificable.
+     */
+    private function cotizador()
+    {
+        static $cot = null;
+        if ($cot === null) {
+            if (!class_exists('PMU_Cotizador')) {
+                require_once PERSONALIZADOR_PDF_PATH . 'inc' . DIRECTORY_SEPARATOR . 'class-pmu-cotizador.php';
+            }
+            $cot = new PMU_Cotizador($this->pmu_uploads(), $this->sesion());
+        }
+        return $cot;
+    }
+
+    /**
+     * Endpoint unico del cotizador (spec 037, C2): `admin_post_pmu_cotizador`.
+     * `op=listar|guardar|favorito|borrar|historial|imagen`; responde JSON.
+     */
+    public function handle_cotizador()
+    {
+        $this->cotizador()->handle();
     }
 
     /** Spec 030 (T033/D18): agendar el barrido diario del TTL (una sola vez). */
@@ -1901,11 +1943,14 @@ class Personalizador_PDF_Plugin
             // vista previa lo REUSA (no abre un segundo item).
             $creado = false;
             if ($item === '') {
-                $pdf = $this->pmu_uploads()->nombre_seguro(
-                    sanitize_file_name(wp_unslash((string) ($_POST['pdf'] ?? ''))),
-                    'subida'
-                );
-                $item = $sesion->crear_draft($sid, [$pdf]);
+                // Spec 037 (C0/T004): el cotizador pide un item SIN PDF. Su contexto
+                // viaja en el manifest (`contexto = 'cotizador'`), el item se llama
+                // `cot-{8 hex}` y nace con `preview_estado = 'omisible'`.
+                $contexto = sanitize_key(wp_unslash((string) ($_POST['contexto'] ?? '')));
+                $pdf = sanitize_file_name(wp_unslash((string) ($_POST['pdf'] ?? '')));
+                $pdfs = ($contexto === 'cotizador' || $pdf === '')
+                    ? [] : [$this->pmu_uploads()->nombre_seguro($pdf, 'subida')];
+                $item = $sesion->crear_draft($sid, $pdfs, $contexto);
                 $creado = true;
             }
             // Spec 030 (T021/D24): dedupe por contenido. Si estos bytes (crudos) ya
@@ -3020,6 +3065,44 @@ class Personalizador_PDF_Plugin
     }
 
     /**
+     * Spec 037 (T027): bloque "Diseno" del line item, en el admin y en Mi cuenta.
+     *
+     * Solo para items del cotizador (`_mu_origen = 'cotizador'`). Muestra el id del
+     * diseno y un enlace al ORIGINAL servido por el endpoint del cotizador, que
+     * autoriza por pedido (duenio o admin): nunca se expone una ruta absoluta.
+     */
+    public function pedido_item_diseno_html($item_id, $item, $order)
+    {
+        if (!is_object($item) || !method_exists($item, 'get_meta')) {
+            return;
+        }
+        $cot = $this->cotizador();
+        if (!$cot->activo()) {
+            return; // fachada apagada: el bloque no se pinta (sin efectos laterales)
+        }
+        if ((string)$item->get_meta('_mu_origen', true) !== PMU_Cotizador::CONTEXTO) {
+            return;
+        }
+        $diseno = (string)$item->get_meta('_mu_diseno_id', true);
+        if ($diseno === '') {
+            return;
+        }
+        $itemKey = (string)$item->get_meta('_pmu_item_key', true);
+        $orderId = is_object($order) && method_exists($order, 'get_id') ? (int)$order->get_id() : 0;
+        $url = admin_url('admin-post.php') . '?action=pmu_cotizador&op=imagen&tipo=original'
+            . '&order_id=' . (int)$orderId
+            . '&item_key=' . rawurlencode($itemKey)
+            . '&_wpnonce=' . rawurlencode(wp_create_nonce(PMU_Cotizador::NONCE));
+        echo '<div class="pmu-diseno-pedido" style="margin-top:6px;font-size:12px;line-height:1.5">'
+            . '<strong>Diseno del cotizador</strong><br>'
+            . '<a href="' . esc_url($url) . '" target="_blank" rel="noopener">'
+            . 'Descargar archivo original</a><br>'
+            . '<span style="color:#64748b">diseno ' . esc_html($diseno)
+            . ' &middot; item ' . esc_html($itemKey) . '</span>'
+            . '</div>';
+    }
+
+    /**
      * Spec 035 (D6): al confirmarse el pago, cada item personalizado se MUEVE de
      * la sesion al entregable (`orders/{clave}/{order_id}/{item_key}/`), junto con
      * sus originales (`orders/{clave}/uploads/`). Ya no hay staging: el item esta
@@ -3078,6 +3161,24 @@ class Personalizador_PDF_Plugin
                 }
             }
             $oid = (int)$order->get_id();
+            // Spec 037 (C3/R7): un item del COTIZADOR no entrega PDF ni congela bonus.
+            // Se promueve (item + originales + adopcion de customs) y se saltea el
+            // ciclo de entrega, que es lo que ensuciaria el pedido y la consola.
+            if ((string)$lineItem->get_meta('_mu_origen', true) === PMU_Cotizador::CONTEXTO) {
+                try {
+                    if ($this->cotizador()->promover_linea($oid, $itemKey) !== '') {
+                        $cambios = true;
+                    }
+                } catch (\Throwable $e) {
+                    $this->log_pedido(sprintf(
+                        'promover:cotizador order=%d item=%s err=%s',
+                        $oid,
+                        $itemKey,
+                        $e->getMessage()
+                    ));
+                }
+                continue;
+            }
             try {
                 // Spec 035 (D6): SIN staging. El item vive completo en la sesion
                 // desde la vista previa, asi que se mueve entero al entregable y

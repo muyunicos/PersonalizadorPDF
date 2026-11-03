@@ -102,7 +102,14 @@ function has_action($h) { return in_array((string)$h, (array)($GLOBALS['test_hoo
 function add_filter(...$a) { return true; }
 function add_menu_page(...$a) { return true; }
 function wp_enqueue_style(...$a) { return true; }
-function wp_enqueue_script(...$a) { return true; }
+function wp_enqueue_script(...$a) { $GLOBALS['test_encolados'][] = (string)($a[0] ?? ''); return true; }
+function apply_filters($tag, $valor = null) {
+    // Stub conmutable: `pmu_cotizador_activo` en false apaga la fachada (037).
+    if ((string)$tag === 'pmu_cotizador_activo' && !empty($GLOBALS['test_cotizador_off'])) {
+        return false;
+    }
+    return $valor;
+}
 function wp_enqueue_media() { return true; }
 function wp_localize_script(...$a) { $GLOBALS['test_localizados'][($a[0] ?? '') . '#' . ($a[1] ?? '')] = $a[2] ?? null; return true; }
 function wp_create_nonce($a) { return 'nonce'; }
@@ -2201,6 +2208,78 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 (string)($m_ap2['aplanado'] ?? '(null)'));
             check('el aplanado NO aparece como foto del admin',
                 !isset($datos_ap['fotos']['vistas.webp']));
+            break;
+        case 'cotizador':
+            // Spec 037 (T028/T036): contexto, receta, ideas, favoritos, borrado,
+            // promocion, adopcion, retencion y fachada.
+            $errCot = (string)($GLOBALS['cot_error_guardar'] ?? '')
+                . (string)($GLOBALS['cot_error_reguardar'] ?? '')
+                . (string)($GLOBALS['cot_error_fav'] ?? '');
+            check('sin errores de la fachada', $errCot === '', $errCot);
+            check('el item del cotizador se llama cot-*', !empty($GLOBALS['cot_prefijo']),
+                (string)($GLOBALS['cot_item'] ?? ''));
+            check('manifest.contexto = cotizador', ($GLOBALS['cot_contexto'] ?? '') === 'cotizador');
+            check('manifest.pdfs = [] (sin PDF)', !empty($GLOBALS['cot_sin_pdfs']));
+            check('preview_estado = omisible', !empty($GLOBALS['cot_omisible']));
+            $recC = (array)($GLOBALS['cot_receta'] ?? []);
+            check('receta: gid 6 hex derivado de categoria|tamano',
+                (bool)preg_match('/^[0-9A-F]{6}$/', (string)($recC['gid'] ?? '')),
+                (string)($recC['gid'] ?? ''));
+            check('receta: lienzo explicito = px del sticker (6 cm -> 709)',
+                (int)($recC['w'] ?? 0) === 709 && (int)($recC['h'] ?? 0) === 709,
+                (string)($recC['w'] ?? '') . 'x' . (string)($recC['h'] ?? ''));
+            check('receta: fondo blanco y sin transparencia',
+                ($recC['fondo'] ?? '') === '#ffffff' && ($recC['transp'] ?? '') === 'no');
+            check('receta: phsize 0 (sin placeholder)', (int)($recC['phsize'] ?? -1) === 0);
+            check('la subida queda como fila original', ($GLOBALS['cot_origen'] ?? '') === 'original');
+            check('dos subidas del mismo archivo dejan UNA fila', !empty($GLOBALS['cot_dedupe']));
+            check('la fila guarda la receta (12 hex)',
+                (bool)preg_match('/^[a-f0-9]{12}$/', (string)($GLOBALS['cot_receta_fila'] ?? '')));
+            $gc = (array)($GLOBALS['cot_guardar'] ?? []);
+            check('existe customs/{idea}/idea.json', !empty($gc['json']));
+            check('existe customs/{idea}/mockup.webp', !empty($gc['mockup']));
+            check('customs/ NO tiene manifest.json', !empty($gc['sin_manifest']));
+            check('mockup.id = 12 hex del contenido',
+                (bool)preg_match('/^[a-f0-9]{12}$/', (string)($gc['mockup_id'] ?? '')));
+            check('re-guardar no duplica la idea', !empty($GLOBALS['cot_reguardar']));
+            $lc = (array)($GLOBALS['cot_listar'] ?? []);
+            check('listar devuelve la idea', (int)($lc['n'] ?? 0) === 1);
+            check('el favorito va primero', !empty($lc['fav']));
+            check('la tarjeta trae URL del snapshot (op=imagen)', !empty($lc['url']));
+            check('con la revision vigente responde sin_cambios', !empty($GLOBALS['cot_sin_cambios']));
+            check('estrella de la tienda escribe favoritos.json', !empty($GLOBALS['cot_fav_tienda']));
+            check('desmarcar la quita de favoritos', !empty($GLOBALS['cot_fav_off']));
+            $bc = (array)($GLOBALS['cot_borrar'] ?? []);
+            check('borrar elimina JSON + snapshot', (int)($bc['archivos'] ?? 0) === 2, json_encode($bc));
+            check('borrar no deja huerfanos ni toca el original', !empty($GLOBALS['cot_borrar_ok']));
+            check('borrar dos veces -> cotizador:idea:ausente',
+                strpos((string)($GLOBALS['cot_borrar2'] ?? ''), 'cotizador:idea:ausente') !== false,
+                (string)($GLOBALS['cot_borrar2'] ?? ''));
+            check('idea ajena -> cotizador:idea:ajena',
+                strpos((string)($GLOBALS['cot_ajena'] ?? ''), 'cotizador:idea:ajena') !== false,
+                (string)($GLOBALS['cot_ajena'] ?? ''));
+            $pc = (array)($GLOBALS['cot_promover'] ?? []);
+            check('promover mueve el item del cotizador', !empty($pc['item']), json_encode($pc));
+            check('promover mueve el original a orders/{clave}/uploads/', !empty($pc['original']));
+            check('promover conserva manifest.contexto', ($pc['contexto'] ?? '') === 'cotizador');
+            check('el item promovido sigue sin PDFs', (array)($pc['pdfs'] ?? ['x']) === []);
+            check('adopcion del invitado mueve sus ideas', !empty($GLOBALS['cot_adoptar']));
+            check('re-adoptar es no-op', !empty($GLOBALS['cot_adoptar2']));
+            check('retencion: orders/{cliente}/customs/ NO vence', !empty($GLOBALS['cot_retencion_orden']));
+            check('retencion: la idea vencida del invitado se poda', !empty($GLOBALS['cot_retencion_tmp']));
+            $ctxA = (array)($GLOBALS['cot_ctx'] ?? []);
+            check('contexto() declara cotizador y prefijo cot-',
+                ($ctxA['contexto'] ?? '') === 'cotizador' && ($ctxA['prefijo'] ?? '') === 'cot-');
+            $assetsC = (array)($GLOBALS['cot_assets'] ?? []);
+            check('assets() encola los 6 modulos del paso', count($assetsC) === 6, implode(',', $assetsC));
+            check('assets() NUNCA encola tienda.js ni campo-montar.js',
+                !in_array('personalizador-pdf-tienda', $assetsC, true)
+                && !in_array('personalizador-pdf-campo-montar', $assetsC, true));
+            check('pmu_cotizador_activo=false apaga activo()', !empty($GLOBALS['cot_apagado']));
+            check('apagada, listar no devuelve ideas', !empty($GLOBALS['cot_apagado_lista']));
+            check('apagada, guardar no toca disco (cotizador:inactivo)',
+                strpos((string)($GLOBALS['cot_apagado_guardar'] ?? ''), 'cotizador:inactivo') !== false,
+                (string)($GLOBALS['cot_apagado_guardar'] ?? ''));
             break;
         case 'cola_subida':
             // Spec 036 (T002): esqueleto; los checks llegan con US3.
@@ -5455,9 +5534,201 @@ switch ($fase) {
         $p->handle_mockups_guardar(); // exit en wp_send_json_success
         break;
 
-    case 'cola_subida':
-        // Spec 036 (T002): esqueleto de las fases nuevas. Cada una arma su
-        // entorno aislado cuando llegue su tarea.
+    case 'cotizador':
+        // Spec 037 (T028/T036): contexto, receta, subida, ideas, favoritos,
+        // borrado, promocion, adopcion del invitado y retencion. Un entorno
+        // aislado por fase (mismo patron que `pedido`).
+        preparar_entorno($testBase, $base);
+        if (!class_exists('PMU_Uploads')) {
+            require dirname(__DIR__) . '/inc/class-pmu-galeria.php';
+            require dirname(__DIR__) . '/inc/class-pmu-uploads.php';
+        }
+        if (!class_exists('PMU_Sesion')) {
+            require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
+        }
+        $sidC = 'test-cot-' . substr(sha1((string)getmypid()), 0, 8);
+        $_COOKIE[PMU_Sesion::COOKIE] = $sidC;
+        // 1) INVITADO (uid 0): sus ideas viven en `tmp/sesion-{sid}/customs/`.
+        $GLOBALS['test_user_id'] = 0;
+        $motorC = $p->motor_para_tests();
+        $sesC = new PMU_Sesion($motorC);
+        $cotC = new PMU_Cotizador($motorC, $sesC);
+
+        // 2) Contexto (E1): el item del cotizador NO tiene PDF.
+        $itemC = $sesC->crear_draft($sidC, [], 'cotizador');
+        $manC = $sesC->leer_manifest($sidC, $itemC);
+        $GLOBALS['cot_item'] = $itemC;
+        $GLOBALS['cot_contexto'] = is_array($manC) ? (string)($manC['contexto'] ?? '') : '';
+        $GLOBALS['cot_sin_pdfs'] = is_array($manC) && array_key_exists('pdfs', $manC)
+            && $manC['pdfs'] === [];
+        $GLOBALS['cot_omisible'] = is_array($manC)
+            && (string)($manC['preview_estado'] ?? '') === PMU_Sesion::ESTADO_OMISIBLE;
+        $GLOBALS['cot_prefijo'] = strpos($itemC, 'cot-') === 0;
+
+        // 3) Receta sintetica + subida (E2).
+        $recetaC = PMU_Sesion::receta_cotizador('Circulares', '6,0 cm', ['iw' => 1200, 'ih' => 900]);
+        $GLOBALS['cot_receta'] = $recetaC;
+        $pngC = sys_get_temp_dir() . '/pd_cot_' . getmypid() . '.png';
+        \ExtractCorel\Engine\PngWriter::write($pngC, 40, 30);
+        $bytesC = (string)@file_get_contents($pngC);
+        $filaC = $sesC->guardar_subida($sidC, $itemC, $bytesC, '', $recetaC);
+        $sesC->guardar_subida($sidC, $itemC, $bytesC, '', $recetaC);
+        $filasC = array_values((array)(($sesC->leer_manifest($sidC, $itemC)['subidas'] ?? [])));
+        $GLOBALS['cot_fila'] = $filaC;
+        $GLOBALS['cot_dedupe'] = count($filasC) === 1;
+        $GLOBALS['cot_origen'] = (string)($filasC[0]['origen'] ?? '');
+        $GLOBALS['cot_receta_fila'] = (string)($filasC[0]['receta'] ?? '');
+
+        // 4) Guardar idea + snapshot (E4).
+        $ideaC = [
+            'id' => 'idea-1761000000-a1b2',
+            'order' => 'v1.m11.s60.q15.f1.d0',
+            'titulo' => 'Circulos 6 cm',
+            'descripcion' => 'Vinilo | Circulares 6,0 cm',
+            'favorito' => true,
+            'precio' => ['final' => 193500, 'perUnit' => 860, 'total' => 193500,
+                'sheets' => 15, 'stickers' => 225, 'savingsPct' => 12, 'ts' => 1761000000],
+            'diseno' => [
+                'id' => (string)($filaC['id'] ?? ''),
+                'itemKey' => $itemC,
+                'sid' => $sidC,
+                'w' => (int)$recetaC['w'],
+                'h' => (int)$recetaC['h'],
+                'receta' => (string)($filaC['receta'] ?? ''),
+            ],
+            'mockup' => ['id' => '', 'w' => 300, 'h' => 300, 'mockupId' => 'mk-circulares'],
+        ];
+        $dirCustoms = $motorC->dir_sesion_customs($sidC, true);
+        try {
+            $guardadaC = $cotC->guardar_idea($ideaC, $bytesC);
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_error_guardar'] = $e->getMessage();
+            $guardadaC = [];
+        }
+        $GLOBALS['cot_guardar'] = [
+            'json' => is_file($dirCustoms . DIRECTORY_SEPARATOR . $ideaC['id'] . DIRECTORY_SEPARATOR . 'idea.json'),
+            'mockup' => is_file($dirCustoms . DIRECTORY_SEPARATOR . $ideaC['id'] . DIRECTORY_SEPARATOR . 'mockup.webp'),
+            'sin_manifest' => !is_file($dirCustoms . DIRECTORY_SEPARATOR . 'manifest.json'),
+            'mockup_id' => (string)($guardadaC['mockup']['id'] ?? ''),
+        ];
+        // Re-guardar SIN bytes: reusa el snapshot y NO duplica ideas.
+        try {
+            $cotC->guardar_idea($ideaC);
+            $GLOBALS['cot_reguardar'] = count((array)glob($dirCustoms . DIRECTORY_SEPARATOR . 'idea-*', GLOB_ONLYDIR)) === 1;
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_error_reguardar'] = $e->getMessage();
+        }
+        $GLOBALS['cot_fase_a'] = true;
+
+        // 5) Listado + estrella (E5).
+        $listaC = $cotC->listar_ideas();
+        $primera = (array)(($listaC['ideas'] ?? [])[0] ?? []);
+        $GLOBALS['cot_listar'] = [
+            'n' => count((array)($listaC['ideas'] ?? [])),
+            'fav' => !empty($primera['favorito']),
+            'url' => strpos((string)($primera['url'] ?? ''), 'op=imagen') !== false,
+            'revision' => (string)($listaC['revision'] ?? ''),
+        ];
+        $segunda = $cotC->listar_ideas((string)($listaC['revision'] ?? ''));
+        $GLOBALS['cot_sin_cambios'] = !empty($segunda['sin_cambios']);
+        try {
+            $cotC->favorito('tienda', 'circulares-6', true);
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_error_fav'] = $e->getMessage();
+        }
+        $favC = $motorC->leer_json($dirCustoms . DIRECTORY_SEPARATOR . 'favoritos.json');
+        $GLOBALS['cot_fav_tienda'] = is_array($favC) && count((array)($favC['items'] ?? [])) === 1;
+        $cotC->favorito('tienda', 'circulares-6', false);
+        $favC2 = $motorC->leer_json($dirCustoms . DIRECTORY_SEPARATOR . 'favoritos.json');
+        $GLOBALS['cot_fav_off'] = is_array($favC2) && count((array)($favC2['items'] ?? [])) === 0;
+
+        // 6) Borrado sin huerfanos (E6): el original compartido NO se borra.
+        $originalC = $motorC->dir_sesion_uploads($sidC) . DIRECTORY_SEPARATOR
+            . (string)($filaC['id'] ?? '') . '.webp';
+        $GLOBALS['cot_original_antes'] = is_file($originalC);
+        try {
+            $GLOBALS['cot_borrar'] = $cotC->borrar_idea($ideaC['id']);
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_borrar'] = ['archivos' => 0, 'error' => $e->getMessage()];
+        }
+        $GLOBALS['cot_borrar_ok'] = !is_dir($dirCustoms . DIRECTORY_SEPARATOR . $ideaC['id'])
+            && is_file($originalC);
+        try {
+            $cotC->borrar_idea($ideaC['id']);
+            $GLOBALS['cot_borrar2'] = 'no-lanzo';
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_borrar2'] = $e->getMessage();
+        }
+        // Idea ajena: id valido que no existe en la identidad.
+        try {
+            $cotC->favorito('custom', 'idea-1761000009-zzzz', true);
+            $GLOBALS['cot_ajena'] = 'no-lanzo';
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_ajena'] = $e->getMessage();
+        }
+
+        // 7) Promocion del item (E7): se mueve con sus originales y conserva el
+        //    contexto; sin PDF ni bonus (eso lo decide `pedido_promover`).
+        $itemP2 = $sesC->crear_draft($sidC, [], 'cotizador');
+        $filaP2 = $sesC->guardar_subida($sidC, $itemP2, $bytesC, '', $recetaC);
+        try {
+            $destinoP = $sesC->promover_order(5150, '7', $sidC, $itemP2);
+            $manP = $sesC->leer_manifest_dir($destinoP);
+            $GLOBALS['cot_promover'] = [
+                'item' => is_dir($destinoP) && !is_dir($motorC->dir_sesion_item($sidC, $itemP2)),
+                'original' => is_file($motorC->dir_order_uploads('7') . DIRECTORY_SEPARATOR
+                    . (string)($filaP2['id'] ?? '') . '.webp'),
+                'contexto' => (string)(is_array($manP) ? ($manP['contexto'] ?? '') : ''),
+                'pdfs' => is_array($manP) ? (array)($manP['pdfs'] ?? ['x']) : ['x'],
+            ];
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_promover'] = ['error' => $e->getMessage()];
+        }
+
+        // 8) Adopcion del invitado al cliente (E8), idempotente.
+        $ideaAd = 'idea-1761000001-b2c3';
+        $dirAd = $dirCustoms . DIRECTORY_SEPARATOR . $ideaAd;
+        wp_mkdir_p($dirAd);
+        file_put_contents($dirAd . DIRECTORY_SEPARATOR . 'idea.json', json_encode(array_merge($ideaC, ['id' => $ideaAd])));
+        file_put_contents($dirAd . DIRECTORY_SEPARATOR . 'mockup.webp', 'WEBP');
+        $dirOrden = $motorC->dir_order_customs('9');
+        $GLOBALS['cot_adoptar'] = $cotC->adoptar_customs($sidC, 9) === 1
+            && is_dir($dirOrden . DIRECTORY_SEPARATOR . $ideaAd)
+            && !is_dir($dirAd);
+        $GLOBALS['cot_adoptar2'] = $cotC->adoptar_customs($sidC, 9) === 0;
+
+        // 9) Retencion (FR-032/C6): `orders/{cliente}/customs/` NO se toca; las
+        //    ideas del invitado vencen como un item de carrito.
+        $ideaVieja = 'idea-1700000000-c3d4';
+        $dirVieja = $motorC->dir_sesion_customs($sidC, true) . DIRECTORY_SEPARATOR . $ideaVieja;
+        wp_mkdir_p($dirVieja);
+        file_put_contents($dirVieja . DIRECTORY_SEPARATOR . 'idea.json', json_encode(array_merge(
+            $ideaC,
+            ['id' => $ideaVieja, 'creado' => time() - 40 * 86400]
+        )));
+        $sesC->limpiar_ttl();
+        $GLOBALS['cot_retencion_tmp'] = !is_dir($dirVieja);
+        $GLOBALS['cot_retencion_orden'] = is_dir($dirOrden . DIRECTORY_SEPARATOR . $ideaAd);
+
+        // 10) Fachada: contexto, assets y apagado por filtro (D10/E1.4).
+        $ctxC = $cotC->contexto();
+        $GLOBALS['cot_ctx'] = [
+            'contexto' => (string)($ctxC['contexto'] ?? ''),
+            'prefijo' => (string)($ctxC['prefijoItem'] ?? ''),
+        ];
+        $GLOBALS['test_encolados'] = [];
+        $cotC->assets();
+        $GLOBALS['cot_assets'] = (array)($GLOBALS['test_encolados'] ?? []);
+        $GLOBALS['test_cotizador_off'] = true;
+        $GLOBALS['cot_apagado'] = $cotC->activo() === false;
+        $GLOBALS['cot_apagado_lista'] = ($cotC->listar_ideas()['activo'] ?? true) === false;
+        try {
+            $cotC->guardar_idea($ideaC, $bytesC);
+            $GLOBALS['cot_apagado_guardar'] = 'no-lanzo';
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_apagado_guardar'] = $e->getMessage();
+        }
+        $GLOBALS['test_cotizador_off'] = false;
         break;
 
 }

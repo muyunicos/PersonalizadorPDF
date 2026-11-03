@@ -1,0 +1,16 @@
+{
+  "_nota": "Tabla de paridad cotizador (spec 037, I1). La consumen DOS puertas: tests/cotizador-contrato.test.js --paridad (PHP: PMU_Sesion::px_cotizador/receta_cotizador) y calculadora/tests/core.test.js (TS: sizeToPx/gidPara). Si una de las dos implementaciones cambia, esta tabla deja de coincidir y la puerta falla.",
+  "_reglas": {
+    "px": "round(cm / 2.54 * 300), con escala proporcional si el lado mayor pasa de 3000",
+    "gid": "6 hex MAYUSCULAS de sha1(categoria_minusculas + '|' + W + 'x' + H)"
+  },
+  "casos": [
+    { "categoria": "Circulares", "size": "2,5 cm", "w": 295, "h": 295, "gid": "E5D109" },
+    { "categoria": "Circulares", "size": "6,0 cm", "w": 709, "h": 709, "gid": "3A279C" },
+    { "categoria": "Circulares", "size": "8 cm", "w": 945, "h": 945, "gid": "5422CB" },
+    { "categoria": "Circulares", "size": "10 cm", "w": 1181, "h": 1181, "gid": "92ADB8" },
+    { "categoria": "Formas", "size": "2,5 cm", "w": 295, "h": 295, "gid": "C6317B" },
+    { "categoria": "Formas", "size": "5x2,5 cm", "w": 591, "h": 295, "gid": "503034" },
+    { "categoria": "A Medida", "size": "10x200", "w": 150, "h": 3000, "gid": "9AE441" }
+  ]
+}

@@ -151,19 +151,29 @@ class PMU_Sesion
         return $this->motor->dir_sesion_item($sid, $item_key);
     }
 
-    /** Crea un borrador draft-{uuid} con manifest inicial. Devuelve el item_key. */
-    public function crear_draft($sid, array $pdfs)
+    /**
+     * Crea un borrador draft-{uuid} con manifest inicial. Devuelve el item_key.
+     *
+     * `$contexto` (spec 037, T004/R1): el cotizador de stickers NO tiene PDF. Su
+     * item nace con `contexto = 'cotizador'`, `pdfs = []` y `preview_estado =
+     * 'omisible'` (el mockup informa; el visto bueno es el add-to-cart). El
+     * contexto viaja como CLAVE PROPIA del manifest: `subidas[].origen` es
+     * vocabulario cerrado de la 035 y agregarle un valor rompe sus `switch`.
+     */
+    public function crear_draft($sid, array $pdfs, $contexto = '')
     {
-        if (!$pdfs) {
+        $contexto = strtolower(trim((string)$contexto));
+        if (!$pdfs && $contexto !== 'cotizador') {
             throw new Exception('motor:sesion:pdfs:vacio');
         }
         $limpios = [];
         foreach ($pdfs as $pdf) {
             $limpios[] = $this->motor->nombre_seguro($pdf, 'sesion:crear_draft');
         }
-        $item = 'draft-' . substr(str_replace('-', '', $this->uuid4()), 0, 12);
+        $item = ($contexto === 'cotizador' ? 'cot-' : 'draft-')
+            . substr(str_replace('-', '', $this->uuid4()), 0, $contexto === 'cotizador' ? 8 : 12);
         $this->motor->dir_sesion_item_img($sid, $item, true); // crea item + img/
-        $this->guardar_manifest($sid, $item, [
+        $manifest = [
             'item_key' => $item,
             'sid' => $this->motor->sesion_segura($sid, 'sesion:crear_draft'),
             'pdfs' => $limpios,
@@ -177,7 +187,13 @@ class PMU_Sesion
             'preview_estado' => self::ESTADO_SIN_VISTA,
             'creado' => gmdate('Y-m-d\TH:i:s\Z'),
             'motor' => defined('PERSONALIZADOR_PDF_VERSION') ? PERSONALIZADOR_PDF_VERSION : 'dev',
-        ]);
+        ];
+        if ($contexto !== '') {
+            $manifest['contexto'] = $contexto;
+            $manifest['pdfs'] = [];
+            $manifest['preview_estado'] = self::ESTADO_OMISIBLE;
+        }
+        $this->guardar_manifest($sid, $item, $manifest);
         return $item;
     }
 
@@ -1530,6 +1546,17 @@ class PMU_Sesion
                 if ($nombre === 'uploads') {
                     continue;
                 }
+                if ($nombre === 'customs') {
+                    // Spec 037 (T036/C6): las ideas del INVITADO vencen como un item
+                    // de carrito (30 d) y se podan POR IDEA (su `idea.json`), no como
+                    // un arbol entero. `orders/{cliente}/customs/` no entra aca: este
+                    // barrido solo recorre `tmp/`, asi la retencion del cliente es
+                    // manual del admin (FR-032).
+                    if ($this->limpiar_customs_dir($item, $horizonteCarrito) > 0) {
+                        $vivos++;
+                    }
+                    continue;
+                }
                 $man = json_decode((string)@file_get_contents($item . DIRECTORY_SEPARATOR . 'manifest.json'), true);
                 $creado = is_array($man) && isset($man['creado']) ? strtotime((string)$man['creado']) : 0;
                 $fallback = @filemtime($item) ?: 0;
@@ -1585,6 +1612,35 @@ class PMU_Sesion
      *
      * @return array ids borrados
      */
+    /**
+     * Poda las ideas del INVITADO (`tmp/sesion-{sid}/customs/`), spec 037 (T036).
+     *
+     * Vencen como un item de carrito (`$horizonte` = epoch de corte) y se borran
+     * POR IDEA: `idea.json` + su `mockup.webp` + la carpeta. **Nunca** se llama
+     * sobre `orders/` (C6: los customs del cliente no tienen TTL automatico).
+     *
+     * @return int ideas que quedan vivas
+     */
+    private function limpiar_customs_dir($dir, $horizonte)
+    {
+        $quedan = 0;
+        foreach ((array)glob(rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . 'idea-*', GLOB_ONLYDIR) as $ideaDir) {
+            $json = $ideaDir . DIRECTORY_SEPARATOR . 'idea.json';
+            $datos = json_decode((string)@file_get_contents($json), true);
+            $creado = is_array($datos) && isset($datos['creado']) ? (int)$datos['creado'] : 0;
+            $fallback = @filemtime($json) ?: (@filemtime($ideaDir) ?: 0);
+            $vence = $creado ?: $fallback;
+            if ($vence > 0 && $vence < (int)$horizonte) {
+                @unlink($json);
+                @unlink($ideaDir . DIRECTORY_SEPARATOR . 'mockup.webp');
+                @rmdir($ideaDir);
+                continue;
+            }
+            $quedan++;
+        }
+        return $quedan;
+    }
+
     private function podar_uploads_sesion($dirSesion, array $referencias)
     {
         $dir = $dirSesion . DIRECTORY_SEPARATOR . 'uploads';
@@ -1697,6 +1753,108 @@ class PMU_Sesion
             $partes[] = (string)$p[$k];
         }
         return substr(sha1(implode('|', $partes)), 0, 12);
+    }
+
+    /**
+     * Pixeles de un tamano del cotizador (spec 037, R6): cm -> px a 300 ppp.
+     *
+     * Acepta el formato del catalogo del cotizador (`2,5 cm`, `8 cm`, `6,0 cm`) y
+     * el de una medida rectangular (`5x2,5 cm`, `10x200`). La coma es DECIMAL; la
+     * `x`, el separador de lados. Si el lado mayor pasa de `PH_MAX` se escala
+     * proporcionalmente (un banderin de 200 cm no puede pedir 23.622 px).
+     *
+     * Devuelve `[0, 0]` si no hay ningun numero: el llamador decide la causa.
+     * La MISMA regla vive en `calculadora/src/core/mockups.ts` (`sizeToPx`); si
+     * divergen, el `gid` y el encuadre dejan de coincidir (assert de paridad).
+     *
+     * @return array{0:int,1:int}
+     */
+    public static function px_cotizador($size)
+    {
+        $texto = strtolower(str_replace(',', '.', (string)$size));
+        $partes = preg_split('/[^0-9.]+/', trim($texto), -1, PREG_SPLIT_NO_EMPTY);
+        $nums = [];
+        foreach ((array)$partes as $parte) {
+            $n = (float)$parte;
+            if ($n > 0) {
+                $nums[] = $n;
+            }
+        }
+        if (!$nums) {
+            return [0, 0];
+        }
+        $cmW = $nums[0];
+        $cmH = isset($nums[1]) ? $nums[1] : $nums[0];
+        return self::px_acotar((int)round($cmW / 2.54 * 300), (int)round($cmH / 2.54 * 300));
+    }
+
+    /** Acota el lienzo a `PH_MAX` conservando el ASPECTO (lado mayor = PH_MAX). */
+    private static function px_acotar($w, $h)
+    {
+        $w = max(1, (int)$w);
+        $h = max(1, (int)$h);
+        $mayor = max($w, $h);
+        if ($mayor <= self::PH_MAX) {
+            return [$w, $h];
+        }
+        $k = self::PH_MAX / $mayor;
+        return [max(1, (int)round($w * $k)), max(1, (int)round($h * $k))];
+    }
+
+    /**
+     * Receta SINTETICA del cotizador (spec 037, R6): el arte que se imprime.
+     *
+     * El cotizador no tiene PDF, asi que no hay `analisis.json` del que derivar
+     * el lienzo: el lienzo es EXPLICITO (`w/h` = px del sticker) y el `gid` se
+     * deriva de categoria + tamano NORMALIZADO a px (asi `3,0 cm` y `3 cm` dan el
+     * mismo id y el nombre del compuesto cachea bien). `phsize = 0` (sin
+     * placeholder), `fondo` blanco y `transp = 'no'`: el arte nunca sale
+     * transparente. La salida pasa por `receta_validar()`: si no valida, la causa
+     * es `params:invalidos` (nunca una receta a medias).
+     *
+     * @param string $categoria clave del catalogo (`Circulares`, `Formas`, ...)
+     * @param string $size      tamano tal como lo muestra el cotizador
+     * @param array  $diseno    encuadre del selector: forma, modo, escala, ox, oy,
+     *                          rot, iw, ih (px del original)
+     * @return array receta v2 canonizada
+     * @throws Exception `params:invalidos`
+     */
+    public static function receta_cotizador($categoria, $size, array $diseno = [])
+    {
+        $cat = strtolower((string)preg_replace('/[^A-Za-z0-9_-]/', '', (string)$categoria));
+        list($w, $h) = self::px_cotizador($size);
+        if ($w < 1 || $h < 1) {
+            throw new Exception('params:invalidos');
+        }
+        $gid = strtoupper(substr(sha1($cat . '|' . $w . 'x' . $h), 0, 6));
+        $iw = (int)($diseno['iw'] ?? 0);
+        $ih = (int)($diseno['ih'] ?? 0);
+        if ($iw < 1 || $ih < 1) {
+            $iw = $w;
+            $ih = $h;
+        }
+        $params = [
+            'v' => 2,
+            'w' => $w,
+            'h' => $h,
+            'forma' => (string)($diseno['forma'] ?? 'rectangulo'),
+            'modo' => (string)($diseno['modo'] ?? 'cubrir'),
+            'escala' => isset($diseno['escala']) ? $diseno['escala'] : 1,
+            'ox' => isset($diseno['ox']) ? $diseno['ox'] : 0.5,
+            'oy' => isset($diseno['oy']) ? $diseno['oy'] : 0.5,
+            'fondo' => '#ffffff',
+            'transp' => 'no',
+            'rot' => (int)($diseno['rot'] ?? 0),
+            'iw' => $iw,
+            'ih' => $ih,
+            'phsize' => 0,
+            'gid' => $gid,
+        ];
+        try {
+            return self::receta_validar($params);
+        } catch (Exception $e) {
+            throw new Exception('params:invalidos');
+        }
     }
 
     /**

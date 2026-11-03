@@ -1124,6 +1124,43 @@ class PMU_Uploads
         return $dir;
     }
 
+    /**
+     * Ideas/favoritos del INVITADO (spec 037, D3/R3): `tmp/sesion-{sid}/customs/`.
+     *
+     * Misma forma que el cliente (`{idea_id}/idea.json` + `mockup.webp`) y **sin**
+     * `manifest.json`: los escaneos de items de sesion leen ese archivo, asi que
+     * `customs/` queda invisible para ellos sin agregar listas de exclusiones.
+     */
+    public function dir_sesion_customs($sid, $crear = false)
+    {
+        $dir = $this->dir_sesion($sid, $crear) . DIRECTORY_SEPARATOR . 'customs';
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        if ($crear && (!is_dir($dir) || !wp_is_writable($dir))) {
+            throw new Exception('motor:dir_sesion_customs:directorio:no_escribible');
+        }
+        return $dir;
+    }
+
+    /**
+     * Ideas/favoritos del CLIENTE (spec 037, C1): `orders/{clave}/customs/`.
+     *
+     * Vive junto a `uploads/` (originales compartidos) y a los pedidos numericos;
+     * **sin** `manifest.json`, por la misma razon que los customs del invitado.
+     */
+    public function dir_order_customs($clave, $crear = false)
+    {
+        $dir = $this->dir_order_cliente($clave, $crear) . DIRECTORY_SEPARATOR . 'customs';
+        if ($crear && !is_dir($dir)) {
+            wp_mkdir_p($dir);
+        }
+        if ($crear && (!is_dir($dir) || !wp_is_writable($dir))) {
+            throw new Exception('motor:dir_order_customs:directorio:no_escribible');
+        }
+        return $dir;
+    }
+
     /** Carpeta del pedido confirmado: uploads/pmu/orders/{clave}/{order_id}/ */
     public function dir_order($clave, $order_id, $crear = false)
     {
