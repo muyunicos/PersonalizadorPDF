@@ -78,9 +78,16 @@
     var visor = null;
     var onKey = null;
     var estilo = null;
+    /** API del TEMA cuando se delego (`MU.visor`): null = visor propio. */
+    var delegado = null;
 
-    /** Cierra el visor (idempotente). */
+    /** Cierra el visor (idempotente). Si se delego en el tema, lo cierra el tema. */
     function cerrar() {
+        if (delegado) {
+            var apiTema = delegado;
+            delegado = null;
+            if (typeof apiTema.cerrar === 'function') { apiTema.cerrar(); }
+        }
         var doc = estilo || global.document;
         if (onKey && doc) { doc.removeEventListener('keydown', onKey); }
         onKey = null;
@@ -89,7 +96,56 @@
     }
 
     function estaAbierto() {
+        if (delegado) {
+            if (delegado.estaAbierto && delegado.estaAbierto()) { return true; }
+            delegado = null;
+            return false;
+        }
         return visor !== null;
+    }
+
+    /**
+     * Delega en el MOTOR DEL TEMA (`MU.visor`, spec 019, ambito 2) cuando esta
+     * presente. D11: la dependencia es **blanda** — el plugin se instala y funciona
+     * solo, asi que sin `MU.visor` sigue el visor propio de mas abajo, sin cambios.
+     *
+     * Que gana el plugin: meta, banda de miniaturas, tono, foco atrapado y
+     * `actualizar()`; y el visor deja de estar duplicado (spec 019 D26: el motor vive
+     * en el tema y los demas repositorios lo consumen).
+     *
+     * @param {Object} opts mismas opciones que `abrir`
+     * @param {Document} doc documento donde viven los estilos de las acciones
+     * @returns {boolean} true si el TEMA abrio el visor
+     */
+    function delegarTema(opts, doc) {
+        var tema = global.MU;
+        if (!tema || typeof tema.visor !== 'function') { return false; }
+        var items = (opts.items || []).filter(function (it) { return it && it.url; });
+        if (!items.length) { return false; }
+        if (delegado) { cerrar(); }
+        // La clase de las acciones del plugin (`pmu-visor-peligro`) viaja tal cual: sus
+        // estilos se inyectan aca y el boton del tema la conserva (Borrar/Eliminar rojo).
+        inyectarEstilos(doc);
+        estilo = doc;
+        var ok = tema.visor({
+            items: items.map(function (it) {
+                return { url: it.url, thumb: it.thumb || it.url, etiqueta: it.etiqueta || '' };
+            }),
+            indice: opts.indice,
+            titulo: opts.titulo || 'Imagenes',
+            tono: 'oscuro',
+            contador: 'auto',
+            ancho: 'auto',
+            segmentos: (opts.segmentos || []).length ? opts.segmentos : undefined,
+            acciones: opts.acciones,
+            alCerrar: function () {
+                delegado = null;
+                if (typeof opts.alCerrar === 'function') { opts.alCerrar(); }
+            }
+        });
+        if (!ok) { return false; }
+        delegado = tema;
+        return true;
     }
 
     /**
@@ -103,6 +159,8 @@
         if (!items.length) { return false; }
         var doc = (opts.documento) || global.document;
         if (!doc || !doc.body) { return false; }
+        // El motor vive en el tema: si esta, el visor es SUYO (D11, dependencia blanda).
+        if (delegarTema(opts, doc)) { return true; }
         cerrar();
         inyectarEstilos(doc);
         estilo = doc;

@@ -55,6 +55,9 @@ check('la foto elegida entra por el MISMO camino que un arrastre (drop)',
 console.log('== Visor compartido y ranura (D28) ==');
 check('visor-pmu.js expone abrir/cerrar y precarga vecinos',
     /global\.PMUVisor = api;/.test(visor) && /function preCargar/.test(visor));
+check('el visor delega en el MOTOR DEL TEMA cuando esta (D11, blanda)',
+    /function delegarTema/.test(visor) && /global\.MU/.test(visor)
+    && /typeof tema\.visor/.test(visor) && /delegado = tema;/.test(visor));
 check('la ranura usa el visor compartido (no uno propio)',
     /_abrirVisorCompartido/.test(carg) && /global\.PMUVisor\.abrir\(\{/.test(carg));
 
@@ -169,7 +172,42 @@ check('el visor navega con las URLs ya resueltas (config.urlDe memoizado, items[
     && /items\.push\(\{ url: String\(urls\[i\]\), etiqueta: String\(id\) \}\);/.test(carg)
     && /urlDe: api\.urlDeSubida/.test(tienda));
 
-console.log('');
+/* --- Delegacion REAL en el motor del tema (sin navegador): un `MU` falso --- */
+{
+    const doc = {
+        getElementById: () => null,
+        createElement: () => ({ setAttribute() {}, appendChild() {}, style: {}, textContent: '' }),
+        head: { appendChild() {} },
+        body: {}
+    };
+    let pedido = null;
+    let cerrado = 0;
+    let sigueAbierto = true;
+    global.MU = {
+        visor: (o) => { pedido = o; return true; },
+        cerrar: () => { cerrado += 1; sigueAbierto = false; },
+        estaAbierto: () => sigueAbierto
+    };
+    const v = require(path.join(RAIZ, 'assets/visor-pmu.js'));
+    const abierto = v.abrir({
+        items: [{ url: 'a.png', etiqueta: '1' }, { url: 'b.png' }],
+        indice: 1, titulo: 'Tus imagenes', documento: doc
+    });
+    check('con MU (tema) presente el visor DELEGA en MU.visor', abierto === true && !!pedido);
+    check('la delegacion mapea items/indice/titulo/tono del plugin',
+        !!pedido && pedido.items.length === 2 && pedido.items[1].thumb === 'b.png'
+        && pedido.indice === 1 && pedido.titulo === 'Tus imagenes' && pedido.tono === 'oscuro');
+    check('estaAbierto() sigue al visor del tema', v.estaAbierto() === true);
+    v.cerrar();
+    check('cerrar() cierra el visor del tema y no queda delegado',
+        cerrado === 1 && v.estaAbierto() === false);
+    delete global.MU;
+    const propio = v.abrir({ items: [{ url: 'a.png' }] });
+    check('sin MU (tema ausente) no delega: cae al visor propio (D11, blanda)',
+        propio === false);
+}
+
+    console.log('');
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }
 console.log('BIBLIOTECA CONTRATO FALLA (' + fallos + ' de ' + (ok + fallos) + ')');
 process.exit(1);
