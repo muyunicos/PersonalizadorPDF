@@ -122,7 +122,13 @@
         var fotos = ultimas.length ? ultimas : ((c && c.fotos) || []);
         if (!fotos.length || !global.PMUVisor) { return false; }
         return global.PMUVisor.abrir({
-            items: fotos.map(function (f) { return { url: f.url, etiqueta: f.madre }; }),
+            items: fotos.map(function (f) {
+                // La URL se resuelve igual que en la tira (D23): el visor del tema y el
+                // propio navegan sin pedir nada.
+                var u = (global.PMU_FICHA && global.PMU_FICHA.urls && f.base)
+                    ? global.PMU_FICHA.urls[String(f.base)] : '';
+                return { url: String(u || f.url || f.thumb || ''), etiqueta: f.madre };
+            }),
             indice: indice,
             titulo: 'Mis imagenes',
             acciones: [{

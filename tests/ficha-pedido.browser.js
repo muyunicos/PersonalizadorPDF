@@ -126,6 +126,14 @@ async function cerrarOverlays(page) {
             await esperar(600);
             continue;
         }
+        // Spec 019 (D26): con el tema, el visor abierto es `.mu-gal-visor` (motor del
+        // tema). Se cierra con Escape, igual que el propio.
+        const gv = page.locator('.mu-gal-visor.is-visible').first();
+        if (await gv.count()) {
+            await page.keyboard.press('Escape').catch(() => { });
+            await esperar(600);
+            continue;
+        }
         const v = page.locator('.cpmu-visor').first();
         if (await v.count() && await v.isVisible()) {
             await v.locator('.cpmu-visor-cerrar').click({ force: true }).catch(() => { });
@@ -146,6 +154,21 @@ async function cerrarOverlays(page) {
 const cerrarModal = cerrarOverlays;
 async function tiraBib(page) {
     return page.evaluate(() => {
+        // Motor del TEMA (`MU.coleccion`, spec 019 D26): la tira son celdas `mu-gal-celda`.
+        const contTema = document.querySelector('.pmu-bib-contenedor')
+            || document.querySelector('.spmu-modal');
+        const temaTira = contTema ? contTema.querySelector('.mu-gal-linea') : null;
+        if (temaTira) {
+            const celdas = [...temaTira.querySelectorAll('.mu-gal-celda')];
+            const minis = celdas.filter((c) => !c.classList.contains('mu-gal-celda--chip'));
+            const etiqueta = (c) => (c.querySelector('.mu-gal-item-etiqueta') || {}).textContent || '';
+            return {
+                motor: 'tema', montada: true, minis: minis.length,
+                mas: temaTira.querySelectorAll('.mu-gal-celda--chip').length,
+                versionadas: minis.filter((c) => /versiones/.test(etiqueta(c))).length,
+                titulos: minis.map((c) => etiqueta(c))
+            };
+        }
         const t = document.querySelector('.pmu-bib-tira');
         if (!t) return { montada: false, minis: 0, versionadas: 0, mas: 0 };
         const minis = [...t.querySelectorAll('.pmu-bib-mini')].filter((b) => !b.classList.contains('pmu-bib-mas'));
@@ -155,6 +178,15 @@ async function tiraBib(page) {
             titulos: minis.map((b) => b.title || '')
         };
     });
+}
+/** Toca la primera miniatura de la tira de la biblioteca: motor del tema o tira propia. */
+async function clickMini(page) {
+    for (const sel of ['.pmu-bib-contenedor .mu-gal-celda:not(.mu-gal-celda--chip)',
+        '.spmu-modal .mu-gal-celda:not(.mu-gal-celda--chip)']) {
+        const c = page.locator(sel).first();
+        if (await c.count()) { await c.click(); return; }
+    }
+    await page.locator('.pmu-bib-tira .pmu-bib-mini').first().click();
 }
 /** Filas `origen: ref` de los manifests del item (spec 030 D2/D11). */
 function filasRef() {
@@ -336,8 +368,14 @@ async function precondiciones(page) {
     try {
         const page = await ctx.newPage();
         const errores = [];
-        page.on('pageerror', (e) => errores.push('PAGEERROR: '
-            + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' <- ') : (e && e.message))));
+        page.on('pageerror', (e) => {
+            const traza = (e && e.stack) ? e.stack.split('\n').slice(0, 3).join(' <- ') : (e && e.message);
+            // Ruido del ENTORNO: el lab entra con sesion de admin y WordPress encola
+            // scripts de `wp-admin/js/` en el front (p. ej. `user-profile.min.js`, que
+            // rompe por una dependencia que el front no carga). No es de este plugin.
+            if (/wp-admin\/js\//.test(String(traza))) { return; }
+            errores.push('PAGEERROR: ' + traza);
+        });
         page.on('console', (m) => { if (m.type() === 'error' && !/favicon/i.test(m.text())) errores.push('ERROR: ' + m.text().slice(0, 160)); });
         await page.addInitScript(() => {
             window.__rechazos = [];
@@ -450,13 +488,23 @@ async function precondiciones(page) {
         check('biblioteca (030/E2): la tira sigue mostrando la foto desde la copia local', bib2.montada && bib2.minis === 1, JSON.stringify(bib2));
 
         // E9: visor compartido (al tocar una miniatura) con Elegir/Borrar y 0 peticiones al recorrer.
-        await page.locator('.pmu-bib-tira .pmu-bib-mini').first().click();
+        await clickMini(page);
         let visorBib = null;
         for (let i = 0; i < 20; i++) {
             visorBib = await page.evaluate(() => {
-                const v = document.querySelector('.pmu-visor');
+                const v = document.querySelector('.pmu-visor') || document.querySelector('.mu-gal-visor');
                 if (!v) return null;
+                if (v.classList.contains('mu-gal-visor')) {
+                    return {
+                        motor: 'tema',
+                        titulo: (v.querySelector('.mu-gal-titulo') || {}).textContent || '',
+                        acciones: [...v.querySelectorAll('.mu-gal-acciones button')].map((b) => b.textContent.trim()),
+                        segs: [...v.querySelectorAll('.mu-gal-seg')].map((b) => b.textContent.trim()),
+                        img: !!v.querySelector('.mu-gal-img')
+                    };
+                }
                 return {
+                    motor: 'plugin',
                     titulo: (v.querySelector('.pmu-visor-titulo') || {}).textContent || '',
                     acciones: [...v.querySelectorAll('.pmu-visor-acciones button')].map((b) => b.textContent.trim()),
                     segs: [...v.querySelectorAll('.pmu-visor-seg')].map((b) => b.textContent.trim()),
@@ -469,7 +517,7 @@ async function precondiciones(page) {
         check('biblioteca (030/E9): el visor de la biblioteca ofrece Elegir y Borrar', !!visorBib && visorBib.acciones.indexOf('Elegir') >= 0 && visorBib.acciones.indexOf('Borrar') >= 0, JSON.stringify(visorBib && visorBib.acciones));
         limpiar(log);
         for (let i = 0; i < 4; i++) {
-            const nav = page.locator('.pmu-visor-nav:not([hidden])').first();
+            const nav = page.locator('.pmu-visor-nav:not([hidden]), .mu-gal-next:not([hidden]):not([disabled])').first();
             if (await nav.count()) { await nav.click().catch(() => { }); await esperar(500); }
         }
         check('biblioteca (030/E9): recorrer el visor no dispara peticiones', log.ops.length === 0, JSON.stringify(log.ops));
@@ -489,8 +537,8 @@ async function precondiciones(page) {
         const refsAntes = filasRef().length;
         await abrirModal(page);
         await esperarTira(page, 1);
-        await page.locator('.pmu-bib-tira .pmu-bib-mini').first().click();
-        await page.waitForSelector('.pmu-visor', { state: 'visible', timeout: 10000 }).catch(() => { });
+        await clickMini(page);
+        await page.waitForSelector('.pmu-visor, .mu-gal-visor', { state: 'visible', timeout: 10000 }).catch(() => { });
         limpiar(log);
         await page.getByRole('button', { name: 'Elegir', exact: true }).first().click();
         await esperar(2500);

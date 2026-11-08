@@ -62,6 +62,8 @@ check('la tira de la biblioteca delega en el MOTOR del tema (D26, blanda)',
     check('el visor delega en el MOTOR DEL TEMA cuando esta (D11, blanda)',
     /function delegarTema/.test(visor) && /global\.MU/.test(visor)
     && /typeof tema\.visor/.test(visor) && /delegado = tema;/.test(visor));
+check('el visor delegado se eleva sobre el modal del plugin (z-index)',
+    /pmu-visor--sobre/.test(visor) && /z-index:200000 !important/.test(visor));
 check('la ranura usa el visor compartido (no uno propio)',
     /_abrirVisorCompartido/.test(carg) && /global\.PMUVisor\.abrir\(\{/.test(carg));
 
@@ -182,6 +184,7 @@ check('el visor navega con las URLs ya resueltas (config.urlDe memoizado, items[
         getElementById: () => null,
         createElement: () => ({ setAttribute() {}, appendChild() {}, style: {}, textContent: '' }),
         head: { appendChild() {} },
+        querySelector: () => null,
         body: {}
     };
     let pedido = null;

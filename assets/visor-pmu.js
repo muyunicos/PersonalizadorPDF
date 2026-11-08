@@ -71,7 +71,11 @@
             '.pmu-visor-nav[hidden]{display:none !important}' +
             '.pmu-visor-acciones{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}' +
             '.pmu-visor-acciones .button{min-height:42px;padding:6px 18px;font-size:14px}' +
-            '.pmu-visor-peligro{background:#d63638 !important;border-color:#d63638 !important;color:#fff !important}';
+            '.pmu-visor-peligro{background:#d63638 !important;border-color:#d63638 !important;color:#fff !important}' +
+            // Cuando el visor es el del TEMA (`MU.visor`) y el plugin lo abre sobre su
+            // propio modal (`.spmu-modal`, z-index 180000), hay que elevarlo: el overlay
+            // del tema vive en 99999 y el modal del plugin lo tapaba.
+            '.pmu-visor--sobre{z-index:200000 !important}';
         (doc.head || doc.documentElement).appendChild(s);
     }
 
@@ -144,6 +148,14 @@
             }
         });
         if (!ok) { return false; }
+        // El modal del plugin (`.spmu-modal`) vive en z-index 180000 y el overlay del
+        // tema en 99999: sin esta clase el visor del tema quedaria DEBAJO del modal
+        // del recorte (medido en el laboratorio: el click de Elegir lo interceptaba
+        // `.spmu-acciones`).
+        var overlay = doc.querySelector('.mu-gal-visor');
+        if (overlay && overlay.className.indexOf('pmu-visor--sobre') === -1) {
+            overlay.className += ' pmu-visor--sobre';
+        }
         delegado = tema;
         return true;
     }
