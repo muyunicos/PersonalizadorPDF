@@ -456,18 +456,17 @@ check('miniaturas reales: la mini pinta un <img> con la URL resuelta',
   && /object-fit:cover/.test(cargador16));
 check('el cargador NO conoce el endpoint (urlDe lo resuelve el llamador)',
   /urlDe: typeof config\.urlDe/.test(cargador16) && /config\.urlDe\(id\)/.test(cargador16));
-check('Spec 021 D9: tocar una miniatura abre la mini galeria fullscreen (cpmu-visor)',
-  /_miniTocar/.test(cargador16) && /this\._abrirVisor\(indice, posicion\)/.test(cargador16)
-  && /cpmu-visor/.test(cargador16) && /cpmu-visor-prev/.test(cargador16)
-  && /cpmu-visor-next/.test(cargador16));
-check('Spec 021 D9: el visor permite Reemplazar (avisando que imagen reemplaza) y Eliminar',
-  /cpmu-visor-reemplazar/.test(cargador16) && /cpmu-visor-eliminar/.test(cargador16)
+check('Spec 021 D9 + 020 T014: la miniatura abre el visor COMPARTIDO (sin visor propio)',
+  /_miniTocar/.test(cargador16) && /_abrirVisorCompartido/.test(cargador16)
+  && !/cpmu-visor/.test(cargador16.replace(/\/\*[\s\S]*?\*\//g, '')));
+check('el visor compartido ofrece Reemplazar (avisando que imagen) y Eliminar',
+  /etiqueta: 'Reemplazar'/.test(cargador16) && /etiqueta: 'Eliminar'/.test(cargador16)
   && /Reemplazando imagen #/.test(cargador16)
   && /ids\[posicion\] = String\(id\)/.test(cargador16));
-check('Spec 021 D9: cancelar el reemplazo vuelve a la galeria con la foto actual',
+check('cancelar el reemplazo vuelve a la galeria con la foto actual',
   /err\.code === 'CROP_ABORTED'/.test(cargador16)
   && /reemp && reemp\.desdeVisor/.test(cargador16)
-  && /self\._abrirVisor\(reemp\.indice, reemp\.posicion\)/.test(cargador16));
+  && /self\._abrirVisorCompartido\(reemp\.indice, reemp\.posicion\)/.test(cargador16));
 check('FR-017: restauracion de ids al montar (acotada por max)',
   /idsIniciales/.test(cargador16) && /slice\(0, this\.config\.ranuras\[i\]\.max\)/.test(cargador16));
 check('tienda.js pasa idsIniciales y urlDe (endpoint de la 012)',

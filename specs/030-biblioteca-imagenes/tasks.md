@@ -269,9 +269,11 @@ node --check assets/biblioteca-pmu.js        # T011 + T012 (modulo nuevo)
   `PMUVisor` y la tira propia quedan como **fallback**. El visor delegado se eleva sobre
   `.spmu-modal` (`pmu-visor--sobre`, z-index 200000). Puertas: `biblioteca-contrato` (48) y
   `ficha-pedido.browser.js` **52/52** en el laboratorio.
-- **Pendiente del retiro (spec 020, T014)**: `cpmu-visor` (fallback del cargador) ya es
-  inalcanzable porque `visor-pmu.js` se encola siempre; se retira junto con el puente
-  `pmu-visor-peligro` cuando nadie lo pase.
+- **Hecho (spec 020, T014)**: `cpmu-visor` **retirado** del cargador (metodos `_abrirVisor` /
+  `_cablearVisor` / `_cerrarVisor`, sus estilos inline y las dos llamadas de reemplazo, que ahora
+  van a `_abrirVisorCompartido`). Si falta `PMUVisor`/`urlDe` se avisa **con causa** y la ficha
+  sigue funcionando (antes caia al visor propio). Puertas: `biblioteca-contrato` (48),
+  `selector-contrato` y `ficha-pedido` **52/52** en el laboratorio.
 - **Pendiente (spec 020, T011)**: el `mu_galeria_encolar()` agregado a
   `plugin-calculadora-cart-integration.php` (repo `calculadora`) se retira cuando el shortcode
   del cotizador quede **versionado en el tema** (`inc/cotizador.php`).

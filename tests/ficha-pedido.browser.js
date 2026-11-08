@@ -117,8 +117,9 @@ async function abrirModal(page) {
     await esperar(1500);
 }
 async function cerrarOverlays(page) {
-    // Dos overlays pueden quedar abiertos y comerse los clicks: el visor del
-    // cargador (`cpmu-visor`) y el modal de recorte (`spmu-modal`).
+    // Dos overlays pueden quedar abiertos y comerse los clicks: el visor compartido
+    // (`pmu-visor` o el del tema) y el modal de recorte (`spmu-modal`). El visor propio
+    // del cargador (`cpmu-visor`) se retiro en la spec 020 (T014).
     for (let i = 0; i < 6; i++) {
         const pv = page.locator('.pmu-visor').first();
         if (await pv.count() && await pv.isVisible()) {
@@ -131,12 +132,6 @@ async function cerrarOverlays(page) {
         const gv = page.locator('.mu-gal-visor.is-visible').first();
         if (await gv.count()) {
             await page.keyboard.press('Escape').catch(() => { });
-            await esperar(600);
-            continue;
-        }
-        const v = page.locator('.cpmu-visor').first();
-        if (await v.count() && await v.isVisible()) {
-            await v.locator('.cpmu-visor-cerrar').click({ force: true }).catch(() => { });
             await esperar(600);
             continue;
         }

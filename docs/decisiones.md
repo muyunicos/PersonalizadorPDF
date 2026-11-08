@@ -133,8 +133,9 @@ y se conserva, porque es la evidencia de por que no se repite.
   si la ranura declara `{ r: 1 }`), control **Reducir / Ampliar** con reset al centro (`0`), color
   de fondo autodetectado por los bordes de la imagen (o transparente si hay transparencia), botón
   **Subir** con aviso `"Subiendo imagen..."` y pregunta `"¿Querés subir otra imagen?"` si quedan
-  espacios, y **mini galería fullscreen (`cpmu-visor`)** al tocar las miniaturas subidas (flechas,
-  Eliminar y Reemplazar con retorno al visor si cancela).
+  espacios, y **visor fullscreen COMPARTIDO** al tocar las miniaturas subidas (flechas, Eliminar y
+  Reemplazar con retorno al visor si cancela). El visor propio `cpmu-visor` se **retiro** en la
+  spec 020 (T014): la ranura usa `PMUVisor`, que delega en `MU.visor` del tema cuando esta.
   **Limpieza de la tira**: se retiraron el botón **"Listo"** (decorativo: sin acción y sin bloquear
   nada), el texto `"Listo: N imagen(es)."`, el encabezado técnico de la ranura y la guía de la
   envoltura de la tira; el botón de cargar dice **"Cargar imagen"** y el aviso de faltantes aparece

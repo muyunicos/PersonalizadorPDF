@@ -180,18 +180,7 @@
             + '.cpmu-zona-sobre{border-color:#2271b1;background:#f0f6fc}'
             + '.cpmu-zona-llena{opacity:.75}'
             + '.cpmu-falta{margin:6px 0 0;font-size:12.5px;color:#8a6116}'
-            + '.cpmu-falta[hidden]{display:none}'
-            + '.cpmu-visor{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:180000;display:flex;flex-direction:column;justify-content:space-between;color:#fff;padding:calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));box-sizing:border-box}'
-            + '.cpmu-visor-top{display:flex;align-items:center;justify-content:space-between;gap:12px}'
-            + '.cpmu-visor-contador{font-size:14px;font-weight:600}'
-            + '.cpmu-visor-cerrar{border:0;background:rgba(255,255,255,.15);color:#fff;border-radius:50%;width:40px;height:40px;font-size:18px;cursor:pointer}'
-            + '.cpmu-visor-cuerpo{flex:1;display:flex;align-items:center;justify-content:center;position:relative;min-height:0;gap:12px;margin:10px 0}'
-            + '.cpmu-visor-img{max-width:min(86vw,900px);max-height:70vh;object-fit:contain;border-radius:6px;box-shadow:0 8px 32px rgba(0,0,0,.6);background:repeating-conic-gradient(#333 0 25%,#444 0 50%) 0/20px 20px}'
-            + '.cpmu-visor-nav{border:0;background:rgba(255,255,255,.18);color:#fff;border-radius:50%;width:44px;height:44px;font-size:24px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}'
-            + '.cpmu-visor-nav[hidden]{display:none}'
-            + '.cpmu-visor-acciones{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}'
-            + '.cpmu-visor-acciones .button{min-height:42px;padding:6px 18px;font-size:14px}'
-            + '.cpmu-visor-eliminar{background:#d63638 !important;border-color:#d63638 !important;color:#fff !important}';
+            + '.cpmu-falta[hidden]{display:none}';
         (doc.head || doc.documentElement).appendChild(st);
     }
 
@@ -221,8 +210,6 @@
         this.selectores = [];
         this.raiz = null;
         this._reemplazo = null;
-        this.visor = null;
-        this._onKeyVisor = null;
     }
 
     CargadorPMU.prototype.montar = function () {
@@ -379,7 +366,7 @@
                     var pos = reemplazo ? reemplazo.posicion : null;
                     return self._subir(indice, blob, pos).then(function (id) {
                         if (reemplazo && reemplazo.desdeVisor) {
-                            self._abrirVisor(indice, pos);
+                            self._abrirVisorCompartido(indice, pos);
                         }
                         return id;
                     });
@@ -418,7 +405,7 @@
                 var reemp = self._reemplazo;
                 self._reemplazo = null;
                 if (reemp && reemp.desdeVisor) {
-                    self._abrirVisor(reemp.indice, reemp.posicion);
+                    self._abrirVisorCompartido(reemp.indice, reemp.posicion);
                 }
                 return;
             }
@@ -556,8 +543,13 @@
         var ids = (this.estado[indice] && this.estado[indice].ids) || [];
         if (!ids.length) { return Promise.resolve(false); }
         if (!global.PMUVisor || !this.config.urlDe) {
-            // Sin el visor compartido no se rompe la ficha: cae en el historico.
-            return Promise.resolve(this._abrirVisor(indice, posicion));
+            // El visor PROPIO del cargador se retiro (spec 020, T014): el compartido
+            // (`visor-pmu.js`) se encola siempre. Sin el se avisa CON LA CAUSA y la ficha
+            // sigue funcionando (nunca un fallo mudo).
+            if (global.console && global.console.warn) {
+                global.console.warn('[PMU] visor no disponible: falta PMUVisor o config.urlDe.');
+            }
+            return Promise.resolve(false);
         }
         var pos = Math.max(0, Math.min(ids.length - 1, parseInt(posicion, 10) || 0));
         return Promise.all(ids.map(function (id) { return self.config.urlDe(id); }))
@@ -581,128 +573,14 @@
             });
     };
 
-    /**
-     * Spec 021 (D9): mini galeria fullscreen (`cpmu-visor`) para revisar la
-     * coleccion de imagenes subidas con flechas, Eliminar y Reemplazar.
-     */
-    CargadorPMU.prototype._abrirVisor = function (indice, posicion) {
-        var self = this;
-        this._cerrarVisor();
-        var ids = (this.estado[indice] && this.estado[indice].ids) || [];
-        if (!ids.length) { return; }
-        var pos = Math.max(0, Math.min(ids.length - 1, parseInt(posicion, 10) || 0));
-        var doc = (this.raiz && this.raiz.ownerDocument) || global.document;
-        if (!doc || !doc.body) { return; }
+    /* (v1 retirada en la spec 020, T014: el visor propio `cpmu-visor` del cargador ya NO
+       existe. La ranura usa el visor COMPARTIDO `PMUVisor` — que delega en `MU.visor` del
+       tema cuando esta — y si falta se avisa con causa en `_abrirVisorCompartido`.) */
+        /* (fin de `_abrirVisor`: retirado) */
 
-        var modal = doc.createElement('div');
-        modal.className = 'cpmu-visor';
-        modal.setAttribute('role', 'dialog');
-        modal.setAttribute('aria-modal', 'true');
-        modal.setAttribute('aria-label', 'Galeria de imagenes subidas');
-        modal.innerHTML =
-            '<div class="cpmu-visor-top">' +
-            '<span class="cpmu-visor-contador"></span>' +
-            '<button type="button" class="cpmu-visor-cerrar" aria-label="Cerrar">&#10005;</button>' +
-            '</div>' +
-            '<div class="cpmu-visor-cuerpo">' +
-            '<button type="button" class="cpmu-visor-nav cpmu-visor-prev" aria-label="Anterior">&#8249;</button>' +
-            '<img class="cpmu-visor-img" alt="">' +
-            '<button type="button" class="cpmu-visor-nav cpmu-visor-next" aria-label="Siguiente">&#8250;</button>' +
-            '</div>' +
-            '<div class="cpmu-visor-acciones">' +
-            '<button type="button" class="button button-primary cpmu-visor-reemplazar">Reemplazar</button>' +
-            '<button type="button" class="button cpmu-visor-eliminar">Eliminar</button>' +
-            '</div>';
-        doc.body.appendChild(modal);
-        this.visor = modal;
-        this._cablearVisor(modal, doc, indice, pos);
-    };
+    /* (`_cablearVisor`: retirado con el visor propio, spec 020 T014) */
 
-    CargadorPMU.prototype._cablearVisor = function (modal, doc, indice, pos) {
-        var self = this;
-        var elCont = modal.querySelector('.cpmu-visor-contador');
-        var elImg = modal.querySelector('.cpmu-visor-img');
-        var btnPrev = modal.querySelector('.cpmu-visor-prev');
-        var btnNext = modal.querySelector('.cpmu-visor-next');
-        var btnReemp = modal.querySelector('.cpmu-visor-reemplazar');
-        var btnElim = modal.querySelector('.cpmu-visor-eliminar');
-        var btnCerrar = modal.querySelector('.cpmu-visor-cerrar');
-
-        function renderizar() {
-            var lista = (self.estado[indice] && self.estado[indice].ids) || [];
-            if (!lista.length) { self._cerrarVisor(); return; }
-            if (pos >= lista.length) { pos = lista.length - 1; }
-            if (pos < 0) { pos = 0; }
-            elCont.textContent = 'Imagen ' + (pos + 1) + ' de ' + lista.length;
-            btnPrev.hidden = lista.length <= 1;
-            btnNext.hidden = lista.length <= 1;
-            var idActual = lista[pos];
-            elImg.src = '';
-            if (self.config.urlDe) {
-                Promise.resolve(self.config.urlDe(idActual)).then(function (url) {
-                    if (url && self.visor === modal) { elImg.src = url; }
-                }).catch(function () {});
-            }
-        }
-
-        function ir(delta) {
-            var lista = (self.estado[indice] && self.estado[indice].ids) || [];
-            if (lista.length <= 1) { return; }
-            pos = (pos + delta + lista.length) % lista.length;
-            renderizar();
-        }
-
-        btnPrev.addEventListener('click', function () { ir(-1); });
-        btnNext.addEventListener('click', function () { ir(1); });
-        btnCerrar.addEventListener('click', function () { self._cerrarVisor(); });
-        modal.addEventListener('click', function (e) {
-            if (e.target === modal || e.target.classList.contains('cpmu-visor-cuerpo')) {
-                self._cerrarVisor();
-            }
-        });
-        btnReemp.addEventListener('click', function () {
-            self._cerrarVisor();
-            self._cambiar(indice, pos, true);
-        });
-        btnElim.addEventListener('click', function () {
-            self._quitar(indice, pos);
-            var lista = (self.estado[indice] && self.estado[indice].ids) || [];
-            if (!lista.length) { self._cerrarVisor(); return; }
-            if (pos >= lista.length) { pos = lista.length - 1; }
-            renderizar();
-        });
-
-        var touchX = null;
-        modal.addEventListener('touchstart', function (e) {
-            if (e.touches && e.touches.length === 1) { touchX = e.touches[0].clientX; }
-        }, { passive: true });
-        modal.addEventListener('touchend', function (e) {
-            if (touchX === null || !e.changedTouches || !e.changedTouches.length) { return; }
-            var dx = e.changedTouches[0].clientX - touchX;
-            touchX = null;
-            if (Math.abs(dx) > 40) { ir(dx < 0 ? 1 : -1); }
-        }, { passive: true });
-
-        this._onKeyVisor = function (e) {
-            if (e.key === 'Escape') { self._cerrarVisor(); }
-            else if (e.key === 'ArrowLeft') { ir(-1); }
-            else if (e.key === 'ArrowRight') { ir(1); }
-        };
-        doc.addEventListener('keydown', this._onKeyVisor);
-        renderizar();
-    };
-
-    CargadorPMU.prototype._cerrarVisor = function () {
-        var doc = (this.raiz && this.raiz.ownerDocument) || global.document;
-        if (this._onKeyVisor && doc) {
-            doc.removeEventListener('keydown', this._onKeyVisor);
-            this._onKeyVisor = null;
-        }
-        if (this.visor && this.visor.parentNode) {
-            this.visor.parentNode.removeChild(this.visor);
-        }
-        this.visor = null;
-    };
+    /* (`_cerrarVisor`: retirado con el visor propio) */
 
     /** FR-016 + Spec 021 (D9): "Reemplazar" abre el cargador y reemplaza la foto. */
     CargadorPMU.prototype._cambiar = function (indice, posicion, desdeVisor) {
@@ -744,7 +622,6 @@
     };
 
     CargadorPMU.prototype.destruir = function () {
-        this._cerrarVisor();
         this.config.ranuras.forEach(function (r, i) {
             var s = this.selectores[i];
             if (s && s.sel && s.sel.destroy) { s.sel.destroy(); }
