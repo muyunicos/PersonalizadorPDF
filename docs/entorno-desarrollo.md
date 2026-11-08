@@ -254,7 +254,7 @@ node C:\Users\Jonatan\Documents\GitHub\personalizador-pdf\tests\galerias-sprite.
                                             # (`C:\wp-lab\recorrido-009.cjs` es un wrapper)
                                             # modo hosting: PMU_SOLO_UI=1 + PMU_BASE=<sitio>
 node C:\Users\Jonatan\Documents\GitHub\personalizador-pdf\tests\ficha-pedido.browser.js
-                                            # PUERTA del plugin: ficha -> pedido -> PDF (47/47)
+                                            # PUERTA del plugin: ficha -> pedido -> PDF (52/52)
                                             # (`C:\wp-lab\recorrido-ficha-pedido.cjs` es un wrapper)
 node C:\wp-lab\probe-ficha.cjs               # volcado del DOM de la ficha (diagnostico)
 node C:\wp-lab\probe-modal.cjs               # volcado del modal del cargador
@@ -269,7 +269,7 @@ node C:\wp-lab\probe-modal.cjs               # volcado del modal del cargador
   certificacion; con hoja ⇒ 0 descargas; alta ⇒ 1 celda + 1 escritura; geometria (2 columnas, alto
   `round(ancho·h/w) ±2`); no existen los botones retirados; reentrancia ⇒ 1 escritura. **Precondicion
   nueva**: el catalogo `img/` del lab debe existir (se copia del espejo del repo: el lab no lo trae).
-- **Puerta del plugin `tests/ficha-pedido.browser.js`: 47/47 OK** (2026-10-31) — vive en el repo
+- **Puerta del plugin `tests/ficha-pedido.browser.js`: 52/52 OK** (2026-11-07, con la biblioteca delegando en el motor del tema `MU.coleccion`/`MU.visor`) — vive en el repo
   (el `.cjs` del lab quedo como *wrapper* de una linea, para no duplicar lógica). Cubre
   `assets/tienda.js` con WP+Woo reales y **verifica precondiciones con causa accionable** antes de
   recorrer. Detalle del circuito cubierto:

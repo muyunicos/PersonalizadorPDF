@@ -759,7 +759,7 @@ y tema montados por *junction*) con Chrome + Playwright **sin instalar nada en e
 credenciales, scripteado, higiene de datos y las trampas conocidas están en
 `docs/entorno-desarrollo.md` §9. Vigentes: **`tests/galerias-sprite.browser.js`** (spec 009: galerias y
 hojas, **32/32**) y **`tests/ficha-pedido.browser.js`** (ficha → pedido → `orders/{cliente}/{order_id}/{item}/…_procesado.pdf`,
-**47/47**). Ambas cubren caminos que ninguna otra puerta cubria (`assets/tienda.js`, galerias/hojas) y
+**52/52**). Ambas cubren caminos que ninguna otra puerta cubria (`assets/tienda.js`, galerias/hojas) y
 la de ficha-pedido ademas la **biblioteca del comprador** (spec 030: tira, `Elegir` 0 bytes, version,
 dedupe y visor compartido) y el escenario de vistas obligatorias de la 035 (orden, marca al mostrarse, re-edicion desde el carrito). **Fallan con la causa accionable** si al lab le falta una precondicion (lab apagado, producto sin
 `_pmu_pdf_slugs`, catalogo `img/` ausente, **presets v1 en lugar de v2**, COD sin `enable_for_virtual`).
@@ -770,7 +770,7 @@ sin leer el disco del lab.
 $env:NODE_PATH = "$env:TEMP\pmu-pw\node_modules"
 $env:TEXTMUY_CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 node tests/galerias-sprite.browser.js       # 32/32 (mutan/restauran datos del lab)
-node tests/ficha-pedido.browser.js          # 47/47 (crea un pedido de prueba)
+node tests/ficha-pedido.browser.js          # 52/52 (crea un pedido de prueba)
 node tests/aplanado.browser.js              # mockup APLANADO real (spec 036): productor + hueco (D12) + T016
 pwsh C:\wp-lab\arrancar.ps1                 # (si el lab esta apagado)
 ```
