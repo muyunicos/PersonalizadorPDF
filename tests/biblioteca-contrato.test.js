@@ -55,7 +55,11 @@ check('la foto elegida entra por el MISMO camino que un arrastre (drop)',
 console.log('== Visor compartido y ranura (D28) ==');
 check('visor-pmu.js expone abrir/cerrar y precarga vecinos',
     /global\.PMUVisor = api;/.test(visor) && /function preCargar/.test(visor));
-check('el visor delega en el MOTOR DEL TEMA cuando esta (D11, blanda)',
+check('la tira de la biblioteca delega en el MOTOR del tema (D26, blanda)',
+    /function delegarTira/.test(bib) && /delegarTira\(el, fotos\)/.test(bib)
+    && /tema\.coleccion\(el, \{/.test(bib) && /navegable: false/.test(bib)
+    && /onChip: function \(cuantos, desde\) \{ visor\(desde \|\| 0\); \}/.test(bib));
+    check('el visor delega en el MOTOR DEL TEMA cuando esta (D11, blanda)',
     /function delegarTema/.test(visor) && /global\.MU/.test(visor)
     && /typeof tema\.visor/.test(visor) && /delegado = tema;/.test(visor));
 check('la ranura usa el visor compartido (no uno propio)',

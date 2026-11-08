@@ -134,7 +134,7 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   ├── selector-pmu.js      ← Cliente de subida/recorte de imágenes de campos (spec 004,
 │   │                          contrato `specs/004.../contracts/selector-pmu.md`; editor visual
 │   │                          spec 016; spec 021: motor propio Canvas 2D sin dependencias)
-│   ├── visor-pmu.js         ← Visor fullscreen COMPARTIDO (PMUVisor: ranura + biblioteca; spec 030 D28)
+│   ├── visor-pmu.js         ← Visor fullscreen COMPARTIDO (PMUVisor: ranura + biblioteca; spec 030 D28); con el tema presente DELEGA en `MU.visor` y queda de fallback (D11, blanda)
 │   ├── biblioteca-pmu.js    ← Biblioteca del comprador (spec 030): copia local v2 (metadatos), tira
 │   │                          adaptativa, visor (Elegir/Borrar) y usar (0 bytes); se calienta en la ficha
 │   └── miniaturas.js        ← ThumbEngine: miniaturas `.webp` y sprites por ámbito; único

@@ -194,6 +194,43 @@
     }
 
     /**
+     * Delega la tira en el MOTOR DEL TEMA (`MU.coleccion`, spec 019, ambito 1) cuando
+     * esta presente. D11/D26: la dependencia es **blanda** — el plugin se instala y
+     * funciona solo, asi que sin `MU.coleccion` se usa la tira propia de abajo, sin
+     * cambios. La vista queda FIJA con el tile `N+` abriendo el visor (igual que hoy):
+     * `navegable:false` es exactamente esa politica.
+     *
+     * @param {Element} el contenedor de la tira
+     * @param {Array} fotos fotos de la biblioteca (madre/versiones/base/thumb)
+     * @returns {boolean} true si el TEMA la pinto
+     */
+    function delegarTira(el, fotos) {
+        var tema = global.MU;
+        if (!tema || typeof tema.coleccion !== 'function') { return false; }
+        tema.coleccion(el, {
+            items: (fotos || []).map(function (f) {
+                var urlResuelta = (global.PMU_FICHA && global.PMU_FICHA.urls && f.base)
+                    ? global.PMU_FICHA.urls[String(f.base)] : '';
+                var url = String(urlResuelta || f.thumb || f.url || '');
+                return {
+                    url: url,
+                    thumb: url,
+                    etiqueta: (f.versiones > 1) ? (f.versiones + ' versiones') : ''
+                };
+            }),
+            layout: 'linea',
+            preset: 'mini',
+            tamano: 'chico',
+            navegable: false,
+            tope: TOPE_TIRA,
+            chipAccion: 'abrir',
+            onChip: function (cuantos, desde) { visor(desde || 0); },
+            onAbrir: function (i) { visor(i); }
+        });
+        return true;
+    }
+
+    /**
      * Pinta la tira en `el`: las miniaturas que CABEN en el ancho + el tile `N+`.
      * El tap de cada una abre el visor (Elegir / Borrar); sin fotos no dibuja.
      */
@@ -203,6 +240,9 @@
         var doc = el.ownerDocument || global.document;
         el.innerHTML = '';
         if (!fotos || !fotos.length) { return 0; }
+        // El MOTOR vive en el tema: si esta, la tira es SUYA (D26/D11). Si no, sigue
+        // la tira propia de abajo, sin cambios.
+        if (delegarTira(el, fotos)) { return fotos.length; }
         inyectarEstilos(doc);
         // Cuantas entran en el ANCHO disponible (la tira NO scrollea): con mas
         // fotos que lugar se reserva un tile para el resto (`N+`). Tope: 10.
