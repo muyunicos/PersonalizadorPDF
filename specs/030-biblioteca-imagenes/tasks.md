@@ -262,3 +262,16 @@ node --check assets/biblioteca-pmu.js        # T011 + T012 (modulo nuevo)
   resuelve por POST), asi que navegar el visor o repintar la tira cuesta **0 POST**.
 - **T042** (recorrido manual en WP real, quickstart E1-E8) queda **pendiente**: es la unica `[ ]`.
 - Los hallazgos del cierre estan en `spec.md` §6 (P1-P5) y las 3 filas nuevas de `AGENTS.md` §11.
+## Spec 019/020 (2026-11-07) — el visor y la tira delegan en el MOTOR DEL TEMA
+
+- **Hecho (F2)**: `assets/visor-pmu.js` delega en `MU.visor` y `biblioteca-pmu.js` en
+  `MU.coleccion` cuando el tema esta presente (spec 019 D26; dependencia **blanda**, D11);
+  `PMUVisor` y la tira propia quedan como **fallback**. El visor delegado se eleva sobre
+  `.spmu-modal` (`pmu-visor--sobre`, z-index 200000). Puertas: `biblioteca-contrato` (48) y
+  `ficha-pedido.browser.js` **52/52** en el laboratorio.
+- **Pendiente del retiro (spec 020, T014)**: `cpmu-visor` (fallback del cargador) ya es
+  inalcanzable porque `visor-pmu.js` se encola siempre; se retira junto con el puente
+  `pmu-visor-peligro` cuando nadie lo pase.
+- **Pendiente (spec 020, T011)**: el `mu_galeria_encolar()` agregado a
+  `plugin-calculadora-cart-integration.php` (repo `calculadora`) se retira cuando el shortcode
+  del cotizador quede **versionado en el tema** (`inc/cotizador.php`).
