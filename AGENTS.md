@@ -129,7 +129,7 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   ├── vendor/pdfjs/         ← PDF.js local (Apache-2.0): raster de paginas PDF para el editor
 │   ├── campo-montar.js      ← Montaje COMPARTIDO de campos (spec 012): lo usan la ficha del
 │   │                          comprador y el preview del admin (una sola lógica, DRY)
-│   ├── cargador-pmu.js      ← Cargador de imágenes del comprador (spec 012): N ranuras
+│   ├── cargador-pmu.js      ← Cargador de imágenes del comprador (spec 012): N ranuras; usa el visor COMPARTIDO (sin visor propio: spec 020 T014)
 │   │                          sobre SelectorPMU; valida `min` y sube la foto al item
 │   ├── selector-pmu.js      ← Cliente de subida/recorte de imágenes de campos (spec 004,
 │   │                          contrato `specs/004.../contracts/selector-pmu.md`; editor visual
@@ -137,6 +137,7 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   ├── visor-pmu.js         ← Visor fullscreen COMPARTIDO (PMUVisor: ranura + biblioteca; spec 030 D28); con el tema presente DELEGA en `MU.visor` y queda de fallback (D11, blanda)
 │   ├── biblioteca-pmu.js    ← Biblioteca del comprador (spec 030): copia local v2 (metadatos), tira
 │   │                          adaptativa, visor (Elegir/Borrar) y usar (0 bytes); se calienta en la ficha
+│   │                          y DELEGA la tira en `MU.coleccion` del tema si esta (blanda)
 │   └── miniaturas.js        ← ThumbEngine: miniaturas `.webp` y sprites por ámbito; único
 │                              cliente de `op=sprite`/`op=miniatura` (envía `firma`; nunca
 │                              escribe catálogos). Se encola en admin y su URL viaja al iframe
