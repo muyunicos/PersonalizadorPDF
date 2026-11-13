@@ -256,6 +256,10 @@ node C:\Users\Jonatan\Documents\GitHub\personalizador-pdf\tests\galerias-sprite.
 node C:\Users\Jonatan\Documents\GitHub\personalizador-pdf\tests\ficha-pedido.browser.js
                                             # PUERTA del plugin: ficha -> pedido -> PDF (52/52)
                                             # (`C:\wp-lab\recorrido-ficha-pedido.cjs` es un wrapper)
+
+node C:\Users\Jonatan\Documents\GitHub\muyunicos\tests\galeria.browser.js
+# PUERTA del TEMA: ficha real de WooCommerce (spec 019 SC-003):
+# arrastre conectado en el slider + lupa -> visor compartido, sin Photoswipe (9/9)
 node C:\wp-lab\probe-ficha.cjs               # volcado del DOM de la ficha (diagnostico)
 node C:\wp-lab\probe-modal.cjs               # volcado del modal del cargador
 ```
