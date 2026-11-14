@@ -31,7 +31,7 @@
 
 ## Fase C — Mockup propio (pendiente)
 
-- [ ] T009 Plugin: `PMU_Cotizador::mockup_local($def)` valida (fondo del catalogo `img/`, hueco
+- [X] T009 Plugin: `PMU_Cotizador::mockup_local($def)` valida (fondo del catalogo `img/`, hueco
       0..300, forma de la lista) y **sintetiza** capas + grupo con `env_defecto` (circulo = 4 curvas)
       devolviendo el **mismo shape** que `op=mockups`.
 - [ ] T010 Calculadora: `PlantillaCotizador.mockup{fondo,hueco,forma}` + `requiere`;

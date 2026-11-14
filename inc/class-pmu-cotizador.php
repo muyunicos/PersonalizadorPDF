@@ -941,6 +941,13 @@ class PMU_Cotizador
             // Enmienda v2 (contrato C5): mockups del Editor, catalogo de plantillas
             // y descarga de la imagen procesada.
             if ($op === 'mockups') {
+                // Spec 038 (C): sin `pdf`, `local` trae la definicion del mockup propio.
+                $local = (string)self::param('local');
+                if ($local !== '') {
+                    $def = json_decode($local, true);
+                    wp_send_json_success($this->mockup_local($def));
+                    return;
+                }
                 wp_send_json_success($this->mockups_de_pdf(self::param('pdf')));
                 return;
             }
@@ -1296,6 +1303,123 @@ class PMU_Cotizador
             }
         }
         return $mejor;
+    }
+    /**
+     * URL publica de una imagen de los catalogos del editor (spec 038, D4/FR-048).
+     *
+     * Busca por id en `img/` y, si no esta, en `mockups/`. Nunca se acepta una ruta
+     * del cliente: el id se resuelve contra `listar()`, que verifica el fisico.
+     */
+    private function url_de_catalogo($id)
+    {
+        foreach (['img', 'mockups'] as $ambito) {
+            try {
+                $lista = $this->motor()->listar($ambito);
+            } catch (\Throwable $e) {
+                continue;
+            }
+            foreach ((array)($lista['items'] ?? []) as $it) {
+                if (is_array($it) && (int)($it['id'] ?? 0) === (int)$id
+                    && (string)($it['url'] ?? '') !== '') {
+                    return (string)$it['url'];
+                }
+            }
+        }
+        return '';
+    }
+
+    /** Numero acotado a un rango (spec 038, FR-048). */
+    private function num_rango($valor, $defecto, $min, $max)
+    {
+        $n = is_numeric($valor) ? (float)$valor : (float)$defecto;
+        if ($n < $min) {
+            $n = $min;
+        }
+        if ($n > $max) {
+            $n = $max;
+        }
+        return $n;
+    }
+
+    /**
+     * Envoltura circular normalizada (4 curvas de Bezier, kappa 0.5523).
+     *
+     * Es el clip que `PMUMockup.componer` aplica al placeholder del mockup local,
+     * en el MISMO formato que las envolturas PowerClip del PDF.
+     */
+    private function envoltura_circulo()
+    {
+        $k = 0.5523;
+        return ['subs' => [[
+            'm' => [0.5, 0],
+            's' => [
+                ['c', 0.5 + $k, 0, 1, 0.5 - $k, 1, 0.5],
+                ['c', 1, 0.5 + $k, 0.5 + $k, 1, 0.5, 1],
+                ['c', 0.5 - $k, 1, 0, 0.5 + $k, 0, 0.5],
+                ['c', 0, 0.5 - $k, 0.5 - $k, 0, 0.5, 0],
+            ],
+            'c' => true,
+        ]]];
+    }
+    /**
+     * Mockup PROPIO del cotizador (spec 038, C / D4): sintetiza el payload a partir
+     * de `{fondo, hueco, forma}` con el MISMO shape que `mockups_de_pdf()`.
+     *
+     * Validacion (FR-048): `fondo` debe existir en un catalogo del editor, `hueco`
+     * dentro de 0..300 / 1..300 y `forma` de la lista. Nunca se aceptan rutas.
+     *
+     * @return array payload `mockups`/`grupos`/`imagenes`/`revision`
+     * @throws Exception `cotizador:mockup:def` | `cotizador:mockup:fondo` |
+     *                  `cotizador:mockup:fondo:ausente` | `cotizador:mockup:forma`
+     */
+    public function mockup_local($def)
+    {
+        $vacio = ['activo' => $this->activo(), 'pdf' => '', 'mockups' => [], 'grupos' => [],
+            'imagenes' => [], 'envolturas' => [], 'revision' => ''];
+        if (!$this->activo()) {
+            return $vacio;
+        }
+        if (!is_array($def)) {
+            throw new Exception('cotizador:mockup:def');
+        }
+        $fondo = (int)($def['fondo'] ?? 0);
+        if ($fondo < 1) {
+            throw new Exception('cotizador:mockup:fondo');
+        }
+        $url = $this->url_de_catalogo($fondo);
+        if ($url === '') {
+            throw new Exception('cotizador:mockup:fondo:ausente');
+        }
+        $forma = strtolower(trim((string)($def['forma'] ?? 'rectangulo')));
+        if (!in_array($forma, ['rectangulo', 'circulo', 'cuadrado', 'ovalo'], true)) {
+            throw new Exception('cotizador:mockup:forma');
+        }
+        $h = is_array($def['hueco'] ?? null) ? $def['hueco'] : [];
+        $x = $this->num_rango($h['x'] ?? 0, 0, 0, 300);
+        $y = $this->num_rango($h['y'] ?? 0, 0, 0, 300);
+        $w = $this->num_rango($h['w'] ?? 1, 1, 1, 300);
+        $hh = $this->num_rango($h['h'] ?? 1, 1, 1, 300);
+        $rot = $this->num_rango($h['rot'] ?? 0, 0, -180, 180);
+        $titulo = substr(trim((string)($def['titulo'] ?? '')), 0, 60);
+        $capas = [
+            ['tipo' => 'img', 'ref' => 'mock:' . $fondo, 'x' => 0, 'y' => 0, 'w' => 300, 'h' => 300, 'nombre' => 'fondo'],
+            ['tipo' => 'placeholder', 'ref' => '0000FF#1', 'x' => $x, 'y' => $y, 'w' => $w, 'h' => $hh, 'rot' => $rot, 'envoltura' => true],
+        ];
+        $env = in_array($forma, ['circulo', 'ovalo'], true) ? $this->envoltura_circulo() : null;
+        $mockups = [[
+            'id' => 'local-' . substr(sha1($fondo . '|' . $x . '|' . $y . '|' . $w . '|' . $hh . '|' . $rot . '|' . $forma), 0, 8),
+            'titulo' => $titulo !== '' ? $titulo : 'Vista previa',
+            'capas' => $capas,
+        ]];
+        return [
+            'activo' => true,
+            'pdf' => '',
+            'mockups' => $mockups,
+            'grupos' => [['id' => '0000FF', 'w' => (int)round($w), 'h' => (int)round($hh), 'env_defecto' => $env]],
+            'imagenes' => ['mock:' . $fondo => $url],
+            'envolturas' => [],
+            'revision' => substr(sha1((string)wp_json_encode($mockups)), 0, 12),
+        ];
     }
     /**
      * Enlaza el DISENO del comprador con el/los GRUPO(S) del PDF importado

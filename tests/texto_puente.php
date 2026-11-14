@@ -2331,6 +2331,32 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('grupo inexistente -> cotizador:grupo:invalido',
                 strpos((string)($GLOBALS['cot_enlace_grupo_malo'] ?? ''), 'cotizador:grupo:invalido') !== false,
                 (string)($GLOBALS['cot_enlace_grupo_malo'] ?? ''));
+            $ml = (array)($GLOBALS['cot_mock_local'] ?? []);
+            $mlMock = (array)($ml['mockups'][0] ?? []);
+            $mlCapas = (array)($mlMock['capas'] ?? []);
+            $mlEnv = $ml['grupos'][0]['env_defecto'] ?? null;
+            check('mockup_local sintetiza 1 mockup con fondo + placeholder',
+                count((array)($ml['mockups'] ?? [])) === 1
+                && count($mlCapas) === 2
+                && (string)($mlCapas[0]['tipo'] ?? '') === 'img'
+                && (string)($mlCapas[1]['tipo'] ?? '') === 'placeholder',
+                json_encode($ml));
+            check('mockup_local circulo trae la envoltura de 4 curvas',
+                is_array($mlEnv) && count((array)($mlEnv['subs'][0]['s'] ?? [])) === 4, json_encode($mlEnv));
+            check('mockup_local resuelve la URL del fondo del catalogo',
+                strpos((string)(($ml['imagenes'] ?? [])['mock:1'] ?? ''), 'fondo.png') !== false,
+                json_encode($ml['imagenes'] ?? null));
+            $mr = (array)($GLOBALS['cot_mock_rect'] ?? []);
+            $mrGrupo = (array)($mr['grupos'][0] ?? []);
+            check('mockup_local rectangulo NO lleva envoltura',
+                array_key_exists('env_defecto', $mrGrupo) && $mrGrupo['env_defecto'] === null,
+                json_encode($mrGrupo));
+            check('mockup_local fondo ausente -> cotizador:mockup:fondo:ausente',
+                strpos((string)($GLOBALS['cot_mock_fondo'] ?? ''), 'cotizador:mockup:fondo:ausente') !== false,
+                (string)($GLOBALS['cot_mock_fondo'] ?? ''));
+            check('mockup_local forma invalida -> cotizador:mockup:forma',
+                strpos((string)($GLOBALS['cot_mock_forma'] ?? ''), 'cotizador:mockup:forma') !== false,
+                (string)($GLOBALS['cot_mock_forma'] ?? ''));
 
             break;
         case 'cola_subida':
@@ -5847,6 +5873,35 @@ switch ($fase) {
             $GLOBALS['cot_enlace_grupo_malo'] = 'no-lanzo';
         } catch (\Throwable $e) {
             $GLOBALS['cot_enlace_grupo_malo'] = $e->getMessage();
+        }
+        // 14) Spec 038 (C): mockup PROPIO (sin PDF) sintetizado por el servidor.
+        $dirImg = $motorC->dir_ambito('img', true);
+        wp_mkdir_p($dirImg);
+        \ExtractCorel\Engine\PngWriter::write($dirImg . DIRECTORY_SEPARATOR . 'fondo.png', 60, 60);
+        $motorC->guardar_catalogo('img', ['thumbs' => ['w' => 40, 'h' => 40, 'c' => 12], 'items' => [[1, 'Fondo', 'test', 'fondo.png']]]);
+        $GLOBALS['cot_mock_local'] = [];
+        try {
+            $GLOBALS['cot_mock_local'] = $cotC->mockup_local(['fondo' => 1, 'forma' => 'circulo', 'hueco' => ['x' => 50, 'y' => 60, 'w' => 200, 'h' => 180]]);
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_mock_local'] = ['error' => $e->getMessage()];
+        }
+        $GLOBALS['cot_mock_rect'] = [];
+        try {
+            $GLOBALS['cot_mock_rect'] = $cotC->mockup_local(['fondo' => 1, 'forma' => 'rectangulo', 'hueco' => ['x' => 10, 'y' => 10, 'w' => 100, 'h' => 100]]);
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_mock_rect'] = ['error' => $e->getMessage()];
+        }
+        try {
+            $cotC->mockup_local(['fondo' => 999]);
+            $GLOBALS['cot_mock_fondo'] = 'no-lanzo';
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_mock_fondo'] = $e->getMessage();
+        }
+        try {
+            $cotC->mockup_local(['fondo' => 1, 'forma' => 'rombo']);
+            $GLOBALS['cot_mock_forma'] = 'no-lanzo';
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_mock_forma'] = $e->getMessage();
         }
         try {
             $mkC = $cotC->mockups_de_pdf('muestra');
