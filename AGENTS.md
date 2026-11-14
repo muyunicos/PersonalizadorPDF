@@ -199,6 +199,7 @@ diagnóstico) está documentado en `docs/entorno-desarrollo.md` y resumido en §
 el agente **POST-ea la URL del webhook** despues del push y **verifica** el deploy comparando el archivo servido con el
 local (`?nc=<epoch>` + hash). Con eso el usuario solo **purga cache + Ctrl+F5**: **no** se le pide el boton Implementar.
 El boton queda como rescate si la verificacion falla (p. ej. un `git pull` abortado por archivos untracked).
+Verificacion: `pwsh -NoProfile -File scripts/verificar-deploy.ps1 -Url <servido> -Local <archivo>` (sale 0 con `DEPLOY OK` cuando el SHA256 coincide).
 
 Repos y rutas:
 
