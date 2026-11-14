@@ -1995,7 +1995,7 @@ class Personalizador_PDF_Plugin
                 $contextoSubida = is_array($manSubida) ? (string)($manSubida['contexto'] ?? '') : '';
             }
             if ($contextoSubida === PMU_Cotizador::CONTEXTO) {
-                $this->enlazar_diseno_cotizador($sid, $item, isset($pdfs) ? $pdfs : [], (string)($fila['id'] ?? ''));
+                $this->enlazar_diseno_cotizador($sid, $item, isset($pdfs) ? $pdfs : [], (string)($fila['id'] ?? ''), sanitize_text_field(wp_unslash((string)($_POST['grupo'] ?? ''))));
             }
             // Spec 030 (D14/D23): la URL viaja CON el dato (endpoint protegido).
             $fila['url'] = $this->url_biblioteca_imagen($item, (string)($fila['id'] ?? ''));
@@ -2011,7 +2011,7 @@ class Personalizador_PDF_Plugin
      * Best-effort: un fallo NO frena la subida ni la venta (D9); queda en el log del
      * pedido con la causa `cotizador:*`.
      */
-    private function enlazar_diseno_cotizador($sid, $item, array $pdfs, $diseno_id)
+    private function enlazar_diseno_cotizador($sid, $item, array $pdfs, $diseno_id, $grupo = 'todos')
     {
         if ($diseno_id === '') {
             return;
@@ -2030,7 +2030,7 @@ class Personalizador_PDF_Plugin
         }
         foreach ($pdfs as $slug) {
             try {
-                if ($cot->enlazar_diseno($sid, $item, (string)$slug, $diseno_id) !== '') {
+                if ($cot->enlazar_diseno($sid, $item, (string)$slug, $diseno_id, $grupo) !== '') {
                     return; // un grupo por item: la primera plantilla con grupos manda
                 }
             } catch (\Throwable $e) {

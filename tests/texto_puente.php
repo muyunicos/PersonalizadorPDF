@@ -2299,23 +2299,38 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 (bool)preg_match('/^[0-9A-F]{6}$/', $gidPdf), $gidPdf);
             $archE = (array)($GLOBALS['cot_archivos'] ?? []);
             $filaE = (array)($archE[0] ?? []);
-            check('con plantilla el arte se enlaza al grupo (manifest.archivos[])',
-                count($archE) === 1
+            $gruposE = array_map(function ($f) { return (string)($f['grupo_id'] ?? ''); }, $archE);
+            sort($gruposE);
+            check('con plantilla el arte se enlaza a TODOS los grupos (archivos[])',
+                count($archE) === 2
+                && $gruposE === ['0000FF', 'FF0000']
                 && (string)($filaE['pdf'] ?? '') === 'muestra'
-                && (string)($filaE['grupo_id'] ?? '') === $gidPdf
                 && (string)($filaE['origen'] ?? '') === 'compuesta'
                 && (string)($filaE['orig']['id'] ?? '') === (string)($GLOBALS['cot_fila_pdf']['id'] ?? ''),
                 json_encode($filaE));
             check('el compuesto tiene nombre determinista (cache)',
                 (string)($filaE['file'] ?? '')
-                    === 'img/foto-muestra-' . $gidPdf . '-'
+                    === 'img/foto-muestra-' . (string)($filaE['grupo_id'] ?? '') . '-'
                         . strtolower((string)($GLOBALS['cot_fila_pdf']['receta'] ?? '')) . '.webp',
                 (string)($filaE['file'] ?? ''));
-            check('re-enlazar es idempotente (una sola fila)',
-                count((array)($GLOBALS['cot_archivos_2'] ?? [])) === 1);
+            check('re-enlazar es idempotente (una fila por grupo)',
+                count((array)($GLOBALS['cot_archivos_2'] ?? [])) === 2);
             check('plantilla sin grupos -> cotizador:pdf:sin:grupo',
                 strpos((string)($GLOBALS['cot_enlace_mal'] ?? ''), 'cotizador:pdf:sin:grupo') !== false,
                 (string)($GLOBALS['cot_enlace_mal'] ?? ''));
+            $gd = (array)($GLOBALS['cot_grupos_doble'] ?? []);
+            check('grupos_de_pdf devuelve TODOS los grupos del analisis',
+                count($gd) === 2 && ($gd[0] ?? '') === '0000FF' && ($gd[1] ?? '') === 'FF0000', json_encode($gd));
+            check('enlace "todos" registra el arte en los 2 grupos',
+                (string)($GLOBALS['cot_enlace_todos'] ?? '') === '0000FF,FF0000'
+                && count((array)($GLOBALS['cot_archivos_doble'] ?? [])) === 2,
+                json_encode([$GLOBALS['cot_enlace_todos'] ?? null, count((array)($GLOBALS['cot_archivos_doble'] ?? []))]));
+            check('enlace "auto" usa solo el grupo de mayor area',
+                (string)($GLOBALS['cot_enlace_auto'] ?? '') === '0000FF',
+                (string)($GLOBALS['cot_enlace_auto'] ?? ''));
+            check('grupo inexistente -> cotizador:grupo:invalido',
+                strpos((string)($GLOBALS['cot_enlace_grupo_malo'] ?? ''), 'cotizador:grupo:invalido') !== false,
+                (string)($GLOBALS['cot_enlace_grupo_malo'] ?? ''));
 
             break;
         case 'cola_subida':
@@ -5799,6 +5814,39 @@ switch ($fase) {
             $GLOBALS['cot_enlace_mal'] = 'no-lanzo';
         } catch (\Throwable $e) {
             $GLOBALS['cot_enlace_mal'] = $e->getMessage();
+        }
+        // 13) Spec 038 (D1): "todos" enlaza el arte en TODOS los grupos de la plancha.
+        $dirDoble = $motorC->dir_ambito('pdfs') . DIRECTORY_SEPARATOR . 'doble';
+        wp_mkdir_p($dirDoble);
+        \ExtractCorel\Engine\Metadata::guardar([
+            'version' => 2, 'pdf' => 'doble', 'creado' => '2026-11-13T00:00:00Z',
+            'grupos' => [
+                ['id' => '0000FF', 'w' => 400, 'h' => 400, 'cont' => 2],
+                ['id' => 'FF0000', 'w' => 200, 'h' => 200, 'cont' => 1],
+            ],
+        ], $dirDoble . DIRECTORY_SEPARATOR . 'analisis.json');
+        $GLOBALS['cot_grupos_doble'] = $cotC->grupos_de_pdf('doble');
+        $itemDoble = $sesC->crear_draft($sidC, ['doble'], 'cotizador');
+        $filaDoble = $sesC->guardar_subida($sidC, $itemDoble, $bytesC, '', $recetaC);
+        $GLOBALS['cot_enlace_todos'] = '';
+        try {
+            $GLOBALS['cot_enlace_todos'] = $cotC->enlazar_diseno($sidC, $itemDoble, 'doble', (string)($filaDoble['id'] ?? ''), 'todos');
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_enlace_todos'] = 'ERR:' . $e->getMessage();
+        }
+        $manDoble = (array)$sesC->leer_manifest($sidC, $itemDoble);
+        $GLOBALS['cot_archivos_doble'] = array_values((array)($manDoble['archivos'] ?? []));
+        $GLOBALS['cot_enlace_auto'] = '';
+        try {
+            $GLOBALS['cot_enlace_auto'] = $cotC->enlazar_diseno($sidC, $itemDoble, 'doble', (string)($filaDoble['id'] ?? ''), 'auto');
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_enlace_auto'] = 'ERR:' . $e->getMessage();
+        }
+        try {
+            $cotC->enlazar_diseno($sidC, $itemDoble, 'doble', (string)($filaDoble['id'] ?? ''), 'ZZ0000');
+            $GLOBALS['cot_enlace_grupo_malo'] = 'no-lanzo';
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_enlace_grupo_malo'] = $e->getMessage();
         }
         try {
             $mkC = $cotC->mockups_de_pdf('muestra');

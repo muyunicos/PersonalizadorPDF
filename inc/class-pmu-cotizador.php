@@ -1179,7 +1179,7 @@ class PMU_Cotizador
                     $ids[] = $id;
                 }
             }
-            $out[] = ['slug' => $slug, 'titulo' => $slug, 'mockups' => $ids, 'tiene_mockups' => true];
+            $out[] = ['slug' => $slug, 'titulo' => $slug, 'mockups' => $ids, 'tiene_mockups' => true, 'grupos' => $this->grupos_de_pdf($slug)];
         }
         usort($out, function ($a, $b) {
             return strcmp($a['slug'], $b['slug']);
@@ -1188,15 +1188,71 @@ class PMU_Cotizador
     }
 
     /**
-     * Grupo del PDF IMPORTADO que recibe el arte del comprador (Enmienda v3, FR-043).
+     * Analisis crudo del PDF importado (null si no existe o no se puede leer).
      *
-     * El cotizador declara UN grupo por defecto: si la plantilla tiene uno, ese; si
-     * tiene varios, el de MAYOR area (el mismo criterio con el que el Detector toma
-     * la figura base del grupo). Queda abierto a futuro: con varios grupos, la
-     * plantilla del catalogo podra declarar cual (`PlantillaCotizador.grupo`).
+     * @return array|null
+     */
+    private function analisis_bruto($slug)
+    {
+        $ruta = '';
+        try {
+            $ruta = (string)$this->motor()->ruta_analisis($slug);
+        } catch (\Throwable $e) {
+            return null;
+        }
+        if ($ruta === '' || !is_file($ruta)) {
+            return null;
+        }
+        try {
+            $datos = \ExtractCorel\Engine\Metadata::cargar($ruta);
+        } catch (\Throwable $e) {
+            return null;
+        }
+        return is_array($datos) ? $datos : null;
+    }
+
+    /**
+     * Grupos (6 hex) del PDF importado, en el orden del analisis (spec 038, D1).
      *
      * `analisis.json:grupos` es una LISTA (`{id,w,h,cont,pgs}`), pero los fixtures y
      * algunas escrituras lo guardan como MAPA (`{id: {...}}`): se aceptan las dos.
+     *
+     * @return array<int,string>
+     */
+    public function grupos_de_pdf($pdf)
+    {
+        if (!$this->activo()) {
+            return [];
+        }
+        $slug = '';
+        try {
+            $slug = (string)$this->motor()->nombre_seguro((string)$pdf, 'cotizador:grupo');
+        } catch (\Throwable $e) {
+            return [];
+        }
+        if ($slug === '') {
+            return [];
+        }
+        $datos = $this->analisis_bruto($slug);
+        if ($datos === null || !isset($datos['grupos']) || !is_array($datos['grupos'])) {
+            return [];
+        }
+        $out = [];
+        foreach ((array)$datos['grupos'] as $clave => $g) {
+            if (!is_array($g)) {
+                continue;
+            }
+            $id = strtoupper((string)($g['id'] ?? $clave));
+            if (preg_match('/^[0-9A-F]{6}$/', $id)) {
+                $out[] = $id;
+            }
+        }
+        return array_values(array_unique($out));
+    }
+
+    /**
+     * Grupo por defecto del PDF importado (Enmienda v3, D15): el de MAYOR area
+     * (el mismo criterio con el que el Detector toma la figura base del grupo).
      *
      * @return string 6 hex en mayusculas, o '' si el PDF no tiene grupos utilizables.
      */
@@ -1207,28 +1263,15 @@ class PMU_Cotizador
         }
         $slug = '';
         try {
-            $slug = $this->motor()->nombre_seguro((string)$pdf, 'cotizador:grupo');
+            $slug = (string)$this->motor()->nombre_seguro((string)$pdf, 'cotizador:grupo');
         } catch (\Throwable $e) {
             return '';
         }
         if ($slug === '') {
             return '';
         }
-        $ruta = '';
-        try {
-            $ruta = (string)$this->motor()->ruta_analisis($slug);
-        } catch (\Throwable $e) {
-            return '';
-        }
-        if ($ruta === '' || !is_file($ruta)) {
-            return '';
-        }
-        try {
-            $datos = \ExtractCorel\Engine\Metadata::cargar($ruta);
-        } catch (\Throwable $e) {
-            return '';
-        }
-        if (!is_array($datos) || !isset($datos['grupos']) || !is_array($datos['grupos'])) {
+        $datos = $this->analisis_bruto($slug);
+        if ($datos === null || !isset($datos['grupos']) || !is_array($datos['grupos'])) {
             return '';
         }
         $mejor = '';
@@ -1254,22 +1297,23 @@ class PMU_Cotizador
         }
         return $mejor;
     }
-
     /**
-     * Enlaza el DISENO del comprador con el GRUPO del PDF importado (Enmienda v3, FR-043).
+     * Enlaza el DISENO del comprador con el/los GRUPO(S) del PDF importado
+     * (Enmienda v3 + spec 038, D1 / FR-043 / FR-044).
      *
      * Es el puente que faltaba: el item del cotizador nace con `pdfs = [plantilla]`
      * pero SIN `manifest.archivos[]`, y `Motor::procesar_pedido` compone el
      * imprimible desde esas filas (`grupo_id` -> composicion). Sin esta llamada el
      * PDF del pedido no se puede generar ("Sin imagenes para procesar el pedido").
      *
-     * Idempotente: `registrar_fotos` REEMPLAZA las filas del grupo, asi que la
-     * ultima subida manda y no se acumulan archivos ni filas.
+     * `$grupo`: `'todos'` (default) registra el arte en TODOS los grupos de la
+     * plancha; `'auto'` en el de mayor area; un `RRGGBB` en ese grupo. Idempotente:
+     * `registrar_fotos` REEMPLAZA las filas del grupo.
      *
-     * @return string grupo enlazado ('' si el cotizador esta apagado)
-     * @throws Exception `cotizador:item:ausente` | `cotizador:diseno:id` | `cotizador:diseno:receta` | `cotizador:pdf:sin:grupo`
+     * @return string grupos enlazados separados por coma ('' si esta apagado)
+     * @throws Exception `cotizador:item:ausente` | `cotizador:diseno:id` | `cotizador:diseno:receta` | `cotizador:pdf:sin:grupo` | `cotizador:grupo:invalido`
      */
-    public function enlazar_diseno($sid, $item_key, $pdf, $diseno_id)
+    public function enlazar_diseno($sid, $item_key, $pdf, $diseno_id, $grupo = 'todos')
     {
         if (!$this->activo()) {
             return '';
@@ -1301,14 +1345,32 @@ class PMU_Cotizador
             throw new Exception('cotizador:diseno:receta');
         }
         $slug = $this->motor()->nombre_seguro((string)$pdf, 'cotizador:enlazar');
-        $grupo = $this->grupo_de_pdf($slug);
-        if ($grupo === '') {
+        $todos = $this->grupos_de_pdf($slug);
+        if (!$todos) {
             throw new Exception('cotizador:pdf:sin:grupo');
         }
-        $this->sesion()->registrar_fotos($sid, $item_key, $slug, $grupo, [['id' => $diseno_id, 'receta' => $receta]]);
-        return $grupo;
+        $modo = strtolower(trim((string)$grupo));
+        $elegidos = [];
+        if ($modo === '' || $modo === 'todos' || $modo === 'all') {
+            $elegidos = $todos;
+        } elseif ($modo === 'auto') {
+            $primero = $this->grupo_de_pdf($slug);
+            $elegidos = $primero !== '' ? [$primero] : $todos;
+        } else {
+            $pedido = strtoupper(trim((string)$grupo));
+            if (!in_array($pedido, $todos, true)) {
+                throw new Exception('cotizador:grupo:invalido');
+            }
+            $elegidos = [$pedido];
+        }
+        if (!$elegidos) {
+            throw new Exception('cotizador:pdf:sin:grupo');
+        }
+        foreach ($elegidos as $uno) {
+            $this->sesion()->registrar_fotos($sid, $item_key, $slug, $uno, [['id' => $diseno_id, 'receta' => $receta]]);
+        }
+        return implode(',', $elegidos);
     }
-
     /** Respuesta binaria con cache privada (no pasa por CDN ni cache publica). */
     private function emitir($ruta, $descarga = false)
     {
