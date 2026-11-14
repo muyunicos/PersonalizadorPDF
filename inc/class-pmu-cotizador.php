@@ -1308,6 +1308,7 @@ class PMU_Cotizador
         $this->sesion()->registrar_fotos($sid, $item_key, $slug, $grupo, [['id' => $diseno_id, 'receta' => $receta]]);
         return $grupo;
     }
+
     /** Respuesta binaria con cache privada (no pasa por CDN ni cache publica). */
     private function emitir($ruta, $descarga = false)
     {
