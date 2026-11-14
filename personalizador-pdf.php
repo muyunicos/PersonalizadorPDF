@@ -1985,12 +1985,58 @@ class Personalizador_PDF_Plugin
             $fila['sid'] = $sid;
             $fila['item_key'] = $item;
             $fila['item_nuevo'] = $creado;
+            // Spec 037 Enmienda v3 (FR-043): con PLANTILLA, el arte del comprador se
+            // declara contra el GRUPO del PDF importado. Sin esto el item nace con
+            // `pdfs` pero sin `manifest.archivos[]` y el imprimible del pedido no se
+            // puede generar ("Sin imagenes para procesar el pedido").
+            $contextoSubida = isset($contexto) ? (string)$contexto : '';
+            if ($contextoSubida === '') {
+                $manSubida = $sesion->leer_manifest($sid, $item);
+                $contextoSubida = is_array($manSubida) ? (string)($manSubida['contexto'] ?? '') : '';
+            }
+            if ($contextoSubida === PMU_Cotizador::CONTEXTO) {
+                $this->enlazar_diseno_cotizador($sid, $item, isset($pdfs) ? $pdfs : [], (string)($fila['id'] ?? ''));
+            }
             // Spec 030 (D14/D23): la URL viaja CON el dato (endpoint protegido).
             $fila['url'] = $this->url_biblioteca_imagen($item, (string)($fila['id'] ?? ''));
         } catch (\Throwable $e) {
             wp_send_json_error($e->getMessage());
         }
         wp_send_json_success($fila);
+    }
+
+    /**
+     * Enmienda v3 (FR-043): enlaza el arte del cotizador con el grupo de su plantilla.
+     *
+     * Best-effort: un fallo NO frena la subida ni la venta (D9); queda en el log del
+     * pedido con la causa `cotizador:*`.
+     */
+    private function enlazar_diseno_cotizador($sid, $item, array $pdfs, $diseno_id)
+    {
+        if ($diseno_id === '') {
+            return;
+        }
+        $sesion = $this->sesion();
+        if (!$pdfs) {
+            $man = $sesion->leer_manifest($sid, $item);
+            $pdfs = is_array($man) ? array_map('strval', (array)($man['pdfs'] ?? [])) : [];
+        }
+        if (!$pdfs) {
+            return;
+        }
+        $cot = $this->cotizador();
+        if (!$cot->activo()) {
+            return;
+        }
+        foreach ($pdfs as $slug) {
+            try {
+                if ($cot->enlazar_diseno($sid, $item, (string)$slug, $diseno_id) !== '') {
+                    return; // un grupo por item: la primera plantilla con grupos manda
+                }
+            } catch (\Throwable $e) {
+                $this->log_pedido('cotizador:enlazar ' . $slug . ' err=' . $e->getMessage());
+            }
+        }
     }
 
     /**

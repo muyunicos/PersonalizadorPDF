@@ -2293,6 +2293,30 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('op=mockups de un PDF inexistente -> cotizador:pdf:ausente',
                 strpos((string)($GLOBALS['cot_mockups_ausente'] ?? ''), 'cotizador:pdf:ausente') !== false,
                 (string)($GLOBALS['cot_mockups_ausente'] ?? ''));
+
+            $gidPdf = (string)($GLOBALS['cot_grupo_pdf'] ?? '');
+            check('grupo_de_pdf resuelve el grupo del PDF importado',
+                (bool)preg_match('/^[0-9A-F]{6}$/', $gidPdf), $gidPdf);
+            $archE = (array)($GLOBALS['cot_archivos'] ?? []);
+            $filaE = (array)($archE[0] ?? []);
+            check('con plantilla el arte se enlaza al grupo (manifest.archivos[])',
+                count($archE) === 1
+                && (string)($filaE['pdf'] ?? '') === 'muestra'
+                && (string)($filaE['grupo_id'] ?? '') === $gidPdf
+                && (string)($filaE['origen'] ?? '') === 'compuesta'
+                && (string)($filaE['orig']['id'] ?? '') === (string)($GLOBALS['cot_fila_pdf']['id'] ?? ''),
+                json_encode($filaE));
+            check('el compuesto tiene nombre determinista (cache)',
+                (string)($filaE['file'] ?? '')
+                    === 'img/foto-muestra-' . $gidPdf . '-'
+                        . strtolower((string)($GLOBALS['cot_fila_pdf']['receta'] ?? '')) . '.webp',
+                (string)($filaE['file'] ?? ''));
+            check('re-enlazar es idempotente (una sola fila)',
+                count((array)($GLOBALS['cot_archivos_2'] ?? [])) === 1);
+            check('plantilla sin grupos -> cotizador:pdf:sin:grupo',
+                strpos((string)($GLOBALS['cot_enlace_mal'] ?? ''), 'cotizador:pdf:sin:grupo') !== false,
+                (string)($GLOBALS['cot_enlace_mal'] ?? ''));
+
             break;
         case 'cola_subida':
             // Spec 036 (T002): esqueleto; los checks llegan con US3.
@@ -5752,6 +5776,30 @@ switch ($fase) {
             'estado' => (string)(is_array($manPdf) ? ($manPdf['preview_estado'] ?? '') : ''),
             'contexto' => (string)(is_array($manPdf) ? ($manPdf['contexto'] ?? '') : ''),
         ];
+        // 12) Enmienda v3: el arte del comprador se enlaza al GRUPO del PDF importado.
+        $filaPdf = $sesC->guardar_subida($sidC, $itemPdf, $bytesC, '', $recetaC);
+        $GLOBALS['cot_fila_pdf'] = $filaPdf;
+        $GLOBALS['cot_grupo_pdf'] = $cotC->grupo_de_pdf('muestra');
+        $GLOBALS['cot_enlace'] = '';
+        try {
+            $cotC->enlazar_diseno($sidC, $itemPdf, 'muestra', (string)($filaPdf['id'] ?? ''));
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_enlace'] = $e->getMessage();
+        }
+        $manE1 = (array)$sesC->leer_manifest($sidC, $itemPdf);
+        $GLOBALS['cot_archivos'] = array_values((array)($manE1['archivos'] ?? []));
+        try {
+            $cotC->enlazar_diseno($sidC, $itemPdf, 'muestra', (string)($filaPdf['id'] ?? ''));
+        } catch (\Throwable $e) {
+        }
+        $manE2 = (array)$sesC->leer_manifest($sidC, $itemPdf);
+        $GLOBALS['cot_archivos_2'] = array_values((array)($manE2['archivos'] ?? []));
+        try {
+            $cotC->enlazar_diseno($sidC, $itemPdf, 'no-existe', (string)($filaPdf['id'] ?? ''));
+            $GLOBALS['cot_enlace_mal'] = 'no-lanzo';
+        } catch (\Throwable $e) {
+            $GLOBALS['cot_enlace_mal'] = $e->getMessage();
+        }
         try {
             $mkC = $cotC->mockups_de_pdf('muestra');
             $GLOBALS['cot_mockups'] = [

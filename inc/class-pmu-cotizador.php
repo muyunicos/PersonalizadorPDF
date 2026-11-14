@@ -12,9 +12,10 @@
  *  - no compone bitmaps: el cliente compone la VISTA PREVIA con el nucleo
  *    compartido (`assets/mockup-render.js`) y el servidor compone el arte que se
  *    imprime con `engine/Compositor.php` (original + receta, §III);
- *  - no toca el Motor: el cotizador no tiene PDF (`manifest.pdfs = []` y
- *    `preview_estado = 'omisible'`), y `promover_linea()` no entrega PDFs ni
- *    congela bonus;
+ *  - no toca el Motor: SIN plantilla el item no tiene PDF (`manifest.pdfs = []`
+ *    y `preview_estado = 'omisible'`) y `promover_linea()` no entrega PDFs ni
+ *    congela bonus. CON plantilla (Enmienda v2/v3) el item SI se entrega como
+ *    PDF y el arte se enlaza al grupo del PDF (`enlazar_diseno()`);
  *  - no acepta rutas del cliente: `idea_id`, `ref` e `item_key` se validan por
  *    regex y el archivo se resuelve con `is_file()`.
  *
@@ -1186,6 +1187,127 @@ class PMU_Cotizador
         return $out;
     }
 
+    /**
+     * Grupo del PDF IMPORTADO que recibe el arte del comprador (Enmienda v3, FR-043).
+     *
+     * El cotizador declara UN grupo por defecto: si la plantilla tiene uno, ese; si
+     * tiene varios, el de MAYOR area (el mismo criterio con el que el Detector toma
+     * la figura base del grupo). Queda abierto a futuro: con varios grupos, la
+     * plantilla del catalogo podra declarar cual (`PlantillaCotizador.grupo`).
+     *
+     * `analisis.json:grupos` es una LISTA (`{id,w,h,cont,pgs}`), pero los fixtures y
+     * algunas escrituras lo guardan como MAPA (`{id: {...}}`): se aceptan las dos.
+     *
+     * @return string 6 hex en mayusculas, o '' si el PDF no tiene grupos utilizables.
+     */
+    public function grupo_de_pdf($pdf)
+    {
+        if (!$this->activo()) {
+            return '';
+        }
+        $slug = '';
+        try {
+            $slug = $this->motor()->nombre_seguro((string)$pdf, 'cotizador:grupo');
+        } catch (\Throwable $e) {
+            return '';
+        }
+        if ($slug === '') {
+            return '';
+        }
+        $ruta = '';
+        try {
+            $ruta = (string)$this->motor()->ruta_analisis($slug);
+        } catch (\Throwable $e) {
+            return '';
+        }
+        if ($ruta === '' || !is_file($ruta)) {
+            return '';
+        }
+        try {
+            $datos = \ExtractCorel\Engine\Metadata::cargar($ruta);
+        } catch (\Throwable $e) {
+            return '';
+        }
+        if (!is_array($datos) || !isset($datos['grupos']) || !is_array($datos['grupos'])) {
+            return '';
+        }
+        $mejor = '';
+        $mejorArea = -1;
+        $mejorInst = -1;
+        foreach ((array)$datos['grupos'] as $clave => $g) {
+            if (!is_array($g)) {
+                continue;
+            }
+            $id = strtoupper((string)($g['id'] ?? $clave));
+            if (!preg_match('/^[0-9A-F]{6}$/', $id)) {
+                continue;
+            }
+            $area = (int)($g['w'] ?? 0) * (int)($g['h'] ?? 0);
+            $inst = isset($g['instancias']) && is_array($g['instancias'])
+                ? count($g['instancias'])
+                : (int)($g['cont'] ?? 0);
+            if ($area > $mejorArea || ($area === $mejorArea && $inst > $mejorInst)) {
+                $mejor = $id;
+                $mejorArea = $area;
+                $mejorInst = $inst;
+            }
+        }
+        return $mejor;
+    }
+
+    /**
+     * Enlaza el DISENO del comprador con el GRUPO del PDF importado (Enmienda v3, FR-043).
+     *
+     * Es el puente que faltaba: el item del cotizador nace con `pdfs = [plantilla]`
+     * pero SIN `manifest.archivos[]`, y `Motor::procesar_pedido` compone el
+     * imprimible desde esas filas (`grupo_id` -> composicion). Sin esta llamada el
+     * PDF del pedido no se puede generar ("Sin imagenes para procesar el pedido").
+     *
+     * Idempotente: `registrar_fotos` REEMPLAZA las filas del grupo, asi que la
+     * ultima subida manda y no se acumulan archivos ni filas.
+     *
+     * @return string grupo enlazado ('' si el cotizador esta apagado)
+     * @throws Exception `cotizador:item:ausente` | `cotizador:diseno:id` | `cotizador:diseno:receta` | `cotizador:pdf:sin:grupo`
+     */
+    public function enlazar_diseno($sid, $item_key, $pdf, $diseno_id)
+    {
+        if (!$this->activo()) {
+            return '';
+        }
+        $sid = strtolower(trim((string)$sid));
+        $item_key = strtolower(trim((string)$item_key));
+        if (!preg_match(self::RE_SID, $sid) || !preg_match(self::RE_ITEM, $item_key)) {
+            throw new Exception('cotizador:sesion:invalida');
+        }
+        $diseno_id = strtolower(trim((string)$diseno_id));
+        if (!preg_match(self::RE_ID12, $diseno_id)) {
+            throw new Exception('cotizador:diseno:id');
+        }
+        $man = $this->sesion()->leer_manifest($sid, $item_key);
+        if (!is_array($man)) {
+            throw new Exception('cotizador:item:ausente');
+        }
+        $receta = '';
+        foreach ((array)($man['subidas'] ?? []) as $filaSubida) {
+            if (!is_array($filaSubida)) {
+                continue;
+            }
+            if (strtolower((string)($filaSubida['id'] ?? '')) === $diseno_id) {
+                $receta = strtolower((string)($filaSubida['receta'] ?? ''));
+                break;
+            }
+        }
+        if (!preg_match(self::RE_ID12, $receta)) {
+            throw new Exception('cotizador:diseno:receta');
+        }
+        $slug = $this->motor()->nombre_seguro((string)$pdf, 'cotizador:enlazar');
+        $grupo = $this->grupo_de_pdf($slug);
+        if ($grupo === '') {
+            throw new Exception('cotizador:pdf:sin:grupo');
+        }
+        $this->sesion()->registrar_fotos($sid, $item_key, $slug, $grupo, [['id' => $diseno_id, 'receta' => $receta]]);
+        return $grupo;
+    }
     /** Respuesta binaria con cache privada (no pasa por CDN ni cache publica). */
     private function emitir($ruta, $descarga = false)
     {
