@@ -51,3 +51,21 @@
 - [X] **T054** Puertas: `npm test 37`, `typecheck`, `GALERIA 254`, `VISOR 152/152`.
 - [X] **T055** UI: pastilla de categoria en la tarjeta (`categoria` en `MU.coleccion`) y `<select>` del visor con `PROMO` automatica.
 - [X] **T056** Titulo editable: `meta.tituloEditable` + `onEditarTitulo` en el motor del tema (D7).
+
+## Fase E — Promos con filtros (Enmienda v5, 2026-11-14)
+
+- [X] **T057** `Promo` en `types` (`material` / `forma` / `tamMin` / `tamMax` / `desde` en planchas /
+  `pct` / `activa`) y `promos` en `Config` (con la `promo` vieja como alias de un solo elemento).
+- [X] **T058** `promoAplicaA()` + `elegirPromo()` en `priceEngine`: filtra por material, forma,
+  **tamaño en AMBOS lados** y planchas; gana la de **mayor %**. La promo vieja (v4) declaraba
+  unidades: se marca `desdeUnidades` y se compara contra `totalStickers`.
+- [X] **T059** `promoAplicable()` devuelve `PromoElegida`; `calcularPrecio` aplica la promo sobre el
+  **total** y expone `precioLista`; `galleryPricing` reporta la promo que ganó (vidriera = carrito).
+- [X] **T060** Paridad PHP: `mu_calc_promo_aplica()` en `calculadora-pricing.php` (mismos filtros y
+  desempate) con guardia `$sinPromo` para no recursar; `precio-paridad.php` acepta overrides de config.
+- [X] **T061** Saneado: `sanitizeConfig` valida `promos` fila por fila y `guardar_datos.php` las
+  persiste saneadas (descarta `pct<=0`; nunca rompe el guardado del resto).
+- [X] **T062** UI: subpestaña **Promos** en Costos y Tiempos (alta, edición, borrado, activa),
+  escribiendo `config.promos` por `onConfigChange`.
+- [X] **T063** Puertas: `npm test 39` (filtros + desempate + paridad TS/PHP), `typecheck`, `build:js`,
+  `pub:tema`, `php -l` del carrito y de `guardar_datos`.
