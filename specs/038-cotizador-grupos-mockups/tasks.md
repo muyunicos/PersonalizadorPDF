@@ -20,13 +20,13 @@
       `grupos_sin_imagen` vacio y 15 imagenes insertadas (antes 8 y un grupo vacio).
 ## Fase B — "Ya tengo diseno" y forma (pendiente)
 
-- [ ] T006 Calculadora: `DesignOption.pideArte` (checkbox en el admin, retrocompatible: si ninguna
+- [X] T006 Calculadora: `DesignOption.pideArte` (checkbox en el admin, retrocompatible: si ninguna
       opcion lo declara, el paso se muestra como hoy) y el paso 4 se muestra solo con la opcion que
       lo pide.
-- [ ] T007 `core/mockups.ts`: `formaDeCategoria(categoria, w, h)` (Circulares -> `circulo`,
+- [X] T007 `core/mockups.ts`: `formaDeCategoria(categoria, w, h)` (Circulares -> `circulo`,
       Rectangulares con aspecto ~1 -> `cuadrado`, resto `rectangulo`, `A Medida` -> `auto`) + asserts
       en `tests/core.test.js`.
-- [ ] T008 `App.tsx` deja de pasar `forma="auto"` fijo; puerta: el contrato del cargador recibe la
+- [X] T008 `App.tsx` deja de pasar `forma="auto"` fijo; puerta: el contrato del cargador recibe la
       forma derivada.
 
 ## Fase C — Mockup propio (pendiente)

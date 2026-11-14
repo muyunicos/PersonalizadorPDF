@@ -1,6 +1,6 @@
 # Spec 038 — Cotizador: grupos del PDF y mockup propio
 
-> Estado: **fase A implementada y verificada en el laboratorio** (2026-11-13).
+> Estado: **fases A y B implementadas y verificadas** (2026-11-13).
 > Construye sobre la [037](../037-cotizador-diseno-mockups/spec.md) (contexto cotizador, plantilla
 > importada, Enmienda v3) y sobre la 011/036 (nucleo de render compartido y aplanado del cliente).
 > **Decisiones del negocio (2026-11-13)**: (1) el arte va a **todos** los grupos de la plancha por
@@ -47,5 +47,5 @@
 | Fase | Alcance | Estado | Evidencia |
 |---|---|---|---|
 | **A** | Grupos `todos`/`auto`/HEX + `grupos_de_pdf` + `grupo` en la subida + selector en la consola | **Implementada** (2026-11-13) | `FASE cotizador OK` (12 checks), `FASE pedido OK`, `SMOKE`, `PARIDAD`, `SIN_LECTURA`, `COTIZADOR CONTRATO 31`, `npm test 34`, `typecheck`; laboratorio: `circulo6cm` -> `grupo_enlazado` `0000FF,FF0000`, **`grupos_sin_imagen: []`**, 15 imagenes insertadas |
-| **B** | Rama "Ya tengo diseno" (`pideArte`) + `forma` derivada de la categoria | Pendiente | -- |
+| **B** | Rama "Ya tengo diseno" (`pideArte`) + `forma` derivada de la categoria | **Implementada** (2026-11-13) | `npm test 35` (incluye `formaDeCategoria`), `typecheck`, `build:js`; el paso 4 se oculta salvo que la opcion pida arte (retrocompatible) |
 | **C** | Mockup propio sin PDF + `requiere` + orden PDF-primero | Pendiente | -- |
