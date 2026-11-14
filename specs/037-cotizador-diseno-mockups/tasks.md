@@ -389,3 +389,21 @@ Editor del plugin y hace **condicional** el PDF del item.
 
 **Enmienda v2 aplicada (2026-11-03)** — D11-D14 / FR-036..FR-042 (T040-T046): el arte se sube sin mockup, el PDF es una plantilla importada por categoria+tamano, los mockups son los del Editor del plugin (op=mockups) y el catalogo de plantillas tiene titulo, categoria, rango X/Y, orden y duplicar. Nota: la fase icha_edicion esta roja por un check **preexistente** (legado del campo imagen), ajeno a la 037.
 
+
+## Phase 9: Enmienda v3 (2026-11-13) — El arte alimenta el imprimible
+
+**Origen**: Enmienda v3 de `spec.md` (D15/D16, FR-043, SC-011). Cierra el hueco de la v2: el item
+nacia con `pdfs = [plantilla]` pero SIN `manifest.archivos[]`, asi que `Motor::procesar_pedido`
+no tenia con que componer el PDF del pedido (`Sin imagenes para procesar el pedido`).
+
+- [X] T047 [US3] `PMU_Cotizador::grupo_de_pdf()` + `enlazar_diseno()` (commit `1920b2e`): resuelve el
+      grupo del PDF importado (el unico o el de mayor area; `analisis.json` como lista **o** mapa) y
+      registra la composicion contra ese grupo con `PMU_Sesion::registrar_fotos()`, resolviendo la
+      **receta desde `subidas[]`** (sin receta la fila se descarta); idempotente por grupo.
+- [X] T048 [US3] `handle_subida`: con `contexto = cotizador` y plantilla llama al puente dentro de un
+      `try/catch` (D9: un fallo solo se registra). Gate: **5 checks** nuevos en la fase `cotizador`
+      (`grupo_de_pdf`, fila compuesta con `grupo_id`, nombre determinista, idempotencia,
+      `cotizador:pdf:sin:grupo`). Puertas: `FASE cotizador OK`, `FASE pedido OK`, `SMOKE OK`,
+      `PARIDAD OK`, `SIN_LECTURA OK`.
+- [ ] T049 Recorrido de navegador del imprimible real: comprar un item con plantilla en el laboratorio
+      y descargar el PDF desde el bloque "Diseno del cotizador" del pedido.

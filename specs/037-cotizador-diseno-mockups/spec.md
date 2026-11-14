@@ -427,3 +427,36 @@ hace aplicable **solo** a los tamanos dentro del rango (los intermedios se resue
   procesada: 0 pasos extra, 0 errores.
 - **SC-010**: con plantilla, el PDF del pedido se descarga desde el resumen y tiene el arte compuesto en el
   placeholder (no el bitmap del cliente).
+
+---
+
+## Enmienda v3 (2026-11-13) — El arte del cotizador alimenta el imprimible
+
+> Corrige la Enmienda v2: el PDF de produccion **se importa** (a) y su reemplazo de
+> placeholders es el flujo nativo del Motor. La **generacion** de la plancha (b) queda
+> **pendiente** por decision del negocio.
+
+### D15 — Un grupo por defecto
+
+El item del cotizador declara **un** grupo del PDF importado: el unico, o el de mayor area
+si hay varios (mismo criterio que el Detector). A futuro la plantilla del catalogo podra
+declararlo (`PlantillaCotizador.grupo`); hoy la UI no cambia.
+
+### D16 — El imprimible se IMPORTa; generarlo queda pendiente
+
+(a) el admin sube una plancha con placeholders transparentes y el Motor reemplaza cada PH
+con el arte del comprador (una imagen por grupo, z-order splice, `/ECOp1`). (b) generar la
+plancha automaticamente (imposicion A4) queda **fuera de esta entrega**.
+
+### FR-043 — El arte se enlaza al grupo del PDF
+
+Al subir el arte, si el item tiene plantilla, el sistema DEBE registrar la composicion
+contra el grupo del PDF (`manifest.archivos[]`, `origen=compuesta`, `orig{id,params}`).
+Sin esa fila `Motor::procesar_pedido` no tiene con que componer y el PDF del pedido no se
+genera. La operacion es **idempotente** por grupo.
+
+### SC-011 — El imprimible del pedido existe
+
+Un pedido con plantilla y arte del comprador descarga el PDF desde el bloque "Diseno del
+cotizador" del pedido, con el arte compuesto; sin plantilla, el mismo bloque ofrece la
+imagen procesada y el link del PDF no se muestra.
