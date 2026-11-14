@@ -24,6 +24,9 @@
 | **D3** | **Varios mockups**: primero los del **PDF** (Editor, en su orden), despues los **locales**; se muestra el primero y, si hay mas de uno, un selector. |
 | **D4** | **El servidor sintetiza el mockup local**: a partir de `{fondo, hueco, forma}` devuelve el **mismo shape** que `op=mockups` (capas + grupos + imagenes), con la **envoltura del circulo** (4 curvas) cuando la forma lo pide. El cliente no aprende un formato nuevo. |
 | **D5** | **`requiere` es visibilidad**, no render: `arte` (solo con arte subido), `pdf` (solo si la plantilla tiene PDF), `null` (siempre). |
+| **D6** | **Categorias del cotizador**: `sin etiqueta` (ideas del admin) / `GUARDADO` (personalizaciones del cliente) / `COMPRADO` (historial) / **`PROMO`** (admin). La tarjeta muestra la etiqueta y el visor la filtra con su `<select>`. Sin chips en Sugerencias (no saturar). |
+| **D7** | **Titulo del item**: el admin escribe el de una idea; el cliente escribe el suyo al **guardar** y puede editarlo despues. Se guarda aparte del titulo del admin (fallback si esta vacio). |
+| **D8** | **PROMO = `max(pct, pct_cantidad)`**, por unidad: gana **solo si supera** al descuento por cantidad; el precio mostrado es el mejor de los dos y el badge lo dice (`PROMO -50%`). |
 ## 3. Requisitos
 
 - **FR-044**: con plantilla y `grupo = "todos"` (default), el sistema DEBE registrar la composicion
@@ -35,6 +38,10 @@
 - **FR-047**: con varios mockups aplicables, el orden DEBE ser **PDF primero** y local despues, y el
   comprador DEBE poder cambiar de mockup sin perder su arte.
 - **FR-048**: el payload del mockup local DEBE validarse en el servidor (fondo existente en el catalogo
+- **FR-049**: la tira del cotizador DEBE mostrar la **categoria** del item (`GUARDADO`/`COMPRADO`/`PROMO` o ninguna) y el visor DEBE poder filtrar por ella, sumando `PROMO` a los filtros existentes.
+- **FR-050**: el titulo de un item guardado por el cliente DEBE ser **editable** (al guardar y despues); si esta vacio, cae al titulo del admin.
+- **FR-051**: `config.promo = {desde, pct}` DEBE aplicarse por unidad y **solo si supera** al descuento por cantidad; el badge lo indica.
+- **FR-052**: el admin DEBE poder configurar la promo (porcentaje + desde cuantas unidades) desde su consola.
   `img/`, hueco 0..300, forma de la lista) y **nunca** aceptar rutas del cliente.
 
 ## 4. Criterios de exito
@@ -49,3 +56,4 @@
 | **A** | Grupos `todos`/`auto`/HEX + `grupos_de_pdf` + `grupo` en la subida + selector en la consola | **Implementada** (2026-11-13) | `FASE cotizador OK` (12 checks), `FASE pedido OK`, `SMOKE`, `PARIDAD`, `SIN_LECTURA`, `COTIZADOR CONTRATO 31`, `npm test 34`, `typecheck`; laboratorio: `circulo6cm` -> `grupo_enlazado` `0000FF,FF0000`, **`grupos_sin_imagen: []`**, 15 imagenes insertadas |
 | **B** | Rama "Ya tengo diseno" (`pideArte`) + `forma` derivada de la categoria | **Implementada** (2026-11-13) | `npm test 35` (incluye `formaDeCategoria`), `typecheck`, `build:js`; el paso 4 se oculta salvo que la opcion pida arte (retrocompatible) |
 | **C** | Mockup propio sin PDF + `requiere` + orden PDF-primero | **Implementada (C1+C2+C3)** (2026-11-13) | C1: `mockup_local()` + `op=mockups&local` (6 checks). C2: `mockupsDePlantilla()` + `useMockupLocal()` + preview con indice y chips. C3: la consola configura fondo/forma/hueco/requiere en `PlantillaCard`. Puertas: `FASE cotizador OK`, `npm test 36`, `typecheck`, `build:js` | C1: `mockup_local()` + `op=mockups&local` con 6 checks en la fase `cotizador`. C2: `mockupsDePlantilla()` (PDF primero + `requiere`), `useMockupLocal()`, `MockupPreview` con indice y chips; `npm test 36`, `typecheck`, `build:js` |
+| **D** | Categorias (tarjeta + `<select>` del visor) y **PROMO** (`max(pct, cantidad)`) con su UI de admin | **Implementada (motor)** (2026-11-14) | `resolverPromo()` + `promo` en `GalleryPricing`; `metaDeItem` elige el mejor precio y el badge `PROMO`; `Config.promo` saneado; panel de admin; puertas: `npm test 37`, `typecheck`, `GALERIA OK (254)`, `VISOR OK (152/152)`, `build:js` |

@@ -41,3 +41,13 @@
 - [X] T012 Puertas: `cotizador-contrato` (circulo -> 4 curvas; rectangulo -> sin envoltura;
       `requiere='pdf'` sin pdf -> sin mockup), `npm test`, `typecheck` y laboratorio con un mockup
       **sin plantilla** visible en `/cotizador/`.
+
+## Fase D - Categorias y PROMO (2026-11-14)
+
+- [X] **T050** `Config.promo = {desde, pct}` en `types` + saneado en `validation` (se ignora si es invalido).
+- [X] **T051** `resolverPromo()` en `priceEngine` (vence solo si supera al descuento por cantidad).
+- [X] **T052** `metaDeItem` usa `max(cantidad, promo)`, precio promo cuando gana y badge `PROMO`; tono `promo` en el motor del tema.
+- [X] **T053** Panel de admin: % de descuento + desde cuantas unidades (`AdminConfigPanel` + `handleConfigChange`).
+- [X] **T054** Puertas: `npm test 37`, `typecheck`, `GALERIA 254`, `VISOR 152/152`.
+- [ ] **T055** UI: etiqueta de categoria en la tarjeta y `<select>` con `PROMO` en el visor (usa `cats` de `MU.coleccion`).
+- [ ] **T056** Titulo editable por el cliente al guardar/editar (D7).
