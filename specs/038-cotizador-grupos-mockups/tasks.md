@@ -100,3 +100,20 @@
   creciente y `$/plancha` estable) y verificación con el catálogo real
   (`Circulares 5 cm`: `$/plancha` **$4.438** en 1/2/5/10; ahorro 0/24/38/43% sin promo; con promo
   30% → 30/30/38/43% — gana la escala desde las 5 planchas; con 50% → 50% en todas).
+
+## Fase I — Lo que el cliente ve (Enmienda v6, 2026-11-14)
+
+- [X] **T073** Badge del **Total Estimado**: estaba `absolute top-2 right-2` y se **pisaba** con el
+  número y con el rótulo (medido: `badge.bottom = 38`, `num.top = 38`). Ahora va en la **fila del
+  rótulo** (`flex justify-between`): `badge.bottom = 42` vs `num.top = 55` → 13 px de aire,
+  `solapaConNumero: false` y dentro de la tarjeta.
+- [X] **T074** **PROMO automática** en la tira (`D6`): `categoriaDe(item, promo)` devuelve `PROMO`
+  cuando la promo del admin gana, sin que el admin declare nada; si el item ya trae categoría
+  (`GUARDADO`/`COMPRADO`), esa manda.
+- [X] **T075** Título del cliente (`D7`): `useClientIdeas.renombrar(id, titulo)` reusa `op=guardar`
+  con el id existente (no hay endpoint nuevo ni se duplica la idea) y `TiraIdeas` permite
+  **editarlo en la tarjeta** (lápiz → input, Enter guarda, Escape cancela) sólo en items propios.
+- [X] **T076** Categoría `PROMO` en **oro** también en la pastilla de la celda
+  (`.mu-gal-item-cat--promo`), igual que el badge del visor: el verde queda para `COMPRADO`.
+- [X] **T077** Puertas: `npm test 40`, `typecheck`, `build:js`, `pub:tema`, `GALERIA 257`,
+  y bundle verificado en `/cotizador/` (contiene `GUARDADO`, `COMPRADO`, `PROMO`, `renombrar`).
