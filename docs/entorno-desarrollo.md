@@ -119,8 +119,10 @@ No cambiar perfiles, PATH ni versiones sin evidencia de los pasos 1–3.
 ## 6. Límites (sin aprobación explícita del usuario)
 
 - No modificar **bases de datos**, **credenciales** ni **servicios externos**.
-- No **desplegar a producción**: el deploy es el botón *Implementar* de Hostinger (webhooks
-  declarados en `AGENTS.md` §2); antes de hacer `push` a los repos conectados, confirmar.
+- No **desplegar a producción** sin confirmacion: el deploy lo dispara el `push` (webhooks de Hostinger,
+  declarados en `AGENTS.md` §2) y el agente **POST-ea la URL** despues del push; **antes** de hacer
+  `push` a los repos conectados, confirmar. La verificacion se corre con
+  `pwsh -NoProfile -File scripts/verificar-deploy.ps1 -Url <servido> -Local <archivo>` (`DEPLOY OK` = listo).
 - No ejecutar comandos destructivos (borrados masivos, migraciones, instalaciones) sin
   pedirlo antes.
 
