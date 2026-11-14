@@ -193,8 +193,14 @@ diagnóstico) está documentado en `docs/entorno-desarrollo.md` y resumido en §
 **Despliegue automático (webhooks Hostinger — implementaciones al hosting)**:
 - Plugin (este repo): `https://webhooks.hostinger.com/deploy/1f050c10cad12026236eb07cf9fc7c11`
 - Módulo TextMuy: `https://webhooks.hostinger.com/deploy/4df90409198182acd0a39f9fe786a033`
+- Tema (muyunicos): `https://webhooks.hostinger.com/deploy/461c9c6874c9ff5584dd26de26bc2778`
 
-**Deploy: el usuario despliega con el boton Implementar de Hostinger**, sobre 3 repos:
+**Deploy = push + webhook (automatico)**: los tres repos tienen webhook de Hostinger. El push lo dispara por GitHub y, ademas,
+el agente **POST-ea la URL del webhook** despues del push y **verifica** el deploy comparando el archivo servido con el
+local (`?nc=<epoch>` + hash). Con eso el usuario solo **purga cache + Ctrl+F5**: **no** se le pide el boton Implementar.
+El boton queda como rescate si la verificacion falla (p. ej. un `git pull` abortado por archivos untracked).
+
+Repos y rutas:
 
 | Repositorio | Rama | Ruta en el servidor |
 |---|---|---|
