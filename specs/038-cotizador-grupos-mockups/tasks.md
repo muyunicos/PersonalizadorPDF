@@ -117,3 +117,25 @@
   (`.mu-gal-item-cat--promo`), igual que el badge del visor: el verde queda para `COMPRADO`.
 - [X] **T077** Puertas: `npm test 40`, `typecheck`, `build:js`, `pub:tema`, `GALERIA 257`,
   y bundle verificado en `/cotizador/` (contiene `GUARDADO`, `COMPRADO`, `PROMO`, `renombrar`).
+
+## Fase J — La promo "no se pierde" y la tabla de 2 columnas (v7, 2026-11-14)
+
+- [X] **T078** `galleryPricing` calcula la referencia con `calcularPrecioNeto` (sin promo) y expone
+  `precioLista`, `ahorroPct`, `promoManda` y **`promoActiva`**. Antes la base salía promo-descontada:
+  `perUnitBase` quedaba igual al final y el ahorro daba **0%** (por eso la celda 0 mostraba `PROMO`
+  sin `-N%` y con `antes == ya`).
+- [X] **T079** Regla nueva: desde que la promo está **vigente** (`desde` alcanzado) el badge es **ORO**
+  aunque el descuento por cantidad sea mayor; el precio sigue siendo el mejor de los dos. Medido con
+  promo 30% desde 1 plancha: 1→-30% oro, 2→-30% oro, 3→-32%, 5→-38%, 10→-43%, **monótono creciente**
+  (`monotone: true`) y `$/plancha` bajando 3.107 → 2.523.
+- [X] **T080** Texto del badge **siempre `-N%`** (antes anteponía `PROMO`): el **color** dice si es
+  promo (oro) o escala (verde), tanto en la tabla como en el visor y la celda.
+- [X] **T081** `PriceTable` a **2 columnas** (`Planchas` · `Precio`): la fila muestra `N (unidades)` +
+  chip `Tu pedido`, y el precio es **`$X c/u` con el descuento aplicado** (antes mostraba el de lista
+  y quedaba constante). Sin tachado del regular. Badge del ahorro junto al precio.
+- [X] **T082** Paridad PHP: `mu_calc_compute_price` marca `promo.manda` y aplica el mismo criterio
+  (promo vigente = badge, precio = mejor de los dos); `precio-paridad.php` acepta overrides de config.
+- [X] **T083** Puertas: `npm test 40` (+ caso v6: `precioLista` regular pura, ahorro creciente,
+  `$/plancha` estable), `typecheck`, `php -l` del carrito, `build:js`, `pub:tema`, `GALERIA 258`.
+  Laboratorio: tabla de 2 columnas con 6 escalones, precios 2.510→1.480 y **badge oro en todas** las
+  filas con promo vigente.
