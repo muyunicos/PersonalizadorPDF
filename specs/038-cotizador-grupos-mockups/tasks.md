@@ -69,3 +69,19 @@
   escribiendo `config.promos` por `onConfigChange`.
 - [X] **T063** Puertas: `npm test 39` (filtros + desempate + paridad TS/PHP), `typecheck`, `build:js`,
   `pub:tema`, `php -l` del carrito y de `guardar_datos`.
+
+## Fase G — El descuento se ve (Enmienda v6, 2026-11-14)
+
+- [X] **T064** `PriceResult` expone **`precioLista`** (total de ESA cantidad sin ningún descuento),
+  **`ahorroPct`** (% real sobre la lista) y **`promoManda`** (la promo es la que más descuenta).
+  `precioLista` se calcula **siempre** (antes sólo con promo), así el tachado aparece también con
+  1 plancha.
+- [X] **T065** `PriceTable`: la columna `$/plancha` pasa a **`precioLista / planchas`** (estable, no se
+  aplasta con la promo) y el `Ahorro` de cada fila es el **`ahorroPct`** de esa fila (promo + escala).
+- [X] **T066** `OrderSummary` (Total Estimado): **tachado** contra `precioLista` y **badge en la
+  esquina superior derecha** (`-N%`), **oro** si manda la promo y **esmeralda** si es sólo escala.
+- [X] **T067** Tema: `.mu-gal-badge--promo` (y su variante `cotizador`) pasa a **ORO**
+  (`--mu-gal-oro-bg` / `--mu-gal-oro-texto` / `--mu-gal-oro-borde`), el verde queda para el ahorro por
+  cantidad. En el tema `cotizador` el badge es la columna 3 de la grilla.
+- [X] **T068** Puertas: `npm test 40` (precioLista/ahorroPct/$/plancha estable), `typecheck`, `build:js`,
+  `pub:tema`, `GALERIA 247`, `VISOR 152/152`.
