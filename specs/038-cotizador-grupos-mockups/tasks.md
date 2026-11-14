@@ -36,8 +36,8 @@
       devolviendo el **mismo shape** que `op=mockups`.
 - [X] T010 Calculadora: `PlantillaCotizador.mockup{fondo,hueco,forma}` + `requiere`;
       `mockupsDePlantilla()` ordena **PDF primero**; selector si hay mas de uno.
-- [ ] T011 Consola: fondo (picker del catalogo `img/`), forma, hueco y preview 300x300 en
+- [X] T011 Consola: fondo (picker del catalogo `img/`), forma, hueco y preview 300x300 en
       `PlantillaCard`.
-- [ ] T012 Puertas: `cotizador-contrato` (circulo -> 4 curvas; rectangulo -> sin envoltura;
+- [X] T012 Puertas: `cotizador-contrato` (circulo -> 4 curvas; rectangulo -> sin envoltura;
       `requiere='pdf'` sin pdf -> sin mockup), `npm test`, `typecheck` y laboratorio con un mockup
       **sin plantilla** visible en `/cotizador/`.
