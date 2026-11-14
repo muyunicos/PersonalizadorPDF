@@ -405,5 +405,10 @@ no tenia con que componer el PDF del pedido (`Sin imagenes para procesar el pedi
       (`grupo_de_pdf`, fila compuesta con `grupo_id`, nombre determinista, idempotencia,
       `cotizador:pdf:sin:grupo`). Puertas: `FASE cotizador OK`, `FASE pedido OK`, `SMOKE OK`,
       `PARIDAD OK`, `SIN_LECTURA OK`.
-- [ ] T049 Recorrido de navegador del imprimible real: comprar un item con plantilla en el laboratorio
-      y descargar el PDF desde el bloque "Diseno del cotizador" del pedido.
+- [~] T049 **Integracion server-side en el laboratorio** (2026-11-13): item `cot-...` con la plantilla
+      `circulo6cm` + subida + `enlazar_diseno()` -> `archivos[]` con `grupo_id 0000FF` ->
+      `materializar_composiciones()` creo el compuesto (1 creada, 0 faltantes) -> `Motor::procesar_pedido()`
+      inserto **8 imagenes** y devolvio un PDF de **93 KB** (`pdf_ok`). Observacion: `circulo6cm` tiene
+      **dos** grupos (`0000FF` y `FF0000`) y el arte va solo al grupo por defecto (D15); el segundo queda
+      transparente hasta que exista el campo `grupo` en la plantilla. **Falta** el click real en el
+      navegador (pedido + descarga desde el bloque "Diseno del cotizador").
