@@ -85,3 +85,18 @@
   cantidad. En el tema `cotizador` el badge es la columna 3 de la grilla.
 - [X] **T068** Puertas: `npm test 40` (precioLista/ahorroPct/$/plancha estable), `typecheck`, `build:js`,
   `pub:tema`, `GALERIA 247`, `VISOR 152/152`.
+
+## Fase H — `precioLista` es REGULAR PURA (Enmienda v6, 2026-11-14)
+
+- [X] **T069** `precioLista` deja de usar el neto de la fila (que incluia la escala) y pasa a ser
+  **`$/u de 1 plancha x unidades de esa cantidad`**: la referencia *regular pura*, sin promo y sin
+  escala. Es el mismo numero contra el que la promo compara internamente.
+- [X] **T070** `ahorroPct` pasa a medir el **descuento total** sobre esa lista, asi **crece con la
+  cantidad** (antes decrecia porque solo medía lo que la promo agregaba encima de la escala). El
+  `$/plancha` de la tabla es `precioLista / planchas` → **constante** en todos los escalones.
+- [X] **T071** `round2` del porcentaje: estaba multiplicando por 10000 y dividiendo por 100 (4
+  decimales); ahora son 2 decimales reales.
+- [X] **T072** Puertas: `npm test 40` (caso v6 con `precioLista = 15,75 x 40 = 630`, `ahorroPct`
+  creciente y `$/plancha` estable) y verificación con el catálogo real
+  (`Circulares 5 cm`: `$/plancha` **$4.438** en 1/2/5/10; ahorro 0/24/38/43% sin promo; con promo
+  30% → 30/30/38/43% — gana la escala desde las 5 planchas; con 50% → 50% en todas).
