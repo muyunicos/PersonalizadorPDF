@@ -49,5 +49,5 @@
 - [X] **T052** `metaDeItem` usa `max(cantidad, promo)`, precio promo cuando gana y badge `PROMO`; tono `promo` en el motor del tema.
 - [X] **T053** Panel de admin: % de descuento + desde cuantas unidades (`AdminConfigPanel` + `handleConfigChange`).
 - [X] **T054** Puertas: `npm test 37`, `typecheck`, `GALERIA 254`, `VISOR 152/152`.
-- [ ] **T055** UI: etiqueta de categoria en la tarjeta y `<select>` con `PROMO` en el visor (usa `cats` de `MU.coleccion`).
-- [ ] **T056** Titulo editable por el cliente al guardar/editar (D7).
+- [X] **T055** UI: pastilla de categoria en la tarjeta (`categoria` en `MU.coleccion`) y `<select>` del visor con `PROMO` automatica.
+- [X] **T056** Titulo editable: `meta.tituloEditable` + `onEditarTitulo` en el motor del tema (D7).
