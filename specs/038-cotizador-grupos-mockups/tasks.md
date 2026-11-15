@@ -139,3 +139,16 @@
   `$/plancha` estable), `typecheck`, `php -l` del carrito, `build:js`, `pub:tema`, `GALERIA 258`.
   Laboratorio: tabla de 2 columnas con 6 escalones, precios 2.510→1.480 y **badge oro en todas** las
   filas con promo vigente.
+
+## Fase K — La tarjeta de la tira (Enmienda v6, 2026-11-14)
+
+- [X] **T084** La **categoría** y el **descuento** van **juntos arriba de la foto** ( esquina
+  superior izquierda), no en el cuerpo: `mu-gal-item-top` agrupa `.mu-gal-item-cat` + el pill
+  `-N%`. Medido en el lab: `cat.cy = promo.cy = 466`, sin solaparse (`cat.r=156 ≤ promo.l=162`).
+- [X] **T085** Las **unidades** viven en la **misma fila que el precio** (`30 u · $9.063  $6.935`),
+  no en una fila aparte; se retira `mu-gal-item-lote` del motor y se agrega `.mu-gal-item-sep`.
+  Medido: `uni.cy = ya.cy = 593`.
+- [X] **T086** El pill `-N%` de la celda es **oro** cuando la promo del admin es la que manda
+  (`.mu-gal-item-promo--oro`); el ahorro por cantidad sigue esmeralda.
+- [X] **T087** Puertas: `GALERIA 258`, `VISOR 152/152` y laboratorio con 2 promos sembradas
+  (30% Circulares 3–6 y 50% m1 5–6): celda 0 → `[PROMO] [-50%] … 30 u · $9.063 $4.531`.
