@@ -64,7 +64,14 @@ function contratoContexto(ok) {
     check('manifest.contexto = cotizador', ok.has('manifest.contexto = cotizador'));
     check('manifest.pdfs = [] y preview_estado = omisible',
         ok.has('manifest.pdfs = [] (sin PDF)') && ok.has('preview_estado = omisible'));
-    check('subidas[].origen NO inventa un valor del cotizador',
+    check('la descarga del admin sirve la COMPUESTA (y el original a pedido)',
+        ok.has('la descarga del admin prefiere la COMPUESTA')
+        && ok.has('tipo=original sirve el archivo tal como lo subio el cliente'));
+    check('sin compuesta la descarga cae al original',
+        ok.has('sin compuesta cae al original (nunca rompe)'));
+    check('el pedido del admin muestra los dos links y avisa si es invitado',
+        ok.has('el pedido muestra los DOS links (procesada + original)')
+        && ok.has('invitado: aviso de retencion en el pedido'));    check('subidas[].origen NO inventa un valor del cotizador',
         ok.has('la subida queda como fila original'));
     check('pmu_cotizador_activo=false apaga la fachada sin tocar disco',
         ok.has('pmu_cotizador_activo=false apaga activo()')

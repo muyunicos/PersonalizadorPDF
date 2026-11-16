@@ -1019,6 +1019,26 @@ class PMU_Cotizador
      */
     private function ruta_diseno_pedido($order_id, $item_key)
     {
+        $ctx = $this->contexto_item_pedido($order_id, $item_key);
+        $id = (string)$ctx[2];
+        $ruta = $id !== '' ? $this->sesion()->resolver_original($id, (string)$ctx[0], (string)$ctx[1]) : '';
+        if ($ruta !== '' && is_file($ruta)) {
+            return $ruta;
+        }
+        throw new Exception('cotizador:idea:ausente');
+    }
+
+    /**
+     * Contexto AUTORIZADO de un item del pedido (T027).
+     *
+     * Centraliza el permiso (duenio o `edit_shop_order`) y devuelve lo que
+     * necesitan las descargas sin volver a recorrer el pedido.
+     *
+     * @return array{0:string,1:string,2:string,3:string} [duenio, sid, diseno_id, item_key]
+     * @throws Exception `cotizador:idea:ausente` | `cotizador:idea:ajena`
+     */
+    private function contexto_item_pedido($order_id, $item_key)
+    {
         if (!function_exists('wc_get_order')) {
             throw new Exception('cotizador:idea:ausente');
         }
@@ -1041,22 +1061,95 @@ class PMU_Cotizador
             if ((string)$item->get_meta('_pmu_item_key', true) !== $item_key) {
                 continue;
             }
-            $id = (string)$item->get_meta('_mu_diseno_id', true);
-            $sid = (string)$item->get_meta('_pmu_sid', true);
-            $ruta = $id !== '' ? $this->sesion()->resolver_original($id, (string)$duenio, $sid) : '';
-            if ($ruta !== '' && is_file($ruta)) {
-                return $ruta;
-            }
-            break;
+            return [
+                (string)$duenio,
+                (string)$item->get_meta('_pmu_sid', true),
+                (string)$item->get_meta('_mu_diseno_id', true),
+                $item_key,
+            ];
         }
         throw new Exception('cotizador:idea:ausente');
     }
 
     /**
-     * Descarga la IMAGEN PROCESADA del item (contrato C5.4, FR-038).
+     * Ruta de la COMPUESTA del item (recorte + forma del cargador), o '' si no hay.
      *
-     * Reusa la autorizacion por pedido de `ruta_diseno_pedido()` y sirve el
-     * original como adjunto. El PDF no pasa por aca: el resumen enlaza directo a
+     * El nombre del archivo ES el cache (spec 035 D9): si falta, se materializa con
+     * `Compositor` a partir del ORIGINAL + los `params` de la receta. Nunca se
+     * compone si la fila no trae `orig` (receta irreversible).
+     *
+     * @return string ruta absoluta, o '' si no hay compuesta
+     */
+    private function ruta_compuesta_pedido($order_id, $item_key)
+    {
+        $ctx = $this->contexto_item_pedido($order_id, $item_key);
+        $duenio = (string)$ctx[0];
+        $sid = (string)$ctx[1];
+        $clave = (string)$ctx[3];
+        $dirItem = '';
+        if ($this->motor()->clave_valida($duenio)) {
+            try {
+                $dirItem = (string)$this->motor()->dir_order($duenio, (int)$order_id)
+                    . DIRECTORY_SEPARATOR . $clave;
+            } catch (\Throwable $e) {
+                $dirItem = '';
+            }
+        }
+        if ($dirItem === '' || !is_dir($dirItem)) {
+            try {
+                $dirItem = $this->sesion()->dir_item($sid, $clave);
+            } catch (\Throwable $e) {
+                return '';
+            }
+        }
+        $man = $this->sesion()->leer_manifest_dir($dirItem);
+        if (!is_array($man)) {
+            return '';
+        }
+        $fila = array();
+        foreach ((array)($man['archivos'] ?? array()) as $f) {
+            if (!is_array($f) || (string)($f['origen'] ?? '') !== 'compuesta') {
+                continue;
+            }
+            if ((string)($f['file'] ?? '') === '') {
+                continue;
+            }
+            $fila = $f;
+            break;
+        }
+        if (!$fila) {
+            return '';
+        }
+        $destino = $dirItem . DIRECTORY_SEPARATOR
+            . str_replace(array('/', '\\'), DIRECTORY_SEPARATOR, (string)$fila['file']);
+        if (!is_file($destino)) {
+            $this->sesion()->materializar_composiciones($duenio, $sid, $dirItem, $man, '');
+        }
+        return is_file($destino) ? $destino : '';
+    }
+
+    /**
+     * Ruta que se sirve al admin (T097): la COMPUESTA si existe, el ORIGINAL como
+     * respaldo. `solo_original` fuerza el original (segundo link del pedido).
+     *
+     * @return string ruta absoluta
+     * @throws Exception `cotizador:idea:ausente`
+     */
+    private function ruta_descarga_pedido($order_id, $item_key, $solo_original = false)
+    {
+        $original = $this->ruta_diseno_pedido($order_id, $item_key);
+        if ($solo_original) {
+            return $original;
+        }
+        $compuesta = $this->ruta_compuesta_pedido($order_id, $item_key);
+        return $compuesta !== '' ? $compuesta : $original;
+    }
+
+    /**
+     * Descarga la imagen del item (contrato C5.4, FR-038): la COMPUESTA por
+     * defecto (recorte + forma aplicados) y el ORIGINAL con `tipo=original`.
+     *
+     * El PDF no pasa por aca: el resumen enlaza directo a
      * `admin_post_personalizador_pdf_item_descargar`, que ya lo genera y sirve.
      */
     private function descargar()
@@ -1066,7 +1159,8 @@ class PMU_Cotizador
         if ($order_id < 1 || $item_key === '') {
             throw new Exception('cotizador:idea:ausente');
         }
-        $this->emitir($this->ruta_diseno_pedido($order_id, $item_key), true);
+        $solo = ((string)self::param('tipo')) === 'original';
+        $this->emitir($this->ruta_descarga_pedido($order_id, $item_key, $solo), true);
     }
 
     /**

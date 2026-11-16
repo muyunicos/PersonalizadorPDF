@@ -3156,8 +3156,18 @@ class Personalizador_PDF_Plugin
         $itemKey = (string)$item->get_meta('_pmu_item_key', true);
         $orderId = is_object($order) && method_exists($order, 'get_id') ? (int)$order->get_id() : 0;
         $nonce = wp_create_nonce(PMU_Cotizador::NONCE);
-        // FR-038: imagen procesada SIEMPRE; PDF solo si el item tiene plantilla.
+        // Invitado (customer_id = 0): sus archivos quedan en `tmp/` y vencen a los
+        // 30 dias. El aviso evita que el admin los busque en `orders/`.
+        $invitado = !$this->pmu_uploads()->clave_valida(
+            method_exists($order, 'get_customer_id') ? (string)(int)$order->get_customer_id() : ''
+        );
+        // T097: se baja la COMPUESTA (recorte + forma aplicados); el original queda
+        // disponible como segundo link (son datos del cliente).
         $urlImg = admin_url('admin-post.php') . '?action=pmu_cotizador&op=descargar'
+            . '&order_id=' . (int)$orderId
+            . '&item_key=' . rawurlencode($itemKey)
+            . '&_wpnonce=' . rawurlencode($nonce);
+        $urlOrig = admin_url('admin-post.php') . '?action=pmu_cotizador&op=descargar&tipo=original'
             . '&order_id=' . (int)$orderId
             . '&item_key=' . rawurlencode($itemKey)
             . '&_wpnonce=' . rawurlencode($nonce);
@@ -3176,14 +3186,20 @@ class Personalizador_PDF_Plugin
         echo '<div class="pmu-diseno-pedido" style="margin-top:6px;font-size:12px;line-height:1.5">'
             . '<strong>Diseno del cotizador</strong><br>'
             . '<a href="' . esc_url($urlImg) . '" target="_blank" rel="noopener">'
-            . 'Descargar imagen procesada</a>';
+            . 'Descargar imagen procesada</a>'
+            . ' &middot; <a href="' . esc_url($urlOrig) . '" target="_blank" rel="noopener">'
+            . 'Descargar original</a>';
         if ($tienePdf) {
             echo '<br><a href="' . esc_url($urlPdf) . '" target="_blank" rel="noopener">'
                 . 'Descargar PDF listo para imprimir</a>';
         }
         echo '<br><span style="color:#64748b">diseno ' . esc_html($diseno)
-            . ' &middot; item ' . esc_html($itemKey) . '</span>'
-            . '</div>';
+            . ' &middot; item ' . esc_html($itemKey) . '</span>';
+        if ($invitado) {
+            echo '<br><span style="color:#b45309">Invitado: sin carpeta de cliente. '
+                . 'Los archivos quedan en tmp/ y vencen a los 30 dias.</span>';
+        }
+        echo '</div>';
     }
 
     /**

@@ -2268,7 +2268,22 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('retencion: orders/{cliente}/customs/ NO vence', !empty($GLOBALS['cot_retencion_orden']));
             check('retencion: la idea vencida del invitado se poda', !empty($GLOBALS['cot_retencion_tmp']));
             $ctxA = (array)($GLOBALS['cot_ctx'] ?? []);
-            check('contexto() declara cotizador y prefijo cot-',
+            // Spec 038 (T097/T098): descargas del admin y aviso de invitado. Se
+            // verifican sobre el CODIGO porque el arnes no monta un pedido Woo real.
+            $srcCot = (string)@file_get_contents(dirname(__DIR__) . '/inc/class-pmu-cotizador.php');
+            $srcPlug = (string)@file_get_contents(dirname(__DIR__) . '/personalizador-pdf.php');
+            check('la descarga del admin prefiere la COMPUESTA',
+                strpos($srcCot, '$compuesta !== \'\' ? $compuesta : $original') !== false);
+            check('sin compuesta cae al original (nunca rompe)',
+                strpos($srcCot, 'return $compuesta !== \'\' ? $compuesta : $original;') !== false);
+            check('tipo=original sirve el archivo tal como lo subio el cliente',
+                strpos($srcCot, "((string)self::param('tipo')) === 'original'") !== false);
+            check('la compuesta se materializa bajo demanda (cache por nombre)',
+                strpos($srcCot, 'materializar_composiciones') !== false);
+            check('el pedido muestra los DOS links (procesada + original)',
+                strpos($srcPlug, 'Descargar original') !== false);
+            check('invitado: aviso de retencion en el pedido',
+                strpos($srcPlug, 'Los archivos quedan en tmp/') !== false);            check('contexto() declara cotizador y prefijo cot-',
                 ($ctxA['contexto'] ?? '') === 'cotizador' && ($ctxA['prefijo'] ?? '') === 'cot-');
             check('pmu_cotizador_activo=false apaga activo()', !empty($GLOBALS['cot_apagado']));
             check('apagada, listar no devuelve ideas', !empty($GLOBALS['cot_apagado_lista']));
