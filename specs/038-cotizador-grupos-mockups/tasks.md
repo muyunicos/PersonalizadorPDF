@@ -213,3 +213,25 @@ midiendo el lab, no leyendo codigo.
 - [X] **T101** Puertas: `FASE cotizador OK` (+6 checks de T096-T098), `FASE pedido OK`,
   `COTIZADOR CONTRATO 33`, `npm test 41`, `typecheck`, `php -l` (0), `GALERIA 258`,
   `COTIZADOR ASSETS 8`.
+## Fase N — La tira unificada al motor (Enmienda v9, 2026-11-16)
+
+- [X] **T102** `TiraIdeas` (la tira de /cotizador/) delega en **`MU.coleccion`**: adios a
+  las tarjetas React de 190 px con "$99 c/u" y boton "Usar". Ahora usa el MISMO motor
+  que `MiniGallery` (tarjeta 168x150, tema `cotizador`). Fallback blando: si el tema no
+  trae el motor, siguen las tarjetas React.
+- [X] **T103** Categoria con la precedencia acordada (**COMPRADO > GUARDADO > PROMO > nada**):
+  el del admin sin promo no lleva etiqueta; la del cliente, `GUARDADO`; si se comprocho,
+  `COMPRADO` (sea del admin o del cliente); `PROMO` es automatica y en oro.
+- [X] **T104** La **descripcion que repite el titulo no se pinta** (eliminado el titulo
+  duplicado que se veia en /cotizador/).
+- [X] **T105** Titulo de la tira: el valor viejo del JSON (`"Ideas y favoritos"`) se
+  normaliza a **"Sugerencias"** sin que el admin tenga que editar nada.
+- [X] **T106** Renombrar la idea se hace **en el visor** (motor `tituloEditable` +
+  `onEditarTitulo`), que es donde el cliente la mira.
+- [X] **T107** Extraido `hooks/useMotorVisor.ts` (indice, flechas, teclado y bloqueo del
+  scroll): una sola implementacion para las dos tiras.
+- [X] **T108** Funciones PURAS en `src/core/tiraDatos.ts` (`normalizarTitulo`,
+  `categoriaTira`, `descripcionVisible`, `precioTira`) + 4 tests nuevos.
+- [X] **T109** Puertas: `npm test 45` (+4 de la Fase N), `typecheck`, `build:js`,
+  `pub:tema`, `COTIZADOR ASSETS 8`; laboratorio: 4 celdas del motor,
+  `h3 = "Sugerencias"`, `PROMO` en oro, `Personalizar` en todas y `180/30/120/300 u`.
