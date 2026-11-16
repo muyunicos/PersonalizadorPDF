@@ -69,8 +69,6 @@ function contratoContexto(ok) {
     check('pmu_cotizador_activo=false apaga la fachada sin tocar disco',
         ok.has('pmu_cotizador_activo=false apaga activo()')
         && ok.has('apagada, guardar no toca disco (cotizador:inactivo)'));
-    check('assets() no arrastra tienda.js ni campo-montar.js',
-        ok.has('assets() NUNCA encola tienda.js ni campo-montar.js'));
 }
 function contratoIdeas(ok) {
     grupo('Customs, estrella y borrado (C1-C6)');

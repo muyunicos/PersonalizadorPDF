@@ -2270,11 +2270,6 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             $ctxA = (array)($GLOBALS['cot_ctx'] ?? []);
             check('contexto() declara cotizador y prefijo cot-',
                 ($ctxA['contexto'] ?? '') === 'cotizador' && ($ctxA['prefijo'] ?? '') === 'cot-');
-            $assetsC = (array)($GLOBALS['cot_assets'] ?? []);
-            check('assets() encola los 6 modulos del paso', count($assetsC) === 6, implode(',', $assetsC));
-            check('assets() NUNCA encola tienda.js ni campo-montar.js',
-                !in_array('personalizador-pdf-tienda', $assetsC, true)
-                && !in_array('personalizador-pdf-campo-montar', $assetsC, true));
             check('pmu_cotizador_activo=false apaga activo()', !empty($GLOBALS['cot_apagado']));
             check('apagada, listar no devuelve ideas', !empty($GLOBALS['cot_apagado_lista']));
             check('apagada, guardar no toca disco (cotizador:inactivo)',
@@ -5788,15 +5783,12 @@ switch ($fase) {
         $GLOBALS['cot_retencion_tmp'] = !is_dir($dirVieja);
         $GLOBALS['cot_retencion_orden'] = is_dir($dirOrden . DIRECTORY_SEPARATOR . $ideaAd);
 
-        // 10) Fachada: contexto, assets y apagado por filtro (D10/E1.4).
+        // 10) Fachada: contexto y apagado por filtro (D10/E1.4).
         $ctxC = $cotC->contexto();
         $GLOBALS['cot_ctx'] = [
             'contexto' => (string)($ctxC['contexto'] ?? ''),
             'prefijo' => (string)($ctxC['prefijoItem'] ?? ''),
         ];
-        $GLOBALS['test_encolados'] = [];
-        $cotC->assets();
-        $GLOBALS['cot_assets'] = (array)($GLOBALS['test_encolados'] ?? []);
         $GLOBALS['test_cotizador_off'] = true;
         $GLOBALS['cot_apagado'] = $cotC->activo() === false;
         $GLOBALS['cot_apagado_lista'] = ($cotC->listar_ideas()['activo'] ?? true) === false;

@@ -152,3 +152,42 @@
   (`.mu-gal-item-promo--oro`); el ahorro por cantidad sigue esmeralda.
 - [X] **T087** Puertas: `GALERIA 258`, `VISOR 152/152` y laboratorio con 2 promos sembradas
   (30% Circulares 3–6 y 50% m1 5–6): celda 0 → `[PROMO] [-50%] … 30 u · $9.063 $4.531`.
+## Fase L — El puente del cotizador (Enmienda v7, 2026-11-16)
+
+Tres bugs REALES que dejaban el paso de diseno fuera de combate. Se encontraron
+midiendo el lab, no leyendo codigo.
+
+- [X] **T088** El shortcode del tema NO inyectaba el puente: `WP_STICKER_DATA` traia
+  `isAdmin/assetsUrl/configUrl/saveUrl` y **nada mas**, asi que `PMU_DISPONIBLE` era
+  falso y `App.tsx` no renderizaba la seccion "Tu diseno". Ahora `mu_cotizador_puente()`
+  agrega `pmu{baseUrl,ajaxUrl,postUrl,nonce}` (nonce = `PMU_Cotizador::NONCE`), y solo
+  si `class_exists('Personalizador_PDF_Plugin')`: sin plugin no se inyecta y el paso
+  degrada a WhatsApp (D9) en vez de apuntar a un endpoint muerto.
+- [X] **T089** El checkbox "Pide arte al cliente" **no persistia**: `sanitizeDesignOptions`
+  (validation.ts) reconstruia el objeto y **omitia `pideArte`**; el PHP si lo conserva.
+  Agregada la linea + comentario con la causa.
+- [X] **T090** `DesignFields.onChange` leia `estado.ranuras[].ids`, pero
+  `CargadorPMU.prototype.estadoActual()` devuelve `{ids, listo, faltan, minTotal, array,
+  ranuras:<numero>}`. El `.flatMap` sobre un numero lanzaba TypeError y el cargador no
+  montaba. Ahora lee `estado.ids`.
+- [X] **T091** `PMU_Cotizador::assets()` retirado: **nadie lo llamaba** (el bundle carga
+  los modulos solo, D10). Su invariante ("6 modulos, NUNCA tienda.js/campo-montar.js")
+  se migro a `tests/core.test.js`, que es donde hoy vive la lista.
+- [X] **T092** Nombre de la tira: default **"Sugerencias"** (antes "Ideas y favoritos").
+- [X] **T093** Puertas: `FASE cotizador OK`, `FASE pedido OK`, `COTIZADOR CONTRATO 30`,
+  `npm test 41` (+ D10), `typecheck`, `php -l` (0), `GALERIA 258`, `COTIZADOR ASSETS 8`.
+  Laboratorio: puente en el HTML, seccion "Tu diseno" presente, 6 modulos 200, y
+  **subida real** de `foto_a.png` -> `admin-ajax` `success:true` con id
+  `53a1d7fe6869`, `uploads/53a1d7fe6869.webp` (1060 B) y `cot-cb6363b7/manifest.json`
+  con `origen: original`.
+
+### Lo que NO se cerro (a proposito)
+
+- **T094** (pendiente) Recorrido completo del **selector** hasta la miniatura del
+  `.cpmu`: la subida llega al servidor, pero el id no vuelve al cargador porque el
+  automatismo salteo el paso de recorte del selector. Hace falta un `.browser.js` que
+  haga el flujo real (arrastrar/mover el recorte y confirmar) y compruebe que aparece
+  la miniatura y `diseno` se publica.
+- **T095** (pendiente) El **modal de bienvenida/pais del tema** se superpone al cotizador
+  y bloquea los clicks (se ve en cada corrida). No es del cotizador, pero molesta:
+  conviene que no se muestre dentro de `/cotizador/`.

@@ -124,37 +124,6 @@ class PMU_Cotizador
         ];
     }
 
-    /**
-     * Encola SOLO los modulos del paso de diseno (D10/R9): `mockup-render`,
-     * `selector`, `visor`, `biblioteca`, `cargador` y `fotos`. **Nunca**
-     * `tienda.js` (107 KB) ni `campo-montar.js`: no hay campos que montar.
-     */
-    public function assets()
-    {
-        $version = defined('PERSONALIZADOR_PDF_VERSION') ? PERSONALIZADOR_PDF_VERSION : '0';
-        $url = defined('PERSONALIZADOR_PDF_URL') ? PERSONALIZADOR_PDF_URL : '';
-        $modulos = [
-            'personalizador-pdf-mockup-render' => ['archivo' => 'assets/mockup-render.js', 'deps' => []],
-            'personalizador-pdf-selector' => ['archivo' => 'assets/selector-pmu.js', 'deps' => []],
-            'personalizador-pdf-visor' => ['archivo' => 'assets/visor-pmu.js', 'deps' => []],
-            'personalizador-pdf-biblioteca' => ['archivo' => 'assets/biblioteca-pmu.js', 'deps' => ['personalizador-pdf-visor']],
-            'personalizador-pdf-cargador' => ['archivo' => 'assets/cargador-pmu.js', 'deps' => ['personalizador-pdf-visor']],
-            'personalizador-pdf-fotos' => ['archivo' => 'assets/fotos-pmu.js', 'deps' => []],
-        ];
-        foreach ($modulos as $handle => $modulo) {
-            wp_enqueue_script($handle, $url . $modulo['archivo'], $modulo['deps'], $version, true);
-        }
-        $ctx = $this->contexto();
-        // El objeto que YA leen los modulos: solo se le suma la clave `contexto`.
-        wp_localize_script('personalizador-pdf-mockup-render', 'PMU_TIENDA', [
-            'version' => $version,
-            'ajaxUrl' => $ctx['ajaxUrl'],
-            'postUrl' => $ctx['postUrl'],
-            'nonceVistaPrevia' => $ctx['nonce'],
-            'contexto' => self::CONTEXTO,
-        ]);
-        wp_localize_script('personalizador-pdf-mockup-render', 'PMU_COTIZADOR', $ctx);
-    }
 
     /* ==================== Identidad y rutas ==================== */
 
