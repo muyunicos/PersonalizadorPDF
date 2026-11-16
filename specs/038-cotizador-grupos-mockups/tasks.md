@@ -191,3 +191,25 @@ midiendo el lab, no leyendo codigo.
 - **T095** (pendiente) El **modal de bienvenida/pais del tema** se superpone al cotizador
   y bloquea los clicks (se ve en cada corrida). No es del cotizador, pero molesta:
   conviene que no se muestre dentro de `/cotizador/`.
+
+## Fase M — El circuito del arte (Enmienda v8, 2026-11-16)
+
+- [X] **T096** El admin baja la **COMPUESTA** (recorte + forma aplicados):
+  `ruta_descarga_pedido()` la prefiere y cae al original si no existe o no se puede
+  componer (nunca rompe la descarga). La compuesta se **materializa bajo demanda**
+  (`materializar_composiciones`, cache por nombre).
+- [X] **T097** Segundo link **"Descargar original"** (`tipo=original`) en el bloque
+  "Diseno del cotizador" del pedido: los originales siguen disponibles como datos
+  del cliente.
+- [X] **T098** Aviso de **invitado** en el pedido (`customer_id = 0`): sin carpeta de
+  cliente los archivos quedan en `tmp/` y vencen a los 30 dias.
+- [X] **T099** Cierre del **recorrido real** (antes T094): `.browser.js` contra el lab
+  (anonimo) — `.cpmu-agregar` → `.spmu-file` → recorte → `.spmu-ok` → **miniatura en
+  `.cpmu`** (`mini: 1`, `imgs: 1`, sin "Faltan 1"), `admin-ajax` `success:true` y
+  `uploads/{id}.webp` en la sesion.
+- [X] **T100** Quinto bug del circuito: al publicarse el `diseno`, React **remontaba**
+  el cargador y la ranura arrancaba vacia ("Faltan 1" con la imagen ya subida).
+  `DesignFields` manda `idsIniciales` con el id ya subido.
+- [X] **T101** Puertas: `FASE cotizador OK` (+6 checks de T096-T098), `FASE pedido OK`,
+  `COTIZADOR CONTRATO 33`, `npm test 41`, `typecheck`, `php -l` (0), `GALERIA 258`,
+  `COTIZADOR ASSETS 8`.
