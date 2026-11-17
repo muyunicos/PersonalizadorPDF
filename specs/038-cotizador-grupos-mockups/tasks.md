@@ -275,3 +275,14 @@ midiendo el lab, no leyendo codigo.
 - [X] **T119** Dedupe por item (los dos hooks pueden coincidir en la vista del cliente) y
   el pedido se toma de `$item->get_order()` (el 3er parametro del hook es el PRODUCTO).
 - [X] **T120** Puertas: `FASE cotizador OK` (+3 checks), `FASE pedido OK`, `php -l`.
+
+## Fase P — Puerta del carrito (Enmienda v11, 2026-11-16)
+
+- [X] **T115** `tests/cotizador-cart.browser.js` (lab, Playwright): E1 (puente), E10 (0 modulos al
+  abrir), E3 (lienzo 300x300), miniatura del recorte y mockup guardado en el item.
+- [ ] **T116** (pendiente) F5h en el navegador: `guardarMockup()` no dispara en el flujo
+  automatico. Hipotesis: la miniatura entra por la **familia de biblioteca** (evento
+  `usado`), que no llena `filasRef` -> `publicarDiseno` publica un itemKey vacio y la
+  exportacion se saltea. Falta: que `cargador-pmu.js` tambien registre la fila en ese
+  camino (o que el cotizador la derive del manifest).
+- [X] **T117** Puertas: `node tests/cotizador-cart.browser.js` -> `COTIZADOR CART OK (11 checks)`.
