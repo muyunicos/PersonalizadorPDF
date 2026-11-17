@@ -3253,6 +3253,14 @@ class Personalizador_PDF_Plugin
         $sid = isset($cart_item['pmu_sid']) ? (string)$cart_item['pmu_sid'] : '';
         $item = isset($cart_item['pmu_item_key']) ? (string)$cart_item['pmu_item_key'] : '';
         // Respaldo: el mockup guardado en el item (el bundle pudo no mandarlo).
+        // Spec 038 (T116-bis): si el bundle mando `mockupId`, la URL es exacta.
+        if ($previa === '' && !empty($dis['mockupId']) && is_string($dis['mockupId']) && $sid !== '' && $item !== '') {
+            try {
+                $previa = $this->cotizador()->url_item_publica($sid, $item, (string) $dis['mockupId']);
+            } catch (\Throwable $e) {
+                $previa = '';
+            }
+        }
         if ($previa === '' && $sid !== '' && $item !== '') {
             try {
                 $dir = $this->pmu_uploads()->dir_sesion_item($sid, $item);
