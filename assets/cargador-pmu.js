@@ -22,10 +22,21 @@
  * Config:
  *   new CargadorPMU(elemento, {
  *     ranuras: [...],
- *     subir: function(blob, ctx) { return Promise<{id:string}> },  // lo da tienda.js
- *     onChange: function(estado) {},
+ *     // `subir(blob, ctx)` -> Promise<{id}>: el unico camino que manda bytes.
+ *     // `ctx` lleva `{ranura, w, h, forma, params, madre_origen}` (spec 030 D8 +
+ *     // spec 038 F-RECETA: `params` son los v2 de la receta, no el hash).
+ *     subir: function(blob, ctx) { return Promise.resolve({id:''}); },
+ *     // `usar(madre, params, ctx)` -> Promise<{fila}|{coincide:false}>: reusa la
+ *     // familia ya subida (0 bytes, FR-009 "Elegir ya subida").
+ *     usar: function(madre, params, ctx) { return Promise.resolve(null); },
+ *     // `urlDe(id)` -> URL de la miniatura (endpoint protegido; memoizado afuera).
+ *     urlDe: function(id) { return ''; },
+ *     onChange: function(estado) {},      // {ids, listo, faltan, minTotal, array, ranuras}
+ *     onRecorte: function(id, url, params) {},  // recorte local recien compuesto
  *     onError: function(mensaje) {},
- *     tecnico: false   // true = muestra medidas/forma/min y avisos (consola)
+ *     idsIniciales: [[id1], [id2]],       // una entrada por ranura (re-edicion)
+ *     envoltura: null,                    // guia PowerClip del recorte
+ *     tecnico: false                      // true = muestra medidas/forma/min (consola)
  *   })
  *
  * Sin dependencias (JS puro). Exporta tambien en Node (`module`) para poder
@@ -180,6 +191,7 @@
             + '.cpmu-zona-sobre{border-color:#2271b1;background:#f0f6fc}'
             + '.cpmu-zona-llena{opacity:.75}'
             + '.cpmu-falta{margin:6px 0 0;font-size:12.5px;color:#8a6116}'
+            + '.cpmu-error{margin:6px 0 0;font-size:12.5px;color:#b32d2d;background:#fdf2f2;border:1px solid #f4c7c7;border-radius:4px;padding:4px 6px}'
             + '.cpmu-falta[hidden]{display:none}';
         (doc.head || doc.documentElement).appendChild(st);
     }
@@ -215,6 +227,11 @@
     CargadorPMU.prototype.montar = function () {
         if (!this.elemento || this.config.ranuras.length === 0) {
             return false;
+        }
+        // Spec 038 (D): montar() es IDEMPOTENTE. Antes duplicaba toda la UI (dos
+        // `.cpmu` con los mismos handlers) si el consumidor lo llamaba dos veces.
+        if (this.raiz && this.raiz.parentNode) {
+            return true;
         }
         inyectarEstilos();
         var self = this;
@@ -619,10 +636,21 @@
         this._pintar();
     };
 
+    /**
+     * Spec 038 (D): el ERROR tiene su propia linea (`cpmu-error`). Antes reusaba el
+     * aviso de "Faltan N imagen(es)": un fallo se leia como un faltante y, al
+     * repintar, el mensaje desaparecia sin que nadie lo viera.
+     */
     CargadorPMU.prototype._error = function (mensaje) {
-        if (this.txtFalta) {
-            this.txtFalta.hidden = false;
-            this.txtFalta.textContent = mensaje;
+        if (this.raiz) {
+            if (!this.txtError) {
+                var doc = this.raiz.ownerDocument || global.document;
+                this.txtError = doc.createElement('p');
+                this.txtError.className = 'cpmu-error';
+                this.txtError.setAttribute('role', 'alert');
+                this.raiz.appendChild(this.txtError);
+            }
+            this.txtError.textContent = String(mensaje || 'No se pudo completar la operacion.');
         }
         if (this.config.onError) {
             this.config.onError(mensaje);
@@ -648,14 +676,20 @@
     };
 
     CargadorPMU.prototype.destruir = function () {
-        this.config.ranuras.forEach(function (r, i) {
-            var s = this.selectores[i];
-            if (s && s.sel && s.sel.destroy) { s.sel.destroy(); }
-        }, this);
+        // Spec 038 (D): se limpian los selectores para que un segundo `destruir()`
+        // no llame `destroy()` dos veces sobre el mismo modal.
+        var sel = this.selectores || [];
+        this.selectores = [];
+        sel.forEach(function (s) {
+            if (s && s.sel && s.sel.destroy) {
+                try { s.sel.destroy(); } catch (e) { /* el modal ya se cerro */ }
+            }
+        });
         if (this.raiz && this.raiz.parentNode) {
             this.raiz.parentNode.removeChild(this.raiz);
         }
         this.raiz = null;
+        this.txtFalta = null;
     };
 
     var API = {
