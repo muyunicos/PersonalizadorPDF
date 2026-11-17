@@ -3150,9 +3150,9 @@ class Personalizador_PDF_Plugin
             return;
         }
         $diseno = (string)$item->get_meta('_mu_diseno_id', true);
-        if ($diseno === '') {
-            return;
-        }
+        // Spec 038 (F5d): el bloque ya NO depende de `_mu_diseno_id` (esa meta la
+        // escribe el plugin de la calculadora y puede no viajar). Se resuelve el arte
+        // por item_key + sid: asi el admin ve el diseño aunque la meta falte.
         $itemKey = (string)$item->get_meta('_pmu_item_key', true);
         $orderId = is_object($order) && method_exists($order, 'get_id') ? (int)$order->get_id() : 0;
         $nonce = wp_create_nonce(PMU_Cotizador::NONCE);
@@ -3161,8 +3161,7 @@ class Personalizador_PDF_Plugin
         $invitado = !$this->pmu_uploads()->clave_valida(
             method_exists($order, 'get_customer_id') ? (string)(int)$order->get_customer_id() : ''
         );
-        // T097: se baja la COMPUESTA (recorte + forma aplicados); el original queda
-        // disponible como segundo link (son datos del cliente).
+        list($tieneDiseno, $causaSin) = $cot->disponible_descarga($orderId, $itemKey);
         $urlImg = admin_url('admin-post.php') . '?action=pmu_cotizador&op=descargar'
             . '&order_id=' . (int)$orderId
             . '&item_key=' . rawurlencode($itemKey)
@@ -3184,17 +3183,22 @@ class Personalizador_PDF_Plugin
             . '&order_id=' . (int)$orderId
             . '&item_key=' . rawurlencode($itemKey);
         echo '<div class="pmu-diseno-pedido" style="margin-top:6px;font-size:12px;line-height:1.5">'
-            . '<strong>Diseno del cotizador</strong><br>'
-            . '<a href="' . esc_url($urlImg) . '" target="_blank" rel="noopener">'
-            . 'Descargar imagen procesada</a>'
-            . ' &middot; <a href="' . esc_url($urlOrig) . '" target="_blank" rel="noopener">'
-            . 'Descargar original</a>';
-        if ($tienePdf) {
-            echo '<br><a href="' . esc_url($urlPdf) . '" target="_blank" rel="noopener">'
-                . 'Descargar PDF listo para imprimir</a>';
+            . '<strong>Diseno del cotizador</strong><br>';
+        if ($tieneDiseno) {
+            echo '<a href="' . esc_url($urlImg) . '" target="_blank" rel="noopener">'
+                . 'Descargar imagen procesada</a>'
+                . ' &middot; <a href="' . esc_url($urlOrig) . '" target="_blank" rel="noopener">'
+                . 'Descargar original</a>';
+            if ($tienePdf) {
+                echo '<br><a href="' . esc_url($urlPdf) . '" target="_blank" rel="noopener">'
+                    . 'Descargar PDF listo para imprimir</a>';
+            }
+        } else {
+            echo '<span style="color:#b45309" title="' . esc_attr($causaSin !== '' ? $causaSin : 'sin arte') . '">Este item no tiene diseno (sin arte subido).</span>';
         }
-        echo '<br><span style="color:#64748b">diseno ' . esc_html($diseno)
-            . ' &middot; item ' . esc_html($itemKey) . '</span>';
+        echo '<br><span style="color:#64748b">';
+        if ($diseno !== '') { echo 'diseno ' . esc_html($diseno) . ' &middot; '; }
+        echo 'item ' . esc_html($itemKey) . '</span>';
         if ($invitado) {
             echo '<br><span style="color:#b45309">Invitado: sin carpeta de cliente. '
                 . 'Los archivos quedan en tmp/ y vencen a los 30 dias.</span>';

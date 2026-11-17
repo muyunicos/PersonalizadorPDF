@@ -2268,7 +2268,18 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('retencion: orders/{cliente}/customs/ NO vence', !empty($GLOBALS['cot_retencion_orden']));
             check('retencion: la idea vencida del invitado se poda', !empty($GLOBALS['cot_retencion_tmp']));
             $ctxA = (array)($GLOBALS['cot_ctx'] ?? []);
-            // Spec 038 (T097/T098): descargas del admin y aviso de invitado. Se
+            // Spec 038 (F5d): el bloque del pedido no depende de las metas del carrito.
+            $srcPlug2 = (string)@file_get_contents(dirname(__DIR__) . '/personalizador-pdf.php');
+            check('el bloque del pedido resuelve el arte por item_key (no por meta)',
+                strpos($srcPlug2, 'disponible_descarga($orderId, $itemKey)') !== false);
+            check('sin arte el admin ve el aviso con la causa',
+                strpos($srcPlug2, 'Este item no tiene diseno') !== false
+                && strpos($srcPlug2, 'esc_attr($causaSin') !== false);
+            check('hay link de descarga del original (datos del cliente)',
+                strpos($srcPlug2, 'Descargar original') !== false);
+            $srcFachada = (string)@file_get_contents(dirname(__DIR__) . '/inc/class-pmu-cotizador.php');
+            check('la fachada expone disponible_descarga()',
+                strpos($srcFachada, 'public function disponible_descarga') !== false);            // Spec 038 (T097/T098): descargas del admin y aviso de invitado. Se
             // verifican sobre el CODIGO porque el arnes no monta un pedido Woo real.
             $srcCot = (string)@file_get_contents(dirname(__DIR__) . '/inc/class-pmu-cotizador.php');
             $srcPlug = (string)@file_get_contents(dirname(__DIR__) . '/personalizador-pdf.php');

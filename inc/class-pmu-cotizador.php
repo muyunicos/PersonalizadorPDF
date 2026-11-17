@@ -1152,6 +1152,25 @@ class PMU_Cotizador
      * El PDF no pasa por aca: el resumen enlaza directo a
      * `admin_post_personalizador_pdf_item_descargar`, que ya lo genera y sirve.
      */
+    /**
+     * Disponibilidad de la descarga del admin (spec 038, F5d).
+     *
+     * Dice si hay imagen que bajar (compuesta o, si no, original) y con que causa.
+     * El bloque del pedido lo usa para pintar los links o el aviso, sin depender de
+     * las metas del carrito (`_mu_diseno_id`), que puede no viajar si el plugin de la
+     * calculadora es viejo o el item se creo por otro camino.
+     *
+     * @return array{0:bool,1:string} [hay, causa]
+     */
+    public function disponible_descarga($order_id, $item_key)
+    {
+        try {
+            $ruta = $this->ruta_descarga_pedido((int)$order_id, (string)$item_key, false);
+            return [is_string($ruta) && $ruta !== '' && is_file($ruta), ''];
+        } catch (\Throwable $e) {
+            return [false, $e->getMessage()];
+        }
+    }
     private function descargar()
     {
         $order_id = (int)self::param('order_id');
