@@ -930,8 +930,9 @@ class PMU_Cotizador
             }
             // Spec 038 (F5h): el mockup 300x300 del item (guardar y servir).
             if ($op === 'mockup_guardar') {
-                $this->guardar_mockup(self::param('sid'), self::param('item_key'), self::param('gid'), $this->bytes_mockup());
-                wp_send_json_success(['ok' => true]);
+                // Se devuelve la FILA (con `url`): el bundle la necesita para el carrito.
+                $rMock = $this->guardar_mockup(self::param('sid'), self::param('item_key'), self::param('gid'), $this->bytes_mockup());
+                wp_send_json_success($rMock);
                 return;
             }
             if ($op === 'item_imagen') {
