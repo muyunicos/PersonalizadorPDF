@@ -1210,7 +1210,9 @@ class PMU_Cotizador
         $img = PMU_Sesion::convertir_webp($bytes, 82);
         $gid = strtoupper(preg_replace('/[^0-9A-Fa-f]/', '', (string)$gid));
         $nombre = 'mockup-' . ($gid !== '' ? strtolower($gid) : 'principal') . '.webp';
-        $dir = $this->sesion()->dir_item($sid, $item_key, true);
+        // Ojo: `PMU_Sesion::dir_item()` NO crea la carpeta (no tiene `$crear`): se
+        // usa el motor para crearla (si no, la escritura fallaba con `escritura`).
+        $dir = $this->motor()->dir_sesion_item($sid, $item_key, true);
         $destino = $dir . DIRECTORY_SEPARATOR . $nombre;
         if (@file_put_contents($destino, (string) $img['bytes']) === false) {
             throw new Exception('cotizador:mockup:escritura');
