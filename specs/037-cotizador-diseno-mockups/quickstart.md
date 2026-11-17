@@ -203,3 +203,4 @@ node tests/cotizador-pedido.browser.js
 | E7 | **PENDIENTE** — requiere un pedido real: la puerta no crea pedidos |
 
 > Los pendientes son **limitaciones declaradas**, no fallos: la puerta sale 0 y dice cuales son.
+| E3 | `node tests/cotizador-diseno.browser.js` | **OK — 9 checks** (lab): lienzo 300x300, mockup de la forma/tamano, 0 POST al componer, 0 POST al cambiar tamano, PNG con transparencia, FR-009 "Elegir" = 0 bytes, mockup < 2 s |

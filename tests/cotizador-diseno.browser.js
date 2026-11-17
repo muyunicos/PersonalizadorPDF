@@ -115,39 +115,22 @@ function finalizar() {
                 .forEach(function (n) { n.remove(); });
         });
 
-        // 0) E3 pide "elegir forma y tamano": el paso de diseno solo aparece con una
+        // 0) E3 pide "elegir forma y tamano": el paso de diseno solo aparece con la
         // categoria resuelta, y con ella la plantilla (mockup) del admin.
-        await pagina.evaluate(function () {
-            const normal = function (s) { return (s || '').toLowerCase(); };
-            const btns = Array.from(document.querySelectorAll('button'));
-            const material = btns.find(function (b) {
-                const t = normal(b.textContent);
-                return t.indexOf('papel adhesivo') >= 0 || t.indexOf('vinilo') >= 0;
-            });
-            if (material) { material.click(); }
-        });
-        await esperar(1500);
-        await pagina.evaluate(function () {
-            const cont = Array.from(document.querySelectorAll('button'))
-                .find(function (b) { return /continuar/i.test(b.textContent || ''); });
-            if (cont) { cont.click(); }
-        });
-        await esperar(2500);
-        await pagina.evaluate(function () {
-            const normal = function (s) { return (s || '').toLowerCase(); };
-            const forma = Array.from(document.querySelectorAll('button'))
-                .find(function (b) { return normal(b.textContent).indexOf('circulares') >= 0; });
-            if (forma) { forma.click(); }
-        });
-        await esperar(2000);
-        const eleccion = await pagina.evaluate(function () {
-            const normal = function (s) { return (s || '').toLowerCase(); };
-            const talla = Array.from(document.querySelectorAll('button'))
-                .find(function (b) { return /\\d,\\d\\s*cm/.test(normal(b.textContent)); });
-            if (talla) { talla.click(); }
-            return { material: document.body.textContent.indexOf('Vinilo') >= 0, talla: talla ? talla.textContent.trim() : null };
-        });
-        void eleccion;
+        const clicTexto = async function (re) {
+            await pagina.evaluate(function (fuente) {
+                const rx = new RegExp(fuente);
+                const b = Array.from(document.querySelectorAll('button'))
+                    .find(function (x) { return rx.test((x.textContent || '').trim()); });
+                if (b) { b.click(); }
+            }, re.source);
+            await esperar(2000);
+        };
+        await clicTexto(/Papel Adhesivo|Vinilo/);
+        await clicTexto(/^Continuar$/i);
+        await clicTexto(/^Circulares$/);
+        await clicTexto(/\d,\d\s*cm/);
+        await clicTexto(/^Continuar$/i);
         await esperar(2500);
         // 1) Abrir el paso de diseno (hasta aca no se pidio ningun modulo: E10).
         const antes = posts.length;
@@ -176,8 +159,11 @@ function finalizar() {
             };
         });
         // T023b: elegir material + forma no esta automatizado; el lienzo se declara
-        pendiente('E3: lienzo 300x300 con el arte dentro', JSON.stringify(lienzo));
-        pendiente('E3: hay mockup para esta forma y tamano', 'falta elegir material+forma (T023b)');
+        check('E3: el lienzo del mockup es 300x300 y tiene contenido',
+            lienzo.hay && lienzo.lado === 300 && lienzo.alto === 300 && lienzo.noBlanco > 500,
+            JSON.stringify(lienzo));
+        check('E3: hay mockup para esta forma y tamano (no el aviso de ausencia)',
+            lienzo.hay === true && lienzo.aviso === false);
         check('E3: componer el mockup no hace NINGUN POST', posts.length - antes === 0,
             'posts=' + (posts.length - antes));
 
@@ -200,7 +186,7 @@ function finalizar() {
             return c ? { lado: c.width, alto: c.height } : null;
         });
         check('E3: cambiar el tamano NO vuelve a subir (0 POST)', postsSize === 0, 'posts=' + postsSize);
-        pendiente('E3: el lienzo sigue vivo tras cambiar el tamano', 'sin lienzo: falta elegir material+forma (T023b)');
+        check('E3: el lienzo sigue vivo tras cambiar el tamano', !!lienzo2, JSON.stringify(lienzo2));
 
         // 3) PNG con transparencia: el selector lo acepta sin dejar un error visible.
         const rutaAlfa = pngTransparente();
@@ -247,8 +233,7 @@ function finalizar() {
             return !!c;
         });
         // Sin lienzo (T023b) el tiempo de composicion no se puede medir.
-        void t0; void rapido;
-        pendiente('E3: el mockup se ve enseguida (< 2 s)', 'sin lienzo (T023b)');
+        check('E3: el mockup se ve enseguida (< 2 s)', rapido && (Date.now() - t0) < 2000, 'ms=' + (Date.now() - t0));
 
         pendiente('E3: pendientes() = 0 al comprar',
             'requiere el flujo de compra (lo cubre ficha-pedido.browser.js)');
