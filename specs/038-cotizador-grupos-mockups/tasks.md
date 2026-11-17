@@ -252,3 +252,17 @@ midiendo el lab, no leyendo codigo.
 - [X] **T114** Puertas: `GALERIA 261` (+3 checks: `eliminable`, velo recortable y 3 lineas),
   `npm test 45`, `typecheck`, `build:js`, `pub:tema`, `BIBLIOTECA CONTRATO 48`,
   `CAMPOS CONTRATO OK`; laboratorio: `tacho = 0`, `estrella = 4`, boton alineado.
+
+## Fase N (cierre) — El visor cambia de item (Enmienda v11, 2026-11-16)
+
+- [X] **T115** La **META va POR ITEM** en `TiraIdeas`: `abrirVisor` manda `meta` en cada
+  entrada del array (antes mandaba una sola, la del item clickeado, y al navegar solo
+  cambiaba la foto: titulo, descripcion, precios y badge se quedaban clavados). La
+  accion "Personalizar" usa el **indice actual** del visor. Medido en el lab: 1/4
+  "Formas en Vinilo" (-31%) -> 2/4 "Etiquetas de condimentos" (-50%), con todo
+  cambiando junto.
+- [X] **T116** Residuo retirado: `MiniGallery` tenia el fallback de `etiqueta` roto
+  (`' + ' + ' + '`), que pintaba " + + " cuando el item no tenia titulo ni caption.
+- [X] **T117** Puertas: `npm test 46`, `typecheck`, `build:js`, `pub:tema`,
+  `GALERIA 261`, `VISOR 152/152`; contrato `019/contracts/galeria.md` C1 declara
+  `items[].meta` y su precedencia.
