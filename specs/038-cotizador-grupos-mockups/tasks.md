@@ -235,3 +235,20 @@ midiendo el lab, no leyendo codigo.
 - [X] **T109** Puertas: `npm test 45` (+4 de la Fase N), `typecheck`, `build:js`,
   `pub:tema`, `COTIZADOR ASSETS 8`; laboratorio: 4 celdas del motor,
   `h3 = "Sugerencias"`, `PROMO` en oro, `Personalizar` en todas y `180/30/120/300 u`.
+## Fase O — La tarjeta pareja (Enmienda v10, 2026-11-16)
+
+- [X] **T110** El **tacho** no aparece en los items del admin: `eliminable: false` por item
+  en el contrato (`MU.coleccion`) y `eliminable: item.origen === 'custom'` en `TiraIdeas`.
+  Ademas se elimino la **doble confirmacion** (confirmaba el motor y otra vez el
+  componente): ahora la hace el motor (`confirmar`) con el texto correcto.
+- [X] **T111** **Alturas parejas**: `.mu-gal-item-desc` a **3 renglones** con puntos
+  (`-webkit-line-clamp: 3` + `min-height: 3.75em`), `.mu-gal-item { height: 100% }` y
+  `.mu-gal-item-acciones { margin-top: auto }`. Medido en el lab: 4 tarjetas con
+  `alto = 249`, `desc = 36 px (3 lineas)` y el **boton en y = 625 en las cuatro**.
+- [X] **T112** El titulo del velo va en un HIJO (`mu-gal-item-etiqueta-txt`) y se recorta
+  a **2 lineas**: sin eso un titulo largo se desbordaba del area de la foto.
+- [X] **T113** Limpieza: prop `categorias` **muerta** de `MiniGallery` retirada y comentado
+  el cast `as never` de `metaDeItem` (solo lee `title`/`caption`).
+- [X] **T114** Puertas: `GALERIA 261` (+3 checks: `eliminable`, velo recortable y 3 lineas),
+  `npm test 45`, `typecheck`, `build:js`, `pub:tema`, `BIBLIOTECA CONTRATO 48`,
+  `CAMPOS CONTRATO OK`; laboratorio: `tacho = 0`, `estrella = 4`, boton alineado.
