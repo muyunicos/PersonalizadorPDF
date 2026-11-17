@@ -219,7 +219,9 @@ cualquier item; borrado de los propios; precio recalculado al cargar.
 - [X] T034 [US4] `calculadora/src/components/MiniGallery.tsx` + `App.tsx`: precio recalculado al
       cargar con `galleryPricing` contra el catalogo vigente; badge "actualizado" cuando difiere
       del guardado (D7/FR-027)
-- [ ] T035 [US4] Gate: `node tests/cotizador-contrato.test.js --ideas` + navegador (guardar,
+- [X] T035 [US4] Gate: `node tests/cotizador-contrato.test.js --ideas` (10 checks) + puerta de
+      navegador `node tests/cotizador-ideas.browser.js` (7 checks): recorte con receta, guardar,
+      GUARDADO en la tira, favorito y borrado sin huerfanos. `npm run typecheck` limpio.
       recargar, marcar, borrar) + `npm run typecheck`
 - [X] T036 [US4] Retencion (FR-032): fijar el TTL de `tmp/sesion-{sid}/customs/` (el vigente de
       drafts/carrito) y garantizar que `limpiar_ttl()` **no** toca `orders/{cliente}/customs/`; en

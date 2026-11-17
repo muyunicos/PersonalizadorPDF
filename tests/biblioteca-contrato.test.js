@@ -122,7 +122,8 @@ check('el guard cae al camino normal cuando el servidor no reusa (coincide:false
 
 console.log('== Cargador: reuso y receta (T014) ==');
 check('el cargador pasa params al subir y una funcion usar al selector',
-    /params: \(this\.selectores\[indice\] && this\.selectores\[indice\]\._params\)/.test(carg)
+    /params: this\._paramsDe\(indice\)/.test(carg)
+    && /CargadorPMU\.prototype\._paramsDe = function/.test(carg)
     && /usar: self\.config\.usar \? function \(madre, params\)/.test(carg));
 check('el cargador escucha el evento usado y anota el id de la fila',
     /sel\.on\('usado', function \(dato\)/.test(carg) && /dato\.fila && dato\.fila\.id/.test(carg));
@@ -160,7 +161,8 @@ check('el montaje de la tira INVOCA su bloque (})();) y los params viajan con la
 
 console.log('== 5a: version al subir, Elegir ya y URL compartida ==');
 check('la subida lleva madre_origen (validada) y el selector recalcula el primario al cargar',
-    /madre_origen: \(this\.selectores\[indice\] && this\.selectores\[indice\]\._bibMadre\)/.test(carg)
+    /madre_origen: this\._madreDe\(indice\)/.test(carg)
+    && /CargadorPMU\.prototype\._madreDe = function/.test(carg)
     && /fd\.append\('madre_origen'/.test(tienda)
     && /public function biblioteca_madre_por_subida/.test(plugin)
     && /self\._paramsBase = JSON\.stringify\(self\._params\(\)\);\s*\n\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*self\._actualizarPrimario\(\);/.test(sel));

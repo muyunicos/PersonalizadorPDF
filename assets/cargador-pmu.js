@@ -426,6 +426,30 @@
     };
 
     /** Sube el blob al item y, si el servidor devuelve id, lo anota. */
+    /**
+     * Spec 038 (F-RECETA): params v2 de la composicion de una ranura.
+     *
+     * `_params()` y `_bibMadre` son de la INSTANCIA del selector (`selectores[i].sel`),
+     * NO del slot: leerlos del slot devolvia `{}` y el servidor guardaba la subida sin
+     * `receta` (spec 035 D9: sin receta no se puede componer despues).
+     */
+    CargadorPMU.prototype._paramsDe = function (indice) {
+        var slot = this.selectores[indice];
+        var sel = slot && slot.sel;
+        if (!sel || typeof sel._params !== 'function') { return {}; }
+        try {
+            return sel._params() || {};
+        } catch (e) {
+            return {};   // sin imagen todavia: la subida va sin receta (el servidor decide)
+        }
+    };
+
+    /** Familia de biblioteca elegida en la ranura ('' si no hay). */
+    CargadorPMU.prototype._madreDe = function (indice) {
+        var sel = this.selectores[indice] && this.selectores[indice].sel;
+        return (sel && sel._bibMadre) ? String(sel._bibMadre) : '';
+    };
+
     CargadorPMU.prototype._subir = function (indice, blob, posicion) {
         var self = this;
         if (!this.config.subir) {
@@ -439,11 +463,13 @@
             ranura: indice, w: r.w, h: r.h, forma: r.forma,
             // Spec 030 (D8): la receta de la composicion viaja con la subida (el servidor la
             // guarda y despues `Elegir` puede reconocerla).
-            params: (this.selectores[indice] && this.selectores[indice]._params)
-                ? this.selectores[indice]._params() : {},
+            // Spec 038 (F-RECETA): `_params` y `_bibMadre` viven en la INSTANCIA del
+            // selector (`selectores[i].sel`), NO en el slot: leerlos del slot daba {}
+            // y el servidor guardaba la fila SIN receta (imposible componer despues).
+            params: this._paramsDe(indice),
             // Spec 030 (5a): la familia elegida de la biblioteca. El servidor la VALIDA y
             // escribe la fila como version de ESA familia (la tira no suma una entrada nueva).
-            madre_origen: (this.selectores[indice] && this.selectores[indice]._bibMadre) || ''
+            madre_origen: this._madreDe(indice)
         })).then(function (res) {
             btn.disabled = false;
             var id = res && res.id;
