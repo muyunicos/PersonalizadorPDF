@@ -2268,6 +2268,19 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('retencion: orders/{cliente}/customs/ NO vence', !empty($GLOBALS['cot_retencion_orden']));
             check('retencion: la idea vencida del invitado se poda', !empty($GLOBALS['cot_retencion_tmp']));
             $ctxA = (array)($GLOBALS['cot_ctx'] ?? []);
+            // Spec 038 (F5h): mockup del item y miniatura del carrito.
+            $srcF5h = (string)@file_get_contents(dirname(__DIR__) . '/inc/class-pmu-cotizador.php');
+            $srcPlg5h = (string)@file_get_contents(dirname(__DIR__) . '/personalizador-pdf.php');
+            check('el cotizador guarda el mockup del item (guardar_mockup)',
+                strpos($srcF5h, 'public function guardar_mockup') !== false);
+            check('op=mockup_guardar disponible en el endpoint',
+                strpos($srcF5h, 'mockup_guardar') !== false);
+            check('item_imagen sirve un archivo del item (nunca ruta del cliente)',
+                strpos($srcF5h, 'private function item_archivo') !== false
+                && strpos($srcF5h, 'item_imagen') !== false);
+            check('el carrito pinta la miniatura del cotizador',
+                strpos($srcPlg5h, 'carrito_miniaturas') !== false
+                && strpos($srcPlg5h, 'woocommerce_cart_item_name') !== false);
             // Spec 038 (F5e): enganche en la pantalla de PEDIDOS del admin.
             $srcPlug3 = (string)@file_get_contents(dirname(__DIR__) . '/personalizador-pdf.php');
             check('el bloque se engancha en woocommerce_after_order_itemmeta (admin)',

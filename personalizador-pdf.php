@@ -144,7 +144,8 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_pmu_cotizador', [$this, 'handle_cotizador']);
         add_action('admin_post_nopriv_pmu_cotizador', [$this, 'handle_cotizador']);
         // Spec 037 (T027): bloque "Diseno" en el pedido (admin y cliente).
-        // Spec 038 (F5e): el bloque se engancha en `woocommerce_after_order_itemmeta`,
+        // Spec 038 (F5h): miniatura del cotizador en el carrito (mockup ya aprobado).
+        add_filter('woocommerce_cart_item_name', [$this, 'carrito_miniaturas_hook'], 11, 3);
         // que es el hook que dispara la pantalla de PEDIDOS del admin. El
         // `woocommerce_order_item_meta_end` es de la plantilla del CLIENTE (Mi cuenta):
         // en el admin no existe, y por eso el bloque nunca se pintaba. Dedupe por item.
@@ -3226,6 +3227,81 @@ class Personalizador_PDF_Plugin
         echo '</div>';
     }
 
+    /**
+     * Miniatura del item del cotizador en el CARRITO (spec 038, F5h).
+     *
+     * Muestra el mockup ya aprobado (preview 300x300): primero el que mando el
+     * bundle (`calculator_data.diseno.previa`), si no el `mockup-*.webp` del item.
+     * Al clickear abre el visor del tema (la imagen ya esta en el DOM: 0 peticiones).
+     *
+     * @param  string $nombre    HTML del nombre (viene del plugin del carrito).
+     * @param  array  $cart_item Item del carrito.
+     * @return string
+     */
+    public function carrito_miniaturas($nombre, $cart_item)
+    {
+        if (!is_array($cart_item)) {
+            return $nombre;
+        }
+        $previa = '';
+        $calc = (isset($cart_item['calculator_data']) && is_array($cart_item['calculator_data']))
+            ? $cart_item['calculator_data'] : array();
+        $dis = (isset($calc['diseno']) && is_array($calc['diseno'])) ? $calc['diseno'] : array();
+        if (!empty($dis['previa']) && is_string($dis['previa'])) {
+            $previa = (string)$dis['previa'];
+        }
+        $sid = isset($cart_item['pmu_sid']) ? (string)$cart_item['pmu_sid'] : '';
+        $item = isset($cart_item['pmu_item_key']) ? (string)$cart_item['pmu_item_key'] : '';
+        // Respaldo: el mockup guardado en el item (el bundle pudo no mandarlo).
+        if ($previa === '' && $sid !== '' && $item !== '') {
+            try {
+                $dir = $this->pmu_uploads()->dir_sesion_item($sid, $item);
+                foreach ((array)glob($dir . DIRECTORY_SEPARATOR . 'mockup-*.webp') as $ruta) {
+                    $previa = $this->cotizador()->url_item_publica($sid, $item, basename($ruta));
+                    break;
+                }
+            } catch (\Throwable $e) {
+                $previa = '';
+            }
+        }
+        if ($previa === '') {
+            return $nombre;   // sin mockup: no se agrega nada
+        }
+        if (function_exists('mu_galeria_encolar')) {
+            mu_galeria_encolar();   // motor del tema para el visor del carrito
+        }
+        static $script = false;
+        if (!$script) {
+            $script = true;
+            add_action('wp_footer', function () {
+                echo '<script>(function(){document.addEventListener("click",function(e){'
+                    . 'var b=e.target&&e.target.closest?e.target.closest(".pmu-cart-thumb"):null;'
+                    . 'if(!b)return;var u=b.getAttribute("data-pmu-url")||"";'
+                    . 'if(!u)return;'
+                    . 'if(window.MU&&typeof window.MU.visor==="function"){e.preventDefault();'
+                    . 'window.MU.visor({items:[{url:u}],titulo:"Tu diseno",tono:"claro"});}'
+                    . '});})();</script>';
+            });
+        }
+        return $nombre . '<div class="pmu-cart-thumbs" style="display:flex;gap:6px;margin-top:6px">'
+            . '<button type="button" class="pmu-cart-thumb" data-pmu-url="' . esc_url($previa) . '"'
+            . ' aria-label="Ver tu diseno" style="padding:0;border:1px solid #e2e8f0;border-radius:8px;background:#fff;cursor:zoom-in;overflow:hidden">'
+            . '<img src="' . esc_url($previa) . '" alt="Tu diseno" width="56" height="56"'
+            . ' style="display:block;width:56px;height:56px;object-fit:cover" /></button></div>';
+    }
+
+    /**
+     * Miniaturas del item del cotizador en el carrito (hook).
+     *
+     * @param string $nombre    HTML del nombre.
+     * @param array  $cart_item Item del carrito.
+     * @param string $key       Clave del item.
+     * @return string
+     */
+    public function carrito_miniaturas_hook($nombre, $cart_item, $key = '')
+    {
+        return $this->carrito_miniaturas($nombre, $cart_item);
+    }
     /**
      * Spec 035 (D6): al confirmarse el pago, cada item personalizado se MUEVE de
      * la sesion al entregable (`orders/{clave}/{order_id}/{item_key}/`), junto con

@@ -928,6 +928,16 @@ class PMU_Cotizador
                 $this->descargar();
                 return;
             }
+            // Spec 038 (F5h): el mockup 300x300 del item (guardar y servir).
+            if ($op === 'mockup_guardar') {
+                $this->guardar_mockup(self::param('sid'), self::param('item_key'), self::param('gid'), $this->bytes_mockup());
+                wp_send_json_success(['ok' => true]);
+                return;
+            }
+            if ($op === 'item_imagen') {
+                $this->item_archivo(self::param('sid'), self::param('item_key'), self::param('file'));
+                return;
+            }
             if ($op === 'imagen') {
                 $this->servir_imagen();
                 return;
@@ -1170,6 +1180,97 @@ class PMU_Cotizador
         } catch (\Throwable $e) {
             return [false, $e->getMessage()];
         }
+    }
+    /**
+     * Guarda el MOCKUP del item (spec 038, F5h): el preview 300x300 que el cliente
+     * ya aprobo en la ficha. Asi el carrito/el pedido lo muestran sin volver a
+     * componer (ni bajar la imagen de 3000 px, ni montar el motor y la plantilla).
+     *
+     * @return array{id:string,url:string,bytes:int}
+     * @throws Exception `cotizador:mockup:item|formato|tamano|escritura`
+     */
+    public function guardar_mockup($sid, $item_key, $gid, $bytes)
+    {
+        $sid = (string)$sid;
+        $item_key = strtolower(trim((string)$item_key));
+        if ($sid === '' || $item_key === '') {
+            throw new Exception('cotizador:mockup:item');
+        }
+        $bytes = (string)$bytes;
+        if ($bytes === '') {
+            throw new Exception('cotizador:mockup:formato');
+        }
+        if (strlen($bytes) > PMU_Sesion::TOPE_SUBIDA_BYTES) {
+            throw new Exception('cotizador:mockup:tamano');
+        }
+        if (PMU_Sesion::firma_imagen($bytes) === null) {
+            throw new Exception('cotizador:mockup:formato');
+        }
+        // El WebP ya viene del canvas: se guarda tal cual (el navegador codifica).
+        $img = PMU_Sesion::convertir_webp($bytes, 82);
+        $gid = strtoupper(preg_replace('/[^0-9A-Fa-f]/', '', (string)$gid));
+        $nombre = 'mockup-' . ($gid !== '' ? strtolower($gid) : 'principal') . '.webp';
+        $dir = $this->sesion()->dir_item($sid, $item_key, true);
+        $destino = $dir . DIRECTORY_SEPARATOR . $nombre;
+        if (@file_put_contents($destino, (string) $img['bytes']) === false) {
+            throw new Exception('cotizador:mockup:escritura');
+        }
+        return [
+            'id' => pathinfo($nombre, PATHINFO_FILENAME),
+            'nombre' => $nombre,
+            'bytes' => strlen((string) $img['bytes']),
+            'url' => $this->url_item($sid, $item_key, 'mockup', $nombre),
+        ];
+    }
+
+    /**
+     * Sirve un ARCHIVO del item (spec 038, F5h): el mockup guardado, no el original.
+     * El nombre se valida contra el inventario del item (nunca una ruta del cliente).
+     */
+    private function item_archivo($sid, $item_key, $nombre)
+    {
+        $item_key = strtolower(trim((string)$item_key));
+        $nombre = (string)$nombre;
+        if ($item_key === '' || $nombre === '' || strpos($nombre, '..') !== false) {
+            throw new Exception('cotizador:carrito:file');
+        }
+        $dir = $this->sesion()->dir_item($sid, $item_key);
+        $permitidos = array();
+        if (is_dir($dir)) {
+            foreach ((array)glob($dir . DIRECTORY_SEPARATOR . 'mockup-*.webp') as $ruta) {
+                $permitidos[basename($ruta)] = true;
+            }
+            foreach ((array)($this->sesion()->leer_manifest_dir($dir)['archivos'] ?? []) as $fila) {
+                if (is_array($fila) && (string)($fila['file'] ?? '') !== '') {
+                    $permitidos[basename((string)$fila['file'])] = true;
+                }
+            }
+        }
+        if (!isset($permitidos[$nombre])) {
+            throw new Exception('cotizador:carrito:file');
+        }
+        $ruta = $dir . DIRECTORY_SEPARATOR . $nombre;
+        if (!is_file($ruta)) {
+            throw new Exception('cotizador:carrito:ausente');
+        }
+        $this->emitir($ruta, false);
+    }
+
+    /** URL publica de un archivo del item (endpoint protegido, no ruta directa). */
+    /** Wrapper publico de `url_item()` (lo usa el carrito del plugin). */
+    public function url_item_publica($sid, $item_key, $nombre)
+    {
+        return $this->url_item($sid, $item_key, 'mockup', $nombre);
+    }
+
+    private function url_item($sid, $item_key, $tipo, $nombre)
+    {
+        return admin_url('admin-post.php')
+            . '?action=pmu_cotizador&op=item_imagen'
+            . '&sid=' . rawurlencode((string)$sid)
+            . '&item_key=' . rawurlencode((string)$item_key)
+            . '&file=' . rawurlencode((string)$nombre)
+            . '&_wpnonce=' . rawurlencode(wp_create_nonce(self::NONCE));
     }
     private function descargar()
     {
