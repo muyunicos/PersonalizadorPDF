@@ -157,7 +157,11 @@ forma/tamano y ver que el hueco se re-resuelve sin volver a subir.
 - [X] T022 [US2] `calculadora/src/components/DesignStep.tsx`: degradacion (D9) — si
       `PMU_TIENDA`/la fachada no responden, el Paso 4 se oculta (o avisa) y el cotizador sigue
       cotizando y comprando; ofrecer el canal alternativo
-- [ ] T023 [US2] Gate navegador (lab): `specs/037-cotizador-diseno-mockups/quickstart.md` E3 —
+- [~] T023 [US2] Gate navegador (lab) E3 — PARCIAL: `tests/cotizador-diseno.browser.js`
+      en verde con 5 checks (0 POST al componer, 0 POST al cambiar tamano, PNG con
+      transparencia aceptado, **FR-009 "Elegir" = 0 bytes**) y 4 PENDIENTE declarados:
+      el lienzo 300x300 y "< 2 s" dependen de **T023b** (automatizar "elegir material + forma",
+      que hoy no esta hecho y sin eso el paso no llega al mockup).
       subir JPG grande, PNG transparente y recargar; verificar `0` POST de mas al re-encuadrar,
       `pendientes()` en 0 al comprar, el mockup en < 2 s y "Elegir ya subida" (FR-009)
 
