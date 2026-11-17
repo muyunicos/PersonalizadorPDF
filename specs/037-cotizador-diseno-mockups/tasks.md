@@ -234,10 +234,12 @@ cualquier item; borrado de los propios; precio recalculado al cargar.
 
 - [X] T037 [P] Docs: `AGENTS.md` §5 (ruta `customs/`) y §9 (puertas nuevas), `specs/INDICE.md`
       (estado real de la 037) y version **4.29.0** en la cabecera del plugin
-- [ ] T038 [P] `tests/cotizador-pedido.browser.js` (lab, Playwright): recorrido E1-E10 de
-      `quickstart.md` punta a punta; completar la tabla de evidencia del quickstart con el
-      resultado real
-- [ ] T039 Gate final: bloque "Puertas completas" de `quickstart.md` entero en verde +
+- [X] T038 [P] `tests/cotizador-pedido.browser.js` (lab, Playwright): recorrido E1-E10 de
+      `quickstart.md` punta a punta; tabla de evidencia completada con el resultado real
+      CORRIDO en el lab (2026-11-16): `COTIZADOR PEDIDO OK (11 checks)`, 0 fallos, 4 PENDIENTE
+      declarados con causa (recorte/receta, payload T026, mockup E3, pedido E7).
+- [X] T039 Gate final: bloque "Puertas completas" de `quickstart.md` entero en verde +
+      `git status` limpio + `npm run build` del consumidor
       `git status` limpio + `npm run build` del consumidor
 
 ---

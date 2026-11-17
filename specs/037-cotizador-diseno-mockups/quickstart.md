@@ -182,7 +182,7 @@ node tests/cotizador-pedido.browser.js
 | Regresion plugin | `receta` / `fotos` / `biblioteca` / `cola` / `mockup` / `vistas` | **OK** — 21 / 38 / 40 / 22 / 177 / 24 checks |
 | Motor | `motor_smoke` + `parity` | **OK** — `SMOKE OK` + `PARIDAD OK` (el Motor no cambio) |
 | Consumidor | `npm run typecheck` + `npm test` + `npm run build` + `npm run reglas` | **OK** — 26 tests, build OK, reglas regeneradas |
-| E10 | `node tests/cotizador-pedido.browser.js` | **escrito, pendiente de lab** — sin `PMU_COTIZADOR_URL` sale 0 y declara `PENDIENTE`; cubre el conteo de red (0/32/+23 KB), `tienda.js`/`campo-montar.js` = 0 y el payload con `diseno` |
+| E10 | `node tests/cotizador-pedido.browser.js` | **OK — 11 checks, 0 fallos** (lab, 2026-11-16): 0 modulos al abrir, +2 al abrir el paso, +4 al tocar "Cargar imagen", `tienda.js`/`campo-montar.js` = 0; 4 PENDIENTE con causa |
 
 > Al cerrar la spec se completa esta tabla con el **resultado real** de cada puerta (patron de la
 > 036: la evidencia se registra en `quickstart.md`, no en un archivo aparte).
@@ -190,3 +190,16 @@ node tests/cotizador-pedido.browser.js
 | v2 - PDF condicional | `php tests/texto_puente.php cotizador` | **OK** - con plantilla `pdfs=[slug]`/`ok`; sin plantilla `pdfs=[]`/`omisible` (46 checks) |
 | v2 - Mockups del Editor | `cotizador --paridad` / `op=mockups` | **OK** - `mockups_de_pdf('muestra')` devuelve grupos; inexistente -> `cotizador:pdf:ausente` |
 
+### Evidencia del recorrido E1-E10 (lab, 2026-11-16)
+
+| Escenario | Resultado real |
+|---|---|
+| E1 | **OK** — `WP_STICKER_DATA.pmu` con `baseUrl`, `ajaxUrl` y `nonce` |
+| E2 | **OK** — item `cot-*` con `contexto=cotizador` y fila `origen: original` con `sha` de 40 hex |
+| E2 (recorte) | **PENDIENTE** — sin selector no hay receta: el input nativo de respaldo no recorta |
+| E10 | **OK** — 0 modulos al abrir; +2 al abrir el paso; +4 al tocar "Cargar imagen"; `tienda.js`/`campo-montar.js` = 0 |
+| T026 | **PENDIENTE** — la interceptacion de `window.addToCartFromCalculator` no es fiable (los componentes capturan la referencia al renderizar) |
+| E3 | **PENDIENTE** — la composicion del mockup 300x300 se comprueba a mano (canvas + CORS del lab) |
+| E7 | **PENDIENTE** — requiere un pedido real: la puerta no crea pedidos |
+
+> Los pendientes son **limitaciones declaradas**, no fallos: la puerta sale 0 y dice cuales son.

@@ -80,6 +80,27 @@ function pngPrueba(destino) {
 
     try {
         await pagina.goto(URL_COTIZADOR, { waitUntil: 'networkidle' });
+        // E1 (R1): el puente con el plugin esta declarado en la pagina.
+        const puente = await pagina.evaluate(function () {
+            const d = window.WP_STICKER_DATA || {};
+            return {
+                base: String((d.pmu && d.pmu.baseUrl) || ''),
+                ajax: String((d.pmu && d.pmu.ajaxUrl) || ''),
+                nonce: String((d.pmu && d.pmu.nonce) || ''),
+                contexto: String((d.pmu && d.pmu.contexto) || ''),
+            };
+        });
+        check('E1: el puente pmu esta declarado (baseUrl + ajaxUrl + nonce)',
+            puente.base.indexOf('http') === 0 && puente.ajax.indexOf('http') === 0
+                && puente.nonce.length > 8,
+            puente.base || 'sin baseUrl');
+        // T095: el modal de bienvenida/pais del tema se superpone al cotizador y se
+        // queda con los clicks (medido en cada corrida). La puerta lo retira.
+        await pagina.evaluate(function () {
+            document.querySelectorAll('#muyu-country-modal-overlay, .mu-modal-overlay')
+                .forEach(function (n) { n.remove(); });
+        });
+
         check('E10: al abrir no se pide ningun modulo de diseno',
             MODULOS.every(function (m) { return contar(red, m) === 0; }), MODULOS.join(','));
 
@@ -102,6 +123,43 @@ function pngPrueba(destino) {
             if (await input.count()) {
                 await input.setInputFiles(archivo);
                 await esperar(2000);
+                // E2 (R5/R6): el original llega al servidor con su receta (hash 12 hex).
+                let man = null;
+                try {
+                    const base = PMU + '/tmp';
+                    const sesiones = fs.readdirSync(base)
+                        .filter(function (d) { return d.indexOf('sesion-') === 0; })
+                        .map(function (d) { return { d: d, t: fs.statSync(base + '/' + d).mtimeMs }; })
+                        .sort(function (a, b) { return b.t - a.t; });
+                    for (let i = 0; i < sesiones.length && !man; i++) {
+                        const items = fs.readdirSync(base + '/' + sesiones[i].d)
+                            .filter(function (d) { return /^cot-/.test(d); });
+                        for (let j = items.length - 1; j >= 0 && !man; j--) {
+                            const ruta = base + '/' + sesiones[i].d + '/' + items[j] + '/manifest.json';
+                            if (fs.existsSync(ruta)) man = JSON.parse(fs.readFileSync(ruta, 'utf8'));
+                        }
+                    }
+                } catch (e) { man = null; }
+                if (man && Array.isArray(man.subidas) && man.subidas.length > 0) {
+                    const fila = man.subidas[man.subidas.length - 1];
+                    check('E2: el item del cotizador nace con contexto=cotizador',
+                        man.contexto === 'cotizador', String(man.contexto));
+                    check('E2: la subida queda como fila original (con sha de 40 hex)',
+                        fila.origen === 'original'
+                        && /^[a-f0-9]{40}$/.test(String(fila.sha || '')),
+                        String(fila.sha).slice(0, 12) || String(fila.origen));
+                    // La receta solo existe si hubo RECORTE (selector). Con el input
+                    // nativo de respaldo no hay receta: se declara como pendiente.
+                    if (String(fila.receta || '') === '') {
+                        pendiente('E2: receta del recorte (12 hex)',
+                            'subida por input nativo: sin recorte no hay receta');
+                    } else {
+                        check('E2: la receta del recorte es un hash de 12 hex',
+                            /^[a-f0-9]{12}$/.test(String(fila.receta)), String(fila.receta));
+                    }
+                } else {
+                    pendiente('E2: manifest del item subido', 'no se encontro tmp/sesion-*/cot-*');
+                }
                 // T026: interceptar el payload del carrito.
                 const datos = await pagina.evaluate(function () {
                     return new Promise(function (resolver) {
@@ -126,7 +184,8 @@ function pngPrueba(destino) {
                         /^cot-[a-z0-9]{8}$/.test(String(datos.diseno && datos.diseno.itemKey)),
                         String(datos.diseno && datos.diseno.itemKey));
                 } else {
-                    pendiente('T026: payload del carrito con diseno', 'no se pudo interceptar');
+                    pendiente('T026: payload del carrito con diseno',
+                        'la interceptacion no es fiable: los componentes capturan window.addToCartFromCalculator al renderizar');
                 }
             } else {
                 pendiente('E3: input de subida disponible', 'sin #pmu-cotizador-archivo');
