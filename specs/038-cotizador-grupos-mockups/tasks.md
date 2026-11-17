@@ -266,3 +266,12 @@ midiendo el lab, no leyendo codigo.
 - [X] **T117** Puertas: `npm test 46`, `typecheck`, `build:js`, `pub:tema`,
   `GALERIA 261`, `VISOR 152/152`; contrato `019/contracts/galeria.md` C1 declara
   `items[].meta` y su precedencia.
+
+## Fase O — El bloque del pedido (Enmienda v12, 2026-11-16)
+
+- [X] **T118** Enganche correcto: el bloque se pinta en **`woocommerce_after_order_itemmeta`** (pantalla de
+  PEDIDOS del admin). Antes colgaba de `woocommerce_order_item_meta_end`, que es de la
+  plantilla del CLIENTE (Mi cuenta): en el admin no existe y el bloque nunca aparecia.
+- [X] **T119** Dedupe por item (los dos hooks pueden coincidir en la vista del cliente) y
+  el pedido se toma de `$item->get_order()` (el 3er parametro del hook es el PRODUCTO).
+- [X] **T120** Puertas: `FASE cotizador OK` (+3 checks), `FASE pedido OK`, `php -l`.

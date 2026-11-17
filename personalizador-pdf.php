@@ -144,6 +144,11 @@ class Personalizador_PDF_Plugin
         add_action('admin_post_pmu_cotizador', [$this, 'handle_cotizador']);
         add_action('admin_post_nopriv_pmu_cotizador', [$this, 'handle_cotizador']);
         // Spec 037 (T027): bloque "Diseno" en el pedido (admin y cliente).
+        // Spec 038 (F5e): el bloque se engancha en `woocommerce_after_order_itemmeta`,
+        // que es el hook que dispara la pantalla de PEDIDOS del admin. El
+        // `woocommerce_order_item_meta_end` es de la plantilla del CLIENTE (Mi cuenta):
+        // en el admin no existe, y por eso el bloque nunca se pintaba. Dedupe por item.
+        add_action('woocommerce_after_order_itemmeta', [$this, 'pedido_item_diseno_html'], 10, 3);
         add_action('woocommerce_order_item_meta_end', [$this, 'pedido_item_diseno_html'], 10, 3);
         // Spec 030 (T035/D3): al loguearse, el `sid` del invitado se anota en su cuenta
         // (`_pmu_sids`): su historial lo sigue en cualquier dispositivo. Nunca al reves.
@@ -3142,6 +3147,21 @@ class Personalizador_PDF_Plugin
         if (!is_object($item) || !method_exists($item, 'get_meta')) {
             return;
         }
+        // El 3er parametro es el PRODUCTO en `woocommerce_after_order_itemmeta`: el
+        // pedido se toma del propio item (y se acepta el que llegue por el otro hook).
+        if (!is_object($order) || !method_exists($order, 'get_id') || (int)$order->get_id() < 1) {
+            $order = method_exists($item, 'get_order') ? $item->get_order() : null;
+        }
+        if (!is_object($order)) {
+            return;
+        }
+        // Dedupe: los dos hooks pueden coincidir en la vista del cliente.
+        static $pintados = array();
+        $firma = (int)$item_id . '-' . (int)$order->get_id();
+        if (isset($pintados[$firma])) {
+            return;
+        }
+        $pintados[$firma] = true;
         $cot = $this->cotizador();
         if (!$cot->activo()) {
             return; // fachada apagada: el bloque no se pinta (sin efectos laterales)

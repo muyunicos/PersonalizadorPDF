@@ -2268,7 +2268,14 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('retencion: orders/{cliente}/customs/ NO vence', !empty($GLOBALS['cot_retencion_orden']));
             check('retencion: la idea vencida del invitado se poda', !empty($GLOBALS['cot_retencion_tmp']));
             $ctxA = (array)($GLOBALS['cot_ctx'] ?? []);
-            // Spec 038 (F5d): el bloque del pedido no depende de las metas del carrito.
+            // Spec 038 (F5e): enganche en la pantalla de PEDIDOS del admin.
+            $srcPlug3 = (string)@file_get_contents(dirname(__DIR__) . '/personalizador-pdf.php');
+            check('el bloque se engancha en woocommerce_after_order_itemmeta (admin)',
+                strpos($srcPlug3, "add_action('woocommerce_after_order_itemmeta'") !== false);
+            check('el pedido se toma del item cuando el hook pasa el producto',
+                strpos($srcPlug3, '$item->get_order()') !== false);
+            check('el bloque se pinta una sola vez (dedupe por item)',
+                strpos($srcPlug3, 'static $pintados') !== false);            // Spec 038 (F5d): el bloque del pedido no depende de las metas del carrito.
             $srcPlug2 = (string)@file_get_contents(dirname(__DIR__) . '/personalizador-pdf.php');
             check('el bloque del pedido resuelve el arte por item_key (no por meta)',
                 strpos($srcPlug2, 'disponible_descarga($orderId, $itemKey)') !== false);
