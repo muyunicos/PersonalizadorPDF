@@ -117,8 +117,9 @@ function pngPrueba() {
     pagina.on('request', function (r) {
         if (r.method() !== 'POST') { return; }
         const t = r.postData() || '';
-        if (t.indexOf('mockup_guardar') >= 0) { posts.push('mockup'); }
-        else if (t.indexOf('pmu_cotizador') >= 0) { posts.push('cotizador'); }
+        // Spec 038 (T122): el POST del mockup es multipart (el body no trae la `op`:
+        // viaja en el FormData binario). Se cuenta por la RESPUESTA (ver abajo).
+        if (t.indexOf('pmu_cotizador') >= 0) { posts.push('cotizador'); }
         else if (t.indexOf('calculator_add_to_cart') >= 0) { posts.push('cart'); }
     });
     pagina.on('response', async function (r) {
@@ -126,14 +127,14 @@ function pngPrueba() {
         if (u.indexOf('/assets/') >= 0 && u.indexOf('personalizador-pdf') >= 0) {
             modulos.push(u.split('/').pop());
         }
-        // El body del POST es multipart (no se puede leer del request): se detecta la
-        // respuesta JSON del endpoint (`{"success":true,...}` de mockup_guardar).
-        if (u.indexOf('admin-post.php') >= 0 && posts.indexOf('mockup') < 0) {
+        // La respuesta de `op=mockup_guardar` trae `data.nombre` (el `mockup-*.webp`):
+        // se distingue de cualquier otro `success:true` del endpoint.
+        if (u.indexOf('admin-post.php') >= 0) {
             const ct = (r.headers()['content-type'] || '');
             if (ct.indexOf('json') >= 0) {
                 try {
                     const t = await r.text();
-                    if (t.indexOf('"ok":true') >= 0) { posts.push('mockup'); }
+                    if (t.indexOf('"nombre"') >= 0 && t.indexOf('mockup') >= 0) { posts.push('mockup'); }
                 } catch (e) { /* cuerpo no legible */ }
             }
         }
