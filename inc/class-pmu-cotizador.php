@@ -1260,9 +1260,19 @@ class PMU_Cotizador
     }
 
     /** URL publica de un archivo del item (endpoint protegido, no ruta directa). */
-    /** Wrapper publico de `url_item()` (lo usa el carrito del plugin). */
+    /**
+     * Wrapper publico de `url_item()` (lo usa el carrito del plugin).
+     * Spec 038 (T117): si `$nombre` no es un nombre de archivo valido devuelve '',
+     * asi el consumidor cae al respaldo (glob `mockup-*.webp`) en vez de armar una
+     * URL que el endpoint rechazaria con 404.
+     */
     public function url_item_publica($sid, $item_key, $nombre)
     {
+        $nombre = basename(trim((string)$nombre));
+        if ($nombre === '' || strpos($nombre, '..') !== false || strpos($nombre, '/') !== false
+            || strpos($nombre, '\\') !== false) {
+            return '';
+        }
         return $this->url_item($sid, $item_key, 'mockup', $nombre);
     }
 

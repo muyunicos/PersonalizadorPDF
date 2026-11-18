@@ -205,6 +205,10 @@
             onChange: typeof config.onChange === 'function' ? config.onChange : null,
             onError: typeof config.onError === 'function' ? config.onError : null,
             urlDe: typeof config.urlDe === 'function' ? config.urlDe : null,
+            // Spec 038 (T116): avisa cuando el selector REUSA una imagen ya subida
+            // (camino `usado`), que no pasa por `subir` y por lo tanto no llena la
+            // referencia de filas del consumidor. Recibe `{indice, pos, fila}`.
+            onFila: typeof config.onFila === 'function' ? config.onFila : null,
             preview: !!config.preview,
             // `tecnico`: muestra medidas/forma/min y avisos de configuracion.
             // Lo pasa el preview de la consola; la ficha del comprador NO.
@@ -405,8 +409,13 @@
         slot.sel.on('usado', function (dato) {
             // Spec 030 (D8): el selector REUSO la familia (0 bytes): el id de la fila entra
             // al estado de la ranura como si se hubiera subido, y la ranura se repinta.
+            // Spec 038 (T116): el camino `usado` NO llena `filasRef` del consumidor (no hay
+            // subida), asi que ademas se PUBLICA la fila (id, item_key, sid, receta) con el
+            // evento `fila`: sin eso el cotizador no tiene con que componer ni guardar el
+            // mockup (y el carrito se queda sin miniatura).
             var idU = (dato && dato.fila && dato.fila.id) ? String(dato.fila.id) : '';
             if (!idU) { return; }
+            var filaU = dato.fila;
             var reemplazoU = self._reemplazo;
             self._reemplazo = null;
             var posU = reemplazoU ? reemplazoU.posicion : null;
@@ -415,6 +424,13 @@
             } else {
                 self.estado[indice].ids[posU] = String(idU);
             }
+            try {
+                // Spec 038 (T116): se avisa al consumidor para que llene su `filasRef`
+                // (el camino `usado` no pasa por la subida).
+                if (typeof self.config.onFila === 'function') {
+                    self.config.onFila({ indice: indice, pos: posU, fila: filaU });
+                }
+            } catch (e) { /* el consumidor decide */ }
             self._pintar();
         });
         slot.sel.onError(function (mensaje, err) {
