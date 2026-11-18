@@ -1223,6 +1223,8 @@ class PMU_Cotizador
             'nombre' => $nombre,
             'bytes' => strlen((string) $img['bytes']),
             'url' => $this->url_item($sid, $item_key, 'mockup', $nombre),
+                // Spec 038 (T116-c): lista de mockups del item (para el carrito).
+                'mockups' => array_map('basename', (array)glob($dir . DIRECTORY_SEPARATOR . 'mockup-*.webp')),
         ];
     }
 
@@ -1259,7 +1261,51 @@ class PMU_Cotizador
         $this->emitir($ruta, false);
     }
 
-    /** URL publica de un archivo del item (endpoint protegido, no ruta directa). */
+    /**
+     * Inventario de MOCKUPS del item (spec 038, T116-d).
+     *
+     * Devuelve `{sid, item_key, mockups: [{nombre, url}, ...], subidas: [...]}`
+     * para que el consumidor (bundle) conozca el preview guardado SIN tener que
+     * adivinar el nombre del archivo. No escribe nada.
+     *
+     * @throws Exception `cotizador:item:sin_sesion`
+     */
+    public function item_mockups($sid, $item_key)
+    {
+        $sid = trim((string)$sid);
+        $item_key = strtolower(trim((string)$item_key));
+        if ($sid === '' || $item_key === '') {
+            throw new Exception('cotizador:item:sin_sesion');
+        }
+        $dir = $this->sesion()->dir_item($sid, $item_key);
+        $mockups = array();
+        if (is_dir($dir)) {
+            foreach ((array)glob($dir . DIRECTORY_SEPARATOR . 'mockup-*.webp') as $ruta) {
+                $nombre = basename($ruta);
+                $mockups[] = [
+                    'nombre' => $nombre,
+                    'bytes' => (int)@filesize($ruta),
+                    'url' => $this->url_item_publica($sid, $item_key, $nombre),
+                ];
+            }
+        }
+        $man = ($dir !== '') ? $this->sesion()->leer_manifest_dir($dir) : array();
+        $subs = array();
+        foreach ((array)($man['subidas'] ?? array()) as $fila) {
+            if (!is_array($fila) || (string)($fila['id'] ?? '') === '') { continue; }
+            $subs[] = [
+                'id' => (string)$fila['id'],
+                'item_key' => (string)($fila['item_key'] ?? $item_key),
+                'sid' => (string)($fila['sid'] ?? $sid),
+                'sha' => (string)($fila['sha'] ?? ''),
+                'origen' => (string)($fila['origen'] ?? ''),
+            ];
+        }
+        return ['sid' => $sid, 'item_key' => $item_key, 'mockups' => $mockups, 'subidas' => $subs];
+    }
+
+    /**
+     * URL publica de un archivo del item (endpoint protegido, no ruta directa).
     /**
      * Wrapper publico de `url_item()` (lo usa el carrito del plugin).
      * Spec 038 (T117): si `$nombre` no es un nombre de archivo valido devuelve '',
