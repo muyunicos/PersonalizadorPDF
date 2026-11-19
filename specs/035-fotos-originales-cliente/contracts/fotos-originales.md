@@ -2,6 +2,13 @@
 
 > Normativo. Si el codigo y este archivo discrepan, gana este contrato (y se corrige el codigo).
 
+> **Enmienda (spec 039, 2026-11-19)**: C2 se lee con el `id` como identidad. El campo `madre` de las
+> filas viejas se conserva **solo por compatibilidad de lectura** (no se borra ni se reescribe): ya no
+> significa "familia". El original vive en `tmp/sesion-{sid}/uploads/{id}.{ext}` (compartido por la
+> sesion) y se puede **borrar en el acto** (`PMU_Sesion::borrar_original_item`, D3) desde "Mis
+> imagenes" o el visor del campo: el archivo se borra **solo si ningun otro item de la sesion lo
+> referencia**. `orders/` no se toca nunca (C5).
+
 ## C1 — Receta v2 (identidad de la composicion)
 
 ```json

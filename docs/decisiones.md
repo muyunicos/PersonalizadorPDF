@@ -391,6 +391,27 @@ backup es una copia de `uploads/pmu/`, como para los PDFs, las imagenes o los pr
 Detalle y alternativas: `specs/012-campos-consola/spec.md` (D1–D22), `research.md` (R1–R6) y
 `contracts/campos.md` + `contracts/campos-consola.md`.
 
+## Sync Impact Report (v4.3.0 — spec 039, 2026-11-19)
+
+- **Bump**: **MINOR** (4.29.0 -> 4.30.0). No cambia ningun principio de la `constitution`: el Motor,
+  el render en navegador y la estructura de `uploads/pmu/` quedan intactos.
+- **Sin enmienda de constitucion**: la 039 es **código + docs**. Retira codigo muerto (modelo
+  "familias" de la 030, superado por la 035) y cierra 6 hallazgos de friccion del pipeline.
+- **Modificado** (docs): `specs/030.../contracts/biblioteca.md` y `cliente-biblioteca.md` (nota de
+  supersesion de "familias"; `listar` -> `imagenes[]`; se retiran `op=usar`/`op=usos`),
+  `specs/016.../contracts/selector-visual.md` (enmienda v5: sin `Elegir`; `Eliminar` con confirmacion),
+  `specs/035.../contracts/fotos-originales.md` (C2: `madre` por compatibilidad de lectura; borrado en
+  el acto por `borrar_original_item`).
+- **Supersede**: la decision **D5 de la 030** (familias con sufijo `{madre}-n`) y **D8 de la 030**
+  (Elegir vs Subir) quedan **SUPERADAS por la 039 D5/D6**. La identidad es el `id` (sha1 del contenido).
+- **Impacto en codigo**: `assets/visor-pmu.js` (mini-dialogo), `assets/cargador-pmu.js` (reintento +
+  borrado), `assets/selector-pmu.js` (sin `_bibMadre`/`usar`), `assets/tienda.js` (sin `usarBiblioteca`,
+  `borrarFoto`, `subidas.detalle`), `assets/biblioteca-pmu.js` (tira sin versiones), `personalizador-pdf.php`
+  (`op=borrar`, retiro de `usar`/`usos`), `inc/class-pmu-sesion.php` (`borrar_original_item`, retiro de
+  `familias()`/`usar_de_biblioteca()`). **El Motor (`Pdf`/`Detector`/`Overlay`/`Motor`/`Compositor`) no cambia.**
+- **Spec**: [039-cargas-friccion](../specs/039-cargas-friccion/spec.md) (H1-H6, D1-D8, US1-US5) +
+  `plan.md` (F0-F6) + `tasks.md`.
+
 ## Sync Impact Report (v4.0.0, 2026-11-02)
 
 - **Bump**: **MAJOR** (3.0.0 -> 4.0.0). Cambia un principio NON-NEGOTIABLE (§I) en su flujo de UI.

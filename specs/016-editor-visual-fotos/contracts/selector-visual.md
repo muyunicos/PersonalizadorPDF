@@ -2,6 +2,13 @@
 
 **Feature**: 016-editor-visual-fotos + 021-cargador-visor-cliente | **Fecha**: 2026-10-19
 
+> **Enmienda v5 (spec 039, 2026-11-19)**: la rama de reuso **"Elegir" (0 bytes) se retira**.
+> El primario del modal dice **siempre `Subir`** y siempre viajan bytes; se retiran `_bibMadre`,
+> `config.usar`, `_yaElegido`, `_paramsBase` y `_actualizarPrimario`. La tira "Mis imagenes" pasa a
+> **una entrada por imagen** (sin badge `N versiones`), al tocar **carga directo** en el modal
+> (IndexedDB si existe, `op=imagen` si no) y **no** abre un visor de biblioteca. `Eliminar` pide
+> confirmacion (mini-dialogo propio en `visor-pmu.js`, D1) y el visor **no se reabre** tras borrar.
+>
 > **Enmienda v4 (spec 024, 2026-10-20)**: pulido de los controles y de la guia.
 > - **Controles en 3 filas**: (1) los 3 modos a la izquierda, los tres del mismo ancho, y **al tocarlos la `Escala` vuelve al medio**; (2) **`Escala`** al 100% del ancho **sin boton de reset**; (3) `Fondo` con **icono damero** (transparente) + **icono `auto`** (visible solo si el fondo no es automatico) y **`Girar`** a la derecha.
 > - **Acciones**: `Cargar imagen` a la izquierda; `Cancelar` + `Subir` a la derecha.

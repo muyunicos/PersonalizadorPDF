@@ -3,6 +3,13 @@
 > **Nota de supersesion (spec 035, 2026-10-28)**: las fotos se resuelven por **`id`** del original
 > (cadena `orders/{cliente}/uploads/` -> `tmp/sesion-{sid}/uploads/`); `subidas/` ya no existe. El
 > resto del contrato (endpoint, identidad, `op=`) sigue igual.
+>
+> **Nota de supersesion (spec 039, 2026-11-19)**: el modelo "familias" se **retira**. La identidad
+> es el `id` (sha1 del contenido, D24): **una imagen + N recetas**. Se retiran `op=usar` y `op=usos`
+> (el boton "Elegir" de 0 bytes desaparece; la tira carga directo), `familias()`/`familia_de()`/
+> `borrar_familia_dir()` del servidor, y el badge `N versiones`. `listar` pasa a devolver
+> **imagenes** (`id`, `url`, `thumb`, `recetas[]`, `bytes`, `creado`); el borrado se hace **por
+> imagen** desde el visor del campo (`op=borrar`, D3 de la 039), idempotente y sin tocar `orders/`.
 
 Endpoint unico: `admin_post_personalizador_pdf_biblioteca` (+ `nopriv`).
 Nonce: `personalizador_pdf_vista_previa`. Identidad: **cookie `pmu_sid`** (spec 014), nunca el `sid`

@@ -36,6 +36,13 @@ Sin endpoint (consola o preview) `abrir()` **no dibuja nada** y avisa por `conso
   usan la **misma** URL, asi que el navegador la sirve de su cache y **navegar no hace ningun POST** (D23).
 - Las imagenes se sirven por `op=imagen` (`Cache-Control: private` + `ETag`): una sola politica de acceso (D14).
 
+> **Nota de supersesion (spec 039, 2026-11-19)**: la tira pasa a **una entrada por imagen** (sin
+> agrupar por `madre`, sin badge `N versiones`); al **tocar** una miniatura la imagen **carga directo**
+> en el modal de recorte (IndexedDB si existe, `op=imagen` si no) y **no** abre un visor de biblioteca.
+> Se retiran `PMUBiblioteca.usar()`, el visor con `Elegir`/`Borrar` y la rama de reuso del selector
+> (`_bibMadre`/`_yaElegido`). Borrar se hace desde el visor del campo (D1/D3 de la 039). La cache
+> (`revision`/`sin_cambios`) y el tope de 10 contenedores **no cambian**.
+
 ## Visor compartido (`PMUVisor`, `assets/visor-pmu.js`)
 
 | Miembro | Firma | Que hace |

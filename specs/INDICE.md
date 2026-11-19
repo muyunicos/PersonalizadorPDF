@@ -14,6 +14,23 @@
 > cada PH perforada (alfa 0)**; la ficha dibuja los PH **debajo** y el aplanado **encima** (la foto
 > se ve por el hueco). **1 archivo, 1 descarga**; PH con perspectiva no se perfora (aviso). **v4.28.1**.
 
+> **2026-11-19**: spec **039-cargas-friccion** en **borrador** — friccion del pipeline de cargas
+> del comprador (H1-H6): mini-dialogo de confirmacion para `Eliminar` (D1), reintento de subida al
+> tocar la miniatura (D2), borrado en el acto de la fila y del archivo compartido (D3), tira "Mis
+> imagenes" que carga directo (D4), modelo **una imagen + N recetas** con retiro de `op=usar`/
+> `op=usos`/familias (D5/D6). **El Motor no se toca**; sin migracion. Enmienda la 030 (modelo de
+> familias), la 016 (sin `Elegir`) y la 035 (C2: `madre` por compatibilidad de lectura).
+
+> **2026-11-19**: spec **039-cargas-friccion** — **implementada** (v4.30.0): friccion del pipeline
+> de cargas del comprador. **H1** (el `_yaElegido` trucho de "Elegir") y **H6** (codigo muerto del
+> modelo "familias") resueltos **retirando** la rama de reuso `op=usar` y `familias()` (una imagen +
+> N recetas, la identidad es el `id`). **H2**: `Eliminar` pide confirmacion con un **mini-dialogo propio**
+> del visor y no reabre el visor. **H3**: **reintentar** la subida tocando la miniatura marcada. **H4**:
+> **borrado en el acto** (`PMU_Sesion::borrar_original_item` + `op=borrar`), idempotente y sin tocar
+> `orders/`. **H5**: `subidas.detalle()` y aviso con el total. **El Motor no se toca**; sin migracion.
+> Puertas: `biblioteca-contrato` 60, `selector-contrato` 100, `campos-contrato` 128, `cola-subida` 27,
+> `receta-contrato` 21 + 40 fases del arnes PHP + `motor_smoke` + `parity`.
+
 ## Activos (codigo completo, falta solo manual WP real)
 | Spec | Codigo | Pendiente manual | Docs normativos |
 |------|--------|------------------|-----------------|
