@@ -229,7 +229,7 @@
         // Spec 039 (D2): blobs de las subidas que FALLARON, por ranura y posicion.
         // Viven en memoria (moran con la pestana): al tocar la miniatura marcada se
         // reintenta con el MISMO recorte, sin volver a elegir el archivo.
-        // { indice: { posicion: { blob, params, madre_origen, error } } }
+        // { indice: [ { blob, params, error } ] }  (spec 039 D2: blobs de fallos por ranura)
         this._fallos = {};
     }
 
