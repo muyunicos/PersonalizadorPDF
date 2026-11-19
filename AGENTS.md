@@ -718,7 +718,7 @@ php -l personalizador-pdf.php
 Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.FullName }
 php tests/campos_migracion.php   # CRUD de campos v3 (debe decir "CAMPOS V3 OK")
 php tests/certificacion_hoja.php  # Certificacion del sprite (debe decir "CERTIFICACION HOJA OK")
-php tests/catalogo_uploads.php  # Catalogo de uploads (spec 041): carpetas, lock, miniaturas y reconstruccion ("CATALOGO UPLOADS OK")
+php tests/catalogo_uploads.php  # Catalogo de uploads (spec 040): carpetas, lock, miniaturas y reconstruccion ("CATALOGO UPLOADS OK")
 node tests/campos-contrato.test.js  # Montaje de campos + cargador (spec 012): "CAMPOS CONTRATO OK"
 node tests/selector-contrato.test.js  # Contrato del selector visual (spec 016): "SELECTOR CONTRATO OK"
 node tests/biblioteca-contrato.test.js  # Biblioteca del comprador (spec 030): "BIBLIOTECA CONTRATO OK (N checks)"

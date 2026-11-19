@@ -32,7 +32,7 @@
     var ultimoEl = null; // contenedor vigente de la tira (para repintar tras borrar)
     var ultimas = [];    // ultima lista pintada: el visor muestra TODAS (no solo las visibles)
     var onElegir = null;
-    // Spec 041 (F1): promesa EN VUELO compartida. `calentar()` y `tira()` (y el modal
+    // Spec 040 (F1): promesa EN VUELO compartida. `calentar()` y `tira()` (y el modal
     // abierto dos veces) lanzaban listados completos en paralelo: 3 POST identicos.
     var enVuelo = null;
 
@@ -81,7 +81,7 @@
     function pedir(sinDesde) {
         var c = config();
         if (!c.url) { return Promise.reject(new Error('api:biblioteca:sin:endpoint')); }
-        // Spec 041 (F1): una sola peticion en vuelo (ver `enVuelo`).
+        // Spec 040 (F1): una sola peticion en vuelo (ver `enVuelo`).
         if (enVuelo && !sinDesde) { return enVuelo; }
         var previa = leerCache();
         var fd = new FormData();
@@ -296,7 +296,7 @@
     }());
     /** Spec 030 (4a): el calentado corre con la pagina cargada (los globals ya estan). */
     function calentar() {
-        // Spec 041 (F1): con copia fresca no se pide nada (el primer gesto en el panel
+        // Spec 040 (F1): con copia fresca no se pide nada (el primer gesto en el panel
         // disparaba un listado completo aunque la copia tuviera segundos de vida).
         var fresca = leerCache();
         if (fresca && fresca.revision && (Date.now() - (fresca.ts || 0)) < 30000) { return; }

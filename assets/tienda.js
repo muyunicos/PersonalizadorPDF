@@ -89,7 +89,7 @@
             if (!isFinite(ox)) { ox = 0; }
             var oy = parseFloat(r.oy);
             if (!isFinite(oy)) { oy = 0; }
-            // Spec 041 (A1): `min: 0` es valido (campo opcional). Antes `|| 1` y el
+            // Spec 040 (A1): `min: 0` es valido (campo opcional). Antes `|| 1` y el
             // `Math.max(1, ...)` lo subian a 1. Va en LOS DOS normalizadores
             // (este y `CargadorPMU.normalizarRanuras`): la puerta anti-divergencia
             // compara los resultados.
@@ -2051,13 +2051,13 @@
                 fd.append('item_key', ses.item_key || '');
                 fd.append('id', String(id || ''));
                 fd.append('_wpnonce', cfg.nonceVistaPrevia || '');
-                // Spec 041 (T020): segunda llamada (el comprador ya confirmo).
+                // Spec 040 (T020): segunda llamada (el comprador ya confirmo).
                 if (confirmar) { fd.append('confirmar', '1'); }
                 return postAjax(fd).then(function (json) {
                     if (!json || !json.success) {
                         throw new Error((json && json.data) || 'motor:borrar:falla');
                     }
-                    // Spec 041 (T020): la imagen esta en carrito o en un pedido: el
+                    // Spec 040 (T020): la imagen esta en carrito o en un pedido: el
                     // servidor NO borro nada y pide confirmacion explicita.
                     if (json.data && json.data.requiere_confirmacion) {
                         var errConf = new Error('La imagen esta en un carrito o en un pedido.');

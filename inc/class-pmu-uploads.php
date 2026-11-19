@@ -51,7 +51,7 @@ class PMU_Uploads
     /** Sufijo de la miniatura cuadrada del comprador: `{id}-80x80.webp`. */
     const MINIATURA_SUFIJO = '-80x80.webp';
 
-    /** Lock de la mutacion serializada del catalogo (spec 041 A-4). */
+    /** Lock de la mutacion serializada del catalogo (spec 040 A-4). */
     const LOCK_UPLOADS = 'uploads.json.lock';
 
     /** Grilla del sprite por ambito (defaults; el catalogo vigente manda). */
@@ -1203,7 +1203,7 @@ class PMU_Uploads
     }
 
     /**
-     * Mutacion SERIALIZADA del catalogo (spec 041 A-4).
+     * Mutacion SERIALIZADA del catalogo (spec 040 A-4).
      *
      * Lee DENTRO del lock y escribe atomico: dos pestanas no se pisan. El callable
      * recibe el catalogo por referencia (`function (&$c) {...}`).

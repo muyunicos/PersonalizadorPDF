@@ -263,7 +263,7 @@ console.log('\n== spec 019: ranura adaptativa (phsize + aviso) ==');
     check('auto + r + size + ox + oy se normalizan con phsize',
       rauto.forma === 'auto' && rauto.w === 1000 && rauto.r === 1 && rauto.size === 0.9 && rauto.ox === 5 && rauto.oy === -5);
     const rmin = nr({ w: 10, h: 10, min: 0, max: 0 }, null);
-    // Spec 041 (A1): `min: 0` es un campo OPCIONAL (el cotizador lo usa asi);
+    // Spec 040 (A1): `min: 0` es un campo OPCIONAL (el cotizador lo usa asi);
     // `max` nunca queda por debajo de `min`.
     check('min 0 se respeta y max nunca queda por debajo', rmin.min === 0 && rmin.max === 1);
     const rneg = nr({ w: 10, h: 10, min: -3, max: 2 }, null);
@@ -381,7 +381,7 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
     const r = Carg.normalizarRanuras([{ w: 10, h: 10, min: 3, max: 1 }])[0];
     return r.min === 3 && r.max === 3;   // max nunca queda por debajo de min
   })());
-  // Spec 041 (A1): `min: 0` es un campo OPCIONAL. Antes `parseInt(0) || 1` lo
+  // Spec 040 (A1): `min: 0` es un campo OPCIONAL. Antes `parseInt(0) || 1` lo
   // convertia en 1 y el cargador avisaba "Faltan 1 imagen(es)" en un campo que
   // no exige nada (el cotizador lo pasa asi).
   check('cargador: min 0 se respeta (campo opcional)',

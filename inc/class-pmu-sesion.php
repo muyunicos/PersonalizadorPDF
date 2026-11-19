@@ -977,7 +977,7 @@ class PMU_Sesion
                         $filas[$i]['mime'] = $img['mime'];
                         $filas[$i]['bytes'] = (int)@filesize($ruta);
                         $filas[$i]['sha'] = $sha;
-                        // Spec 041 (F4): w/h en la FILA (no solo en el retorno): asi
+                        // Spec 040 (F4): w/h en la FILA (no solo en el retorno): asi
                         // `imagenes()` no abre cada archivo con `getimagesize` en cada
                         // listado de la biblioteca.
                         $filas[$i]['w'] = is_array($med) ? (int)$med[0] : 0;
@@ -995,7 +995,7 @@ class PMU_Sesion
                 }
                 $nueva = $this->fila_subida($id, '', $receta, $sha, $img['mime'],
                     (int)@filesize($ruta), time(), 'original', $paramsV2);
-                // Spec 041 (F4): las medidas se PERSISTEN con la fila.
+                // Spec 040 (F4): las medidas se PERSISTEN con la fila.
                 $nueva['w'] = is_array($med) ? (int)$med[0] : 0;
                 $nueva['h'] = is_array($med) ? (int)$med[1] : 0;
                 $filas[] = $nueva;
@@ -1228,7 +1228,7 @@ class PMU_Sesion
     }
 
     /**
-     * Spec 041 (T021): referencias de una imagen en items de CARRITO y en PEDIDOS.
+     * Spec 040 (T021): referencias de una imagen en items de CARRITO y en PEDIDOS.
      *
      * "Carrito" = items de la sesion que NO son borradores (`draft-*`): un borrador
      * todavia no esta en el carrito, asi que no cuenta (Decision 2026-11-19).
@@ -1286,7 +1286,7 @@ class PMU_Sesion
     }
 
     /**
-     * Spec 041 (T021): borra una imagen de la GALERIA (original + miniatura +
+     * Spec 040 (T021): borra una imagen de la GALERIA (original + miniatura +
      * entrada de catalogo). Es el borrado que pide confirmacion cuando la imagen
      * esta en carrito o en un pedido; la decision la toma el llamador.
      *
@@ -1322,7 +1322,7 @@ class PMU_Sesion
     }
 
     /**
-     * Spec 041 (T018/T031): migra los originales de la sesion anonima a la carpeta del
+     * Spec 040 (T018/T031): migra los originales de la sesion anonima a la carpeta del
      * cliente al iniciar sesion. Idempotente: lo que ya esta en destino se descarta.
      *
      * Fusiona el catalogo (el destino gana en conflicto) y mueve originales y
@@ -1628,8 +1628,8 @@ class PMU_Sesion
      * Reemplaza a `familias()` en la vista del cliente: el modelo "familias" murio con
      * la 030 (la identidad es el `id` = sha1 del contenido, D24 de la 035). Cada fila
      * trae `id`, `url`, `thumb`, `recetas[]`, `params`, `bytes`, `w`, `h` y `creado`.
-     * `params` son los v2 de la ULTIMA receta (spec 041 A3) para recordar el encuadre;
-     * `thumb` es una miniatura real (spec 041 A2), distinta de la imagen completa.
+     * `params` son los v2 de la ULTIMA receta (spec 040 A3) para recordar el encuadre;
+     * `thumb` es una miniatura real (spec 040 A2), distinta de la imagen completa.
      *
      * @param array $contenedores escaneo (cada uno con `manifest` y `dir`)
      * @param callable|null $url    inyecta la URL protegida por `id` (politica del plugin)
@@ -1665,11 +1665,11 @@ class PMU_Sesion
                     $vistas[$id] = [
                         'id' => $id,
                         'url' => ($url ? (string)$url($id) : ''),
-                        // Spec 041 (A2): `thumb` es una MINIATURA real (endpoint propio) y
+                        // Spec 040 (A2): `thumb` es una MINIATURA real (endpoint propio) y
                         // NO la imagen completa: la tira bajaba N fotos enteras y tardaba.
                         'thumb' => ($thumb ? (string)$thumb($id) : ($url ? (string)$url($id) : '')),
                         'recetas' => [],
-                        // Spec 041 (A3): params v2 de la ULTIMA receta de esta imagen, para
+                        // Spec 040 (A3): params v2 de la ULTIMA receta de esta imagen, para
                         // recordar el encuadre al re-elegirla (el hash de `recetas` no sirve:
                         // es irreversible).
                         'params' => $paramsFila,
@@ -1873,7 +1873,7 @@ class PMU_Sesion
                 $this->borrar_arbol($dirSesion);
             }
         }
-        // Spec 041 (T030): poda por ULTIMO USO en las carpetas de los CLIENTES. Nunca se
+        // Spec 040 (T030): poda por ULTIMO USO en las carpetas de los CLIENTES. Nunca se
         // borra una imagen referenciada por un pedido (romperia su regeneracion).
         $raizOrders = $this->motor->dir_ambito('orders');
         foreach ((array)glob($raizOrders . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirCli) {

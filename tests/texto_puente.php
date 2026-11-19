@@ -314,7 +314,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('resolver_subidas resuelve la fila ref', !empty($GLOBALS['bib_resuelve_ref']));
         $fotos_b = (is_array($json) && !empty($json['success'])) ? (array)($json['data']['fotos'] ?? []) : [];
         check('listar devuelve IMAGENES (una entrada por imagen, D5)', count($fotos_b) >= 1, 'fotos=' . count($fotos_b));
-        // Spec 041 (T001/T006): identidad -> carpeta y subida con catalogo + miniatura.
+        // Spec 040 (T001/T006): identidad -> carpeta y subida con catalogo + miniatura.
         check('041 T001: cliente -> orders/{uid}/uploads', !empty($GLOBALS['bib_dir_cliente']));
         check('041 T001: invitado -> tmp/sesion-{sid}/uploads', !empty($GLOBALS['bib_dir_invitado']));
         check('041 T006: la subida deja uploads.json', !empty($GLOBALS['bib_catalogo_ok']));
@@ -325,19 +325,19 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('cada imagen trae url por op=imagen', !empty($fotos_b[0]['url']) && strpos((string)$fotos_b[0]['url'], 'op=imagen') !== false);
         check('cada imagen trae id y medidas', !empty($fotos_b[0]['id']) && (int)($fotos_b[0]['w'] ?? 0) >= 1);
         check('cada imagen expone sus recetas (una imagen + N recetas)', isset($fotos_b[0]['recetas']) && is_array($fotos_b[0]['recetas']));
-        // Spec 041 (A2/A3): la tira usa una MINIATURA real y el listado trae los
+        // Spec 040 (A2/A3): la tira usa una MINIATURA real y el listado trae los
         // params v2 de la ultima receta (para recordar el encuadre al re-elegirla).
         check('cada imagen trae thumb por op=miniatura (no la foto completa)',
             !empty($fotos_b[0]['thumb']) && strpos((string)$fotos_b[0]['thumb'], 'op=miniatura') !== false,
             (string)($fotos_b[0]['thumb'] ?? ''));
-        // Spec 041 (T009): la receta viaja en `recetas` (mapa por contexto), no en un
+        // Spec 040 (T009): la receta viaja en `recetas` (mapa por contexto), no en un
         // `params` suelto: la imagen puede tener N recetas.
         check('cada imagen expone `recetas` y NO un `params` suelto',
             array_key_exists('recetas', (array)$fotos_b[0])
             && !array_key_exists('params', (array)$fotos_b[0]));
         check('listar ya NO expone familias (sin madre/base/archivos/usos)',
             !isset($fotos_b[0]['madre']) && !isset($fotos_b[0]['base']) && !isset($fotos_b[0]['usos']));
-        // Spec 041 (T021): referencias para el borrado en dos pasos.
+        // Spec 040 (T021): referencias para el borrado en dos pasos.
         check('T021: la imagen de un PEDIDO aparece referenciada', !empty($GLOBALS['bib_refs_ord']));
         check('T021: un BORRADOR no cuenta como carrito', !empty($GLOBALS['bib_refs_draft']));
         check('op=imagen: la imagen propia se resuelve a un archivo real', !empty($GLOBALS['bib_img_propia']));
@@ -355,7 +355,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('039 D5: el id lo deriva el SERVIDOR del contenido', !empty($GLOBALS['bib_fam_1']));
         check('039 D5: los mismos bytes dan el MISMO id (dedupe, sin duplicar)', !empty($GLOBALS['bib_fam_2']));
         check('039 D7: la fila ya NO lleva `madre` (modelo familias retirado)', !empty($GLOBALS['bib_dedupe_madre']));
-        // Spec 041 (F4): las medidas quedan PERSISTIDAS en la fila del manifest (si no,
+        // Spec 040 (F4): las medidas quedan PERSISTIDAS en la fila del manifest (si no,
         // `imagenes()` abre cada archivo con `getimagesize` en CADA listado).
         check('F4: la fila guarda w/h (sin getimagesize por foto en cada listado)', !empty($GLOBALS['bib_fila_wh']));
         check('039 D5: un contenido nuevo obtiene su propio id (no reusa)', !empty($GLOBALS['bib_dedupe_nuevo']));
@@ -3190,7 +3190,7 @@ switch ($fase) {
         $motor_ft = $p->motor_para_tests();
         $sesion_ft = new PMU_Sesion($motor_ft);
         $sid_ft = 'test-8f2a';
-        // Spec 041 (T006): esta fase simula INVITADO. `get_current_user_id()` del arnes
+        // Spec 040 (T006): esta fase simula INVITADO. `get_current_user_id()` del arnes
         // devuelve 1 por defecto y `guardar_subida()` ya escribe en la carpeta de la
         // identidad: sin esto, la foto iria a orders/1/uploads/.
         $GLOBALS['test_user_id'] = 0;
@@ -3208,7 +3208,7 @@ switch ($fase) {
         $GLOBALS['fotos_fila_original'] = !isset($subA['file']) || (string)$subA['file'] === '';
 
         // 2) Dedupe: los mismos bytes NO crean otro id ni otro archivo.
-        // Spec 041 (T006): la carpeta tiene tambien miniaturas; se compara el DELTA
+        // Spec 040 (T006): la carpeta tiene tambien miniaturas; se compara el DELTA
         // de originales antes/despues (asi el resultado no depende de lo sembrado).
         $contarFt = function () use ($motor_ft, $sid_ft) {
             $d = $motor_ft->dir_sesion_uploads($sid_ft, false);
@@ -3234,10 +3234,10 @@ switch ($fase) {
         $subB = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt);
         $GLOBALS['fotos_id_b'] = (string)($subB['id'] ?? '');
         $dirUp_ft = $motor_ft->dir_sesion_uploads($sid_ft, false);
-        // Spec 041 (T006): la carpeta tambien tiene miniaturas `{id}-80x80.webp`; el
+        // Spec 040 (T006): la carpeta tambien tiene miniaturas `{id}-80x80.webp`; el
         // dedupe se mide sobre ORIGINALES (las miniaturas son derivadas).
         $GLOBALS['fotos_uploads_archivos'] = $contarFt();
-        // Spec 041 (T006): el contrato es "re-subir NO agrega un archivo" (delta 0).
+        // Spec 040 (T006): el contrato es "re-subir NO agrega un archivo" (delta 0).
         $GLOBALS['fotos_dedupe_archivos'] = ($GLOBALS['fotos_uploads_archivos'] === $antesFt);
 
         // Dos recetas VALIDAS distintas (rot 0 y rot 90).
@@ -3342,7 +3342,7 @@ switch ($fase) {
         $motor_b = $p->motor_para_tests();
         $sesion_b = new PMU_Sesion($motor_b);
         $sid_b = 'test-bib-0001';
-        // Spec 041: esta fase simula INVITADO (uid 0). El arnes, por defecto, hace que
+        // Spec 040: esta fase simula INVITADO (uid 0). El arnes, por defecto, hace que
         // `get_current_user_id()` devuelva 1, y `guardar_subida()` ya escribe en la
         // carpeta de la identidad: sin esto, la foto iria a orders/1/uploads/.
         $GLOBALS['test_user_id'] = 0;
@@ -3352,7 +3352,7 @@ switch ($fase) {
         \ExtractCorel\Engine\PngWriter::write($png_b, 60, 40);
         $bytes_b = (string)file_get_contents($png_b);
         $sub_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b);
-        // Spec 041 (T001/T006): la identidad decide la carpeta y la subida deja
+        // Spec 040 (T001/T006): la identidad decide la carpeta y la subida deja
         // catalogo + miniatura en ella.
         $GLOBALS['bib_dir_cliente'] = (strpos(
             (string)$motor_b->dir_uploads_identidad(['uid' => 7, 'sid' => $sid_b]),
@@ -3381,7 +3381,7 @@ switch ($fase) {
                 'madre' => $madre_b, 'receta' => 'r0', 'sha' => str_repeat('c', 40),
                 'origen' => 'original']],
         ]));
-        // Spec 041 (T021): referencias para el borrado en dos pasos (pedidos si,
+        // Spec 040 (T021): referencias para el borrado en dos pasos (pedidos si,
         // borradores no). Se calcula aca porque el bloque de checks corre en shutdown.
         $refsBib_b = $sesion_b->referencias_en_carrito_o_pedidos($sid_b, $madre_b, '1');
         $GLOBALS['bib_refs_ord'] = (is_array($refsBib_b) && (int)$refsBib_b['pedidos'] >= 1);
@@ -3492,7 +3492,7 @@ switch ($fase) {
         // fila por `id`. Se comprueba la invariante real (misma foto -> mismo id).
         $subFam_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b);
         $subFam2_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b);
-        // Spec 041 (F4): la fila PERSISTIDA trae w/h (no solo el valor de retorno).
+        // Spec 040 (F4): la fila PERSISTIDA trae w/h (no solo el valor de retorno).
         $manF4_b = json_decode((string)@file_get_contents(
             $sesion_b->dir_item($sid_b, $draft_b) . '/manifest.json'), true);
         $filaF4_b = null;
@@ -5728,10 +5728,10 @@ switch ($fase) {
         $png_cc = sys_get_temp_dir() . '/pd_puente_cc_' . getmypid() . '.png';
         \ExtractCorel\Engine\PngWriter::write($png_cc, 120, 90);
         $bytes_cc = (string)file_get_contents($png_cc);
-        // Spec 041 (T006): esta fase prueba la carpeta COMPARTIDA DE LA SESION, asi que
+        // Spec 040 (T006): esta fase prueba la carpeta COMPARTIDA DE LA SESION, asi que
         // simula INVITADO (uid 0). Con cuenta, la foto iria a orders/{uid}/uploads/.
         $GLOBALS['test_user_id'] = 0;
-        // Spec 041 (T006): cuenta ORIGINALES (excluye miniaturas). Se compara el DELTA
+        // Spec 040 (T006): cuenta ORIGINALES (excluye miniaturas). Se compara el DELTA
         // de las dos subidas: re-subir no debe agregar archivo.
         $contarCc = function () use ($motor_cc, $sid_cc) {
             $d = $motor_cc->dir_sesion_uploads($sid_cc, false);

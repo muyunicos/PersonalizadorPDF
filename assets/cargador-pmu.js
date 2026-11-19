@@ -66,7 +66,7 @@
             var min = parseInt(r.min, 10);
             if (!isFinite(min) || min < 0) { min = 1; }   // ausente/invalido = 1 (compat)
             var max = parseInt(r.max, 10) || 1;
-            // Spec 041 (A1): `0` es valido (campo opcional); solo se corrige lo negativo.
+            // Spec 040 (A1): `0` es valido (campo opcional); solo se corrige lo negativo.
             if (min < 0) { min = 1; }
             if (max < min) { max = min; }
             var fCruda = (r.forma === undefined || r.forma === null || r.forma === '')
@@ -212,7 +212,7 @@
             // Spec 039 (D6): `usar` y `onFila` se retiraron con la rama de reuso
             // `Elegir` (0 bytes). Ahora SIEMPRE se sube el original.
             preview: !!config.preview,
-            // Spec 041 (C1): abrir la ranura sola al montar (el cotizador lo usa para
+            // Spec 040 (C1): abrir la ranura sola al montar (el cotizador lo usa para
             // que "Cargar imagen" abra el recorte en UN click).
             autoAbrir: !!config.autoAbrir,
             // `tecnico`: muestra medidas/forma/min y avisos de configuracion.
@@ -236,7 +236,7 @@
         // reintenta con el MISMO recorte, sin volver a elegir el archivo.
         // { indice: [ { blob, params, error } ] }  (spec 039 D2: blobs de fallos por ranura)
         this._fallos = {};
-        // Spec 041 (A6): URLs y RECETAS de las imagenes usadas desde la biblioteca
+        // Spec 040 (A6): URLs y RECETAS de las imagenes usadas desde la biblioteca
         // (id conocido): no viajan bytes y la miniatura se pinta sin pedirla.
         this._urls = {};
         this.recetas = {};
@@ -274,7 +274,7 @@
         this.raiz = raiz;
         this.txtFalta = falta;
         this._pintar();
-        // Spec 041 (C1): `autoAbrir` abre la PRIMERA ranura vacia al montar. Es lo que
+        // Spec 040 (C1): `autoAbrir` abre la PRIMERA ranura vacia al montar. Es lo que
         // evita el doble click del cotizador: el boton del campo monta el cargador y
         // el modal de recorte aparece ya (sin un segundo toque).
         if (this.config.autoAbrir) {
@@ -288,7 +288,7 @@
         return true;
     };
 
-    /** Spec 041 (C1): abre el selector de una ranura (API publica, sin tocar privados). */
+    /** Spec 040 (C1): abre el selector de una ranura (API publica, sin tocar privados). */
     CargadorPMU.prototype.abrir = function (indice) {
         var i = parseInt(indice, 10);
         this._abrir(isFinite(i) && i >= 0 ? i : 0);
@@ -426,7 +426,7 @@
                 quedanEspacios: function () {
                     return self.estado[indice].ids.length < r.max;
                 },
-                // Spec 041 (A6): una imagen YA subida (id conocido) no manda bytes:
+                // Spec 040 (A6): una imagen YA subida (id conocido) no manda bytes:
                 // se anota en la ranura y se publica su receta (0 red, cierre inmediato).
                 usarExistente: function (id, params, url) {
                     return self._usarExistente(indice, id, params, url);
@@ -511,7 +511,7 @@
         })).then(function (res) {
             btn.disabled = false;
             var id = res && res.id;
-            // Spec 041 (A6): la receta con la que se subio queda legible por id
+            // Spec 040 (A6): la receta con la que se subio queda legible por id
             // (`recetasDe`), igual que la de una imagen usada de la biblioteca.
             if (id) { self.recetas[String(id)] = paramsSubida || null; }
             // Spec 035 (T014/D2): el recorte recien compuesto se queda en el
@@ -604,7 +604,7 @@
     };
 
     /**
-     * Spec 041 (A6): usa una imagen YA EXISTENTE del comprador (id conocido).
+     * Spec 040 (A6): usa una imagen YA EXISTENTE del comprador (id conocido).
      *
      * No manda bytes: anota el id en la ranura (sin duplicar), guarda su receta y
      * publica `onRecorte` para que la vista previa/mockup la dibujen al instante.
@@ -633,7 +633,7 @@
         return Promise.resolve(clave);
     };
 
-    /** Receta v2 con la que se uso una imagen (spec 041 A6), o null. */
+    /** Receta v2 con la que se uso una imagen (spec 040 A6), o null. */
     CargadorPMU.prototype.recetasDe = function (id) {
         return this.recetas[String(id)] || null;
     };
@@ -825,7 +825,7 @@
         return baja(false).then(function () {
             return quitarLocal();
         }, function (err) {
-            // Spec 041 (T020): el servidor pide confirmacion (esta en carrito o en un
+            // Spec 040 (T020): el servidor pide confirmacion (esta en carrito o en un
             // pedido). El visor ya la mostro: se reintenta con `confirmar=1`.
             if (err && err.referencias) {
                 return baja(true).then(function () {

@@ -569,9 +569,9 @@
             ajustes: Array.isArray(config.ajustes) ? config.ajustes : [],
             envoltura: envolturaValida(config.envoltura),
             usarExistente: typeof config.usarExistente === 'function' ? config.usarExistente : null,
-            // Spec 041 (A6): declarar la receta SIN bytes (si el integrador lo soporta).
+            // Spec 040 (A6): declarar la receta SIN bytes (si el integrador lo soporta).
             declararReceta: typeof config.declararReceta === 'function' ? config.declararReceta : null,
-            // Spec 041 (A4): receta v2 a re-aplicar sobre la imagen (si es de esta geometria).
+            // Spec 040 (A4): receta v2 a re-aplicar sobre la imagen (si es de esta geometria).
             paramsIniciales: (config.paramsIniciales && typeof config.paramsIniciales === 'object')
                 ? config.paramsIniciales : null,
             subirAsync: typeof config.subirAsync === 'function' ? config.subirAsync : null,
@@ -599,7 +599,7 @@
         this.fondoEsAuto = true;
         // Spec 024 (D9): mascara de inspeccion (blanco opaco fuera de la forma).
         this._mascaraRecorte = false;
-        // Spec 041 (A4/A6): imagen elegida de "Mis imagenes" (id + receta recordada).
+        // Spec 040 (A4/A6): imagen elegida de "Mis imagenes" (id + receta recordada).
         this._bib = null;
         this.supera5 = false;
         this._arrastrando = null;
@@ -936,7 +936,7 @@
 
                 window.PMUBiblioteca.tira(cajaBib, {
                     onElegir: function (foto) {
-                        // Spec 041 (A4/A6): la miniatura entra DIRECTO al recorte con su
+                        // Spec 040 (A4/A6): la miniatura entra DIRECTO al recorte con su
                         // receta recordada y el primario pasa a `Usar` (0 bytes).
                         self.cargarDesdeBiblioteca(foto);
                     }
@@ -977,7 +977,7 @@
     };
 
     SelectorPMU.prototype._prepararNuevaCarga = function () {
-        // Spec 041 (A6): una carga NUEVA deja de ser "usar la existente".
+        // Spec 040 (A6): una carga NUEVA deja de ser "usar la existente".
         this._bib = null;
         if (this.imagen && this.imagen.src) { URL.revokeObjectURL(this.imagen.src); }
         this.imagen = null;
@@ -1001,7 +1001,7 @@
     SelectorPMU.prototype._cargar = function (archivo) {
         var self = this;
         if (!archivo) { return; }
-        // Spec 041 (A6): un archivo elegido por el comprador NO es "la existente"
+        // Spec 040 (A6): un archivo elegido por el comprador NO es "la existente"
         // de la biblioteca: al cargarlo se pierde el id recordado.
         if (!this._desdeBiblioteca) { this._bib = null; }
         this._desdeBiblioteca = false;
@@ -1067,7 +1067,7 @@
             // huecos); <=5% -> `estirar` (llena el marco exacto con una
             // deformacion imperceptible y el boton pasa a ser "Ajustar al marco").
             self.config.mode = self.supera5 ? 'cubrir' : 'estirar';
-            // Spec 041 (A4/A6): si la imagen viene de la biblioteca (o el campo paso
+            // Spec 040 (A4/A6): si la imagen viene de la biblioteca (o el campo paso
             // `paramsIniciales`) y la receta es de ESTA geometria, se re-aplica el
             // encuadre recordado. Si no coincide se ignora: quedan los defaults.
             var recetaPrevia = (self._bib && self._bib.params) || self.config.paramsIniciales || null;
@@ -1106,7 +1106,7 @@
     };
 
     /**
-     * Spec 041 (A4/A6): carga una imagen de "Mis imagenes" DIRECTO en el recorte.
+     * Spec 040 (A4/A6): carga una imagen de "Mis imagenes" DIRECTO en el recorte.
      *
      * No pasa por un `drop` sintetico: guarda `id` + `params` (la receta recordada)
      * y deja que `_cargar` los re-aplique si son de esta geometria. El primario
@@ -1134,7 +1134,7 @@
     };
 
     /**
-     * Spec 041 (A4): receta recordada de una ficha de la biblioteca para ESTA ranura.
+     * Spec 040 (A4): receta recordada de una ficha de la biblioteca para ESTA ranura.
      *
      * El listado trae `recetas` como **mapa por contexto** (`{gid}-{w}x{h}-{phsize}`).
      * Se acepta tambien `params` (compatibilidad con el payload viejo). La receta se
@@ -1165,7 +1165,7 @@
     };
 
     /**
-     * Spec 041 (A4): aplica una receta v2 recordada SOBRE la imagen ya cargada.
+     * Spec 040 (A4): aplica una receta v2 recordada SOBRE la imagen ya cargada.
      *
      * Solo si es de la MISMA geometria (`w`/`h`/`phsize`/`gid`): una receta de otro
      * lienzo no significa nada aca. Devuelve true si aplico.
@@ -1413,7 +1413,7 @@
         if (!this.raiz || this._subiendo) { return; }
         var ok = this.raiz.querySelector('.spmu-ok');
         if (!ok) { return; }
-        // Spec 041 (A6): con una imagen YA existente (id de la biblioteca) el
+        // Spec 040 (A6): con una imagen YA existente (id de la biblioteca) el
         // primario es `Usar`: no se sube nada, solo se publica la receta.
         ok.textContent = this._bib ? 'Usar' : 'Subir';
     };
@@ -1749,7 +1749,7 @@
             if (!this.imagen) { this._fallo('UPLOAD_FAILED', 'No hay imagen para subir'); }
             return;
         }
-        // Spec 041 (A6): imagen YA existente (biblioteca) -> NO se suben bytes. Se
+        // Spec 040 (A6): imagen YA existente (biblioteca) -> NO se suben bytes. Se
         // publica su id + la receta (por si reencuadro) y el modal cierra al instante.
         if (this._bib && this._bib.id) {
             var paramsBib = this._params();

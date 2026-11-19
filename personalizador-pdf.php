@@ -2070,7 +2070,7 @@ class Personalizador_PDF_Plugin
         if ($sid === '') {
             return;
         }
-        // Spec 041 (T031): FUSIONADO con el vinculo: al iniciar sesion (o al crearse la
+        // Spec 040 (T031): FUSIONADO con el vinculo: al iniciar sesion (o al crearse la
         // cuenta en el checkout) los originales de la sesion anonima pasan a la carpeta
         // del cliente. Idempotente y best-effort: nunca tumba el login.
         try {
@@ -2193,7 +2193,7 @@ class Personalizador_PDF_Plugin
         ];
     }
 
-    /* (spec 041 T024: `biblioteca_version()` RETIRADO. La revision del listado ahora se
+    /* (spec 040 T024: `biblioteca_version()` RETIRADO. La revision del listado ahora se
      *  calcula sobre el catalogo: mtime + ids; no hay contenedores que sellar.) */
 
     /**
@@ -2240,7 +2240,7 @@ class Personalizador_PDF_Plugin
             }
         }
         $raiz = $motor->dir_ambito('orders');
-        // Spec 041 (F2): `orders/{cliente}/...` se indexa por el id de CLIENTE, y un
+        // Spec 040 (F2): `orders/{cliente}/...` se indexa por el id de CLIENTE, y un
         // INVITADO no tiene pedidos (el pedido exige `customer_id > 0`). Antes se
         // caminaba el arbol de TODOS los clientes en cada listado (y con el doble
         // click, 3 veces por apertura). Ahora: invitado = no toca `orders/`;
@@ -2358,12 +2358,12 @@ class Personalizador_PDF_Plugin
                 return;
             }
             if ($op === 'miniatura') {
-                // Spec 041 (A2): la tira pide MINIATURAS (128 px), no la foto completa.
+                // Spec 040 (A2): la tira pide MINIATURAS (128 px), no la foto completa.
                 $this->biblioteca_servir_miniatura($sid);
                 return;
             }
             if ($op === 'listar') {
-                // Spec 041 (T009): la biblioteca se lista desde el CATALOGO de la carpeta
+                // Spec 040 (T009): la biblioteca se lista desde el CATALOGO de la carpeta
                 // de identidad, no desde manifiestos ni pedidos (FR-001..FR-003).
                 $identidad = $this->biblioteca_identidad();
                 $identidad['sid'] = $sid;
@@ -2422,7 +2422,7 @@ class Personalizador_PDF_Plugin
                 throw new \RuntimeException('op:retirada');
             }
             if ($op === 'borrar') {
-                // Spec 041 (T020): borrado de GALERIA en dos pasos. Sin `confirmar`, si la
+                // Spec 040 (T020): borrado de GALERIA en dos pasos. Sin `confirmar`, si la
                 // imagen esta en carrito o en un pedido, se avisa y NO se borra nada.
                 $id = sanitize_text_field(wp_unslash((string)($_POST['id'] ?? '')));
                 $item = sanitize_text_field(wp_unslash((string)($_POST['item_key'] ?? '')));
@@ -2482,7 +2482,7 @@ class Personalizador_PDF_Plugin
             $rutas = $sesion->resolver_subidas($sid, $item, [$id]);
             $ruta = isset($rutas[$id]) ? (string)$rutas[$id] : '';
         } elseif ($id !== '') {
-            // Spec 041 (T010): variante por `id` (la del `listar`), resuelta en O(1) por
+            // Spec 040 (T010): variante por `id` (la del `listar`), resuelta en O(1) por
             // la cadena de la IDENTIDAD: cliente -> `orders/{uid}/uploads`; invitado ->
             // `tmp/sesion-{sid}/uploads`. Solo sirvo una imagen QUE SEA SUYA.
             $identidad = $this->biblioteca_identidad();
@@ -2524,7 +2524,7 @@ class Personalizador_PDF_Plugin
     }
 
     /**
-     * Spec 041 (T016): sirve la MINIATURA de una imagen del comprador.
+     * Spec 040 (T016): sirve la MINIATURA de una imagen del comprador.
      *
      * Es `{id}-80x80.webp`, JUNTO al original (la escribe `guardar_subida`; si falta,
      // se genera aca). Misma politica de acceso que `op=imagen`: `biblioteca_ruta_imagen()`
