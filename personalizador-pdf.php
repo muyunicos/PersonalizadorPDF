@@ -2430,19 +2430,38 @@ class Personalizador_PDF_Plugin
                 throw new \RuntimeException('op:retirada');
             }
             if ($op === 'borrar') {
-                // Spec 039 (D3): borra la FILA de un item + el archivo compartido de la
-                // sesion (si ningun otro item lo referencia). Idempotente. NUNCA toca
-                // `orders/` (lo comprado vive ahi; C5 de la 035).
-                $item = sanitize_text_field(wp_unslash((string)($_POST['item_key'] ?? '')));
+                // Spec 041 (T020): borrado de GALERIA en dos pasos. Sin `confirmar`, si la
+                // imagen esta en carrito o en un pedido, se avisa y NO se borra nada.
                 $id = sanitize_text_field(wp_unslash((string)($_POST['id'] ?? '')));
-                $res = $this->sesion()->borrar_original_item($sid, $item, $id);
-                wp_send_json_success(array(
+                $item = sanitize_text_field(wp_unslash((string)($_POST['item_key'] ?? '')));
+                $confirmar = ((int)($_POST['confirmar'] ?? 0) === 1);
+                $identidadB = $this->biblioteca_identidad();
+                $uidB = (int)($identidadB['uid'] ?? 0);
+                $sesionB = $this->sesion();
+                $refs = $sesionB->referencias_en_carrito_o_pedidos($sid, $id, (string)$uidB);
+                $totalRefs = (int)$refs['carrito'] + (int)$refs['pedidos'];
+                if ($totalRefs > 0 && !$confirmar) {
+                    wp_send_json_success([
+                        'id' => $id,
+                        'requiere_confirmacion' => true,
+                        'referencias' => $refs,
+                    ]);
+                }
+                $res = $sesionB->borrar_imagen_galeria($sid, $id, (string)$uidB);
+                // Si el borrado vino de un item concreto, su fila tambien se quita.
+                $filas = 0;
+                if ($item !== '') {
+                    $filaB = $sesionB->borrar_original_item($sid, $item, $id);
+                    $filas = (int)$filaB['filas'];
+                }
+                wp_send_json_success([
                     'id' => $id,
                     'borrado' => (bool)$res['borrado'],
-                    'no_hacia_nada' => (bool)$res['no_hacia_nada'],
-                    'filas' => (int)$res['filas'],
                     'archivo' => (bool)$res['archivo'],
-                ));
+                    'catalogo' => (bool)$res['catalogo'],
+                    'filas' => $filas,
+                    'referencias' => $refs,
+                ]);
             }
             throw new \RuntimeException('op:invalido');
         } catch (\Throwable $e) {

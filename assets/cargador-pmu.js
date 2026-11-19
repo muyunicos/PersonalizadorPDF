@@ -819,9 +819,19 @@
         if (!tieneBaja || !id) {
             return Promise.resolve(quitarLocal());
         }
-        return Promise.resolve(global.PMU_API.borrarFoto(String(id))).then(function () {
+        var baja = function (confirmar) {
+            return Promise.resolve(global.PMU_API.borrarFoto(String(id), confirmar));
+        };
+        return baja(false).then(function () {
             return quitarLocal();
         }, function (err) {
+            // Spec 041 (T020): el servidor pide confirmacion (esta en carrito o en un
+            // pedido). El visor ya la mostro: se reintenta con `confirmar=1`.
+            if (err && err.referencias) {
+                return baja(true).then(function () {
+                    return quitarLocal();
+                });
+            }
             var msg = (err && err.message) || 'No se pudo borrar la imagen.';
             self._error(msg);
             return false;

@@ -1228,6 +1228,97 @@ class PMU_Sesion
     }
 
     /**
+     * Spec 041 (T021): referencias de una imagen en items de CARRITO y en PEDIDOS.
+     *
+     * "Carrito" = items de la sesion que NO son borradores (`draft-*`): un borrador
+     * todavia no esta en el carrito, asi que no cuenta (Decision 2026-11-19).
+     * "Pedidos" = items del arbol del cliente (`orders/{uid}/{order_id}/{item}`).
+     *
+     * @return array{carrito:int, pedidos:int}
+     */
+    public function referencias_en_carrito_o_pedidos($sid, $id, $clave = '')
+    {
+        $fuera = ['carrito' => 0, 'pedidos' => 0];
+        $id = strtolower(trim((string)$id));
+        if (preg_match('/^[a-f0-9]{12}$/', $id) !== 1) {
+            return $fuera;
+        }
+        // Carrito: items de la sesion (sin borradores) que referencian el id.
+        $raiz = $this->motor->dir_sesion($sid, false);
+        foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $itemDir) {
+            if (strpos(basename($itemDir), 'draft-') === 0) {
+                continue;   // borrador: todavia no es carrito
+            }
+            $man = $this->leer_manifest_dir($itemDir);
+            if ($this->filaReferenciaId($man, $id)) {
+                $fuera['carrito']++;
+            }
+        }
+        // Pedidos: items del arbol del cliente.
+        $clave = trim((string)$clave);
+        if (PMU_Uploads::clave_valida($clave)) {
+            $raizPed = $this->motor->dir_ambito('orders') . DIRECTORY_SEPARATOR . (int)$clave;
+            foreach ((array)glob($raizPed . DIRECTORY_SEPARATOR . '*' . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $itemDir) {
+                if (!is_dir($itemDir) || !is_file($itemDir . DIRECTORY_SEPARATOR . 'manifest.json')) {
+                    continue;
+                }
+                $man = $this->leer_manifest_dir($itemDir);
+                if ($this->filaReferenciaId($man, $id)) {
+                    $fuera['pedidos']++;
+                }
+            }
+        }
+        return $fuera;
+    }
+
+    /** ¿El manifest tiene una fila `subidas[]` con este `id`? */
+    private function filaReferenciaId($manifest, $id)
+    {
+        foreach ((array)(is_array($manifest) ? ($manifest['subidas'] ?? []) : []) as $fila) {
+            if (is_array($fila) && (string)($fila['id'] ?? '') === $id) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Spec 041 (T021): borra una imagen de la GALERIA (original + miniatura +
+     * entrada de catalogo). Es el borrado que pide confirmacion cuando la imagen
+     * esta en carrito o en un pedido; la decision la toma el llamador.
+     *
+     * @return array{borrado:bool, archivo:bool, catalogo:bool}
+     */
+    public function borrar_imagen_galeria($sid, $id, $clave = '')
+    {
+        $salida = ['borrado' => false, 'archivo' => false, 'catalogo' => false];
+        $id = strtolower(trim((string)$id));
+        if (preg_match('/^[a-f0-9]{12}$/', $id) !== 1) {
+            return $salida;
+        }
+        $ruta = $this->resolver_original($id, trim((string)$clave), $sid);
+        if ($ruta === '' || !is_file($ruta)) {
+            return $salida;
+        }
+        $dir = dirname($ruta);
+        $ext = strtolower((string)pathinfo($ruta, PATHINFO_EXTENSION));
+        $base = ($ext !== '') ? substr($ruta, 0, -(strlen($ext) + 1)) : $ruta;
+        $mini = $base . '-80x80.webp';
+        $salida['archivo'] = @unlink($ruta);
+        if (is_file($mini)) {
+            @unlink($mini);
+        }
+        try {
+            $this->motor->catalogo_borrar($dir, $id);
+            $salida['catalogo'] = true;
+        } catch (\Throwable $e) {
+            // El catalogo se reconstruye desde los archivos: no bloquea el borrado.
+        }
+        $salida['borrado'] = true;
+        return $salida;
+    }
+
+    /**
      * Spec 039 (D5): envoltorio PUBLICO de `ruta_fila_subida()` (privado) para que el
      * handler resuelva una fila del `listar` por `id` sin duplicar la logica de rutas.
      *

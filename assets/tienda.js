@@ -2040,7 +2040,7 @@
         // archivo compartido si nadie mas lo usa). Espera a que la cola de subida
         // quede vacia (para no borrar algo que todavia se esta subiendo) e invalida
         // la copia local de la biblioteca.
-        api.borrarFoto = function (id) {
+        api.borrarFoto = function (id, confirmar) {
             var ses = api.sesion || {};
             var esperar = (typeof colaDeSubidas().vaciar === 'function')
                 ? colaDeSubidas().vaciar() : Promise.resolve();
@@ -2051,9 +2051,18 @@
                 fd.append('item_key', ses.item_key || '');
                 fd.append('id', String(id || ''));
                 fd.append('_wpnonce', cfg.nonceVistaPrevia || '');
+                // Spec 041 (T020): segunda llamada (el comprador ya confirmo).
+                if (confirmar) { fd.append('confirmar', '1'); }
                 return postAjax(fd).then(function (json) {
                     if (!json || !json.success) {
                         throw new Error((json && json.data) || 'motor:borrar:falla');
+                    }
+                    // Spec 041 (T020): la imagen esta en carrito o en un pedido: el
+                    // servidor NO borro nada y pide confirmacion explicita.
+                    if (json.data && json.data.requiere_confirmacion) {
+                        var errConf = new Error('La imagen esta en un carrito o en un pedido.');
+                        errConf.referencias = json.data.referencias || {};
+                        throw errConf;
                     }
                     // La tira cambio: se vuelve a pedir la lista (no se parchea).
                     if (window.PMUBiblioteca && typeof window.PMUBiblioteca.invalidar === 'function') {

@@ -337,6 +337,9 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             && !array_key_exists('params', (array)$fotos_b[0]));
         check('listar ya NO expone familias (sin madre/base/archivos/usos)',
             !isset($fotos_b[0]['madre']) && !isset($fotos_b[0]['base']) && !isset($fotos_b[0]['usos']));
+        // Spec 041 (T021): referencias para el borrado en dos pasos.
+        check('T021: la imagen de un PEDIDO aparece referenciada', !empty($GLOBALS['bib_refs_ord']));
+        check('T021: un BORRADOR no cuenta como carrito', !empty($GLOBALS['bib_refs_draft']));
         check('op=imagen: la imagen propia se resuelve a un archivo real', !empty($GLOBALS['bib_img_propia']));
         check('op=imagen: el mime sale por EXTENSION (image/webp)', !empty($GLOBALS['bib_img_mime']));
         check('op=imagen: un id ajeno da la causa foto:ajena', !empty($GLOBALS['bib_img_ajena']));
@@ -3378,6 +3381,12 @@ switch ($fase) {
                 'madre' => $madre_b, 'receta' => 'r0', 'sha' => str_repeat('c', 40),
                 'origen' => 'original']],
         ]));
+        // Spec 041 (T021): referencias para el borrado en dos pasos (pedidos si,
+        // borradores no). Se calcula aca porque el bloque de checks corre en shutdown.
+        $refsBib_b = $sesion_b->referencias_en_carrito_o_pedidos($sid_b, $madre_b, '1');
+        $GLOBALS['bib_refs_ord'] = (is_array($refsBib_b) && (int)$refsBib_b['pedidos'] >= 1);
+        $refsDraft_b = $sesion_b->referencias_en_carrito_o_pedidos($sid_b, (string)($sub_b['id'] ?? ''), '1');
+        $GLOBALS['bib_refs_draft'] = (is_array($refsDraft_b) && (int)$refsDraft_b['carrito'] === 0);
         $params_b = ['v' => 2, 'w' => 1000, 'h' => 1000, 'forma' => 'auto', 'modo' => 'cubrir',
             'escala' => 1, 'ox' => 0.5, 'oy' => 0.5, 'fondo' => 'auto', 'transp' => '',
             'rot' => 0, 'iw' => 400, 'ih' => 300, 'phsize' => 0, 'gid' => '0000FF'];
