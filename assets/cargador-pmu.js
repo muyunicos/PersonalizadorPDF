@@ -63,9 +63,11 @@
             var w = parseInt(r.w, 10) || 0;
             var h = parseInt(r.h, 10) || 0;
             if (w < 1 || h < 1) { return; }
-            var min = parseInt(r.min, 10) || 1;
+            var min = parseInt(r.min, 10);
+            if (!isFinite(min) || min < 0) { min = 1; }   // ausente/invalido = 1 (compat)
             var max = parseInt(r.max, 10) || 1;
-            if (min < 1) { min = 1; }
+            // Spec 041 (A1): `0` es valido (campo opcional); solo se corrige lo negativo.
+            if (min < 0) { min = 1; }
             if (max < min) { max = min; }
             var fCruda = (r.forma === undefined || r.forma === null || r.forma === '')
                 ? 'auto' : String(r.forma);

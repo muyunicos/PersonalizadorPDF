@@ -1383,13 +1383,16 @@ class PMU_Sesion
      *
      * Reemplaza a `familias()` en la vista del cliente: el modelo "familias" murio con
      * la 030 (la identidad es el `id` = sha1 del contenido, D24 de la 035). Cada fila
-     * trae `id`, `url`, `thumb`, `recetas[]`, `bytes`, `w`, `h` y `creado`.
+     * trae `id`, `url`, `thumb`, `recetas[]`, `params`, `bytes`, `w`, `h` y `creado`.
+     * `params` son los v2 de la ULTIMA receta (spec 041 A3) para recordar el encuadre;
+     * `thumb` es una miniatura real (spec 041 A2), distinta de la imagen completa.
      *
      * @param array $contenedores escaneo (cada uno con `manifest` y `dir`)
      * @param callable|null $url    inyecta la URL protegida por `id` (politica del plugin)
+     * @param callable|null $thumb  inyecta la URL de la MINIATURA (cae a `$url` si falta)
      * @return array lista por fecha descendente (mas nuevas primero)
      */
-    public function imagenes(array $contenedores, ?callable $url = null)
+    public function imagenes(array $contenedores, ?callable $url = null, ?callable $thumb = null)
     {
         $vistas = [];
         foreach ($contenedores as $c) {
@@ -1413,12 +1416,20 @@ class PMU_Sesion
                 // se muestra UNA vez (la vista mas reciente gana) y se suman los usos.
                 $receta = (string)($fila['receta'] ?? '');
                 $creado = (int)($fila['creado'] ?? 0);
+                $paramsFila = (isset($fila['params']) && is_array($fila['params']) && $fila['params']) ? $fila['params'] : null;
                 if (!isset($vistas[$id])) {
                     $vistas[$id] = [
                         'id' => $id,
                         'url' => ($url ? (string)$url($id) : ''),
-                        'thumb' => ($url ? (string)$url($id) : ''),
+                        // Spec 041 (A2): `thumb` es una MINIATURA real (endpoint propio) y
+                        // NO la imagen completa: la tira bajaba N fotos enteras y tardaba.
+                        'thumb' => ($thumb ? (string)$thumb($id) : ($url ? (string)$url($id) : '')),
                         'recetas' => [],
+                        // Spec 041 (A3): params v2 de la ULTIMA receta de esta imagen, para
+                        // recordar el encuadre al re-elegirla (el hash de `recetas` no sirve:
+                        // es irreversible).
+                        'params' => $paramsFila,
+                        'params_creado' => ($paramsFila !== null) ? $creado : -1,
                         'bytes' => (int)@filesize($ruta),
                         'w' => $w,
                         'h' => $h,
@@ -1433,9 +1444,16 @@ class PMU_Sesion
                 if ($receta !== '' && !in_array($receta, (array)$vistas[$id]['recetas'], true)) {
                     $vistas[$id]['recetas'][] = $receta;
                 }
+                if ($paramsFila !== null && $creado >= (int)$vistas[$id]['params_creado']) {
+                    $vistas[$id]['params'] = $paramsFila;
+                    $vistas[$id]['params_creado'] = $creado;
+                }
             }
         }
         $out = array_values($vistas);
+        foreach ($out as $i => $v) {
+            unset($out[$i]['params_creado']);
+        }
         usort($out, function ($a, $b) {
             return (int)$b['creado'] - (int)$a['creado'];
         });
@@ -1609,6 +1627,15 @@ class PMU_Sesion
             $this->podar_uploads_sesion($dirSesion, $referencias);
             if ($vivos === 0) {
                 $this->borrar_arbol($dirSesion);
+            }
+        }
+        // Spec 041 (A2): el cache de miniaturas (`tmp/miniaturas/`) es por CONTENIDO y no
+        // vence con los items: se poda por edad con el horizonte del carrito.
+        foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . 'miniaturas', GLOB_ONLYDIR) as $dirMini) {
+            foreach ((array)glob($dirMini . DIRECTORY_SEPARATOR . '*.webp') as $mini) {
+                if ((int)@filemtime($mini) < $horizonteCarrito) {
+                    @unlink($mini);
+                }
             }
         }
         return $eliminados;

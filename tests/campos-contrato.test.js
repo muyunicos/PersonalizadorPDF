@@ -263,7 +263,11 @@ console.log('\n== spec 019: ranura adaptativa (phsize + aviso) ==');
     check('auto + r + size + ox + oy se normalizan con phsize',
       rauto.forma === 'auto' && rauto.w === 1000 && rauto.r === 1 && rauto.size === 0.9 && rauto.ox === 5 && rauto.oy === -5);
     const rmin = nr({ w: 10, h: 10, min: 0, max: 0 }, null);
-    check('min/max se normalizan a >= 1', rmin.min === 1 && rmin.max === 1);
+    // Spec 041 (A1): `min: 0` es un campo OPCIONAL (el cotizador lo usa asi);
+    // `max` nunca queda por debajo de `min`.
+    check('min 0 se respeta y max nunca queda por debajo', rmin.min === 0 && rmin.max === 1);
+    const rneg = nr({ w: 10, h: 10, min: -3, max: 2 }, null);
+    check('min negativo se corrige a 1 (compat)', rneg.min === 1 && rneg.max === 2);
     // Spec 025: `escala` dejo de existir (el cap a 1x es regla general).
     check('la ranura ya no lleva `escala` (spec 025 D1)',
       nr({ w: 10, h: 10 }, null).escala === undefined);
@@ -377,6 +381,13 @@ console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
     const r = Carg.normalizarRanuras([{ w: 10, h: 10, min: 3, max: 1 }])[0];
     return r.min === 3 && r.max === 3;   // max nunca queda por debajo de min
   })());
+  // Spec 041 (A1): `min: 0` es un campo OPCIONAL. Antes `parseInt(0) || 1` lo
+  // convertia en 1 y el cargador avisaba "Faltan 1 imagen(es)" en un campo que
+  // no exige nada (el cotizador lo pasa asi).
+  check('cargador: min 0 se respeta (campo opcional)',
+    Carg.normalizarRanuras([{ w: 10, h: 10, min: 0, max: 1 }])[0].min === 0);
+  check('cargador: min ausente sigue siendo 1 (compat)',
+    Carg.normalizarRanuras([{ w: 10, h: 10 }])[0].min === 1);
   check('cargador: forma desconocida cae en rectangulo',
     Carg.normalizarRanuras([{ w: 10, h: 10, forma: 'triangulo' }])[0].forma === 'rectangulo');
   check('cargador: formas nuevas (circulo, cuadrado, ovalo, auto, rectangulo) y alias se respetan',

@@ -89,7 +89,12 @@
             if (!isFinite(ox)) { ox = 0; }
             var oy = parseFloat(r.oy);
             if (!isFinite(oy)) { oy = 0; }
-            var min = Math.max(1, parseInt(r.min, 10) || 1);
+            // Spec 041 (A1): `min: 0` es valido (campo opcional). Antes `|| 1` y el
+            // `Math.max(1, ...)` lo subian a 1. Va en LOS DOS normalizadores
+            // (este y `CargadorPMU.normalizarRanuras`): la puerta anti-divergencia
+            // compara los resultados.
+            var min = parseInt(r.min, 10);
+            if (!isFinite(min) || min < 0) { min = 1; }
             var max = Math.max(min, parseInt(r.max, 10) || 1);
             var fondo = (typeof r.fondo === 'string' && r.fondo.trim() !== '')
                 ? r.fondo.trim() : 'auto';

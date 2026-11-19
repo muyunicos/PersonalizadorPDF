@@ -319,6 +319,13 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('cada imagen trae url por op=imagen', !empty($fotos_b[0]['url']) && strpos((string)$fotos_b[0]['url'], 'op=imagen') !== false);
         check('cada imagen trae id y medidas', !empty($fotos_b[0]['id']) && (int)($fotos_b[0]['w'] ?? 0) >= 1);
         check('cada imagen expone sus recetas (una imagen + N recetas)', isset($fotos_b[0]['recetas']) && is_array($fotos_b[0]['recetas']));
+        // Spec 041 (A2/A3): la tira usa una MINIATURA real y el listado trae los
+        // params v2 de la ultima receta (para recordar el encuadre al re-elegirla).
+        check('cada imagen trae thumb por op=miniatura (no la foto completa)',
+            !empty($fotos_b[0]['thumb']) && strpos((string)$fotos_b[0]['thumb'], 'op=miniatura') !== false,
+            (string)($fotos_b[0]['thumb'] ?? ''));
+        check('cada imagen expone `params` (clave presente; null si no hay receta)',
+            array_key_exists('params', (array)$fotos_b[0]));
         check('listar ya NO expone familias (sin madre/base/archivos/usos)',
             !isset($fotos_b[0]['madre']) && !isset($fotos_b[0]['base']) && !isset($fotos_b[0]['usos']));
         check('op=imagen: la imagen propia se resuelve a un archivo real', !empty($GLOBALS['bib_img_propia']));
