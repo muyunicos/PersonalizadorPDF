@@ -83,7 +83,7 @@ specs/040-catalogo-uploads/
 ```text
 personalizador-pdf.php          # listar/imagen/miniatura/borrar + rutas protegidas
 inc/class-pmu-uploads.php       # catalogo (leer/guardar/reconstruir) + miniatura 80x80
-inc/class-pmu-sesion.php        # escritura del catalogo desde el ciclo (subida, receta, borrado)
+inc/class-pmu-sesion.php        # invoca el catalogo (dueno: PMU_Uploads) desde el ciclo: subida, receta, migracion y borrado
 assets/biblioteca-pmu.js        # pide el listado (dedupe en vuelo) y pinta la tira
 assets/cargador-pmu.js          # quitar del campo = solo local; borrar desde la galeria
 assets/selector-pmu.js          # params desde el catalogo

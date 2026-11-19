@@ -90,9 +90,11 @@ GET/POST con `_wpnonce`; `id` obligatorio (`item_key` opcional, compatibilidad).
 POST `id=...`:
 
 1. Si la imagen la referencia **un item de carrito** o **un pedido**, y no vino `confirmar=1`:
-   `{"requiere_confirmacion": true, "referencias": N}` (no borra nada).
+   `{"requiere_confirmacion": true, "referencias": {"carrito": N, "pedidos": M}}` (no borra nada).
+   El cliente MUST distinguirlos: con `pedidos > 0` el dialogo **advierte** que ese pedido deja de poder
+   regenerarse (FR-019).
 2. Con `confirmar=1`, o si no hay referencias: elimina original, miniatura y entrada del catalogo, y
-   responde `{"borrado": true, "referencias": N}`.
+   responde `{"borrado": true, "referencias": {"carrito": N, "pedidos": M}}`.
 
 - Los **borradores NO cuentan** como referencia.
 - Las imagenes del cliente **viven** en `orders/{uid}/uploads/`: el borrado las elimina **ahi**. Si la

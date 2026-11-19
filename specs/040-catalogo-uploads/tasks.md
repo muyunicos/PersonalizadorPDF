@@ -36,7 +36,7 @@
 
 - [ ] T029 Ciclo de vida (FR-016): al promover el item a pedido **no se mueven originales** (ya estan en la carpeta de la cuenta); ajustar `trasladar_originales()` en `inc/class-pmu-sesion.php` para que sea no-op/idempotente y mueva solo el manifiesto, dejando el catalogo del cliente intacto.
 - [ ] T030 Ciclo de vida (FR-017): extender la poda en `inc/class-pmu-sesion.php` para usar el **ultimo uso** del catalogo, **nunca** eliminar imagenes con pedido y limpiar entradas/miniaturas huerfanas.
-- [ ] T031 Ciclo de vida (FR-018): migrar `tmp/sesion-{sid}/uploads/` -> `orders/{uid}/uploads/` al iniciar sesion (incluye el alta en el checkout): originales + miniaturas + fusion del catalogo, **idempotente y una sola vez**, en `inc/class-pmu-sesion.php`.
+- [ ] T031 Ciclo de vida (FR-018): **fusionar** la migracion con el vinculo que ya existe: extender `vinculo_sid_usuario()` en `personalizador-pdf.php` (el unico punto que corre en `wp_login` y en el alta del checkout) para que, ademas de vincular el `sid`, **migre** `tmp/sesion-{sid}/uploads/` -> `orders/{uid}/uploads/` (originales + miniaturas + fusion del catalogo, idempotente), delegando en `PMU_Sesion::migrar_uploads_a_cliente($sid, $uid)` en `inc/class-pmu-sesion.php`.
 
 > **Orden de ejecucion**: T029, T030 y T031 cierran la Fase 2 aunque sus IDs sean altos (se agregaron despues, por el analisis). Sin ellas, el catalogo queda sin mantenimiento (promover, podar) y el cliente no ve sus fotos de invitado.
 
@@ -98,9 +98,9 @@ confirmacion solo cuando la imagen esta en carrito o en un pedido.
 referencias la elimina directo; con una referencia en carrito pide confirmacion y, al aceptar, elimina.
 
 - [ ] T019 [US4] En `assets/cargador-pmu.js`, `_quitar()` deja de llamar `PMU_API.borrarFoto`: solo quita la referencia de la ranura (sin tocar archivo, miniatura ni catalogo). **Revierte la 039 D3** (FR-011).
-- [ ] T020 [P] [US4] En `personalizador-pdf.php`, **reemplazar** el `op=borrar` de un paso (039 D3) por el de dos pasos: sin `confirmar`, si hay referencias en carrito/pedidos responder `requiere_confirmacion` + `referencias`; con `confirmar=1` (o sin referencias) borrar y responder `borrado` (FR-012, FR-014, FR-015).
-- [ ] T021 [US4] En `inc/class-pmu-sesion.php`, `referencias_en_carrito_o_pedidos($id)` (los borradores NO cuentan) y `borrar_imagen_galeria($id)` que elimina original, miniatura y entrada del catalogo cuando corresponde (**delegando** la baja en `PMU_Uploads::catalogo_borrar()`); si la imagen esta en un pedido, la UI pide confirmacion y advierte que ese pedido deja de poder regenerarse (FR-019).
-- [ ] T022 [P] [US4] En `assets/biblioteca-pmu.js` (tira/acciones) y `assets/visor-pmu.js`, agregar la accion **Borrar** de la galeria usando el mini-dialogo de confirmacion existente cuando el servidor lo pida.
+- [ ] T020 [P] [US4] En `personalizador-pdf.php`, **reemplazar** el `op=borrar` de un paso (039 D3) por el de dos pasos: sin `confirmar`, si hay referencias en carrito/pedidos responder `requiere_confirmacion` + `referencias: {carrito, pedidos}` (separadas, para que la UI distinga el aviso de FR-019); con `confirmar=1` (o sin referencias) borrar y responder `borrado` (FR-012, FR-014, FR-015).
+- [ ] T021 [US4] En `inc/class-pmu-sesion.php`, `referencias_en_carrito_o_pedidos($id)` (devuelve `{carrito, pedidos}`; los borradores NO cuentan) y `borrar_imagen_galeria($id)` que elimina original, miniatura y entrada del catalogo cuando corresponde (**delegando** la baja en `PMU_Uploads::catalogo_borrar()`); si `pedidos > 0`, la UI pide confirmacion y advierte que ese pedido deja de poder regenerarse (FR-019).
+- [ ] T022 [P] [US4] En `assets/biblioteca-pmu.js` (tira/acciones) y `assets/visor-pmu.js`, agregar la accion **Borrar** de la galeria usando el mini-dialogo de confirmacion existente; si `referencias.pedidos > 0`, el dialogo **advierte que ese pedido deja de poder regenerarse** (FR-019).
 - [ ] T023 [US4] Actualizar la fase `biblioteca` de `tests/texto_puente.php` (quitar no borra; borrar sin referencias; borrar con referencia pide confirmacion) y `node tests/biblioteca-contrato.test.js`.
 
 **Checkpoint**: US4 entregable; el flujo de cargas queda coherente con la spec.
