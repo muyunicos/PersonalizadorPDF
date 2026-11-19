@@ -1727,9 +1727,20 @@
             // si no, cae a la subida normal (que estampa la receta en la fila).
             var previos = this._bib.params;
             var iguales = false;
-            try {
-                iguales = !!previos && JSON.stringify(previos) === JSON.stringify(paramsBib);
-            } catch (e) { iguales = false; }
+            // Comparacion CON TOLERANCIA: el prefill reconstruye `ox/oy` por inversa y
+            // el recomputo puede diferir en el ultimo decimal. Un JSON exacto diria
+            // "cambio" siempre y volveria a subir sin motivo.
+            var firmaDe = function (p) {
+                if (!p) { return ''; }
+                var r = function (v) {
+                    var n = parseFloat(v);
+                    return isFinite(n) ? (Math.round(n * 10000) / 10000) : '';
+                };
+                return [r(p.w), r(p.h), String(p.modo || ''), r(p.escala), r(p.ox), r(p.oy),
+                    r(p.rot), String(p.fondo || ''), String(p.gid || ''), r(p.phsize)].join('|');
+            };
+            try { iguales = firmaDe(previos) !== '' && firmaDe(previos) === firmaDe(paramsBib); }
+            catch (e) { iguales = false; }
             var puedeDeclarar = (typeof this.config.declararReceta === 'function');
             if (iguales || puedeDeclarar) {
                 var usar = (typeof this.config.usarExistente === 'function')
