@@ -115,7 +115,7 @@ galeria y comprobar que desaparece de archivos y catalogo.
 - Q: Si falta el catálogo en una carpeta existente, ¿de dónde salen las recetas para reconstruirlo? → A: Solo desde los archivos (identificador, formato, peso, medidas y fecha). Las recetas NO se recuperan y esas imágenes quedan con el encuadre por defecto.
 - Q: Al borrar una imagen desde un ítem, ¿cómo se decide si se eliminan archivo, miniatura y entrada del catálogo? → A: Quitar desde un campo NO elimina la imagen: solo quita esa referencia del campo. El borrado vive en la galería: consulta referencias solo en ítems de CARRITO y en PEDIDOS (los borradores no cuentan); si hay alguna, pide confirmación, y si no, borra directamente (archivos + catálogo).
 - Q: ¿Cuántas carpetas tiene cada identidad y cuándo se migra? → A: Una por identidad: invitado `tmp/sesion-{sid}/uploads/`, cliente `orders/{uid}/uploads/`. La sesión anónima se migra en el login (incluye el alta en el checkout); al pagar no se mueven originales. Caducidad por último uso, nunca sobre imágenes con pedido.
-- Q: ¿Y al promover el ítem a pedido? → A: no se mueve nada (los originales ya están en la carpeta de la cuenta): solo cambia el manifiesto.
+- Derivada de la aclaración anterior: al promover el ítem a pedido no se mueve nada (los originales ya están en la carpeta de la cuenta); solo cambia el manifiesto.
 - Q: Si la imagen ya está en un pedido, ¿qué pasa al borrarla desde la galería? → A: Se permite **con confirmación**; se acepta que ese pedido deja de poder regenerarse. Sin pedido, el borrado es directo.
 
 ## Requirements *(mandatory)*
@@ -148,8 +148,9 @@ galeria y comprobar que desaparece de archivos y catalogo.
 - **FR-012**: Borrar una imagen desde la galeria MUST eliminar el original, su miniatura y su entrada
   de catalogo.
 - **FR-013**: El catalogo MUST NOT publicarse ni servirse por una ruta propia: su unica via de lectura
-  es la protegida que ya sirven las imagenes y sus miniaturas. Comparte la carpeta fisica de los
-  originales y, por lo tanto, su misma exposicion.
+  es la protegida. Los directorios privados (`tmp/`, `orders/`, `api/`) MUST NOT servirse como
+  estaticos: el servidor los deniega (`uploads/pmu/.htaccess`) y solo los leen los handlers del
+  plugin (spec 040 A-1).
 - **FR-014**: Antes de borrar desde la galeria, el sistema MUST consultar las referencias en items de
   CARRITO y en PEDIDOS (los borradores NO cuentan). Si hay alguna, MUST pedir confirmacion explicita y
   borrar solo si el comprador acepta.
@@ -193,8 +194,8 @@ galeria y comprobar que desaparece de archivos y catalogo.
 - Las miniaturas son cuadradas, recorte al centro, 80x80.
 - El catalogo vive dentro del ambito de originales y es dato derivado: se puede reconstruir.
 - La politica de acceso y el endpoint protegido actuales se mantienen; no se publican rutas crudas.
-- El catalogo comparte la carpeta fisica de los originales: su exposicion es la misma que la de ellos y
-  nunca se publica su URL.
+- El catalogo comparte la carpeta fisica de los originales y esa carpeta es **privada** (denegada por
+  el servidor): nunca se publica su URL.
 - Reconstruir el catalogo NO recupera recetas: se prioriza no bloquear la apertura de la biblioteca.
 - El borrado de una imagen vive en la galeria y **supersede** la 039 D3 (borrado en el acto desde el
   visor del campo): quitar una foto de un campo ya **no** borra el original.

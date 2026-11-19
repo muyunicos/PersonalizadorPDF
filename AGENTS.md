@@ -356,6 +356,13 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
 Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del plugin:
 
 - Raíz de datos: `uploads/pmu/`
+- **Privacidad (spec 040 A-1)**: `uploads/pmu/.htaccess` **deniega** `tmp/`, `orders/` y `api/`
+  (fotos del comprador, originales comprados, manifiestos y el catalogo `uploads.json`): solo se leen
+  por los handlers del plugin (`op=imagen`, `op=miniatura`, `borrar`, `handle_ver`). **Publico por
+  diseno (no denegar)**: `img/`, `fonts/`, `tm-presets/`, `mockups/` y `pdfs/` (plantillas del producto
+  y mockups aplanados: la ficha y el editor PDF.js los piden por URL). El archivo es un **dotfile** y
+  `uploads/` esta gitignored: al desplegar `uploads/pmu/` COMPLETA hay que copiarlo (si falta, las fotos
+  de los compradores quedan alcanzables por URL).
 - Ámbitos del editor: `fonts/` (catálogo `fonts.json`), `img/` (catálogo `img.json`) y
   `tm-presets/` (catálogo `presets.json`); un sprite `thumbs.webp` por ámbito, junto a su
   catálogo. La **certificación** de la hoja es `thumbs.sprite_firma` = `[w,h,c,items]`
