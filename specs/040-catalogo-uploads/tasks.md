@@ -67,7 +67,7 @@ retoca, no viaja ningun byte.
 **Independent Test**: subir y encuadrar; reabrir; elegir la misma imagen -> vuelve el encuadre y el
 primario ofrece usarla sin cambios; con otra forma/tamano -> encuadre por defecto.
 
-- [ ] T013 [US2] En `assets/selector-pmu.js`, al cargar una imagen de la biblioteca tomar la receta por clave `"{gid}-{w}x{h}-{phsize}"` desde `foto.recetas` y re-aplicarla (escala, `ox/oy`, `rot`, `modo`, `fondo`) **solo si la clave coincide** con el contexto del campo (FR-009, US2 esc. 2).
+- [X] T013 [US2] En `assets/selector-pmu.js`, al cargar una imagen de la biblioteca tomar la receta por clave `"{gid}-{w}x{h}-{phsize}"` desde `foto.recetas` y re-aplicarla (escala, `ox/oy`, `rot`, `modo`, `fondo`) **solo si la clave coincide** con el contexto del campo (FR-009, US2 esc. 2).
 - [ ] T014 [P] [US2] En `assets/cargador-pmu.js`, pasar el contexto y las recetas de la foto al selector; mantener el primario `Usar` con **0 bytes** cuando la receta no cambia y el resguardo que sube si el comprador reencuadra (FR-015, SC-003).
 - [ ] T015 [US2] Actualizar `node tests/selector-contrato.test.js` y `node tests/biblioteca-contrato.test.js` para la receta por clave (no por `params` plano) y correr ambas suites.
 

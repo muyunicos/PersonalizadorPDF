@@ -1119,7 +1119,7 @@
         if (url === '') { return Promise.resolve(false); }
         this._bib = {
             id: String(foto.id || ''),
-            params: foto.params || null,
+            params: this._recetaDeFoto(foto),
             url: url
         };
         return window.fetch(url, { credentials: 'same-origin' })
@@ -1131,6 +1131,37 @@
                 return true;
             })
             .catch(function () { self._bib = null; return false; });
+    };
+
+    /**
+     * Spec 041 (A4): receta recordada de una ficha de la biblioteca para ESTA ranura.
+     *
+     * El listado trae `recetas` como **mapa por contexto** (`{gid}-{w}x{h}-{phsize}`).
+     * Se acepta tambien `params` (compatibilidad con el payload viejo). La receta se
+     * devuelve tal cual: `_aplicarParamsIniciales()` la valida contra la geometria.
+     */
+    SelectorPMU.prototype._recetaDeFoto = function (foto) {
+        if (!foto) {
+            return null;
+        }
+        if (foto.params && typeof foto.params === 'object') {
+            return foto.params;
+        }
+        var recetas = (foto.recetas && typeof foto.recetas === 'object') ? foto.recetas : null;
+        if (!recetas) {
+            return null;
+        }
+        var w = Math.max(1, parseInt(this.config.finalW, 10) || 1);
+        var h = Math.max(1, parseInt(this.config.finalH, 10) || 1);
+        var gid = String(this.config.gid || '').toUpperCase();
+        var ph = Math.max(0, Math.min(2, parseInt(this.config.phsize, 10) || 0));
+            var pedido = gid + '-' + w + 'x' + h + '-' + ph;
+        if (recetas[pedido]) {
+            return recetas[pedido];
+        }
+        // Compatibilidad: una sola receta conocida (datos viejos) se ofrece igual.
+        var claves = Object.keys(recetas);
+        return (claves.length === 1) ? recetas[claves[0]] : null;
     };
 
     /**
