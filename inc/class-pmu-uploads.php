@@ -17,6 +17,12 @@ if (!defined('ABSPATH')) {
  * ambitos de datos del motor, sin catalogo ni sprite. Prohibidas las raices
  * heredadas: una carpeta tm suelta en uploads o dentro de pmu, distinta de
  * la vigente tm-presets.
+     *
+     * Spec 040: ademas de los catalogos de recursos, esta clase es el **dueno del
+     * catalogo de originales del comprador** (`uploads.json` dentro de su carpeta de
+     * identidad) y de las miniaturas `{id}-80x80.webp`. Todas las mutaciones pasan
+     * por `catalogo_mutar()` (serializadas con `flock`); `guardar_subida()` y la
+     * declaracion de recetas la invocan desde `PMU_Sesion`.
  */
 class PMU_Uploads
 {
@@ -36,6 +42,17 @@ class PMU_Uploads
 
     /** Subambitos de trabajo bajo tmp/ (contrato rutas-pmu.md v2, spec 007). */
     private static $SUBAMBITOS_TMP = ['muestras', 'cart', 'orders', 'reemplazos'];
+
+    /* ==================== Originales del comprador (spec 040) ==================== */
+
+    /** Catalogo de un ambito de originales del comprador (identidad, recetas y ultimo uso). */
+    const CATALOGO_UPLOADS = 'uploads.json';
+
+    /** Sufijo de la miniatura cuadrada del comprador: `{id}-80x80.webp`. */
+    const MINIATURA_SUFIJO = '-80x80.webp';
+
+    /** Lock de la mutacion serializada del catalogo (spec 041 A-4). */
+    const LOCK_UPLOADS = 'uploads.json.lock';
 
     /** Grilla del sprite por ambito (defaults; el catalogo vigente manda). */
     private static $THUMBS = [
@@ -1122,6 +1139,271 @@ class PMU_Uploads
             throw new Exception('motor:dir_order_uploads:directorio:no_escribible');
         }
         return $dir;
+    }
+
+    /* ==================== Originales del comprador (spec 040) ==================== */
+
+    /**
+     * Carpeta de ORIGINALES de una identidad: UNA sola por comprador.
+     *
+     *   - Cliente: `orders/{uid}/uploads/` (el arbol del cliente; `orders/{uid}/`
+     *     tambien guarda `customs/` y los pedidos).
+     *   - Invitado: `tmp/sesion-{sid}/uploads/` (la sesion actual).
+     *
+     * Al iniciar sesion, la sesion anonima se migra aca una sola vez (idempotente).
+     *
+     * @param array $identidad ['uid' => int, 'sid' => string]
+     * @return string directorio (creado si falta)
+     */
+    public function dir_uploads_identidad($identidad)
+    {
+        if (!is_array($identidad)) {
+            $identidad = ['uid' => 0, 'sid' => ''];
+        }
+        $uid = (int)($identidad['uid'] ?? 0);
+        if ($uid > 0 && self::clave_valida((string)$uid)) {
+            return $this->dir_order_uploads((string)$uid, true);
+        }
+        $sid = trim((string)($identidad['sid'] ?? ''));
+        if ($sid === '') {
+            throw new Exception('motor:dir_uploads_identidad:sin_sesion');
+        }
+        return $this->dir_sesion_uploads($sid, true);
+    }
+
+    /** Ruta del catalogo de una carpeta de uploads. */
+    public function ruta_catalogo_uploads($dir)
+    {
+        $dir = rtrim((string)$dir, '/\\');
+        return ($dir === '') ? '' : $dir . DIRECTORY_SEPARATOR . self::CATALOGO_UPLOADS;
+    }
+
+    /**
+     * Lee el catalogo de una carpeta. Tolerante: ausente, ilegible o version
+     * desconocida devuelve `null` (el llamador reconstruye o lista con lo que hay).
+     */
+    public function catalogo_leer($dir)
+    {
+        $ruta = $this->ruta_catalogo_uploads($dir);
+        if ($ruta === '' || !is_file($ruta)) {
+            return null;
+        }
+        $datos = json_decode((string)@file_get_contents($ruta), true);
+        if (!is_array($datos) || (int)($datos['version'] ?? 0) !== 1 || !is_array($datos['items'] ?? null)) {
+            return null;
+        }
+        // JSON decodifica los objetos como stdClass: normalizamos `recetas` a array
+        // para que las escrituras trabajen siempre con arrays.
+        foreach ($datos['items'] as $k => $v) {
+            if (is_array($v) && isset($v['recetas']) && !is_array($v['recetas'])) {
+                $datos['items'][$k]['recetas'] = (array)$v['recetas'];
+            }
+        }
+        return $datos;
+    }
+
+    /**
+     * Mutacion SERIALIZADA del catalogo (spec 041 A-4).
+     *
+     * Lee DENTRO del lock y escribe atomico: dos pestanas no se pisan. El callable
+     * recibe el catalogo por referencia (`function (&$c) {...}`).
+     */
+    public function catalogo_mutar($dir, callable $fn)
+    {
+        $dir = rtrim((string)$dir, '/\\');
+        if ($dir === '' || !is_dir($dir)) {
+            throw new Exception('motor:catalogo_uploads:directorio:ausente');
+        }
+        $lock = @fopen($dir . DIRECTORY_SEPARATOR . self::LOCK_UPLOADS, 'c');
+        if ($lock === false) {
+            throw new Exception('motor:catalogo_uploads:lock:invalido');
+        }
+        if (!@flock($lock, LOCK_EX)) {
+            @fclose($lock);
+            throw new Exception('motor:catalogo_uploads:lock:invalido');
+        }
+        try {
+            $datos = $this->catalogo_leer($dir);
+            if (!is_array($datos)) {
+                $datos = ['version' => 1, 'items' => []];
+            }
+            $fn($datos);
+            $this->catalogo_escribir($dir, $datos);
+        } finally {
+            @flock($lock, LOCK_UN);
+            @fclose($lock);
+        }
+        return true;
+    }
+
+    /** Escritura atomica del catalogo (.tmp + rename). */
+    private function catalogo_escribir($dir, array $datos)
+    {
+        $datos['version'] = 1;
+        if (!is_array($datos['items'] ?? null)) {
+            $datos['items'] = [];
+        }
+        $json = wp_json_encode($datos, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            throw new Exception('motor:catalogo_uploads:json:invalido');
+        }
+        $tmp = $dir . DIRECTORY_SEPARATOR . self::CATALOGO_UPLOADS . '.tmp';
+        if (@file_put_contents($tmp, $json) === false) {
+            throw new Exception('motor:catalogo_uploads:escritura');
+        }
+        if (!@rename($tmp, $dir . DIRECTORY_SEPARATOR . self::CATALOGO_UPLOADS)) {
+            @unlink($tmp);
+            throw new Exception('motor:catalogo_uploads:escritura');
+        }
+        return true;
+    }
+
+    /**
+     * Alta/refresco de UNA entrada (`ext`, `bytes`, `w`, `h`, `creado`, `ultimo_uso`)
+     * y merge profundo de sus `recetas`. Todo bajo el lock.
+     */
+    public function catalogo_upsert($dir, $id, array $datos)
+    {
+        $id = strtolower(trim((string)$id));
+        if (preg_match('/^[a-f0-9]{12}$/', $id) !== 1) {
+            throw new Exception('motor:catalogo_uploads:id:invalido');
+        }
+        return $this->catalogo_mutar($dir, function (&$c) use ($id, $datos) {
+            $prev = (isset($c['items'][$id]) && is_array($c['items'][$id])) ? $c['items'][$id] : [];
+            $recPrev = (isset($prev['recetas']) && is_array($prev['recetas'])) ? $prev['recetas'] : [];
+            $recNue = (isset($datos['recetas']) && is_array($datos['recetas'])) ? $datos['recetas'] : [];
+            $prev = array_merge($prev, $datos);
+            if ($recNue) {
+                $prev['recetas'] = array_merge($recPrev, $recNue);
+            }
+            $prev['id'] = $id;
+            $c['items'][$id] = $prev;
+        });
+    }
+
+    /** Baja de una entrada del catalogo (la imagen se borra aparte). */
+    public function catalogo_borrar($dir, $id)
+    {
+        $id = strtolower(trim((string)$id));
+        if (preg_match('/^[a-f0-9]{12}$/', $id) !== 1) {
+            throw new Exception('motor:catalogo_uploads:id:invalido');
+        }
+        return $this->catalogo_mutar($dir, function (&$c) use ($id) {
+            unset($c['items'][$id]);
+        });
+    }
+
+    /* ==================== Miniaturas del comprador (spec 040 A-2) ==================== */
+
+    /** Ruta de la miniatura cuadrada: `{id}-80x80.webp` (spec 040). */
+    public function miniatura_ruta($rutaOriginal, $lado = 80)
+    {
+        $lado = max(32, min(512, (int)$lado));
+        $base = (string)$rutaOriginal;
+        $ext = strtolower((string)pathinfo($base, PATHINFO_EXTENSION));
+        if ($ext !== '') {
+            $base = substr($base, 0, -(strlen($ext) + 1));
+        }
+        return $base . '-' . $lado . 'x' . $lado . '.webp';
+    }
+
+    /**
+     * Genera (y devuelve los bytes de) la miniatura cuadrada **cover**: recorta el
+     * centro, nunca deforma. Devuelve '' si no se puede (sin GD o archivo ilegible):
+     * el llamador degrada al original.
+     */
+    public function miniatura_generar($rutaOriginal, $lado = 80)
+    {
+        $lado = max(32, min(512, (int)$lado));
+        if (!extension_loaded('gd') || !function_exists('imagewebp') || !is_file($rutaOriginal)) {
+            return '';
+        }
+        $destino = $this->miniatura_ruta($rutaOriginal, $lado);
+        if (is_file($destino)) {
+            $hit = (string)@file_get_contents($destino);
+            if ($hit !== '') {
+                return $hit;
+            }
+        }
+        $src = @imagecreatefromstring((string)@file_get_contents($rutaOriginal));
+        if (!$src) {
+            return '';
+        }
+        $w0 = imagesx($src);
+        $h0 = imagesy($src);
+        if ($w0 < 1 || $h0 < 1) {
+            return '';
+        }
+        // cover: el lado MENOR pasa a $lado; el sobrante se recorta al centro.
+        $k = (float)$lado / max(1, min($w0, $h0));
+        $sw = max($lado, (int)round($w0 * $k));
+        $sh = max($lado, (int)round($h0 * $k));
+        $tmp = imagecreatetruecolor($sw, $sh);
+        imagealphablending($tmp, false);
+        imagesavealpha($tmp, true);
+        imagefill($tmp, 0, 0, imagecolorallocatealpha($tmp, 0, 0, 0, 127));
+        imagealphablending($tmp, true);
+        imagecopyresampled($tmp, $src, 0, 0, 0, 0, $sw, $sh, $w0, $h0);
+        $dst = imagecreatetruecolor($lado, $lado);
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        imagefill($dst, 0, 0, imagecolorallocatealpha($dst, 0, 0, 0, 127));
+        imagealphablending($dst, true);
+        imagecopyresampled($dst, $tmp, 0, 0, (int)(($sw - $lado) / 2), (int)(($sh - $lado) / 2), $lado, $lado, $lado, $lado);
+        ob_start();
+        $ok = @imagewebp($dst, null, 82);
+        $out = ob_get_clean();
+        if (PHP_VERSION_ID < 80000) {
+            @imagedestroy($src);
+            @imagedestroy($tmp);
+            @imagedestroy($dst);
+        }
+        if (!$ok || $out === false || $out === '') {
+            return '';
+        }
+        @file_put_contents($destino, $out);
+        return $out;
+    }
+
+    /**
+     * Reconstruye el catalogo **solo desde los archivos** (spec 040 F-006):
+     * `id`, `ext`, `bytes`, `w`, `h`, `creado` y `ultimo_uso` = creado.
+     * **No** recupera recetas (los archivos no las tienen). Serializado.
+     */
+    public function catalogo_reconstruir($dir)
+    {
+        $dir = rtrim((string)$dir, '/\\');
+        if ($dir === '' || !is_dir($dir)) {
+            throw new Exception('motor:catalogo_uploads:directorio:ausente');
+        }
+        $items = [];
+        foreach ((array)glob($dir . DIRECTORY_SEPARATOR . '*') as $archivo) {
+            if (!is_file($archivo)) {
+                continue;
+            }
+            $nombre = basename($archivo);
+            if (preg_match('/-\\d{2,3}x\\d{2,3}\\.webp$/i', $nombre) === 1) {
+                continue;   // miniatura derivada
+            }
+            $id = strtolower(pathinfo($archivo, PATHINFO_FILENAME));
+            if (preg_match('/^[a-f0-9]{12}$/', $id) !== 1) {
+                continue;   // catalogo, lock o archivo ajeno
+            }
+            $dim = @getimagesize($archivo);
+            $items[$id] = [
+                'id' => $id,
+                'ext' => strtolower((string)pathinfo($archivo, PATHINFO_EXTENSION)),
+                'bytes' => (int)@filesize($archivo),
+                'w' => is_array($dim) ? (int)$dim[0] : 0,
+                'h' => is_array($dim) ? (int)$dim[1] : 0,
+                'creado' => (int)@filemtime($archivo),
+                'ultimo_uso' => (int)@filemtime($archivo),
+                'recetas' => new \stdClass(),
+            ];
+        }
+        return $this->catalogo_mutar($dir, function (&$c) use ($items) {
+            $c['items'] = $items;
+        });
     }
 
     /**
