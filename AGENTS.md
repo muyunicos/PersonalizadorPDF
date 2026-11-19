@@ -363,6 +363,10 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   y mockups aplanados: la ficha y el editor PDF.js los piden por URL). El archivo es un **dotfile** y
   `uploads/` esta gitignored: al desplegar `uploads/pmu/` COMPLETA hay que copiarlo (si falta, las fotos
   de los compradores quedan alcanzables por URL).
+- **`orders/{cliente}/` es el ARBOL DEL CLIENTE** (no solo pedidos): `uploads/` (originales; desde la
+  spec 040 tambien los borradores), `customs/` (ideas del cotizador, spec 037) y `{order_id}/{item_key}/`
+  (entregables). El nombre se conserva: renombrar el nivel a `clients/` queda como spec aparte (antes de
+  la tabla de la 041, que guardaria rutas).
 - Ámbitos del editor: `fonts/` (catálogo `fonts.json`), `img/` (catálogo `img.json`) y
   `tm-presets/` (catálogo `presets.json`); un sprite `thumbs.webp` por ámbito, junto a su
   catálogo. La **certificación** de la hoja es `thumbs.sprite_firma` = `[w,h,c,items]`

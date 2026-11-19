@@ -17,6 +17,7 @@ Ubicacion: `{ambito}/uploads.json`. Es **dato derivado**: se puede reconstruir (
 
 **Ambitos (aclaracion 2026-11-19)**: uno por identidad. Invitado: `tmp/sesion-{sid}/uploads/`.
 Cliente: `orders/{uid}/uploads/`, adonde se **migra** la sesion anonima en el login (una vez).
+`orders/{uid}/` es el **arbol del cliente** (`uploads/`, `customs/` y pedidos); el nombre se conserva.
 
 ### EntradaCatalogo
 

@@ -190,6 +190,8 @@ galeria y comprobar que desaparece de archivos y catalogo.
 
 - Un invitado tiene una sola sesion (`tmp/sesion-{sid}/uploads/`); un cliente tiene una sola carpeta
   (`orders/{uid}/uploads/`). La sesion anonima se migra en el login, una vez.
+- `orders/{uid}/` es el **arbol del cliente** (`uploads/` + `customs/` + pedidos), no solo pedidos. En
+  esta spec NO se renombra: un eventual `clients/` sera otra spec (y conviene antes de la tabla de 041).
 - En esta spec, "galeria" y "biblioteca" nombran la MISMA vista (el modulo es `assets/biblioteca-pmu.js`).
 - Las miniaturas son cuadradas, recorte al centro, 80x80.
 - El catalogo vive dentro del ambito de originales y es dato derivado: se puede reconstruir.
