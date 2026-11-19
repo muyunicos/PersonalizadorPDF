@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.32.0
+Stable tag: 4.33.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,19 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.33.0 =
+* Spec 040 (catalogo de uploads): la biblioteca del comprador se lista desde un **catalogo por
+  carpeta** (`uploads/uploads.json`) con ids, medidas, fecha, ultimo uso y recetas por contexto.
+  Deja de leer manifiestos de items y pedidos ajenos: abre en tiempo constante.
+* **Una carpeta por identidad**: invitado `tmp/sesion-{sid}/uploads/`; cliente `orders/{uid}/uploads/`
+  (al iniciar sesion los originales de la sesion anonima se **migran** ahi, una sola vez).
+* **Miniaturas 80x80** junto al original (`{id}-80x80.webp`, cover): la tira ya no baja la foto entera.
+* **El encuadre se recuerda** por forma + tamano: al elegir una imagen usada se re-aplica su receta.
+* **Borrado en dos pasos**: si la imagen esta en un carrito o en un pedido se pide confirmacion y se
+  advierte que ese pedido deja de poder regenerarse; sin referencias, borra directo (archivo,
+  miniatura y catalogo). Quitar una foto de un campo ya **no** borra la imagen.
+* Privacidad: `uploads/pmu/.htaccess` deniega `tmp/`, `orders/` y `api/` (solo se leen por el plugin).
 
 = 4.32.0 =
 * "Cargar imagen" abre el recorte en **un solo toque**: el cargador expone `abrir()` y la

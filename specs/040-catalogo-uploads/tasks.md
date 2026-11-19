@@ -109,7 +109,7 @@ referencias la elimina directo; con una referencia en carrito pide confirmacion 
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T024 [P] Retirar `biblioteca_contenedores()` de la ruta de lectura de `personalizador-pdf.php` (y el remanente de F2), dejando solo lo que el borrado necesite.
+- [ ] T024 [P] Retirar `biblioteca_contenedores()` de la ruta de lectura de `personalizador-pdf.php` (y el remanente de F2), dejando solo lo que el borrado necesite. **Parcial**: `biblioteca_version()` ya se retiro; `biblioteca_contenedores()` quedo SIN LLAMADORES pero se conserva hasta borrarlo en un commit propio (bloque de ~100 lineas).
 - [ ] T025 [P] Corregir las 41 referencias "spec 041" -> "spec 040" en `assets/selector-pmu.js`, `assets/cargador-pmu.js`, `assets/biblioteca-pmu.js`, `assets/tienda.js`, `inc/class-pmu-sesion.php`, `personalizador-pdf.php`, `tests/texto_puente.php`, `tests/campos-contrato.test.js`, `tests/biblioteca-contrato.test.js`.
 - [ ] T026 [P] Documentar: `AGENTS.md` §5 (formato `uploads.json` + `{id}-80x80.webp`), `docs/decisiones.md` (supersede 039 D3 + catalogo), `specs/INDICE.md` (fila 040) y `readme.txt` (changelog + version).
 - [ ] T027 Correr la bateria de `specs/040-catalogo-uploads/quickstart.md`: `php -l` (plugin, `admin/`, `engine/`, `inc/`), `node --check` de los JS tocados, suites JS (`tests/biblioteca-contrato.test.js`, `tests/fotos-contrato.test.js`, `tests/selector-contrato.test.js`, `tests/campos-contrato.test.js`, `tests/cola-subida.test.js`), fase `biblioteca` de `tests/texto_puente.php`, `tests/sin_lectura.php`, `tests/motor_smoke.php`, `tests/parity.php` y PHPStan sobre `engine/`.
