@@ -5304,6 +5304,13 @@ switch ($fase) {
         if (!class_exists('PMU_Sesion')) {
             require dirname(__DIR__) . '/inc/class-pmu-sesion.php';
         }
+        // Spec 040 (T006): esta fase simula INVITADO. El stub de `get_current_user_id()`
+        // del arnes devuelve 1 por defecto (cliente), y `guardar_subida()` ya escribe en
+        // la carpeta de la IDENTIDAD: con uid=1 iria a orders/1/uploads/ y el test, que
+        // busca en tmp/sesion-*/uploads/, no lo encontraria. Se fija el contexto y se
+        // restaura al salir para no contaminar las fases siguientes.
+        $userPrevio = $GLOBALS['test_user_id'] ?? null;
+        $GLOBALS['test_user_id'] = 0;
         $ses = new PMU_Sesion($p->motor_para_tests());
         try {
             $sid = 'test-sub1';
@@ -5386,6 +5393,12 @@ switch ($fase) {
             ];
         } catch (\Throwable $e) {
             $GLOBALS['test_campo_subida'] = ['error' => $e->getMessage()];
+        }
+        // Restaura la identidad del arnes (la fase simulaba invitado).
+        if ($userPrevio === null) {
+            unset($GLOBALS['test_user_id']);
+        } else {
+            $GLOBALS['test_user_id'] = $userPrevio;
         }
         break;
 

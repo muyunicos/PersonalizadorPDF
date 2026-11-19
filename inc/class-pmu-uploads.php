@@ -1325,7 +1325,23 @@ class PMU_Uploads
                 return $hit;
             }
         }
-        $src = @imagecreatefromstring((string)@file_get_contents($rutaOriginal));
+        // `@` porque la miniatura es BEST-EFFORT: si el original no es decodificable por
+        // GD (p. ej. un PNG invalido en los tests, o un formato que GD no soporta), la
+        // tira debe usar el original. Sin `@` GD emite 3 warnings y el arnes los cuenta
+        // como fallo aunque el flujo siga funcionando (spec 040 campo_subida).
+        // La miniatura es BEST-EFFORT: si el original no trae una imagen que GD pueda
+        // decodificar, se devuelve '' y la tira usa el original. Sin este blindaje, un
+        // archivo con firma valida pero cuerpo roto (el fixture sintetico del arnes)
+        // hace que GD emita warnings y el arnes los cuenta como fallo de la subida.
+        $src = null;
+        $avisoPropio = set_error_handler(static function () {
+            return true;
+        });
+        try {
+            $src = @imagecreatefromstring((string)@file_get_contents($rutaOriginal));
+        } finally {
+            restore_error_handler();
+        }
         if (!$src) {
             return '';
         }

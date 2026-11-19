@@ -112,7 +112,16 @@ referencias la elimina directo; con una referencia en carrito pide confirmacion 
 - [X] T024 [P] Retirar `biblioteca_contenedores()` de la ruta de lectura de `personalizador-pdf.php` (y el remanente de F2), dejando solo lo que el borrado necesite. **Hecho**: 93 lineas eliminadas (`biblioteca_contenedores()` completo + docblock); `biblioteca_version()` ya estaba retirada. Verificado: cero referencias en el codigo (solo el comentario T024) y `wc_get_orders` ya no se usa en el plugin.
 - [X] T025 [P] Corregir las 41 referencias "spec 041" -> "spec 040" en `assets/selector-pmu.js`, `assets/cargador-pmu.js`, `assets/biblioteca-pmu.js`, `assets/tienda.js`, `inc/class-pmu-sesion.php`, `personalizador-pdf.php`, `tests/texto_puente.php`, `tests/campos-contrato.test.js`, `tests/biblioteca-contrato.test.js`. **Hecho**: eran 69 en 12 archivos (7 con `spec 041`, 62 con `Spec 041`); reemplazo exacto byte a byte, diff 1:1 y **cero lineas de codigo tocadas**. Las 7 restantes son de otras specs (`T041` de la 009 y labels `041 T001`/`T006` del arnes) y no se tocan.
 - [ ] T026 [P] Documentar: `AGENTS.md` §5 (formato `uploads.json` + `{id}-80x80.webp`), `docs/decisiones.md` (supersede 039 D3 + catalogo), `specs/INDICE.md` (fila 040) y `readme.txt` (changelog + version).
-- [ ] T027 Correr la bateria de `specs/040-catalogo-uploads/quickstart.md`: `php -l` (plugin, `admin/`, `engine/`, `inc/`), `node --check` de los JS tocados, suites JS (`tests/biblioteca-contrato.test.js`, `tests/fotos-contrato.test.js`, `tests/selector-contrato.test.js`, `tests/campos-contrato.test.js`, `tests/cola-subida.test.js`), fase `biblioteca` de `tests/texto_puente.php`, `tests/sin_lectura.php`, `tests/motor_smoke.php`, `tests/parity.php` y PHPStan sobre `engine/`.
+- [X] T027 Correr la bateria de `specs/040-catalogo-uploads/quickstart.md`: `php -l` (plugin, `admin/`, `engine/`, `inc/`), `node --check` de los JS tocados, suites JS (`tests/biblioteca-contrato.test.js`, `tests/fotos-contrato.test.js`, `tests/selector-contrato.test.js`, `tests/campos-contrato.test.js`, `tests/cola-subida.test.js`), fase `biblioteca` de `tests/texto_puente.php`, `tests/sin_lectura.php`, `tests/motor_smoke.php`, `tests/parity.php` y PHPStan sobre `engine/`.
+  **Hecho**: 7 suites PHP (smoke, catalogo, parity, envolturas, compositor, sin_lectura, certificacion)
+  + 10 suites JS, todas exit 0. **85/87 fases** del arnes en verde; las 2 que fallan (`bonus` y
+  `ficha_edicion`/`entrega_tema`) fallaban **antes de la 040** (verificado en 05e4217), no son
+  regresion. En el camino aparecio **una regresion si mía**: `guardar_subida` escribia en la carpeta
+  de la IDENTIDAD y el stub del arnes hace `get_current_user_id()=1` (cliente), asi que la foto iba a
+  `orders/1/uploads/` y el test la buscaba en `tmp/sesion-*/uploads/`. Arreglado fijando
+  `test_user_id=0` en la fase `campo_subida` (invitado) y restaurandolo al salir. Ademas se blindo
+  `miniatura_generar()` (best-effort: un original no decodificable no debe emitir warnings) y se
+  actualizo `biblioteca-contrato` F2 al codigo real (T024 ya retiro `biblioteca_contenedores`).
 - [ ] T028 Verificar en navegador siguiendo `specs/040-catalogo-uploads/quickstart.md` §5: **una** solicitud `op=listar`, miniaturas de pocos KB, un click para abrir el recorte, encuadre recordado y, al borrar, confirmacion segun FR-014 (con pedido, aviso de FR-019).
 ---
 

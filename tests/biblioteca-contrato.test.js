@@ -69,11 +69,20 @@ check('F1: pedir() comparte la promesa en vuelo (un solo POST por apertura)',
 check('F1: el calentado no pide nada con copia fresca',
     /Date\.now\(\) - \(fresca\.ts \|\| 0\)\) < 30000/.test(bib));
 check('F2: orders/ se mira SOLO en la carpeta del cliente (invitado no lo toca)',
-    /\$uidOrders > 0/.test(plugin)
-    && /\$raiz \. DIRECTORY_SEPARATOR \. \$uidOrders/.test(plugin)
-    // El bloque viejo de la BIBLIOTECA (recorria todos los clientes) ya no existe.
-    // OJO: `pedidos_completados()` SI recorre todo `orders/`: es la consola del admin.
-    && !/Spec 035 \(D5\): el arbol suma el nivel del CLIENTE/.test(plugin));
+    // Spec 040 T024: `biblioteca_contenedores()` (recorria TODOS los clientes) fue
+    // retirado. `listar` lee el catalogo de la carpeta de la identidad. La invariante
+    // se verifica sobre la UNICA funcion que arma el listado (`handle_biblioteca`),
+    // no sobre todo el archivo (otros metodos SI recorren orders/ y es correcto:
+    // `pedidos_completados()` es la consola del admin).
+    (function () {
+        var i = plugin.indexOf('function handle_biblioteca');
+        var j = plugin.indexOf('private function', i + 10);
+        var cuerpo = i < 0 ? '' : plugin.slice(i, j < 0 ? plugin.length : j);
+        return /dir_uploads_identidad/.test(cuerpo)
+            && /catalogo_leer/.test(cuerpo)
+            && !/wc_get_orders/.test(cuerpo)
+            && !/biblioteca_contenedores/.test(cuerpo);
+    })());
 
 console.log('== Visor compartido y ranura (D28) ==');
 check('visor-pmu.js expone abrir/cerrar y precarga vecinos',
