@@ -46,22 +46,12 @@ class Overlay
     }
 
     /**
-     * Devuelve los bytes del PDF procesado.
-     *
-     * $imagenes (opcional): mapa id => especificacion de Imagen::normalizar():
-     *   - ['tipo'=>'raster', 'w','h','rgb','alpha']  imagen real RGBA
-     *   - ['tipo'=>'dct', 'w','h','jpeg']            JPEG incrustado directo
-     * Si $imagenes es null se usa el comportamiento original: marcos
-     * transparentes para TODOS los grupos. Si se pasa, los grupos sin imagen
-     * se omiten por completo (el PDF conserva sus rectangulos originales).
-     */
-    /**
      * Escribe el XObject de imagen de una ranura y devuelve su numero de objeto
-     * (spec 012, T026). `$spec` null = imagen totalmente transparente, que es
-     * el comportamiento original cuando no se paso ninguna imagen. Un JPEG
-     * (`dct`) va directo con DCTDecode y sin SMask; el resto usa FlateDecode
-     * con SMask propio. El "encajar" (contain) ya lo aplico `Imagen::normalizar`
-     * antes de llegar aca: aca solo se empaqueta.
+     * (spec 012, T026). Un JPEG exacto (`dct`) va directo con DCTDecode y sin
+     * SMask; el resto usa FlateDecode con SMask propio. Una spec que no sea
+     * `dct` ni `raster` cae a una imagen transparente (defensivo). El "encajar"
+     * (contain) ya lo aplico `Imagen::normalizar` antes de llegar aca: aca solo
+     * se empaqueta.
      */
     private function xobjectImagen(array $g, $spec, $num)
     {
@@ -82,7 +72,7 @@ class Overlay
             $rgb = gzcompress($spec['rgb'], 6);
             $alpha = gzcompress($spec['alpha'], 6);
         } else {
-            // Comportamiento original: imagen totalmente transparente.
+            // Spec invalida (ni dct ni raster): imagen transparente, defensivo.
             $rgb = gzcompress(str_repeat("\x00", $wPx * $hPx * 3), 6);
             $alpha = gzcompress(str_repeat("\x00", $wPx * $hPx), 6);
         }
@@ -135,7 +125,18 @@ class Overlay
         return $nextNum + (is_array($spec) && isset($spec['tipo']) && $spec['tipo'] === 'dct' ? 1 : 2);
     }
 
-    public function build($grupos, $imagenes = null)
+    /**
+     * Devuelve los bytes del PDF procesado.
+     *
+     * $imagenes: mapa id => especificacion de `Imagen::normalizar()`, o una
+     * LISTA de especificaciones (una por instancia, spec 012):
+     *   - ['tipo'=>'raster', 'w','h','rgb','alpha']  imagen real RGBA
+     *   - ['tipo'=>'dct', 'w','h','jpeg']            JPEG incrustado directo
+     * Los grupos sin imagen se omiten por completo: el PDF conserva sus
+     * rectangulos originales. `Motor::procesar` garantiza un mapa no vacio: se
+     * retiro el modo historico "marcos transparentes para todos los grupos".
+     */
+    public function build($grupos, array $imagenes)
     {
         $this->grupos = $grupos;
         $this->activas = [];
@@ -167,23 +168,20 @@ class Overlay
         foreach ($grupos as $g) {
             $gid = $g['id'];
             $specs = [];
-            if ($imagenes !== null) {
-                if (isset($imagenes[$gid])) {
-                    $bruto = $imagenes[$gid];
-                    if (self::esListaDeSpecs($bruto)) {
-                        $specs = [];
-                        foreach ($bruto as $una) {
-                            if (is_array($una) && isset($una['tipo'])) {
-                                $specs[] = $una;
-                            }
+            if (isset($imagenes[$gid])) {
+                $bruto = $imagenes[$gid];
+                if (self::esListaDeSpecs($bruto)) {
+                    foreach ($bruto as $una) {
+                        if (is_array($una) && isset($una['tipo'])) {
+                            $specs[] = $una;
                         }
-                    } else {
-                        $specs = [$bruto];
                     }
+                } else {
+                    $specs = [$bruto];
                 }
-                if (!$specs) {
-                    continue; // grupo sin imagen: no se toca
-                }
+            }
+            if (!$specs) {
+                continue; // grupo sin imagen: no se toca
             }
             $this->imgObjs[$gid] = [];
             foreach ($specs as $k => $spec) {
@@ -191,12 +189,7 @@ class Overlay
                 $nextNum = $this->nextNumTrasImagen($nextNum, $spec);
             }
             // Atajo del caso simple: la ranura 0 es "la imagen del grupo".
-            $this->imgObj[$gid] = isset($this->imgObjs[$gid][0])
-                ? $this->imgObjs[$gid][0]
-                : $this->xobjectImagen($g, null, $nextNum);
-            if (!$specs) {
-                $nextNum = $this->nextNumTrasImagen($nextNum, null);
-            }
+            $this->imgObj[$gid] = $this->imgObjs[$gid][0];
             $this->activas[$gid] = true;
         }
 
