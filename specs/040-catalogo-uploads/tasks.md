@@ -122,7 +122,7 @@ referencias la elimina directo; con una referencia en carrito pide confirmacion 
   `test_user_id=0` en la fase `campo_subida` (invitado) y restaurandolo al salir. Ademas se blindo
   `miniatura_generar()` (best-effort: un original no decodificable no debe emitir warnings) y se
   actualizo `biblioteca-contrato` F2 al codigo real (T024 ya retiro `biblioteca_contenedores`).
-- [ ] T028 Verificar en navegador siguiendo `specs/040-catalogo-uploads/quickstart.md` §5: **una** solicitud `op=listar`, miniaturas de pocos KB, un click para abrir el recorte, encuadre recordado y, al borrar, confirmacion segun FR-014 (con pedido, aviso de FR-019).
+- [ ] T028 Verificar en navegador siguiendo `specs/040-catalogo-uploads/quickstart.md` §5: **una** solicitud `op=listar`, miniaturas de pocos KB, un click para abrir el recorte, encuadre recordado y, al borrar, confirmacion segun FR-014 (con pedido, aviso de FR-019). **Pendiente**: requiere el lab (`C:\wp-lab`) o el hosting; no se puede correr desde el arnes.
 ---
 
 ## Dependencies & Execution Order
