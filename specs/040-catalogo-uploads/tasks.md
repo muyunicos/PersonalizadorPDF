@@ -51,8 +51,8 @@
 **Independent Test**: con 10 imagenes propias y pedidos de otros clientes, `op=listar` responde rapido,
 no incluye imagenes ajenas y una apertura del modal produce **una** solicitud.
 
-- [ ] T009 [US1] Reescribir la rama `op=listar` de `handle_biblioteca()` en `personalizador-pdf.php` para armar las fotos desde **la carpeta de la identidad** (`dir_uploads_identidad()`) + `catalogo_leer()`, sin leer manifiestos ni consultar pedidos ajenos (FR-001..FR-003).
-- [ ] T010 [P] [US1] Cambiar `biblioteca_ruta_imagen()` en `personalizador-pdf.php` para resolver por `PMU_Sesion::resolver_original($id, $clave, $sid)` **segun identidad** (cliente -> `orders/{clave}/uploads/`; invitado -> `tmp/sesion-{sid}/uploads/`), eliminando el recorrido de contenedores (FR-008).
+- [X] T009 [US1] Reescribir la rama `op=listar` de `handle_biblioteca()` en `personalizador-pdf.php` para armar las fotos desde **la carpeta de la identidad** (`dir_uploads_identidad()`) + `catalogo_leer()`, sin leer manifiestos ni consultar pedidos ajenos (FR-001..FR-003).
+- [X] T010 [P] [US1] Cambiar `biblioteca_ruta_imagen()` en `personalizador-pdf.php` para resolver por `PMU_Sesion::resolver_original($id, $clave, $sid)` **segun identidad** (cliente -> `orders/{clave}/uploads/`; invitado -> `tmp/sesion-{sid}/uploads/`), eliminando el recorrido de contenedores (FR-008).
 - [ ] T011 [US1] Ajustar `assets/biblioteca-pmu.js` al payload nuevo (`id`, `url`, `thumb`, `bytes`, `w`, `h`, `recetas`) manteniendo el dedupe en vuelo de `pedir()` y el calentado con copia fresca (SC-002).
 - [ ] T012 [US1] Actualizar `tests/biblioteca-contrato.test.js` (payload, dedupe, sin `contenedores`/`madre`, y **sin ruta publica del catalogo**: ninguna rama sirve `uploads.json`, FR-013) y los checks que hoy esperan `op=imagen` con `item_key`; correr `node tests/biblioteca-contrato.test.js`.
 

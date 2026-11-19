@@ -320,7 +320,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('041 T006: la subida deja uploads.json', !empty($GLOBALS['bib_catalogo_ok']));
         check('041 T006: la subida deja su miniatura 80x80', !empty($GLOBALS['bib_mini_ok']));
         check('listar trae revision de 12 hex', is_array($json) && strlen((string)($json['data']['revision'] ?? '')) === 12);
-        check('listar: contenedores >= 1', (int)($json['data']['totales']['contenedores'] ?? 0) >= 1);
+        check('listar: totales trae fotos', (int)($json['data']['totales']['fotos'] ?? 0) >= 1,
+            'fotos=' . (int)($json['data']['totales']['fotos'] ?? 0));
         check('cada imagen trae url por op=imagen', !empty($fotos_b[0]['url']) && strpos((string)$fotos_b[0]['url'], 'op=imagen') !== false);
         check('cada imagen trae id y medidas', !empty($fotos_b[0]['id']) && (int)($fotos_b[0]['w'] ?? 0) >= 1);
         check('cada imagen expone sus recetas (una imagen + N recetas)', isset($fotos_b[0]['recetas']) && is_array($fotos_b[0]['recetas']));
@@ -329,8 +330,11 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('cada imagen trae thumb por op=miniatura (no la foto completa)',
             !empty($fotos_b[0]['thumb']) && strpos((string)$fotos_b[0]['thumb'], 'op=miniatura') !== false,
             (string)($fotos_b[0]['thumb'] ?? ''));
-        check('cada imagen expone `params` (clave presente; null si no hay receta)',
-            array_key_exists('params', (array)$fotos_b[0]));
+        // Spec 041 (T009): la receta viaja en `recetas` (mapa por contexto), no en un
+        // `params` suelto: la imagen puede tener N recetas.
+        check('cada imagen expone `recetas` y NO un `params` suelto',
+            array_key_exists('recetas', (array)$fotos_b[0])
+            && !array_key_exists('params', (array)$fotos_b[0]));
         check('listar ya NO expone familias (sin madre/base/archivos/usos)',
             !isset($fotos_b[0]['madre']) && !isset($fotos_b[0]['base']) && !isset($fotos_b[0]['usos']));
         check('op=imagen: la imagen propia se resuelve a un archivo real', !empty($GLOBALS['bib_img_propia']));

@@ -2370,28 +2370,57 @@ class Personalizador_PDF_Plugin
                 $this->biblioteca_servir_miniatura($sid);
                 return;
             }
-            $contenedores = $this->biblioteca_contenedores($this->biblioteca_identidad());
             if ($op === 'listar') {
-                $revision = $this->biblioteca_version($contenedores);
+                // Spec 041 (T009): la biblioteca se lista desde el CATALOGO de la carpeta
+                // de identidad, no desde manifiestos ni pedidos (FR-001..FR-003).
+                $identidad = $this->biblioteca_identidad();
+                $identidad['sid'] = $sid;
+                $uploads = $this->pmu_uploads();
+                $dir = $uploads->dir_uploads_identidad($identidad);
+                $rutaCat = $uploads->ruta_catalogo_uploads($dir);
+                $cat = $uploads->catalogo_leer($dir);
+                if (!is_array($cat)) {
+                    // Spec 040 (F-006): carpeta sin catalogo (datos viejos): se reconstruye
+                    // UNA vez desde los archivos (sin recetas) y se sigue.
+                    $uploads->catalogo_reconstruir($dir);
+                    $cat = $uploads->catalogo_leer($dir);
+                }
+                $items = (is_array($cat) && isset($cat['items']) && is_array($cat['items']))
+                    ? $cat['items'] : [];
+                // Revision: mtime del catalogo + ids (barata y estable).
+                $revision = substr(sha1((string)@filemtime($rutaCat) . '|'
+                    . implode(',', array_keys($items))), 0, 12);
                 $desde = sanitize_text_field(wp_unslash((string)($_REQUEST['desde'] ?? '')));
                 if ($desde !== '' && hash_equals($revision, $desde)) {
                     wp_send_json_success(['revision' => $revision, 'sin_cambios' => true, 'fotos' => [],
-                        'totales' => ['fotos' => 0, 'bytes' => 0, 'contenedores' => count($contenedores)]]);
+                        'totales' => ['fotos' => 0, 'bytes' => 0]]);
                 }
                 $fotos = [];
                 $bytes = 0;
                 // Spec 039 (D5): una entrada por IMAGEN (no por familia).
-                foreach ($this->sesion()->imagenes($contenedores, function ($id) {
-                    return $this->url_biblioteca_imagen_id($id);
-                }, function ($id) {
-                    return $this->url_biblioteca_imagen_id($id, 'miniatura');
-                }) as $img) {
-                    $bytes += (int)$img['bytes'];
-                    $fotos[] = $img;
+                foreach ($items as $id => $it) {
+                    if (!is_array($it)) {
+                        continue;
+                    }
+                    $peso = (int)($it['bytes'] ?? 0);
+                    $fotos[] = [
+                        'id' => (string)$id,
+                        'url' => $this->url_biblioteca_imagen_id($id),
+                        'thumb' => $this->url_biblioteca_imagen_id($id, 'miniatura'),
+                        'bytes' => $peso,
+                        'w' => (int)($it['w'] ?? 0),
+                        'h' => (int)($it['h'] ?? 0),
+                        'recetas' => (isset($it['recetas']) && is_array($it['recetas']))
+                            ? $it['recetas'] : [],
+                        'creado' => (int)($it['creado'] ?? 0),
+                    ];
+                    $bytes += $peso;
                 }
+                usort($fotos, function ($a, $b) {
+                    return (int)$b['creado'] - (int)$a['creado'];
+                });
                 wp_send_json_success(['revision' => $revision, 'sin_cambios' => false, 'fotos' => $fotos,
-                    'totales' => ['fotos' => count($fotos), 'bytes' => $bytes,
-                        'contenedores' => count($contenedores)]]);
+                    'totales' => ['fotos' => count($fotos), 'bytes' => $bytes]]);
             }
             // Spec 039 (D5/D6): `op=usos` y `op=usar` se RETIRARON con el modelo de
             // "familias" y la rama de reuso `Elegir` (0 bytes). No hay familia que
@@ -2442,22 +2471,12 @@ class Personalizador_PDF_Plugin
             $rutas = $sesion->resolver_subidas($sid, $item, [$id]);
             $ruta = isset($rutas[$id]) ? (string)$rutas[$id] : '';
         } elseif ($id !== '') {
-            // Spec 039 (D5): variante por `id` (la del `listar`, donde la fila ya no
-            // trae `item_key` ni `madre`). Se re-resuelve contra el escaneo del
-            // comprador: solo sirvo una imagen QUE SEA SUYA (nunca una ruta del cliente).
-            $contenedores = $this->biblioteca_contenedores($this->biblioteca_identidad());
-            foreach ($contenedores as $contenedor) {
-                foreach ((array)($contenedor['manifest']['subidas'] ?? []) as $fila) {
-                    if (!is_array($fila) || (string)($fila['id'] ?? '') !== $id) {
-                        continue;
-                    }
-                    $rutaCandidata = $sesion->ruta_fila_subida_public($contenedor, $fila);
-                    if ($rutaCandidata !== '') {
-                        $ruta = $rutaCandidata;
-                        break 2;
-                    }
-                }
-            }
+            // Spec 041 (T010): variante por `id` (la del `listar`), resuelta en O(1) por
+            // la cadena de la IDENTIDAD: cliente -> `orders/{uid}/uploads`; invitado ->
+            // `tmp/sesion-{sid}/uploads`. Solo sirvo una imagen QUE SEA SUYA.
+            $identidad = $this->biblioteca_identidad();
+            $uid = (int)($identidad['uid'] ?? 0);
+            $ruta = (string)$sesion->resolver_original($id, (string)$uid, $sid);
             if ($ruta === '') {
                 throw new \RuntimeException('foto:ajena');
             }
