@@ -568,6 +568,10 @@
             category: config.category || '',
             ajustes: Array.isArray(config.ajustes) ? config.ajustes : [],
             envoltura: envolturaValida(config.envoltura),
+            usarExistente: typeof config.usarExistente === 'function' ? config.usarExistente : null,
+            // Spec 041 (A4): receta v2 a re-aplicar sobre la imagen (si es de esta geometria).
+            paramsIniciales: (config.paramsIniciales && typeof config.paramsIniciales === 'object')
+                ? config.paramsIniciales : null,
             subirAsync: typeof config.subirAsync === 'function' ? config.subirAsync : null,
             quedanEspacios: typeof config.quedanEspacios === 'function' ? config.quedanEspacios : null
         };
@@ -593,6 +597,8 @@
         this.fondoEsAuto = true;
         // Spec 024 (D9): mascara de inspeccion (blanco opaco fuera de la forma).
         this._mascaraRecorte = false;
+        // Spec 041 (A4/A6): imagen elegida de "Mis imagenes" (id + receta recordada).
+        this._bib = null;
         this.supera5 = false;
         this._arrastrando = null;
         this._pinch = null;
@@ -928,23 +934,9 @@
 
                 window.PMUBiblioteca.tira(cajaBib, {
                     onElegir: function (foto) {
-                        // Spec 039 (D4/D6): tocar una miniatura de "Mis imagenes" carga
-                        // la imagen DIRECTO en el recorte (sin visor de biblioteca y sin
-                        // rama de reuso `Elegir`). Si la foto no esta en el navegador se
-                        // baja por `op=imagen`; si esta, sale del cache del navegador.
-                        window.fetch(foto.url, { credentials: 'same-origin' })
-                            .then(function (r) { return r.blob(); })
-                            .then(function (b) {
-                                var f = new File([b], 'biblioteca.webp', { type: b.type || 'image/webp' });
-                                var dt = new DataTransfer();
-                                dt.items.add(f);
-                                var zona = $('.spmu-escena') || $('.spmu-caja');
-                                if (zona) {
-                                    zona.dispatchEvent(new DragEvent('drop',
-                                        { bubbles: true, cancelable: true, dataTransfer: dt }));
-                                }
-                            })
-                            .catch(function () { });
+                        // Spec 041 (A4/A6): la miniatura entra DIRECTO al recorte con su
+                        // receta recordada y el primario pasa a `Usar` (0 bytes).
+                        self.cargarDesdeBiblioteca(foto);
                     }
                 });
             })();
@@ -983,6 +975,8 @@
     };
 
     SelectorPMU.prototype._prepararNuevaCarga = function () {
+        // Spec 041 (A6): una carga NUEVA deja de ser "usar la existente".
+        this._bib = null;
         if (this.imagen && this.imagen.src) { URL.revokeObjectURL(this.imagen.src); }
         this.imagen = null;
         this.archivoOrigen = null;
@@ -1005,6 +999,10 @@
     SelectorPMU.prototype._cargar = function (archivo) {
         var self = this;
         if (!archivo) { return; }
+        // Spec 041 (A6): un archivo elegido por el comprador NO es "la existente"
+        // de la biblioteca: al cargarlo se pierde el id recordado.
+        if (!this._desdeBiblioteca) { this._bib = null; }
+        this._desdeBiblioteca = false;
         var tipo = String(archivo.type || '');
         var ext = String(archivo.name || '').split('.').pop().toLowerCase();
         if (TIPOS.indexOf(tipo) === -1 && EXTS.indexOf(ext) === -1) {
@@ -1059,9 +1057,6 @@
             if (self.config.transp === 'no' && self.colorFondo === 'transparent') {
                 self.colorFondo = '#ffffff';
             }
-            // Spec 039 (D6): se retiro la composicion de REFERENCIA con la que el
-            // primario decia `Elegir` (0 bytes). El primario siempre dice `Subir`.
-            self._actualizarPrimario();
             self.supera5 = superaCincoPorciento(
                 img.naturalWidth || 1, img.naturalHeight || 1,
                 self.config.finalW, self.config.finalH
@@ -1070,13 +1065,19 @@
             // huecos); <=5% -> `estirar` (llena el marco exacto con una
             // deformacion imperceptible y el boton pasa a ser "Ajustar al marco").
             self.config.mode = self.supera5 ? 'cubrir' : 'estirar';
+            // Spec 041 (A4/A6): si la imagen viene de la biblioteca (o el campo paso
+            // `paramsIniciales`) y la receta es de ESTA geometria, se re-aplica el
+            // encuadre recordado. Si no coincide se ignora: quedan los defaults.
+            var recetaPrevia = (self._bib && self._bib.params) || self.config.paramsIniciales || null;
+            if (recetaPrevia) { self._aplicarParamsIniciales(recetaPrevia); }
+            self._actualizarPrimario();
             if (self.raiz) {
                 var rango = self.raiz.querySelector('.spmu-zoom');
                 if (rango) { rango.value = '0'; }
                 var elegir = self.raiz.querySelector('.spmu-elegir');
                 if (elegir) { elegir.textContent = 'Cambiar imagen'; }
                 var ok = self.raiz.querySelector('.spmu-ok');
-                if (ok) { ok.disabled = false; ok.textContent = 'Subir'; }
+                if (ok) { ok.disabled = false; }
             }
             self._estado(null);
             self._actualizarControlesModo();
@@ -1100,6 +1101,80 @@
      */
     SelectorPMU.prototype.obtenerBlobFallido = function () {
         return (this.ultimoBlob && this._falloSubida) ? this.ultimoBlob : null;
+    };
+
+    /**
+     * Spec 041 (A4/A6): carga una imagen de "Mis imagenes" DIRECTO en el recorte.
+     *
+     * No pasa por un `drop` sintetico: guarda `id` + `params` (la receta recordada)
+     * y deja que `_cargar` los re-aplique si son de esta geometria. El primario
+     * pasa a `Usar` y, al aceptar, NO se suben bytes.
+     */
+    SelectorPMU.prototype.cargarDesdeBiblioteca = function (foto) {
+        var self = this;
+        if (!foto || !this.raiz) { return Promise.resolve(false); }
+        var url = String(foto.url || foto.thumb || '');
+        if (url === '') { return Promise.resolve(false); }
+        this._bib = {
+            id: String(foto.id || ''),
+            params: foto.params || null,
+            url: url
+        };
+        return window.fetch(url, { credentials: 'same-origin' })
+            .then(function (r) { return r.blob(); })
+            .then(function (b) {
+                var f = new File([b], 'biblioteca.webp', { type: b.type || 'image/webp' });
+                self._desdeBiblioteca = true;
+                self._cargar(f);
+                return true;
+            })
+            .catch(function () { self._bib = null; return false; });
+    };
+
+    /**
+     * Spec 041 (A4): aplica una receta v2 recordada SOBRE la imagen ya cargada.
+     *
+     * Solo si es de la MISMA geometria (`w`/`h`/`phsize`/`gid`): una receta de otro
+     * lienzo no significa nada aca. Devuelve true si aplico.
+     */
+    SelectorPMU.prototype._aplicarParamsIniciales = function (params) {
+        if (!params || !this.imagen) { return false; }
+        var w = Math.max(1, parseInt(this.config.finalW, 10) || 1);
+        var h = Math.max(1, parseInt(this.config.finalH, 10) || 1);
+        if (parseInt(params.w, 10) !== w || parseInt(params.h, 10) !== h) { return false; }
+        var gidConf = String(this.config.gid || '').toUpperCase();
+        var gidPar = String(params.gid || '').toUpperCase();
+        if (gidConf !== '' && gidPar !== '' && gidConf !== gidPar) { return false; }
+        var psz = Math.max(0, Math.min(2, parseInt(this.config.phsize, 10) || 0));
+        if (parseInt(params.phsize, 10) !== psz) { return false; }
+        var esc = parseFloat(params.escala);
+        if (isFinite(esc) && esc > 0) { this.zoom = Math.max(0.25, Math.min(4, esc)); }
+        var rot = parseInt(params.rot, 10);
+        if (isFinite(rot)) { this.rotacion = ((rot % 360) + 360) % 360; }
+        var modo = modoCanonico(params.modo);
+        if (modo) { this.config.mode = modo; }
+        if (params.fondo && params.fondo !== 'auto') {
+            this.colorFondo = (params.fondo === 'transparent') ? 'transparent' : String(params.fondo);
+            this.fondoEsAuto = false;
+        }
+        // Inverso EXACTO de `_params()`: origen = (prin - margen) + desplazamiento * zoom.
+        var geo = this.geo || geometriaEscena(w, h, this.config);
+        var prin = (geo && geo.principal) ? geo.principal : { cx: 0, cy: 0 };
+        var mx = (geo && isFinite(geo.margenX)) ? geo.margenX : 0;
+        var my = (geo && isFinite(geo.margenY)) ? geo.margenY : 0;
+        var ox = parseFloat(params.ox);
+        var oy = parseFloat(params.oy);
+        if (isFinite(ox) && isFinite(oy) && this.zoom > 0) {
+            this.desplazamiento = {
+                x: (ox * w - (prin.cx - mx)) / this.zoom,
+                y: (oy * h - (prin.cy - my)) / this.zoom
+            };
+        }
+        var rango = this.raiz ? this.raiz.querySelector('.spmu-zoom') : null;
+        if (rango) { rango.value = String((this.zoom - 1) * 100); }
+        this._actualizarControlesModo();
+        this._actualizarControlesFondo();
+        return true;
     };
 
     SelectorPMU.prototype._estado = function (estado) {
@@ -1305,7 +1380,9 @@
         if (!this.raiz || this._subiendo) { return; }
         var ok = this.raiz.querySelector('.spmu-ok');
         if (!ok) { return; }
-        ok.textContent = 'Subir';
+        // Spec 041 (A6): con una imagen YA existente (id de la biblioteca) el
+        // primario es `Usar`: no se sube nada, solo se publica la receta.
+        ok.textContent = this._bib ? 'Usar' : 'Subir';
     };
 
     SelectorPMU.prototype._dibujar = function () {
@@ -1637,6 +1714,30 @@
         var self = this;
         if (!this.imagen || this._subiendo) {
             if (!this.imagen) { this._fallo('UPLOAD_FAILED', 'No hay imagen para subir'); }
+            return;
+        }
+        // Spec 041 (A6): imagen YA existente (biblioteca) -> NO se suben bytes. Se
+        // publica su id + la receta (por si reencuadro) y el modal cierra al instante.
+        if (this._bib && this._bib.id) {
+            var paramsBib = this._params();
+            var usar = (typeof this.config.usarExistente === 'function')
+                ? this.config.usarExistente(this._bib.id, paramsBib, this._bib.url)
+                : Promise.resolve(this._bib.id);
+            var okBib = this.raiz ? this.raiz.querySelector('.spmu-ok') : null;
+            if (okBib) { okBib.disabled = true; okBib.textContent = 'Usando...'; }
+            Promise.resolve(usar).then(function () {
+                if (okBib) { okBib.disabled = false; }
+                if (typeof self.onSelectCallback === 'function') {
+                    self.onSelectCallback(self._bib.url || '', {
+                        width: self.config.finalW,
+                        height: self.config.finalH
+                    });
+                }
+                self.close();
+            }, function (err) {
+                if (okBib) { okBib.disabled = false; self._actualizarPrimario(); }
+                self._fallo('UPLOAD_FAILED', (err && err.message) || 'No se pudo usar la imagen');
+            });
             return;
         }
         // Spec 039 (D6): la rama de reuso de la biblioteca (`Elegir`, 0 bytes) se retiro.

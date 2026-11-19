@@ -51,8 +51,10 @@ console.log('== Modal de recorte (T013) ==');
 check('el modal monta la tira SIEMPRE visible (sin boton de biblioteca)',
     !/spmu-biblioteca/.test(sel) && /pmu-bib-contenedor/.test(sel));
 check('engancha la tira pasando onElegir', /PMUBiblioteca\.tira\(cajaBib, \{/.test(sel));
-check('la foto elegida entra por el MISMO camino que un arrastre (drop)',
-    /new DragEvent\(.drop./.test(sel) && /dataTransfer: dt/.test(sel));
+check('la foto elegida entra por cargarDesdeBiblioteca (sin drop sintetico)',
+    /self\.cargarDesdeBiblioteca\(foto\)/.test(sel)
+    && /prototype\.cargarDesdeBiblioteca = function/.test(sel)
+    && !/new DragEvent\('drop'/.test(sel));
 
 console.log('== Visor compartido y ranura (D28) ==');
 check('visor-pmu.js expone abrir/cerrar y precarga vecinos',
@@ -132,7 +134,8 @@ check('el selector expone obtenerBlobFallido() para reintentar (spec 039 D2)',
 
 console.log('== Cargador: receta y reintento (spec 039) ==');
 check('el cargador pasa params al subir (sin usar ni madre_origen)',
-    /params: this\._paramsDe\(indice\)/.test(carg)
+    /params: paramsSubida/.test(carg)
+    && /var paramsSubida = this\._paramsDe\(indice\)/.test(carg)
     && /CargadorPMU\.prototype\._paramsDe = function/.test(carg)
     && !/usar: self\.config\.usar \? function \(madre, params\)/.test(carg)
     && !/madre_origen: this\._madreDe\(indice\)/.test(carg));
@@ -165,9 +168,13 @@ check('el cargador reintenta con el MISMO blob (no vuelve a elegir archivo)',
     /this\._subir\(indice, fallo\.blob, null\)/.test(carg));
 
 console.log('== Spec 039 D4: la tira carga directo ==');
-check('la tira de "Mis imagenes" entra por el camino normal del modal (drop)',
+check('la tira de "Mis imagenes" NO usa madre ni drop: usa cargarDesdeBiblioteca',
     /self\._bibMadre = String/.test(sel) === false
-    && /new DragEvent\('drop'/.test(sel));
+    && /self\.cargarDesdeBiblioteca\(foto\)/.test(sel)
+    && /new DragEvent\('drop'/.test(sel) === false);
+check('A4: la receta recordada solo se aplica si la geometria coincide',
+    /_aplicarParamsIniciales = function/.test(sel)
+    && /parseInt\(params\.w, 10\) !== w \|\| parseInt\(params\.h, 10\) !== h/.test(sel));
 
 console.log('== US5: vinculo invitado -> cuenta (D3) ==');
 check('D3: el vinculo solo se consulta con cuenta (uid > 0)',

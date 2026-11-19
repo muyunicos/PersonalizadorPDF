@@ -233,6 +233,10 @@
         // reintenta con el MISMO recorte, sin volver a elegir el archivo.
         // { indice: [ { blob, params, error } ] }  (spec 039 D2: blobs de fallos por ranura)
         this._fallos = {};
+        // Spec 041 (A6): URLs y RECETAS de las imagenes usadas desde la biblioteca
+        // (id conocido): no viajan bytes y la miniatura se pinta sin pedirla.
+        this._urls = {};
+        this.recetas = {};
     }
 
     CargadorPMU.prototype.montar = function () {
@@ -401,6 +405,11 @@
                 },
                 quedanEspacios: function () {
                     return self.estado[indice].ids.length < r.max;
+                },
+                // Spec 041 (A6): una imagen YA subida (id conocido) no manda bytes:
+                // se anota en la ranura y se publica su receta (0 red, cierre inmediato).
+                usarExistente: function (id, params, url) {
+                    return self._usarExistente(indice, id, params, url);
                 }
             });
         }
@@ -470,6 +479,7 @@
         var r = this.config.ranuras[indice];
         var btn = this.selectores[indice].boton;
         btn.disabled = true;
+        var paramsSubida = this._paramsDe(indice);
         return Promise.resolve(this.config.subir(blob, {
             ranura: indice, w: r.w, h: r.h, forma: r.forma,
             // Spec 035 (D9): la RECETA de la composicion viaja con la subida (el
@@ -477,11 +487,14 @@
             // Spec 038 (F-RECETA): `_params` vive en la INSTANCIA del selector
             // (`selectores[i].sel`), NO en el slot: leerlos del slot daba {} y el
             // servidor guardaba la fila SIN receta (imposible componer despues).
-            params: this._paramsDe(indice)
+            params: paramsSubida
             // Spec 039 (D6): `madre_origen` se retiro con las "familias".
         })).then(function (res) {
             btn.disabled = false;
             var id = res && res.id;
+            // Spec 041 (A6): la receta con la que se subio queda legible por id
+            // (`recetasDe`), igual que la de una imagen usada de la biblioteca.
+            if (id) { self.recetas[String(id)] = paramsSubida || null; }
             // Spec 035 (T014/D2): el recorte recien compuesto se queda en el
             // navegador (objectURL) y se publica para que la vista previa dibuje
             // sin red y sin subir copias. La receta es la misma que viajo con la
@@ -571,9 +584,47 @@
         }
     };
 
+    /**
+     * Spec 041 (A6): usa una imagen YA EXISTENTE del comprador (id conocido).
+     *
+     * No manda bytes: anota el id en la ranura (sin duplicar), guarda su receta y
+     * publica `onRecorte` para que la vista previa/mockup la dibujen al instante.
+     * Si la ranura esta llena devuelve un rechazo con causa (el selector lo pinta).
+     */
+    CargadorPMU.prototype._usarExistente = function (indice, id, params, url) {
+        var self = this;
+        var r = this.config.ranuras[indice];
+        var clave = String(id || '');
+        if (!r || clave === '') {
+            return Promise.reject(new Error('Imagen invalida.'));
+        }
+        if (url) { this._urls[clave] = String(url); }
+        var ids = this.estado[indice].ids;
+        if (ids.indexOf(clave) === -1) {
+            if (ids.length >= r.max) {
+                return Promise.reject(new Error('La ranura ya esta llena.'));
+            }
+            ids.push(clave);
+        }
+        this.recetas[clave] = params || null;
+        this._pintar();
+        if (typeof this.config.onRecorte === 'function') {
+            this.config.onRecorte(clave, String(url || ''), params || null);
+        }
+        return Promise.resolve(clave);
+    };
+
+    /** Receta v2 con la que se uso una imagen (spec 041 A6), o null. */
+    CargadorPMU.prototype.recetasDe = function (id) {
+        return this.recetas[String(id)] || null;
+    };
+
     CargadorPMU.prototype._pintarMini = function (mini, id) {
-        if (!this.config.urlDe || mini._pmuMiniImg) { return; }
-        Promise.resolve(this.config.urlDe(id)).then(function (url) {
+        if (!this.config.urlDe && !this._urls[String(id)]) { return; }
+        if (mini._pmuMiniImg) { return; }
+        var conocida = this._urls[String(id)] || '';
+        var pedir = conocida || (this.config.urlDe ? this.config.urlDe(id) : '');
+        Promise.resolve(pedir).then(function (url) {
             if (!url || mini._pmuMiniImg) { return; }
             var doc = mini.ownerDocument || global.document;
             var img = doc.createElement('img');
