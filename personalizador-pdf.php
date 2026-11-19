@@ -2513,21 +2513,22 @@ class Personalizador_PDF_Plugin
     }
 
     /**
-     * Spec 041 (A2): sirve la MINIATURA de una imagen del comprador.
+     * Spec 041 (T016): sirve la MINIATURA de una imagen del comprador.
      *
-     * Misma politica de acceso que `op=imagen` (`biblioteca_ruta_imagen()` solo
-     * resuelve archivos QUE SEAN SUYOS). El WebP se cachea por contenido en
-     * `tmp/miniaturas/{sha1}.webp`, asi la tira se pinta con pocos KB por foto en
-     * vez de bajar la foto entera.
+     * Es `{id}-80x80.webp`, JUNTO al original (la escribe `guardar_subida`; si falta,
+     // se genera aca). Misma politica de acceso que `op=imagen`: `biblioteca_ruta_imagen()`
+     * solo resuelve archivos QUE SEAN SUYOS.
      */
     private function biblioteca_servir_miniatura($sid)
     {
         $ruta = $this->biblioteca_ruta_imagen($sid);
-        $lado = (int)($_REQUEST['w'] ?? 128);
-        if ($lado < 32 || $lado > 512) {
-            $lado = 128;
+        $uploads = $this->pmu_uploads();
+        $destino = $uploads->miniatura_ruta($ruta, 80);
+        $bytes = is_file($destino) ? (string)@file_get_contents($destino) : '';
+        if ($bytes === '') {
+            // Primera vez (datos viejos) o cache borrado: se genera y se conserva.
+            $bytes = $uploads->miniatura_generar($ruta, 80);
         }
-        $bytes = $this->miniatura_webp($ruta, $lado);
         if ($bytes === '') {
             // Sin GD o imagen ilegible: se sirve el original (nunca un 500).
             $this->biblioteca_servir_imagen($sid);
@@ -2539,63 +2540,6 @@ class Personalizador_PDF_Plugin
         header('Content-Length: ' . strlen($bytes));
         echo $bytes;
         exit;
-    }
-
-    /**
-     * Miniaturas WebP por CONTENIDO (spec 041 A2). Devuelve los bytes, o '' si no
-     * se puede generar (sin GD o archivo ilegible): el llamador degrada al original.
-     */
-    private function miniatura_webp($ruta, $lado = 128)
-    {
-        if (!extension_loaded('gd') || !function_exists('imagewebp') || !is_file($ruta)) {
-            return '';
-        }
-        $dir = $this->pmu_uploads()->dir_ambito('tmp', true) . DIRECTORY_SEPARATOR . 'miniaturas';
-        if (!is_dir($dir) && function_exists('wp_mkdir_p')) {
-            wp_mkdir_p($dir);
-        }
-        // Clave por CONTENIDO: si el archivo cambia, la clave cambia (nunca sirve uno viejo).
-        $clave = sha1($ruta . '|' . (int)@filesize($ruta) . '|' . (int)@filemtime($ruta) . '|' . (int)$lado);
-        $cache = $dir . DIRECTORY_SEPARATOR . $clave . '.webp';
-        if (is_file($cache)) {
-            $hit = (string)@file_get_contents($cache);
-            if ($hit !== '') {
-                return $hit;
-            }
-        }
-        $src = @imagecreatefromstring((string)@file_get_contents($ruta));
-        if (!$src) {
-            return '';
-        }
-        $w0 = imagesx($src);
-        $h0 = imagesy($src);
-        if ($w0 < 1 || $h0 < 1) {
-            return '';
-        }
-        // Factor UNIFORME: la miniatura conserva el aspecto (nunca deforma).
-        $k = min(1.0, (float)$lado / max($w0, $h0));
-        $w = max(1, (int)round($w0 * $k));
-        $h = max(1, (int)round($h0 * $k));
-        $dst = imagecreatetruecolor($w, $h);
-        imagealphablending($dst, false);
-        imagesavealpha($dst, true);
-        imagefill($dst, 0, 0, imagecolorallocatealpha($dst, 0, 0, 0, 127));
-        imagealphablending($dst, true);
-        imagecopyresampled($dst, $src, 0, 0, 0, 0, $w, $h, $w0, $h0);
-        imagealphablending($dst, false);
-        imagesavealpha($dst, true);
-        ob_start();
-        $ok = @imagewebp($dst, null, 82);
-        $out = ob_get_clean();
-        if (PHP_VERSION_ID < 80000) {
-            @imagedestroy($src);
-            @imagedestroy($dst);
-        }
-        if (!$ok || $out === false || $out === '') {
-            return '';
-        }
-        @file_put_contents($cache, $out);
-        return $out;
     }
 
     /** URL publica de un archivo de `uploads/` (con cache-busting por mtime). */
