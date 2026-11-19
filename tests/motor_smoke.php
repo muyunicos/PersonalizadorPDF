@@ -64,35 +64,25 @@ check('encajado 800x600 -> 1532x1145', $fw === 1527 && $fh === 1145 && $oy === 0
     "fw=$fw fh=$fh ox=$ox oy=$oy");
 
 // ===== B: normalizar PNG RGB (camino activo) =====
-Imagen::$sinGD = false;
 $spec = Imagen::normalizar($fixtures . '/foto_a.png', 1532, 1145);
 $centro = (int)(1145 / 2) * 1532 + (int)(1532 / 2);
 check('foto_a -> raster 1532x1145', $spec['tipo'] === 'raster' && $spec['w'] === 1532 && $spec['h'] === 1145);
 check('centro opaco', ord($spec['alpha'][$centro]) === 255);
 check('margen sup-izq transparente', ord($spec['alpha'][0]) === 0);
 check('franja blanca arriba', ord($spec['rgb'][300]) === 255 && ord($spec['rgb'][301]) === 255);
-// ===== C: decodificador PHP puro (forzado) =====
-Imagen::$sinGD = true;
-$spec2 = Imagen::normalizar($fixtures . '/foto_a.png', 1532, 1145);
-check('puro: foto_a dims correctas', $spec2['tipo'] === 'raster' && $spec2['w'] === 1532 && $spec2['h'] === 1145);
-check('puro: centro opaco', ord($spec2['alpha'][$centro]) === 255);
-check('puro: margen transparente', ord($spec2['alpha'][0]) === 0);
+// ===== C: PNG de paleta (GD la expande a RGBA) =====
 
 $specP = Imagen::normalizar($fixtures . '/paleta_b.png', 522, 522);
-check('puro: paleta -> raster 522x522', $specP['tipo'] === 'raster' && $specP['w'] === 522 && $specP['h'] === 522);
-check('puro: paleta margen transparente', ord($specP['alpha'][0]) === 0);
-check('puro: paleta centro opaco', ord($specP['alpha'][(int)(522 / 2) * 522 + (int)(522 / 2)]) === 255);
+check('paleta -> raster 522x522', $specP['tipo'] === 'raster' && $specP['w'] === 522 && $specP['h'] === 522);
+check('paleta margen transparente', ord($specP['alpha'][0]) === 0);
+check('paleta centro opaco', ord($specP['alpha'][(int)(522 / 2) * 522 + (int)(522 / 2)]) === 255);
 
-// ===== D: JPEG sin GD =====
+// ===== D: JPEG exacto -> dct (DCTDecode, sin recomprimir) =====
 $specJ = Imagen::normalizar($fixtures . '/exacto_b.jpg', 522, 522);
-check('JPEG 522x522 sin GD -> dct', $specJ['tipo'] === 'dct');
-try {
-    Imagen::normalizar($fixtures . '/exacto_b.jpg', 100, 100);
-    check('JPEG no exacto sin GD rechazado', false);
-} catch (\Throwable $e) {
-    check('JPEG no exacto sin GD rechazado', true, $e->getMessage());
-}
-Imagen::$sinGD = false;
+check('JPEG 522x522 exacto -> dct', $specJ['tipo'] === 'dct' && $specJ['w'] === 522 && $specJ['h'] === 522);
+check('dct conserva los BYTES del JPEG', $specJ['jpeg'] === file_get_contents($fixtures . '/exacto_b.jpg'));
+$specJ2 = Imagen::normalizar($fixtures . '/exacto_b.jpg', 100, 100);
+check('JPEG que no coincide -> raster (contain)', $specJ2['tipo'] === 'raster' && $specJ2['w'] === 100 && $specJ2['h'] === 100);
 
 // ===== D2: WebP con alfa (spec 026 T016) =====
 // El Motor no cambia (D6): ya sabe leer WebP via GD. Este check comprueba que
