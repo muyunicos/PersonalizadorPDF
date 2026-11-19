@@ -346,8 +346,10 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
 6. **Fix de transparencia (`/ECOp1`)**: las imágenes insertadas heredan la opacidad 0 del
    placeholder. Solución obligatoria: ExtGState `/ECOp1` (`ca 1 /CA 1`) en la página y
    anteponer `q /ECOp1 gs ... Q` a cada draw.
-7. **Sin dependencias nativas**: motor puramente PHP. Sin GD → decodificador PNG propio +
-   JPEG exacto incrustado (DCTDecode); con GD, todo.
+7. **GD + WebP es requisito** (revision del Motor): el motor es PHP puro (sin Python/Node/
+   ImageMagick) y usa GD para decodificar y recomponer. Un JPEG que mide EXACTO el hueco se
+   incrusta directo (DCTDecode, sin recomprimir); el resto se rasteriza con GD. Sin GD el
+   Motor falla con `motor:imagen:gd` (no hay camino alternativo).
 
 ## 5. Formatos y convenciones de nombres (NO CAMBIAR)
 
@@ -556,7 +558,7 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   `tmp/sesion-{sid}/{item_key}/` por ITEM (`manifest.json` + pool `img/` DEDICADO
   (`img/{pdf}-{id}-{n}.{ext}`, numerados si hay varios por `id`; la extension sale de
   la FIRMA de los bytes — **spec 026**: `webp` tras la conversion del servidor, `png`
-  si no hay GD; los items viejos conservan sus `.png` y se siguen leyendo; sin deduplicacion global
+  si la conversion no aplica; los items viejos conservan sus `.png` y se siguen leyendo; sin deduplicacion global
   entre items; **spec 029 (D2)**: el pool guarda **solo lo que se genera** —el texto— y **una
   fila por grupo** cuando el contenido es uniforme, con `indice` = **posicion de instancia**, D3)
   + `mockup-{id}.webp` congelados 300x300; `draft-{uuid}` →

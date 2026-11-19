@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.30.0
+Stable tag: 4.31.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -29,7 +29,7 @@ A diferencia de la version original (Flask + Python), el motor PDF es **100% PHP
 
 * PHP 7.4 o superior
 * Extension zlib (casi siempre disponible)
-* La extension GD es opcional para el procesamiento general: sin GD el motor procesa imagenes PNG (8 bits, sin entrelazar) con su decodificador propio; para JPEG/GIF/WebP se necesita GD (o un JPEG cuyo tamano coincida exactamente con el del grupo). Para las **fotos del comprador** GD con soporte WebP es **requisito** (spec 035): el servidor revalida el cap de 2000 px y compone la foto bajo demanda al generar el PDF.
+* La extension **GD con soporte WebP** es **requisito** (revision del Motor): el plugin no trae camino alternativo. GD procesa las imagenes del admin (PNG/JPEG/GIF/WebP), incrusta los JPEG que ya miden **exacto** el hueco (DCTDecode, sin recomprimir) y **compone las fotos del comprador** bajo demanda (spec 035: revalida el cap de 2000 px y arma la foto al generar el PDF).
 
 **Datos guardados** (detalle canonico en `AGENTS.md` §5): cada PDF vive en `wp-content/uploads/pmu/pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` inmutable + `config.json` editable con `activo`/`productos`/`campos_ids`/`placeholders[id]`); las pruebas del panel (imagenes aplicadas, salida de muestra) van a `wp-content/uploads/pmu/tmp/muestras/{nombre}/` (se sobrescriben en cada Procesar); ciclo comprador en `tmp/sesion-{sid}/{item_key}/` con los originales compartidos en `tmp/sesion-{sid}/uploads/` (un item por compra; la vista previa es obligatoria **salvo `preview_omisible`**) y resultados confirmados en `orders/{cliente}/{order_id}/{item_key}/` con los originales del cliente en `orders/{cliente}/uploads/` (**sin staging**: al confirmarse el pago el item se mueve); datos TextMuy en `wp-content/uploads/pmu/{fonts,img,tm-presets}/` (catalogos `fonts.json`/`img.json`/`presets.json` + fisicos + `.txm` + `thumbs.webp` por ambito). La carpeta del plugin queda 100% de solo lectura.
 
@@ -66,6 +66,15 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.31.0 =
+* Revision del Motor: **GD con soporte WebP pasa a ser requisito**. El motor ya no trae un
+  decodificador PNG propio como alternativa: si GD falta, falla con una causa clara
+  (`motor:imagen:gd`). El hosting lo comprueba en la pestana Test.
+* Un **JPEG que mide exacto el hueco** vuelve a incrustarse directo en el PDF (DCTDecode, sin
+  recomprimir pixeles): PDFs mas livianos, ahora tambien en servidores con GD.
+* Limpieza interna sin cambio de comportamiento: se retiro el modo historico "marcos transparentes
+  para todos los grupos" (no lo usaba nadie) y se deduplico el parser del trailer del PDF.
 
 = 4.30.0 =
 * Spec 039 (motor de cargas): **borrar en el acto**. Al quitar una foto desde el visor del campo se
@@ -168,7 +177,7 @@ Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}
 
 = 4.18.0 =
 * **Las imagenes se guardan en WebP (spec 026)**: antes todo era PNG, que es enorme (una foto del comprador podia pesar **1,3 MB** y el pool de una sesion unos **19 MB**). Ahora el navegador emite WebP directamente: la foto del comprador baja a **~120 KB** (casi 10 veces menos) y se envia menos por la red. Si el navegador no sabe codificar WebP, se usa el PNG igual que antes (nunca se rompe el flujo).
-* **El servidor tambien convierte (red de seguridad)**: si llega un PNG (navegador sin soporte WebP), el servidor lo convierte a WebP con GD. Sin GD, se guarda el original tal cual. El **formato sale siempre de la firma de los bytes**, no del nombre del archivo.
+* **El servidor tambien convierte (red de seguridad)**: si llega un PNG (navegador sin soporte WebP), el servidor lo convierte a WebP con GD. El **formato sale siempre de la firma de los bytes**, no del nombre del archivo.
 * **El PDF final no cambia**: el Motor ya sabia leer WebP (GD) y arma el mismo SMask. La unica diferencia es el peso que viaja por la red y se guarda en disco.
 * **Sin migracion**: los items ya generados (en PNG) se siguen leyendo normal; el pool numerado no se pisa porque ahora se cuentan todos los formatos.
 * **Documentacion**: contrato nuevo en `specs/026-imagenes-webp/`.

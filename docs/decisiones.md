@@ -417,7 +417,19 @@ Detalle y alternativas: `specs/012-campos-consola/spec.md` (D1–D22), `research
   borrado), `assets/selector-pmu.js` (sin `_bibMadre`/`usar`), `assets/tienda.js` (sin `usarBiblioteca`,
   `borrarFoto`, `subidas.detalle`), `assets/biblioteca-pmu.js` (tira sin versiones), `personalizador-pdf.php`
   (`op=borrar`, retiro de `usar`/`usos`), `inc/class-pmu-sesion.php` (`borrar_original_item`, retiro de
-  `familias()`/`usar_de_biblioteca()`). **El Motor (`Pdf`/`Detector`/`Overlay`/`Motor`/`Compositor`) no cambia.**
+  `familias()`/`usar_de_biblioteca()`). **El Motor no cambio en la 039** (su revision es posterior).
+- **Revision del Motor (2026-11-19, posterior a la 039)**: se retiro el **codigo muerto** y se hizo
+  **GD + WebP requisito**. En `engine/Overlay.php`, `build()` ya no acepta `$imagenes = null` (el modo
+  "marcos transparentes para todos" no lo llamaba nadie) y `$this->imgObj` es siempre la ranura 0. En
+  `engine/Pdf.php`, el trailer de la xref (merge + `XRefStm`/`Prev`) vive en `fusionarTrailer()`: era el
+  mismo bloque copiado en la xref clasica y en la stream (jscpd ya no encuentra clones). En
+  `engine/Imagen.php` se retiro el **camino PHP puro** (`decodificarPng`/`paeth`/`expandirRGBA`/
+  `viaPngPuro`/`encajarNearest`/`separar`/`$sinGD`/`tipo()`): sin GD, `normalizar()` lanza
+  `motor:imagen:gd`. Ademas, el **JPEG que mide exacto el lienzo** vuelve a incrustarse directo
+  (`dct`/DCTDecode) **tambien con GD**: antes ese camino solo existia sin GD, asi que estaba dormido y
+  el PDF pesaba de mas. Principio: **el trabajo pesado va al cliente cuando se puede; GD queda para lo
+  interno del servidor**. `motor_smoke` cubre `dct` (bytes del JPEG intactos) y el raster de un JPEG que
+  no coincide. Docs: `AGENTS.md` §4.7 y `readme.txt` (GD deja de ser opcional).
 - **Spec**: [039-cargas-friccion](../specs/039-cargas-friccion/spec.md) (H1-H6, D1-D8, US1-US5) +
   `plan.md` (F0-F6) + `tasks.md`.
 
