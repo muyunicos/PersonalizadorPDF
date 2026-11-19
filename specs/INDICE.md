@@ -35,6 +35,16 @@
 > `campos-contrato` 128, `cola-subida` 26, `receta-contrato` 21, `mockup-contrato` 177 +
 > 40 fases del arnes PHP + `motor_smoke` + `parity` + `certificacion_hoja` + `sin_lectura`.
 
+> **2026-11-19**: spec **040-catalogo-uploads** — **implementada** (v4.33.0). La biblioteca del comprador
+> se lista desde un **catalogo por carpeta** (`uploads/uploads.json`) y **deja de leer manifiestos y
+> pedidos**: abre en tiempo constante. **Una carpeta por identidad** (invitado `tmp/sesion-{sid}/uploads/`;
+> cliente `orders/{uid}/uploads/`, adonde se **migra** la sesion anonima **en el login**, una vez).
+> **Miniaturas 80x80** junto al original (la tira no baja la foto entera); el **encuadre se recuerda**
+> por forma + tamano; **borrado en dos pasos**: si la imagen esta en carrito o pedido se pide
+> confirmacion y se advierte que ese pedido deja de poder regenerarse; quitar de un campo **no** borra.
+> El catalogo se **serializa** con `flock` (lectura dentro del lock) y **no se sirve por ruta propia**.
+> Puertas: `catalogo_uploads` 16, `biblioteca-contrato` 63, 40 fases + `motor_smoke` + `parity` + `sin_lectura`.
+
 ## Activos (codigo completo, falta solo manual WP real)
 | Spec | Codigo | Pendiente manual | Docs normativos |
 |------|--------|------------------|-----------------|

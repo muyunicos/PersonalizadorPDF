@@ -418,6 +418,14 @@ Detalle y alternativas: `specs/012-campos-consola/spec.md` (D1–D22), `research
   `borrarFoto`, `subidas.detalle`), `assets/biblioteca-pmu.js` (tira sin versiones), `personalizador-pdf.php`
   (`op=borrar`, retiro de `usar`/`usos`), `inc/class-pmu-sesion.php` (`borrar_original_item`, retiro de
   `familias()`/`usar_de_biblioteca()`). **El Motor no cambio en la 039** (su revision es posterior).
+- **Spec 040 (2026-11-19)**: la biblioteca del comprador pasa a listarse desde un **catalogo por
+  carpeta** (`uploads/uploads.json`) en vez de manifiestos y pedidos. **Una carpeta por identidad**
+  (invitado `tmp/sesion-{sid}/uploads/`; cliente `orders/{uid}/uploads/`, adonde se migra la sesion
+  anonima **en el login**, fusionado con `vinculo_sid_usuario()`). **Miniaturas 80x80** pre-renderizadas;
+  **encuadre recordado** por contexto (`gid`+tamaño+`phsize`); **borrado en dos pasos** con confirmacion
+  cuando la imagen esta en carrito o pedido (y aviso de que ese pedido deja de regenerarse); quitar del
+  campo **no** borra. **Supersede 039 D3** (el borrado en el acto desde el visor del campo).
+  El catalogo se escribe con `flock` (lectura dentro del lock) y **no se publica por URL**.
 - **Revision del Motor (2026-11-19, posterior a la 039)**: se retiro el **codigo muerto** y se hizo
   **GD + WebP requisito**. En `engine/Overlay.php`, `build()` ya no acepta `$imagenes = null` (el modo
   "marcos transparentes para todos" no lo llamaba nadie) y `$this->imgObj` es siempre la ranura 0. En

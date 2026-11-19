@@ -367,6 +367,15 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   spec 040 tambien los borradores), `customs/` (ideas del cotizador, spec 037) y `{order_id}/{item_key}/`
   (entregables). El nombre se conserva: renombrar el nivel a `clients/` queda como spec aparte (antes de
   la tabla de la 041, que guardaria rutas).
+- **Catalogo de uploads (spec 040)**: `uploads.json` dentro de cada carpeta de originales
+  (`tmp/sesion-{sid}/uploads/` para invitado; `orders/{uid}/uploads/` para cliente), con una
+  entrada por imagen (`id`, `ext`, `bytes`, `w`, `h`, `creado`, `ultimo_uso`) y sus **recetas por
+  contexto** (`"{gid}-{w}x{h}-{phsize}"`). Es dato **derivado y reconstruible**: si falta o esta
+  corrupto se arma UNA vez desde los archivos, **sin recetas**. Escritura **serializada**
+  (`flock` sobre `uploads.json.lock`, con la lectura DENTRO del lock) y atomica (`.tmp` + `rename`);
+  lectura sin lock. **No se sirve por ruta propia**: se lee por el endpoint protegido.
+- **Miniaturas del comprador**: `{id}-80x80.webp` junto al original (cover, 80x80); la tira del
+  modal pide la miniatura, nunca la foto completa.
 - Ámbitos del editor: `fonts/` (catálogo `fonts.json`), `img/` (catálogo `img.json`) y
   `tm-presets/` (catálogo `presets.json`); un sprite `thumbs.webp` por ámbito, junto a su
   catálogo. La **certificación** de la hoja es `thumbs.sprite_firma` = `[w,h,c,items]`
