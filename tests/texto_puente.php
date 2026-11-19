@@ -314,6 +314,11 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('resolver_subidas resuelve la fila ref', !empty($GLOBALS['bib_resuelve_ref']));
         $fotos_b = (is_array($json) && !empty($json['success'])) ? (array)($json['data']['fotos'] ?? []) : [];
         check('listar devuelve IMAGENES (una entrada por imagen, D5)', count($fotos_b) >= 1, 'fotos=' . count($fotos_b));
+        // Spec 041 (T001/T006): identidad -> carpeta y subida con catalogo + miniatura.
+        check('041 T001: cliente -> orders/{uid}/uploads', !empty($GLOBALS['bib_dir_cliente']));
+        check('041 T001: invitado -> tmp/sesion-{sid}/uploads', !empty($GLOBALS['bib_dir_invitado']));
+        check('041 T006: la subida deja uploads.json', !empty($GLOBALS['bib_catalogo_ok']));
+        check('041 T006: la subida deja su miniatura 80x80', !empty($GLOBALS['bib_mini_ok']));
         check('listar trae revision de 12 hex', is_array($json) && strlen((string)($json['data']['revision'] ?? '')) === 12);
         check('listar: contenedores >= 1', (int)($json['data']['totales']['contenedores'] ?? 0) >= 1);
         check('cada imagen trae url por op=imagen', !empty($fotos_b[0]['url']) && strpos((string)$fotos_b[0]['url'], 'op=imagen') !== false);
@@ -1579,9 +1584,9 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 $GLOBALS['fotos_id_a'] . ' ' . $GLOBALS['fotos_w'] . 'x' . $GLOBALS['fotos_h']);
             check('los mismos bytes dan el MISMO id (dedupe por sha)',
                 $GLOBALS['fotos_id_a'] === $GLOBALS['fotos_id_b']);
-            check('dos subidas de los mismos bytes dejan UN archivo en la sesion',
-                (int)$GLOBALS['fotos_uploads_archivos'] === 1,
-                'archivos=' . (int)$GLOBALS['fotos_uploads_archivos']);
+            check('dos subidas de los mismos bytes NO agregan un archivo (dedupe)',
+            !empty($GLOBALS['fotos_dedupe_archivos']),
+            'originales=' . (int)$GLOBALS['fotos_uploads_archivos']);
             check('la fila del original lleva SOLO id (sin file)',
                 $GLOBALS['fotos_fila_original'] === true);
             check('uniforme: 3 instancias con la misma receta dejan UNA fila',
@@ -2154,9 +2159,9 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         case 'carpeta_cliente':
             // Spec 035 (T017): la carpeta COMPARTIDA de originales de la sesion.
             check('dos items distintos en la misma sesion', $GLOBALS['cc_dos_items'] === true);
-            check('la misma foto en DOS items deja UN solo archivo',
-                (int)$GLOBALS['cc_archivos'] === 1,
-                'archivos=' . (int)$GLOBALS['cc_archivos']);
+            check('la misma foto en DOS items NO agrega un archivo (dedupe)',
+            !empty($GLOBALS['cc_dedupe_archivos']),
+            'originales=' . (int)$GLOBALS['cc_archivos']);
             check('la misma foto en DOS items devuelve el MISMO id (dedupe por sha)',
                 $GLOBALS['cc_mismo_id'] === true);
             check('TTL con items vivos: la carpeta compartida NO se borra',
@@ -3178,6 +3183,10 @@ switch ($fase) {
         $motor_ft = $p->motor_para_tests();
         $sesion_ft = new PMU_Sesion($motor_ft);
         $sid_ft = 'test-8f2a';
+        // Spec 041 (T006): esta fase simula INVITADO. `get_current_user_id()` del arnes
+        // devuelve 1 por defecto y `guardar_subida()` ya escribe en la carpeta de la
+        // identidad: sin esto, la foto iria a orders/1/uploads/.
+        $GLOBALS['test_user_id'] = 0;
         $draft_ft = $sesion_ft->crear_draft($sid_ft, ['muestra']);
         $_COOKIE[PMU_Sesion::COOKIE] = $sid_ft;
         $pngFt = sys_get_temp_dir() . '/pd_puente_fotos_' . getmypid() . '.png';
@@ -3192,11 +3201,37 @@ switch ($fase) {
         $GLOBALS['fotos_fila_original'] = !isset($subA['file']) || (string)$subA['file'] === '';
 
         // 2) Dedupe: los mismos bytes NO crean otro id ni otro archivo.
+        // Spec 041 (T006): la carpeta tiene tambien miniaturas; se compara el DELTA
+        // de originales antes/despues (asi el resultado no depende de lo sembrado).
+        $contarFt = function () use ($motor_ft, $sid_ft) {
+            $d = $motor_ft->dir_sesion_uploads($sid_ft, false);
+            $n = 0;
+            if (is_dir($d)) {
+                foreach ((array)glob($d . DIRECTORY_SEPARATOR . '*') as $fC) {
+                    if (!is_file($fC)) {
+                        continue;
+                    }
+                    if (preg_match('/-\\d{2,3}x\\d{2,3}\\.webp$/i', basename($fC)) === 1) {
+                        continue;
+                    }
+                    $nomC = basename($fC);
+                    if ($nomC === PMU_Uploads::CATALOGO_UPLOADS || $nomC === PMU_Uploads::LOCK_UPLOADS) {
+                        continue;   // el catalogo y su lock no son fotos
+                    }
+                    $n++;
+                }
+            }
+            return $n;
+        };
+        $antesFt = $contarFt();
         $subB = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt);
         $GLOBALS['fotos_id_b'] = (string)($subB['id'] ?? '');
         $dirUp_ft = $motor_ft->dir_sesion_uploads($sid_ft, false);
-        $GLOBALS['fotos_uploads_archivos'] = is_dir($dirUp_ft)
-            ? count((array)glob($dirUp_ft . DIRECTORY_SEPARATOR . '*')) : 0;
+        // Spec 041 (T006): la carpeta tambien tiene miniaturas `{id}-80x80.webp`; el
+        // dedupe se mide sobre ORIGINALES (las miniaturas son derivadas).
+        $GLOBALS['fotos_uploads_archivos'] = $contarFt();
+        // Spec 041 (T006): el contrato es "re-subir NO agrega un archivo" (delta 0).
+        $GLOBALS['fotos_dedupe_archivos'] = ($GLOBALS['fotos_uploads_archivos'] === $antesFt);
 
         // Dos recetas VALIDAS distintas (rot 0 y rot 90).
         $baseRec = ['v' => 2, 'w' => 463, 'h' => 463, 'forma' => 'rectangulo',
@@ -3300,12 +3335,27 @@ switch ($fase) {
         $motor_b = $p->motor_para_tests();
         $sesion_b = new PMU_Sesion($motor_b);
         $sid_b = 'test-bib-0001';
+        // Spec 041: esta fase simula INVITADO (uid 0). El arnes, por defecto, hace que
+        // `get_current_user_id()` devuelva 1, y `guardar_subida()` ya escribe en la
+        // carpeta de la identidad: sin esto, la foto iria a orders/1/uploads/.
+        $GLOBALS['test_user_id'] = 0;
         $_COOKIE[PMU_Sesion::COOKIE] = $sid_b;
         $draft_b = $sesion_b->crear_draft($sid_b, ['muestra']);
         $png_b = sys_get_temp_dir() . '/pd_puente_bib_' . getmypid() . '.webp';
         \ExtractCorel\Engine\PngWriter::write($png_b, 60, 40);
         $bytes_b = (string)file_get_contents($png_b);
         $sub_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b);
+        // Spec 041 (T001/T006): la identidad decide la carpeta y la subida deja
+        // catalogo + miniatura en ella.
+        $GLOBALS['bib_dir_cliente'] = (strpos(
+            (string)$motor_b->dir_uploads_identidad(['uid' => 7, 'sid' => $sid_b]),
+            'orders' . DIRECTORY_SEPARATOR . '7' . DIRECTORY_SEPARATOR . 'uploads') !== false);
+        $GLOBALS['bib_dir_invitado'] = (strpos(
+            (string)$motor_b->dir_uploads_identidad(['uid' => 0, 'sid' => $sid_b]),
+            'sesion-' . $sid_b . DIRECTORY_SEPARATOR . 'uploads') !== false);
+        $dirUp_b = $motor_b->dir_sesion_uploads($sid_b);
+        $GLOBALS['bib_catalogo_ok'] = is_file($dirUp_b . DIRECTORY_SEPARATOR . 'uploads.json');
+        $GLOBALS['bib_mini_ok'] = is_file($dirUp_b . DIRECTORY_SEPARATOR . $sub_b['id'] . '-80x80.webp');
         // Pedido ya entregado del MISMO comprador (origen estable -> se REFERENCIA).
         $itemOrder_b = $motor_b->dir_order('1', 4242, true) . DIRECTORY_SEPARATOR . 'item-pedido';
         wp_mkdir_p($itemOrder_b);
@@ -3357,6 +3407,8 @@ switch ($fase) {
         // silencio y dejaba la tira sin fotos). Se ejercita SIN streaming.
         // Spec 039 (D5): `op=imagen` por `id` (identidad = sha12). `madre` ya no existe.
         $_REQUEST = ['op' => 'imagen', 'id' => $madre_b, '_wpnonce' => 'nonce'];
+        // El pedido sembrado es del usuario 1: la variante por contenedores lo necesita.
+        $GLOBALS['test_user_id'] = 1;
         $rutaImg_b = '';
         try {
             $rutaImg_b = $p->biblioteca_ruta_imagen($sid_b);
@@ -3383,6 +3435,7 @@ switch ($fase) {
             $rutaItem_b = '';
         }
         $GLOBALS['bib_img_item'] = is_file($rutaItem_b);
+        $GLOBALS['test_user_id'] = 0;   // el resto de la fase vuelve a invitado
         // Spec 030 (T028/D18/D26): el barrido por ITEM sobre datos reales. Un item de
         // carrito ABANDONADO (31 dias) se va con sus fotos; uno RECIENTE sobrevive; un
         // draft vencido (26 h) se va; una sesion sin items se borra; lo comprado
@@ -5662,11 +5715,38 @@ switch ($fase) {
         $png_cc = sys_get_temp_dir() . '/pd_puente_cc_' . getmypid() . '.png';
         \ExtractCorel\Engine\PngWriter::write($png_cc, 120, 90);
         $bytes_cc = (string)file_get_contents($png_cc);
+        // Spec 041 (T006): esta fase prueba la carpeta COMPARTIDA DE LA SESION, asi que
+        // simula INVITADO (uid 0). Con cuenta, la foto iria a orders/{uid}/uploads/.
+        $GLOBALS['test_user_id'] = 0;
+        // Spec 041 (T006): cuenta ORIGINALES (excluye miniaturas). Se compara el DELTA
+        // de las dos subidas: re-subir no debe agregar archivo.
+        $contarCc = function () use ($motor_cc, $sid_cc) {
+            $d = $motor_cc->dir_sesion_uploads($sid_cc, false);
+            $n = 0;
+            if (is_dir($d)) {
+                foreach ((array)glob($d . DIRECTORY_SEPARATOR . '*') as $fC2) {
+                    if (!is_file($fC2)) {
+                        continue;
+                    }
+                    if (preg_match('/-\\d{2,3}x\\d{2,3}\\.webp$/i', basename($fC2)) === 1) {
+                        continue;
+                    }
+                    $nom = basename($fC2);
+                    if ($nom === PMU_Uploads::CATALOGO_UPLOADS || $nom === PMU_Uploads::LOCK_UPLOADS) {
+                        continue;   // el catalogo y su lock no son fotos
+                    }
+                    $n++;
+                }
+            }
+            return $n;
+        };
         $s1_cc = $sesion_cc->guardar_subida($sid_cc, $item1_cc, $bytes_cc);
+        // Base de comparacion: DESPUES de la primera subida (la primera crea el archivo).
+        $antes_cc = $contarCc();
         $s2_cc = $sesion_cc->guardar_subida($sid_cc, $item2_cc, $bytes_cc);
         $dirUp_cc = $motor_cc->dir_sesion_uploads($sid_cc, false);
-        $GLOBALS['cc_archivos'] = is_dir($dirUp_cc)
-            ? count((array)glob($dirUp_cc . DIRECTORY_SEPARATOR . '*')) : 0;
+        $GLOBALS['cc_archivos'] = $contarCc();
+        $GLOBALS['cc_dedupe_archivos'] = ($GLOBALS['cc_archivos'] === $antes_cc);
         $GLOBALS['cc_mismo_id'] = (string)($s1_cc['id'] ?? '') === (string)($s2_cc['id'] ?? '')
             && (string)($s1_cc['id'] ?? '') !== '';
 

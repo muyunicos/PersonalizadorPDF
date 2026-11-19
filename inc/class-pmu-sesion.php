@@ -593,6 +593,34 @@ class PMU_Sesion
                 'orig' => ['id' => $id, 'params' => $params],
             ];
         }
+        // Spec 040 (T007): cada receta aceptada entra al catalogo por contexto.
+        // Es best-effort: la receta ya vive en la fila del manifest, asi que un
+        // fallo del catalogo no debe tumbar el registro del grupo.
+        $clave = (function_exists('get_current_user_id') ? (int) get_current_user_id() : 0);
+        foreach ($porInstancia as $p) {
+            $orig = (array)($p['orig'] ?? []);
+            $idF = strtolower((string)($orig['id'] ?? ''));
+            $paramsRec = (array)($orig['params'] ?? []);
+            if (!preg_match('/^[a-f0-9]{12}$/', $idF) || !$paramsRec) {
+                continue;
+            }
+            $claveReceta = self::clave_receta($paramsRec);
+            if ($claveReceta === '') {
+                continue;
+            }
+            $rutaOrig = $this->resolver_original($idF, (string)$clave, $sid);
+            if ($rutaOrig === '') {
+                continue;
+            }
+            try {
+                $this->motor->catalogo_upsert(dirname($rutaOrig), $idF, [
+                    'ultimo_uso' => time(),
+                    'recetas' => [$claveReceta => $paramsRec],
+                ]);
+            } catch (\Throwable $e) {
+                // La receta ya quedo en la fila del manifest (spec 035 D9).
+            }
+        }
         $out = [];
         if ($porInstancia) {
             ksort($porInstancia);
@@ -843,6 +871,51 @@ class PMU_Sesion
      *
      * @return array fila de `manifest.subidas[]` + `w`/`h` del original guardado
      */
+    /**
+     * Spec 040 (T006): alta/refresco de la entrada en el catalogo de la carpeta y
+     * miniatura 80x80. La receta se guarda por contexto si corresponde.
+     *
+     * El catalogo es la fuente de la biblioteca: si su escritura falla, la foto
+     * quedaria invisible, asi que la excepcion se propaga con causa.
+     */
+    private function catalogo_de_subida($dir, $id, $ext, $ruta, $med, $paramsV2, $receta)
+    {
+        $ahora = time();
+        $entrada = [
+            'ext' => (string)$ext,
+            'bytes' => (int)@filesize($ruta),
+            'w' => is_array($med) ? (int)$med[0] : 0,
+            'h' => is_array($med) ? (int)$med[1] : 0,
+            'creado' => $ahora,
+            'ultimo_uso' => $ahora,
+        ];
+        if ($receta !== '' && is_array($paramsV2) && $paramsV2) {
+            $claveReceta = self::clave_receta($paramsV2);
+            if ($claveReceta !== '') {
+                $entrada['recetas'] = [$claveReceta => $paramsV2];
+            }
+        }
+        $this->motor->catalogo_upsert($dir, $id, $entrada);
+        // Best-effort: si la miniatura no se puede generar, la tira usara el original.
+        $this->motor->miniatura_generar($ruta, 80);
+    }
+
+    /**
+     * Clave de contexto de una receta: `"{gid}-{w}x{h}-{phsize}"` (spec 040 D5).
+     * `''` si no alcanza para identificar el lienzo.
+     */
+    private static function clave_receta(array $params)
+    {
+        $gid = strtoupper((string)($params['gid'] ?? ''));
+        $w = (int)($params['w'] ?? 0);
+        $h = (int)($params['h'] ?? 0);
+        $ph = max(0, min(2, (int)($params['phsize'] ?? 0)));
+        if (preg_match('/^[0-9A-F]{6}$/', $gid) !== 1 || $w < 1 || $h < 1) {
+            return '';
+        }
+        return $gid . '-' . $w . 'x' . $h . '-' . $ph;
+    }
+
     public function guardar_subida($sid, $item_key, $bytes, $params = [])
     {
         $bytes = (string)$bytes;
@@ -879,12 +952,17 @@ class PMU_Sesion
         // Spec 026 (D3): el servidor convierte a WebP si puede (q0.85: la foto del
         // comprador es unseen y el ahorro es ~10x).
         $img = self::convertir_webp($bytes, 85);
-        $dir = $this->motor->dir_sesion_uploads($sid, true);
+        $clave = (function_exists('get_current_user_id') ? (int) get_current_user_id() : 0);
+        // Spec 040 (T006): la subida va a la carpeta de la IDENTIDAD (cliente -> orders/{uid};
+        // invitado -> tmp/sesion-{sid}), no siempre a la sesion.
+        $dir = $this->motor->dir_uploads_identidad(['uid' => $clave, 'sid' => $sid]);
         $ruta = $dir . DIRECTORY_SEPARATOR . $id . '.' . $img['ext'];
         if (!is_file($ruta) && @file_put_contents($ruta, $img['bytes']) === false) {
             throw new Exception('motor:dir_sesion_uploads:directorio:no_escribible');
         }
         $med = @getimagesize($ruta);
+        // Spec 040 (T006): alta/refresh en el catalogo de la identidad + miniatura.
+        $this->catalogo_de_subida($dir, $id, $img['ext'], $ruta, $med, $paramsV2, $receta);
         $fila = null;
         $this->mutar_manifest($sid, $item_key,
             function (&$manifest) use ($item_key, $id, $sha, $img, $ruta, $receta, $paramsV2, $med, &$fila) {
@@ -1725,6 +1803,17 @@ class PMU_Sesion
             }
             $id = pathinfo($ruta, PATHINFO_FILENAME);
             if (isset($referencias[$id])) {
+                continue;
+            }
+            $nombre = basename($ruta);
+            // Spec 040 (T006): el catalogo y su lock NO son fotos: la poda por
+            // referencias los borraria como huerfanos.
+            if ($nombre === PMU_Uploads::CATALOGO_UPLOADS || $nombre === PMU_Uploads::LOCK_UPLOADS) {
+                continue;
+            }
+            // Las miniaturas (`{id}-80x80.webp`) son derivadas del original: si el
+            // original se va, se van con el; mientras exista, no se tocan.
+            if (preg_match('/-\\d{2,3}x\\d{2,3}\\.webp$/i', $nombre) === 1) {
                 continue;
             }
             @unlink($ruta);
