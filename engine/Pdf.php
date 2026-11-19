@@ -323,15 +323,7 @@ class Pdf
             if ($t[0] === 'op' && $t[1] === 'trailer') {
                 $dict = $this->parseValue($lex);
                 if (is_array($dict)) {
-                    foreach ($dict as $k => $v) {
-                        $this->trailer[$k] = $v;
-                    }
-                    if (isset($dict['XRefStm'])) {
-                        $this->parseXref((int)$this->deref($dict['XRefStm']), $seen);
-                    }
-                    if (isset($dict['Prev'])) {
-                        $this->parseXref((int)$this->deref($dict['Prev']), $seen);
-                    }
+                    $this->fusionarTrailer($dict, $seen);
                 }
                 break;
             }
@@ -372,6 +364,17 @@ class Pdf
                 }
             }
         }
+        $this->fusionarTrailer($dict, $seen);
+    }
+
+    /**
+     * Fusiona el diccionario de una seccion xref en `$trailer` y sigue la
+     * cadena (`XRefStm` de los archivos hibridos y `Prev` de las secciones
+     * anteriores). Lo usan el xref CLASICO (`trailer << ... >>`) y el xref
+     * STREAM (`/Type /XRef`): era el mismo bloque copiado en los dos.
+     */
+    private function fusionarTrailer(array $dict, &$seen)
+    {
         foreach ($dict as $k => $v) {
             $this->trailer[$k] = $v;
         }

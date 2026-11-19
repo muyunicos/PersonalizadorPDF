@@ -171,14 +171,12 @@ class Motor
     }
 
     /**
-     * Motor rapido tienda: PDF + mapa id => ruta PNG (tamano exacto por grupo)
-     * -> PDF editado. Sin dataset: no hay paridad que validar (los PNG ya
-     * vienen renderizados por el cliente). Devuelve el resumen del Motor.
-     */
-    /**
-     * Procesa el pedido desde el pool del item. `$mapaIdRuta` acepta UNA ruta
-     * por grupo (comportamiento historico: se replica en todas las instancias)
-     * o una LISTA (una por instancia, spec 012 T027).
+     * Procesa el pedido desde el pool del item (Motor rapido tienda): PDF +
+     * mapa id => ruta PNG al tamano exacto de cada grupo -> PDF editado. Sin
+     * dataset: no hay paridad que validar, porque los PNG ya vienen
+     * renderizados por el cliente. `$mapaIdRuta` acepta UNA ruta por grupo
+     * (comportamiento historico: se replica en todas las instancias) o una
+     * LISTA (una por instancia, spec 012 T027).
      */
     public static function procesar_pedido($rutaPdf, array $mapaIdRuta)
     {
