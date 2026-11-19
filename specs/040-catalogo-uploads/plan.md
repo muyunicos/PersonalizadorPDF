@@ -7,12 +7,13 @@
 ## Summary
 
 La biblioteca del comprador deja de construirse leyendo manifiestos de items y recorriendo el arbol de
-pedidos. Pasa a listarse desde las **carpetas de originales** (`tmp/sesion-{sid}/uploads/` y, si tiene
-cuenta, `orders/{uid}/uploads/`), con un **catalogo por carpeta** (`uploads.json`: ids, medidas, fecha y
-recetas por contexto) y **miniaturas 80x80 cover** pre-renderizadas al subir. La lectura de una imagen o
-su miniatura se resuelve por `id` en tiempo constante con `resolver_original()`. El borrado se separa en
-dos acciones: **quitar del campo** (solo quita la referencia) y **borrar desde la galeria** (consulta
-referencias en carrito/pedidos, pide confirmacion si las hay y elimina archivo + miniatura + entrada).
+pedidos. Pasa a listarse desde **una carpeta por identidad** (`tmp/sesion-{sid}/uploads/` para el
+invitado; `orders/{uid}/uploads/` para el cliente, adonde se **migra** la sesion anonima en el login),
+con un **catalogo por carpeta** (`uploads.json`: ids, medidas, fecha, ultimo uso y recetas por contexto)
+y **miniaturas 80x80 cover** pre-renderizadas al subir. La lectura de una imagen o su miniatura se
+resuelve por `id` en tiempo constante. El borrado se separa en dos acciones: **quitar del campo** (solo
+quita la referencia) y **borrar desde la galeria** (consulta referencias en carrito/pedidos, pide
+confirmacion si las hay y elimina archivo + miniatura + entrada).
 
 ## Technical Context
 

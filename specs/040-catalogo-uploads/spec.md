@@ -26,8 +26,8 @@ debe mostrar la tira sin degradarse y sin leer pedidos ajenos.
 1. **Given** un comprador con 10 imagenes propias y el sitio con historial, **When** abre el recorte,
    **Then** ve su tira en menos de 300 ms y el servidor no recorrio pedidos de terceros.
 2. **Given** un invitado, **When** abre el recorte, **Then** solo se lista su carpeta de sesion.
-3. **Given** un cliente con pedidos, **When** abre el recorte, **Then** ve sus originales de la sesion
-   actual y los de su carpeta de pedidos, sin duplicados.
+3. **Given** un cliente con pedidos, **When** abre el recorte, **Then** ve sus originales en su carpeta
+   de la cuenta (una sola), sin duplicados.
 
 ---
 
@@ -98,11 +98,14 @@ galeria y comprobar que desaparece de archivos y catalogo.
   archivos y las recetas disponibles y la biblioteca nunca queda vacia por eso.
 - El catalogo esta corrupto o ilegible: mismo camino de reconstruccion, sin romper la apertura.
 - Falta la miniatura de una imagen: se genera al pedirla.
-- La misma imagen existe en la carpeta de pedidos y en la de la sesion: se muestra **una** vez.
+- La misma imagen existe en la carpeta del cliente y en la de una sesion vieja: se muestra **una** vez
+  (gana la del cliente).
 - Un item roto o un archivo ausente: se omite esa imagen, el resto se lista.
 - Una receta guardada con un tamano que ya no existe: se ignora.
-- Un invitado que despues inicia sesion: sus originales de la sesion invitada no se listan (limitacion
-  aceptada; su compra si se conserva).
+- Un invitado que inicia sesion: sus originales se **migran** a su carpeta de cliente (una sola vez,
+  idempotente) y pasan a listarse ahi.
+- Una imagen ya usada en un pedido: borrarla desde la galeria se permite **con confirmacion**, y ese
+  pedido deja de ser regenerable (aceptado).
 
 ## Clarifications
 
@@ -111,18 +114,22 @@ galeria y comprobar que desaparece de archivos y catalogo.
 - Q: ¿El archivo de catálogo puede quedar alcanzable por URL bajo la carpeta de uploads como los originales, o hay que impedir el acceso directo? → A: Igual que los originales: nunca se publica su URL y el acceso pasa por el endpoint protegido; su exposición física es la misma que la de los originales.
 - Q: Si falta el catálogo en una carpeta existente, ¿de dónde salen las recetas para reconstruirlo? → A: Solo desde los archivos (identificador, formato, peso, medidas y fecha). Las recetas NO se recuperan y esas imágenes quedan con el encuadre por defecto.
 - Q: Al borrar una imagen desde un ítem, ¿cómo se decide si se eliminan archivo, miniatura y entrada del catálogo? → A: Quitar desde un campo NO elimina la imagen: solo quita esa referencia del campo. El borrado vive en la galería: consulta referencias solo en ítems de CARRITO y en PEDIDOS (los borradores no cuentan); si hay alguna, pide confirmación, y si no, borra directamente (archivos + catálogo).
+- Q: ¿Cuántas carpetas tiene cada identidad y cuándo se migra? → A: Una por identidad: invitado `tmp/sesion-{sid}/uploads/`, cliente `orders/{uid}/uploads/`. La sesión anónima se migra en el login (incluye el alta en el checkout); al pagar no se mueven originales. Caducidad por último uso, nunca sobre imágenes con pedido.
+- Q: ¿Y al promover el ítem a pedido? → A: no se mueve nada (los originales ya están en la carpeta de la cuenta): solo cambia el manifiesto.
+- Q: Si la imagen ya está en un pedido, ¿qué pasa al borrarla desde la galería? → A: Se permite **con confirmación**; se acepta que ese pedido deja de poder regenerarse. Sin pedido, el borrado es directo.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: El listado de la biblioteca MUST construirse desde las carpetas de originales del
-  comprador: la de su sesion actual y, si tiene cuenta, la de sus pedidos.
+- **FR-001**: El listado de la biblioteca MUST construirse desde la carpeta de originales que
+  corresponde a la identidad: la de la sesion (invitado) o la de la cuenta (cliente).
 - **FR-002**: El listado MUST NOT leer manifiestos de items ni consultar pedidos ajenos; su costo MUST
   depender solo de las imagenes del comprador.
 - **FR-003**: Para un invitado MUST listarse unicamente la carpeta de su sesion actual.
 - **FR-004**: Cada ambito de originales MUST mantener un catalogo con, por imagen: identificador,
-  formato, peso, medidas, fecha de alta y sus recetas por contexto (forma + tamano + phsize).
+  formato, peso, medidas, fecha de alta, **ultimo uso** y sus recetas por contexto (forma + tamano +
+  phsize).
 - **FR-005**: El catalogo MUST actualizarse al subir, al declarar una receta y al borrar.
 - **FR-006**: Si el catalogo falta o esta corrupto, el sistema MUST reconstruirlo una sola vez **solo
   desde los archivos** (identificador, formato, peso, medidas y fecha), **sin recuperar recetas** y sin
@@ -133,8 +140,9 @@ galeria y comprobar que desaparece de archivos y catalogo.
   sin recorrer manifiestos ni pedidos.
 - **FR-009**: Al elegir una imagen existente, el sistema MUST recuperar la receta del contexto actual
   si existe; en caso contrario MUST usar el encuadre por defecto.
-- **FR-010**: Imagen, miniatura y catalogo MUST respetar la misma politica de acceso que hoy: solo su
-  dueno las obtiene, y nunca por una ruta que el cliente proponga.
+- **FR-010**: Imagen, miniatura y catalogo MUST respetar la misma politica de acceso que hoy: la
+  pertenencia se valida por la **cadena de la identidad** (cliente: su carpeta; invitado: su sesion) y
+  nunca por una ruta que el cliente proponga.
 - **FR-011**: Quitar una imagen de un campo (su ranura) MUST NOT eliminar el original, su miniatura ni
   su entrada de catalogo: solo elimina la referencia de ese campo.
 - **FR-012**: Borrar una imagen desde la galeria MUST eliminar el original, su miniatura y su entrada
@@ -147,10 +155,16 @@ galeria y comprobar que desaparece de archivos y catalogo.
   borrar solo si el comprador acepta.
 - **FR-015**: Una imagen sin referencias en carrito ni pedidos MUST borrarse directamente, sin
   confirmacion.
-- **FR-016**: Catalogo y miniatura MUST acompanar al original cuando este se mueve a la carpeta del
-  pedido, y MUST borrarse con el.
-- **FR-017**: La poda por vencimiento MUST dejar el ambito sin originales, miniaturas ni entradas de
-  catalogo huerfanas.
+- **FR-016**: Al promover el item a pedido el sistema MUST NOT mover originales, miniaturas ni catalogo:
+  ya viven en la carpeta de la cuenta. Lo unico que cambia es el manifiesto del item.
+- **FR-017**: La poda MUST usar el **ultimo uso** registrado en el catalogo, MUST NOT eliminar imagenes
+  referenciadas por un pedido y MUST dejar el ambito sin originales, miniaturas ni entradas huerfanas.
+- **FR-018**: Al iniciar sesion (incluida la creacion de cuenta en el checkout) el sistema MUST migrar
+  los originales de la sesion anonima a la carpeta de la cuenta, **una sola vez e idempotente**, junto
+  con su catalogo y sus miniaturas.
+- **FR-019**: Borrar desde la galeria una imagen referenciada por un pedido MUST pedir confirmacion y,
+  tras aceptar, eliminar original, miniatura y catalogo; la interfaz MUST advertir que ese pedido deja
+  de poder regenerarse.
 
 ### Key Entities
 
@@ -173,8 +187,9 @@ galeria y comprobar que desaparece de archivos y catalogo.
 
 ## Assumptions
 
-- Un invitado tiene una sola sesion; un cliente se lista con su sesion actual mas su carpeta de
-  pedidos. Los enlaces a sesiones anteriores no se listan (limitacion aceptada y reversible).
+- Un invitado tiene una sola sesion (`tmp/sesion-{sid}/uploads/`); un cliente tiene una sola carpeta
+  (`orders/{uid}/uploads/`). La sesion anonima se migra en el login, una vez.
+- En esta spec, "galeria" y "biblioteca" nombran la MISMA vista (el modulo es `assets/biblioteca-pmu.js`).
 - Las miniaturas son cuadradas, recorte al centro, 80x80.
 - El catalogo vive dentro del ambito de originales y es dato derivado: se puede reconstruir.
 - La politica de acceso y el endpoint protegido actuales se mantienen; no se publican rutas crudas.

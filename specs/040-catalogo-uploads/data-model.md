@@ -15,6 +15,9 @@ Resumen de un **ambito de originales** (una carpeta `uploads/`).
 
 Ubicacion: `{ambito}/uploads.json`. Es **dato derivado**: se puede reconstruir (FR-006).
 
+**Ambitos (aclaracion 2026-11-19)**: uno por identidad. Invitado: `tmp/sesion-{sid}/uploads/`.
+Cliente: `orders/{uid}/uploads/`, adonde se **migra** la sesion anonima en el login (una vez).
+
 ### EntradaCatalogo
 
 | Campo | Tipo | Regla |
@@ -24,6 +27,7 @@ Ubicacion: `{ambito}/uploads.json`. Es **dato derivado**: se puede reconstruir (
 | `bytes` | int | `>= 0` |
 | `w`, `h` | int | `>= 1`; medidas del original guardado |
 | `creado` | int (epoch) | alta de la entrada |
+| `ultimo_uso` | int (epoch) | ultima vez que la imagen se uso en un diseno; base de la caducidad (FR-017) |
 | `recetas` | objeto `clave -> RecetaContexto` | puede estar vacio |
 
 ### RecetaContexto
@@ -68,8 +72,10 @@ tamanos o formas distintas (FR-009 y US2 escenario 2).
 | Quitar la foto de un campo | **sin cambios** | **sin cambios** |
 | Borrar desde la galeria, sin carrito/pedido | elimina la entrada | borra original + miniatura |
 | Borrar desde la galeria, con carrito/pedido | igual, **tras confirmar** | igual, tras confirmar |
-| Promover el item al pagar | el catalogo y la miniatura **se mueven** con el original | `orders/{uid}/uploads/` |
-| Poda por vencimiento | elimina entradas huerfanas | borra originales y miniaturas vencidas |
+| Login (sesion anonima) | el catalogo de la sesion se **fusiona** en el de la cuenta | mueve originales + miniaturas a `orders/{uid}/uploads/` (idempotente) |
+| Promover el item al pagar | **no se mueve nada**: los originales ya viven en la carpeta de la cuenta | solo cambia el manifiesto del item |
+| Poda por vencimiento | elimina entradas huerfanas por `ultimo_uso`; **nunca** una imagen con pedido | borra originales y miniaturas vencidas |
+| Borrar una imagen con pedido (tras confirmar) | elimina la entrada | borra original + miniatura; ese pedido deja de poder regenerarse (aceptado) |
 | Catalogo ausente/corrupto | se reconstruye una vez (sin recetas) | no toca archivos |
 
 ## Volumen y limites

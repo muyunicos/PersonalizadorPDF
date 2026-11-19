@@ -17,7 +17,7 @@
 
 **Purpose**: nombres y helpers compartidos del ambito `uploads/`
 
-- [ ] T001 Agregar en `inc/class-pmu-uploads.php` las constantes del formato (`CATALOGO_UPLOADS = 'uploads.json'`, sufijo `-80x80.webp`) y un helper `dir_uploads_identidad($identidad)` que devuelve las carpetas de originales del comprador (sesion actual + `orders/{uid}/uploads/` cuando `uid > 0`).
+- [ ] T001 Agregar en `inc/class-pmu-uploads.php` las constantes del formato (`CATALOGO_UPLOADS = 'uploads.json'`, sufijo `-80x80.webp`) y un helper `dir_uploads_identidad($identidad)` que devuelve **la carpeta de originales de la identidad** (`tmp/sesion-{sid}/uploads/` para invitado; `orders/{uid}/uploads/` para cliente).
 - [ ] T002 [P] Documentar en el docblock de `inc/class-pmu-uploads.php` que el catalogo es dato DERIVADO y reconstruible (FR-006) y que no se sirve por ruta propia (FR-013).
 
 ---
@@ -30,9 +30,15 @@
 - [ ] T003 Implementar `PMU_Uploads::catalogo_leer($dir)` (tolerante: ausente/ilegible/`version` desconocida = `null`) y `PMU_Uploads::catalogo_guardar($dir, array $datos)` (escritura atomica `.tmp` + `rename`, JSON con `version:1` e `items` mapa por `id`) en `inc/class-pmu-uploads.php`.
 - [ ] T004 [P] Implementar `PMU_Uploads::miniatura_generar($rutaOriginal, $lado = 80)` (GD, **cover al centro**, WebP q82) y `PMU_Uploads::miniatura_ruta($rutaOriginal)` -> `{id}-80x80.webp`, con degradacion a '' si falta GD o la imagen es ilegible, en `inc/class-pmu-uploads.php`.
 - [ ] T005 [P] Implementar `PMU_Uploads::catalogo_reconstruir($dir)` que arma el catalogo **solo desde los archivos** (`id`, `ext`, `bytes`, `w`, `h`, `creado`), **sin recetas** (aclaracion 2026-11-19), omitiendo `uploads.json` y las miniaturas, en `inc/class-pmu-uploads.php`.
-- [ ] T006 Actualizar `PMU_Sesion::guardar_subida()` en `inc/class-pmu-sesion.php` para hacer upsert de la entrada del catalogo (`ext`, `bytes`, `w`, `h` con `w/h >= 1`, `creado`) y generar `{id}-80x80.webp`; re-subir el mismo contenido refresca la entrada sin duplicar.
-- [ ] T007 Actualizar el camino de declaracion de receta (spec 035 D9, `registrar_fotos`) en `inc/class-pmu-sesion.php` para upsert de `recetas["{gid}-{w}x{h}-{phsize}"]` con `params` validados y `ts`, descartando `params` invalidos.
+- [ ] T006 Actualizar `PMU_Sesion::guardar_subida()` en `inc/class-pmu-sesion.php` para escribir en **la carpeta de la identidad** (cliente -> `orders/{uid}/uploads/`; invitado -> `tmp/sesion-{sid}/uploads/`) y **delegar** en `PMU_Uploads::catalogo_upsert()` (dueno unico del catalogo) el alta/refresh de la entrada (`ext`, `bytes`, `w`, `h` con `w/h >= 1`, `creado`, `ultimo_uso`) y generar `{id}-80x80.webp`; re-subir el mismo contenido refresca la entrada sin duplicar.
+- [ ] T007 Actualizar el camino de declaracion de receta (spec 035 D9, `registrar_fotos`) en `inc/class-pmu-sesion.php` para **delegar** en `PMU_Uploads::catalogo_upsert()` el upsert de `recetas["{gid}-{w}x{h}-{phsize}"]` con `params` validados y `ts`, descartando `params` invalidos.
 - [ ] T008 Agregar a `tests/texto_puente.php` (fase `biblioteca`) las aserciones del catalogo: existe tras subir, trae `w/h`, la receta aparece con su clave y la reconstruccion **no** recupera recetas (`php -l tests/texto_puente.php` + `php tests/texto_puente.php biblioteca`).
+
+- [ ] T029 Ciclo de vida (FR-016): al promover el item a pedido **no se mueven originales** (ya estan en la carpeta de la cuenta); ajustar `trasladar_originales()` en `inc/class-pmu-sesion.php` para que sea no-op/idempotente y mueva solo el manifiesto, dejando el catalogo del cliente intacto.
+- [ ] T030 Ciclo de vida (FR-017): extender la poda en `inc/class-pmu-sesion.php` para usar el **ultimo uso** del catalogo, **nunca** eliminar imagenes con pedido y limpiar entradas/miniaturas huerfanas.
+- [ ] T031 Ciclo de vida (FR-018): migrar `tmp/sesion-{sid}/uploads/` -> `orders/{uid}/uploads/` al iniciar sesion (incluye el alta en el checkout): originales + miniaturas + fusion del catalogo, **idempotente y una sola vez**, en `inc/class-pmu-sesion.php`.
+
+> **Orden de ejecucion**: T029, T030 y T031 cierran la Fase 2 aunque sus IDs sean altos (se agregaron despues, por el analisis). Sin ellas, el catalogo queda sin mantenimiento (promover, podar) y el cliente no ve sus fotos de invitado.
 
 **Checkpoint**: catalogo y miniaturas listos; las historias pueden empezar.
 
@@ -45,10 +51,10 @@
 **Independent Test**: con 10 imagenes propias y pedidos de otros clientes, `op=listar` responde rapido,
 no incluye imagenes ajenas y una apertura del modal produce **una** solicitud.
 
-- [ ] T009 [US1] Reescribir la rama `op=listar` de `handle_biblioteca()` en `personalizador-pdf.php` para armar las fotos desde `dir_uploads_identidad()` + `catalogo_leer()` (dedupe por `id`, `orders` gana), sin leer manifiestos ni consultar pedidos ajenos (FR-001..FR-003, FR-002).
-- [ ] T010 [P] [US1] Cambiar `biblioteca_ruta_imagen()` en `personalizador-pdf.php` para resolver por `PMU_Sesion::resolver_original($id, $clave, $sid)` (cadena `orders -> tmp`), eliminando el recorrido de contenedores (FR-008).
+- [ ] T009 [US1] Reescribir la rama `op=listar` de `handle_biblioteca()` en `personalizador-pdf.php` para armar las fotos desde **la carpeta de la identidad** (`dir_uploads_identidad()`) + `catalogo_leer()`, sin leer manifiestos ni consultar pedidos ajenos (FR-001..FR-003).
+- [ ] T010 [P] [US1] Cambiar `biblioteca_ruta_imagen()` en `personalizador-pdf.php` para resolver por `PMU_Sesion::resolver_original($id, $clave, $sid)` **segun identidad** (cliente -> `orders/{clave}/uploads/`; invitado -> `tmp/sesion-{sid}/uploads/`), eliminando el recorrido de contenedores (FR-008).
 - [ ] T011 [US1] Ajustar `assets/biblioteca-pmu.js` al payload nuevo (`id`, `url`, `thumb`, `bytes`, `w`, `h`, `recetas`) manteniendo el dedupe en vuelo de `pedir()` y el calentado con copia fresca (SC-002).
-- [ ] T012 [US1] Actualizar `tests/biblioteca-contrato.test.js` (payload, dedupe, sin `contenedores`/`madre`) y los checks que hoy esperan `op=imagen` con `item_key`; correr `node tests/biblioteca-contrato.test.js`.
+- [ ] T012 [US1] Actualizar `tests/biblioteca-contrato.test.js` (payload, dedupe, sin `contenedores`/`madre`, y **sin ruta publica del catalogo**: ninguna rama sirve `uploads.json`, FR-013) y los checks que hoy esperan `op=imagen` con `item_key`; correr `node tests/biblioteca-contrato.test.js`.
 
 **Checkpoint**: US1 entregable (listado rapido) sin depender de las demas historias.
 
@@ -76,7 +82,7 @@ primario ofrece usarla sin cambios; con otra forma/tamano -> encuadre por defect
 **Independent Test**: con originales de 2000 px, cada miniatura servida pesa <20 KB y la tira se pinta
 sin descargar el original.
 
-- [ ] T016 [US3] Implementar `op=miniatura` en `personalizador-pdf.php`: resolver el original por `id`, servir `{id}-80x80.webp` (generarla si falta), `Content-Type: image/webp`, `ETag` y degradacion al original si no hay GD (FR-007, SC-004).
+- [ ] T016 [US3] **Adaptar** el `op=miniatura` existente en `personalizador-pdf.php` (hoy cachea en `tmp/miniaturas/`): servir `{id}-80x80.webp` junto al original (generarla si falta), `Content-Type: image/webp`, `ETag` y degradacion al original si no hay GD; retirar el cache viejo (FR-007, SC-004).
 - [ ] T017 [P] [US3] En `assets/biblioteca-pmu.js`, usar `thumb` para la tira y reservar `url` para la vista grande/recorte; verificar que el visor sigue navegando con URLs ya resueltas.
 - [ ] T018 [US3] Ampliar `node tests/fotos-contrato.test.js` y la fase `biblioteca` con la miniatura: existe tras subir, mide 80x80 y se regenera si se borra el archivo (`php tests/texto_puente.php biblioteca`).
 
@@ -92,8 +98,8 @@ confirmacion solo cuando la imagen esta en carrito o en un pedido.
 referencias la elimina directo; con una referencia en carrito pide confirmacion y, al aceptar, elimina.
 
 - [ ] T019 [US4] En `assets/cargador-pmu.js`, `_quitar()` deja de llamar `PMU_API.borrarFoto`: solo quita la referencia de la ranura (sin tocar archivo, miniatura ni catalogo). **Revierte la 039 D3** (FR-011).
-- [ ] T020 [P] [US4] En `personalizador-pdf.php`, implementar `op=borrar` en dos pasos: sin `confirmar`, si hay referencias en carrito/pedidos responder `requiere_confirmacion` + `referencias`; con `confirmar=1` (o sin referencias) borrar y responder `borrado` (FR-012, FR-014, FR-015).
-- [ ] T021 [US4] En `inc/class-pmu-sesion.php`, `referencias_en_carrito_o_pedidos($id)` (los borradores NO cuentan) y `borrar_imagen_galeria($id)` que elimina original, miniatura y entrada del catalogo cuando corresponde; nunca toca `orders/`.
+- [ ] T020 [P] [US4] En `personalizador-pdf.php`, **reemplazar** el `op=borrar` de un paso (039 D3) por el de dos pasos: sin `confirmar`, si hay referencias en carrito/pedidos responder `requiere_confirmacion` + `referencias`; con `confirmar=1` (o sin referencias) borrar y responder `borrado` (FR-012, FR-014, FR-015).
+- [ ] T021 [US4] En `inc/class-pmu-sesion.php`, `referencias_en_carrito_o_pedidos($id)` (los borradores NO cuentan) y `borrar_imagen_galeria($id)` que elimina original, miniatura y entrada del catalogo cuando corresponde (**delegando** la baja en `PMU_Uploads::catalogo_borrar()`); si la imagen esta en un pedido, la UI pide confirmacion y advierte que ese pedido deja de poder regenerarse (FR-019).
 - [ ] T022 [P] [US4] En `assets/biblioteca-pmu.js` (tira/acciones) y `assets/visor-pmu.js`, agregar la accion **Borrar** de la galeria usando el mini-dialogo de confirmacion existente cuando el servidor lo pida.
 - [ ] T023 [US4] Actualizar la fase `biblioteca` de `tests/texto_puente.php` (quitar no borra; borrar sin referencias; borrar con referencia pide confirmacion) y `node tests/biblioteca-contrato.test.js`.
 
@@ -107,7 +113,7 @@ referencias la elimina directo; con una referencia en carrito pide confirmacion 
 - [ ] T025 [P] Corregir las 41 referencias "spec 041" -> "spec 040" en `assets/selector-pmu.js`, `assets/cargador-pmu.js`, `assets/biblioteca-pmu.js`, `assets/tienda.js`, `inc/class-pmu-sesion.php`, `personalizador-pdf.php`, `tests/texto_puente.php`, `tests/campos-contrato.test.js`, `tests/biblioteca-contrato.test.js`.
 - [ ] T026 [P] Documentar: `AGENTS.md` §5 (formato `uploads.json` + `{id}-80x80.webp`), `docs/decisiones.md` (supersede 039 D3 + catalogo), `specs/INDICE.md` (fila 040) y `readme.txt` (changelog + version).
 - [ ] T027 Correr la bateria de `specs/040-catalogo-uploads/quickstart.md`: `php -l` (plugin, `admin/`, `engine/`, `inc/`), `node --check` de los JS tocados, suites JS (`tests/biblioteca-contrato.test.js`, `tests/fotos-contrato.test.js`, `tests/selector-contrato.test.js`, `tests/campos-contrato.test.js`, `tests/cola-subida.test.js`), fase `biblioteca` de `tests/texto_puente.php`, `tests/sin_lectura.php`, `tests/motor_smoke.php`, `tests/parity.php` y PHPStan sobre `engine/`.
-- [ ] T028 Verificar en navegador siguiendo `specs/040-catalogo-uploads/quickstart.md` §5: **una** solicitud `op=listar`, miniaturas de pocos KB, un click para abrir el recorte, encuadre recordado y borrado con confirmacion cuando corresponde.
+- [ ] T028 Verificar en navegador siguiendo `specs/040-catalogo-uploads/quickstart.md` §5: **una** solicitud `op=listar`, miniaturas de pocos KB, un click para abrir el recorte, encuadre recordado y, al borrar, confirmacion segun FR-014 (con pedido, aviso de FR-019).
 ---
 
 ## Dependencies & Execution Order

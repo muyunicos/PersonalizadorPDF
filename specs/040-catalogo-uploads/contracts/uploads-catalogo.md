@@ -14,6 +14,7 @@
       "w": 900,
       "h": 1200,
       "creado": 1761000000,
+      "ultimo_uso": 1761000456,
       "recetas": {
         "FF0000-1532x1145-1": {
           "gid": "FF0000",
@@ -59,7 +60,7 @@ Respuesta:
     {
       "id": "9f2c41ab0d7e",
       "url": "…&op=imagen&id=9f2c41ab0d7e…",
-      "thumb": "…&op=miniatura&id=9f2c41ab0d7e&w=128…",
+      "thumb": "…&op=miniatura&id=9f2c41ab0d7e…",
       "bytes": 412000,
       "w": 900,
       "h": 1200,
@@ -81,8 +82,7 @@ GET/POST con `_wpnonce`; `id` obligatorio (`item_key` opcional, compatibilidad).
 
 - `op=imagen`: bytes del original.
 - `op=miniatura`: bytes WebP 80x80 (o `w` 32..512). Sin GD o ilegible: se sirve el original.
-- Resolucion: `resolver_original($id, $clave, $sid)` (cadena `orders/{clave}/uploads` ->
-  `tmp/sesion-{sid}/uploads`). **Nunca** una ruta propuesta por el cliente.
+- Resolucion por identidad: cliente -> `orders/{clave}/uploads/`; invitado -> `tmp/sesion-{sid}/uploads/`. **Nunca** una ruta propuesta por el cliente.
 - `Cache-Control: private` + `ETag`.
 
 ## C5 — `op=borrar` (dos pasos)
@@ -95,9 +95,10 @@ POST `id=...`:
    responde `{"borrado": true, "referencias": N}`.
 
 - Los **borradores NO cuentan** como referencia.
+- Las imagenes del cliente **viven** en `orders/{uid}/uploads/`: el borrado las elimina **ahi**. Si la
+  imagen esta en un pedido, tras la confirmacion se borra igual y ese pedido **deja de poder
+  regenerarse** (FR-019, aceptado).
 - Idempotente: borrar dos veces no rompe (segunda: `borrado: false`).
-- **Nunca** toca `orders/` (lo comprado vive ahi): si la imagen esta en un pedido, la confirmacion lo
-  advierte pero el archivo del pedido no se elimina; solo el de la sesion actual.
 
 ## C6 — Errores
 
