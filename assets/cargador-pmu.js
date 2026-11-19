@@ -467,12 +467,11 @@
         });
     };
 
-    /** Sube el blob al item y, si el servidor devuelve id, lo anota. */
     /**
      * Spec 038 (F-RECETA): params v2 de la composicion de una ranura.
      *
-     * `_params()` y `_bibMadre` son de la INSTANCIA del selector (`selectores[i].sel`),
-     * NO del slot: leerlos del slot devolvia `{}` y el servidor guardaba la subida sin
+     * `_params()` vive en la INSTANCIA del selector (`selectores[i].sel`), NO en el
+     * slot: leerlo del slot devolvia `{}` y el servidor guardaba la subida sin
      * `receta` (spec 035 D9: sin receta no se puede componer despues).
      */
     CargadorPMU.prototype._paramsDe = function (indice) {
