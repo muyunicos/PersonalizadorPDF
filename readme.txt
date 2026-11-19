@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.31.0
+Stable tag: 4.32.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,18 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.32.0 =
+* "Cargar imagen" abre el recorte en **un solo toque**: el cargador expone `abrir()` y la
+  opcion `autoAbrir` (antes habia que pulsar dos veces).
+* Un campo con `min: 0` es **opcional** de verdad: ya no avisa "Faltan 1 imagen(es) por cargar"
+  en campos que no exigen nada.
+* La tira de "Mis imagenes" usa **miniaturas** (128 px, cacheadas por contenido): abre al
+  instante en vez de bajar la foto entera de cada entrada.
+* Se **recuerda el encuadre**: el listado publica la receta de cada imagen y el selector la
+  re-aplica solo si es de la misma forma y tamano.
+* Elegir una imagen ya subida muestra **Usar** (no `Subir`): si el encuadre no cambio, **no
+  viaja ningun byte** y el modal cierra al instante.
 
 = 4.31.0 =
 * Revision del Motor: **GD con soporte WebP pasa a ser requisito**. El motor ya no trae un
