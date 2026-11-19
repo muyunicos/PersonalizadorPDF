@@ -69,22 +69,26 @@ tamano de las fotos originales.
    genera una vez y se conserva.
 ---
 
-### User Story 4 - Baja consistente (Priority: P2)
+### User Story 4 - Quitar del campo no es borrar (Priority: P2)
 
-Al borrar una imagen, desaparecen el original, su miniatura y su entrada en el catalogo.
+Quitar una foto de un campo solo la saca de **ese** campo: la imagen sigue en la galeria del comprador.
+Borrar desde la galeria elimina el original, su miniatura y su entrada en el catalogo, y **pide
+confirmacion** si esa imagen esta en el carrito o en un pedido.
 
-**Why this priority**: evita catalogos fantasma que reaparezcan tras un borrado y mantiene la tira
-fiel a lo que el comprador tiene.
+**Why this priority**: hoy "quitar" y "borrar" se confunden; separarlos evita perder fotos que el
+comprador solo queria reemplazar en un campo.
 
-**Independent Test**: borrar una foto desde el visor; el listado siguiente no la muestra y no queda
-ningun archivo huerfano.
+**Independent Test**: quitar una foto de un campo y comprobar que sigue en la galeria; borrarla desde la
+galeria y comprobar que desaparece de archivos y catalogo.
 
 **Acceptance Scenarios**:
 
-1. **Given** una imagen referenciada solo por ese item, **When** se borra, **Then** se eliminan
-   original, miniatura y entrada del catalogo.
-2. **Given** una imagen que otro item de la sesion sigue usando, **When** se borra de un item,
-   **Then** la imagen sigue visible y su catalogo intacto.
+1. **Given** una imagen usada por un campo, **When** el comprador la quita de ese campo, **Then** la
+   imagen sigue en su galeria y solo se elimina esa referencia.
+2. **Given** una imagen referenciada por un item en carrito o por un pedido, **When** la borra desde la
+   galeria, **Then** se pide confirmacion y, tras aceptarla, se eliminan original, miniatura y catalogo.
+3. **Given** una imagen sin carrito ni pedidos (solo un borrador), **When** la borra desde la galeria,
+   **Then** se elimina directamente, sin confirmacion.
 
 ---
 
@@ -99,6 +103,15 @@ ningun archivo huerfano.
 - Una receta guardada con un tamano que ya no existe: se ignora.
 - Un invitado que despues inicia sesion: sus originales de la sesion invitada no se listan (limitacion
   aceptada; su compra si se conserva).
+
+## Clarifications
+
+### Session 2026-11-19
+
+- Q: ¿El archivo de catálogo puede quedar alcanzable por URL bajo la carpeta de uploads como los originales, o hay que impedir el acceso directo? → A: Igual que los originales: nunca se publica su URL y el acceso pasa por el endpoint protegido; su exposición física es la misma que la de los originales.
+- Q: Si falta el catálogo en una carpeta existente, ¿de dónde salen las recetas para reconstruirlo? → A: Solo desde los archivos (identificador, formato, peso, medidas y fecha). Las recetas NO se recuperan y esas imágenes quedan con el encuadre por defecto.
+- Q: Al borrar una imagen desde un ítem, ¿cómo se decide si se eliminan archivo, miniatura y entrada del catálogo? → A: Quitar desde un campo NO elimina la imagen: solo quita esa referencia del campo. El borrado vive en la galería: consulta referencias solo en ítems de CARRITO y en PEDIDOS (los borradores no cuentan); si hay alguna, pide confirmación, y si no, borra directamente (archivos + catálogo).
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
@@ -111,8 +124,9 @@ ningun archivo huerfano.
 - **FR-004**: Cada ambito de originales MUST mantener un catalogo con, por imagen: identificador,
   formato, peso, medidas, fecha de alta y sus recetas por contexto (forma + tamano + phsize).
 - **FR-005**: El catalogo MUST actualizarse al subir, al declarar una receta y al borrar.
-- **FR-006**: Si el catalogo falta o esta corrupto, el sistema MUST reconstruirlo una sola vez sin
-  bloquear la biblioteca.
+- **FR-006**: Si el catalogo falta o esta corrupto, el sistema MUST reconstruirlo una sola vez **solo
+  desde los archivos** (identificador, formato, peso, medidas y fecha), **sin recuperar recetas** y sin
+  bloquear la biblioteca. Esas imagenes quedan con el encuadre por defecto.
 - **FR-007**: Cada imagen MUST tener una miniatura cuadrada recortada al centro (80x80) generada al
   subir; si falta, MUST generarse al pedirla y conservarse.
 - **FR-008**: La lectura de una imagen o de su miniatura por identificador MUST resolver la ubicacion
@@ -121,12 +135,22 @@ ningun archivo huerfano.
   si existe; en caso contrario MUST usar el encuadre por defecto.
 - **FR-010**: Imagen, miniatura y catalogo MUST respetar la misma politica de acceso que hoy: solo su
   dueno las obtiene, y nunca por una ruta que el cliente proponga.
-- **FR-011**: Catalogo y miniatura MUST acompanar al original cuando este se mueve a la carpeta del
+- **FR-011**: Quitar una imagen de un campo (su ranura) MUST NOT eliminar el original, su miniatura ni
+  su entrada de catalogo: solo elimina la referencia de ese campo.
+- **FR-012**: Borrar una imagen desde la galeria MUST eliminar el original, su miniatura y su entrada
+  de catalogo.
+- **FR-013**: El catalogo MUST NOT publicarse ni servirse por una ruta propia: su unica via de lectura
+  es la protegida que ya sirven las imagenes y sus miniaturas. Comparte la carpeta fisica de los
+  originales y, por lo tanto, su misma exposicion.
+- **FR-014**: Antes de borrar desde la galeria, el sistema MUST consultar las referencias en items de
+  CARRITO y en PEDIDOS (los borradores NO cuentan). Si hay alguna, MUST pedir confirmacion explicita y
+  borrar solo si el comprador acepta.
+- **FR-015**: Una imagen sin referencias en carrito ni pedidos MUST borrarse directamente, sin
+  confirmacion.
+- **FR-016**: Catalogo y miniatura MUST acompanar al original cuando este se mueve a la carpeta del
   pedido, y MUST borrarse con el.
-- **FR-012**: La poda por vencimiento MUST dejar el ambito sin originales, miniaturas ni entradas de
+- **FR-017**: La poda por vencimiento MUST dejar el ambito sin originales, miniaturas ni entradas de
   catalogo huerfanas.
-- **FR-013**: El catalogo MUST NOT exponerse como archivo publico; su lectura MUST pasar por la misma
-  via protegida que las imagenes.
 
 ### Key Entities
 
@@ -154,5 +178,8 @@ ningun archivo huerfano.
 - Las miniaturas son cuadradas, recorte al centro, 80x80.
 - El catalogo vive dentro del ambito de originales y es dato derivado: se puede reconstruir.
 - La politica de acceso y el endpoint protegido actuales se mantienen; no se publican rutas crudas.
-- El borrado de una imagen sigue la regla actual: si otro item de la sesion la usa, el archivo y su
-  catalogo se conservan.
+- El catalogo comparte la carpeta fisica de los originales: su exposicion es la misma que la de ellos y
+  nunca se publica su URL.
+- Reconstruir el catalogo NO recupera recetas: se prioriza no bloquear la apertura de la biblioteca.
+- El borrado de una imagen vive en la galeria y **supersede** la 039 D3 (borrado en el acto desde el
+  visor del campo): quitar una foto de un campo ya **no** borra el original.
