@@ -72,6 +72,15 @@
             '.pmu-visor-acciones{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}' +
             '.pmu-visor-acciones .button{min-height:42px;padding:6px 18px;font-size:14px}' +
             '.pmu-visor-peligro{background:#d63638 !important;border-color:#d63638 !important;color:#fff !important}' +
+            // Spec 039 (D1): mini-dialogo de confirmacion propio del visor (no `confirm()`
+            // del navegador). Vive dentro del overlay, asi el tema no lo tapa y hereda el
+            // foco atrapado del visor.
+            '.pmu-visor-confirmar-fondo{position:absolute;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:2}' +
+            '.pmu-visor-confirmar{background:#fff;color:#1d2327;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.5);max-width:min(92vw,420px);padding:18px 18px 14px;box-sizing:border-box}' +
+            '.pmu-visor-confirmar-txt{margin:0 0 6px;font-size:15px;font-weight:600;color:inherit}' +
+            '.pmu-visor-confirmar-detalle{margin:0 0 12px;font-size:13px;line-height:1.45;color:#50575e;white-space:pre-line}' +
+            '.pmu-visor-confirmar-botones{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}' +
+            '.pmu-visor-confirmar-botones .button{min-height:40px;padding:6px 16px;font-size:14px}' +
             // Cuando el visor es el del TEMA (`MU.visor`) y el plugin lo abre sobre su
             // propio modal (`.spmu-modal`, z-index 180000), hay que elevarlo: el overlay
             // del tema vive en 99999 y el modal del plugin lo tapaba.
@@ -165,6 +174,107 @@
      * nada. Las `acciones` las declara quien abre (Reemplazar/Eliminar en la
      * ranura; Elegir/Borrar en la biblioteca).
      */
+    /**
+     * Spec 039 (D1): mini-dialogo de confirmacion PROPIO del visor.
+     *
+     * Sustituye al `confirm()` del navegador (bloqueante y con el estilo del SO): pinta un
+     * panel dentro del overlay del visor, atrapa el foco y resuelve `true`/`false`. Vive en
+     * `assets/visor-pmu.js` (no en cada consumidor) para que lo reusen la ranura del campo y
+     * "Mis imagenes" sin duplicar logica.
+     *
+     * @param {Object} opts `{titulo, detalle, textoOk, textoCancelar, alResolver}`
+     * @returns {Promise<boolean>} true si confirma
+     */
+    function confirmar(opts) {
+        opts = opts || {};
+        var doc = estilo || global.document;
+        var base = visor || (doc && doc.body);
+        if (!doc || !base || !doc.createElement) {
+            // Sin DOM (Node/tests o visor cerrado): no se puede preguntar. Se resuelve
+            // `false` (cancelar) para que el llamador nunca borre por accidente.
+            return Promise.resolve(false);
+        }
+        return new Promise(function (resolver) {
+            var fondo = doc.createElement('div');
+            fondo.className = 'pmu-visor-confirmar-fondo';
+            var panel = doc.createElement('div');
+            panel.className = 'pmu-visor-confirmar';
+            panel.setAttribute('role', 'alertdialog');
+            panel.setAttribute('aria-modal', 'true');
+            var txt = doc.createElement('p');
+            txt.className = 'pmu-visor-confirmar-txt';
+            txt.textContent = String(opts.titulo || 'Confirmar');
+            panel.appendChild(txt);
+            if (opts.detalle) {
+                var det = doc.createElement('p');
+                det.className = 'pmu-visor-confirmar-detalle';
+                det.textContent = String(opts.detalle);
+                panel.appendChild(det);
+            }
+            var botones = doc.createElement('div');
+            botones.className = 'pmu-visor-confirmar-botones';
+            var bCancelar = doc.createElement('button');
+            bCancelar.type = 'button';
+            bCancelar.className = 'button';
+            bCancelar.textContent = String(opts.textoCancelar || 'Cancelar');
+            var bOk = doc.createElement('button');
+            bOk.type = 'button';
+            bOk.className = 'button button-primary';
+            bOk.textContent = String(opts.textoOk || 'Borrar');
+            botones.appendChild(bCancelar);
+            botones.appendChild(bOk);
+            panel.appendChild(botones);
+            fondo.appendChild(panel);
+
+            var prevFoco = doc.activeElement;
+            function terminar(valor) {
+                doc.removeEventListener('keydown', enTeclado, true);
+                if (fondo.parentNode) { fondo.parentNode.removeChild(fondo); }
+                if (prevFoco && typeof prevFoco.focus === 'function') { prevFoco.focus(); }
+                if (typeof opts.alResolver === 'function') {
+                    try { opts.alResolver(valor); } catch (e) { /* el consumidor decide */ }
+                }
+                resolver(valor);
+            }
+            // Escape = cancelar. Enter en el panel no confirma (evita el borrado por
+            // un enter perdido al abrir el dialogo).
+            function enTeclado(e) {
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    terminar(false);
+                }
+            }
+            bCancelar.addEventListener('click', function () { terminar(false); });
+            bOk.addEventListener('click', function () { terminar(true); });
+            fondo.addEventListener('click', function (e) {
+                if (e.target === fondo) { terminar(false); }
+            });
+            doc.addEventListener('keydown', enTeclado, true);
+            base.appendChild(fondo);
+            bCancelar.focus();
+        });
+    }
+
+    /**
+     * Ejecuta una accion del visor. Si declara `confirmar: true`, primero pregunta con
+     * el mini-dialogo propio (D1) y **no** ejecuta `onAccion` si el usuario cancela.
+     */
+    function ejecutarAccion(ac, indice) {
+        if (!ac) { return; }
+        if (!ac.confirmar) {
+            if (typeof ac.onAccion === 'function') { ac.onAccion(indice); }
+            return;
+        }
+        confirmar({
+            titulo: ac.pregunta || 'Borrar esta imagen?',
+            detalle: ac.detalle || '',
+            textoOk: ac.textoOk || 'Borrar'
+        }).then(function (ok) {
+            if (ok && typeof ac.onAccion === 'function') { ac.onAccion(indice); }
+        });
+    }
+
     function abrir(opts) {
         opts = opts || {};
         var items = (opts.items || []).filter(function (it) { return it && it.url; });
@@ -248,9 +358,7 @@
             b.type = 'button';
             b.className = 'button ' + String(ac.clase || '');
             b.textContent = String(ac.etiqueta || '');
-            b.addEventListener('click', function () {
-                if (typeof ac.onAccion === 'function') { ac.onAccion(pos); }
-            });
+            b.addEventListener('click', function () { ejecutarAccion(ac, pos); });
             pie.appendChild(b);
         });
         modal.appendChild(pie);
@@ -307,6 +415,7 @@
     }
 
     var api = { abrir: abrir, cerrar: cerrar, estaAbierto: estaAbierto,
+        confirmar: confirmar,
         puro: { preCargar: preCargar, acotar: acotar } };
     global.PMUVisor = api;
     if (typeof module !== 'undefined' && module.exports) { module.exports = api; }

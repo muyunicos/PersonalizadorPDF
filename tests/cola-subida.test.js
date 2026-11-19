@@ -146,12 +146,27 @@ function nuevaCola(extra) {
 // == 0: predicado unico "completo" (spec 036, T006/R9) ==
 // ---------------------------------------------------------------------------
 const PURO = require('../assets/tienda.js');
+const tiendaSrc = require('fs').readFileSync(require('path').join(__dirname, '..', 'assets', 'tienda.js'), 'utf8');
 check('sin estado = completo (nada que esperar)', PURO.estaCompleto() === true);
 check('un hueco sin completar NO esta completo', PURO.estaCompleto({ faltanFotos: 1 }) === false);
 check('una subida en vuelo NO esta completo', PURO.estaCompleto({ subidas: 2 }) === false);
 check('validez que rechaza NO esta completo', PURO.estaCompleto({ validez: false }) === false);
 check('todo subido + sin faltantes + validez OK = completo',
     PURO.estaCompleto({ faltanFotos: 0, subidas: 0, validez: true }) === true);
+
+// ---------------------------------------------------------------------------
+// == Spec 039 (H5): la cola dice QUE queda en vuelo, no solo cuantas ==
+// ---------------------------------------------------------------------------
+check('039 H5: el aviso de cola distingue 1 pendiente (singular)',
+    /pendiente' \+ \(n === 1 \? '' : 's'\)/.test(tiendaSrc)
+    && /Estamos recibiendo tus archivos \(' \+ n \+ ' pendiente/.test(tiendaSrc));
+check('039 H5: `api.subidas` expone detalle() con {total, campos}',
+    /detalle: function \(\) \{/.test(tiendaSrc)
+    && /return \{ total: total, campos: porCampo \}/.test(tiendaSrc));
+check('039 H5: refrescarMinimos avisa de la cola cuando no faltan fotos',
+    /\} else if \(bloqueos\.subidas\) \{/.test(tiendaSrc));
+check('039 H5: la cola no cuenta dos veces (usa pendientes(), no lista a ciegas)',
+    /parseInt\(c\.pendientes\(\), 10\) \|\| 0/.test(tiendaSrc));
 
 console.log('\nCOLA SUBIDA OK (' + checks + ' checks)');
     if (fallos) { process.exit(1); }

@@ -769,9 +769,8 @@
         // Spec 030 (D8): la RECETA de la composicion viaja CON la subida: el servidor la
         // estampa en la fila y despues `Elegir` puede reconocerla (si no, `recetas: []`).
         fd.append('params', JSON.stringify((ctx && ctx.params) || {}));
-        // Spec 030 (5a): la familia de origen (cuando la foto se elige de la biblioteca): el
-        // servidor la valida contra su escaneo y evita una familia duplicada en la tira.
-        fd.append('madre_origen', String((ctx && ctx.madre_origen) || ''));
+        // Spec 039 (D6): `madre_origen` se retiro con las "familias" (el servidor
+        // deduplica por `sha`, D24 de la 035).
         return postAjax(fd).then(function (json) {
             if (!json || !json.success) {
                 throw new Error((json && json.data) || 'motor:subida:falla');
@@ -1225,6 +1224,22 @@
             }
             if (faltan > 0) {
                 aviso.textContent = 'Faltan ' + faltan + ' foto(s) por cargar.';
+                aviso.style.display = '';
+            } else if (bloqueos.subidas) {
+                // Spec 039 (H5): si lo unico que falta es que termine la cola, se dice
+                // CUANTO queda (no solo que "algo" pasa): el comprador no se queda
+                // mirando un boton apagado sin explicacion.
+                var det = { total: 0, campos: {} };
+                try {
+                    var apiDet = (global.PMU_API && global.PMU_API.subidas
+                        && typeof global.PMU_API.subidas.detalle === 'function')
+                        ? global.PMU_API.subidas.detalle() : null;
+                    if (apiDet) { det = apiDet; }
+                } catch (e) { /* sin detalle: se avisa con el total */ }
+                var n = parseInt(det.total, 10) || 0;
+                aviso.textContent = (n > 0)
+                    ? 'Estamos recibiendo tus archivos (' + n + ' pendiente' + (n === 1 ? '' : 's') + ').'
+                    : 'Estamos recibiendo tus archivos.';
                 aviso.style.display = '';
             } else {
                 aviso.textContent = '';
@@ -1955,7 +1970,25 @@
         // consume US3 para el aviso "Estamos recibiendo tus archivos".
         api.subidas = {
             vaciar: function () { return colaDeSubidas().vaciar(); },
-            pendientes: function () { return colaDeSubidas().pendientes(); }
+            pendientes: function () { return colaDeSubidas().pendientes(); },
+            // Spec 039 (H5): QUE queda en vuelo (no solo cuantas). Se cuenta por campo
+            // desde los `campos` que ya tiene la cola, para que el aviso pueda decir
+            // "estamos recibiendo N imagen(es)" y el comprador sepa que no esta colgado.
+            detalle: function () {
+                var c = colaDeSubidas();
+                var total = (typeof c.pendientes === 'function')
+                    ? (parseInt(c.pendientes(), 10) || 0) : 0;
+                var porCampo = {};
+                try {
+                    var lista = (typeof c.lista === 'function') ? (c.lista() || []) : [];
+                    lista.forEach(function (t) {
+                        var cid = String((t && t.campo) || '');
+                        var k = cid === '' ? '?' : cid;
+                        porCampo[k] = (porCampo[k] || 0) + 1;
+                    });
+                } catch (e) { /* sin detalle: se reporta solo el total */ }
+                return { total: total, campos: porCampo };
+            }
         };
         // Spec 036 (T025): estado del auto-montaje (diagnostico y puertas).
         api.montaje = function () {
@@ -1998,21 +2031,37 @@
                 return url;
             });
         };
-        // Spec 018 (T004): montar cargador desde el campo.
-        api.usarBiblioteca = function (madre, params, cid, ctxUsar) {
-            if (!window.PMUBiblioteca || !window.PMUBiblioteca.usar) {
-                return Promise.resolve(null);
-            }
+        // Spec 039 (D3): baja en el acto de una foto del item (fila del manifest +
+        // archivo compartido si nadie mas lo usa). Espera a que la cola de subida
+        // quede vacia (para no borrar algo que todavia se esta subiendo) e invalida
+        // la copia local de la biblioteca.
+        api.borrarFoto = function (id) {
             var ses = api.sesion || {};
-            var gidU = '';
-            (ficha.campos || []).forEach(function (c) {
-                if (c && parseInt(c.id, 10) === cid && c.grupo_gid) { gidU = String(c.grupo_gid); }
-            });
-            return window.PMUBiblioteca.usar(String(madre || ''), {
-                item_key: ses.item_key || '', pdf: api.pdf || '', grupo: gidU,
-                indice: 0, params: params || {}
+            var esperar = (typeof colaDeSubidas().vaciar === 'function')
+                ? colaDeSubidas().vaciar() : Promise.resolve();
+            return Promise.resolve(esperar).then(function () {
+                var fd = new FormData();
+                fd.append('action', 'personalizador_pdf_biblioteca');
+                fd.append('op', 'borrar');
+                fd.append('item_key', ses.item_key || '');
+                fd.append('id', String(id || ''));
+                fd.append('_wpnonce', cfg.nonceVistaPrevia || '');
+                return postAjax(fd).then(function (json) {
+                    if (!json || !json.success) {
+                        throw new Error((json && json.data) || 'motor:borrar:falla');
+                    }
+                    // La tira cambio: se vuelve a pedir la lista (no se parchea).
+                    if (window.PMUBiblioteca && typeof window.PMUBiblioteca.invalidar === 'function') {
+                        window.PMUBiblioteca.invalidar();
+                    }
+                    return json.data || {};
+                });
             });
         };
+        // Spec 039 (D6): `api.usarBiblioteca` se retiro con la rama de reuso `Elegir`
+        // (0 bytes). La tira de "Mis imagenes" carga directo (D4) y el servidor
+        // deduplica por `sha` (D24 de la 035).
+        // Spec 018 (T004): montar cargador desde el campo.
         api.montarCargador = function (el, opts) {
             opts = opts || {};
             var campo = opts.campo || {};
@@ -2083,13 +2132,7 @@
                 onRecorte: function (id, url, receta) { anotarRecorte(id, url, receta); },
                 urlDe: api.urlDeSubida,
                 subir: function (blob, ctx) { return api.subirFoto(blob, cid, ctx); },
-                // Spec 030 (T014/D8): Elegir sin recomponer. Devuelve `{fila}` o
-                // `{coincide:false}`; el id de la fila entra al estado de la ranura
-                // (lo hace el cargador al escuchar `usado`) y la Vista previa lo
-                // registra sola (spec 029: `subidas/{id}`, sin copias).
-                usar: function (madre, params, ctxUsar) {
-                    return api.usarBiblioteca(madre, params, cid, ctxUsar);
-                },
+                // Spec 039 (D6): `usar` se retiro con la rama de reuso `Elegir`.
                 onChange: function (est) {
                     if (cid < 1) { return; }
                     if (!api.estado[cid]) { api.estado[cid] = { valor: null, cliente: '' }; }

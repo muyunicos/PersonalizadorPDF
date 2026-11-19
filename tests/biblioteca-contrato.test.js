@@ -42,8 +42,10 @@ check('la tira pinta hasta 10 fotos y no dibuja si esta vacia',
     /var TOPE_TIRA = 10;/.test(bib) && /if \(!fotos \|\| !fotos\.length\)/.test(bib));
 check('guarda solo metadatos: usa la url del endpoint y no la resuelve por POST',
     /img\.src = String\(urlResuelta \|\| f\.thumb \|\| f\.url/.test(bib) && !/urlDeSubida/.test(bib));
-check('el visor es el COMPARTIDO y la accion es Elegir',
-    /global\.PMUVisor\.abrir\(\{/.test(bib) && /etiqueta: .Elegir./.test(bib));
+check('el visor de la biblioteca se retiro: tocar una miniatura ELIGE (D4)',
+    /function elegir\(indice\)/.test(bib)
+    && /function visor\(indice\) \{ return elegir\(indice\); \}/.test(bib)
+    && !/global\.PMUVisor\.abrir\(\{/.test(bib));
 
 console.log('== Modal de recorte (T013) ==');
 check('el modal monta la tira SIEMPRE visible (sin boton de biblioteca)',
@@ -58,7 +60,7 @@ check('visor-pmu.js expone abrir/cerrar y precarga vecinos',
 check('la tira de la biblioteca delega en el MOTOR del tema (D26, blanda)',
     /function delegarTira/.test(bib) && /delegarTira\(el, fotos\)/.test(bib)
     && /tema\.coleccion\(el, \{/.test(bib) && /navegable: false/.test(bib)
-    && /onChip: function \(cuantos, desde\) \{ visor\(desde \|\| 0\); \}/.test(bib));
+    && /onChip: function \(cuantos, desde\) \{ elegir\(desde \|\| 0\); \}/.test(bib));
     check('el visor delega en el MOTOR DEL TEMA cuando esta (D11, blanda)',
     /function delegarTema/.test(visor) && /global\.MU/.test(visor)
     && /typeof tema\.visor/.test(visor) && /delegado = tema;/.test(visor));
@@ -66,6 +68,26 @@ check('el visor delegado se eleva sobre el modal del plugin (z-index)',
     /pmu-visor--sobre/.test(visor) && /z-index:200000 !important/.test(visor));
 check('la ranura usa el visor compartido (no uno propio)',
     /_abrirVisorCompartido/.test(carg) && /global\.PMUVisor\.abrir\(\{/.test(carg));
+
+console.log('== Spec 039 D1: mini-dialogo de confirmacion del visor ==');
+check('visor-pmu.js expone confirmar()',
+    /confirmar: confirmar,/.test(visor) && /function confirmar\(opts\)/.test(visor));
+check('el mini-dialogo es propio (no confirm() del navegador)',
+    !/window\.confirm\(/.test(visor) && !/\bglobal\.confirm\(/.test(visor)
+    && /pmu-visor-confirmar/.test(visor));
+check('el panel atrapa el foco y Escape cancela',
+    /prevFoco/.test(visor) && /prevFoco\.focus\(\)/.test(visor)
+    && /e\.key === 'Escape'/.test(visor) && /terminar\(false\)/.test(visor));
+check('las acciones pasan por ejecutarAccion (confirmar antes de onAccion)',
+    /function ejecutarAccion/.test(visor)
+    && /b\.addEventListener\('click', function \(\) \{ ejecutarAccion\(ac, pos\); \}\);/.test(visor));
+check('la ranura declara Eliminar con confirmar: true',
+    /etiqueta: 'Eliminar', clase: 'pmu-visor-peligro', confirmar: true/.test(carg)
+    && /pregunta: 'Borrar esta imagen\?'/.test(carg));
+check('tras borrar el visor NO se reabre sobre la misma posicion (D1/H2)',
+    !/onAccion: function \(p\) \{ self\._quitar\(indice, p\); self\._abrirVisorCompartido\(indice, p\); \}/.test(carg));
+check('sin DOM (Node) confirmar resuelve false (nunca borra por accidente)',
+    /if \(!doc \|\| !base \|\| !doc\.createElement\) \{[\s\S]{0,200}return Promise\.resolve\(false\);/.test(visor));
 
 console.log('== Encolado (T011) ==');
 check('la ficha encola el visor y la biblioteca, con el visor como dependencia',
@@ -77,22 +99,22 @@ console.log('== Tira adaptativa y tap (2026-10-21) ==');
 check('la tira se adapta al ANCHO (sin scroll) y reserva el tile N+',
     /var ANCHO_MINI = 64;/.test(bib) && /function caben\(el\)/.test(bib)
     && /overflow:hidden/.test(bib) && /Math\.max\(1, cabe - 1\)/.test(bib));
-check('el tap de una miniatura abre el visor (no elige directo)',
-    /addEventListener\('click', function \(\) \{ visor\(i\); \}\)/.test(bib)
-    && !/if \(onElegir\) \{ onElegir\(f\); \}/.test(bib));
+check('el tap de una miniatura ELIGE directo (D4: carga en el modal, sin visor)',
+    /addEventListener\('click', function \(\) \{ elegir\(i\); \}\)/.test(bib)
+    && !/addEventListener\('click', function \(\) \{ visor\(i\); \}\)/.test(bib));
 check('se repinta al cambiar el tamaño sin volver a pedir',
     /'resize'/.test(bib) && /pintarTira\(ultimoEl, ultimas\)/.test(bib));
 
-console.log('== Borrado multiple y aviso (2026-10-21) ==');
-check('borrar NO cierra la galeria: refresca la lista y sigue en la misma posicion',
-    /invalidar\(\);\s*return pedir\(\);/.test(bib) && /visor\(Math\.min\(i, restantes\.length - 1\)\)/.test(bib));
+console.log('== Borrado en el acto (spec 039 D3) ==');
+check('la biblioteca ya no borra: borrar vive en el visor del campo (D1/D3)',
+    !/pedirOp\('borrar'/.test(bib) && !/global\.confirm\(/.test(bib)
+    && /Borrar se hace desde el visor del CAMPO/.test(bib));
 check('el aviso excluye el item que se esta editando (D17)',
-    /fd\.append\('item_key', String\(c\.item \|\| ''\)\)/.test(bib) && /item: s\.item_key \|\| ''/.test(bib));
+    /item: s\.item_key \|\| ''/.test(bib) || /fd\.append\('item_key', String\(c\.item \|\| ''\)\)/.test(bib));
 
-console.log('== Elegir sin recomponer (D8) ==');
-check('usar() postea op=usar con item/pdf/grupo/indice/params e invalida la copia',
-    /fd\.append\('op', 'usar'\)/.test(bib) && /fd\.append\('params', JSON\.stringify\(datos\.params \|\| \{\}\)\)/.test(bib)
-    && /if \(json\.data && json\.data\.fila\) \{ invalidar\(\); \}/.test(bib) && /usar: usar/.test(bib));
+console.log('== Spec 039 D6: se retiro `usar` (Elegir de 0 bytes) ==');
+check('PMUBiblioteca ya no expone usar()',
+    !/usar: usar/.test(bib) && !/function usar\(madre, datos\)/.test(bib));
 
 console.log('== Auto-open condicionado (4a clarificacion) ==');
 check('el selector de archivos se auto-abre SOLO si la biblioteca esta vacia',
@@ -100,12 +122,29 @@ check('el selector de archivos se auto-abre SOLO si la biblioteca esta vacia',
 check('calentar() solo corre con URL y fetch (spec 036 D7: con el primer gesto, NO en load)',
     /if \(config\(\)\.url && typeof global\.fetch === 'function'\)/.test(bib));
 
-console.log('== Elegir: la receta la decide el servidor (D8) ==');
-check('op=usar no escribe si la receta no coincide y avisa coincide:false',
-    /coincide' => false/.test(plugin)
-    && /in_array\(\$recetaUsar, \(array\)\(\$fam\['recetas'\] \?\? \[\]\), true\)/.test(plugin));
-check('usar() solo invalida la copia cuando hay fila escrita',
-    /if \(json\.data && json\.data\.fila\) \{ invalidar\(\); \}/.test(bib));
+console.log('== Spec 039 D6: se retiro `Elegir` del selector ==');
+check('el selector ya no tiene `_bibMadre`/`_yaElegido`/`_paramsBase`',
+    !/_bibMadre/.test(sel) && !/_yaElegido/.test(sel) && !/_paramsBase/.test(sel));
+check('el primario dice SIEMPRE `Subir` (sin rama de reuso)',
+    /prototype\._actualizarPrimario = function/.test(sel) && /ok\.textContent = 'Subir';/.test(sel));
+check('el selector expone obtenerBlobFallido() para reintentar (spec 039 D2)',
+    /prototype\.obtenerBlobFallido = function/.test(sel) && /_falloSubida/.test(sel));
+
+console.log('== Cargador: receta y reintento (spec 039) ==');
+check('el cargador pasa params al subir (sin usar ni madre_origen)',
+    /params: this\._paramsDe\(indice\)/.test(carg)
+    && /CargadorPMU\.prototype\._paramsDe = function/.test(carg)
+    && !/usar: self\.config\.usar \? function \(madre, params\)/.test(carg)
+    && !/madre_origen: this\._madreDe\(indice\)/.test(carg));
+check('el cargador registra el fallo y reintenta al tocar la miniatura',
+    /_anotarFallo\(indice, \{/.test(carg) && /prototype\._reintentar = function/.test(carg)
+    && /prototype\._falloEn = function/.test(carg));
+check('la miniatura fallida se marca y su toque NO abre el visor',
+    /cpmu-mini-fallo/.test(carg) && /data-pmu-fallo/.test(carg));
+
+console.log('== Tienda: sin usarBiblioteca (spec 039 D6) ==');
+check('tienda.js ya no expone usarBiblioteca ni cablea usar al cargador',
+    !/api\.usarBiblioteca = function/.test(tienda) && !/usar: function \(madre, params, ctxUsar\)/.test(tienda));
 
 console.log('== Params de receta en el selector (T014/D7) ==');
 check('el selector sabe sus params con los 15 campos de la receta v2',
@@ -113,25 +152,22 @@ check('el selector sabe sus params con los 15 campos de la receta v2',
     && /v: 2/.test(sel) && /ox: origen\.x \/ w/.test(sel) && /rot: this\.rotacion \|\| 0/.test(sel)
     && /iw: dim\.w/.test(sel));
 
-console.log('== Elegir en el selector (T014/D8) ==');
-check('el selector tiene el guard de Elegir, la etiqueta y la fuente de biblioteca',
-    /prototype\._actualizarPrimario = function/.test(sel) && /self\._bibMadre = String\(\(foto && foto\.madre\)/.test(sel)
-    && /selfB\._emitir\('usado'/.test(sel) && /_paramsBase === JSON\.stringify\(this\._params\(\)\)/.test(sel));
-check('el guard cae al camino normal cuando el servidor no reusa (coincide:false)',
-    /selfB\._aceptar\(\);\s*\n\s*\}\)\.catch/.test(sel) && /selfB\._aceptar\(\);/.test(sel));
+console.log('== Params de receta en el selector (T014/D7, vigente) ==');
+check('el selector sabe sus params con los 15 campos de la receta v2',
+    /prototype\._params = function/.test(sel) && /modo: modoCanonico\(this\.config\.mode\)/.test(sel)
+    && /v: 2/.test(sel) && /ox: origen\.x \/ w/.test(sel) && /rot: this\.rotacion \|\| 0/.test(sel)
+    && /iw: dim\.w/.test(sel));
 
-console.log('== Cargador: reuso y receta (T014) ==');
-check('el cargador pasa params al subir y una funcion usar al selector',
-    /params: this\._paramsDe\(indice\)/.test(carg)
-    && /CargadorPMU\.prototype\._paramsDe = function/.test(carg)
-    && /usar: self\.config\.usar \? function \(madre, params\)/.test(carg));
-check('el cargador escucha el evento usado y anota el id de la fila',
-    /sel\.on\('usado', function \(dato\)/.test(carg) && /dato\.fila && dato\.fila\.id/.test(carg));
+console.log('== Spec 039 D2: reintento de subida ==');
+check('el selector marca _falloSubida y guarda ultimoBlob al fallar',
+    /_falloSubida = true;/.test(sel) && /self\.ultimoBlob = blob;/.test(sel));
+check('el cargador reintenta con el MISMO blob (no vuelve a elegir archivo)',
+    /this\._subir\(indice, fallo\.blob, null\)/.test(carg));
 
-console.log('== Tienda provee Elegir (T015) ==');
-check('tienda.js da usar al cargador y usa PMUBiblioteca.usar (T015/D8)',
-    /usar: function \(madre, params, ctxUsar\)/.test(tienda) && /api\.usarBiblioteca = function/.test(tienda)
-    && /PMUBiblioteca\.usar\(String\(madre \|\| ''\)/.test(tienda));
+console.log('== Spec 039 D4: la tira carga directo ==');
+check('la tira de "Mis imagenes" entra por el camino normal del modal (drop)',
+    /self\._bibMadre = String/.test(sel) === false
+    && /new DragEvent\('drop'/.test(sel));
 
 console.log('== US5: vinculo invitado -> cuenta (D3) ==');
 check('D3: el vinculo solo se consulta con cuenta (uid > 0)',
@@ -148,24 +184,22 @@ check('config() no cachea endpoint vacio y el calentado NO va en load (spec 036 
     && !/addEventListener\('load', function \(\) \{ calentar\(\); \}\)/.test(bib)
     && /closest\('\[data-pmu-panel\]'\)/.test(bib));
 
-console.log('== Copia envenenada: auto-sanado (2026-10-23) ==');
-check('la copia local es v2 y pedir() se auto-sana de una copia vacia',
+console.log('== Copia envenenada: auto-sanado (2026-10-23, vigente) ==');
+check('la copia local es v2 y se auto-sana de una copia vacia',
     /var CLAVE = 'pmu_bib_v2';/.test(bib) && /function pedir\(sinDesde\)/.test(bib)
     && /if \(\(!previa\.fotos \|\| !previa\.fotos\.length\) && !sinDesde\) \{ return pedir\(true\); \}/.test(bib));
 
-console.log('== Fix 4.22.2: montaje y receta de la subida ==');
+console.log('== Fix 4.22.2: montaje y receta de la subida (vigente) ==');
 check('el montaje de la tira INVOCA su bloque (})();) y los params viajan con la subida',
-    /\(function \(\) \{ \/\/ 4a[\s\S]{0,1500}\}\)\(\);/.test(sel)
+    /\(function \(\) \{ \/\/ 4a[\s\S]{0,3000}\}\)\(\);/.test(sel)
     && /fd\.append\('params', JSON\.stringify\(\(ctx && ctx\.params\)/.test(tienda)
     && /subir: function \(blob, ctx\) \{ return api\.subirFoto\(blob, cid, ctx\); \}/.test(tienda));
 
-console.log('== 5a: version al subir, Elegir ya y URL compartida ==');
-check('la subida lleva madre_origen (validada) y el selector recalcula el primario al cargar',
-    /madre_origen: this\._madreDe\(indice\)/.test(carg)
-    && /CargadorPMU\.prototype\._madreDe = function/.test(carg)
-    && /fd\.append\('madre_origen'/.test(tienda)
-    && /public function biblioteca_madre_por_subida/.test(plugin)
-    && /self\._paramsBase = JSON\.stringify\(self\._params\(\)\);\s*\n\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*self\._actualizarPrimario\(\);/.test(sel));
+console.log('== Spec 039 D6: se retiro `madre_origen` ==');
+check('la subida ya NO manda madre_origen (no hay familia que reusar)',
+    !/madre_origen: this\._madreDe\(indice\)/.test(carg)
+    && !/CargadorPMU\.prototype\._madreDe = function/.test(carg)
+    && !/fd\.append\('madre_origen'/.test(tienda));
 check('la tira reusa la URL ya resuelta de la ficha (una sola descarga)',
     /img\.src = String\(urlResuelta \|\| f\.thumb/.test(bib));
 

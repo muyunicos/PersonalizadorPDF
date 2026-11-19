@@ -455,11 +455,9 @@ class PMU_Sesion
      * referenciada desde `subidas/`: se registra, no se copia).
      */
     /**
-     * Spec 030 (T005/D5/D24): UNICO lugar de la forma de una fila de `subidas[]`
-     * cuando la foto **es** un archivo del item (`origen: subida`). `madre` es la
-     * familia (la define el primer archivo) y `sha` el contenido **crudo** (antes
-     * de convertir a WebP, D24). `base` NO se persiste: `PMU_Sesion::familias()` lo
-     * **deriva** por area (una sola verdad, sin drift).
+     * Forma de una fila de `subidas[]`. `madre` se conserva por compatibilidad de
+     * lectura (el `id` es la identidad, spec 039 D7) y `sha` es el contenido **crudo**
+     * (antes de convertir a WebP, D24).
      */
     private function fila_subida($id, $file, $madre, $receta, $sha, $mime, $bytes, $creado, $origen = 'subida', $params = [])
     {
@@ -1085,6 +1083,137 @@ class PMU_Sesion
     }
 
     /**
+     * Spec 039 (D3): borra la fila de `manifest.subidas[]` de un item y, si NINGUN
+     * otro item de la sesion referencia ese `id`, borra el archivo compartido
+     * `tmp/sesion-{sid}/uploads/{id}.{ext}`.
+     *
+     * Reglas (contrato `specs/039-cargas-friccion/spec.md` D3):
+     *  - **Idempotente**: si el id no esta en el item, responde `no_hacia_nada: true`.
+     *  - **Compartido**: el original lo pueden usar varios items de la sesion; solo se
+     *    borra el archivo cuando el `id` ya no aparece en NINGUN manifest de la sesion.
+     *  - **`orders/` intacto**: nunca toca lo comprado (C5 de la 035). Si el original ya
+     *    se movio a `orders/`, aca no hay archivo que borrar (y no se busca ahi).
+     *  - **Sin `orders/`**: `resolver_original` cubre la cadena orders -> tmp; aca solo
+     *    borramos la copia de `tmp/` (la de `orders/` es del pedido, no del draft).
+     *
+     * @return array{borrado: bool, no_hacia_nada: bool, filas: int, archivo: bool}
+     */
+    public function borrar_original_item($sid, $item_key, $id)
+    {
+        $sid = trim((string)$sid);
+        $item_key = trim((string)$item_key);
+        $id = strtolower(trim((string)$id));
+        $salida = ['borrado' => false, 'no_hacia_nada' => true, 'filas' => 0, 'archivo' => false];
+        if ($sid === '' || $item_key === '' || !preg_match('/^[a-f0-9]{12}$/', $id)) {
+            return $salida;
+        }
+
+        // 1) Quita la fila del item (idempotente: si no estaba, no hay nada que hacer).
+        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($id, &$salida) {
+            $filas = isset($manifest['subidas']) && is_array($manifest['subidas'])
+                ? array_values($manifest['subidas']) : [];
+            $quedan = [];
+            $quitadas = 0;
+            foreach ($filas as $fila) {
+                if (is_array($fila) && (string)($fila['id'] ?? '') === $id) {
+                    $quitadas++;
+                    continue;
+                }
+                $quedan[] = $fila;
+            }
+            if ($quitadas > 0) {
+                $manifest['subidas'] = $quedan;
+                $salida['filas'] = $quitadas;
+                $salida['no_hacia_nada'] = false;
+                $salida['borrado'] = true;
+            }
+        });
+
+        if ($salida['no_hacia_nada']) {
+            return $salida;
+        }
+
+        // 2) ¿Algún OTRO item de la sesion sigue referenciando el id? Si si, el
+        //    archivo compartido se conserva (C3 de la 035).
+        $referencias = $this->referencias_subidas_sesion($sid, $id);
+        if (!empty($referencias['otros'])) {
+            return $salida;   // compartido: se borro la fila, el archivo queda
+        }
+
+        // 3) Borra el archivo de `tmp/sesion-{sid}/uploads/{id}.{ext}` (si existe).
+        try {
+            $dir = $this->motor->dir_sesion_uploads($sid, false);
+            $ruta = $this->archivo_con_extension($dir . DIRECTORY_SEPARATOR . $id);
+            if ($ruta !== '' && is_file($ruta)) {
+                if (@unlink($ruta)) {
+                    $salida['archivo'] = true;
+                }
+            }
+        } catch (Exception $e) {
+            // Sin carpeta: no hay archivo que borrar (ya se borro o nunca existio).
+        }
+        return $salida;
+    }
+
+    /**
+     * Spec 039 (D5): envoltorio PUBLICO de `ruta_fila_subida()` (privado) para que el
+     * handler resuelva una fila del `listar` por `id` sin duplicar la logica de rutas.
+     *
+     * @param array $contenedor entrada del escaneo (con `dir`/`manifest`)
+     * @param array $fila       fila de `subidas[]`
+     * @return string ruta absoluta o '' si no existe
+     */
+    public function ruta_fila_subida_public(array $contenedor, array $fila)
+    {
+        return $this->ruta_fila_subida($contenedor, $fila);
+    }
+
+    /**
+     * Spec 039 (D3): cuenta en cuantos items de la sesion aparece un `id` de subida.
+     *
+     * Devuelve `['total' => N, 'otros' => M]` donde `otros` excluye el item que se
+     * esta editando (`$item_key_excluido`). Recorre los `manifest.json` de los items
+     * de `tmp/sesion-{sid}/`.
+     */
+    private function referencias_subidas_sesion($sid, $id, $item_key_excluido = '')
+    {
+        $sid = trim((string)$sid);
+        $id = strtolower(trim((string)$id));
+        $excluido = trim((string)$item_key_excluido);
+        $total = 0;
+        $otros = 0;
+        if ($sid === '' || $id === '') {
+            return ['total' => 0, 'otros' => 0];
+        }
+        try {
+            $dirSesion = $this->motor->dir_sesion($sid, false);
+        } catch (Exception $e) {
+            return ['total' => 0, 'otros' => 0];
+        }
+        foreach ((array)glob($dirSesion . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirItem) {
+            $item = basename($dirItem);
+            if ($item === 'uploads' || $item === 'customs') {
+                continue;   // no son items
+            }
+            if ($excluido !== '' && $item === $excluido) {
+                continue;   // el que estamos editando: su fila ya la sacamos
+            }
+            $manifest = $this->leer_manifest($sid, $item);
+            if (!is_array($manifest)) {
+                continue;
+            }
+            foreach ((array)($manifest['subidas'] ?? []) as $fila) {
+                if (is_array($fila) && (string)($fila['id'] ?? '') === $id) {
+                    $total++;
+                    $otros++;
+                    break;   // una fila por item alcanza para contar la referencia
+                }
+            }
+        }
+        return ['total' => $total, 'otros' => $otros];
+    }
+
+    /**
      * Spec 035 (T024): materializa en el pool las composiciones que FALTAN.
      *
      * El nombre (`img/foto-{pdf}-{grupo}-{receta}.webp`) es DETERMINISTA por
@@ -1327,6 +1456,71 @@ class PMU_Sesion
             $f['recetas'] = array_values(array_keys((array)$f['recetas']));
         }
         unset($f);
+        usort($out, function ($a, $b) {
+            return (int)$b['creado'] - (int)$a['creado'];
+        });
+        return $out;
+    }
+
+    /**
+     * Spec 039 (D5): **imagenes** del comprador a partir de los CONTENEDORES del escaneo
+     * (sesiones + pedidos): **una entrada por imagen** (`id`), no por familia.
+     *
+     * Reemplaza a `familias()` en la vista del cliente: el modelo "familias" murio con
+     * la 030 (la identidad es el `id` = sha1 del contenido, D24 de la 035). Cada fila
+     * trae `id`, `url`, `thumb`, `recetas[]`, `bytes`, `w`, `h` y `creado`.
+     *
+     * @param array $contenedores escaneo (cada uno con `manifest` y `dir`)
+     * @param callable|null $url    inyecta la URL protegida por `id` (politica del plugin)
+     * @return array lista por fecha descendente (mas nuevas primero)
+     */
+    public function imagenes(array $contenedores, ?callable $url = null)
+    {
+        $vistas = [];
+        foreach ($contenedores as $c) {
+            foreach ((array)($c['manifest']['subidas'] ?? []) as $fila) {
+                if (!is_array($fila) || !isset($fila['id'])) {
+                    continue;
+                }
+                $id = (string)$fila['id'];
+                $ruta = $this->ruta_fila_subida($c, $fila);
+                if ($ruta === '') {
+                    continue;
+                }
+                $w = (int)($fila['w'] ?? 0);
+                $h = (int)($fila['h'] ?? 0);
+                if ($w < 1 || $h < 1) {
+                    $dim = @getimagesize($ruta);
+                    $w = is_array($dim) ? (int)$dim[0] : 0;
+                    $h = is_array($dim) ? (int)$dim[1] : 0;
+                }
+                // La MISMA imagen puede estar en varios contenedores (carrito + pedido):
+                // se muestra UNA vez (la vista mas reciente gana) y se suman los usos.
+                $receta = (string)($fila['receta'] ?? '');
+                $creado = (int)($fila['creado'] ?? 0);
+                if (!isset($vistas[$id])) {
+                    $vistas[$id] = [
+                        'id' => $id,
+                        'url' => ($url ? (string)$url($id) : ''),
+                        'thumb' => ($url ? (string)$url($id) : ''),
+                        'recetas' => [],
+                        'bytes' => (int)@filesize($ruta),
+                        'w' => $w,
+                        'h' => $h,
+                        'creado' => $creado,
+                    ];
+                } else {
+                    $vistas[$id]['bytes'] = max((int)$vistas[$id]['bytes'], (int)@filesize($ruta));
+                    if ($creado > (int)$vistas[$id]['creado']) {
+                        $vistas[$id]['creado'] = $creado;
+                    }
+                }
+                if ($receta !== '' && !in_array($receta, (array)$vistas[$id]['recetas'], true)) {
+                    $vistas[$id]['recetas'][] = $receta;
+                }
+            }
+        }
+        $out = array_values($vistas);
         usort($out, function ($a, $b) {
             return (int)$b['creado'] - (int)$a['creado'];
         });
@@ -1942,169 +2136,10 @@ class PMU_Sesion
         return rtrim(rtrim($s, '0'), '.');
     }
 
-    /**
-     * Registra el uso de una foto de la BIBLIOTECA en el item (spec 030, D8/D9/D10).
-     *
-     * De `tmp/` se COPIA (es volatil); de `orders/` se REFERENCIA: el item esta a
-     * la misma profundidad en las dos etapas, asi que `../../orders/...` vale antes
-     * y despues de promover (cero reescritura). La fila lleva `madre` y `receta`.
-     *
-     * @param string $rutaBase ruta absoluta del archivo de la familia (su `base`)
-     * @return array fila escrita
-     */
-    public function usar_de_biblioteca($sid, $item_key, $pdf, $grupo, $madre, $indice, array $params, $rutaBase)
-    {
-        $pdf = $this->motor->nombre_seguro($pdf, 'sesion:usar_de_biblioteca');
-        $grupo = strtoupper((string)$grupo);
-        if (!preg_match('/^[0-9A-F]{6}$/', $grupo)) {
-            throw new Exception('motor:sesion:grupo:invalido');
-        }
-        $madre = (string)$madre;
-        if (!preg_match('/^[a-z0-9\-]{4,32}$/', $madre)) {
-            throw new Exception('motor:sesion:familia:invalida');
-        }
-        $rutaBase = (string)$rutaBase;
-        if ($rutaBase === '' || !is_file($rutaBase)) {
-            throw new Exception('motor:sesion:biblioteca:archivo:ausente');
-        }
-        $receta = self::receta_de($params);
-        $ext = strtolower((string)pathinfo($rutaBase, PATHINFO_EXTENSION));
-        if ($ext === '') {
-            $ext = 'webp';
-        }
-        $raiz = rtrim(str_replace('\\', '/', $this->motor->dir_pmu()), '/') . '/';
-        $plano = str_replace('\\', '/', $rutaBase);
-        $enTmp = (strpos($plano, $raiz . 'tmp/') === 0);
-        $fila = null;
-        $this->mutar_manifest($sid, $item_key, function (&$manifest) use ($sid, $item_key, $pdf, $grupo, $madre, $indice, $receta, $rutaBase, $ext, $enTmp, $raiz, $plano, &$fila) {
-            if ((string)($manifest['item_key'] ?? '') !== (string)$item_key) {
-                throw new Exception('motor:sesion:item:ausente');
-            }
-            $subidas = isset($manifest['subidas']) && is_array($manifest['subidas'])
-                ? array_values($manifest['subidas']) : [];
-            $id = $madre;
-            $archivo = '';
-            $rel = '';
-            if ($enTmp) {
-                $dir = $this->dir_subidas($sid, $item_key, true);
-                $usados = [];
-                foreach ($subidas as $s) {
-                    if (isset($s['id'])) {
-                        $usados[(string)$s['id']] = true;
-                    }
-                }
-                $archivo = $madre . '.' . $ext;
-                $n = 1;
-                while (isset($usados[$id])) {
-                    $n++;
-                    $id = $madre . '-' . $n;
-                    $archivo = $id . '.' . $ext;
-                }
-                if (!@copy($rutaBase, $dir . DIRECTORY_SEPARATOR . $archivo)) {
-                    throw new Exception('motor:sesion:subidas:no_escribible');
-                }
-                $subidas[] = $this->fila_subida($id, 'subidas/' . $archivo, $madre, $receta, '',
-                    'image/' . ($ext === 'jpg' ? 'jpeg' : $ext), (int)@filesize($rutaBase), time());
-            } else {
-                $rel = (strpos($plano, $raiz) === 0) ? substr($plano, strlen($raiz)) : '';
-                if ($rel === '') {
-                    throw new Exception('motor:sesion:biblioteca:fuera:de:pmu');
-                }
-                $subidas[] = $this->fila_ref($id, $rel, $madre, $receta, time());
-            }
-            $manifest['subidas'] = $subidas;
-            $ind = ($indice === null) ? 0 : max(0, (int)$indice);
-            $nueva = ['pdf' => (string)$pdf, 'grupo_id' => (string)$grupo, 'indice' => $ind,
-                'hash' => $receta, 'origen' => ($enTmp ? 'subida' : 'ref'), 'id' => $id, 'madre' => $madre];
-            if ($enTmp) {
-                $nueva['file'] = 'subidas/' . $archivo;
-            } else {
-                $nueva['ref'] = $rel;
-            }
-            $resto = [];
-            foreach ((array)($manifest['archivos'] ?? []) as $f) {
-                if (is_array($f) && (string)($f['pdf'] ?? '') === $pdf
-                    && strtoupper((string)($f['grupo_id'] ?? '')) === $grupo) {
-                    continue;
-                }
-                $resto[] = $f;
-            }
-            $resto[] = $nueva;
-            $manifest['archivos'] = $resto;
-            $fila = $nueva;
-        });
-        return $fila;
-    }
-    /**
-     * Borra una FAMILIA en un item por DIRECTORIO (spec 030, D17/D25): los
-     * archivos `{madre}` y `{madre}-{n}` de `subidas/` mas sus filas en
-     * `manifest.subidas[]` y en `manifest.archivos[]`. Sirve para items de la
-     * sesion y para items ya promovidos (`orders/`, que no resuelven por sid).
-     *
-     * @return int archivos borrados
-     */
-    public function borrar_familia_dir($dir, $madre)
-    {
-        $madre = (string)$madre;
-        if (!preg_match('/^[a-z0-9\-]{4,32}$/', $madre)) {
-            throw new Exception('motor:sesion:familia:invalida');
-        }
-        $borrados = 0;
-        $this->mutar_manifest_dir($dir, function (&$manifest) use ($dir, $madre, &$borrados) {
-            $ids = [];
-            $quedan = [];
-            foreach ((array)($manifest['subidas'] ?? []) as $fila) {
-                if (!is_array($fila) || !isset($fila['id'])) {
-                    continue;
-                }
-                $id = (string)$fila['id'];
-                $suya = (string)($fila['madre'] ?? $id);
-                if ($suya === '') {
-                    $suya = $id;
-                }
-                if ($suya !== $madre) {
-                    $quedan[] = $fila;
-                    continue;
-                }
-                $ids[$id] = true;
-                // Spec 035: las filas `original` NO llevan `file` (el archivo vive en
-                // `tmp/sesion-{sid}/uploads/` o `orders/{clave}/uploads/`, COMPARTIDO
-                // por los items y pedidos del comprador): borrar la familia de ESTE
-                // item no puede llevarse el original de los otros. Se quitan las
-                // filas; el original lo limpia la poda por sesion / TTL.
-                $archivo = basename((string)($fila['file'] ?? '' ));
-                if ($archivo !== '' ) {
-                    $ruta = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . 'subidas' . DIRECTORY_SEPARATOR . $archivo;
-                    if (is_file($ruta)) {
-                        @unlink($ruta);
-                        $borrados++;
-                    }
-                }
-            }
-            $manifest['subidas'] = $quedan;
-            $archivos = [];
-            foreach ((array)($manifest['archivos'] ?? []) as $fila) {
-                $idFila = '';
-                if (is_array($fila)) {
-                    $origenFila = (string)($fila['origen'] ?? '');
-                    if ($origenFila === 'subida') {
-                        $idFila = (string)($fila['id'] ?? '');
-                    } elseif ($origenFila === 'compuesta') {
-                        // Spec 035: la fila compuesta no lleva `id`; el original va en
-                        // `orig.id`. Sin esto, borrar la familia dejaba el grupo pintando
-                        // la foto que el comprador acababa de sacar.
-                        $idFila = (string)($fila['orig']['id'] ?? '');
-                    }
-                }
-                if ($idFila !== '' && isset($ids[$idFila])) {
-                    continue;
-                }
-                $archivos[] = $fila;
-            }
-            $manifest['archivos'] = $archivos;
-        });
-        return $borrados;
-    }
+    /* (spec 039 D5: `usar_de_biblioteca()` y `borrar_familia_dir()` RETIRADOS: el
+     *  modelo "familias" murio. El original se referencia por `id`; borrar en el acto
+     *  lo hace `borrar_original_item()`.)
+
     /* ==================== Ayudantes de arbol ==================== */
 
     private function borrar_arbol($dir)

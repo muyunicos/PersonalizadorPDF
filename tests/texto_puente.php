@@ -307,21 +307,20 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('spec 030: la receta es un hash de 12 hex', (string)($GLOBALS['bib_receta'] ?? '') !== '' && strlen((string)$GLOBALS['bib_receta']) === 12);
         check('spec 030: la misma composicion da la misma receta', !empty($GLOBALS['bib_receta_igual']));
         check('spec 030: otra composicion cambia la receta', !empty($GLOBALS['bib_receta_otra']));
-        check('reuso desde tmp: se COPIA un archivo al item', !empty($GLOBALS['bib_copia_archivo']));
-        check('reuso desde tmp: fila con origen subida + madre + file', !empty($GLOBALS['bib_copia_fila']));
-        check('reuso desde orders: NO se copia nada', !empty($GLOBALS['bib_ref_sin_copia']));
-        check('reuso desde orders: fila origen ref relativa a uploads/pmu', !empty($GLOBALS['bib_ref_fila']));
+        check('039 D5: el original viaja al item (origen original, sin file)', !empty($GLOBALS['bib_copia_fila']));
+        check('039 D5: re-subir el mismo contenido NO duplica (dedupe por sha)', !empty($GLOBALS['bib_ref_fila']));
         check('resolver_ref: la referencia da un archivo real', !empty($GLOBALS['bib_ref_ok']));
         check('resolver_ref: una referencia rota devuelve cadena vacia', !empty($GLOBALS['bib_ref_roto']));
         check('resolver_subidas resuelve la fila ref', !empty($GLOBALS['bib_resuelve_ref']));
         $fotos_b = (is_array($json) && !empty($json['success'])) ? (array)($json['data']['fotos'] ?? []) : [];
-        check('op=listar devuelve las familias del comprador', count($fotos_b) >= 1, 'fotos=' . count($fotos_b));
-        check('op=listar trae revision de 12 hex', is_array($json) && strlen((string)($json['data']['revision'] ?? '')) === 12);
-        check('op=listar: contenedores >= 1', (int)($json['data']['totales']['contenedores'] ?? 0) >= 1);
-        check('la familia trae url por op=imagen', !empty($fotos_b[0]['url']) && strpos((string)$fotos_b[0]['url'], 'op=imagen') !== false);
-        check('la familia trae base y archivos', !empty($fotos_b[0]['base']) && (int)($fotos_b[0]['archivos'] ?? 0) >= 1);
-        check('la familia expone sus recetas (D8: Elegir vs Subir)', isset($fotos_b[0]['recetas']) && is_array($fotos_b[0]['recetas']));
-        check('usos: el item del carrito queda anotado', !empty($fotos_b[0]['usos']['carrito']));
+        check('listar devuelve IMAGENES (una entrada por imagen, D5)', count($fotos_b) >= 1, 'fotos=' . count($fotos_b));
+        check('listar trae revision de 12 hex', is_array($json) && strlen((string)($json['data']['revision'] ?? '')) === 12);
+        check('listar: contenedores >= 1', (int)($json['data']['totales']['contenedores'] ?? 0) >= 1);
+        check('cada imagen trae url por op=imagen', !empty($fotos_b[0]['url']) && strpos((string)$fotos_b[0]['url'], 'op=imagen') !== false);
+        check('cada imagen trae id y medidas', !empty($fotos_b[0]['id']) && (int)($fotos_b[0]['w'] ?? 0) >= 1);
+        check('cada imagen expone sus recetas (una imagen + N recetas)', isset($fotos_b[0]['recetas']) && is_array($fotos_b[0]['recetas']));
+        check('listar ya NO expone familias (sin madre/base/archivos/usos)',
+            !isset($fotos_b[0]['madre']) && !isset($fotos_b[0]['base']) && !isset($fotos_b[0]['usos']));
         check('op=imagen: la familia propia se resuelve a un archivo real', !empty($GLOBALS['bib_img_propia']));
         check('op=imagen: el mime sale por EXTENSION (image/webp)', !empty($GLOBALS['bib_img_mime']));
         check('op=imagen: una madre ajena da la causa foto:ajena', !empty($GLOBALS['bib_img_ajena']));
@@ -342,6 +341,17 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('T021: un contenido nuevo devuelve cadena vacia (no bloquea)', !empty($GLOBALS['bib_dedupe_nuevo']));
         check('T035: el login anota el sid en _pmu_sids (una sola vez)', !empty($GLOBALS['bib_vinculo']));
         check('T035: el vinculo respeta el tope de 20 (D3)', !empty($GLOBALS['bib_vinculo_tope']));
+        // Spec 039 (D3/T044): borrado en el acto del original + su fila.
+        $bb = (array)($GLOBALS['bib_borr_test'] ?? []);
+        check('039 D3: quita la fila del item', !empty($bb['fila_quitada']));
+        check('039 D3: el archivo compartido se CONSERVA si otro item lo usa', !empty($bb['archivo_queda']));
+        check('039 D3: el otro item de la sesion queda intacto', !empty($bb['otro_item_intacto']));
+        check('039 D3: sin otra referencia, el archivo se BORRA', !empty($bb['archivo_borrado']));
+        check('039 D3: el borrado es IDEMPOTENTE (segunda vez no hace nada)', !empty($bb['idempotente']));
+        check('039 D3: lo comprado (orders/) NO se toca', !empty($bb['orders_intacto']));
+        check('039 D3: un id con forma invalida no rompe ni borra', !empty($bb['id_invalido']));
+        check('039 D5/D6: `usos` y `usar` se retiraron (op:retirada)',
+            strpos((string)($GLOBALS['bib_op_retirada'] ?? ''), 'op:retirada') !== false);
         check('op=listar no deja avisos de PHP', $admin_error === '');
     }    if ($fase === 'admin') {
         preparar_entorno($testBase, $base);
@@ -2403,6 +2413,15 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         case 'cola_subida':
             // Spec 036 (T002): esqueleto; los checks llegan con US3.
             break;
+
+        case 'cargas_reintento':
+            // Spec 039 (US2/D2): esqueleto; los checks llegan con F2.
+            break;
+
+        case 'cargas_borrar':
+            // Spec 039 (US1/D3): esqueleto; los checks llegan con F4.
+            break;
+
         default:
             check('fase desconocida', false);
     }
@@ -3306,23 +3325,26 @@ switch ($fase) {
         $otra_b['w'] = 900;
         $GLOBALS['bib_receta_otra'] = ($GLOBALS['bib_receta'] !== PMU_Sesion::receta_de($otra_b));
         $dirSub_b = $sesion_b->dir_subidas($sid_b, $draft_b, false);
-        $antes_b = count((array)glob($dirSub_b . '/*'));
-        $resSub_b = $sesion_b->resolver_subidas($sid_b, $draft_b, [$sub_b['id']]);
-        $filaTmp_b = $sesion_b->usar_de_biblioteca($sid_b, $draft_b, 'muestra', '0000FF', 'ffff11112222', 0, $params_b, (string)($resSub_b[$sub_b['id']] ?? ''));
-        $GLOBALS['bib_copia_archivo'] = (count((array)glob($dirSub_b . '/*')) === $antes_b + 1);
-        $GLOBALS['bib_copia_fila'] = (is_array($filaTmp_b) && ($filaTmp_b['origen'] ?? '') === 'subida'
-            && ($filaTmp_b['madre'] ?? '') === 'ffff11112222' && ($filaTmp_b['file'] ?? '') !== '' );
+        // Spec 039 (D5): se retiro `usar_de_biblioteca()` (el original se referencia por
+        // `id`, no se copia ni se versiona). El camino equivalente es `guardar_subida`:
+        // el original viaja al item y el servidor lo deduplica por `sha` (D24 de la 035).
+        $filaTmp_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b, 'ffff11112222', $params_b);
+        $GLOBALS['bib_copia_archivo'] = is_array($filaTmp_b) && !empty($filaTmp_b['id']);
+        $GLOBALS['bib_copia_fila'] = (is_array($filaTmp_b) && ($filaTmp_b['origen'] ?? '') === 'original'
+            && !empty($filaTmp_b['id']) && (string)($filaTmp_b['file'] ?? '') === '');
         $antes2_b = count((array)glob($dirSub_b . '/*'));
-        $filaOrd_b = $sesion_b->usar_de_biblioteca($sid_b, $draft_b, 'muestra', '0000FF', $madre_b, 1, $params_b,
-            $motor_b->dir_order_uploads('1') . DIRECTORY_SEPARATOR . $madre_b . '.webp');
+        // Re-subir el MISMO contenido no duplica (dedupe por `sha`): el `id` no cambia.
+        $filaOrd_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b, 'ffff11112222', $params_b);
         $GLOBALS['bib_ref_sin_copia'] = (count((array)glob($dirSub_b . '/*')) === $antes2_b);
-        $GLOBALS['bib_ref_fila'] = (is_array($filaOrd_b) && ($filaOrd_b['origen'] ?? '') === 'ref'
-            && strpos((string)($filaOrd_b['ref'] ?? ''), 'orders/') === 0);
+        $GLOBALS['bib_ref_fila'] = (is_array($filaOrd_b) && is_array($filaTmp_b)
+            && ($filaOrd_b['id'] ?? '') === ($filaTmp_b['id'] ?? ''));
         $itemDir_b = $sesion_b->dir_item($sid_b, $draft_b);
-        $GLOBALS['bib_ref_ok'] = is_file($sesion_b->resolver_ref($itemDir_b, (string)$filaOrd_b['ref']));
-        $GLOBALS['bib_ref_roto'] = ($sesion_b->resolver_ref($itemDir_b, 'orders/9999/nada/x.webp') === '' );
-        $resRef_b = $sesion_b->resolver_subidas($sid_b, $draft_b, [(string)$filaOrd_b['id']]);
-        $GLOBALS['bib_resuelve_ref'] = is_file((string)($resRef_b[$filaOrd_b['id']] ?? ''));
+        $rutaOrig_b = $sesion_b->resolver_original((string)($filaTmp_b['id'] ?? ''), '', $sid_b);
+        $GLOBALS['bib_ref_ok'] = is_file((string)$rutaOrig_b);
+        // Un `ref` roto (a un pedido inexistente) resuelve a cadena vacia.
+        $GLOBALS['bib_ref_roto'] = ($sesion_b->resolver_ref($itemDir_b, 'orders/9999/nada/x.webp') === '');
+        $resRef_b = $sesion_b->resolver_subidas($sid_b, $draft_b, [(string)($filaTmp_b['id'] ?? '')]);
+        $GLOBALS['bib_resuelve_ref'] = is_file((string)($resRef_b[(string)($filaTmp_b['id'] ?? '')] ?? ''));
         // Spec 030 (T009): la RESOLUCION de `op=imagen` (el camino que fallaba en
         // silencio y dejaba la tira sin fotos). Se ejercita SIN streaming.
         $_REQUEST = ['op' => 'imagen', 'madre' => $madre_b, '_wpnonce' => 'nonce'];
@@ -3383,7 +3405,10 @@ switch ($fase) {
         $GLOBALS['bib_ttl_huerfana'] = !is_dir($dirHuerfana_b);
         $GLOBALS['bib_ttl_order_intacto'] = is_file(
             $motor_b->dir_order_uploads('1') . DIRECTORY_SEPARATOR . $madre_b . '.webp');
-        $GLOBALS['bib_ttl_ref_ok'] = is_file($sesion_b->resolver_ref($sesion_b->dir_item($sid_b, $draft_b), (string)($filaOrd_b['ref'] ?? '')));
+        // Spec 039 (D5): lo comprado sigue vivo en `orders/` y su original se resuelve
+        // por `id` (la cadena `orders/{cliente}/uploads/` -> `tmp/sesion-{sid}/uploads/`).
+        $GLOBALS['bib_ttl_ref_ok'] = is_file((string)$sesion_b->resolver_original(
+            $madre_b, '1', $sid_b));
         $GLOBALS['bib_ttl_sesion_viva'] = is_dir($motor_b->dir_ambito('tmp') . '/sesion-' . $sid_b);
         // Spec 030 (T018/T021): el dedupe por `sha` y el reuso de familia (D5/D24).
         $contenedoresBib_b = [];
@@ -3422,7 +3447,75 @@ switch ($fase) {
             $p->vinculo_sid_usuario(7, '');
         }
         $GLOBALS['bib_vinculo_tope'] = (count((array)get_user_meta(7, '_pmu_sids', true)) === 20);
+        // Spec 039 (D3/T044): BORRADO EN EL ACTO (`borrar_original_item`).
+        //   (a) quita la fila del item y borra el archivo compartido si nadie mas lo usa.
+        //   (b) idempotente: un id que no esta en el item responde `no_hacia_nada`.
+        //   (c) compartido: si OTRO item de la sesion referencia el id, el archivo queda.
+        //   (d) `orders/` intacto: el original comprado no se toca.
+        $sidBorr_b = 'sid-borrado-039';
+        $itemA_b = 'item-a';
+        $itemB_b = 'item-b';
+        // Bytes de una IMAGEN real (el servidor valida la firma, no un string suelto).
+        $bytesB_b = $bytes_b;
+        // Los dos items tienen que existir (draft) antes de guardar su original.
+        $sesion_b->crear_draft($sidBorr_b, ['muestra']);
+        $dirA_b = $sesion_b->dir_item($sidBorr_b, $itemA_b);
+        $dirB_b = $sesion_b->dir_item($sidBorr_b, $itemB_b);
+        @mkdir($dirA_b, 0775, true);
+        @mkdir($dirB_b, 0775, true);
+        file_put_contents($dirA_b . '/manifest.json', json_encode([
+            'item_key' => $itemA_b, 'sid' => $sidBorr_b, 'pdfs' => ['muestra'],
+            'creado' => date('c'), 'subidas' => [],
+        ]));
+        file_put_contents($dirB_b . '/manifest.json', json_encode([
+            'item_key' => $itemB_b, 'sid' => $sidBorr_b, 'pdfs' => ['muestra'],
+            'creado' => date('c'), 'subidas' => [],
+        ]));
+        // Dos items de la MISMA sesion comparten el MISMO original (mismo `id`).
+        $subA_b = $sesion_b->guardar_subida($sidBorr_b, $itemA_b, $bytesB_b);
+        $subB_b = $sesion_b->guardar_subida($sidBorr_b, $itemB_b, $bytesB_b);
+        $idBorr_b = is_array($subA_b) ? (string)($subA_b['id'] ?? '') : '';
+        $rutaOrig_b = $idBorr_b !== '' ? $sesion_b->resolver_original($idBorr_b, '', $sidBorr_b) : '';
+        // (c) compartido: con los DOS items referenciando, se borra la fila de A pero
+        //     el archivo NO se toca (B todavia lo usa).
+        $resComp_b = $sesion_b->borrar_original_item($sidBorr_b, $itemA_b, $idBorr_b);
+        $manA_b = $sesion_b->leer_manifest($sidBorr_b, $itemA_b);
+        $manB_b = $sesion_b->leer_manifest($sidBorr_b, $itemB_b);
+        $GLOBALS['bib_borr_test'] = [];
+        $GLOBALS['bib_borr_test']['fila_quitada'] = is_array($manA_b)
+            && !in_array($idBorr_b, array_column((array)($manA_b['subidas'] ?? []), 'id'), true);
+        $GLOBALS['bib_borr_test']['archivo_queda'] = ($rutaOrig_b !== '' && is_file($rutaOrig_b))
+            && !empty($resComp_b['borrado']) && empty($resComp_b['archivo']);
+        $GLOBALS['bib_borr_test']['otro_item_intacto'] = is_array($manB_b)
+            && in_array($idBorr_b, array_column((array)($manB_b['subidas'] ?? []), 'id'), true);
+        // (a) sin la referencia de B, el archivo compartido SI se borra.
+        $resUnico_b = $sesion_b->borrar_original_item($sidBorr_b, $itemB_b, $idBorr_b);
+        $GLOBALS['bib_borr_test']['archivo_borrado'] = !empty($resUnico_b['archivo'])
+            && ($rutaOrig_b === '' || !is_file($rutaOrig_b));
+        // (b) idempotente: el mismo id otra vez no hace nada.
+        $rep_b = $sesion_b->borrar_original_item($sidBorr_b, $itemB_b, $idBorr_b);
+        $GLOBALS['bib_borr_test']['idempotente'] = !empty($rep_b['no_hacia_nada'])
+            && (int)($rep_b['filas'] ?? 0) === 0;
+        // (d) `orders/` intacto: el original del pedido sigue donde estaba.
+        $GLOBALS['bib_borr_test']['orders_intacto'] = is_file(
+            $motor_b->dir_order_uploads('1') . DIRECTORY_SEPARATOR . $madre_b . '.webp');
+        // Un id con forma invalida no rompe (ni borra): responde idempotente.
+        $malo_b = $sesion_b->borrar_original_item($sidBorr_b, $itemB_b, '../../etc/passwd');
+        $GLOBALS['bib_borr_test']['id_invalido'] = !empty($malo_b['no_hacia_nada'])
+            && (int)($malo_b['filas'] ?? 0) === 0;
         $_COOKIE[PMU_Sesion::COOKIE] = $sid_b;
+        // Spec 039 (D5/D6): `op=usar` se retiro. Se comprueba que responde la causa
+        // `op:retirada` (y no escribe nada).
+        $GLOBALS['bib_op_retirada'] = '';
+        $_COOKIE[PMU_Sesion::COOKIE] = $sid_b;
+        // Spec 039 (D5/D6): `op=usar`/`op=usos` se retiraron. No se puede probar por
+        // `handle_biblioteca` porque el stub de `wp_send_json_error` hace `exit`: se
+        // comprueba que el handler ya no los despacha (la causa `op:retirada` vive en
+        // el codigo y la cubre la puerta de codigo `biblioteca-contrato`).
+        $srcHandler_b = (string)@file_get_contents(__DIR__ . '/../personalizador-pdf.php');
+        $GLOBALS['bib_op_retirada'] = (strpos($srcHandler_b, "throw new \\RuntimeException('op:retirada')") !== -1)
+            && (strpos($srcHandler_b, "if (\$op === 'usar')") === false)
+            ? 'op:retirada' : '';
         $_REQUEST = ['op' => 'listar', '_wpnonce' => 'nonce'];
         $_POST = $_REQUEST;
         $p->handle_biblioteca(); // exit -> checks del shutdown

@@ -115,80 +115,38 @@
         (doc.head || doc.documentElement).appendChild(s);
     }
 
-    /** Abre el visor COMPARTIDO con la biblioteca (accion Elegir; Borrar llega con US4). */
+    /**
+     * Spec 039 (D4): la biblioteca no tiene visor propio. Se conserva el nombre
+     * `visor` por compatibilidad, pero ahora **elige y carga directo** en el modal de
+     * recorte (igual que `elegir`). Borrar se hace desde el visor del CAMPO (D1/D3).
+     */
     function visor(indice) {
-        var c = leerCache();
-        // La lista pintada manda (el servidor acaba de confirmarla); la copia es el respaldo.
-        var fotos = ultimas.length ? ultimas : ((c && c.fotos) || []);
-        if (!fotos.length || !global.PMUVisor) { return false; }
-        return global.PMUVisor.abrir({
-            items: fotos.map(function (f) {
-                // La URL se resuelve igual que en la tira (D23): el visor del tema y el
-                // propio navegan sin pedir nada.
-                var u = (global.PMU_FICHA && global.PMU_FICHA.urls && f.base)
-                    ? global.PMU_FICHA.urls[String(f.base)] : '';
-                return { url: String(u || f.url || f.thumb || ''), etiqueta: f.madre };
-            }),
-            indice: indice,
-            titulo: 'Mis imagenes',
-            acciones: [{
-                etiqueta: 'Elegir',
-                clase: 'button-primary',
-                onAccion: function (i) {
-                    global.PMUVisor.cerrar();
-                    if (typeof onElegir === 'function' && fotos[i]) { onElegir(fotos[i]); }
-                }
-            }, {
-                etiqueta: 'Borrar',
-                clase: 'pmu-visor-peligro',
-                onAccion: function (i) {
-                    var foto = fotos[i];
-                    if (!foto) { return; }
-                    pedirOp('usos', String(foto.madre)).then(function (uso) {
-                        var aviso = 'Borrar esta imagen?', detalle = [];
-                        if (uso && (uso.carrito || []).length) { detalle.push('esta en tu carrito'); }
-                        if (uso && (uso.pedidos || []).length) { detalle.push('corresponde a la compra #' + uso.pedidos.join(', #')); }
-                        if (detalle.length) { aviso += ' Ojo: ' + detalle.join(' y ') + '.'; }
-                        if (!global.confirm(aviso + ' Se elimina la original y sus versiones.')) { return; }
-                        pedirOp('borrar', String(foto.madre)).then(function () {
-                            global.PMUVisor.cerrar();
-                            invalidar();
-                            invalidar();
-                            return pedir();
-                        }).then(function (res) {
-                            var restantes = (res && res.fotos) || [];
-                            if (ultimoEl) { pintarTira(ultimoEl, restantes); }
-                            if (global.PMUVisor) { global.PMUVisor.cerrar(); }
-                            if (restantes.length) { visor(Math.min(i, restantes.length - 1)); }
-                        }).catch(function () { });
-                    }).catch(function () { });
-                }
-            }]
-        });
+        return elegir(indice);
     }
 
     /** Dibuja la tira (hasta 10 fotos) en `el`; si no hay fotos NO dibuja nada (D23). */
     /** Pinta la tira en `el`: una miniatura por familia + el tile del resto (N+). */
-    /** POST simple al endpoint (op con `madre`): usos y borrar. */
-    function pedirOp(op, madre) {
-        var c = config();
-        var fd = new FormData();
-        fd.append('action', 'personalizador_pdf_biblioteca');
-        fd.append('op', op);
-        fd.append('madre', String(madre || ''));
-        // D17: el item que el comprador esta editando AHORA no cuenta como "esta en
-        // tu carrito" (el servidor lo saca de `usos.carrito`).
-        fd.append('item_key', String(c.item || ''));
-        fd.append('_wpnonce', c.nonce);
-        return global.fetch(c.url, { method: 'POST', body: fd, credentials: 'same-origin' })
-            .then(function (r) { return r.json(); })
-            .then(function (json) {
-                if (!json || !json.success) {
-                    throw new Error((json && json.data) || 'api:biblioteca:falla');
-                }
-                return json.data || {};
-            });
+    /**
+     * Spec 039 (D4): `visor()` se retiro. La biblioteca no tiene visor propio: tocar
+     * una miniatura ELIGE la imagen y la carga directo en el modal de recorte (via
+     * `onElegir`). Borrar se hace desde el visor del CAMPO (D1/D3 de la 039).
+     *
+     * Se conserva el nombre `visor` (compatibilidad) apuntando a `elegir`.
+     */
+    function elegir(indice) {
+        var fotos = ultimas || [];
+        var f = fotos[parseInt(indice, 10) || 0];
+        if (!f) { return false; }
+        if (typeof onElegir === 'function') { onElegir(f); }
+        return true;
     }
+
+    function visor(indice) { return elegir(indice); }
+
+    /**
+     * Spec 039 (D3): `pedirOp()` se retiro con el borrado desde la biblioteca. Borrar
+     * se hace desde el visor del CAMPO (`op=borrar`), no desde la tira.
+     */
     /** Cuantas miniaturas entran en `el` sin scroll (tile 56px + 8px de gap). */
     function caben(el) {
         var ancho = 0;
@@ -221,7 +179,8 @@
                 return {
                     url: url,
                     thumb: url,
-                    etiqueta: (f.versiones > 1) ? (f.versiones + ' versiones') : ''
+                    // Spec 039 (D4): una entrada por imagen, sin badge `N versiones`.
+                    etiqueta: ''
                 };
             }),
             layout: 'linea',
@@ -230,8 +189,8 @@
             navegable: false,
             tope: TOPE_TIRA,
             chipAccion: 'abrir',
-            onChip: function (cuantos, desde) { visor(desde || 0); },
-            onAbrir: function (i) { visor(i); }
+            onChip: function (cuantos, desde) { elegir(desde || 0); },
+            onAbrir: function (i) { elegir(i); }
         });
         return true;
     }
@@ -260,8 +219,8 @@
             var b = doc.createElement('button');
             b.type = 'button';
             b.className = 'pmu-bib-mini';
-            b.setAttribute('data-madre', String(f.madre || ''));
-            b.title = (f.versiones > 1) ? (f.versiones + ' versiones') : 'Imagen guardada';
+            b.setAttribute('data-id', String(f.id || ''));
+            b.title = 'Elegir esta imagen';
             var img = doc.createElement('img');
             img.alt = '';
             img.decoding = 'async';
@@ -269,7 +228,7 @@
                 ? global.PMU_FICHA.urls[String(f.base)] : '';
             img.src = String(urlResuelta || f.thumb || f.url || '' );
             b.appendChild(img);
-            b.addEventListener('click', function () { visor(i); });
+            b.addEventListener('click', function () { elegir(i); });
             t.appendChild(b);
         });
         if (fotos.length > visibles) {
@@ -278,7 +237,7 @@
             mas.className = 'pmu-bib-mini pmu-bib-mas';
             mas.textContent = String(fotos.length) + '+';
             mas.title = 'Ver todas tus imagenes';
-            mas.addEventListener('click', function () { visor(visibles); });
+            mas.addEventListener('click', function () { elegir(visibles); });
             t.appendChild(mas);
         }
         el.appendChild(t);
@@ -344,38 +303,11 @@
     }
 
     /**
-     * Elegir una foto de la biblioteca SIN recomponer (D8/D14): POST `op=usar` con la
-     * `madre` y los datos del hueco. El servidor **re-decide** con su receta: igual ->
-     * fila `origen: ref` (0 bytes); distinta -> version `{madre}-{n}`. Invalida la copia
-     * local: la vista cambio.
+     * Spec 039 (D6): `usar()` se retiro con la rama de reuso `Elegir` (0 bytes).
+     * Ahora SIEMPRE se sube el original y el servidor deduplica por `sha` (D24).
      */
-    function usar(madre, datos) {
-        var c = config();
-        if (!c.url) { return Promise.reject(new Error('api:biblioteca:sin:endpoint')); }
-        datos = datos || {};
-        var fd = new FormData();
-        fd.append('action', 'personalizador_pdf_biblioteca');
-        fd.append('op', 'usar');
-        fd.append('madre', String(madre || ''));
-        fd.append('item_key', String(datos.item_key || c.item || ''));
-        fd.append('pdf', String(datos.pdf || ''));
-        fd.append('grupo', String(datos.grupo || ''));
-        fd.append('indice', String(datos.indice || 0));
-        fd.append('params', JSON.stringify(datos.params || {}));
-        fd.append('_wpnonce', c.nonce);
-        return global.fetch(c.url, { method: 'POST', body: fd, credentials: 'same-origin' })
-            .then(function (r) { return r.json(); })
-            .then(function (json) {
-                if (!json || !json.success) { throw new Error((json && json.data) || 'api:biblioteca:falla'); }
-                // D8: la copia se invalida SOLO si el servidor escribio una fila. Si la
-                // receta no coincidia, respondio `coincide: false` y no cambio nada.
-                if (json.data && json.data.fila) { invalidar(); }
-                return json.data || {};
-            });
-    }
-
-    var api = { pedir: pedir, cache: leerCache, invalidar: invalidar, tira: tira, visor: visor, usar: usar,
-        tope: TOPE_TIRA, clave: CLAVE };
+    var api = { pedir: pedir, cache: leerCache, invalidar: invalidar, tira: tira,
+        visor: visor, elegir: elegir, tope: TOPE_TIRA, clave: CLAVE };
     global.PMUBiblioteca = api;
     if (typeof module !== 'undefined' && module.exports) { module.exports = api; }
 })(typeof window !== 'undefined' ? window : globalThis);

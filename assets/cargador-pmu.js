@@ -23,12 +23,9 @@
  *   new CargadorPMU(elemento, {
  *     ranuras: [...],
  *     // `subir(blob, ctx)` -> Promise<{id}>: el unico camino que manda bytes.
- *     // `ctx` lleva `{ranura, w, h, forma, params, madre_origen}` (spec 030 D8 +
- *     // spec 038 F-RECETA: `params` son los v2 de la receta, no el hash).
+ *     // `ctx` lleva `{ranura, w, h, forma, params}` (spec 030 D8 + spec 038 F-RECETA:
+ *     // `params` son los v2 de la receta, no el hash).
  *     subir: function(blob, ctx) { return Promise.resolve({id:''}); },
- *     // `usar(madre, params, ctx)` -> Promise<{fila}|{coincide:false}>: reusa la
- *     // familia ya subida (0 bytes, FR-009 "Elegir ya subida").
- *     usar: function(madre, params, ctx) { return Promise.resolve(null); },
  *     // `urlDe(id)` -> URL de la miniatura (endpoint protegido; memoizado afuera).
  *     urlDe: function(id) { return ''; },
  *     onChange: function(estado) {},      // {ids, listo, faltan, minTotal, array, ranuras}
@@ -187,6 +184,11 @@
             + '.cpmu-mini{width:56px;height:56px;border:1px solid #2271b1;background:#f0f6fc;color:#2271b1;font:600 15px/1 system-ui,sans-serif;cursor:pointer;border-radius:4px;position:relative;overflow:hidden;padding:0}'
             + '.cpmu-mini img{width:100%;height:100%;object-fit:cover;display:block;border-radius:inherit}'
             + '.cpmu-mini-circulo,.cpmu-mini-circle{border-radius:50%}'
+            // Spec 039 (D2): miniatura cuya subida FALLO. Se marca y, al tocarla,
+            // REINTENTA con el mismo recorte (no abre el visor). El borde rojo y el
+            // signo "!" son la senal visible.
+            + '.cpmu-mini-fallo{border:2px solid #d63638}'
+            + '.cpmu-mini-fallo::before{content:"!";position:absolute;top:2px;right:2px;width:16px;height:16px;line-height:16px;text-align:center;border-radius:50%;background:#d63638;color:#fff;font:700 11px/16px system-ui,sans-serif}'
             + '.cpmu-zona{border:2px dashed #c3c4c7;border-radius:6px;padding:14px;text-align:center;color:#50575e;font-size:13px;cursor:pointer}'
             + '.cpmu-zona-sobre{border-color:#2271b1;background:#f0f6fc}'
             + '.cpmu-zona-llena{opacity:.75}'
@@ -205,10 +207,8 @@
             onChange: typeof config.onChange === 'function' ? config.onChange : null,
             onError: typeof config.onError === 'function' ? config.onError : null,
             urlDe: typeof config.urlDe === 'function' ? config.urlDe : null,
-            // Spec 038 (T116): avisa cuando el selector REUSA una imagen ya subida
-            // (camino `usado`), que no pasa por `subir` y por lo tanto no llena la
-            // referencia de filas del consumidor. Recibe `{indice, pos, fila}`.
-            onFila: typeof config.onFila === 'function' ? config.onFila : null,
+            // Spec 039 (D6): `usar` y `onFila` se retiraron con la rama de reuso
+            // `Elegir` (0 bytes). Ahora SIEMPRE se sube el original.
             preview: !!config.preview,
             // `tecnico`: muestra medidas/forma/min y avisos de configuracion.
             // Lo pasa el preview de la consola; la ficha del comprador NO.
@@ -226,6 +226,11 @@
         this.selectores = [];
         this.raiz = null;
         this._reemplazo = null;
+        // Spec 039 (D2): blobs de las subidas que FALLARON, por ranura y posicion.
+        // Viven en memoria (moran con la pestana): al tocar la miniatura marcada se
+        // reintenta con el MISMO recorte, sin volver a elegir el archivo.
+        // { indice: { posicion: { blob, params, madre_origen, error } } }
+        this._fallos = {};
     }
 
     CargadorPMU.prototype.montar = function () {
@@ -406,33 +411,9 @@
                 self._subir(indice, blob, reemplazo ? reemplazo.posicion : null);
             }
         });
-        slot.sel.on('usado', function (dato) {
-            // Spec 030 (D8): el selector REUSO la familia (0 bytes): el id de la fila entra
-            // al estado de la ranura como si se hubiera subido, y la ranura se repinta.
-            // Spec 038 (T116): el camino `usado` NO llena `filasRef` del consumidor (no hay
-            // subida), asi que ademas se PUBLICA la fila (id, item_key, sid, receta) con el
-            // evento `fila`: sin eso el cotizador no tiene con que componer ni guardar el
-            // mockup (y el carrito se queda sin miniatura).
-            var idU = (dato && dato.fila && dato.fila.id) ? String(dato.fila.id) : '';
-            if (!idU) { return; }
-            var filaU = dato.fila;
-            var reemplazoU = self._reemplazo;
-            self._reemplazo = null;
-            var posU = reemplazoU ? reemplazoU.posicion : null;
-            if (posU === null || posU === undefined || posU >= self.estado[indice].ids.length) {
-                self.estado[indice].ids.push(String(idU));
-            } else {
-                self.estado[indice].ids[posU] = String(idU);
-            }
-            try {
-                // Spec 038 (T116): se avisa al consumidor para que llene su `filasRef`
-                // (el camino `usado` no pasa por la subida).
-                if (typeof self.config.onFila === 'function') {
-                    self.config.onFila({ indice: indice, pos: posU, fila: filaU });
-                }
-            } catch (e) { /* el consumidor decide */ }
-            self._pintar();
-        });
+        // Spec 039 (D6): el evento `usado` (camino de reuso de la biblioteca, 0 bytes)
+        // se retiro con la rama `Elegir`. Ahora SIEMPRE se sube el original y el
+        // servidor deduplica por `sha` (D24 de la 035).
         slot.sel.onError(function (mensaje, err) {
             if (err && err.code === 'CROP_ABORTED') {
                 var reemp = self._reemplazo;
@@ -449,12 +430,9 @@
             : '';
         slot.sel.open({
             archivo: archivo || null,
-            tituloContexto: tituloContexto,
-            // Spec 030 (T014/D8): el selector decide `Elegir` vs `Subir` con su receta.
-            // La funcion la provee tienda.js (como `subir`): tiene el item, el pdf y el grupo.
-            usar: self.config.usar ? function (madre, params) {
-                return self.config.usar(madre, params, { ranura: indice });
-            } : null
+            tituloContexto: tituloContexto
+            // Spec 039 (D6): se retiro `usar` (el selector ya no decide `Elegir` vs
+            // `Subir`): siempre sube bytes y el servidor deduplica por `sha`.
         });
     };
 
@@ -477,12 +455,10 @@
         }
     };
 
-    /** Familia de biblioteca elegida en la ranura ('' si no hay). */
-    CargadorPMU.prototype._madreDe = function (indice) {
-        var sel = this.selectores[indice] && this.selectores[indice].sel;
-        return (sel && sel._bibMadre) ? String(sel._bibMadre) : '';
-    };
-
+    /**
+     * Spec 039 (D6): se retiro `_madreDe` (y con el, `madre_origen`). No hay familia
+     * que reusar: el servidor deduplica por `sha` (D24 de la 035).
+     */
     CargadorPMU.prototype._subir = function (indice, blob, posicion) {
         var self = this;
         if (!this.config.subir) {
@@ -494,15 +470,13 @@
         btn.disabled = true;
         return Promise.resolve(this.config.subir(blob, {
             ranura: indice, w: r.w, h: r.h, forma: r.forma,
-            // Spec 030 (D8): la receta de la composicion viaja con la subida (el servidor la
-            // guarda y despues `Elegir` puede reconocerla).
-            // Spec 038 (F-RECETA): `_params` y `_bibMadre` viven en la INSTANCIA del
-            // selector (`selectores[i].sel`), NO en el slot: leerlos del slot daba {}
-            // y el servidor guardaba la fila SIN receta (imposible componer despues).
-            params: this._paramsDe(indice),
-            // Spec 030 (5a): la familia elegida de la biblioteca. El servidor la VALIDA y
-            // escribe la fila como version de ESA familia (la tira no suma una entrada nueva).
-            madre_origen: this._madreDe(indice)
+            // Spec 035 (D9): la RECETA de la composicion viaja con la subida (el
+            // servidor la estampa en la fila y despues puede componer sin adivinar).
+            // Spec 038 (F-RECETA): `_params` vive en la INSTANCIA del selector
+            // (`selectores[i].sel`), NO en el slot: leerlos del slot daba {} y el
+            // servidor guardaba la fila SIN receta (imposible componer despues).
+            params: this._paramsDe(indice)
+            // Spec 039 (D6): `madre_origen` se retiro con las "familias".
         })).then(function (res) {
             btn.disabled = false;
             var id = res && res.id;
@@ -530,6 +504,15 @@
         }, function (err) {
             btn.disabled = false;
             var msg = (err && err.message) || 'No se pudo subir la imagen.';
+            // Spec 039 (D2): se GUARDA el blob del recorte (y con que receta se
+            // compuso) para que tocar la miniatura marcada reintente sin volver a
+            // elegir el archivo.
+            self._anotarFallo(indice, {
+                blob: blob,
+                params: self._paramsDe(indice),
+                error: msg
+            });
+            self._pintar();
             self._error(msg);
             throw err || new Error(msg);
         });
@@ -553,6 +536,21 @@
                 self._pintarMini(mini, id);
                 mini.addEventListener('click', function () { self._miniTocar(i, k, mini); });
                 slot.tira.appendChild(mini);
+            });
+            // Spec 039 (D2): las subidas que FALLARON quedan como miniaturas marcadas
+            // al final de la tira. No son ids (no existen en el servidor): el comprador
+            // las ve, las toca y REINTENTA con el mismo recorte.
+            (self._fallos[i] || []).forEach(function (f, m) {
+                var miniF = doc.createElement('button');
+                miniF.type = 'button';
+                miniF.className = 'cpmu-mini cpmu-mini-' + r.forma + ' cpmu-mini-fallo';
+                miniF.setAttribute('data-pmu-fallo', '1');
+                miniF.title = 'Reintentar subida';
+                miniF.textContent = '!';
+                miniF.addEventListener('click', function () {
+                    self._miniTocar(i, self.estado[i].ids.length + m, miniF);
+                });
+                slot.tira.appendChild(miniF);
             });
             slot.boton.disabled = n >= r.max;
             slot.zona.classList.toggle('cpmu-zona-llena', n > 0);
@@ -592,7 +590,61 @@
      * no hace ninguna peticion: ese era el motivo de la lentitud. Acciones de la
      * ranura: Reemplazar y Eliminar.
      */
+    /**
+     * Spec 039 (D2): fallo de subida de una MINIATURA MARCADA, o null.
+     *
+     * Las miniaturas de fallo van **despues** de los ids reales de la tira: su
+     * posicion es `estado[indice].ids.length + m`. Los ids (fotos que SI existen en
+     * el servidor) nunca tienen fallo.
+     */
+    CargadorPMU.prototype._falloEn = function (indice, posicion) {
+        var i = parseInt(indice, 10);
+        var p = parseInt(posicion, 10);
+        var ids = (this.estado[i] && this.estado[i].ids) || [];
+        var lista = (this._fallos && this._fallos[i]) || [];
+        if (p < ids.length) { return null; }          // es un id real: no hay fallo
+        var f = lista[p - ids.length];
+        return (f && f.blob) ? f : null;
+    };
+
+    /** Anota un fallo (o lo quita, con `null`) en la lista de la ranura. */
+    CargadorPMU.prototype._anotarFallo = function (indice, fallo) {
+        var i = parseInt(indice, 10);
+        if (!this._fallos[i]) { this._fallos[i] = []; }
+        if (fallo) { this._fallos[i].push(fallo); } else { this._fallos[i] = []; }
+    };
+
+    /**
+     * Spec 039 (D2): reintenta la subida de una miniatura marcada con el MISMO blob
+     * (el recorte que el comprador ya compuso). Si no hay blob (recarga de pagina)
+     * devuelve false y el llamador abre el visor como siempre.
+     */
+    CargadorPMU.prototype._reintentar = function (indice, posicion) {
+        var fallo = this._falloEn(indice, posicion);
+        if (!fallo || !this.config.subir) { return false; }
+        var self = this;
+        var slot = this.selectores[indice];
+        if (!slot) { return false; }
+        if (slot.boton) { slot.boton.disabled = true; }
+        if (this.txtError) { this.txtError.hidden = true; }
+        // `_subir` con `posicion` NULA: la foto entra como NUEVA (el fallo no tenia
+        // id que reemplazar). Al tener exito se limpia la marca.
+        this._subir(indice, fallo.blob, null).then(function () {
+            self._anotarFallo(indice, null);
+            self._pintar();
+        }, function () {
+            // Sigue fallando: se quita la miniatura vieja y se anota la nueva (sin
+            // duplicar la marca).
+            self._anotarFallo(indice, null);
+            self._pintar();
+        });
+        return true;
+    };
+
     CargadorPMU.prototype._miniTocar = function (indice, posicion) {
+        // Spec 039 (D2): si esta miniatura fallo, el toque REINTENTA (no abre el
+        // visor): el blob del recorte sigue en memoria.
+        if (this._reintentar(indice, posicion)) { return Promise.resolve(true); }
         return this._abrirVisorCompartido(indice, posicion);
     };
 
@@ -625,8 +677,29 @@
                     acciones: [
                         { etiqueta: 'Reemplazar', clase: 'button-primary',
                             onAccion: function (p) { global.PMUVisor.cerrar(); self._cambiar(indice, p, true); } },
-                        { etiqueta: 'Eliminar', clase: 'pmu-visor-peligro',
-                            onAccion: function (p) { self._quitar(indice, p); self._abrirVisorCompartido(indice, p); } }
+                        // Spec 039 (D1): `Eliminar` pide confirmacion con el mini-dialogo
+                        // propio del visor. Tras borrar NO se reabre (antes el visor volvía
+                        // a abrirse con la posicion corrida y el comprador veía la foto
+                        // siguiente sin entender qué pasó). Si queda al menos una, el visor
+                        // sigue abierto en la posicion que corresponda; si era la ultima, se
+                        // cierra y se vuelve a la tira.
+                        { etiqueta: 'Eliminar', clase: 'pmu-visor-peligro', confirmar: true,
+                            pregunta: 'Borrar esta imagen?',
+                            textoOk: 'Borrar',
+                            onAccion: function (p) {
+                                // `_quitar` devuelve una promesa (borra en el servidor):
+                                // solo se repinta/reabre el visor si la baja salio bien.
+                                Promise.resolve(self._quitar(indice, p)).then(function (ok) {
+                                    if (ok === false) { return; }   // fallo: se avisa y no se saca
+                                    var restantes = (self.estado[indice] && self.estado[indice].ids) || [];
+                                    if (restantes.length && global.PMUVisor) {
+                                        global.PMUVisor.cerrar();
+                                        self._abrirVisorCompartido(indice, Math.min(p, restantes.length - 1));
+                                    } else if (global.PMUVisor) {
+                                        global.PMUVisor.cerrar();
+                                    }
+                                });
+                            } }
                     ]
                 });
             });
@@ -647,9 +720,40 @@
         this._abrir(indice, null);
     };
 
+    /**
+     * Spec 039 (D3): quita la foto de la ranura Y la borra del servidor.
+     *
+     * Antes era un `splice` local: la fila del manifest y el archivo compartido
+     * quedaban hasta que el TTL del item vencia (30 dias). Ahora se pide la baja
+     * (`PMU_API.borrarFoto` -> `op=borrar`): si el borrado falla, se avisa CON LA
+     * CAUSA y la miniatura NO se saca (asi el comprador no pierde la foto por un
+     * error de red y puede reintentar).
+     *
+     * @param {number} indice  ranura
+     * @param {number} posicion posicion dentro de la tira
+     * @returns {Promise<boolean>} true si se quito
+     */
     CargadorPMU.prototype._quitar = function (indice, posicion) {
-        this.estado[indice].ids.splice(posicion, 1);
-        this._pintar();
+        var self = this;
+        var ids = (this.estado[indice] && this.estado[indice].ids) || [];
+        var id = ids[parseInt(posicion, 10)];
+        var quitarLocal = function () {
+            self.estado[indice].ids.splice(posicion, 1);
+            self._pintar();
+            return true;
+        };
+        // Sin consumidor de red (preview del admin, o sin `borrarFoto`): solo local.
+        var tieneBaja = (global.PMU_API && typeof global.PMU_API.borrarFoto === 'function');
+        if (!tieneBaja || !id) {
+            return Promise.resolve(quitarLocal());
+        }
+        return Promise.resolve(global.PMU_API.borrarFoto(String(id))).then(function () {
+            return quitarLocal();
+        }, function (err) {
+            var msg = (err && err.message) || 'No se pudo borrar la imagen.';
+            self._error(msg);
+            return false;
+        });
     };
 
     /**

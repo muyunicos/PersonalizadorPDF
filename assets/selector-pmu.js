@@ -646,15 +646,17 @@
         inyectarEstilos();
         this._focoPrevio = document.activeElement || null;
         this._contextoReemplazo = opciones.tituloContexto ? String(opciones.tituloContexto) : '';
-        // Spec 030 (T014/4a clarificacion): el contexto del hueco (para `op=usar`) y si la
-        // fuente viene de la BIBLIOTECA (entonces se puede ELEGIR sin recomponer). `_cambios`
-        // se enciende con cualquier retoque: si no, el primario dice `Elegir` (0 bytes).
+        // Spec 039 (D6): se retira la rama de reuso `Elegir` (0 bytes). El primario
+        // dice SIEMPRE `Subir` y SIEMPRE viajan bytes; el servidor deduplica por
+        // `sha` (D24 de la 035) si la foto ya existia.
+        //   - `this.config.usar`  -> eliminado
+        //   - la fuente de biblioteca (`bibMadre`) y su guard (`yaElegido`)
+        //   - la composicion de REFERENCIA que hacia decir `Elegir`
         this._hueco = opciones.hueco || null;
-        this.config.usar = opciones.usar || this.config.usar || null;
-        this._bibMadre = opciones.bibMadre ? String(opciones.bibMadre) : '';
         this._cambios = false;
-        this._yaElegido = false;
         this._subiendo = false;
+        // Spec 039 (D2): true si la ULTIMA subida fallo (habilita `obtenerBlobFallido`).
+        this._falloSubida = false;
         this.raiz = document.createElement('div');
         this.raiz.className = 'spmu-modal';
         var tituloTxt = this._contextoReemplazo
@@ -926,9 +928,10 @@
 
                 window.PMUBiblioteca.tira(cajaBib, {
                     onElegir: function (foto) {
-                        // Spec 030 (D8): la fuente viene de la BIBLIOTECA: si el comprador
-                        // no toca la composicion, el primario dira `Elegir` (0 bytes).
-                        self._bibMadre = String((foto && foto.madre) || '');
+                        // Spec 039 (D4/D6): tocar una miniatura de "Mis imagenes" carga
+                        // la imagen DIRECTO en el recorte (sin visor de biblioteca y sin
+                        // rama de reuso `Elegir`). Si la foto no esta en el navegador se
+                        // baja por `op=imagen`; si esta, sale del cache del navegador.
                         window.fetch(foto.url, { credentials: 'same-origin' })
                             .then(function (r) { return r.blob(); })
                             .then(function (b) {
@@ -1056,11 +1059,8 @@
             if (self.config.transp === 'no' && self.colorFondo === 'transparent') {
                 self.colorFondo = '#ffffff';
             }
-            // Spec 030 (D8): composicion de REFERENCIA al cargar la imagen. Si el comprador
-            // no la toca, el primario puede ELEGIR (0 bytes) y no recomponer ni subir.
-            self._paramsBase = JSON.stringify(self._params());
-            // Spec 030 (5a): el primario se recalcula YA (no depende de un redibujo posterior):
-            // si la fuente es de la biblioteca y no se toco, el boton dice `Elegir` (0 bytes).
+            // Spec 039 (D6): se retiro la composicion de REFERENCIA con la que el
+            // primario decia `Elegir` (0 bytes). El primario siempre dice `Subir`.
             self._actualizarPrimario();
             self.supera5 = superaCincoPorciento(
                 img.naturalWidth || 1, img.naturalHeight || 1,
@@ -1090,6 +1090,16 @@
             self._fallo('UPLOAD_FAILED', 'No se pudo leer la imagen');
         };
         img.src = url;
+    };
+
+    /**
+     * Spec 039 (D2): ultimo blob recortado en memoria, si la subida fallo.
+     * Lo usa `cargador-pmu.js` cuando el modal se cerro despues de un fallo: al
+     * tocar la miniatura marcada se reintenta con ESTE recorte. Tras recargar la
+     * pagina no hay nada (el blob vive en memoria).
+     */
+    SelectorPMU.prototype.obtenerBlobFallido = function () {
+        return (this.ultimoBlob && this._falloSubida) ? this.ultimoBlob : null;
     };
 
     SelectorPMU.prototype._estado = function (estado) {
@@ -1287,16 +1297,15 @@
     };
 
     /**
-     * Spec 030 (D8): el primario dice `Elegir` (0 bytes) cuando la fuente es una foto
-     * de la biblioteca y la composicion NO se toco; en cualquier otro caso, `Subir`.
+     * Spec 039 (D6): el primario del modal dice **siempre** `Subir` (se retiro la rama
+     * de reuso `Elegir` de 0 bytes). Se conserva el metodo (lo llaman `_dibujar` y
+     * `_cargar`) para no dejar un esqueleto sin explicacion.
      */
     SelectorPMU.prototype._actualizarPrimario = function () {
         if (!this.raiz || this._subiendo) { return; }
         var ok = this.raiz.querySelector('.spmu-ok');
         if (!ok) { return; }
-        var puede = !!(this._bibMadre && this.config.usar && this._paramsBase
-            && this._paramsBase === JSON.stringify(this._params()));
-        ok.textContent = puede ? 'Elegir' : 'Subir';
+        ok.textContent = 'Subir';
     };
 
     SelectorPMU.prototype._dibujar = function () {
@@ -1630,31 +1639,9 @@
             if (!this.imagen) { this._fallo('UPLOAD_FAILED', 'No hay imagen para subir'); }
             return;
         }
-        // Spec 030 (D8/4a clarificacion): si la fuente es de la BIBLIOTECA y no se toco
-        // nada (misma composicion que al cargarla), no se compone ni se suben bytes: se le
-        // pide al servidor que REUSE esa familia (`op=usar`, decide por receta). Si vuelve
-        // `coincide:false`, se sigue por el camino normal. El `_yaElegido` evita re-entrar.
-        if (!this._yaElegido && this._bibMadre && this.config.usar
-            && this._paramsBase === JSON.stringify(this._params())) {
-            var selfB = this;
-            this._yaElegido = true;
-            var okB = this.raiz ? this.raiz.querySelector('.spmu-ok') : null;
-            if (okB) { okB.disabled = true; okB.textContent = 'Eligiendo...'; }
-            this._emitir('progress', { percentage: 30 });
-            this.config.usar(this._bibMadre, this._params()).then(function (res) {
-                if (okB) { okB.disabled = false; okB.textContent = 'Elegir'; }
-                if (res && res.fila) {
-                    selfB._emitir('usado', { fila: res.fila, madre: selfB._bibMadre });
-                    selfB._cancelar();
-                    return;
-                }
-                selfB._aceptar();
-            }).catch(function () {
-                if (okB) { okB.disabled = false; okB.textContent = 'Elegir'; }
-                selfB._aceptar();
-            });
-            return;
-        }
+        // Spec 039 (D6): la rama de reuso de la biblioteca (`Elegir`, 0 bytes) se retiro.
+        // El primario siempre dice `Subir` y siempre viajan bytes; si la foto ya
+        // existia, el servidor la deduplica por `sha` (D24).
         var ok = this.raiz ? this.raiz.querySelector('.spmu-ok') : null;
         var elegir = this.raiz ? this.raiz.querySelector('.spmu-elegir') : null;
         if (ok) { ok.disabled = true; ok.textContent = 'Subiendo...'; }
@@ -1709,9 +1696,14 @@
 
             if (typeof self.config.subirAsync === 'function') {
                 Promise.resolve(self.config.subirAsync(blobOrig || blob, meta)).then(function () {
+                    // Spec 039 (D2): subio bien -> ya no hay blob que reintentar.
+                    self._falloSubida = false;
                     if (typeof self.onSelectCallback === 'function') { self.onSelectCallback(url, meta); }
                     finalizarExito();
                 }, function (err) {
+                    // Spec 039 (D2): la subida fallo pero el blob queda en memoria:
+                    // `obtenerBlobFallido()` lo devuelve para reintentar sin recomponer.
+                    self._falloSubida = true;
                     self._subiendo = false;
                     if (ok) { ok.disabled = false; ok.textContent = 'Subir'; }
                     if (elegir) { elegir.disabled = false; }

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.29.0
+ * Version: 4.30.0
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -1871,27 +1871,14 @@ class Personalizador_PDF_Plugin
      * biblioteca no bloquea nada, D17).
      */
     /**
-     * Spec 030 (5a/D8): familia para una SUBIDA. Primero el dedupe por contenido (`sha` de
-     * los bytes crudos, D24); si no hay, la `madre_origen` que manda el cliente **validada
-     * contra el escaneo propio** (nunca se confia en el cliente, §III): asi una foto elegida
-     * de la biblioteca entra como VERSION de su familia y la tira no muestra dos entradas.
+     * Spec 039 (D6): familia para una SUBIDA. **Solo** el dedupe por contenido (`sha`
+     * de los bytes crudos, D24). Se retiro la `madre_origen` que mandaba el cliente:
+     * no hay familia que reusar (una imagen + N recetas), asi que la subida siempre
+     * viaja con bytes y el servidor decide si ya la tiene.
      */
     public function biblioteca_madre_por_subida($bytes)
     {
-        $madre = $this->biblioteca_madre_por_contenido($bytes);
-        if ($madre !== '') {
-            return $madre;
-        }
-        $origen = sanitize_text_field(wp_unslash((string)($_POST['madre_origen'] ?? '')));
-        if ($origen === '') {
-            return '';
-        }
-        try {
-            $contenedores = $this->biblioteca_contenedores($this->biblioteca_identidad());
-            return ($this->biblioteca_familia_de($contenedores, $origen) !== null) ? $origen : '';
-        } catch (\Throwable $e) {
-            return '';
-        }
+        return $this->biblioteca_madre_por_contenido($bytes);
     }
 
     public function biblioteca_madre_por_contenido($bytes)
@@ -2381,6 +2368,27 @@ class Personalizador_PDF_Plugin
         ], admin_url('admin-post.php'));
     }
     /**
+     * Spec 039 (D5): URL protegida de una imagen por su `id` (identidad = sha12).
+     *
+     * Es la variante del `listar`, donde la fila ya no trae `madre`/`item_key`:
+     * la galeria pide la imagen por `id` y el servidor la resuelve con el escaneo
+     * del comprador (`biblioteca_servir_imagen`). Misma politica de acceso (D14).
+     */
+    private function url_biblioteca_imagen_id($id, $w = 0)
+    {
+        $id = (string)$id;
+        if ($id === '') {
+            return '';
+        }
+        return add_query_arg([
+            'action' => 'personalizador_pdf_biblioteca',
+            'op' => 'imagen',
+            'id' => $id,
+            '_wpnonce' => wp_create_nonce('personalizador_pdf_vista_previa'),
+        ], admin_url('admin-post.php'));
+    }
+
+    /**
      * URL protegida de una imagen (spec 030, D14/D23): endpoint unico con
      * `op=imagen`, identidad por cookie y nonce. La miniatura y la vista grande
      * usan la MISMA URL, asi que el navegador la sirve de su cache.
@@ -2429,94 +2437,39 @@ class Personalizador_PDF_Plugin
                 }
                 $fotos = [];
                 $bytes = 0;
-                foreach ($this->biblioteca_familias($contenedores) as $f) {
-                    $bytes += (int)$f['bytes'];
-                    $fotos[] = $f;
+                // Spec 039 (D5): una entrada por IMAGEN (no por familia).
+                foreach ($this->sesion()->imagenes($contenedores, function ($id) {
+                    return $this->url_biblioteca_imagen_id($id);
+                }) as $img) {
+                    $bytes += (int)$img['bytes'];
+                    $fotos[] = $img;
                 }
                 wp_send_json_success(['revision' => $revision, 'sin_cambios' => false, 'fotos' => $fotos,
                     'totales' => ['fotos' => count($fotos), 'bytes' => $bytes,
                         'contenedores' => count($contenedores)]]);
             }
-            if ($op === 'usos') {
-                $familia = $this->biblioteca_familia_de($contenedores, (string)($_REQUEST['madre'] ?? ''));
-                if ($familia === null) {
-                    throw new \RuntimeException('foto:ajena');
-                }
-                // D17: el aviso habla de OTROS usos. El item que el comprador esta
-                // editando ahora mismo no es "esta en tu carrito" (esta ahi mismo).
-                $itemActual = sanitize_text_field(wp_unslash((string)($_REQUEST['item_key'] ?? '')));
-                $carrito = array_values((array)$familia['usos']['carrito']);
-                if ($itemActual !== '') {
-                    $carrito = array_values(array_diff($carrito, [$itemActual]));
-                }
-                wp_send_json_success(['madre' => (string)$familia['madre'],
-                    'versiones' => (int)$familia['archivos'], 'bytes' => (int)$familia['bytes'],
-                    'carrito' => $carrito,
-                    'pedidos' => array_values((array)$familia['usos']['pedidos'])]);
+            // Spec 039 (D5/D6): `op=usos` y `op=usar` se RETIRARON con el modelo de
+            // "familias" y la rama de reuso `Elegir` (0 bytes). No hay familia que
+            // listar ni receta que reusar: el cliente sube el original y el servidor
+            // deduplica por `sha` (D24 de la 035).
+            if ($op === 'usos' || $op === 'usar') {
+                throw new \RuntimeException('op:retirada');
             }
-            if ($op === 'usar') {
+            if ($op === 'borrar') {
+                // Spec 039 (D3): borra la FILA de un item + el archivo compartido de la
+                // sesion (si ningun otro item lo referencia). Idempotente. NUNCA toca
+                // `orders/` (lo comprado vive ahi; C5 de la 035).
                 $item = sanitize_text_field(wp_unslash((string)($_POST['item_key'] ?? '')));
-                $pdf = sanitize_file_name(wp_unslash((string)($_POST['pdf'] ?? '')));
-                $grupo = strtoupper(sanitize_text_field(wp_unslash((string)($_POST['grupo'] ?? ''))));
-                $madre = sanitize_text_field(wp_unslash((string)($_POST['madre'] ?? '')));
-                $indice = isset($_POST['indice']) ? (int)$_POST['indice'] : 0;
-                $params = json_decode((string)wp_unslash($_POST['params'] ?? ''), true);
-                if (!is_array($params)) {
-                    throw new \RuntimeException('params:invalidos');
-                }
-                if ($this->biblioteca_familia_de($contenedores, $madre) === null) {
-                    throw new \RuntimeException('foto:ajena');
-                }
-                $rutaBase = $this->biblioteca_ruta_familia($contenedores, $madre);
-                if ($rutaBase === '') {
-                    throw new \RuntimeException('imagen:ausente');
-                }
-                // Spec 030 (D8): la RECETA manda. Si la composicion del hueco no coincide
-                // con NINGUNA de la familia, no se escribe nada: el cliente compone y sube
-                // una version (viaja `coincide: false`). El cliente NO decide esto: podria
-                // mentir (constitution §III).
-                $fam = $this->biblioteca_familia_de($contenedores, $madre);
-                $recetaUsar = PMU_Sesion::receta_de($params);
-                if (!in_array($recetaUsar, (array)($fam['recetas'] ?? []), true)) {
-                    wp_send_json_success(['coincide' => false, 'receta' => $recetaUsar]);
-                }
-                $fila = $this->sesion()->usar_de_biblioteca($sid, $item, $pdf, $grupo, $madre, $indice, $params, $rutaBase);
-                wp_send_json_success(['fila' => $fila, 'receta' => PMU_Sesion::receta_de($params)]);
+                $id = sanitize_text_field(wp_unslash((string)($_POST['id'] ?? '')));
+                $res = $this->sesion()->borrar_original_item($sid, $item, $id);
+                wp_send_json_success(array(
+                    'id' => $id,
+                    'borrado' => (bool)$res['borrado'],
+                    'no_hacia_nada' => (bool)$res['no_hacia_nada'],
+                    'filas' => (int)$res['filas'],
+                    'archivo' => (bool)$res['archivo'],
+                ));
             }
-           if ($op === 'borrar') {
-               $madre = sanitize_text_field(wp_unslash((string)($_REQUEST['madre'] ?? '')));
-               $familia = $this->biblioteca_familia_de($contenedores, $madre);
-               if ($familia === null) {
-                   throw new \RuntimeException('foto:ajena');
-               }
-               $borrados = 0;
-               foreach ($contenedores as $contenedor) {
-                   $tiene = false;
-                   foreach ((array)($contenedor['manifest']['subidas'] ?? []) as $fila) {
-                       if (!is_array($fila) || !isset($fila['id'])) {
-                           continue;
-                       }
-                       $suya = (string)($fila['madre'] ?? $fila['id']);
-                       if ($suya === $madre || (string)$fila['id'] === $madre) {
-                           $tiene = true;
-                       }
-                   }
-                   if (!$tiene) {
-                       continue;
-                   }
-                   $borrados += $this->sesion()->borrar_familia_dir($contenedor['dir'], $madre);
-               }
-               wp_send_json_success(array(
-                   'madre' => $madre,
-                   'borrado' => true,
-                   'versiones' => (int)$familia['archivos'],
-                   'archivos_borrados' => $borrados,
-                   'usos' => array(
-                       'carrito' => array_values((array)$familia['usos']['carrito']),
-                       'pedidos' => array_values((array)$familia['usos']['pedidos']),
-                   ),
-               ));
-           }
             throw new \RuntimeException('op:invalido');
         } catch (\Throwable $e) {
             wp_send_json_error('api:biblioteca:' . $e->getMessage());
@@ -2550,6 +2503,26 @@ class Personalizador_PDF_Plugin
                 throw new \RuntimeException('foto:ajena');
             }
             $ruta = $this->biblioteca_ruta_familia($contenedores, $madre);
+        } elseif ($id !== '') {
+            // Spec 039 (D5): variante por `id` (la del `listar`, donde la fila ya no
+            // trae `item_key` ni `madre`). Se re-resuelve contra el escaneo del
+            // comprador: solo sirvo una imagen QUE SEA SUYA (nunca una ruta del cliente).
+            $contenedores = $this->biblioteca_contenedores($this->biblioteca_identidad());
+            foreach ($contenedores as $contenedor) {
+                foreach ((array)($contenedor['manifest']['subidas'] ?? []) as $fila) {
+                    if (!is_array($fila) || (string)($fila['id'] ?? '') !== $id) {
+                        continue;
+                    }
+                    $rutaCandidata = $sesion->ruta_fila_subida_public($contenedor, $fila);
+                    if ($rutaCandidata !== '') {
+                        $ruta = $rutaCandidata;
+                        break 2;
+                    }
+                }
+            }
+            if ($ruta === '') {
+                throw new \RuntimeException('foto:ajena');
+            }
         }
         if ($ruta === '' || !is_file($ruta)) {
             throw new \RuntimeException('imagen:ausente');

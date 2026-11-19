@@ -138,8 +138,11 @@ const selectorSrc = fs.readFileSync(path.join(RAIZ, 'assets', 'selector-pmu.js')
 const ini = selectorSrc.indexOf('SelectorPMU.prototype._params');
 const fin = selectorSrc.indexOf('SelectorPMU.prototype._dimensionesImagen');
 check('_params no calcula ningun hash', !/sha1|sha256|createHash/.test(selectorSrc.slice(ini, fin)));
+// Spec 039: la receta la STAMPA el servidor al guardar el original (`guardar_subida`),
+// no el handler del admin-post: `op=usar` se retiro y con el, su `receta_de()`.
 check('la receta viaja como params (el servidor recomputa)',
-    /receta_de\(\$params\)/.test(fs.readFileSync(path.join(RAIZ, 'personalizador-pdf.php'), 'utf8')));
+    /receta_de\(\$params\)/.test(fs.readFileSync(path.join(RAIZ, 'personalizador-pdf.php'), 'utf8'))
+    || /receta_de\(\$params\)/.test(fs.readFileSync(path.join(RAIZ, 'inc', 'class-pmu-sesion.php'), 'utf8')));
 
 // ---------------------------------------------------------------------------
 if (fallos) {
