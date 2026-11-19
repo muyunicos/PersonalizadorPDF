@@ -1244,14 +1244,17 @@ class PMU_Sesion
             return $fuera;
         }
         // Carrito: items de la sesion (sin borradores) que referencian el id.
-        $raiz = $this->motor->dir_sesion($sid, false);
-        foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $itemDir) {
-            if (strpos(basename($itemDir), 'draft-') === 0) {
-                continue;   // borrador: todavia no es carrito
-            }
-            $man = $this->leer_manifest_dir($itemDir);
-            if ($this->filaReferenciaId($man, $id)) {
-                $fuera['carrito']++;
+        // Sin `sid` (poda del arbol del cliente) no hay sesion que mirar.
+        if ((string)$sid !== '') {
+            $raiz = $this->motor->dir_sesion($sid, false);
+            foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $itemDir) {
+                if (strpos(basename($itemDir), 'draft-') === 0) {
+                    continue;   // borrador: todavia no es carrito
+                }
+                $man = $this->leer_manifest_dir($itemDir);
+                if ($this->filaReferenciaId($man, $id)) {
+                    $fuera['carrito']++;
+                }
             }
         }
         // Pedidos: items del arbol del cliente.
@@ -1316,6 +1319,70 @@ class PMU_Sesion
         }
         $salida['borrado'] = true;
         return $salida;
+    }
+
+    /**
+     * Spec 041 (T018/T031): migra los originales de la sesion anonima a la carpeta del
+     * cliente al iniciar sesion. Idempotente: lo que ya esta en destino se descarta.
+     *
+     * Fusiona el catalogo (el destino gana en conflicto) y mueve originales y
+     * miniaturas; al final retira el catalogo de la sesion, que ya quedo fusionado.
+     *
+     * @return int archivos movidos
+     */
+    public function migrar_uploads_a_cliente($sid, $uid)
+    {
+        $uid = (int)$uid;
+        if (!PMU_Uploads::clave_valida((string)$uid)) {
+            return 0;
+        }
+        $src = $this->motor->dir_sesion_uploads($sid, false);
+        if (!is_dir($src)) {
+            return 0;
+        }
+        $dst = $this->motor->dir_order_uploads($uid, true);
+        // 1) Catalogos: merge entry por entry (el destino gana).
+        $catSrc = $this->motor->catalogo_leer($src);
+        if (is_array($catSrc)) {
+            foreach ((array)($catSrc['items'] ?? []) as $id => $it) {
+                if (!is_array($it)) {
+                    continue;
+                }
+                try {
+                    $this->motor->catalogo_upsert($dst, (string)$id, $it);
+                } catch (\Throwable $e) {
+                    // Best-effort: el catalogo se reconstruye desde los archivos.
+                }
+            }
+        }
+        // 2) Archivos: originales + miniaturas (`{id}.ext` y `{id}-80x80.webp`).
+        $movidos = 0;
+        foreach ((array)glob($src . DIRECTORY_SEPARATOR . '*') as $archivo) {
+            if (!is_file($archivo)) {
+                continue;
+            }
+            $nombre = basename($archivo);
+            if ($nombre === PMU_Uploads::CATALOGO_UPLOADS || $nombre === PMU_Uploads::LOCK_UPLOADS) {
+                continue;
+            }
+            $destino = $dst . DIRECTORY_SEPARATOR . $nombre;
+            if (is_file($destino)) {
+                @unlink($archivo);   // mismo id = mismo contenido
+                continue;
+            }
+            if (@rename($archivo, $destino)) {
+                $movidos++;
+            } else {
+                @copy($archivo, $destino);
+                @unlink($archivo);
+                $movidos++;
+            }
+        }
+        // 3) El catalogo de la sesion ya se fusiono: se retira.
+        if (is_array($catSrc)) {
+            @unlink($this->motor->ruta_catalogo_uploads($src));
+        }
+        return $movidos;
     }
 
     /**
@@ -1806,12 +1873,30 @@ class PMU_Sesion
                 $this->borrar_arbol($dirSesion);
             }
         }
-        // Spec 041 (A2): el cache de miniaturas (`tmp/miniaturas/`) es por CONTENIDO y no
-        // vence con los items: se poda por edad con el horizonte del carrito.
-        foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . 'miniaturas', GLOB_ONLYDIR) as $dirMini) {
-            foreach ((array)glob($dirMini . DIRECTORY_SEPARATOR . '*.webp') as $mini) {
-                if ((int)@filemtime($mini) < $horizonteCarrito) {
-                    @unlink($mini);
+        // Spec 041 (T030): poda por ULTIMO USO en las carpetas de los CLIENTES. Nunca se
+        // borra una imagen referenciada por un pedido (romperia su regeneracion).
+        $raizOrders = $this->motor->dir_ambito('orders');
+        foreach ((array)glob($raizOrders . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirCli) {
+            $uidCli = basename($dirCli);
+            if (!PMU_Uploads::clave_valida($uidCli)) {
+                continue;   // `uploads/`, `customs/` y demas no son clientes
+            }
+            $dirUp = $dirCli . DIRECTORY_SEPARATOR . 'uploads';
+            $cat = $this->motor->catalogo_leer($dirUp);
+            if (!is_array($cat)) {
+                continue;
+            }
+            foreach ((array)($cat['items'] ?? []) as $id => $it) {
+                if (!is_array($it) || (int)($it['ultimo_uso'] ?? 0) >= $horizonteCarrito) {
+                    continue;
+                }
+                $refs = $this->referencias_en_carrito_o_pedidos('', (string)$id, $uidCli);
+                if ((int)$refs['pedidos'] > 0) {
+                    continue;
+                }
+                $baja = $this->borrar_imagen_galeria('', (string)$id, $uidCli);
+                if (!empty($baja['borrado'])) {
+                    $eliminados++;
                 }
             }
         }

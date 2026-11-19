@@ -2070,6 +2070,14 @@ class Personalizador_PDF_Plugin
         if ($sid === '') {
             return;
         }
+        // Spec 041 (T031): FUSIONADO con el vinculo: al iniciar sesion (o al crearse la
+        // cuenta en el checkout) los originales de la sesion anonima pasan a la carpeta
+        // del cliente. Idempotente y best-effort: nunca tumba el login.
+        try {
+            $this->sesion()->migrar_uploads_a_cliente($sid, $uid);
+        } catch (\Throwable $e) {
+            // La migracion se reintenta en el proximo login.
+        }
         $lista = [];
         foreach ((array)get_user_meta($uid, '_pmu_sids', true) as $s) {
             $s = (string)$s;
