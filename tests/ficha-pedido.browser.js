@@ -190,12 +190,15 @@ function filasRef() {
         if (!/manifest\.json$/.test(f.ruta)) continue;
         try {
             const j = JSON.parse(fs.readFileSync(f.ruta, 'utf8'));
-            (j.subidas || []).forEach((s) => { if (s && s.origen === 'ref') out.push({ item: f.ruta, ref: String(s.ref || ''), madre: String(s.madre || '') }); });
+            (j.subidas || []).forEach((s) => { if (s && s.origen === 'ref') out.push({ item: f.ruta, ref: String(s.ref || '') }); });
         } catch (e) { /* no json */ }
     }
     return out;
 }
-/** Familia (`madre`) -> archivos, desde los manifests del comprador (spec 030). */
+/**
+ * Imagen (`id`) -> archivos, desde los manifests del comprador.
+ * Spec 039 (D5): `madre` murio; la identidad es el `id` (sha12 del contenido).
+ */
 function familiasItem() {
     const out = {};
     for (const f of listarRec(PMU + '\\tmp')) {
@@ -203,7 +206,7 @@ function familiasItem() {
         try {
             const j = JSON.parse(fs.readFileSync(f.ruta, 'utf8'));
             (j.subidas || []).forEach((s) => {
-                const m = String(s.madre || '');
+                const m = String((s && s.id) || '');
                 if (!m) return;
                 if (!out[m]) out[m] = [];
                 out[m].push(String(s.file || s.ref || ''));
@@ -542,13 +545,13 @@ async function precondiciones(page) {
         check('biblioteca (030/E3): el item no gano archivos en subidas/', subidasArchivos().length === bytesAntes, bytesAntes + ' -> ' + subidasArchivos().length);
         const refs = filasRef();
         // D2: la fila `origen: ref` existe cuando el archivo vive en OTRO item/pedido.
-        // Aca la familia es la del PROPIO item, asi que el contrato es NO escribir ref
+        // Aca el original es del PROPIO item, asi que el contrato es NO escribir ref
         // (y no mover un byte). El caso cruzado (ref a un pedido pagado) lo cubre la
         // fase `biblioteca` del arnes en CLI.
-        check('biblioteca (030/E3/D2): con la familia en el propio item no escribe ref (contrato del caso cruzado)', refs.length === refsAntes, refsAntes + ' -> ' + refs.length + ' | ' + JSON.stringify(refs.slice(-1)));
+        check('biblioteca (030/E3/D2): con el original en el propio item no escribe ref (contrato del caso cruzado)', refs.length === refsAntes, refsAntes + ' -> ' + refs.length + ' | ' + JSON.stringify(refs.slice(-1)));
 
-        // E4: reusar recomponiendo => VERSION de la MISMA familia. Se comprueba en el
-        // manifest (fuente de verdad): filas que comparten `madre` con `{madre}-N`.
+        // E4: reusar recomponiendo => la MISMA imagen (misma receta, mismo id). Se
+        // comprueba en el manifest (fuente de verdad): no aparecen archivos `{id}-N`.
         const famAntes = familiasItem();
         await abrirModal(page);
         await page.evaluate(() => {
@@ -563,16 +566,16 @@ async function precondiciones(page) {
         await subirOtra(page);
         await cerrarOverlays(page);
         const famDespues = familiasItem();
-        // E4 (spec 035, D3/D7): re-encuadrar la MISMA foto recompone la misma imagen: el
-        // `id` del original no cambia (el contenido es el mismo, se deduplica) y la
-        // receta vigente se ACTUALIZA en la fila. Ya NO entra un archivo `{madre}-2`:
-        // eso era el modelo pre-035, donde cada recorte era un archivo propio.
+        // E4 (spec 035, D3/D7; spec 039 D5): re-encuadrar la MISMA foto recompone la
+        // misma imagen: el `id` del original no cambia (el contenido es el mismo, se
+        // deduplica) y la receta vigente se ACTUALIZA en la fila. No hay "versiones":
+        // una imagen + N recetas.
         const versionadas = Object.keys(famDespues).filter((m) => /-2\./.test(famDespues[m].join(' ')));
-        check('biblioteca (035/D3/D7): re-encuadrar NO crea familia ni version nueva',
+        check('biblioteca (035/D3/D7): re-encuadrar NO crea imagen ni version nueva',
             versionadas.length === 0 && Object.keys(famDespues).length === Object.keys(famAntes).length,
-            'familias=' + Object.keys(famDespues).length + ' antes=' + Object.keys(famAntes).length + ' | version=' + JSON.stringify(versionadas.slice(0, 2)));
+            'imagenes=' + Object.keys(famDespues).length + ' antes=' + Object.keys(famAntes).length + ' | version=' + JSON.stringify(versionadas.slice(0, 2)));
 
-        // E6.1: dedupe por contenido. Subir la MISMA foto otra vez NO crea otra familia.
+        // E6.1: dedupe por contenido. Subir la MISMA foto otra vez NO crea otra imagen.
         const familiasAntes6 = Object.keys(familiasItem()).length;
         await abrirModal(page);
         await page.locator('.spmu-file').setInputFiles(FOTO);
@@ -582,8 +585,8 @@ async function precondiciones(page) {
         await subirOtra(page);
         await cerrarOverlays(page);
         const familiasDespues6 = Object.keys(familiasItem()).length;
-        check('biblioteca (030/E6): re-subir la misma foto reusa la familia (sin duplicar la entrada)', familiasDespues6 === familiasAntes6,
-            familiasAntes6 + ' -> ' + familiasDespues6 + ' familias');
+        check('biblioteca (030/E6): re-subir la misma foto reusa la imagen (sin duplicar la entrada)', familiasDespues6 === familiasAntes6,
+            familiasAntes6 + ' -> ' + familiasDespues6 + ' imagenes');
         page.screenshot({ path: CAPT + '\\biblioteca-tira.png' }).catch(() => { });
 
         // (El sembrado del escenario de US3 se movio al inicio de la ficha: el

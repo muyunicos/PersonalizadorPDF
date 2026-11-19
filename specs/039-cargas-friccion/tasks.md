@@ -75,6 +75,29 @@ Rutas relativas a la raiz del repo.
 
 ---
 
+## Fase F7 — Retiro TOTAL del modelo "familias" (2026-11-19)
+
+> El usuario pidio "retira familias, estamos en desarrollo": se retira todo, sin
+> compatibilidad de lectura (las filas viejas con `madre` se **ignorean**, no se migran).
+
+- [X] T070 Plugin: borrar `biblioteca_madre_por_subida()` y `biblioteca_madre_por_contenido()`;
+      `handle_subida` deja de calcular familia y manda `guardar_subida($sid,$item,$bytes,'',$params)`.
+- [X] T071 Plugin: borrar `biblioteca_familias()`, `biblioteca_familia_de()`, `biblioteca_ruta_familia()`,
+      `url_biblioteca_imagen_madre()`; quitar la rama `madre` de `biblioteca_ruta_imagen()`.
+- [X] T072 Plugin: smoke anti-drift actualizado (exige `imagenes`/`borrar_original_item`/`ruta_fila_subida_public`
+      y **reprocha** si reaparecen `familias`/`familia_de`/`familia_por_sha`/`ruta_familia`).
+- [X] T073 `PMU_Sesion`: borrar `familias()`, `familia_por_sha()`, `familia_de()`, `ruta_familia()`,
+      `fila_ref()`; `guardar_subida()` firma nueva **sin `$madre`** (4º arg = `$params`);
+      `fila_subida()` ya **no escribe `madre`** (D7).
+- [X] T074 Puertas: `texto_puente.php` fase `biblioteca` actualizada (`op=imagen` por `id`, dedupe
+      por `id`/`sha`, `madre` ausente en la fila) + `ficha-pedido.browser.js` indexa por `id`
+      (`familiasItem`) y textos de E3/E4/E6 actualizados.
+- [X] T075 Docs: enmienda `specs/030.../contracts/biblioteca.md`, `cliente-biblioteca.md` y
+      `specs/035.../contracts/fotos-originales.md` (C2 sin `madre`); `docs/decisiones.md`
+      (Sync Impact Report); `specs/039.../spec.md` (D5/D7 con el detalle del retiro).
+
+---
+
 ## Dependencias
 
 - **F0** no depende de nada.

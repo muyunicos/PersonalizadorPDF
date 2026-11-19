@@ -23,13 +23,17 @@
 
 > **2026-11-19**: spec **039-cargas-friccion** — **implementada** (v4.30.0): friccion del pipeline
 > de cargas del comprador. **H1** (el `_yaElegido` trucho de "Elegir") y **H6** (codigo muerto del
-> modelo "familias") resueltos **retirando** la rama de reuso `op=usar` y `familias()` (una imagen +
-> N recetas, la identidad es el `id`). **H2**: `Eliminar` pide confirmacion con un **mini-dialogo propio**
-> del visor y no reabre el visor. **H3**: **reintentar** la subida tocando la miniatura marcada. **H4**:
-> **borrado en el acto** (`PMU_Sesion::borrar_original_item` + `op=borrar`), idempotente y sin tocar
-> `orders/`. **H5**: `subidas.detalle()` y aviso con el total. **El Motor no se toca**; sin migracion.
-> Puertas: `biblioteca-contrato` 60, `selector-contrato` 100, `campos-contrato` 128, `cola-subida` 27,
-> `receta-contrato` 21 + 40 fases del arnes PHP + `motor_smoke` + `parity`.
+> modelo "familias") resueltos **retirando** la rama de reuso `op=usar` y **todo** el modelo de
+> familias (`familias()`, `familia_de()`, `familia_por_sha()`, `ruta_familia()`, `usar_de_biblioteca()`,
+> `borrar_familia_dir()`, `fila_ref()`, y los 6 privados del plugin). La identidad es el `id` (sha12)
+> y **una imagen + N recetas**; `guardar_subida()` ya no recibe `$madre`; las filas `subidas[]` **no
+> llevan `madre`** (las viejas se ignorean al leer). **H2**: `Eliminar` pide confirmacion con un
+> **mini-dialogo propio** del visor y no reabre el visor. **H3**: **reintentar** la subida tocando la
+> miniatura marcada. **H4**: **borrado en el acto** (`PMU_Sesion::borrar_original_item` + `op=borrar`),
+> idempotente y sin tocar `orders/`. **H5**: `subidas.detalle()` y aviso con el total. **El Motor no se
+> toca**; sin migracion. Puertas: `biblioteca-contrato` 59, `selector-contrato` 100,
+> `campos-contrato` 128, `cola-subida` 26, `receta-contrato` 21, `mockup-contrato` 177 +
+> 40 fases del arnes PHP + `motor_smoke` + `parity` + `certificacion_hoja` + `sin_lectura`.
 
 ## Activos (codigo completo, falta solo manual WP real)
 | Spec | Codigo | Pendiente manual | Docs normativos |

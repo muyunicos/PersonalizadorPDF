@@ -455,11 +455,11 @@ class PMU_Sesion
      * referenciada desde `subidas/`: se registra, no se copia).
      */
     /**
-     * Forma de una fila de `subidas[]`. `madre` se conserva por compatibilidad de
-     * lectura (el `id` es la identidad, spec 039 D7) y `sha` es el contenido **crudo**
-     * (antes de convertir a WebP, D24).
+     * Forma de una fila de `subidas[]`. El `id` es la identidad (sha12 del contenido,
+     * spec 039 D7) y `sha` es el contenido **crudo** (antes de convertir a WebP, D24).
+     * Ya NO lleva `madre`: el modelo "familias" murio (una imagen + N recetas).
      */
-    private function fila_subida($id, $file, $madre, $receta, $sha, $mime, $bytes, $creado, $origen = 'subida', $params = [])
+    private function fila_subida($id, $file, $receta, $sha, $mime, $bytes, $creado, $origen = 'subida', $params = [])
     {
         $fila = [
             'id' => (string)$id,
@@ -467,7 +467,6 @@ class PMU_Sesion
             'mime' => (string)$mime,
             'bytes' => max(0, (int)$bytes),
             'creado' => max(0, (int)$creado),
-            'madre' => (string)$madre,
             'receta' => (string)$receta,
             'sha' => (string)$sha,
             'origen' => (string)$origen,
@@ -481,22 +480,9 @@ class PMU_Sesion
         return $fila;
     }
 
-    /**
-     * Fila de `subidas[]` que **referencia** un archivo ya existente dentro de
-     * `uploads/pmu/` (spec 030, D10/D13): sin bytes y sin `mime` (el Motor resuelve
-     * la ruta con `resolver_ref()`).
-     */
-    private function fila_ref($id, $ref, $madre, $receta, $creado)
-    {
-        return [
-            'id' => (string)$id,
-            'origen' => 'ref',
-            'ref' => (string)$ref,
-            'madre' => (string)$madre,
-            'receta' => (string)$receta,
-            'creado' => max(0, (int)$creado),
-        ];
-    }
+    // (spec 039 D5: `fila_ref()` RETIRADO: no hay referencias entre pedidos desde el
+    // modelo "familias". La fila `ref` historica sigue LEYENDOSE igual, pero ya no se
+    // escribe: la galeria lista imagenes del escaneo, no familias referenciadas.)
 
     private function fila_archivo($pdf, $grupo, $indice, $file, $origen, $hash = '', $orig = [])
     {
@@ -852,12 +838,12 @@ class PMU_Sesion
      *
      * `$item_key` se conserva porque la fila `origen: original` vive en el manifest
      * del item que la usa (varios items de la sesion la comparten por `id`).
-     * `$madre`/`$params` se aceptan por compatibilidad: la familia es el propio `id`
-     * y la receta la fija el add-to-cart.
+     * `$params` son los PARAMS v2 de la receta (spec 035 D9): el servidor deriva el
+     * hash y lo estampa en la fila. Es lo unico con lo que `Compositor` recompone.
      *
      * @return array fila de `manifest.subidas[]` + `w`/`h` del original guardado
      */
-    public function guardar_subida($sid, $item_key, $bytes, $madre = '', $params = [])
+    public function guardar_subida($sid, $item_key, $bytes, $params = [])
     {
         $bytes = (string)$bytes;
         if ($bytes === '' || strlen($bytes) > self::TOPE_SUBIDA_BYTES) {
@@ -924,7 +910,7 @@ class PMU_Sesion
                         return;
                     }
                 }
-                $nueva = $this->fila_subida($id, '', $id, $receta, $sha, $img['mime'],
+                $nueva = $this->fila_subida($id, '', $receta, $sha, $img['mime'],
                     (int)@filesize($ruta), time(), 'original', $paramsV2);
                 $filas[] = $nueva;
                 $manifest['subidas'] = $filas;
@@ -1387,80 +1373,9 @@ class PMU_Sesion
 
     /* ==================== Biblioteca de imagenes (spec 030, D1) ==================== */
 
-    /**
-     * Familias del comprador a partir de los CONTENEDORES del escaneo (sesiones +
-     * pedidos): agrupa por `madre`, elige la `base` por area y anota los `usos`.
-     * Dueno UNICO de la convencion de familia (D1 / constitution §II). La URL la
-     * inyecta el plugin: la politica de acceso es suya (D14).
-     */
-    public function familias(array $contenedores, ?callable $url = null)
-    {
-        $familias = [];
-        foreach ($contenedores as $c) {
-            foreach ((array)($c['manifest']['subidas'] ?? []) as $fila) {
-                if (!is_array($fila) || !isset($fila['id'])) {
-                    continue;
-                }
-                $id = (string)$fila['id'];
-                $madre = (string)($fila['madre'] ?? $id);
-                if ($madre === '') {
-                    $madre = $id;
-                }
-                $ruta = $this->ruta_fila_subida($c, $fila);
-                if ($ruta === '') {
-                    continue;
-                }
-                $w = (int)($fila['w'] ?? 0);
-                $h = (int)($fila['h'] ?? 0);
-                if ($w < 1 || $h < 1) {
-                    $dim = @getimagesize($ruta);
-                    $w = is_array($dim) ? (int)$dim[0] : 0;
-                    $h = is_array($dim) ? (int)$dim[1] : 0;
-                }
-                if (!isset($familias[$madre])) {
-                    $familias[$madre] = ['madre' => $madre, 'archivos' => 0, 'w' => 0, 'h' => 0,
-                        'base' => '', 'url' => ($url ? (string)$url($madre) : ''), 'creado' => 0, 'bytes' => 0,
-                        'recetas' => [],
-                        'usos' => ['carrito' => [], 'pedidos' => []]];
-                }
-                $familias[$madre]['archivos']++;
-                // Spec 030 (T014/D8): las recetas de la familia viajan en la vista para
-                // que el cliente pueda decidir Elegir (misma receta -> `ref`, 0 bytes)
-                // vs Subir (otra composicion -> version `{madre}-{n}`).
-                $recetaFila = (string)($fila['receta'] ?? '');
-                if ($recetaFila !== '') {
-                    $familias[$madre]['recetas'][$recetaFila] = true;
-                }
-                $familias[$madre]['bytes'] += (int)@filesize($ruta);
-                $creado = (int)($fila['creado'] ?? 0);
-                if ($creado > $familias[$madre]['creado']) {
-                    $familias[$madre]['creado'] = $creado;
-                }
-                if (($w * $h) > ($familias[$madre]['w'] * $familias[$madre]['h'])) {
-                    $familias[$madre]['w'] = $w;
-                    $familias[$madre]['h'] = $h;
-                    $familias[$madre]['base'] = $id;
-                }
-                if ($c['tipo'] === 'sesion') {
-                    if (!in_array($c['item_key'], $familias[$madre]['usos']['carrito'], true)) {
-                        $familias[$madre]['usos']['carrito'][] = (string)$c['item_key'];
-                    }
-                } elseif ((int)$c['order_id'] > 0
-                    && !in_array((int)$c['order_id'], $familias[$madre]['usos']['pedidos'], true)) {
-                    $familias[$madre]['usos']['pedidos'][] = (int)$c['order_id'];
-                }
-            }
-        }
-        $out = array_values($familias);
-        foreach ($out as &$f) {
-            $f['recetas'] = array_values(array_keys((array)$f['recetas']));
-        }
-        unset($f);
-        usort($out, function ($a, $b) {
-            return (int)$b['creado'] - (int)$a['creado'];
-        });
-        return $out;
-    }
+    /* (spec 039 D5: `familias()` RETIRADO. El modelo "familias" murio: la identidad
+     *  es el `id` (sha12 del contenido) y la vista del cliente lista **imagenes**
+     *  con `imagenes()`, no familias.) */
 
     /**
      * Spec 039 (D5): **imagenes** del comprador a partir de los CONTENEDORES del escaneo
@@ -1527,85 +1442,9 @@ class PMU_Sesion
         return $out;
     }
 
-    /**
-     * Spec 030 (T021/D24): familia ya conocida cuyo contenido tiene este `sha` (el
-     * de los bytes CRUDOS, escrito al subir) — `''` si no hay. Es la llave del
-     * dedupe, con el MISMO alcance que la galeria (los contenedores del escaneo,
-     * no toda la tienda). No lee archivos: el `sha` ya esta en la fila.
-     */
-    public function familia_por_sha(array $contenedores, $sha)
-    {
-        $sha = (string)$sha;
-        if ($sha === '') {
-            return '';
-        }
-        foreach ($contenedores as $c) {
-            foreach ((array)($c['manifest']['subidas'] ?? []) as $fila) {
-                if (!is_array($fila) || (string)($fila['sha'] ?? '') !== $sha) {
-                    continue;
-                }
-                $madre = (string)($fila['madre'] ?? ($fila['id'] ?? ''));
-                if ($madre !== '') {
-                    return $madre;
-                }
-            }
-        }
-        return '';
-    }
-
-    /** Familia concreta del escaneo, o null si no es de este comprador (D14). */
-    public function familia_de(array $contenedores, $madre, ?callable $url = null)
-    {
-        $madre = (string)$madre;
-        if ($madre === '' || !preg_match('/^[a-z0-9\-]{4,32}$/', $madre)) {
-            return null;
-        }
-        foreach ($this->familias($contenedores, $url) as $f) {
-            if ((string)$f['madre'] === $madre) {
-                return $f;
-            }
-        }
-        return null;
-    }
-
-    /** Ruta absoluta de la `base` (mayor area) de una familia del escaneo (D13). */
-    public function ruta_familia(array $contenedores, $madre)
-    {
-        $madre = (string)$madre;
-        if ($madre === '') {
-            return '';
-        }
-        $mejor = '';
-        $area = -1;
-        foreach ($contenedores as $c) {
-            foreach ((array)($c['manifest']['subidas'] ?? []) as $fila) {
-                if (!is_array($fila) || !isset($fila['id'])) {
-                    continue;
-                }
-                $id = (string)$fila['id'];
-                $suya = (string)($fila['madre'] ?? $id);
-                if ($suya === '') {
-                    $suya = $id;
-                }
-                if ($suya !== $madre) {
-                    continue;
-                }
-                // Spec 035: las filas `original` NO llevan `file`: se resuelven por
-                // `id` contra la carpeta del cliente / de la sesion.
-                $ruta = $this->ruta_fila_subida($c, $fila);
-                if ($ruta === '') {
-                    continue;
-                }
-                $dim = @getimagesize($ruta);
-                $a2 = is_array($dim) ? ((int)$dim[0] * (int)$dim[1]) : 0;
-                if ($a2 > $area) {
-                    $area = $a2;
-                    $mejor = $ruta;
-                }
-            }
-        }
-        return $mejor;
-    }
+    /* (spec 039 D5: `familia_por_sha()`, `familia_de()` y `ruta_familia()` RETIRADOS.
+     *  El dedupe por contenido ya no pasa por la familia: el `id` = sha12 es la
+     *  identidad y `guardar_subida()` reusa la fila por `id` (C7 de la 035).) */
 
     /* ==================== Borrado y ciclo de pedido ==================== */
 

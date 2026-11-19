@@ -1864,33 +1864,6 @@ class Personalizador_PDF_Plugin
      * `$_POST`) o como dataURL en `imagen_data`. Techo alto por archivo
      * (`motor:subida:tamano`): es defensa, no limite de producto (D15).
      */
-    /**
-     * Spec 030 (T021/D24): `madre` de la familia que ya tiene este contenido (por
-     * `sha` de los bytes **CRUDOS**, como los escribe `guardar_subida()`), o `''` si
-     * es nuevo. Nunca lanza: sin identidad o sin escaneo la subida sigue normal (la
-     * biblioteca no bloquea nada, D17).
-     */
-    /**
-     * Spec 039 (D6): familia para una SUBIDA. **Solo** el dedupe por contenido (`sha`
-     * de los bytes crudos, D24). Se retiro la `madre_origen` que mandaba el cliente:
-     * no hay familia que reusar (una imagen + N recetas), asi que la subida siempre
-     * viaja con bytes y el servidor decide si ya la tiene.
-     */
-    public function biblioteca_madre_por_subida($bytes)
-    {
-        return $this->biblioteca_madre_por_contenido($bytes);
-    }
-
-    public function biblioteca_madre_por_contenido($bytes)
-    {
-        try {
-            $contenedores = $this->biblioteca_contenedores($this->biblioteca_identidad());
-            return $this->sesion()->familia_por_sha($contenedores, sha1((string)$bytes));
-        } catch (\Throwable $e) {
-            return '';
-        }
-    }
-
     public function handle_subida()
     {
         // Primero la sesion: `sesion()` carga `class-pmu-sesion.php` de forma
@@ -1966,15 +1939,15 @@ class Personalizador_PDF_Plugin
                 $item = $sesion->crear_draft($sid, $pdfs, $contexto);
                 $creado = true;
             }
-            // Spec 030 (T021/D24): dedupe por contenido. Si estos bytes (crudos) ya
-            // son una familia conocida del comprador, la subida REUSA esa familia
-            // (una sola entrada en la galeria) en vez de crear una nueva.
-            // Spec 030 (D8): los `params` de la composicion viajan CON la subida para que la
-            // fila guarde su `receta`: asi `Elegir` puede reconocerla despues (0 bytes).
+            // Spec 039 (D5): la subida NO calcula familia (eso era el modelo "familias",
+            // ya retirado). El `id` = sha12 del contenido lo deriva `guardar_subida()`, asi
+            // que re-subir la misma foto reusa la fila (dedupe por `id`, C7 de la 035).
+            // Spec 035 (D9): los `params` de la RECETA v2 viajan CON la subida y el
+            // servidor los estampa en la fila: son lo unico con lo que `Compositor`
+            // puede componer la foto al generar el PDF (el hash es irreversible).
             $paramsSubida = json_decode((string)wp_unslash($_POST['params'] ?? ''), true);
             if (!is_array($paramsSubida)) { $paramsSubida = []; }
-            $fila = $sesion->guardar_subida($sid, $item, $bytes,
-                $this->biblioteca_madre_por_subida($bytes), $paramsSubida);
+            $fila = $sesion->guardar_subida($sid, $item, $bytes, '', $paramsSubida);
             $fila['sid'] = $sid;
             $fila['item_key'] = $item;
             $fila['item_nuevo'] = $creado;
@@ -2324,49 +2297,12 @@ class Personalizador_PDF_Plugin
     }
 
     /**
-     * Agrupa las subidas en FAMILIAS (spec 030, D5/D6/D15): una entrada por
-     * `madre`, con la `base` (mayor area) como portada, sus versiones y los usos
-     * (carrito/pedidos) para el aviso de borrado (R6).
+     * Spec 039 (D5): se retiraron `biblioteca_familias()`, `biblioteca_familia_de()`,
+     * `biblioteca_ruta_familia()` y `url_biblioteca_imagen_madre()`: el modelo "familias"
+     * murio. La identidad es el `id` (sha12) y la galeria lista **imagenes**
+     * (`PMU_Sesion::imagenes()`), no familias. La URL se arma por `id`
+     * (`url_biblioteca_imagen_id()`); borrar lo hace `borrar_original_item()`.
      */
-    /**
-     * Familias del comprador (D1): la convencion (madre / base por area / usos)
-     * vive en `PMU_Sesion::familias()` — **dueno unico** (constitution §II). Aca
-     * solo se inyecta la URL del endpoint, que es politica del plugin (D14).
-     */
-    private function biblioteca_familias(array $contenedores)
-    {
-        return $this->sesion()->familias($contenedores, function ($madre) {
-            return $this->url_biblioteca_imagen_madre($madre);
-        });
-    }
-
-    /** Familia concreta del escaneo, o null si no es de este comprador (D14). */
-    private function biblioteca_familia_de(array $contenedores, $madre)
-    {
-        return $this->sesion()->familia_de($contenedores, $madre, function ($m) {
-            return $this->url_biblioteca_imagen_madre($m);
-        });
-    }
-
-    /** Ruta absoluta de la `base` (mayor area) de una familia del escaneo (D13). */
-    private function biblioteca_ruta_familia(array $contenedores, $madre)
-    {
-        return $this->sesion()->ruta_familia($contenedores, $madre);
-    }
-    /** URL protegida de la base de una familia (spec 030, D14/D27). */
-    private function url_biblioteca_imagen_madre($madre, $w = 0)
-    {
-        $madre = (string)$madre;
-        if ($madre === '') {
-            return '';
-        }
-        return add_query_arg([
-            'action' => 'personalizador_pdf_biblioteca',
-            'op' => 'imagen',
-            'madre' => $madre,
-            '_wpnonce' => wp_create_nonce('personalizador_pdf_vista_previa'),
-        ], admin_url('admin-post.php'));
-    }
     /**
      * Spec 039 (D5): URL protegida de una imagen por su `id` (identidad = sha12).
      *
@@ -2477,10 +2413,12 @@ class Personalizador_PDF_Plugin
     }
 
     /**
-     * Sirve los bytes de la imagen pedida (spec 030, D14): la subida de la RANURA
-     * (`item_key` + `id`, validada contra el manifest) o la `base` de una FAMILIA
-     * (`madre`, con el escaneo de T008). `Cache-Control: private` + `ETag` para que
-     * el navegador la cachee (por eso navegar el visor no vuelve a descargar).
+     * Sirve los bytes de la imagen pedida (spec 030, D14; spec 039 D5): la subida de la
+     * RANURA (`item_key` + `id`, validada contra el manifest) o la imagen del `listar`
+     * (solo `id`, re-resuelta contra el escaneo del comprador). Se retiro la variante
+     * por `madre`: el modelo "familias" murio.
+     * `Cache-Control: private` + `ETag` para que el navegador la cachee (por eso navegar
+     * el visor no vuelve a descargar).
      */
     public function biblioteca_ruta_imagen($sid)
     {
@@ -2490,19 +2428,10 @@ class Personalizador_PDF_Plugin
         $ruta = '';
         $item = $param('item_key');
         $id = $param('id');
-        $madre = $param('madre');
         $sesion = $this->sesion();
         if ($item !== '' && $id !== '') {
             $rutas = $sesion->resolver_subidas($sid, $item, [$id]);
             $ruta = isset($rutas[$id]) ? (string)$rutas[$id] : '';
-        } elseif ($madre !== '') {
-            // D14: una sola politica de acceso. `madre` se re-resuelve contra el escaneo
-            // propio del comprador (nunca una ruta del cliente).
-            $contenedores = $this->biblioteca_contenedores($this->biblioteca_identidad());
-            if ($this->biblioteca_familia_de($contenedores, $madre) === null) {
-                throw new \RuntimeException('foto:ajena');
-            }
-            $ruta = $this->biblioteca_ruta_familia($contenedores, $madre);
         } elseif ($id !== '') {
             // Spec 039 (D5): variante por `id` (la del `listar`, donde la fila ya no
             // trae `item_key` ni `madre`). Se re-resuelve contra el escaneo del
@@ -4522,16 +4451,28 @@ class Personalizador_PDF_Plugin
         $pesoBib = $this->biblioteca_peso_identidades();
         $add('Biblioteca: peso por identidad (medicion P2/P4)', true, $pesoBib['resumen']);
         $this->sesion(); // carga inc/class-pmu-sesion.php (lazy) antes de mirar metodos
+        // Spec 039 (anti-drift): la clase cambio con el retiro del modelo "familias".
+        // Se verifican los metodos que HOY deben existir: si un deploy deja la version
+        // vieja, esto lo canta (y si deja la nueva a medias, tambien).
         $faltanBib = [];
-        foreach (['familias', 'familia_de', 'ruta_familia', 'familia_por_sha', 'guardar_subida', 'limpiar_ttl'] as $mBib) {
+        foreach (['imagenes', 'borrar_original_item', 'ruta_fila_subida_public', 'guardar_subida', 'limpiar_ttl'] as $mBib) {
             if (!method_exists('PMU_Sesion', $mBib)) {
                 $faltanBib[] = $mBib;
             }
         }
+        // Los helpers del modelo "familias" NO deben existir (si aparecen, el deploy
+        // mezclo versiones): `familias`/`familia_de`/`familia_por_sha`/`ruta_familia`.
+        $sobranBib = [];
+        foreach (['familias', 'familia_de', 'familia_por_sha', 'ruta_familia'] as $mBib) {
+            if (method_exists('PMU_Sesion', $mBib)) {
+                $sobranBib[] = $mBib;
+            }
+        }
         $add(
-            'Biblioteca: PMU_Sesion al dia (metodos de la spec 030)',
-            !$faltanBib && method_exists($this, 'biblioteca_familias'),
-            $faltanBib ? ('FALTA(n): ' . implode(', ', $faltanBib) . ' en inc/class-pmu-sesion.php') : 'ok'
+            'Biblioteca: PMU_Sesion al dia (metodos de la spec 039)',
+            !$faltanBib && !$sobranBib,
+            $faltanBib ? ('FALTA(n): ' . implode(', ', $faltanBib) . ' en inc/class-pmu-sesion.php')
+                : ($sobranBib ? ('SOBRA(n) del modelo familias: ' . implode(', ', $sobranBib)) : 'ok')
         );
         return $out;
     }

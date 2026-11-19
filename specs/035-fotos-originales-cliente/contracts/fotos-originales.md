@@ -34,15 +34,20 @@
 ## C2 — Fila de `manifest.subidas[]`
 
 ```json
-{ "origen": "original", "id": "9f2c41ab0d7e", "madre": "9f2c41ab0d7e",
+{ "origen": "original", "id": "9f2c41ab0d7e",
   "receta": "a1b2c3d4e5f6", "sha": "…", "mime": "image/webp", "bytes": 412000, "creado": 1761000000 }
 ```
 
 | `origen` | Campos obligatorios | Prohibidos |
 |---|---|---|
-| `original` | `id` (`^[a-f0-9]{12}$`) | `file`, `ref`, `clave` |
-| `compuesta` (bitmap del Motor) | `id`, `file` = `img/foto-{pdf}-{gid}-{receta}.webp` | `ref`, `clave` |
-| `ref` (030, entre pedidos) | `id`, `ref` | `file`, `clave` |
+| `original` | `id` (`^[a-f0-9]{12}$`) | `file`, `ref`, `clave`, `madre` |
+| `compuesta` (bitmap del Motor) | `id`, `file` = `img/foto-{pdf}-{gid}-{receta}.webp` | `ref`, `clave`, `madre` |
+| `ref` (030, entre pedidos) | `id`, `ref` | `file`, `clave`, `madre` |
+
+> **Spec 039 (D5/D7)**: la fila **ya no lleva `madre`**. El modelo "familias" murio: la
+> identidad es el **`id`** (sha12 del contenido) y la imagen carga **N recetas**. Las filas
+> `madre` que ya existan en items viejos se **ignorean al leer** (no se migran ni se borran):
+> el `id` manda.
 
 - `id` = `^[a-f0-9]{12}$`; **deriva del contenido**, nunca lo propone el cliente.
 - `madre` = familia; **inmutable** (no se renombra).

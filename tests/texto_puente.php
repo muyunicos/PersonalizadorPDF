@@ -321,9 +321,9 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('cada imagen expone sus recetas (una imagen + N recetas)', isset($fotos_b[0]['recetas']) && is_array($fotos_b[0]['recetas']));
         check('listar ya NO expone familias (sin madre/base/archivos/usos)',
             !isset($fotos_b[0]['madre']) && !isset($fotos_b[0]['base']) && !isset($fotos_b[0]['usos']));
-        check('op=imagen: la familia propia se resuelve a un archivo real', !empty($GLOBALS['bib_img_propia']));
+        check('op=imagen: la imagen propia se resuelve a un archivo real', !empty($GLOBALS['bib_img_propia']));
         check('op=imagen: el mime sale por EXTENSION (image/webp)', !empty($GLOBALS['bib_img_mime']));
-        check('op=imagen: una madre ajena da la causa foto:ajena', !empty($GLOBALS['bib_img_ajena']));
+        check('op=imagen: un id ajeno da la causa foto:ajena', !empty($GLOBALS['bib_img_ajena']));
         check('op=imagen: la variante item_key+id (ranura) tambien resuelve', !empty($GLOBALS['bib_img_item']));
         check('TTL: un draft vencido (26 h) se borra con sus fotos', !empty($GLOBALS['bib_ttl_draft']));
         check('TTL: un carrito abandonado (31 dias) se borra con sus fotos', !empty($GLOBALS['bib_ttl_abandonado']));
@@ -332,13 +332,11 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('TTL: la sesion con items sigue viva', !empty($GLOBALS['bib_ttl_sesion_viva']));
         check('TTL: lo comprado (orders/) no se toca', !empty($GLOBALS['bib_ttl_order_intacto']));
         check('TTL: la referencia a orders/ sigue resolviendo', !empty($GLOBALS['bib_ttl_ref_ok']));
-        check('US2: el sha del contenido encuentra la familia (D24)', !empty($GLOBALS['bib_sha_familia']));
-        check('US2: el id lo deriva el servidor del contenido (no la madre propuesta)',
-            !empty($GLOBALS['bib_fam_1']));
-        check('US2: los mismos bytes dan el MISMO id (sin versiones {madre}-n)',
-            !empty($GLOBALS['bib_fam_2']));
-        check('T021: el contenido ya subido devuelve su familia (dedupe)', !empty($GLOBALS['bib_dedupe_madre']));
-        check('T021: un contenido nuevo devuelve cadena vacia (no bloquea)', !empty($GLOBALS['bib_dedupe_nuevo']));
+        check('039 D5: el `sha` del contenido es la identidad (id = sha12)', !empty($GLOBALS['bib_sha_familia']));
+        check('039 D5: el id lo deriva el SERVIDOR del contenido', !empty($GLOBALS['bib_fam_1']));
+        check('039 D5: los mismos bytes dan el MISMO id (dedupe, sin duplicar)', !empty($GLOBALS['bib_fam_2']));
+        check('039 D7: la fila ya NO lleva `madre` (modelo familias retirado)', !empty($GLOBALS['bib_dedupe_madre']));
+        check('039 D5: un contenido nuevo obtiene su propio id (no reusa)', !empty($GLOBALS['bib_dedupe_nuevo']));
         check('T035: el login anota el sid en _pmu_sids (una sola vez)', !empty($GLOBALS['bib_vinculo']));
         check('T035: el vinculo respeta el tope de 20 (D3)', !empty($GLOBALS['bib_vinculo_tope']));
         // Spec 039 (D3/T044): borrado en el acto del original + su fila.
@@ -3211,7 +3209,7 @@ switch ($fase) {
 
         // 3b) Compatibilidad (formato 029): con SOLO el `id`, la receta se resuelve de
         // la fila `original`, que la guardo al aceptar el recorte.
-        $subR = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt, '', $baseRec);
+        $subR = $sesion_ft->guardar_subida($sid_ft, $draft_ft, $bytesFt, $baseRec);
         $GLOBALS['fotos_compat_receta'] = ((string)($subR['receta'] ?? '') === (string)$recA);
         $compat = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF',
             [(string)$subR['id'], (string)$subR['id']]);
@@ -3328,13 +3326,13 @@ switch ($fase) {
         // Spec 039 (D5): se retiro `usar_de_biblioteca()` (el original se referencia por
         // `id`, no se copia ni se versiona). El camino equivalente es `guardar_subida`:
         // el original viaja al item y el servidor lo deduplica por `sha` (D24 de la 035).
-        $filaTmp_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b, 'ffff11112222', $params_b);
+        $filaTmp_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b, $params_b);
         $GLOBALS['bib_copia_archivo'] = is_array($filaTmp_b) && !empty($filaTmp_b['id']);
         $GLOBALS['bib_copia_fila'] = (is_array($filaTmp_b) && ($filaTmp_b['origen'] ?? '') === 'original'
             && !empty($filaTmp_b['id']) && (string)($filaTmp_b['file'] ?? '') === '');
         $antes2_b = count((array)glob($dirSub_b . '/*'));
         // Re-subir el MISMO contenido no duplica (dedupe por `sha`): el `id` no cambia.
-        $filaOrd_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b, 'ffff11112222', $params_b);
+        $filaOrd_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b, $params_b);
         $GLOBALS['bib_ref_sin_copia'] = (count((array)glob($dirSub_b . '/*')) === $antes2_b);
         $GLOBALS['bib_ref_fila'] = (is_array($filaOrd_b) && is_array($filaTmp_b)
             && ($filaOrd_b['id'] ?? '') === ($filaTmp_b['id'] ?? ''));
@@ -3347,7 +3345,8 @@ switch ($fase) {
         $GLOBALS['bib_resuelve_ref'] = is_file((string)($resRef_b[(string)($filaTmp_b['id'] ?? '')] ?? ''));
         // Spec 030 (T009): la RESOLUCION de `op=imagen` (el camino que fallaba en
         // silencio y dejaba la tira sin fotos). Se ejercita SIN streaming.
-        $_REQUEST = ['op' => 'imagen', 'madre' => $madre_b, '_wpnonce' => 'nonce'];
+        // Spec 039 (D5): `op=imagen` por `id` (identidad = sha12). `madre` ya no existe.
+        $_REQUEST = ['op' => 'imagen', 'id' => $madre_b, '_wpnonce' => 'nonce'];
         $rutaImg_b = '';
         try {
             $rutaImg_b = $p->biblioteca_ruta_imagen($sid_b);
@@ -3356,7 +3355,9 @@ switch ($fase) {
         }
         $GLOBALS['bib_img_propia'] = is_file($rutaImg_b);
         $GLOBALS['bib_img_mime'] = ($p->biblioteca_mime_de($rutaImg_b) === 'image/webp');
-        $_REQUEST = ['op' => 'imagen', 'madre' => 'zzzznoexiste', '_wpnonce' => 'nonce'];
+        // Un `id` que no esta en el escaneo del comprador da `foto:ajena` (nunca se
+        // sirve un archivo que no sea suyo: la identidad no es una ruta del cliente).
+        $_REQUEST = ['op' => 'imagen', 'id' => 'zzzznoexiste', '_wpnonce' => 'nonce'];
         $causaBib_b = '';
         try {
             $p->biblioteca_ruta_imagen($sid_b);
@@ -3410,29 +3411,25 @@ switch ($fase) {
         $GLOBALS['bib_ttl_ref_ok'] = is_file((string)$sesion_b->resolver_original(
             $madre_b, '1', $sid_b));
         $GLOBALS['bib_ttl_sesion_viva'] = is_dir($motor_b->dir_ambito('tmp') . '/sesion-' . $sid_b);
-        // Spec 030 (T018/T021): el dedupe por `sha` y el reuso de familia (D5/D24).
-        $contenedoresBib_b = [];
-        foreach ([['sesion', $draft_b, $sesion_b->dir_item($sid_b, $draft_b), 0],
-            ['order', 'item-pedido', $itemOrder_b, 4242]] as $cBib_b) {
-            $manBib_b = json_decode((string)@file_get_contents($cBib_b[2] . '/manifest.json'), true);
-            $contenedoresBib_b[] = ['tipo' => $cBib_b[0], 'item_key' => $cBib_b[1], 'dir' => $cBib_b[2],
-                'order_id' => $cBib_b[3], 'manifest' => is_array($manBib_b) ? $manBib_b : []];
-        }
-        $GLOBALS['bib_sha_familia'] = ($sesion_b->familia_por_sha($contenedoresBib_b, sha1($bytes_b)) !== '');
-        $subFam_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b, 'familiatest');
-        $subFam2_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b, 'familiatest');
-        // Spec 035: el id lo deriva el SERVIDOR del contenido (sha12). La "madre"
-        // que propone el cliente se ignora: la misma foto es el mismo original, asi
-        // que no hay versiones `{madre}-n`.
+        // Spec 039 (D5): el dedupe por CONTENIDO ya no pasa por "familias": el `id`
+        // (sha12 de los bytes CRUDOS) ES la identidad y `guardar_subida()` reusa la
+        // fila por `id`. Se comprueba la invariante real (misma foto -> mismo id).
+        $subFam_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b);
+        $subFam2_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b);
+        // Spec 035: el id lo deriva el SERVIDOR del contenido (sha12).
+        $GLOBALS['bib_sha_familia'] = is_array($subFam_b)
+            && preg_match('/^[a-f0-9]{12}$/', (string)($subFam_b['id'] ?? '')) === 1
+            && ((string)($subFam_b['sha'] ?? '')) === sha1($bytes_b);
         $GLOBALS['bib_fam_1'] = is_array($subFam_b)
-            && preg_match('/^[a-f0-9]{12}$/', (string)$subFam_b['id']) === 1
-            && (string)$subFam_b['id'] !== 'familiatest';
+            && preg_match('/^[a-f0-9]{12}$/', (string)$subFam_b['id']) === 1;
         $GLOBALS['bib_fam_2'] = is_array($subFam2_b)
             && (string)$subFam2_b['id'] === (string)$subFam_b['id'];
-        // Spec 030 (T021): el seam que usa `handle_subida`: contenido ya subido ->
-        // su familia; contenido nuevo -> '' (y la subida sigue normal, sin bloquear).
-        $GLOBALS['bib_dedupe_madre'] = ($p->biblioteca_madre_por_contenido($bytes_b) !== '');
-        $GLOBALS['bib_dedupe_nuevo'] = ($p->biblioteca_madre_por_contenido('contenido-nuevo-sin-familia') === '');
+        // Spec 039 (D7): la fila ya NO lleva `madre` (el modelo "familias" murio).
+        $GLOBALS['bib_dedupe_madre'] = is_array($subFam_b) && !array_key_exists('madre', $subFam_b);
+        // Un contenido nuevo no reusa nada: el `id` sale de su propio sha.
+        $subNuevo_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b . '-nuevo');
+        $GLOBALS['bib_dedupe_nuevo'] = is_array($subNuevo_b)
+            && (string)($subNuevo_b['id'] ?? '') !== (string)($subFam_b['id'] ?? '');
         // Spec 030 (T034/T035): el vinculo invitado -> cuenta (D3). Se simula el login con
         // un `sid` vigente y se comprueba el alta, el dedupe (idempotente) y el tope de 20.
         $GLOBALS['test_user_meta'] = [];
@@ -5783,8 +5780,8 @@ switch ($fase) {
         $pngC = sys_get_temp_dir() . '/pd_cot_' . getmypid() . '.png';
         \ExtractCorel\Engine\PngWriter::write($pngC, 40, 30);
         $bytesC = (string)@file_get_contents($pngC);
-        $filaC = $sesC->guardar_subida($sidC, $itemC, $bytesC, '', $recetaC);
-        $sesC->guardar_subida($sidC, $itemC, $bytesC, '', $recetaC);
+        $filaC = $sesC->guardar_subida($sidC, $itemC, $bytesC, $recetaC);
+        $sesC->guardar_subida($sidC, $itemC, $bytesC, $recetaC);
         $filasC = array_values((array)(($sesC->leer_manifest($sidC, $itemC)['subidas'] ?? [])));
         $GLOBALS['cot_fila'] = $filaC;
         $GLOBALS['cot_dedupe'] = count($filasC) === 1;
@@ -5882,7 +5879,7 @@ switch ($fase) {
         // 7) Promocion del item (E7): se mueve con sus originales y conserva el
         //    contexto; sin PDF ni bonus (eso lo decide `pedido_promover`).
         $itemP2 = $sesC->crear_draft($sidC, [], 'cotizador');
-        $filaP2 = $sesC->guardar_subida($sidC, $itemP2, $bytesC, '', $recetaC);
+        $filaP2 = $sesC->guardar_subida($sidC, $itemP2, $bytesC, $recetaC);
         try {
             $destinoP = $sesC->promover_order(5150, '7', $sidC, $itemP2);
             $manP = $sesC->leer_manifest_dir($destinoP);
@@ -5949,7 +5946,7 @@ switch ($fase) {
             'contexto' => (string)(is_array($manPdf) ? ($manPdf['contexto'] ?? '') : ''),
         ];
         // 12) Enmienda v3: el arte del comprador se enlaza al GRUPO del PDF importado.
-        $filaPdf = $sesC->guardar_subida($sidC, $itemPdf, $bytesC, '', $recetaC);
+        $filaPdf = $sesC->guardar_subida($sidC, $itemPdf, $bytesC, $recetaC);
         $GLOBALS['cot_fila_pdf'] = $filaPdf;
         $GLOBALS['cot_grupo_pdf'] = $cotC->grupo_de_pdf('muestra');
         $GLOBALS['cot_enlace'] = '';
@@ -5984,7 +5981,7 @@ switch ($fase) {
         ], $dirDoble . DIRECTORY_SEPARATOR . 'analisis.json');
         $GLOBALS['cot_grupos_doble'] = $cotC->grupos_de_pdf('doble');
         $itemDoble = $sesC->crear_draft($sidC, ['doble'], 'cotizador');
-        $filaDoble = $sesC->guardar_subida($sidC, $itemDoble, $bytesC, '', $recetaC);
+        $filaDoble = $sesC->guardar_subida($sidC, $itemDoble, $bytesC, $recetaC);
         $GLOBALS['cot_enlace_todos'] = '';
         try {
             $GLOBALS['cot_enlace_todos'] = $cotC->enlazar_diseno($sidC, $itemDoble, 'doble', (string)($filaDoble['id'] ?? ''), 'todos');

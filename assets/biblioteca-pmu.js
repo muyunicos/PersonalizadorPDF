@@ -125,7 +125,7 @@
     }
 
     /** Dibuja la tira (hasta 10 fotos) en `el`; si no hay fotos NO dibuja nada (D23). */
-    /** Pinta la tira en `el`: una miniatura por familia + el tile del resto (N+). */
+    /** Pinta la tira en `el`: una miniatura por IMAGEN (sin versiones) + el tile `N+`.
     /**
      * Spec 039 (D4): `visor()` se retiro. La biblioteca no tiene visor propio: tocar
      * una miniatura ELIGE la imagen y la carga directo en el modal de recorte (via
@@ -165,7 +165,7 @@
      * `navegable:false` es exactamente esa politica.
      *
      * @param {Element} el contenedor de la tira
-     * @param {Array} fotos fotos de la biblioteca (madre/versiones/base/thumb)
+     * @param {Array} fotos imagenes de la biblioteca (id/url/thumb/recetas)
      * @returns {boolean} true si el TEMA la pinto
      */
     function delegarTira(el, fotos) {

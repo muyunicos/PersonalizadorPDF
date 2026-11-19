@@ -404,6 +404,15 @@ Detalle y alternativas: `specs/012-campos-consola/spec.md` (D1–D22), `research
   el acto por `borrar_original_item`).
 - **Supersede**: la decision **D5 de la 030** (familias con sufijo `{madre}-n`) y **D8 de la 030**
   (Elegir vs Subir) quedan **SUPERADAS por la 039 D5/D6**. La identidad es el `id` (sha1 del contenido).
+- **Retiro total del modelo "familias" (2026-11-19)**: con la 039 en desarrollo se retiraron **todos**
+  los helpers: `PMU_Sesion::familias()`, `familia_por_sha()`, `familia_de()`, `ruta_familia()`,
+  `usar_de_biblioteca()`, `borrar_familia_dir()`, `fila_ref()`; y los privados
+  `biblioteca_familias()`, `biblioteca_familia_de()`, `biblioteca_ruta_familia()`,
+  `url_biblioteca_imagen_madre()`, `biblioteca_madre_por_subida()`, `biblioteca_madre_por_contenido()`.
+  `guardar_subida()` firma nueva **sin `$madre`** (4º arg = `$params`). Las filas `subidas[]` **ya no
+  llevan `madre`**; las viejas se **ignorean al leer** (sin migracion). El smoke anti-drift ahora exige
+  `imagenes`/`borrar_original_item`/`ruta_fila_subida_public` y **reprocha** si reaparecen los helpers
+  de familias.
 - **Impacto en codigo**: `assets/visor-pmu.js` (mini-dialogo), `assets/cargador-pmu.js` (reintento +
   borrado), `assets/selector-pmu.js` (sin `_bibMadre`/`usar`), `assets/tienda.js` (sin `usarBiblioteca`,
   `borrarFoto`, `subidas.detalle`), `assets/biblioteca-pmu.js` (tira sin versiones), `personalizador-pdf.php`
