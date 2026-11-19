@@ -569,6 +569,8 @@
             ajustes: Array.isArray(config.ajustes) ? config.ajustes : [],
             envoltura: envolturaValida(config.envoltura),
             usarExistente: typeof config.usarExistente === 'function' ? config.usarExistente : null,
+            // Spec 041 (A6): declarar la receta SIN bytes (si el integrador lo soporta).
+            declararReceta: typeof config.declararReceta === 'function' ? config.declararReceta : null,
             // Spec 041 (A4): receta v2 a re-aplicar sobre la imagen (si es de esta geometria).
             paramsIniciales: (config.paramsIniciales && typeof config.paramsIniciales === 'object')
                 ? config.paramsIniciales : null,
@@ -1720,25 +1722,39 @@
         // publica su id + la receta (por si reencuadro) y el modal cierra al instante.
         if (this._bib && this._bib.id) {
             var paramsBib = this._params();
-            var usar = (typeof this.config.usarExistente === 'function')
-                ? this.config.usarExistente(this._bib.id, paramsBib, this._bib.url)
-                : Promise.resolve(this._bib.id);
-            var okBib = this.raiz ? this.raiz.querySelector('.spmu-ok') : null;
-            if (okBib) { okBib.disabled = true; okBib.textContent = 'Usando...'; }
-            Promise.resolve(usar).then(function () {
-                if (okBib) { okBib.disabled = false; }
-                if (typeof self.onSelectCallback === 'function') {
-                    self.onSelectCallback(self._bib.url || '', {
-                        width: self.config.finalW,
-                        height: self.config.finalH
-                    });
+            // Si el comprador REENCUADRO, la receta nueva tiene que llegar al servidor:
+            // con la declaracion 0-bytes (`declararReceta`) si el integrador la provee;
+            // si no, cae a la subida normal (que estampa la receta en la fila).
+            var previos = this._bib.params;
+            var iguales = false;
+            try {
+                iguales = !!previos && JSON.stringify(previos) === JSON.stringify(paramsBib);
+            } catch (e) { iguales = false; }
+            var puedeDeclarar = (typeof this.config.declararReceta === 'function');
+            if (iguales || puedeDeclarar) {
+                var usar = (typeof this.config.usarExistente === 'function')
+                    ? this.config.usarExistente(this._bib.id, paramsBib, this._bib.url)
+                    : Promise.resolve(this._bib.id);
+                if (puedeDeclarar) {
+                    try { this.config.declararReceta(this._bib.id, paramsBib); } catch (e) { /* best-effort */ }
                 }
-                self.close();
-            }, function (err) {
-                if (okBib) { okBib.disabled = false; self._actualizarPrimario(); }
-                self._fallo('UPLOAD_FAILED', (err && err.message) || 'No se pudo usar la imagen');
-            });
-            return;
+                var okBib = this.raiz ? this.raiz.querySelector('.spmu-ok') : null;
+                if (okBib) { okBib.disabled = true; okBib.textContent = 'Usando...'; }
+                Promise.resolve(usar).then(function () {
+                    if (okBib) { okBib.disabled = false; }
+                    if (typeof self.onSelectCallback === 'function') {
+                        self.onSelectCallback(self._bib.url || '', {
+                            width: self.config.finalW,
+                            height: self.config.finalH
+                        });
+                    }
+                    self.close();
+                }, function (err) {
+                    if (okBib) { okBib.disabled = false; self._actualizarPrimario(); }
+                    self._fallo('UPLOAD_FAILED', (err && err.message) || 'No se pudo usar la imagen');
+                });
+                return;
+            }
         }
         // Spec 039 (D6): la rama de reuso de la biblioteca (`Elegir`, 0 bytes) se retiro.
         // El primario siempre dice `Subir` y siempre viajan bytes; si la foto ya

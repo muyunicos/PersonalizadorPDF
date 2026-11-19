@@ -212,6 +212,9 @@
             // Spec 039 (D6): `usar` y `onFila` se retiraron con la rama de reuso
             // `Elegir` (0 bytes). Ahora SIEMPRE se sube el original.
             preview: !!config.preview,
+            // Spec 041 (C1): abrir la ranura sola al montar (el cotizador lo usa para
+            // que "Cargar imagen" abra el recorte en UN click).
+            autoAbrir: !!config.autoAbrir,
             // `tecnico`: muestra medidas/forma/min y avisos de configuracion.
             // Lo pasa el preview de la consola; la ficha del comprador NO.
             tecnico: !!config.tecnico,
@@ -271,8 +274,25 @@
         this.raiz = raiz;
         this.txtFalta = falta;
         this._pintar();
+        // Spec 041 (C1): `autoAbrir` abre la PRIMERA ranura vacia al montar. Es lo que
+        // evita el doble click del cotizador: el boton del campo monta el cargador y
+        // el modal de recorte aparece ya (sin un segundo toque).
+        if (this.config.autoAbrir) {
+            for (var i = 0; i < this.config.ranuras.length; i++) {
+                if ((this.estado[i] && this.estado[i].ids.length) === 0) {
+                    this._abrir(i);
+                    break;
+                }
+            }
+        }
         return true;
-    }
+    };
+
+    /** Spec 041 (C1): abre el selector de una ranura (API publica, sin tocar privados). */
+    CargadorPMU.prototype.abrir = function (indice) {
+        var i = parseInt(indice, 10);
+        this._abrir(isFinite(i) && i >= 0 ? i : 0);
+    };
 
     /** Un bloque por ranura: encabezado tecnico (solo admin), miniaturas, zona. */
     CargadorPMU.prototype._bloque = function (r, i, doc) {
