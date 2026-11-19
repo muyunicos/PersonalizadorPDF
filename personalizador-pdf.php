@@ -2248,21 +2248,23 @@ class Personalizador_PDF_Plugin
             }
         }
         $raiz = $motor->dir_ambito('orders');
-        // Spec 035 (D5): el arbol suma el nivel del CLIENTE, asi que el tope de 10
-        // se aplica a los PEDIDOS (los `order_id` crecen -> miro los mas nuevos).
+        // Spec 041 (F2): `orders/{cliente}/...` se indexa por el id de CLIENTE, y un
+        // INVITADO no tiene pedidos (el pedido exige `customer_id > 0`). Antes se
+        // caminaba el arbol de TODOS los clientes en cada listado (y con el doble
+        // click, 3 veces por apertura). Ahora: invitado = no toca `orders/`;
+        // con cuenta = SOLO su carpeta.
         $dirsOrder = [];
-        foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirClave) {
-            if (!ctype_digit(basename($dirClave))) {
-                continue;   // `orders/{clave}/uploads/` no es un cliente
-            }
-            foreach ((array)glob($dirClave . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirPedido) {
+        $uidOrders = (int)($identidad['uid'] ?? 0);
+        if ($uidOrders > 0) {
+            foreach ((array)glob($raiz . DIRECTORY_SEPARATOR . $uidOrders . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR) as $dirPedido) {
                 if (ctype_digit(basename($dirPedido))) {
                     $dirsOrder[] = $dirPedido;
                 }
             }
+            rsort($dirsOrder, SORT_STRING);
+            $dirsOrder = array_slice($dirsOrder, 0, 10);
         }
-        rsort($dirsOrder, SORT_STRING);
-        foreach (array_slice($dirsOrder, 0, 10) as $dirOrder) {
+        foreach ($dirsOrder as $dirOrder) {
             $oid = (int)basename($dirOrder);
             if ($oid < 1) {
                 continue;

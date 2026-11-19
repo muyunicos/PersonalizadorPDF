@@ -74,6 +74,8 @@ Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}
   en campos que no exigen nada.
 * La tira de "Mis imagenes" usa **miniaturas** (128 px, cacheadas por contenido): abre al
   instante en vez de bajar la foto entera de cada entrada.
+* La biblioteca abre **sin esperas**: **una sola** peticion `listar` por apertura (antes se
+  lanzaban 3), sin recorrer los pedidos de otros clientes y sin releer cada foto para medirla.
 * Se **recuerda el encuadre**: el listado publica la receta de cada imagen y el selector la
   re-aplica solo si es de la misma forma y tamano.
 * Elegir una imagen ya subida muestra **Usar** (no `Subir`): si el encuadre no cambio, **no

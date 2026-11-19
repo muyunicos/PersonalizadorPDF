@@ -56,6 +56,20 @@ check('la foto elegida entra por cargarDesdeBiblioteca (sin drop sintetico)',
     && /prototype\.cargarDesdeBiblioteca = function/.test(sel)
     && !/new DragEvent\('drop'/.test(sel));
 
+console.log('== Spec 041 F1/F2: una sola peticion y sin recorrer orders/ ajeno ==');
+check('F1: pedir() comparte la promesa en vuelo (un solo POST por apertura)',
+    /var enVuelo = null;/.test(bib)
+    && /if \(enVuelo && !sinDesde\) \{ return enVuelo; \}/.test(bib)
+    && /enVuelo = p;/.test(bib));
+check('F1: el calentado no pide nada con copia fresca',
+    /Date\.now\(\) - \(fresca\.ts \|\| 0\)\) < 30000/.test(bib));
+check('F2: orders/ se mira SOLO en la carpeta del cliente (invitado no lo toca)',
+    /\$uidOrders > 0/.test(plugin)
+    && /\$raiz \. DIRECTORY_SEPARATOR \. \$uidOrders/.test(plugin)
+    // El bloque viejo de la BIBLIOTECA (recorria todos los clientes) ya no existe.
+    // OJO: `pedidos_completados()` SI recorre todo `orders/`: es la consola del admin.
+    && !/Spec 035 \(D5\): el arbol suma el nivel del CLIENTE/.test(plugin));
+
 console.log('== Visor compartido y ranura (D28) ==');
 check('visor-pmu.js expone abrir/cerrar y precarga vecinos',
     /global\.PMUVisor = api;/.test(visor) && /function preCargar/.test(visor));

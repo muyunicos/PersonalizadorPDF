@@ -887,7 +887,7 @@ class PMU_Sesion
         $med = @getimagesize($ruta);
         $fila = null;
         $this->mutar_manifest($sid, $item_key,
-            function (&$manifest) use ($item_key, $id, $sha, $img, $ruta, $receta, $paramsV2, &$fila) {
+            function (&$manifest) use ($item_key, $id, $sha, $img, $ruta, $receta, $paramsV2, $med, &$fila) {
                 if ((string)($manifest['item_key'] ?? '') !== (string)$item_key) {
                     throw new Exception('motor:sesion:item:ausente');
                 }
@@ -899,6 +899,11 @@ class PMU_Sesion
                         $filas[$i]['mime'] = $img['mime'];
                         $filas[$i]['bytes'] = (int)@filesize($ruta);
                         $filas[$i]['sha'] = $sha;
+                        // Spec 041 (F4): w/h en la FILA (no solo en el retorno): asi
+                        // `imagenes()` no abre cada archivo con `getimagesize` en cada
+                        // listado de la biblioteca.
+                        $filas[$i]['w'] = is_array($med) ? (int)$med[0] : 0;
+                        $filas[$i]['h'] = is_array($med) ? (int)$med[1] : 0;
                         // La receta vigente es la ULTIMA que se acepto: es la que el
                         // comprador ve al agregar al carrito.
                         if ($receta !== '') {
@@ -912,6 +917,9 @@ class PMU_Sesion
                 }
                 $nueva = $this->fila_subida($id, '', $receta, $sha, $img['mime'],
                     (int)@filesize($ruta), time(), 'original', $paramsV2);
+                // Spec 041 (F4): las medidas se PERSISTEN con la fila.
+                $nueva['w'] = is_array($med) ? (int)$med[0] : 0;
+                $nueva['h'] = is_array($med) ? (int)$med[1] : 0;
                 $filas[] = $nueva;
                 $manifest['subidas'] = $filas;
                 $fila = $nueva;

@@ -343,6 +343,9 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         check('039 D5: el id lo deriva el SERVIDOR del contenido', !empty($GLOBALS['bib_fam_1']));
         check('039 D5: los mismos bytes dan el MISMO id (dedupe, sin duplicar)', !empty($GLOBALS['bib_fam_2']));
         check('039 D7: la fila ya NO lleva `madre` (modelo familias retirado)', !empty($GLOBALS['bib_dedupe_madre']));
+        // Spec 041 (F4): las medidas quedan PERSISTIDAS en la fila del manifest (si no,
+        // `imagenes()` abre cada archivo con `getimagesize` en CADA listado).
+        check('F4: la fila guarda w/h (sin getimagesize por foto en cada listado)', !empty($GLOBALS['bib_fila_wh']));
         check('039 D5: un contenido nuevo obtiene su propio id (no reusa)', !empty($GLOBALS['bib_dedupe_nuevo']));
         check('T035: el login anota el sid en _pmu_sids (una sola vez)', !empty($GLOBALS['bib_vinculo']));
         check('T035: el vinculo respeta el tope de 20 (D3)', !empty($GLOBALS['bib_vinculo_tope']));
@@ -3423,6 +3426,17 @@ switch ($fase) {
         // fila por `id`. Se comprueba la invariante real (misma foto -> mismo id).
         $subFam_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b);
         $subFam2_b = $sesion_b->guardar_subida($sid_b, $draft_b, $bytes_b);
+        // Spec 041 (F4): la fila PERSISTIDA trae w/h (no solo el valor de retorno).
+        $manF4_b = json_decode((string)@file_get_contents(
+            $sesion_b->dir_item($sid_b, $draft_b) . '/manifest.json'), true);
+        $filaF4_b = null;
+        foreach ((array)($manF4_b['subidas'] ?? []) as $unaF4_b) {
+            if (is_array($unaF4_b) && (string)($unaF4_b['id'] ?? '') === (string)($subFam_b['id'] ?? '')) {
+                $filaF4_b = $unaF4_b;
+            }
+        }
+        $GLOBALS['bib_fila_wh'] = is_array($filaF4_b)
+            && (int)($filaF4_b['w'] ?? 0) > 0 && (int)($filaF4_b['h'] ?? 0) > 0;
         // Spec 035: el id lo deriva el SERVIDOR del contenido (sha12).
         $GLOBALS['bib_sha_familia'] = is_array($subFam_b)
             && preg_match('/^[a-f0-9]{12}$/', (string)($subFam_b['id'] ?? '')) === 1

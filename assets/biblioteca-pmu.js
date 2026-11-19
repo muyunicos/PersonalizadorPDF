@@ -32,6 +32,9 @@
     var ultimoEl = null; // contenedor vigente de la tira (para repintar tras borrar)
     var ultimas = [];    // ultima lista pintada: el visor muestra TODAS (no solo las visibles)
     var onElegir = null;
+    // Spec 041 (F1): promesa EN VUELO compartida. `calentar()` y `tira()` (y el modal
+    // abierto dos veces) lanzaban listados completos en paralelo: 3 POST identicos.
+    var enVuelo = null;
 
     function config() {
         if (cfg && cfg.url) { return cfg; } // OJO: nunca cachear un endpoint vacio
@@ -78,6 +81,8 @@
     function pedir(sinDesde) {
         var c = config();
         if (!c.url) { return Promise.reject(new Error('api:biblioteca:sin:endpoint')); }
+        // Spec 041 (F1): una sola peticion en vuelo (ver `enVuelo`).
+        if (enVuelo && !sinDesde) { return enVuelo; }
         var previa = leerCache();
         var fd = new FormData();
         fd.append('action', 'personalizador_pdf_biblioteca');
@@ -85,7 +90,7 @@
         fd.append('_wpnonce', c.nonce);
         if (sinDesde) { previa = null; } // reintento del auto-sanado: se pide la lista COMPLETA
         if (previa && previa.revision) { fd.append('desde', previa.revision); }
-        return global.fetch(c.url, { method: 'POST', body: fd, credentials: 'same-origin' })
+        var p = global.fetch(c.url, { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
             .then(function (json) {
                 if (!json || !json.success) {
@@ -102,6 +107,11 @@
                 var g = guardarCache(d);
                 return { revision: g.revision, sin_cambios: false, fotos: g.fotos };
             });
+        if (!sinDesde) {
+            enVuelo = p;
+            p.then(function () { enVuelo = null; }, function () { enVuelo = null; });
+        }
+        return p;
     }
     function inyectarEstilos(doc) {
         if (doc.getElementById(ESTILO_ID)) { return; }
@@ -286,6 +296,10 @@
     }());
     /** Spec 030 (4a): el calentado corre con la pagina cargada (los globals ya estan). */
     function calentar() {
+        // Spec 041 (F1): con copia fresca no se pide nada (el primer gesto en el panel
+        // disparaba un listado completo aunque la copia tuviera segundos de vida).
+        var fresca = leerCache();
+        if (fresca && fresca.revision && (Date.now() - (fresca.ts || 0)) < 30000) { return; }
         if (config().url && typeof global.fetch === 'function') {
         pedir().catch(function () { /* sin identidad o sin red: no pasa nada */ });
         }
