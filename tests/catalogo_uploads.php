@@ -13,7 +13,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 define('ABSPATH', __DIR__ . '/');
-$BASE = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'pmu-cat-' . getmypid();
+$BASE = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'pmu-cat-' . getmypid() . '-' . mt_rand(1000, 9999);
 
 function wp_upload_dir() {
     global $BASE;
@@ -87,6 +87,12 @@ try {
         check('la miniatura queda en disco', is_file($u->miniatura_ruta($ruta, 80)));
         $dim = @getimagesizefromstring($bytes);
         check('la miniatura es 80x80', is_array($dim) && (int)$dim[0] === 80 && (int)$dim[1] === 80);
+        // Spec 041 (T018): si la miniatura se borra, se vuelve a generar (idempotente).
+        $mini = $u->miniatura_ruta($ruta, 80);
+        @unlink($mini);
+        $otra = $u->miniatura_generar($ruta, 80);
+        check('la miniatura se regenera al borrarla', is_string($otra) && $otra !== '' && is_file($mini),
+            'bytes=' . strlen((string)$otra) . ' archivo=' . (is_file($mini) ? 'si' : 'no'));
     } else {
         check('GD disponible para la miniatura', false, 'sin GD');
     }

@@ -55,6 +55,11 @@ check('la foto elegida entra por cargarDesdeBiblioteca (sin drop sintetico)',
     /self\.cargarDesdeBiblioteca\(foto\)/.test(sel)
     && /prototype\.cargarDesdeBiblioteca = function/.test(sel)
     && !/new DragEvent\('drop'/.test(sel));
+// Spec 041 (T012/T015): la tira pinta miniaturas y el selector resuelve la receta por clave.
+check('la tira usa la miniatura (thumb) y no la foto completa',
+    /f\.thumb\s*\|\|\s*f\.url/.test(bib));
+check('el selector resuelve la receta por clave de contexto',
+    /prototype\._recetaDeFoto\s*=\s*function/.test(sel));
 
 console.log('== Spec 041 F1/F2: una sola peticion y sin recorrer orders/ ajeno ==');
 check('F1: pedir() comparte la promesa en vuelo (un solo POST por apertura)',

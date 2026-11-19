@@ -54,7 +54,7 @@ no incluye imagenes ajenas y una apertura del modal produce **una** solicitud.
 - [X] T009 [US1] Reescribir la rama `op=listar` de `handle_biblioteca()` en `personalizador-pdf.php` para armar las fotos desde **la carpeta de la identidad** (`dir_uploads_identidad()`) + `catalogo_leer()`, sin leer manifiestos ni consultar pedidos ajenos (FR-001..FR-003).
 - [X] T010 [P] [US1] Cambiar `biblioteca_ruta_imagen()` en `personalizador-pdf.php` para resolver por `PMU_Sesion::resolver_original($id, $clave, $sid)` **segun identidad** (cliente -> `orders/{clave}/uploads/`; invitado -> `tmp/sesion-{sid}/uploads/`), eliminando el recorrido de contenedores (FR-008).
 - [X] T011 [US1] Ajustar `assets/biblioteca-pmu.js` al payload nuevo (`id`, `url`, `thumb`, `bytes`, `w`, `h`, `recetas`) manteniendo el dedupe en vuelo de `pedir()` y el calentado con copia fresca (SC-002).
-- [ ] T012 [US1] Actualizar `tests/biblioteca-contrato.test.js` (payload, dedupe, sin `contenedores`/`madre`, y **sin ruta publica del catalogo**: ninguna rama sirve `uploads.json`, FR-013) y los checks que hoy esperan `op=imagen` con `item_key`; correr `node tests/biblioteca-contrato.test.js`.
+- [X] T012 [US1] Actualizar `tests/biblioteca-contrato.test.js` (payload, dedupe, sin `contenedores`/`madre`, y **sin ruta publica del catalogo**: ninguna rama sirve `uploads.json`, FR-013) y los checks que hoy esperan `op=imagen` con `item_key`; correr `node tests/biblioteca-contrato.test.js`.
 
 **Checkpoint**: US1 entregable (listado rapido) sin depender de las demas historias.
 
@@ -68,8 +68,8 @@ retoca, no viaja ningun byte.
 primario ofrece usarla sin cambios; con otra forma/tamano -> encuadre por defecto.
 
 - [X] T013 [US2] En `assets/selector-pmu.js`, al cargar una imagen de la biblioteca tomar la receta por clave `"{gid}-{w}x{h}-{phsize}"` desde `foto.recetas` y re-aplicarla (escala, `ox/oy`, `rot`, `modo`, `fondo`) **solo si la clave coincide** con el contexto del campo (FR-009, US2 esc. 2).
-- [ ] T014 [P] [US2] En `assets/cargador-pmu.js`, pasar el contexto y las recetas de la foto al selector; mantener el primario `Usar` con **0 bytes** cuando la receta no cambia y el resguardo que sube si el comprador reencuadra (FR-015, SC-003).
-- [ ] T015 [US2] Actualizar `node tests/selector-contrato.test.js` y `node tests/biblioteca-contrato.test.js` para la receta por clave (no por `params` plano) y correr ambas suites.
+- [X] T014 [P] [US2] En `assets/cargador-pmu.js`, pasar el contexto y las recetas de la foto al selector; mantener el primario `Usar` con **0 bytes** cuando la receta no cambia y el resguardo que sube si el comprador reencuadra (FR-015, SC-003).
+- [X] T015 [US2] Actualizar `node tests/selector-contrato.test.js` y `node tests/biblioteca-contrato.test.js` para la receta por clave (no por `params` plano) y correr ambas suites.
 
 **Checkpoint**: US2 entregable sobre US1; sigue siendo testeable por separado.
 
@@ -83,8 +83,8 @@ primario ofrece usarla sin cambios; con otra forma/tamano -> encuadre por defect
 sin descargar el original.
 
 - [X] T016 [US3] **Adaptar** el `op=miniatura` existente en `personalizador-pdf.php` (hoy cachea en `tmp/miniaturas/`): servir `{id}-80x80.webp` junto al original (generarla si falta), `Content-Type: image/webp`, `ETag` y degradacion al original si no hay GD; retirar el cache viejo (FR-007, SC-004).
-- [ ] T017 [P] [US3] En `assets/biblioteca-pmu.js`, usar `thumb` para la tira y reservar `url` para la vista grande/recorte; verificar que el visor sigue navegando con URLs ya resueltas.
-- [ ] T018 [US3] Ampliar `node tests/fotos-contrato.test.js` y la fase `biblioteca` con la miniatura: existe tras subir, mide 80x80 y se regenera si se borra el archivo (`php tests/texto_puente.php biblioteca`).
+- [X] T017 [P] [US3] En `assets/biblioteca-pmu.js`, usar `thumb` para la tira y reservar `url` para la vista grande/recorte; verificar que el visor sigue navegando con URLs ya resueltas.
+- [X] T018 [US3] Ampliar `node tests/fotos-contrato.test.js` y la fase `biblioteca` con la miniatura: existe tras subir, mide 80x80 y se regenera si se borra el archivo (`php tests/texto_puente.php biblioteca`).
 
 **Checkpoint**: US3 entregable; SC-004 medible en Network.
 
