@@ -37,6 +37,8 @@ Reglas:
 - `params` es la receta v2 **ya validada**; una receta invalida se descarta al escribir.
 - El archivo se escribe **atomico** (`.tmp` + `rename`) y se lee **tolerante**: ausente, ilegible o
   `version` desconocida = catalogo inexistente (se reconstruye, sin recetas).
+- Las **mutaciones se serializan** con `flock` sobre `uploads.json.lock`, con la lectura **dentro** del
+  lock: dos pestanas no se pisan. El listado lee sin lock (el `rename` garantiza una version completa).
 - **No se sirve por ruta propia**: no existe URL para este archivo.
 
 ## C2 — Miniaturas

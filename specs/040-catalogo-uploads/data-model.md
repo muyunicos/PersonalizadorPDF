@@ -61,6 +61,9 @@ tamanos o formas distintas (FR-009 y US2 escenario 2).
    (reconstruccion).
 5. **Quitar del campo no modifica el catalogo**; borrar desde la galeria si (FR-011/FR-012).
 6. **El catalogo no se publica**: no hay URL propia; se lee por el canal protegido (FR-013).
+7. **Las mutaciones se serializan**: `flock` sobre `uploads.json.lock` y lectura **dentro** del lock
+   (mismo patron que `mutar_manifest_dir`); la escritura sigue siendo atomica. El listado **no** toma
+   lock: la version que lee siempre esta completa (el `rename` es indivisible).
 
 ## Transiciones
 
