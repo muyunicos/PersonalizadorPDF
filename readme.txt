@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.28.1
+Stable tag: 4.30.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,25 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.30.0 =
+* Spec 039 (motor de cargas): **borrar en el acto**. Al quitar una foto desde el visor del campo se
+  elimina su fila del item **y** su archivo compartido del servidor (si ningun otro item de la sesion lo
+  usa), en vez de esperar al TTL de 30 dias. Es **idempotente** y **nunca** toca `orders/`.
+* Spec 039 (D1): `Eliminar` pide **confirmacion** con un **mini-dialogo propio** del visor (no el
+  `confirm()` del navegador). Al borrar, el visor **no se reabre** en la foto siguiente: vuelve a la tira.
+* Spec 039 (D2): **reintentar** una subida que fallo **tocando la miniatura marcada**: se reintenta con
+  el mismo recorte (queda en memoria), sin volver a elegir el archivo.
+* Spec 039 (D4): la tira **"Mis imagenes"** pasa a **una entrada por imagen** (sin agrupar por familia,
+  sin el badge `N versiones`) y al tocar una miniatura la imagen **carga directo** en el recorte
+  (IndexedDB si esta, `op=imagen` si no).
+* Spec 039 (D5/D6): se retira el **modelo "familias"** y la rama de reuso `Elegir` (0 bytes): la identidad
+  es el `id` (sha del contenido) y **una imagen + N recetas**. La subida siempre viaja con bytes; el
+  servidor deduplica por `sha`. Se retiran `op=usar`/`op=usos` del endpoint.
+* Spec 039 (H5): la ficha dice **cuanto** queda en vuelo ("Estamos recibiendo tus archivos (N pendientes)")
+  en vez de dejar el boton apagado sin explicacion.
+* Puertas en verde: `biblioteca-contrato` (60), `selector-contrato` (100), `campos-contrato` (128),
+  `cola-subida` (27), `receta-contrato` (21) + las 40 fases del arnes PHP + `motor_smoke` y `parity`.
 
 = 4.28.1 =
 * Spec 036 (enmienda D12): el mockup aplanado del cliente ahora trae **fondo blanco opaco** y la
