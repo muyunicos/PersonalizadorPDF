@@ -382,7 +382,8 @@ se implementa con `/speckit-implement`.*
 ### D11 — El arte se sube SIEMPRE; el mockup es accesorio
 
 Subir el diseno **no depende** de que exista un mockup ni una plantilla: el mockup solo ilustra. Sin mockup
-el paso se muestra con un marco neutro y el comprador sube, compra y el taller recibe el archivo igual.**FR-036**.
+el paso **no muestra el elemento** (antes: un marco neutro con el aviso "Sin mockup para esta forma y tamano"):
+el comprador ve solo los campos de subida, sube, compra y el taller recibe el archivo igual.**FR-036**.
 
 ### D12 — PDF de produccion POR CATEGORIA + TAMANO (importado, no generado)
 
