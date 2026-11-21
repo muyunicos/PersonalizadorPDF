@@ -1966,6 +1966,8 @@
             estado: {}
         };
         api.valores = function () { return api.estado; };
+        // Spec 042: diagnostico del boton (vistas/minimos/validez/subidas).
+        api.bloqueos = function () { return bloqueos; };
         // Spec 018 (T002/T003): metodos publicos.
         api.subirFoto = function (blob, campo, ctx) {
             return subirFoto(blob, campo ? (campo.id || campo) : campo, null, ctx);
@@ -2025,6 +2027,15 @@
             urlsResueltas[String(k)] = String(ficha.urls[k]);
         });
         api.anotarUrl = anotarUrl;
+        api.urlDeRespaldo = function (id) {
+            var m = (window.PMU_FICHA && window.PMU_FICHA.urls_respaldo) || {};
+            var u = String(m[String(id || '')] || '');
+            if (u) { return u; }
+            var b = (window.PMU_FICHA && window.PMU_FICHA.biblioteca) || {};
+            if (!b.endpoint || !id) { return ''; }
+            return b.endpoint + '?action=personalizador_pdf_biblioteca&op=imagen&id='
+                + encodeURIComponent(String(id)) + '&_wpnonce=' + encodeURIComponent(b.nonce || '');
+        };
         api.urlDeSubida = function (id) {
             var clave = String(id || '');
             if (clave !== '' && urlsResueltas[clave]) {
@@ -2145,6 +2156,7 @@
                 // foto subida (objectURL) para que la vista previa dibuje sin red.
                 onRecorte: function (id, url, receta) { anotarRecorte(id, url, receta); },
                 urlDe: api.urlDeSubida,
+                urlDeRespaldo: api.urlDeRespaldo,
                 subir: function (blob, ctx) { return api.subirFoto(blob, cid, ctx); },
                 // Spec 039 (D6): `usar` se retiro con la rama de reuso `Elegir`.
                 onChange: function (est) {

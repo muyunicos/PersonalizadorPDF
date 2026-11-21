@@ -96,6 +96,7 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 ├── AGENTS.md                ← ESTE archivo (contexto obligatorio)
 ├── personalizador-pdf.php   ← Plugin WP (clase principal, menús, handlers PDFs/campos/config,
 │                                   ciclo carrito→pedido, puente TextMuy; sin migraciones)
+├── media.php                ← Entrypoint de lectura sin WordPress (spec 042: ping/listar/imagen/miniatura)
 ├── admin/
 │   ├── page.php             ← Página admin con pestañas ("PDFs" | "Campos" | "Estilos de Texto" | "Pedidos" | "Test" | "Ayuda")
 │   ├── pdfs.php             ← Consola: subir PDF, grupos, mockups, imágenes, Procesar
@@ -135,9 +136,9 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   │                          contrato `specs/004.../contracts/selector-pmu.md`; editor visual
 │   │                          spec 016; spec 021: motor propio Canvas 2D sin dependencias)
 │   ├── visor-pmu.js         ← Visor fullscreen COMPARTIDO (PMUVisor: ranura + biblioteca; spec 030 D28); con el tema presente DELEGA en `MU.visor` y queda de fallback (D11, blanda)
-│   ├── biblioteca-pmu.js    ← Biblioteca del comprador (spec 030): copia local v2 (metadatos), tira
-│   │                          adaptativa, visor (Elegir/Borrar) y usar (0 bytes); se calienta en la ficha
-│   │                          y DELEGA la tira en `MU.coleccion` del tema si esta (blanda)
+│   ├── biblioteca-pmu.js    ← Biblioteca del comprador (specs 030/043): copia local v3 (metadatos +
+│   │                          revision), miniaturas embebidas, tira con **Ver todas (N)** -> visor
+│   │                          (Elegir/Eliminar) y borrado en dos pasos; DELEGA la tira en MU.coleccion si esta (blanda)
 │   └── miniaturas.js        ← ThumbEngine: miniaturas `.webp` y sprites por ámbito; único
 │                              cliente de `op=sprite`/`op=miniatura` (envía `firma`; nunca
 │                              escribe catálogos). Se encola en admin y su URL viaja al iframe
@@ -151,6 +152,8 @@ personalizador-pdf/          (carpeta de instalación en WP: wp-content/plugins/
 │   └── Motor.php            ← Orquestador principal
 ├── inc/                     ← DUEÑO UNICO DE DATOS
 │   ├── class-pmu-uploads.php ← PMU_Uploads: rutas, catálogos, ops, handle_request
+│   ├── class-pmu-lectura.php ← PMU_Lectura: ayudante puro de lectura (spec 042; sin WP)
+│   ├── class-pmu-media.php   ← PMU_Media: config .media, cookie pmu_uid y URLs (WP)
 │   ├── class-pmu-galeria.php ← PMU_Galeria: ayudante puro de miniaturas
 │   └── class-pmu-sesion.php  ← PMU_Sesion: ciclo del comprador (sid/item/pool/manifest;
 │                                   planeado en spec 004; T003)
@@ -599,6 +602,8 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   - Endpoint unico (nonce `pmu_uploads` + capability): `admin_post_pmu_uploads` con `op=`
   - Catalogo: `tm-presets/presets.json` con estructura `{thumbs:{w,h,c}, items:[[id,title,cats,file],...]}`
 
+- **Camino liviano de lectura (spec 042)**: `media.php` (sin WordPress) lee `uploads/pmu/{tmp/sesion-{sid}|orders/{uid}}/uploads/` (`uploads.json`, `{id}.{ext}`, `{id}-80x80.webp`). Config: `uploads/pmu/.media/config.json` (privado, `.htaccess` deniega; base + secreto). Identidad: `pmu_sid` (invitado) o `pmu_uid` (cliente, firmada). El camino actual (`admin-post`) queda como respaldo y es el unico camino de escritura.
+
 ## 6. Motor PHP (engine/): responsabilidades
 
 - **`Pdf.php`**: parser base (lectura pura de objetos/streams/xref).
@@ -632,6 +637,10 @@ el estado de cada spec, en [`specs/INDICE.md`](./specs/INDICE.md).
 - ✅ **El Motor no renderiza texto**: el navegador rasteriza y **la vista previa es el PDF final**.
 - ✅ **Presets**: formato unico `.txm` + celda en el sprite del ambito (`thumbs.webp`).
 - ✅ **Modulo TextMuy integrado** en `modules/textmuy/` (repo propio; bump `?v=RCn` al tocar su JS).
+- ✅ **Editor de imagen y biblioteca (spec 043)**: la miniatura del campo abre el editor **con su
+  receta**; guardar una existente **no sube bytes** (una foto = un `id`, N recetas por contexto);
+  "Ver todas (N)" abre el visor de la biblioteca (Elegir/Eliminar, dialogo solo si esta en uso).
+  Sin IndexedDB: cache HTTP de `media.php`. Supera la 039 D2/D3 y la 030 4a/D8.
 - ✅ **Norma ex-008** (`constitution` §IV): `analisis.json` inmutable + `config.json` editable;
   sesion por item `tmp/sesion-{sid}/{item_key}/`; entregable en `orders/{cliente}/{order_id}/{item_key}/`
   con los originales del cliente en `orders/{cliente}/uploads/`.
@@ -643,6 +652,8 @@ el estado de cada spec, en [`specs/INDICE.md`](./specs/INDICE.md).
   + `orders/{cliente}/uploads/`; al pagar el item se **mueve** (rename). `clave_valida()` rechaza `0`
   (invitado): sin cliente no hay carpeta y el pedido queda sin promover con causa visible.
 - ✅ **Jerarquia documental**: `constitution` > `AGENTS.md` > resto.
+
+- **Spec 042 (lectura rapida)**: supersede la D19 de la 030 (heredada por la 040) y la D14 en cuanto a nonce **solo para lecturas**. `media.php` sirve `listar`/`imagen`/`miniatura` sin WordPress; `PMU_Uploads` sigue siendo el dueno de escritura; el endpoint `admin-post` queda como respaldo. Trade-off aceptado y acotado: cookie bearer, solo la carpeta de fotos del comprador; las escrituras conservan nonce/capacidad.
 
 ## 8. Dificultades del entorno (IMPORTANTE AL TRABAJAR AQUÍ)
 
@@ -719,6 +730,7 @@ Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.Full
 php tests/campos_migracion.php   # CRUD de campos v3 (debe decir "CAMPOS V3 OK")
 php tests/certificacion_hoja.php  # Certificacion del sprite (debe decir "CERTIFICACION HOJA OK")
 php tests/catalogo_uploads.php  # Catalogo de uploads (spec 040): carpetas, lock, miniaturas y reconstruccion ("CATALOGO UPLOADS OK")
+php tests/media_lectura.php  # Camino liviano (spec 042): listar, revision, thumb_data, 304, guards, HMAC ("MEDIA LECTURA OK")
 node tests/campos-contrato.test.js  # Montaje de campos + cargador (spec 012): "CAMPOS CONTRATO OK"
 node tests/selector-contrato.test.js  # Contrato del selector visual (spec 016): "SELECTOR CONTRATO OK"
 node tests/biblioteca-contrato.test.js  # Biblioteca del comprador (spec 030): "BIBLIOTECA CONTRATO OK (N checks)"
@@ -790,8 +802,8 @@ y tema montados por *junction*) con Chrome + Playwright **sin instalar nada en e
 credenciales, scripteado, higiene de datos y las trampas conocidas están en
 `docs/entorno-desarrollo.md` §9. Vigentes: **`tests/galerias-sprite.browser.js`** (spec 009: galerias y
 hojas, **32/32**) y **`tests/ficha-pedido.browser.js`** (ficha → pedido → `orders/{cliente}/{order_id}/{item}/…_procesado.pdf`,
-**52/52**). Ambas cubren caminos que ninguna otra puerta cubria (`assets/tienda.js`, galerias/hojas) y
-la de ficha-pedido ademas la **biblioteca del comprador** (spec 030: tira, `Elegir` 0 bytes, version,
+**53/53**). Ambas cubren caminos que ninguna otra puerta cubria (`assets/tienda.js`, galerias/hojas) y
+la de ficha-pedido ademas la **biblioteca del comprador** (specs 030/043: tira, Ver todas (N), Elegir/Eliminar,
 dedupe y visor compartido) y el escenario de vistas obligatorias de la 035 (orden, marca al mostrarse, re-edicion desde el carrito). **Fallan con la causa accionable** si al lab le falta una precondicion (lab apagado, producto sin
 `_pmu_pdf_slugs`, catalogo `img/` ausente, **presets v1 en lugar de v2**, COD sin `enable_for_virtual`).
 La de galerias tiene modo **`PMU_SOLO_UI=1`** (+ `PMU_BASE=<hosting>`) para correr contra el hosting

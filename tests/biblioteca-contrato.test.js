@@ -40,12 +40,12 @@ check('revalida por revision: manda desde y respeta sin_cambios',
     /fd\.append\(.desde., previa\.revision\)/.test(bib) && /d\.sin_cambios && previa/.test(bib));
 check('la tira pinta hasta 10 fotos y no dibuja si esta vacia',
     /var TOPE_TIRA = 10;/.test(bib) && /if \(!fotos \|\| !fotos\.length\)/.test(bib));
-check('guarda solo metadatos: usa la url del endpoint y no la resuelve por POST',
-    /img\.src = String\(urlResuelta \|\| f\.thumb \|\| f\.url/.test(bib) && !/urlDeSubida/.test(bib));
-check('el visor de la biblioteca se retiro: tocar una miniatura ELIGE (D4)',
+check('guarda solo metadatos: usa thumb_data/thumb y no la resolucion por POST',
+    /img\.src = String\(f\.thumb_data \|\| urlResuelta \|\| f\.thumb \|\| f\.url/.test(bib) && !/urlDeSubida/.test(bib));
+check('spec 043 (US4): la miniatura ELIGE y el visor de la biblioteca existe',
     /function elegir\(indice\)/.test(bib)
-    && /function visor\(indice\) \{ return elegir\(indice\); \}/.test(bib)
-    && !/global\.PMUVisor\.abrir\(\{/.test(bib));
+    && /function verTodas\(indice\)/.test(bib)
+    && /function visor\(indice\) \{ return verTodas\(indice\); \}/.test(bib));
 
 console.log('== Modal de recorte (T013) ==');
 check('el modal monta la tira SIEMPRE visible (sin boton de biblioteca)',
@@ -67,7 +67,7 @@ check('F1: pedir() comparte la promesa en vuelo (un solo POST por apertura)',
     && /if \(enVuelo && !sinDesde\) \{ return enVuelo; \}/.test(bib)
     && /enVuelo = p;/.test(bib));
 check('F1: el calentado no pide nada con copia fresca',
-    /Date\.now\(\) - \(fresca\.ts \|\| 0\)\) < 30000/.test(bib));
+    /Date\.now\(\) - \(fresca\.ts \|\| 0\)\) < FRESCURA_MS/.test(bib));
 check('F2: orders/ se mira SOLO en la carpeta del cliente (invitado no lo toca)',
     // Spec 040 T024: `biblioteca_contenedores()` (recorria TODOS los clientes) fue
     // retirado. `listar` lee el catalogo de la carpeta de la identidad. La invariante
@@ -84,13 +84,63 @@ check('F2: orders/ se mira SOLO en la carpeta del cliente (invitado no lo toca)'
             && !/biblioteca_contenedores/.test(cuerpo);
     })());
 
+console.log('== Spec 042: camino liviano ==');
+check('spec 042: cache v3 con identidad y revision',
+    /var CLAVE = 'pmu_bib_v3';/.test(bib)
+    && /identidad: String\(dato\.identidad/.test(bib)
+    && /revision: String\(dato\.revision/.test(bib));
+check('spec 042: config publica rapido/revision/identidad',
+    /rapido: b\.rapido/.test(bib)
+    && /revision: String\(b\.revision/.test(bib)
+    && /identidad: String\(b\.identidad/.test(bib));
+check('spec 042: pedirRapido usa GET sin nonce',
+    /function pedirRapido/.test(bib)
+    && /c\.rapido \+ '\?op=listar'/.test(bib)
+    && !/fd\.append\('_wpnonce'/.test(bib.slice(bib.indexOf('function pedirRapido'), bib.indexOf('function pedirWp'))));
+check('spec 042: respaldo al endpoint actual',
+    /function pedirWp/.test(bib) && /modo = 'wp'/.test(bib));
+check('spec 042: la copia solo se usa con la identidad de la ficha',
+    /var esperada = String\(config\(\)\.identidad/.test(bib)
+    && /String\(v\.identidad \|\| ''\) !== esperada/.test(bib));
+check('spec 042: tira salta con revision/identidad iguales',
+    /previa\.revision === c\.revision/.test(bib));
+check('spec 042: miniaturas embebidas en los dos caminos',
+    /f\.thumb_data \|\| urlResuelta/.test(bib)
+    && /var thumb = String\(f\.thumb_data/.test(bib));
+check('spec 042: urlRespaldo para imagenes',
+    /function urlRespaldo/.test(bib) && /urlRespaldo: urlRespaldo/.test(bib));
+check('spec 042: la ficha publica rapido/revision/identidad',
+    /'rapido' => \$rapido/.test(plugin)
+    && /'revision' => \$revision/.test(plugin)
+    && /'identidad' => \$identidadHash/.test(plugin));
+check('spec 042: media.php existe y no arranca WordPress',
+    fs.existsSync(path.join(RAIZ, 'media.php'))
+    && !/wp-load\.php/.test(lee('media.php')));
+
+console.log('== Spec 043 (US4): Ver todas (N) y visor de la biblioteca ==');
+check('el chip "Ver todas (N)" se pinta SIEMPRE con el total',
+    /mas\.textContent = 'Ver todas \(' \+ fotos\.length \+ '\)'/.test(bib));
+check('el chip abre el visor (no elige una foto)',
+    /function verTodas\(indice\)/.test(bib) && /verTodas\(0\)/.test(bib)
+    && /onChip: function \(cuantos, desde\) \{ verTodas/.test(bib));
+check('el visor muestra TODAS las fotos con Elegir/Eliminar',
+    /global\.PMUVisor\.abrir\(\{/.test(bib)
+    && /etiqueta: 'Elegir'/.test(bib) && /etiqueta: 'Eliminar'/.test(bib));
+check('borrado en dos pasos: directo sin uso y dialogo con referencias',
+    /borrarFoto\(id, confirmar\)/.test(bib) && /err\.referencias/.test(bib)
+    && /PMUVisor\.confirmar\(\{/.test(bib));
+check('tras borrar se repinta la tira (contador al dia)',
+    /pintarTira\(ultimoEl, ultimas\)/.test(bib));
+check('spec 043 (US5): el dialogo de uso queda sobre el modal del editor',
+    /fondo\.style\.zIndex = '200000'/.test(visor));
+
 console.log('== Visor compartido y ranura (D28) ==');
 check('visor-pmu.js expone abrir/cerrar y precarga vecinos',
     /global\.PMUVisor = api;/.test(visor) && /function preCargar/.test(visor));
 check('la tira de la biblioteca delega en el MOTOR del tema (D26, blanda)',
     /function delegarTira/.test(bib) && /delegarTira\(el, fotos\)/.test(bib)
     && /tema\.coleccion\(el, \{/.test(bib) && /navegable: false/.test(bib)
-    && /onChip: function \(cuantos, desde\) \{ elegir\(desde \|\| 0\); \}/.test(bib));
+    && /onChip: function \(cuantos, desde\) \{ verTodas\(desde \|\| 0\); \}/.test(bib));
     check('el visor delega en el MOTOR DEL TEMA cuando esta (D11, blanda)',
     /function delegarTema/.test(visor) && /global\.MU/.test(visor)
     && /typeof tema\.visor/.test(visor) && /delegado = tema;/.test(visor));
@@ -136,9 +186,9 @@ check('se repinta al cambiar el tamaño sin volver a pedir',
     /'resize'/.test(bib) && /pintarTira\(ultimoEl, ultimas\)/.test(bib));
 
 console.log('== Borrado en el acto (spec 039 D3) ==');
-check('la biblioteca ya no borra: borrar vive en el visor del campo (D1/D3)',
-    !/pedirOp\('borrar'/.test(bib) && !/global\.confirm\(/.test(bib)
-    && /Borrar se hace desde el visor del CAMPO/.test(bib));
+check('spec 043 (US4): la biblioteca borra en dos pasos (sin confirm nativo)',
+    /borrarFoto\(id, confirmar\)/.test(bib) && !/global\.confirm\(/.test(bib)
+    && /PMUVisor\.confirmar\(\{/.test(bib));
 check('el aviso excluye el item que se esta editando (D17)',
     /item: s\.item_key \|\| ''/.test(bib) || /fd\.append\('item_key', String\(c\.item \|\| ''\)\)/.test(bib));
 
@@ -150,13 +200,13 @@ console.log('== Auto-open condicionado (4a clarificacion) ==');
 check('el selector de archivos se auto-abre SOLO si la biblioteca esta vacia',
     /bibVacia/.test(sel) && /PMUBiblioteca\.cache/.test(sel));
 check('calentar() solo corre con URL y fetch (spec 036 D7: con el primer gesto, NO en load)',
-    /if \(config\(\)\.url && typeof global\.fetch === 'function'\)/.test(bib));
+    /if \(\(c\.url \|\| c\.rapido\) && typeof global\.fetch === 'function'\)/.test(bib));
 
 console.log('== Spec 039 D6: se retiro `Elegir` del selector ==');
 check('el selector ya no tiene `_bibMadre`/`_yaElegido`/`_paramsBase`',
     !/_bibMadre/.test(sel) && !/_yaElegido/.test(sel) && !/_paramsBase/.test(sel));
-check('el primario dice SIEMPRE `Subir` (sin rama de reuso)',
-    /prototype\._actualizarPrimario = function/.test(sel) && /ok\.textContent = 'Subir';/.test(sel));
+check('spec 043 (US3): el primario dice SIEMPRE `Guardar` (sin rama de reuso)',
+    /prototype\._actualizarPrimario = function/.test(sel) && /ok\.textContent = 'Guardar';/.test(sel));
 check('el selector expone obtenerBlobFallido() para reintentar (spec 039 D2)',
     /prototype\.obtenerBlobFallido = function/.test(sel) && /_falloSubida/.test(sel));
 
@@ -220,9 +270,15 @@ check('config() no cachea endpoint vacio y el calentado NO va en load (spec 036 
     && /closest\('\[data-pmu-panel\]'\)/.test(bib));
 
 console.log('== Copia envenenada: auto-sanado (2026-10-23, vigente) ==');
-check('la copia local es v2 y se auto-sana de una copia vacia',
-    /var CLAVE = 'pmu_bib_v2';/.test(bib) && /function pedir\(sinDesde\)/.test(bib)
+/* Histórico (pre-042): la assertion vieja se reemplazo por la de abajo (el auto-sanado del respaldo usa pedir(true)). */
+/*
+check('la copia local es v3 y se auto-sana de una copia vacia',
+    /var CLAVE = 'pmu_bib_v3';/.test(bib) && /function pedir\(sinDesde\)/.test(bib)
     && /if \(\(!previa\.fotos \|\| !previa\.fotos\.length\) && !sinDesde\) \{ return pedir\(true\); \}/.test(bib));
+*/
+check('la copia local es v3 y se auto-sana de una copia vacia',
+    /var CLAVE = 'pmu_bib_v3';/.test(bib) && /function pedir\(sinDesde\)/.test(bib)
+    && /return pedirWp\(true\)/.test(bib));
 
 console.log('== Fix 4.22.2: montaje y receta de la subida (vigente) ==');
 check('el montaje de la tira INVOCA su bloque (})();) y los params viajan con la subida',
@@ -236,7 +292,7 @@ check('la subida ya NO manda madre_origen (no hay familia que reusar)',
     && !/CargadorPMU\.prototype\._madreDe = function/.test(carg)
     && !/fd\.append\('madre_origen'/.test(tienda));
 check('la tira reusa la URL ya resuelta de la ficha (una sola descarga)',
-    /img\.src = String\(urlResuelta \|\| f\.thumb/.test(bib));
+    /img\.src = String\(f\.thumb_data \|\| urlResuelta \|\| f\.thumb/.test(bib));
 
 console.log('== T046: visor y tira sin POST extra (mapa id -> url) ==');
 check('urlDeSubida reusa el mapa PMU_FICHA.urls antes de resolver por POST',

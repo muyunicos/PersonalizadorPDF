@@ -197,6 +197,9 @@
         return new Promise(function (resolver) {
             var fondo = doc.createElement('div');
             fondo.className = 'pmu-visor-confirmar-fondo';
+            // Spec 043 (US5): sin visor abierto, el dialogo tiene que quedar SOBRE el
+            // modal del editor (z-index 180000).
+            if (!visor) { fondo.style.zIndex = '200000'; }
             var panel = doc.createElement('div');
             panel.className = 'pmu-visor-confirmar';
             panel.setAttribute('role', 'alertdialog');

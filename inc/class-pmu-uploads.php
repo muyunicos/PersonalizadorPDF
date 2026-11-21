@@ -3,6 +3,8 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+require_once __DIR__ . '/class-pmu-lectura.php';
+
 /**
  * PMU_Uploads - Motor unico de cargas y gestion de recursos (Const. II/VII,
  * R1-R2 de specs/006-align-textmuy-motor/research.md).
@@ -1184,22 +1186,7 @@ class PMU_Uploads
      */
     public function catalogo_leer($dir)
     {
-        $ruta = $this->ruta_catalogo_uploads($dir);
-        if ($ruta === '' || !is_file($ruta)) {
-            return null;
-        }
-        $datos = json_decode((string)@file_get_contents($ruta), true);
-        if (!is_array($datos) || (int)($datos['version'] ?? 0) !== 1 || !is_array($datos['items'] ?? null)) {
-            return null;
-        }
-        // JSON decodifica los objetos como stdClass: normalizamos `recetas` a array
-        // para que las escrituras trabajen siempre con arrays.
-        foreach ($datos['items'] as $k => $v) {
-            if (is_array($v) && isset($v['recetas']) && !is_array($v['recetas'])) {
-                $datos['items'][$k]['recetas'] = (array)$v['recetas'];
-            }
-        }
-        return $datos;
+        return PMU_Lectura::catalogo_leer($dir);
     }
 
     /**
@@ -1298,13 +1285,7 @@ class PMU_Uploads
     /** Ruta de la miniatura cuadrada: `{id}-80x80.webp` (spec 040). */
     public function miniatura_ruta($rutaOriginal, $lado = 80)
     {
-        $lado = max(32, min(512, (int)$lado));
-        $base = (string)$rutaOriginal;
-        $ext = strtolower((string)pathinfo($base, PATHINFO_EXTENSION));
-        if ($ext !== '') {
-            $base = substr($base, 0, -(strlen($ext) + 1));
-        }
-        return $base . '-' . $lado . 'x' . $lado . '.webp';
+        return PMU_Lectura::miniatura_ruta($rutaOriginal, $lado);
     }
 
     /**
@@ -1314,71 +1295,7 @@ class PMU_Uploads
      */
     public function miniatura_generar($rutaOriginal, $lado = 80)
     {
-        $lado = max(32, min(512, (int)$lado));
-        if (!extension_loaded('gd') || !function_exists('imagewebp') || !is_file($rutaOriginal)) {
-            return '';
-        }
-        $destino = $this->miniatura_ruta($rutaOriginal, $lado);
-        if (is_file($destino)) {
-            $hit = (string)@file_get_contents($destino);
-            if ($hit !== '') {
-                return $hit;
-            }
-        }
-        // `@` porque la miniatura es BEST-EFFORT: si el original no es decodificable por
-        // GD (p. ej. un PNG invalido en los tests, o un formato que GD no soporta), la
-        // tira debe usar el original. Sin `@` GD emite 3 warnings y el arnes los cuenta
-        // como fallo aunque el flujo siga funcionando (spec 040 campo_subida).
-        // La miniatura es BEST-EFFORT: si el original no trae una imagen que GD pueda
-        // decodificar, se devuelve '' y la tira usa el original. Sin este blindaje, un
-        // archivo con firma valida pero cuerpo roto (el fixture sintetico del arnes)
-        // hace que GD emita warnings y el arnes los cuenta como fallo de la subida.
-        $src = null;
-        $avisoPropio = set_error_handler(static function () {
-            return true;
-        });
-        try {
-            $src = @imagecreatefromstring((string)@file_get_contents($rutaOriginal));
-        } finally {
-            restore_error_handler();
-        }
-        if (!$src) {
-            return '';
-        }
-        $w0 = imagesx($src);
-        $h0 = imagesy($src);
-        if ($w0 < 1 || $h0 < 1) {
-            return '';
-        }
-        // cover: el lado MENOR pasa a $lado; el sobrante se recorta al centro.
-        $k = (float)$lado / max(1, min($w0, $h0));
-        $sw = max($lado, (int)round($w0 * $k));
-        $sh = max($lado, (int)round($h0 * $k));
-        $tmp = imagecreatetruecolor($sw, $sh);
-        imagealphablending($tmp, false);
-        imagesavealpha($tmp, true);
-        imagefill($tmp, 0, 0, imagecolorallocatealpha($tmp, 0, 0, 0, 127));
-        imagealphablending($tmp, true);
-        imagecopyresampled($tmp, $src, 0, 0, 0, 0, $sw, $sh, $w0, $h0);
-        $dst = imagecreatetruecolor($lado, $lado);
-        imagealphablending($dst, false);
-        imagesavealpha($dst, true);
-        imagefill($dst, 0, 0, imagecolorallocatealpha($dst, 0, 0, 0, 127));
-        imagealphablending($dst, true);
-        imagecopyresampled($dst, $tmp, 0, 0, (int)(($sw - $lado) / 2), (int)(($sh - $lado) / 2), $lado, $lado, $lado, $lado);
-        ob_start();
-        $ok = @imagewebp($dst, null, 82);
-        $out = ob_get_clean();
-        if (PHP_VERSION_ID < 80000) {
-            @imagedestroy($src);
-            @imagedestroy($tmp);
-            @imagedestroy($dst);
-        }
-        if (!$ok || $out === false || $out === '') {
-            return '';
-        }
-        @file_put_contents($destino, $out);
-        return $out;
+        return PMU_Lectura::miniatura_generar($rutaOriginal, $lado);
     }
 
     /**

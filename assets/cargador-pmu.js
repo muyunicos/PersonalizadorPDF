@@ -209,6 +209,7 @@
             onChange: typeof config.onChange === 'function' ? config.onChange : null,
             onError: typeof config.onError === 'function' ? config.onError : null,
             urlDe: typeof config.urlDe === 'function' ? config.urlDe : null,
+            urlDeRespaldo: typeof config.urlDeRespaldo === 'function' ? config.urlDeRespaldo : null,
             // Spec 039 (D6): `usar` y `onFila` se retiraron con la rama de reuso
             // `Elegir` (0 bytes). Ahora SIEMPRE se sube el original.
             preview: !!config.preview,
@@ -382,7 +383,7 @@
      * dialogo de archivos por si mismo (spec 021 D8). Si viene de un reemplazo
      * desde la mini galeria, `tituloContexto` avisa que imagen se reemplaza.
      */
-    CargadorPMU.prototype._abrir = function (indice, archivo) {
+    CargadorPMU.prototype._abrir = function (indice, archivo, opciones) {
         var self = this;
         var r = this.config.ranuras[indice];
         var slot = this.selectores[indice];
@@ -427,7 +428,25 @@
                     return self.estado[indice].ids.length < r.max;
                 },
                 // Spec 040 (A6): una imagen YA subida (id conocido) no manda bytes:
+                // Spec 043 (US1): la receta NUEVA de una foto existente se DECLARA (0 bytes).
+                declararReceta: function (id, params) {
+                    var claveD = String(id || '');
+                    if (claveD === '') { return; }
+                    self.recetas[claveD] = params || null;
+                },
                 // se anota en la ranura y se publica su receta (0 red, cierre inmediato).
+                // Spec 043 (US5): Eliminar la imagen desde el editor (dos pasos si esta en uso).
+                eliminar: function () {
+                    var reemp = self._reemplazo;
+                    if (!reemp) { return Promise.resolve(false); }
+                    return self._quitar(reemp.indice, reemp.posicion, true);
+                },
+                // Spec 043 (T023): el visor del campo sigue accesible desde el editor.
+                verVisor: function () {
+                    var reemp = self._reemplazo;
+                    if (!reemp) { return Promise.resolve(false); }
+                    return self._abrirVisorCompartido(reemp.indice, reemp.posicion);
+                },
                 usarExistente: function (id, params, url) {
                     return self._usarExistente(indice, id, params, url);
                 }
@@ -461,7 +480,11 @@
             : '';
         slot.sel.open({
             archivo: archivo || null,
-            tituloContexto: tituloContexto
+            tituloContexto: tituloContexto,
+            // Spec 043 (US2/T022): la receta vigente viaja al editor (paramsIniciales).
+            params: (opciones && opciones.params) || null,
+            // Spec 043 (US2): en modo edicion NO se abre el selector de archivos.
+            abrirArchivo: !(opciones && opciones.editar)
             // Spec 039 (D6): se retiro `usar` (el selector ya no decide `Elegir` vs
             // `Subir`): siempre sube bytes y el servidor deduplica por `sha`.
         });
@@ -514,6 +537,10 @@
             // Spec 040 (A6): la receta con la que se subio queda legible por id
             // (`recetasDe`), igual que la de una imagen usada de la biblioteca.
             if (id) { self.recetas[String(id)] = paramsSubida || null; }
+            // Spec 042: la biblioteca cambio (nuevo original): se revalida en la proxima apertura.
+            if (id && global.PMUBiblioteca && typeof global.PMUBiblioteca.invalidar === 'function') {
+                global.PMUBiblioteca.invalidar();
+            }
             // Spec 035 (T014/D2): el recorte recien compuesto se queda en el
             // navegador (objectURL) y se publica para que la vista previa dibuje
             // sin red y sin subir copias. La receta es la misma que viajo con la
@@ -638,7 +665,32 @@
         return this.recetas[String(id)] || null;
     };
 
+    /**
+     * Spec 043 (US1/T017): receta vigente de un contexto para una foto existente.
+     * Orden: memoria del cargador -> catalogo del comprador (recetas por contexto)
+     * -> null (defaults del campo). La clave es `{gid}-{w}x{h}-{phsize}`.
+     */
+    CargadorPMU.prototype._recetaDeContexto = function (id, r) {
+        var clave = String(id || '');
+        if (clave === '') { return null; }
+        if (this.recetas[clave]) { return this.recetas[clave]; }
+        try {
+            var bib = (global.PMUBiblioteca && typeof global.PMUBiblioteca.cache === 'function')
+                ? global.PMUBiblioteca.cache() : null;
+            var fotos = (bib && bib.fotos) || [];
+            var ctx = String((r && r.gid) || '') + '-' + (r && r.w ? r.w : 0) + 'x'
+                + (r && r.h ? r.h : 0) + '-' + ((r && parseInt(r.phsize, 10)) || 0);
+            for (var i = 0; i < fotos.length; i++) {
+                if (String(fotos[i] && fotos[i].id) !== clave) { continue; }
+                var rec = (fotos[i] && fotos[i].recetas) || {};
+                if (rec[ctx]) { return rec[ctx]; }
+            }
+        } catch (e) { /* sin catalogo: defaults del campo */ }
+        return null;
+    };
+
     CargadorPMU.prototype._pintarMini = function (mini, id) {
+        var self = this;
         if (!this.config.urlDe && !this._urls[String(id)]) { return; }
         if (mini._pmuMiniImg) { return; }
         var conocida = this._urls[String(id)] || '';
@@ -648,6 +700,15 @@
             var doc = mini.ownerDocument || global.document;
             var img = doc.createElement('img');
             img.alt = '';
+            // Spec 042: si la URL liviana falla, se reintenta una vez con la actual.
+            var respaldo = (self.config.urlDeRespaldo && id)
+                ? String(self.config.urlDeRespaldo(String(id))) : '';
+            if (respaldo) {
+                img.onerror = function () {
+                    img.onerror = null;
+                    if (img.src !== respaldo) { img.src = respaldo; }
+                };
+            }
             img.src = url;
             mini._pmuMiniImg = true;
             mini.innerHTML = '';
@@ -689,7 +750,7 @@
     /**
      * Spec 039 (D2): reintenta la subida de una miniatura marcada con el MISMO blob
      * (el recorte que el comprador ya compuso). Si no hay blob (recarga de pagina)
-     * devuelve false y el llamador abre el visor como siempre.
+     * devuelve false y el llamador abre el EDITOR (spec 043 US2).
      */
     CargadorPMU.prototype._reintentar = function (indice, posicion) {
         var fallo = this._falloEn(indice, posicion);
@@ -717,11 +778,36 @@
         // Spec 039 (D2): si esta miniatura fallo, el toque REINTENTA (no abre el
         // visor): el blob del recorte sigue en memoria.
         if (this._reintentar(indice, posicion)) { return Promise.resolve(true); }
-        return this._abrirVisorCompartido(indice, posicion);
+        return this._editar(indice, posicion);
     };
 
     /** Abre el visor compartido con las fotos de ESTE hueco (D28/D23). */
-    CargadorPMU.prototype._abrirVisorCompartido = function (indice, posicion) {
+    /**
+     * Spec 043 (US2/T020-T022): tocar una miniatura abre el EDITOR con esa imagen y
+     * su receta vigente del contexto (no el visor). Carga la foto existente por
+     * `cargarDesdeBiblioteca`, asi Guardar es 0 bytes y Cambiar imagen reemplaza
+     * la posicion de la tira.
+     */
+    CargadorPMU.prototype._editar = function (indice, posicion) {
+        var self = this;
+        var pos = Math.max(0, parseInt(posicion, 10) || 0);
+        var ids = (this.estado[indice] && this.estado[indice].ids) || [];
+        var id = ids[pos];
+        if (!id) { return Promise.resolve(false); }
+        var r = this.config.ranuras[indice];
+        var params = this._recetaDeContexto(id, r);
+        var url = this._urls[String(id)] || (this.config.urlDe ? this.config.urlDe(id) : '');
+        this._reemplazo = { indice: indice, posicion: pos, desdeVisor: false };
+        this._abrir(indice, null, { params: params, editar: true });
+        var slot = this.selectores[indice];
+        if (!slot || !slot.sel) { return Promise.resolve(false); }
+        return Promise.resolve(url).then(function (u) {
+            if (!u) { return false; }
+            return slot.sel.cargarDesdeBiblioteca({ id: String(id), url: String(u), params: params });
+        }).catch(function () { return false; });
+    };
+
+CargadorPMU.prototype._abrirVisorCompartido = function (indice, posicion) {
         var self = this;
         var ids = (this.estado[indice] && this.estado[indice].ids) || [];
         if (!ids.length) { return Promise.resolve(false); }
@@ -805,7 +891,7 @@
      * @param {number} posicion posicion dentro de la tira
      * @returns {Promise<boolean>} true si se quito
      */
-    CargadorPMU.prototype._quitar = function (indice, posicion) {
+    CargadorPMU.prototype._quitar = function (indice, posicion, preguntar) {
         var self = this;
         var ids = (this.estado[indice] && this.estado[indice].ids) || [];
         var id = ids[parseInt(posicion, 10)];
@@ -828,8 +914,26 @@
             // Spec 040 (T020): el servidor pide confirmacion (esta en carrito o en un
             // pedido). El visor ya la mostro: se reintenta con `confirmar=1`.
             if (err && err.referencias) {
-                return baja(true).then(function () {
-                    return quitarLocal();
+                // Sin `preguntar`, el visor ya mostro el dialogo (039 D1): se reintenta.
+                if (!preguntar) {
+                    return baja(true).then(function () {
+                        return quitarLocal();
+                    });
+                }
+                // Spec 043 (US5/D5): desde el editor se pregunta ACA, solo si esta en uso.
+                if (!global.PMUVisor || typeof global.PMUVisor.confirmar !== 'function') {
+                    self._error((err && err.message) || 'No se pudo borrar la imagen.');
+                    return false;
+                }
+                return global.PMUVisor.confirmar({
+                    titulo: 'Esta imagen esta en uso',
+                    detalle: 'Se usa en un carrito o pedido. Si la borras, ese pedido deja de poder regenerarse.',
+                    textoOk: 'Borrar igual'
+                }).then(function (si) {
+                    if (!si) { return false; }
+                    return baja(true).then(function () {
+                        return quitarLocal();
+                    }, function () { return false; });
                 });
             }
             var msg = (err && err.message) || 'No se pudo borrar la imagen.';

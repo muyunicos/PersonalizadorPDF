@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.33.0
+Stable tag: 4.36.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,32 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.36.0 =
+* Spec 043 (editor de imagen): editar el recorte de una foto ya puesta **no vuelve a subirla**.
+  Una foto = un `id` + N recetas: tocar la miniatura del campo abre el editor **con su receta**
+  (posicion, zoom, modo, fondo); **Guardar** sube solo si la imagen es nueva y **Cancelar** no
+  escribe nada. Antes, reencuadrar subia una composicion nueva.
+* **"Ver todas (N)"** al final de la tira abre el visor de la biblioteca: **Elegir** (carga en el
+  editor) o **Eliminar** (borra de la biblioteca; pide confirmacion **solo** si la imagen esta en
+  un carrito o pedido).
+* El editor suma **Eliminar** y **Ver en grande** (el visor del campo sigue accesible).
+* Sin IndexedDB: la imagen se sirve con la cache HTTP de `media.php` (7 dias + validacion).
+* Puertas: `selector-contrato`, `biblioteca-contrato` 81, `texto_puente` (fotos/biblioteca),
+  `campos-contrato`, `media_lectura` 39, `ficha-pedido` 53/53.
+
+= 4.35.0 =
+* Spec 042 (lectura rapida): la galeria del comprador deja de pagar el arranque completo de WordPress.
+  El listado, las miniaturas y las fotos (incluidas las ranuras de la re-edicion) se sirven por
+  `media.php`, un entrypoint de solo lectura que no carga WordPress; la identidad sale de las cookies
+  `pmu_sid` (invitado) y `pmu_uid` (cliente, firmada). La lista trae hasta 10 miniaturas embebidas y
+  una revision: reabrir sin cambios no hace ninguna solicitud durante 5 minutos.
+* Las escrituras (subir, borrar, vista previa, pedido) siguen por `admin-post.php` con nonce/capacidad.
+* El camino actual queda como respaldo: si `media.php` no esta disponible, la galeria funciona igual.
+* Camino liviano desactivable: si falta `uploads/pmu/.media/config.json` o no se puede proteger el
+  directorio, se usa el respaldo. Rotar el secreto = borrar ese archivo.
+* Puertas: `media_lectura` 38, `catalogo_uploads` 16, `biblioteca-contrato` 75, `texto_puente`
+  (biblioteca/ficha/red_carga), `motor_smoke`, `parity`, `sin_lectura` + lint.
 
 = 4.33.0 =
 * Spec 040 (catalogo de uploads): la biblioteca del comprador se lista desde un **catalogo por

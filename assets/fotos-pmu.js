@@ -2,9 +2,10 @@
  * PMUFotos - cache de los ORIGINALES del comprador (spec 035, T009).
  *
  * El navegador es la cache: la foto se acota a 2000 px (factor UNIFORME, nunca
- * deforma), se guarda en IndexedDB y alimenta la vista previa por `objectURL`
- * (0 red). La subida al servidor arranca en segundo plano (T013/T014): el
- * servidor es quien deduplica, porque el `id` sale del sha1 de los bytes CRUDOS.
+ * deforma) y alimenta la vista previa por `objectURL` (0 red). La cache IndexedDB
+ * de la spec 035 queda **sin uso en produccion** (spec 043 FR-016: solo un motor
+ * inyectado en tests). La subida al servidor arranca en segundo plano (T013/T014):
+ * el servidor es quien deduplica, porque el `id` sale del sha1 de los bytes CRUDOS.
  *
  * Por eso aca NO se calcula el sha: la clave local es `local-{uuid}` y el `sha`
  * se anota cuando el servidor lo devuelve (`marcarSubida`). Asi la foto se puede
@@ -56,7 +57,7 @@
 
     /** Abre (y migra) la base. `idb` se inyecta para poder testear sin navegador. */
     function abrir(idb) {
-        var motor = idb || global.indexedDB;
+        var motor = idb || null;   // spec 043 (FR-016): en produccion NO se abre IndexedDB.
         if (!motor) {
             return Promise.reject(new Error('pmu:fotos:sin-indexeddb'));
         }

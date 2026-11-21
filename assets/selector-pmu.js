@@ -571,6 +571,9 @@
             usarExistente: typeof config.usarExistente === 'function' ? config.usarExistente : null,
             // Spec 040 (A6): declarar la receta SIN bytes (si el integrador lo soporta).
             declararReceta: typeof config.declararReceta === 'function' ? config.declararReceta : null,
+            // Spec 043 (US5/T023): acciones sobre una imagen existente (editor).
+            eliminar: typeof config.eliminar === 'function' ? config.eliminar : null,
+            verVisor: typeof config.verVisor === 'function' ? config.verVisor : null,
             // Spec 040 (A4): receta v2 a re-aplicar sobre la imagen (si es de esta geometria).
             paramsIniciales: (config.paramsIniciales && typeof config.paramsIniciales === 'object')
                 ? config.paramsIniciales : null,
@@ -650,12 +653,15 @@
     SelectorPMU.prototype.open = function (opciones) {
         var self = this;
         opciones = opciones || {};
+        // Spec 043 (US2/T022): receta con la que se abre ESTA vez (null = defaults).
+        this._paramsIniciales = (opciones.params && typeof opciones.params === 'object')
+            ? opciones.params : null;
         if (this.raiz) { return; }
         inyectarEstilos();
         this._focoPrevio = document.activeElement || null;
         this._contextoReemplazo = opciones.tituloContexto ? String(opciones.tituloContexto) : '';
         // Spec 039 (D6): se retira la rama de reuso `Elegir` (0 bytes). El primario
-        // dice SIEMPRE `Subir` y SIEMPRE viajan bytes; el servidor deduplica por
+        // dice SIEMPRE `Guardar` y SIEMPRE viajan bytes; el servidor deduplica por
         // `sha` (D24 de la 035) si la foto ya existia.
         //   - `this.config.usar`  -> eliminado
         //   - la fuente de biblioteca (`bibMadre`) y su guard (`yaElegido`)
@@ -723,17 +729,21 @@
             '<button type="button" class="button spmu-rotar" hidden>Girar</button>' +
             '</div>' +
             '</div>' +
-            // Acciones (D7): cargar a la izquierda; Cancelar + Subir a la derecha.
+            // Acciones (D7): cargar a la izquierda; Cancelar + Guardar a la derecha.
             '<div class="spmu-acciones">' +
             '<div class="spmu-acciones-izq">' +
             '' + // 5a: "Cargar imagen" vive ARRIBA, en la fila de la tira
+            // Spec 043 (US5/T023): acciones de la imagen existente (se encienden en
+            // `_actualizarPrimario`).
+            '<button type="button" class="button-link spmu-eliminar" hidden>Eliminar</button>' +
+            '<button type="button" class="button-link spmu-vervisor" hidden>Ver en grande</button>' +
             '<input type="file" class="spmu-file" accept="' + ACEPTA + '" hidden>' +
             '' + // 4a clarificacion: se fue "Elegir ya subida" (la tira vive arriba, siempre visible)
             '' + // 4a clarificacion: el contenedor de la tira vive ARRIBA (uno solo)
             '</div>' +
             '<div class="spmu-acciones-der">' +
             '<button type="button" class="button-link spmu-cancelar">Cancelar</button>' +
-            '<button type="button" class="button button-primary spmu-ok" disabled>Subir</button>' +
+            '<button type="button" class="button button-primary spmu-ok" disabled>Guardar</button>' +
             '</div>' +
             '</div>' +
             '<p class="spmu-status" role="status" aria-live="polite"></p>' +
@@ -760,6 +770,28 @@
         $('.spmu-elegir').addEventListener('click', function () {
             if (!self._subiendo) { $('.spmu-file').click(); }
         });
+        // Spec 043 (US5): eliminar la imagen desde el editor (dos pasos si esta en uso).
+        var btnEliminar = $('.spmu-eliminar');
+        if (btnEliminar) {
+            btnEliminar.addEventListener('click', function () {
+                if (self._subiendo || !self.config.eliminar) { return; }
+                btnEliminar.disabled = true;
+                Promise.resolve(self.config.eliminar()).then(function (okDel) {
+                    if (okDel === false) { btnEliminar.disabled = false; return; }
+                    self.close();
+                }, function (err) {
+                    btnEliminar.disabled = false;
+                    self._fallo('UPLOAD_FAILED', (err && err.message) || 'No se pudo eliminar la imagen');
+                });
+            });
+        }
+        // Spec 043 (T023): el visor del campo sigue accesible desde el editor.
+        var btnVerVisor = $('.spmu-vervisor');
+        if (btnVerVisor) {
+            btnVerVisor.addEventListener('click', function () {
+                if (!self._subiendo && self.config.verVisor) { self.config.verVisor(); }
+            });
+        }
         $('.spmu-file').addEventListener('change', function () {
             var f = this.files && this.files[0];
             this.value = '';
@@ -991,7 +1023,7 @@
         var elegir = this.raiz.querySelector('.spmu-elegir');
         if (elegir) { elegir.textContent = 'Cargar imagen'; }
         var ok = this.raiz.querySelector('.spmu-ok');
-        if (ok) { ok.disabled = true; ok.textContent = 'Subir'; }
+        if (ok) { ok.disabled = true; ok.textContent = 'Guardar'; }
         var zIn = this.raiz.querySelector('.spmu-zoom');
         if (zIn) { zIn.value = '0'; }
         this._estado(null);
@@ -1070,7 +1102,7 @@
             // Spec 040 (A4/A6): si la imagen viene de la biblioteca (o el campo paso
             // `paramsIniciales`) y la receta es de ESTA geometria, se re-aplica el
             // encuadre recordado. Si no coincide se ignora: quedan los defaults.
-            var recetaPrevia = (self._bib && self._bib.params) || self.config.paramsIniciales || null;
+            var recetaPrevia = (self._bib && self._bib.params) || self._paramsIniciales || self.config.paramsIniciales || null;
             if (recetaPrevia) { self._aplicarParamsIniciales(recetaPrevia); }
             self._actualizarPrimario();
             if (self.raiz) {
@@ -1122,15 +1154,30 @@
             params: this._recetaDeFoto(foto),
             url: url
         };
-        return window.fetch(url, { credentials: 'same-origin' })
-            .then(function (r) { return r.blob(); })
-            .then(function (b) {
-                var f = new File([b], 'biblioteca.webp', { type: b.type || 'image/webp' });
-                self._desdeBiblioteca = true;
-                self._cargar(f);
-                return true;
-            })
-            .catch(function () { self._bib = null; return false; });
+        var respaldo = (window.PMUBiblioteca && window.PMUBiblioteca.urlRespaldo)
+            ? String(window.PMUBiblioteca.urlRespaldo(foto)) : '';
+        var cargar = function (u, esRespaldo) {
+            return window.fetch(u, { credentials: 'same-origin' })
+                .then(function (r) {
+                    if (!r.ok) { throw new Error('http-' + r.status); }
+                    return r.blob();
+                })
+                .then(function (b) {
+                    var f = new File([b], 'biblioteca.webp', { type: b.type || 'image/webp' });
+                    if (self._bib) { self._bib.url = u; } // spec 042: URL que funciono
+                    self._desdeBiblioteca = true;
+                    self._cargar(f);
+                    return true;
+                })
+                .catch(function () {
+                    if (!esRespaldo && respaldo && respaldo !== u) {
+                        return cargar(respaldo, true);
+                    }
+                    self._bib = null;
+                    return false;
+                });
+        };
+        return cargar(url, false);
     };
 
     /**
@@ -1405,17 +1452,20 @@
     };
 
     /**
-     * Spec 039 (D6): el primario del modal dice **siempre** `Subir` (se retiro la rama
-     * de reuso `Elegir` de 0 bytes). Se conserva el metodo (lo llaman `_dibujar` y
-     * `_cargar`) para no dejar un esqueleto sin explicacion.
+     * Spec 039 (D6) + 043 (D3): el primario del modal dice **siempre** `Guardar`.
+     * Spec 043 (US5): ademas enciende las acciones que solo aplican a una imagen
+     * existente (Eliminar / Ver en grande).
      */
     SelectorPMU.prototype._actualizarPrimario = function () {
         if (!this.raiz || this._subiendo) { return; }
         var ok = this.raiz.querySelector('.spmu-ok');
         if (!ok) { return; }
-        // Spec 040 (A6): con una imagen YA existente (id de la biblioteca) el
-        // primario es `Usar`: no se sube nada, solo se publica la receta.
-        ok.textContent = this._bib ? 'Usar' : 'Subir';
+        ok.textContent = 'Guardar';
+        var existente = !!(this._bib && this._bib.id);
+        var btnElim = this.raiz.querySelector('.spmu-eliminar');
+        if (btnElim) { btnElim.hidden = !(existente && this.config.eliminar); }
+        var btnVer = this.raiz.querySelector('.spmu-vervisor');
+        if (btnVer) { btnVer.hidden = !(existente && this.config.verVisor); }
     };
 
     SelectorPMU.prototype._dibujar = function () {
@@ -1772,8 +1822,9 @@
             };
             try { iguales = firmaDe(previos) !== '' && firmaDe(previos) === firmaDe(paramsBib); }
             catch (e) { iguales = false; }
+            var puedeReusar = (typeof this.config.usarExistente === 'function');
             var puedeDeclarar = (typeof this.config.declararReceta === 'function');
-            if (iguales || puedeDeclarar) {
+            if (iguales || puedeDeclarar || puedeReusar) {
                 var usar = (typeof this.config.usarExistente === 'function')
                     ? this.config.usarExistente(this._bib.id, paramsBib, this._bib.url)
                     : Promise.resolve(this._bib.id);
@@ -1799,11 +1850,11 @@
             }
         }
         // Spec 039 (D6): la rama de reuso de la biblioteca (`Elegir`, 0 bytes) se retiro.
-        // El primario siempre dice `Subir` y siempre viajan bytes; si la foto ya
+        // El primario siempre dice `Guardar` y siempre viajan bytes; si la foto ya
         // existia, el servidor la deduplica por `sha` (D24).
         var ok = this.raiz ? this.raiz.querySelector('.spmu-ok') : null;
         var elegir = this.raiz ? this.raiz.querySelector('.spmu-elegir') : null;
-        if (ok) { ok.disabled = true; ok.textContent = 'Subiendo...'; }
+        if (ok) { ok.disabled = true; ok.textContent = 'Guardando...'; }
         if (elegir) { elegir.disabled = true; }
         this._subiendo = true;
         this._estado('subiendo');
@@ -1811,7 +1862,7 @@
         var terminar = function (blob, tipo, blobOrig) {
             if (!blob) {
                 self._subiendo = false;
-                if (ok) { ok.disabled = false; ok.textContent = 'Subir'; }
+                if (ok) { ok.disabled = false; self._actualizarPrimario(); }
                 if (elegir) { elegir.disabled = false; }
                 self._estado(null);
                 self._fallo('UPLOAD_FAILED', 'No se pudo generar el recorte');
@@ -1864,7 +1915,7 @@
                     // `obtenerBlobFallido()` lo devuelve para reintentar sin recomponer.
                     self._falloSubida = true;
                     self._subiendo = false;
-                    if (ok) { ok.disabled = false; ok.textContent = 'Subir'; }
+                    if (ok) { ok.disabled = false; self._actualizarPrimario(); }
                     if (elegir) { elegir.disabled = false; }
                     self._estado(null);
                     self._fallo('UPLOAD_FAILED', (err && err.message) || 'No se pudo subir la imagen');
@@ -1879,7 +1930,7 @@
         var lienzo = this._generarLienzoSalida();
         if (!lienzo) {
             this._subiendo = false;
-            if (ok) { ok.disabled = false; ok.textContent = 'Subir'; }
+            if (ok) { ok.disabled = false; self._actualizarPrimario(); }
             if (elegir) { elegir.disabled = false; }
             this._estado(null);
             this._fallo('UPLOAD_FAILED', 'No se pudo generar el recorte');

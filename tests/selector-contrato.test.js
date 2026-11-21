@@ -68,8 +68,8 @@ check('estado de carga y de subida con spinner (sin boton Reintentar ni Camara)'
   && !/spmu-reintentar/.test(selector) && !/spmu-camara/.test(selector));
 check('boton Cargar imagen que cambia a Cambiar imagen cuando hay imagen',
   /Cargar imagen/.test(selector) && /Cambiar imagen/.test(selector));
-check('boton Subir (antes Aceptar) + modal para subir otra imagen si quedan espacios',
-  />Subir<\/button>/.test(selector) && /Subiendo\.\.\./.test(selector)
+check('boton Guardar (spec 043 D3) + modal para subir otra imagen si quedan espacios',
+  />Guardar<\/button>/.test(selector) && /Guardando\.\.\./.test(selector)
   && /spmu-otra-modal/.test(selector) && /spmu-otra-si/.test(selector));
 check('Spec 024 D3: control "Escala" al 100% y SIN boton de reset',
   /<span class="spmu-lb-zoom">Escala<\/span>/.test(selector)
@@ -520,6 +520,50 @@ check('Spec 021: la guia de la tira se retiro (la geometria vive en el modal)',
   /_guia = function/.test(cargador) === false
   && /comandosEnvoltura/.test(cargador) === false
   && /comandosEnvoltura\(/.test(selector));
+
+console.log('\n== Spec 043 (US1): receta nueva sin subir bytes ==');
+check('el cargador cablea declararReceta', /declararReceta:\s*function/.test(cargador));
+check('el cargador resuelve la receta por contexto', /prototype\._recetaDeContexto\s*=/.test(cargador));
+check('declararReceta guarda la receta en memoria', /self\.recetas\[claveD\]\s*=\s*params/.test(cargador));
+check('el selector trata una existente como 0 bytes con cualquiera de los dos',
+  /puedeReusar\s*=\s*\(typeof this\.config\.usarExistente/.test(selector)
+  && /if \(iguales \|\| puedeDeclarar \|\| puedeReusar\)/.test(selector));
+
+console.log('\n== Spec 043 (US2): la miniatura abre el editor con su receta ==');
+check('_miniTocar delega en _editar (no abre el visor si no fallo)',
+  /_miniTocar = function[\s\S]{0,400}_editar\(/.test(cargador));
+check('_editar resuelve la receta del contexto',
+  /_recetaDeContexto\(id, r\)/.test(cargador));
+check('_editar carga la imagen existente en el editor',
+  /cargarDesdeBiblioteca\(\{ id:/.test(cargador));
+check('_abrir acepta opciones y pasa params al selector',
+  /_abrir = function \(indice, archivo, opciones\)/.test(cargador)
+  && /params: \(opciones && opciones\.params\)/.test(cargador));
+check('open() acepta params (paramsIniciales por apertura)',
+  /this\._paramsIniciales = \(opciones\.params/.test(selector)
+  && /self\._paramsIniciales \|\| self\.config\.paramsIniciales/.test(selector));
+
+console.log('\n== Spec 043 (US3): Guardar y Cancelar ==');
+check('Cancelar cierra sin escrituras (CROP_ABORTED, sin tocar los tres caminos)',
+  /_cancelar = function[\s\S]{0,260}CROP_ABORTED/.test(selector)
+  && !/_cancelar = function[\s\S]{0,260}(subirAsync|usarExistente|declararReceta)/.test(selector));
+check('el primario dice Guardar en ambos modos (no Usar/Subir)',
+  !/'Usar' : 'Subir'/.test(selector) && />Guardar<\/button>/.test(selector));
+check('tras guardar una existente se repinta la tira (sin re-subir)',
+  /_usarExistente = function[\s\S]{0,1400}this\._pintar\(\)/.test(cargador));
+
+console.log('\n== Spec 043 (US5): Eliminar desde el editor ==');
+check('el editor enciende Eliminar/Ver en grande solo con imagen existente',
+  /spmu-eliminar/.test(selector) && /spmu-vervisor/.test(selector)
+  && /existente && this\.config\.eliminar/.test(selector));
+check('Eliminar delega en el cargador con confirmacion por uso',
+  /eliminar: function \(\)/.test(cargador)
+  && /_quitar\(reemp\.indice, reemp\.posicion, true\)/.test(cargador)
+  && /preguntar/.test(cargador));
+check('si el borrado falla la foto NO se saca (se avisa)',
+  /_quitar = function[\s\S]{0,4000}var msg = \(err && err\.message\)[\s\S]{0,160}self\._error\(msg\)/.test(cargador));
+check('el visor sigue accesible desde el editor (T023)',
+  /verVisor: function \(\)/.test(cargador) && /self\.config\.verVisor\(\)/.test(selector));
 
 console.log('');
 if (fallos) {

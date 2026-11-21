@@ -22,10 +22,11 @@
 (function (global) {
     'use strict';
 
-    var CLAVE = 'pmu_bib_v2'; // v2 (2026-10-23): mata las copias viejas envenenadas (fotos: [] + revision vigente)
+    var CLAVE = 'pmu_bib_v3'; // v3 (spec 042): identidad + revision + miniaturas embebidas
     var TOPE_TIRA = 10;
     var ANCHO_MINI = 64; // 56px del tile + 8px de separacion (CSS de la tira)
-    var TTL_MS = 20 * 60 * 1000; // 20 min: las URLs llevan nonce de WP (D23)
+    var TTL_MS = 20 * 60 * 1000; // 20 min: la copia no es codigo
+    var FRESCURA_MS = 5 * 60 * 1000; // spec 042: 0 solicitudes dentro de la ventana
     var ESTILO_ID = 'pmu-bib-estilo';
     var cache = null;
     var cfg = null;
@@ -35,14 +36,22 @@
     // Spec 040 (F1): promesa EN VUELO compartida. `calentar()` y `tira()` (y el modal
     // abierto dos veces) lanzaban listados completos en paralelo: 3 POST identicos.
     var enVuelo = null;
+    var modo = 'auto'; // 'auto' = camino liviano; 'wp' = respaldo actual
 
     function config() {
         if (cfg && cfg.url) { return cfg; } // OJO: nunca cachear un endpoint vacio
         var t = global.PMU_TIENDA || {};
         var b = (global.PMU_FICHA && global.PMU_FICHA.biblioteca) || {};
         var s = (global.PMU_FICHA && global.PMU_FICHA.sesion) || {};
-        cfg = { url: b.endpoint || t.postUrl || '', nonce: b.nonce || t.nonceVistaPrevia || '',
-            item: s.item_key || '' };
+        cfg = {
+            url: b.endpoint || t.postUrl || '',
+            nonce: b.nonce || t.nonceVistaPrevia || '',
+            item: s.item_key || '',
+            // Spec 042: camino liviano + metadatos de la ficha.
+            rapido: b.rapido || '',
+            revision: String(b.revision || ''),
+            identidad: String(b.identidad || '')
+        };
         return cfg;
     }
 
@@ -53,6 +62,13 @@
             if (!s) { return null; }
             var v = JSON.parse(s);
             if (!v || !v.revision || !Array.isArray(v.fotos)) { return null; }
+            // Spec 042: la copia pertenece a una identidad. Si la ficha cambio
+            // (login/logout, otra cuenta, pagina cacheada) no se pinta.
+            var esperada = String(config().identidad || '');
+            if (esperada === '' || String(v.identidad || '') !== esperada) {
+                global.localStorage.removeItem(CLAVE);
+                return null;
+            }
             if ((Date.now() - (v.ts || 0)) > TTL_MS) {
                 global.localStorage.removeItem(CLAVE); // vencida: las URLs caducaron (D23)
                 return null;
@@ -63,7 +79,12 @@
     }
 
     function guardarCache(dato) {
-        cache = { revision: String(dato.revision || ''), fotos: (dato.fotos || []), ts: Date.now() };
+        cache = {
+            revision: String(dato.revision || ''),
+            identidad: String(dato.identidad || config().identidad || ''),
+            fotos: (dato.fotos || []),
+            ts: Date.now()
+        };
         try {
             if (global.localStorage) { global.localStorage.setItem(CLAVE, JSON.stringify(cache)); }
         } catch (e) { /* cuota o modo privado: queda en memoria */ }
@@ -80,17 +101,67 @@
     /** Pide la vista al servidor (con `desde` para no viajar si no cambio). */
     function pedir(sinDesde) {
         var c = config();
-        if (!c.url) { return Promise.reject(new Error('api:biblioteca:sin:endpoint')); }
+        if (!c.url && !c.rapido) { return Promise.reject(new Error('api:biblioteca:sin:endpoint')); }
         // Spec 040 (F1): una sola peticion en vuelo (ver `enVuelo`).
         if (enVuelo && !sinDesde) { return enVuelo; }
+        var p = (c.rapido && modo !== 'wp') ? pedirRapido(sinDesde) : pedirWp(sinDesde);
+        if (!sinDesde) {
+            enVuelo = p;
+            var clear = function () { if (enVuelo === p) { enVuelo = null; } };
+            p.then(clear, clear);
+        }
+        return p;
+    }
+
+    /** Camino liviano (sin WordPress): GET `media.php?op=listar`. */
+    function pedirRapido(sinDesde) {
+        var c = config();
+        var previa = leerCache();
+        var url = c.rapido + '?op=listar';
+        if (!sinDesde && previa && previa.revision) {
+            url += '&desde=' + encodeURIComponent(previa.revision);
+        }
+        return global.fetch(url, { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (json) {
+                if (!json || !json.success || !json.data) {
+                    modo = 'wp';
+                    return pedirWp(sinDesde);
+                }
+                var d = json.data || {};
+                if (d.fallback) { modo = 'wp'; return pedirWp(sinDesde); }
+                // Spec 042: la identidad del servidor manda. Si la ficha (o una
+                // pagina cacheada) dice otra cosa, se usa el respaldo.
+                if (c.identidad && d.identidad && String(d.identidad) !== String(c.identidad)) {
+                    modo = 'wp';
+                    return pedirWp(sinDesde);
+                }
+                if (!c.identidad && d.identidad) { c.identidad = String(d.identidad); }
+                if (d.sin_cambios && previa) {
+                    if ((!previa.fotos || !previa.fotos.length) && !sinDesde) { return pedirWp(true); }
+                    return { revision: previa.revision, sin_cambios: true, fotos: previa.fotos };
+                }
+                var g = guardarCache(d);
+                return { revision: g.revision, sin_cambios: false, fotos: g.fotos };
+            })
+            .catch(function () {
+                modo = 'wp';
+                return pedirWp(sinDesde);
+            });
+    }
+
+    /** Respaldo actual: POST admin-post con nonce (y `desde`). */
+    function pedirWp(sinDesde) {
+        var c = config();
+        if (!c.url) { return Promise.reject(new Error('api:biblioteca:sin:endpoint')); }
         var previa = leerCache();
         var fd = new FormData();
         fd.append('action', 'personalizador_pdf_biblioteca');
         fd.append('op', 'listar');
         fd.append('_wpnonce', c.nonce);
-        if (sinDesde) { previa = null; } // reintento del auto-sanado: se pide la lista COMPLETA
+        if (sinDesde) { previa = null; } // reintento del auto-sanado: lista COMPLETA
         if (previa && previa.revision) { fd.append('desde', previa.revision); }
-        var p = global.fetch(c.url, { method: 'POST', body: fd, credentials: 'same-origin' })
+        return global.fetch(c.url, { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
             .then(function (json) {
                 if (!json || !json.success) {
@@ -98,20 +169,12 @@
                 }
                 var d = json.data || {};
                 if (d.sin_cambios && previa) {
-                    // D23 (2026-10-23): copia con `fotos: []` + "sin cambios" = copia envenenada (una
-                    // revision que no se movio tras un bug de deploy). Se re-pregunta UNA vez
-                    // SIN `desde` para que la tira nunca quede vacia por una copia mala.
-                    if ((!previa.fotos || !previa.fotos.length) && !sinDesde) { return pedir(true); }
+                    if ((!previa.fotos || !previa.fotos.length) && !sinDesde) { return pedirWp(true); }
                     return { revision: previa.revision, sin_cambios: true, fotos: previa.fotos };
                 }
                 var g = guardarCache(d);
                 return { revision: g.revision, sin_cambios: false, fotos: g.fotos };
             });
-        if (!sinDesde) {
-            enVuelo = p;
-            p.then(function () { enVuelo = null; }, function () { enVuelo = null; });
-        }
-        return p;
     }
     function inyectarEstilos(doc) {
         if (doc.getElementById(ESTILO_ID)) { return; }
@@ -125,23 +188,11 @@
         (doc.head || doc.documentElement).appendChild(s);
     }
 
-    /**
-     * Spec 039 (D4): la biblioteca no tiene visor propio. Se conserva el nombre
-     * `visor` por compatibilidad, pero ahora **elige y carga directo** en el modal de
-     * recorte (igual que `elegir`). Borrar se hace desde el visor del CAMPO (D1/D3).
-     */
-    function visor(indice) {
-        return elegir(indice);
-    }
-
     /** Dibuja la tira (hasta 10 fotos) en `el`; si no hay fotos NO dibuja nada (D23). */
     /** Pinta la tira en `el`: una miniatura por IMAGEN (sin versiones) + el tile `N+`.
     /**
-     * Spec 039 (D4): `visor()` se retiro. La biblioteca no tiene visor propio: tocar
-     * una miniatura ELIGE la imagen y la carga directo en el modal de recorte (via
-     * `onElegir`). Borrar se hace desde el visor del CAMPO (D1/D3 de la 039).
-     *
-     * Se conserva el nombre `visor` (compatibilidad) apuntando a `elegir`.
+     * Tocar una miniatura ELIGE la imagen y la carga directo en el modal de recorte
+     * (via `onElegir`). El visor completo (spec 043 US4) se abre con "Ver todas (N)".
      */
     function elegir(indice) {
         var fotos = ultimas || [];
@@ -151,7 +202,71 @@
         return true;
     }
 
-    function visor(indice) { return elegir(indice); }
+    /**
+     * Spec 043 (US4/T030): visor de la biblioteca con TODAS las fotos.
+     * Elegir = carga en el editor; Eliminar = borra de la biblioteca (dos pasos, D5).
+     */
+    function verTodas(indice) {
+        var fotos = ultimas || [];
+        if (!fotos.length || !global.PMUVisor || typeof global.PMUVisor.abrir !== 'function') {
+            return false;
+        }
+        var items = fotos.map(function (f) {
+            return { url: String(f.thumb_data || f.thumb || f.url || ''), etiqueta: String(f.id || '') };
+        });
+        var pos = Math.max(0, Math.min(items.length - 1, parseInt(indice, 10) || 0));
+        global.PMUVisor.abrir({
+            items: items,
+            indice: pos,
+            titulo: 'Mi biblioteca',
+            acciones: [
+                { etiqueta: 'Elegir', clase: 'button-primary',
+                    onAccion: function (p) { global.PMUVisor.cerrar(); elegir(p); } },
+                { etiqueta: 'Eliminar', clase: 'pmu-visor-peligro',
+                    onAccion: function (p) { return borrar(fotos[p]); } }
+            ]
+        });
+        return true;
+    }
+
+    /** Spec 043 (US4/T031/D5): borra una foto de la biblioteca en dos pasos. */
+    function borrar(foto) {
+        var id = String((foto && foto.id) || '');
+        if (id === '' || !global.PMU_API || typeof global.PMU_API.borrarFoto !== 'function') {
+            return Promise.resolve(false);
+        }
+        var baja = function (confirmar) {
+            return Promise.resolve(global.PMU_API.borrarFoto(id, confirmar));
+        };
+        var fuera = function () {
+            ultimas = (ultimas || []).filter(function (x) { return String(x.id) !== id; });
+            if (ultimoEl) { pintarTira(ultimoEl, ultimas); }
+            if (global.PMUVisor && typeof global.PMUVisor.cerrar === 'function') { global.PMUVisor.cerrar(); }
+            return true;
+        };
+        return baja(false).then(fuera, function (err) {
+            if (!err || !err.referencias || !global.PMUVisor
+                || typeof global.PMUVisor.confirmar !== 'function') { return false; }
+            return global.PMUVisor.confirmar({
+                titulo: 'Esta imagen esta en uso',
+                detalle: 'Se usa en un carrito o pedido. Si la borras, ese pedido deja de poder regenerarse.',
+                textoOk: 'Borrar igual'
+            }).then(function (si) {
+                if (!si) { return false; }
+                return baja(true).then(fuera, function () { return false; });
+            });
+        });
+    }
+
+    function visor(indice) { return verTodas(indice); }
+
+    /** URL del respaldo actual (admin-post + nonce) para una foto. */
+    function urlRespaldo(foto) {
+        var c = config();
+        if (!c.url || !foto || !foto.id) { return ''; }
+        return c.url + '?action=personalizador_pdf_biblioteca&op=imagen&id='
+            + encodeURIComponent(String(foto.id)) + '&_wpnonce=' + encodeURIComponent(c.nonce);
+    }
 
     /**
      * Spec 039 (D3): `pedirOp()` se retiro con el borrado desde la biblioteca. Borrar
@@ -185,10 +300,11 @@
             items: (fotos || []).map(function (f) {
                 var urlResuelta = (global.PMU_FICHA && global.PMU_FICHA.urls && f.base)
                     ? global.PMU_FICHA.urls[String(f.base)] : '';
-                var url = String(urlResuelta || f.thumb || f.url || '');
+                var thumb = String(f.thumb_data || f.thumb || f.url || '');
+                var url = String(urlResuelta || f.url || f.thumb || '');
                 return {
                     url: url,
-                    thumb: url,
+                    thumb: thumb,
                     // Spec 039 (D4): una entrada por imagen, sin badge `N versiones`.
                     etiqueta: ''
                 };
@@ -199,7 +315,7 @@
             navegable: false,
             tope: TOPE_TIRA,
             chipAccion: 'abrir',
-            onChip: function (cuantos, desde) { elegir(desde || 0); },
+            onChip: function (cuantos, desde) { verTodas(desde || 0); },
             onAbrir: function (i) { elegir(i); }
         });
         return true;
@@ -236,20 +352,20 @@
             img.decoding = 'async';
             var urlResuelta = (global.PMU_FICHA && global.PMU_FICHA.urls && f.base)
                 ? global.PMU_FICHA.urls[String(f.base)] : '';
-            img.src = String(urlResuelta || f.thumb || f.url || '' );
+            img.src = String(f.thumb_data || urlResuelta || f.thumb || f.url || '');
             b.appendChild(img);
             b.addEventListener('click', function () { elegir(i); });
             t.appendChild(b);
         });
-        if (fotos.length > visibles) {
-            var mas = doc.createElement('button');
-            mas.type = 'button';
-            mas.className = 'pmu-bib-mini pmu-bib-mas';
-            mas.textContent = String(fotos.length) + '+';
-            mas.title = 'Ver todas tus imagenes';
-            mas.addEventListener('click', function () { elegir(visibles); });
-            t.appendChild(mas);
-        }
+        // Spec 043 (US4/D4): el chip "Ver todas (N)" va SIEMPRE al final, con el total
+        // real, y abre el visor (no elige una foto).
+        var mas = doc.createElement('button');
+        mas.type = 'button';
+        mas.className = 'pmu-bib-mini pmu-bib-mas';
+        mas.textContent = 'Ver todas (' + fotos.length + ')';
+        mas.title = 'Ver mi biblioteca';
+        mas.addEventListener('click', function () { verTodas(0); });
+        t.appendChild(mas);
         el.appendChild(t);
         return fotos.length;
     }
@@ -263,7 +379,19 @@
         if (typeof opts.onElegir === 'function') { onElegir = opts.onElegir; }
         if (!el) { return Promise.resolve(0); }
         var previa = leerCache();
+        var c = config();
         if (previa && previa.fotos.length) { pintarTira(el, previa.fotos); }
+        // Spec 042: 0 solicitudes si la copia es de la misma identidad y revision.
+        if (previa && previa.fotos.length
+            && previa.revision && c.revision && previa.revision === c.revision) {
+            return Promise.resolve(previa.fotos.length);
+        }
+        // Sin revision disponible: 0 solicitudes dentro de la ventana de frescura.
+        if (previa && previa.fotos.length && !c.revision
+            && (Date.now() - (previa.ts || 0)) < FRESCURA_MS) {
+            return Promise.resolve(previa.fotos.length);
+        }
+        // Si la ficha trae una revision distinta, no se reutiliza la copia.
         return pedir().then(function (res) {
             var fotos = res.fotos || [];
             if (previa && previa.fotos.length && res.sin_cambios) { return fotos.length; }
@@ -296,12 +424,13 @@
     }());
     /** Spec 030 (4a): el calentado corre con la pagina cargada (los globals ya estan). */
     function calentar() {
-        // Spec 040 (F1): con copia fresca no se pide nada (el primer gesto en el panel
-        // disparaba un listado completo aunque la copia tuviera segundos de vida).
         var fresca = leerCache();
-        if (fresca && fresca.revision && (Date.now() - (fresca.ts || 0)) < 30000) { return; }
-        if (config().url && typeof global.fetch === 'function') {
-        pedir().catch(function () { /* sin identidad o sin red: no pasa nada */ });
+        var c = config();
+        // Spec 042: con revision/identidad iguales no se pide nada.
+        if (fresca && fresca.revision && c.revision && fresca.revision === c.revision) { return; }
+        if (fresca && !c.revision && (Date.now() - (fresca.ts || 0)) < FRESCURA_MS) { return; }
+        if ((c.url || c.rapido) && typeof global.fetch === 'function') {
+            pedir().catch(function () { /* sin identidad o sin red: no pasa nada */ });
         }
     }
 
@@ -321,7 +450,7 @@
      * Ahora SIEMPRE se sube el original y el servidor deduplica por `sha` (D24).
      */
     var api = { pedir: pedir, cache: leerCache, invalidar: invalidar, tira: tira,
-        visor: visor, elegir: elegir, tope: TOPE_TIRA, clave: CLAVE };
+        visor: visor, elegir: elegir, urlRespaldo: urlRespaldo, tope: TOPE_TIRA, clave: CLAVE };
     global.PMUBiblioteca = api;
     if (typeof module !== 'undefined' && module.exports) { module.exports = api; }
 })(typeof window !== 'undefined' ? window : globalThis);

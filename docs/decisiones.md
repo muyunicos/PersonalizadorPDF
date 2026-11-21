@@ -9,6 +9,18 @@ y se conserva, porque es la evidencia de por que no se repite.
 
 ---
 
+- ✅ **Editor de imagen y biblioteca (spec 043)**: una foto = un `id` + N recetas; la miniatura del
+  campo abre el editor **con su receta** y guardar una existente **no sube bytes** (`declararReceta`);
+  "Ver todas (N)" abre el visor de la biblioteca (Elegir/Eliminar, con dialogo **solo** si esta en
+  uso). **Supera** la 039 D2 (toque -> visor), D3/US3.4 (sin borrado desde la biblioteca) y SC-003
+  (IndexedDB); la 030 4a/D8 y la 016 D7. Sin IndexedDB: cache HTTP de `media.php`.
+
+- ✅ **Lectura rapida de la biblioteca (spec 042)**: `media.php` sin WordPress para `listar`/`imagen`/
+  `miniatura`; cookies `pmu_sid`/`pmu_uid` (HMAC) como identidad; miniaturas embebidas (hasta 10);
+  revision/identidad para 0 solicitudes en reaperturas; `admin-post` queda como respaldo y unico camino
+  de escritura. Supersede D19/D14 de la 030 para lecturas. Trade-off aceptado: cookie bearer, alcance
+  limitado a las fotos del comprador.
+
 - ❌ **Sin Python ni Node en el servidor**: backend estrictamente en PHP porque el destino es
   hosting compartido (Hostinger Business, solo PHP). La v1 era Flask + Python y se migro por esto.
   **Alcance**: lo que se despliega, **no** las herramientas de desarrollo (Node/Composer/PowerShell).

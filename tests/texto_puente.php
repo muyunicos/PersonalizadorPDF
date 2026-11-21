@@ -1620,6 +1620,11 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('dos recetas distintas dan dos archivos distintos',
                 (int)$GLOBALS['fotos_mixto_archivos'] === 2,
                 'archivos=' . (int)$GLOBALS['fotos_mixto_archivos']);
+            check('dos recetas de la MISMA foto conservan el mismo orig.id (FR-004)',
+                $GLOBALS['fotos_receta_mismo_id'] === true);
+            check('una receta NUEVA no agrega archivos de originales (FR-004)',
+                !empty($GLOBALS['fotos_receta_sin_bytes']),
+                'originales=' . (int)$GLOBALS['fotos_uploads_archivos']);
             check('instancia sin receta: se omite (el hueco queda transparente)',
                 (int)$GLOBALS['fotos_sin_receta_filas'] === 1);
             check('id que no es sha12: se omite (no se inventa la ruta)',
@@ -3281,6 +3286,19 @@ switch ($fase) {
             return (string)$f['file'];
         }, $mixto)));
 
+        // 4b) Spec 043 (US1/FR-004): una receta NUEVA no sube ni crea archivos.
+        $GLOBALS['fotos_receta_mismo_id'] = true;
+        foreach ($mixto as $filaM) {
+            if ((string)($filaM['orig']['id'] ?? '') !== (string)$subA['id']) {
+                $GLOBALS['fotos_receta_mismo_id'] = false;
+            }
+        }
+        $antesRec = $contarFt();
+        $recC = PMU_Sesion::receta_de(array_merge($baseRec, ['rot' => 180]));
+        $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', [
+            ['id' => $subA['id'], 'receta' => $recC],
+        ]);
+        $GLOBALS['fotos_receta_sin_bytes'] = ($contarFt() === $antesRec);
         // 5) Una instancia SIN receta se omite (el hueco queda transparente).
         $sinRec = $sesion_ft->registrar_fotos($sid_ft, $draft_ft, 'muestra', '0000FF', [
             ['id' => $subA['id'], 'receta' => $recA],

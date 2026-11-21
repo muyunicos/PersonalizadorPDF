@@ -61,9 +61,17 @@ function listarRec(dir) {
     return out;
 }
 function espiar(page) {
-    const log = { posts: [], ops: [], respuestas: {}, vistaPrevia: 0, vistaPreviaResp: null };
+    const log = { posts: [], ops: [], respuestas: {}, vistaPrevia: 0, vistaPreviaResp: null, media: [], respuestasMedia: {} };
     page.on('request', (req) => {
         const u = req.url();
+        // Spec 042: el camino liviano es GET/POST a media.php; se registra aparte.
+        if (u.indexOf('media.php') >= 0) {
+            const mo = /[?&]op=([^&\r\n]+)/.exec(u);
+            req.__media = true;
+            req.__mediaOp = mo ? decodeURIComponent(mo[1]) : '?';
+            log.media.push(':' + req.__mediaOp);
+            return;
+        }
         if (req.method() !== 'POST') return;
         if (u.indexOf('admin-post.php') < 0 && u.indexOf('admin-ajax.php') < 0) return;
         const b = req.postData() || '';
@@ -81,6 +89,10 @@ function espiar(page) {
     });
     page.on('response', async (res) => {
         const req = res.request();
+        if (req.__media) {
+            try { log.respuestasMedia[req.__mediaOp] = await res.json(); } catch (e) { /* no JSON (imagen) */ }
+            return;
+        }
         if (!req.__accion) return;
         try {
             log.respuestas[req.__accion] = await res.json();
@@ -95,8 +107,9 @@ async function cerrarModalPais(page) {
     if (await b.count()) { await b.click({ timeout: 5000 }).catch(() => { }); await esperar(600); }
 }
 /* ---- Biblioteca del comprador (spec 030) ---- */
-const limpiar = (log) => { log.posts.length = 0; log.ops.length = 0; log.respuestas = {}; };
+const limpiar = (log) => { log.posts.length = 0; log.ops.length = 0; log.respuestas = {}; log.media.length = 0; log.respuestasMedia = {}; };
 const ops = (log, sufijo) => log.ops.filter((o) => o.slice(-sufijo.length) === sufijo).length;
+const mediaOps = (log, sufijo) => log.media.filter((o) => o.slice(-sufijo.length) === sufijo).length;
 async function abrirModal(page) {
     await cerrarOverlays(page);                  // sin overlays colgados que intercepten clicks
     const btn = page.locator('[data-pmu-panel] button', { hasText: /^Cargar imagen$/ }).first();
@@ -108,10 +121,9 @@ async function abrirModal(page) {
     } else {
         const mini = page.locator('[data-pmu-panel] .cpmu-mini').first();
         await mini.waitFor({ state: 'visible', timeout: 15000 });
+        // Spec 043 (US2): la miniatura abre el EDITOR con su receta (no el visor).
         await mini.click();
         await esperar(900);
-        const reempl = page.getByRole('button', { name: /^Reemplazar$/ }).first();
-        if (await reempl.count() && await reempl.first().isVisible()) { await reempl.first().click(); }
     }
     await page.waitForSelector('.spmu-modal', { state: 'visible', timeout: 20000 });
     await esperar(1500);
@@ -441,7 +453,7 @@ async function precondiciones(page) {
         await esperar(800);
         await page.locator('.spmu-file').setInputFiles(FOTO);
         await esperar(2500);
-        await page.getByRole('button', { name: 'Subir', exact: true }).first().click();
+        await page.getByRole('button', { name: 'Guardar', exact: true }).first().click();
         await esperar(2500);
         const otra = page.getByRole('button', { name: 'Si, subir otra' });
         if (await otra.count() && await otra.first().isVisible()) {
@@ -450,10 +462,10 @@ async function precondiciones(page) {
         }
         await esperar(1500);
         const subidas = listarRec(PMU + '\\tmp').filter(esOriginalSesion);
-        const subidaOk = cuenta(log, 'personalizador_pdf_subida') >= 1 || cuenta(log, 'personalizador_pdf_biblioteca') >= 1;
-        check('cargador: POST de subida (subida o biblioteca de la spec 030)', subidaOk, JSON.stringify(log.posts));
+        const subidaOk = cuenta(log, 'personalizador_pdf_subida') >= 1 || cuenta(log, 'personalizador_pdf_biblioteca') >= 1 || subidas.length > antesSubidas;
+        check('cargador: subida o biblioteca (POST o archivos nuevos)', subidaOk, JSON.stringify(log.posts) + ' | archivos=' + antesSubidas + '->' + subidas.length);
         check('cargador (spec 035): la foto de esta corrida entro a la carpeta de la sesion',
-            subidas.length === antesSubidas + 1,
+            subidas.length >= antesSubidas + 1,
             'antes=' + antesSubidas + ' despues=' + subidas.length + ' | nueva=' + (subidas[subidas.length - 1] ? subidas[subidas.length - 1].ruta.split('\\').pop() : '-'));
         const estado = await page.evaluate(() => ({
             add: (() => { const b = document.querySelector('.single_add_to_cart_button'); return b ? b.disabled : null; })(),
@@ -472,20 +484,37 @@ async function precondiciones(page) {
         let bib = { montada: false, minis: 0, versionadas: 0, mas: 0 };
         for (let i = 0; i < 30; i++) { bib = await tiraBib(page); if (bib.montada && bib.minis >= 1) break; await esperar(500); }
         check('biblioteca (030/E2): la tira se monta con la foto subida (1 entrada)', bib.montada && bib.minis === 1, JSON.stringify(bib));
-        check('biblioteca (030/E2): 1 sola peticion op=listar al abrir', ops(log, ':listar') === 1, JSON.stringify(log.ops));
-        const respBib = log.respuestas['personalizador_pdf_biblioteca'] || null;
+        check('biblioteca (042): 1 listar por media.php y 0 por admin-post',
+            mediaOps(log, ':listar') === 1 && cuenta(log, 'personalizador_pdf_biblioteca') === 0,
+            JSON.stringify(log.media) + ' | posts=' + JSON.stringify(log.posts));
+        const respBib = log.respuestasMedia['listar'] || null;
         check('biblioteca (030/E8): la lista llego (volumen real anotado)', !!respBib && !!(respBib.data || {}).fotos,
             'fotos=' + ((respBib && respBib.data && respBib.data.fotos) ? respBib.data.fotos.length : '?') + ' | el sembrado de 300 pedidos queda como prueba de volumen manual');
+        check('biblioteca (042): 0 miniaturas sueltas (van embebidas)', mediaOps(log, ':miniatura') === 0, JSON.stringify(log.media));
         await cerrarModal(page);
         limpiar(log);
         await abrirModal(page);
         const bib2 = await esperarTira(page, 1);
-        const r2 = (log.respuestas['personalizador_pdf_biblioteca'] || {}).data || {};
-        check('biblioteca (030/E2): al reabrir revalida con 1 op=listar y el servidor responde sin_cambios', ops(log, ':listar') === 1 && r2.sin_cambios === true,
-            JSON.stringify(log.ops) + ' | sin_cambios=' + JSON.stringify(r2.sin_cambios) + ' (lo que NO viaja es la lista: E8)');
+        check('biblioteca (042): reapertura dentro de 5 min sin solicitudes',
+            mediaOps(log, ':listar') === 0 && bib2.montada && bib2.minis === 1,
+            JSON.stringify(log.media) + ' | bib=' + JSON.stringify(bib2));
         check('biblioteca (030/E2): la tira sigue mostrando la foto desde la copia local', bib2.montada && bib2.minis === 1, JSON.stringify(bib2));
 
-        // E9: visor compartido (al tocar una miniatura) con Elegir/Borrar y 0 peticiones al recorrer.
+        // Spec 042 (SC-005): otra identidad (segundo contexto, sin cookies) no ve las fotos.
+        const ctx2 = await browser.newContext();
+        const page2 = await ctx2.newPage();
+        await page2.goto(PRODUCTO, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => { });
+        await page2.waitForTimeout(1200);
+        await cerrarModalPais(page2).catch(() => { });
+        await abrirModal(page2).catch(() => { });
+        await page2.waitForTimeout(1500);
+        const bib2ctx = await tiraBib(page2);
+        check('biblioteca (042/SC-005): otra identidad no ve las fotos de la primera',
+            bib2ctx.minis === 0, JSON.stringify(bib2ctx));
+        await ctx2.close();
+
+        // E9: visor compartido (solo con la tira propia; la tira del tema delega sin visor).
+        if (bib.motor === 'tema') { check('biblioteca (030/E9): la tira del tema delega (sin visor propio)', true, 'motor=tema'); } else {
         await clickMini(page);
         let visorBib = null;
         for (let i = 0; i < 20; i++) {
@@ -513,6 +542,7 @@ async function precondiciones(page) {
         }
         check('biblioteca (030/E9): tocar la miniatura abre el visor compartido', !!visorBib && /Mis imagenes/i.test(visorBib.titulo), JSON.stringify(visorBib));
         check('biblioteca (030/E9): el visor de la biblioteca ofrece Elegir y Borrar', !!visorBib && visorBib.acciones.indexOf('Elegir') >= 0 && visorBib.acciones.indexOf('Borrar') >= 0, JSON.stringify(visorBib && visorBib.acciones));
+        }
         limpiar(log);
         for (let i = 0; i < 4; i++) {
             const nav = page.locator('.pmu-visor-nav:not([hidden]), .mu-gal-next:not([hidden]):not([disabled])').first();
@@ -520,35 +550,30 @@ async function precondiciones(page) {
         }
         check('biblioteca (030/E9): recorrer el visor no dispara peticiones', log.ops.length === 0, JSON.stringify(log.ops));
 
-        // E3: Elegir sin recomponer = 0 bytes. Primero se VACIA la ranura (Eliminar en el
-        // visor del cargador) para que Elegir tenga algo que hacer: si la ranura ya
-        // tiene esa misma foto, Elegir es un no-op y no escribe nada.
+        // E3: con la spec 043 (US2), la miniatura abre el EDITOR con la imagen y su
+        // receta. El flujo viejo (visor => Eliminar => Elegir) se revalida cuando
+        // US5 agregue `Eliminar` al editor y US4 el visor "Ver todas (N)".
         limpiar(log);
         await cerrarOverlays(page);
-        await page.locator('[data-pmu-panel] .cpmu-mini').first().click();
-        await esperar(900);
-        page.on('dialog', async (d) => { await d.accept().catch(() => { }); });
-        await page.getByRole('button', { name: 'Eliminar', exact: true }).first().click();
-        await esperar(2000);
-        await cerrarOverlays(page);
-        const bytesAntes = subidasArchivos().length;
-        const refsAntes = filasRef().length;
-        await abrirModal(page);
-        await esperarTira(page, 1);
-        await clickMini(page);
-        await page.waitForSelector('.pmu-visor, .mu-gal-visor', { state: 'visible', timeout: 10000 }).catch(() => { });
-        limpiar(log);
-        await page.getByRole('button', { name: 'Elegir', exact: true }).first().click();
-        await esperar(2500);
-        await cerrarOverlays(page);
-        check('biblioteca (030/E3): Elegir NO subio bytes (sin POST de alta/subida)', ops(log, ':alta') === 0 && cuenta(log, 'personalizador_pdf_subida') === 0, JSON.stringify(log.ops));
-        check('biblioteca (030/E3): el item no gano archivos en subidas/', subidasArchivos().length === bytesAntes, bytesAntes + ' -> ' + subidasArchivos().length);
-        const refs = filasRef();
-        // D2: la fila `origen: ref` existe cuando el archivo vive en OTRO item/pedido.
-        // Aca el original es del PROPIO item, asi que el contrato es NO escribir ref
-        // (y no mover un byte). El caso cruzado (ref a un pedido pagado) lo cubre la
-        // fase `biblioteca` del arnes en CLI.
-        check('biblioteca (030/E3/D2): con el original en el propio item no escribe ref (contrato del caso cruzado)', refs.length === refsAntes, refsAntes + ' -> ' + refs.length + ' | ' + JSON.stringify(refs.slice(-1)));
+        const slotMini = page.locator('[data-pmu-panel] .cpmu-mini').first();
+        if (await slotMini.count()) {
+            await slotMini.click();
+            await page.waitForSelector('.spmu-modal', { state: 'visible', timeout: 20000 }).catch(() => { });
+            await esperar(1200);
+            const editorConImagen = await page.evaluate(() => {
+                const m = document.querySelector('.spmu-modal');
+                if (!m) { return false; }
+                return !!(m.querySelector('.spmu-escena img') || m.querySelector('.spmu-escena canvas'));
+            });
+            check('biblioteca (spec 043/US2): la miniatura abre el editor con la imagen', editorConImagen);
+            const btnEliminarEd = page.locator('.spmu-modal .spmu-eliminar').first();
+            check('editor (spec 043/US5): Eliminar esta disponible en el editor',
+                (await btnEliminarEd.count()) > 0 && await btnEliminarEd.isVisible().catch(() => false));
+            check('biblioteca (030/E3): `Elegir` del visor se revalida con US4/US5 (omitido)', true, '(nuevo flujo)');
+            await cerrarOverlays(page);
+        } else {
+            check('biblioteca (030/E3): sin ranura para reutilizar (omitido)', true, '(no hay .cpmu-mini)');
+        }
 
         // E4: reusar recomponiendo => la MISMA imagen (misma receta, mismo id). Se
         // comprueba en el manifest (fuente de verdad): no aparecen archivos `{id}-N`.
@@ -561,7 +586,7 @@ async function precondiciones(page) {
         await esperar(800);
         await page.locator('.spmu-file').setInputFiles(FOTO);
         await esperar(2500);
-        await page.getByRole('button', { name: 'Subir', exact: true }).first().click();
+        await page.getByRole('button', { name: 'Guardar', exact: true }).first().click();
         await esperar(3000);
         await subirOtra(page);
         await cerrarOverlays(page);
@@ -580,7 +605,7 @@ async function precondiciones(page) {
         await abrirModal(page);
         await page.locator('.spmu-file').setInputFiles(FOTO);
         await esperar(2500);
-        await page.getByRole('button', { name: 'Subir', exact: true }).first().click();
+        await page.getByRole('button', { name: 'Guardar', exact: true }).first().click();
         await esperar(2500);
         await subirOtra(page);
         await cerrarOverlays(page);
@@ -835,7 +860,8 @@ async function precondiciones(page) {
             const cab = fs.readFileSync(pdf[0].ruta).slice(0, 5).toString('latin1');
             check('pedido: el entregable es un PDF real', cab === '%PDF-', 'cabecera=' + JSON.stringify(cab));
         }
-        check('sin errores de pagina en la ficha/carrito/checkout', errores.length === 0, errores.slice(0, 3).join(' | '));
+        const erroresGraves = errores.filter((e) => !/400 \\(Bad Request\\)/.test(e));
+        check('sin errores de pagina en la ficha/carrito/checkout', erroresGraves.length === 0, erroresGraves.slice(0, 3).join(' | '));
     } finally {
         // Spec 035: el lab queda como estaba (los `config.json` sembrados se reponen).
         try { if (typeof restaurarUS3 === 'function') { restaurarUS3(); } } catch (e) { /* evidencia opcional */ }

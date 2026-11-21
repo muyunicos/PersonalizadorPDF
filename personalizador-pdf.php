@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.33.0
+ * Version: 4.36.0
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -154,6 +154,10 @@ class Personalizador_PDF_Plugin
         // Spec 030 (T035/D3): al loguearse, el `sid` del invitado se anota en su cuenta
         // (`_pmu_sids`): su historial lo sigue en cualquier dispositivo. Nunca al reves.
         add_action('wp_login', [$this, 'vinculo_sid_usuario'], 10, 2);
+        // Spec 042: cookies de lectura y camino liviano.
+        add_action('template_redirect', [$this, 'media_uid_cookie']);
+        add_action('wp_login', [$this, 'media_uid_login'], 10, 2);
+        add_action('wp_logout', [$this, 'media_uid_logout']);
         add_filter('woocommerce_guest_session_to_user_id', [$this, 'vinculo_sid_filtro'], 10, 1);
         // Spec 030 (T033/D18): barrido diario del TTL (drafts 24 h; carrito abandonado 30 dias).
         add_action('init', [$this, 'programar_limpieza_ttl']);
@@ -193,6 +197,60 @@ class Personalizador_PDF_Plugin
             $motor = new PMU_Uploads();
         }
         return $motor;
+    }
+
+    /** Instancia unica de PMU_Media (config/cookies/URLs del camino liviano). */
+    private function media()
+    {
+        static $media = null;
+        if ($media === null) {
+            if (!class_exists("PMU_Media")) {
+                require_once PERSONALIZADOR_PDF_PATH . "inc" . DIRECTORY_SEPARATOR . "class-pmu-media.php";
+            }
+            $media = new PMU_Media($this->pmu_uploads());
+        }
+        return $media;
+    }
+
+    /** Emite/revalida `pmu_uid` en el front (template_redirect). */
+    public function media_uid_cookie()
+    {
+        if (!function_exists('get_current_user_id')) {
+            return;
+        }
+        $uid = (int)get_current_user_id();
+        if ($uid > 0) {
+            $this->media()->cookie_uid_emitir($uid);
+        }
+    }
+
+    /** Emite `pmu_uid` al iniciar sesion. */
+    public function media_uid_login($user_login = '', $user = null)
+    {
+        $uid = is_object($user) && isset($user->ID) ? (int)$user->ID : 0;
+        if ($uid <= 0 && function_exists('get_current_user_id')) {
+            $uid = (int)get_current_user_id();
+        }
+        if ($uid > 0) {
+            $this->media()->cookie_uid_emitir($uid);
+        }
+    }
+
+    /** Borra `pmu_uid` al cerrar sesion. */
+    public function media_uid_logout()
+    {
+        $this->media()->cookie_uid_borrar();
+    }
+
+    /** true si la cookie de identidad del request corresponde a la ficha. */
+    private function media_identidad_presente($media, $uid, $sid)
+    {
+        $uid = (int)$uid;
+        if ($uid > 0) {
+            return $media->cookie_uid_valida() === $uid;
+        }
+        return isset($_COOKIE['pmu_sid'])
+            && PMU_Lectura::sid_de_cookie((string)$_COOKIE['pmu_sid']) === (string)$sid;
     }
 
     /**
@@ -634,11 +692,22 @@ class Personalizador_PDF_Plugin
         $camposPanel = $this->campos_panel($panel['campos']);
         $valores = [];
         $urls = []; // mapa id -> url (spec 030, D23)
+        $urlsRespaldo = []; // spec 042: URL actual por id (fallback de imagen)
         $itemEdicion = '';
         $sid = '';
+        $identidadHash = '';
+        $revision = '';
+        $rapido = '';
         try {
             $sesion = $this->sesion();
             $sid = $sesion->sid_actual();
+            // Spec 042: camino liviano + metadatos para la ficha.
+            $media = $this->media();
+            $media->config_crear();
+            $uid = (int)get_current_user_id();
+            $identidadHash = $media->identidad($uid, $sid);
+            $revision = $media->revision($uid, $sid);
+            $rapido = $media->habilitado() ? $media->url_lista() : '';
             $pedido = isset($_GET['pmu_item_key']) ? sanitize_text_field(wp_unslash((string)$_GET['pmu_item_key'])) : '';
             $manifest = $pedido !== '' ? $sesion->leer_manifest($sid, $pedido) : null;
             if (is_array($manifest)
@@ -647,7 +716,19 @@ class Personalizador_PDF_Plugin
                 $valores = (array)($manifest['valores'] ?? []);
                 foreach ((array)($manifest['subidas'] ?? []) as $filaSub) {
                     if (is_array($filaSub) && isset($filaSub['id'])) {
-                        $urls[(string)$filaSub['id']] = $this->url_biblioteca_imagen($pedido, (string)$filaSub['id']);
+                        $idSub = (string)$filaSub['id'];
+                        // Spec 042: solo las filas originales usan el camino liviano
+                        // (su archivo vive en la carpeta de identidad). El resto sigue
+                        // por el endpoint actual, que resuelve el item.
+                        $esOriginal = ((string)($filaSub['origen'] ?? '') === 'original');
+                        $rapida = ($rapido !== '' && $esOriginal
+                            && $this->media_identidad_presente($media, $uid, $sid));
+                        $urls[$idSub] = $rapida
+                            ? $media->url_imagen($idSub, $identidadHash)
+                            : $this->url_biblioteca_imagen($pedido, $idSub);
+                        if ($rapida) {
+                            $urlsRespaldo[$idSub] = $this->url_biblioteca_imagen($pedido, $idSub);
+                        }
                     }
                 }
             }
@@ -663,12 +744,18 @@ class Personalizador_PDF_Plugin
             'preview_omisible' => !empty($panel['preview_omisible']),
             'valores' => $valores,
             'urls' => $urls,
+            'urls_respaldo' => $urlsRespaldo,
             // Spec 030 (T015/D14/D19): endpoint de la biblioteca (admin-post + nonce de la
             // vista previa). Se publica ACA para que el modulo NO dependa del orden de carga:
             // antes leia `PMU_TIENDA`, que todavia no existia cuando el modulo se cargaba.
             'biblioteca' => [
                 'endpoint' => admin_url('admin-post.php'),
                 'nonce' => wp_create_nonce('personalizador_pdf_vista_previa'),
+                // Spec 042: camino liviano y metadatos para que la reapertura no
+                // haga ninguna solicitud si la revision/identidad coinciden.
+                'rapido' => $rapido,
+                'revision' => $revision,
+                'identidad' => $identidadHash,
             ],
             // Spec 035 (§3.5): en re-edicion, las vistas que el comprador ya MIRO. Con esto
             // la marca sobrevive el cambio de clave (`draft-{uuid}` -> `cart_item_key`)
@@ -2026,12 +2113,17 @@ class Personalizador_PDF_Plugin
         try {
             $sesion = $this->sesion();
             $rutas = $sesion->resolver_subidas($sid, $item, [$id]);
-            if (empty($rutas)) {
+            $ruta = !empty($rutas) ? (string)reset($rutas) : '';
+            if ($ruta === '' || !is_file($ruta)) {
+                // Spec 042: original de la identidad (todavia sin fila en el item).
+                $identidad = $this->biblioteca_identidad();
+                $uid = (int)($identidad['uid'] ?? 0);
+                $ruta = (string)$sesion->resolver_original($id, (string)$uid, $sid);
+                if ($ruta !== '' && is_file($ruta)) {
+                    $hash = $this->media()->identidad($uid, $sid);
+                    wp_send_json_success(['id' => $id, 'url' => $this->media()->url_imagen($id, $hash)]);
+                }
                 wp_send_json_error('motor:subida:id:ausente');
-            }
-            $ruta = reset($rutas);
-            if (!is_file($ruta)) {
-                wp_send_json_error('motor:subida:archivo:ausente');
             }
         } catch (\Throwable $e) {
             wp_send_json_error($e->getMessage());
@@ -2258,6 +2350,11 @@ class Personalizador_PDF_Plugin
             wp_send_json_error('motor:nonce:invalido');
         }
         $op = sanitize_key(wp_unslash((string)($_REQUEST['op'] ?? '')));
+        // Spec 042: el respaldo tambien asegura config/cookie para la proxima
+        // apertura liviana. No cambia la autorizacion (nonce + capability).
+        $media = $this->media();
+        $media->config_crear();
+        $media->cookie_uid_emitir();
         try {
             $sid = $this->sesion_del_comprador();
             if ($op === 'imagen') {
@@ -2270,56 +2367,37 @@ class Personalizador_PDF_Plugin
                 return;
             }
             if ($op === 'listar') {
-                // Spec 040 (T009): la biblioteca se lista desde el CATALOGO de la carpeta
-                // de identidad, no desde manifiestos ni pedidos (FR-001..FR-003).
+                // Spec 042: el respaldo comparte el lector puro (mismos ids/orden)
+                // y agrega identidad, revision y miniaturas embebidas.
                 $identidad = $this->biblioteca_identidad();
                 $identidad['sid'] = $sid;
                 $uploads = $this->pmu_uploads();
                 $dir = $uploads->dir_uploads_identidad($identidad);
-                $rutaCat = $uploads->ruta_catalogo_uploads($dir);
-                $cat = $uploads->catalogo_leer($dir);
-                if (!is_array($cat)) {
-                    // Spec 040 (F-006): carpeta sin catalogo (datos viejos): se reconstruye
-                    // UNA vez desde los archivos (sin recetas) y se sigue.
+                if (!is_array($uploads->catalogo_leer($dir))) {
+                    // Spec 040 (F-006): carpeta sin catalogo: se reconstruye una vez.
                     $uploads->catalogo_reconstruir($dir);
-                    $cat = $uploads->catalogo_leer($dir);
                 }
-                $items = (is_array($cat) && isset($cat['items']) && is_array($cat['items']))
-                    ? $cat['items'] : [];
-                // Revision: mtime del catalogo + ids (barata y estable).
-                $revision = substr(sha1((string)@filemtime($rutaCat) . '|'
-                    . implode(',', array_keys($items))), 0, 12);
+                $hash = $media->identidad((int)($identidad['uid'] ?? 0), $sid);
                 $desde = sanitize_text_field(wp_unslash((string)($_REQUEST['desde'] ?? '')));
-                if ($desde !== '' && hash_equals($revision, $desde)) {
-                    wp_send_json_success(['revision' => $revision, 'sin_cambios' => true, 'fotos' => [],
-                        'totales' => ['fotos' => 0, 'bytes' => 0]]);
+                $res = PMU_Lectura::listar($dir, [
+                    'desde' => $desde,
+                    'identidad' => $hash,
+                    'url' => function ($id, $op2) {
+                        return $this->url_biblioteca_imagen_id($id, $op2);
+                    },
+                    'thumb_data' => true,
+                ]);
+                if (isset($res['error'])) {
+                    // Sin catalogo utilizable: lista vacia (no romper la galeria).
+                    wp_send_json_success([
+                        'revision' => '',
+                        'sin_cambios' => false,
+                        'identidad' => $hash,
+                        'fotos' => [],
+                        'totales' => ['fotos' => 0, 'bytes' => 0],
+                    ]);
                 }
-                $fotos = [];
-                $bytes = 0;
-                // Spec 039 (D5): una entrada por IMAGEN (no por familia).
-                foreach ($items as $id => $it) {
-                    if (!is_array($it)) {
-                        continue;
-                    }
-                    $peso = (int)($it['bytes'] ?? 0);
-                    $fotos[] = [
-                        'id' => (string)$id,
-                        'url' => $this->url_biblioteca_imagen_id($id),
-                        'thumb' => $this->url_biblioteca_imagen_id($id, 'miniatura'),
-                        'bytes' => $peso,
-                        'w' => (int)($it['w'] ?? 0),
-                        'h' => (int)($it['h'] ?? 0),
-                        'recetas' => (isset($it['recetas']) && is_array($it['recetas']))
-                            ? $it['recetas'] : [],
-                        'creado' => (int)($it['creado'] ?? 0),
-                    ];
-                    $bytes += $peso;
-                }
-                usort($fotos, function ($a, $b) {
-                    return (int)$b['creado'] - (int)$a['creado'];
-                });
-                wp_send_json_success(['revision' => $revision, 'sin_cambios' => false, 'fotos' => $fotos,
-                    'totales' => ['fotos' => count($fotos), 'bytes' => $bytes]]);
+                wp_send_json_success($res);
             }
             // Spec 039 (D5/D6): `op=usos` y `op=usar` se RETIRARON con el modelo de
             // "familias" y la rama de reuso `Elegir` (0 bytes). No hay familia que
