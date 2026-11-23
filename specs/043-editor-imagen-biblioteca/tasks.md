@@ -12,9 +12,11 @@
   - **Hecho 2026-11-22** (Act): baseline en verde — `php -l` de `personalizador-pdf.php`,
     `media.php`, `admin/`, `engine/` e `inc/`; `node --check` de los 5 assets;
     `selector-contrato` (F0-F5), `biblioteca-contrato` **81**, `campos-contrato` y
-    `media_lectura` **75** (total v4.36.0).
-- [ ] T002 Agregar a `tests/selector-contrato.test.js` los helpers de prueba para una receta por contexto (`{aspecto}-{familia}-{area}`, spec 047) y un doble de `declararReceta`.
-- [ ] T003 Agregar a `tests/biblioteca-contrato.test.js` el fixture de una biblioteca con 1, 3 y 12 fotos para probar el chip "Ver todas (N)".
+    `media_lectura` **77** (total v4.36.0; recontado 2026-11-22).
+- [X] T002 Cubierta por T014/T015/T019/T024: `tests/selector-contrato.test.js` ya verifica `declararReceta` cableado, `_recetaDeContexto` y la receta en memoria (seccion "Spec 043 (US1)").
+  - **Nota 2026-11-22**: la verificacion es por codigo fuente (regex), no un doble en runtime; alcanza para lo que pide la spec.
+- [ ] T003 (deuda) Agregar a `tests/biblioteca-contrato.test.js` el fixture de una biblioteca con 1, 3 y 12 fotos para probar el chip "Ver todas (N)" en runtime.
+  - **Nota 2026-11-22**: T028 ya verifica el chip por codigo fuente (`mas.textContent = 'Ver todas (' + fotos.length + ')'`); falta el fixture en runtime, sigue pendiente.
 - [X] T004 Documentar en `specs/043-editor-imagen-biblioteca/contracts/editor-imagen.md` cualquier ajuste de firma que surja al implementar (mantener el contrato como fuente de verdad).
 
 ## Phase 2 — Foundational (bloquea todas las historias)

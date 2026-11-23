@@ -9,13 +9,13 @@ descartaron. No quedan incognitas abiertas.
 
 **Decision**: el cliente declara la receta nueva; el servidor ya sabe guardarla.
 
-**Evidencia**: `assets/selector-pmu.js:1769-1814` solo evita la subida si la receta **coincide** o
-si existe `config.declararReceta` (`:1790`). `assets/cargador-pmu.js:398-435` construye el selector
+**Evidencia**: `assets/selector-pmu.js` (`_aceptar`) solo evita la subida si la receta **coincide** o
+si existe `config.declararReceta`. `assets/cargador-pmu.js` construye el selector
 **sin** `declararReceta`, asi que cualquier cambio de encuadre cae al camino de subida
-(`:1816-1818`) y sube la composicion: bytes nuevos y `id` nuevo.
+y sube la composicion: bytes nuevos y `id` nuevo.
 
 **Rationale**: el modelo "una imagen + N recetas" ya existe en el servidor
-(`inc/class-pmu-sesion.php:533-640`: una fila por receta, `file` determinista, `orig.id` intacto) y
+(`inc/class-pmu-sesion.php`: una fila por receta, `file` determinista, `orig.id` intacto) y
 en el catalogo (`uploads.json recetas[clave]`). Solo falta la pieza del cliente.
 
 **Alternativas descartadas**:
@@ -28,11 +28,11 @@ en el catalogo (`uploads.json recetas[clave]`). Solo falta la pieza del cliente.
 **Decision**: memoria del cargador -> catalogo del comprador -> valores por defecto.
 
 **Evidencia**: `PMU_Lectura::listar()` devuelve `recetas` por foto
-(`inc/class-pmu-lectura.php:239`) con la clave `{aspecto}-{familia}-{area}` (spec 047; la vieja
-`{gid}-{w}x{h}-{phsize}` se ignora) y en `inc/class-pmu-sesion.php:607`; el respaldo devuelve el
+(`inc/class-pmu-lectura.php`) con la clave `{aspecto}-{familia}-{area}` (spec 047; la vieja
+`{gid}-{w}x{h}-{phsize}` se ignora) y en `inc/class-pmu-sesion.php`; el respaldo devuelve el
 mismo mapa. `CargadorPMU.recetas[id]`
-(`cargador-pmu.js:517`, `:633`) solo vive en memoria y se pierde al recargar. `SelectorPMU._recetaDeFoto()`
-(`selector-pmu.js:1158`) ya sabe leer el mapa del listado.
+(`cargador-pmu.js`, `recetas[id]`) solo vive en memoria y se pierde al recargar. `SelectorPMU._recetaDeFoto()`
+(`selector-pmu.js`) ya sabe leer el mapa del listado.
 
 **Rationale**: el catalogo es el unico que sobrevive a una recarga y a otra pestaña; la memoria sirve
 para el caso inmediato (recien subida, sin pasar por el listado).
@@ -46,7 +46,7 @@ para el caso inmediato (recien subida, sin pasar por el listado).
 **Decision**: `declararReceta(id, params)` -> `CargadorPMU._usarExistente()`; `tienda.js` registra el
 grupo con esos `params` y `PMU_Sesion::registrar_fotos()` escribe la fila.
 
-**Evidencia**: `cargador-pmu.js:618-639` (`_usarExistente`) ya anota el id, guarda la receta y publica
+**Evidencia**: `cargador-pmu.js` (`_usarExistente`) ya anota el id, guarda la receta y publica
 `onRecorte`; `tienda.js` ya envia `{id, receta}` por instancia al registrar el grupo (fase `fotos`
 de `tests/texto_puente.php`).
 
@@ -60,8 +60,8 @@ de `tests/texto_puente.php`).
 **Decision**: tocar la miniatura abre el editor con esa imagen y su receta. El visor del campo queda
 como accion secundaria ("Ver en grande", "Eliminar").
 
-**Evidencia**: hoy `_miniTocar` (`cargador-pmu.js:731-736`) reintenta si fallo y, si no, abre el
-visor (`_abrirVisorCompartido`). "Reemplazar" (`_cambiar`, `:804-807`) abre el selector **sin**
+**Evidencia**: hoy `_miniTocar` (`cargador-pmu.js`) reintenta si fallo y, si no, abre el
+visor (`_abrirVisorCompartido`). "Reemplazar" (`_cambiar`) abre el selector **sin**
 receta (`_abrir(indice, null)`).
 
 **Rationale**: el gesto mas frecuente sobre una foto puesta es corregir el encuadre, no borrarla ni
@@ -75,9 +75,9 @@ reemplazarla. El reintento de fallos (039 D2) se conserva **antes** del menu.
 
 **Decision**: el chip se muestra **siempre** al final de la tira y abre el visor de la biblioteca.
 
-**Evidencia**: `assets/biblioteca-pmu.js:297` calcula cuantas celdas caben y `:321` pinta el chip
-"Ver todas tus imagenes" cuando desborda; `:274` hoy lo usa para **seleccionar**, no para abrir el
-visor. `:34` ya documenta que el visor muestra **todas** las fotos, no solo las visibles.
+**Evidencia**: `assets/biblioteca-pmu.js` calcula cuantas celdas caben y pinta el chip
+"Ver todas tus imagenes" cuando desborda; el chip hoy se usa para **seleccionar**, no para abrir el
+visor. El modulo ya documenta que el visor muestra **todas** las fotos, no solo las visibles.
 
 **Rationale**: el modal ya tiene "Cargar imagen" a la izquierda; un `+` al final se confundiria con
 "agregar". El chip con contador dice exactamente lo que hace y ademas es la puerta de gestion.
@@ -90,9 +90,9 @@ visor. `:34` ya documenta que el visor muestra **todas** las fotos, no solo las 
 
 **Decision**: reusar `op=borrar` en dos pasos y el dialogo del visor.
 
-**Evidencia**: `personalizador-pdf.php:2410-2440` responde `referencias` sin `confirmar` y borra con
+**Evidencia**: `personalizador-pdf.php` responde `referencias` sin `confirmar` y borra con
 `confirmar=1`; `visor-pmu.js` acepta `confirmar`, `pregunta` y `textoOk` (039 D1). `CargadorPMU._quitar`
-(`cargador-pmu.js:823-854`) ya reintenta con `confirmar=1`.
+(`cargador-pmu.js`) ya reintenta con `confirmar=1`.
 
 **Rationale**: el servidor ya distingue "en uso"; el cliente solo decide **cuando** preguntar. Sin
 uso = borrado directo (lo pedido); con uso = dialogo.
@@ -105,7 +105,7 @@ uso = borrado directo (lo pedido); con uso = dialogo.
 
 **Decision**: sin IndexedDB; la imagen se sirve con la cache HTTP existente.
 
-**Evidencia**: `media.php:133` y `:151` mandan `Cache-Control: private, max-age=604800` + `ETag`;
+**Evidencia**: `media.php` manda `Cache-Control: private, max-age=604800` + `ETag`;
 el listado ya trae miniaturas embebidas y ventana de frescura de 5 min (spec 042).
 
 **Rationale**: la segunda apertura de la misma foto es un cache hit (0 red) y a los 7 dias se

@@ -118,7 +118,7 @@ tests/
 
 Resolver, con evidencia del codigo:
 
-1. **R1 — Por que hoy se re-sube al reencuadrar**: `selector-pmu.js:1769-1818` cae al camino de
+1. **R1 — Por que hoy se re-sube al reencuadrar**: `selector-pmu.js` (`_aceptar`) cae al camino de
    subida cuando la receta cambia porque `declararReceta` no esta cableado en `cargador-pmu.js`.
 2. **R2 — Donde vive la receta vigente**: memoria del cargador (`recetas[id]`, se pierde al
    recargar) vs catalogo (`uploads.json recetas[clave]`, servido por la lista rapida y por el
@@ -128,7 +128,7 @@ Resolver, con evidencia del codigo:
 4. **R4 — Que gesto abre el editor**: `_miniTocar` hoy abre el visor; el contrato nuevo agrega
    "Editar recorte" como accion primaria y deja el visor como accion secundaria.
 5. **R5 — Como se muestra "Ver todas (N)"**: `biblioteca-pmu.js` ya pinta un chip cuando desborda
-   (`:297`, `:321`); se fuerza a mostrarse siempre y se cambia `onChip` para abrir el visor.
+   (`assets/biblioteca-pmu.js`); se fuerza a mostrarse siempre y se cambia `onChip` para abrir el visor.
 6. **R6 — Borrado con confirmacion**: `op=borrar` sin `confirmar` responde `referencias`; el visor
    ya tiene `confirmar/pregunta/textoOk` (spec 039 D1). Se reusa tal cual.
 7. **R7 — Cache vs IndexedDB**: `media.php` ya sirve con `Cache-Control: private, max-age=604800` y
