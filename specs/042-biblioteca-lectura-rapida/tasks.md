@@ -82,7 +82,13 @@ Proyecto unico (plugin WordPress + assets): rutas relativas a la raiz del repo.
 - [X] T020 [US1] Implementar en `media.php` `op=ping` y `op=listar`: busqueda del config (`SCRIPT_FILENAME`, `__DIR__`, `DOCUMENT_ROOT`, `PMU_MEDIA_CONFIG`), identidad (`pmu_uid` valida gana a `pmu_sid`; `pmu_uid`/`pmu_sid` invalidas -> 403/`fallback:true`), lectura con `PMU_Lectura::listar`, `desde`/`sin_cambios`, `revision`/`identidad`, `Cache-Control: no-store`; si no hay `pmu_sid`, emite una cookie nueva y devuelve lista vacia; consume `PMU_Lectura` en modo solo-lectura; sin escrituras.
 - [X] T021 [US1] Implementar en `media.php` `op=imagen` y `op=miniatura`: `id` `^[a-f0-9]{12}$`, extension `webp|png|jpg|jpeg|gif`, `realpath` dentro de `base`, sin symlinks, bytes con `Content-Type`/`Content-Length`, `Cache-Control: private, max-age=604800`, `ETag`/`304`, `Vary: Cookie`, `nosniff`; errores de imagen sin cuerpo JSON.
 - [X] T022 [P] [US1] Implementar en `assets/biblioteca-pmu.js` `config()` (`rapido`/`revision`/`identidad`) y `pedir()` con el camino liviano (GET sin nonce) y un unico reintento al endpoint actual si el camino liviano falla (T043 agrega modo/identidad/imagen); conservar `enVuelo` y el auto-sanado de la copia envenenada.
-- [ ] T023 [US1] Verificar: `foreach ($f in @('media.php','personalizador-pdf.php','inc/class-pmu-lectura.php','inc/class-pmu-media.php')) { php -l $f }`; `node --check assets/biblioteca-pmu.js`; **extender `tests/media_lectura.php` con el contrato HTTP del endpoint** (304, cookie vencida/alterada, 503 config, 403/404 y errores de imagen) y correrlo; `node tests/biblioteca-contrato.test.js`; `node tests/ficha-pedido.browser.js` (primera apertura y <1 s p95 registrado); checkpoint MVP.
+- [X] T023 [US1] Verificar: `foreach ($f in @('media.php','personalizador-pdf.php','inc/class-pmu-lectura.php','inc/class-pmu-media.php')) { php -l $f }`; `node --check assets/biblioteca-pmu.js`; **extender `tests/media_lectura.php` con el contrato HTTP del endpoint** (304, cookie vencida/alterada, 503 config, 403/404 y errores de imagen) y correrlo; `node tests/biblioteca-contrato.test.js`; `node tests/ficha-pedido.browser.js` (primera apertura y <1 s p95 registrado); checkpoint MVP.
+  - **Hecho 2026-11-22** (Act): `tests/media_lectura.php` paso de 39 a **75 checks** con el
+    contrato HTTP real de `media.php` (200/304/400/403/404/503, `Set-Cookie`, `ETag`,
+    `Cache-Control`, `Vary`, `nosniff`, bytes y miniatura 80x80) sobre `php -S` embebido;
+    `biblioteca-contrato` **81**, `ficha-pedido.browser.js` **53/53** (el lab escucha en
+    `127.0.0.1:8091`; con `localhost` IPv6-only los POST morian y la puerta fallaba: no era
+    regresion). El p95 de SC-001 queda para T049.
 
 ---
 

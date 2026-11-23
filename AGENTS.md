@@ -730,7 +730,7 @@ Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.Full
 php tests/campos_migracion.php   # CRUD de campos v3 (debe decir "CAMPOS V3 OK")
 php tests/certificacion_hoja.php  # Certificacion del sprite (debe decir "CERTIFICACION HOJA OK")
 php tests/catalogo_uploads.php  # Catalogo de uploads (spec 040): carpetas, lock, miniaturas y reconstruccion ("CATALOGO UPLOADS OK")
-php tests/media_lectura.php  # Camino liviano (spec 042): listar, revision, thumb_data, 304, guards, HMAC ("MEDIA LECTURA OK")
+php tests/media_lectura.php  # Camino liviano (spec 042): listar, revision, thumb_data, guards, HMAC y el contrato HTTP de `media.php` (200/304/400/403/404/503, cookies, ETag, Cache-Control) ("MEDIA LECTURA OK")
 node tests/campos-contrato.test.js  # Montaje de campos + cargador (spec 012): "CAMPOS CONTRATO OK"
 node tests/selector-contrato.test.js  # Contrato del selector visual (spec 016): "SELECTOR CONTRATO OK"
 node tests/biblioteca-contrato.test.js  # Biblioteca del comprador (spec 030): "BIBLIOTECA CONTRATO OK (N checks)"
@@ -813,7 +813,7 @@ sin leer el disco del lab.
 $env:NODE_PATH = "$env:TEMP\pmu-pw\node_modules"
 $env:TEXTMUY_CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 node tests/galerias-sprite.browser.js       # 32/32 (mutan/restauran datos del lab)
-node tests/ficha-pedido.browser.js          # 52/52 (crea un pedido de prueba)
+node tests/ficha-pedido.browser.js          # 53/53 (crea un pedido de prueba)
 node tests/aplanado.browser.js              # mockup APLANADO real (spec 036): productor + hueco (D12) + T016
 pwsh C:\wp-lab\arrancar.ps1                 # (si el lab esta apagado)
 ```

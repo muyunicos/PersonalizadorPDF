@@ -3,7 +3,8 @@
  * media_lectura - puerta CLI del lector puro de la biblioteca (spec 042).
  *
  * Corre FUERA de WordPress: verifica catalogo, revision, miniaturas, listado,
- * identidad y credenciales. Uso: php tests/media_lectura.php
+ * identidad y credenciales, y el contrato HTTP de `media.php` (estado, cache,
+ * 304, 403/404 y 503) con un servidor embebido. Uso: php tests/media_lectura.php
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -39,6 +40,140 @@ function imagen_valida($ruta, $w = 300, $h = 200, $formato = 'webp')
         return @imagepng($im, $ruta);
     }
     return @imagewebp($im, $ruta, 80);
+}
+/** Peticion HTTP GET del arnes: devuelve status, cabeceras y cuerpo (sin excepciones). */
+function pmu_http_get($url, array $cookies = [], array $extra = [])
+{
+    $lineas = [];
+    foreach ($extra as $clave => $valor) {
+        $lineas[] = $clave . ': ' . $valor;
+    }
+    if (!empty($cookies)) {
+        $pares = [];
+        foreach ($cookies as $clave => $valor) {
+            $pares[] = $clave . '=' . $valor;
+        }
+        $lineas[] = 'Cookie: ' . implode('; ', $pares);
+    }
+    $ctx = stream_context_create(['http' => [
+        'method' => 'GET',
+        'header' => implode("\r\n", $lineas),
+        'ignore_errors' => true,
+        'timeout' => 10,
+    ]]);
+    $http_response_header = [];
+    $cuerpo = @file_get_contents($url, false, $ctx);
+    $estado = 0;
+    $cabeceras = [];
+    foreach ($http_response_header as $linea) {
+        if (preg_match('#^HTTP/\S+\s+(\d{3})#', (string)$linea, $m) === 1) {
+            $estado = (int)$m[1];
+            continue;
+        }
+        $pos = strpos((string)$linea, ':');
+        if ($pos !== false) {
+            $cabeceras[strtolower(trim(substr((string)$linea, 0, $pos)))] = trim(substr((string)$linea, $pos + 1));
+        }
+    }
+    return [
+        'status' => $estado,
+        'headers' => $cabeceras,
+        'body' => $cuerpo === false ? '' : $cuerpo,
+        'json' => $cuerpo === false ? null : json_decode($cuerpo, true),
+    ];
+}
+
+/**
+ * Arranca `php -S` con un router minimo que sirve el `media.php` real (sin WordPress).
+ * $script_filename en null usa el endpoint real; una ruta apunta SCRIPT_FILENAME a otro
+ * lado (para probar el 503 de config ausente).
+ */
+function pmu_http_servidor($base, $raiz, array $env_extra, $nombre = 'router-media.php', $script_filename = null)
+{
+    $router = $base . DIRECTORY_SEPARATOR . $nombre;
+    $destino = $script_filename === null
+        ? $raiz . DIRECTORY_SEPARATOR . 'media.php'
+        : $script_filename;
+    $codigo = "<?php\n"
+        . '$_SERVER[\'SCRIPT_NAME\'] = \'/media.php\';' . "\n"
+        . '$_SERVER[\'SCRIPT_FILENAME\'] = ' . var_export($destino, true) . ';' . "\n"
+        . 'require ' . var_export($raiz . DIRECTORY_SEPARATOR . 'media.php', true) . ';' . "\n";
+    if (@file_put_contents($router, $codigo) === false) {
+        return ['ok' => false, 'error' => 'no se pudo escribir el router'];
+    }
+    $sock = @stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+    if (!$sock) {
+        return ['ok' => false, 'error' => 'sin puerto libre: ' . $errstr];
+    }
+    $nombreSock = (string)@stream_socket_get_name($sock, false);
+    fclose($sock);
+    $partes = explode(':', $nombreSock);
+    $puerto = (int)end($partes);
+    if ($puerto <= 0) {
+        return ['ok' => false, 'error' => 'puerto libre no detectado (' . $nombreSock . ')'];
+    }
+    $log = $base . DIRECTORY_SEPARATOR . $nombre . '.log';
+    $env = [
+        'PATH' => (string)getenv('PATH'),
+        'SystemRoot' => (string)getenv('SystemRoot'),
+        'windir' => (string)getenv('windir'),
+        'TEMP' => (string)getenv('TEMP'),
+        'TMP' => (string)getenv('TMP'),
+        'PMU_ARNES_RAIZ' => $raiz,
+    ];
+    foreach ($env_extra as $clave => $valor) {
+        $env[$clave] = $valor;
+    }
+    $cmd = [PHP_BINARY, '-S', '127.0.0.1:' . $puerto, $router];
+    $descrs = [1 => ['file', $log, 'a'], 2 => ['file', $log, 'a']];
+    $proc = @proc_open($cmd, $descrs, $pipes, $base, $env);
+    if (!is_resource($proc)) {
+        return ['ok' => false, 'error' => 'proc_open fallo (¿PHP disponible?)'];
+    }
+    return [
+        'ok' => true,
+        'proc' => $proc,
+        'url' => 'http://127.0.0.1:' . $puerto . '/media.php',
+        'log' => $log,
+    ];
+}
+
+/** Espera a que el servidor responda `op=ping`. Devuelve '' si arranco, o la causa. */
+function pmu_http_esperar($srv, $intentos = 120)
+{
+    for ($i = 0; $i < $intentos; $i++) {
+        $r = pmu_http_get($srv['url'] . '?op=ping');
+        if ($r['status'] === 200) {
+            return '';
+        }
+        usleep(100000);
+    }
+    $cola = '';
+    if (!empty($srv['log']) && is_file($srv['log'])) {
+        $cola = str_replace(["\r", "\n"], ' | ', (string)@file_get_contents($srv['log']));
+        $cola = substr(trim($cola), -400);
+    }
+    return 'no respondio (log: ' . ($cola !== '' ? $cola : 'vacio') . ')';
+}
+
+/** Corta el servidor de prueba. */
+function pmu_http_parar($srv)
+{
+    if (empty($srv['proc']) || !is_resource($srv['proc'])) {
+        return;
+    }
+    $estado = @proc_get_status($srv['proc']);
+    $pid = is_array($estado) && !empty($estado['pid']) ? (int)$estado['pid'] : 0;
+    if ($pid > 0 && DIRECTORY_SEPARATOR === '\\') {
+        // En Windows `php -S` deja un proceso hijo sirviendo: se corta el arbol.
+        $salida = !empty($srv['log']) ? $srv['log'] : 'nul';
+        $kill = @proc_open(['taskkill', '/F', '/T', '/PID', (string)$pid], [1 => ['file', $salida, 'a'], 2 => ['file', $salida, 'a']], $kp);
+        if (is_resource($kill)) {
+            @proc_close($kill);
+        }
+    }
+    @proc_terminate($srv['proc']);
+    @proc_close($srv['proc']);
 }
 
 @mkdir($BASE, 0777, true);
@@ -145,6 +280,143 @@ try {
     check('directorio cliente', PMU_Lectura::directorio_identidad($BASE, 7, '') === realpath($BASE) . DIRECTORY_SEPARATOR . 'orders' . DIRECTORY_SEPARATOR . '7' . DIRECTORY_SEPARATOR . 'uploads');
     check('directorio invitado', PMU_Lectura::directorio_identidad($BASE, 0, 'abc12345') === realpath($BASE) . DIRECTORY_SEPARATOR . 'tmp' . DIRECTORY_SEPARATOR . 'sesion-abc12345' . DIRECTORY_SEPARATOR . 'uploads');
     check('directorio con sid invalido', PMU_Lectura::directorio_identidad($BASE, 0, '../x') === '');
+    /* ---- Contrato HTTP de media.php (servidor embebido, sin WordPress) ---- */
+    $raizPlugin = dirname(__DIR__);
+    $carpetaHttp = $BASE . DIRECTORY_SEPARATOR . 'tmp' . DIRECTORY_SEPARATOR . 'sesion-abc12345' . DIRECTORY_SEPARATOR . 'uploads';
+    @mkdir($carpetaHttp, 0777, true);
+    $hid1 = 'aabbccddeeff';
+    $hid2 = '112233445566';
+    $hruta1 = $carpetaHttp . DIRECTORY_SEPARATOR . $hid1 . '.webp';
+    $hruta2 = $carpetaHttp . DIRECTORY_SEPARATOR . $hid2 . '.png';
+    copy($ruta1, $hruta1);
+    copy($ruta2, $hruta2);
+    file_put_contents($carpetaHttp . DIRECTORY_SEPARATOR . 'uploads.json', json_encode([
+        'version' => 1,
+        'items' => [
+            $hid1 => ['id' => $hid1, 'ext' => 'webp', 'bytes' => filesize($hruta1), 'w' => 300, 'h' => 200, 'creado' => 100, 'ultimo_uso' => 100, 'recetas' => []],
+            $hid2 => ['id' => $hid2, 'ext' => 'png', 'bytes' => filesize($hruta2), 'w' => 200, 'h' => 300, 'creado' => 200, 'ultimo_uso' => 200, 'recetas' => []],
+        ],
+    ]));
+    $carpetaCli = $BASE . DIRECTORY_SEPARATOR . 'orders' . DIRECTORY_SEPARATOR . '7' . DIRECTORY_SEPARATOR . 'uploads';
+    @mkdir($carpetaCli, 0777, true);
+    $cid = '0123456789ab';
+    $cruta = $carpetaCli . DIRECTORY_SEPARATOR . $cid . '.png';
+    copy($ruta2, $cruta);
+    file_put_contents($carpetaCli . DIRECTORY_SEPARATOR . 'uploads.json', json_encode([
+        'version' => 1,
+        'items' => [
+            $cid => ['id' => $cid, 'ext' => 'png', 'bytes' => filesize($cruta), 'w' => 200, 'h' => 300, 'creado' => 50, 'ultimo_uso' => 50, 'recetas' => []],
+        ],
+    ]));
+    $mediaDir = $BASE . DIRECTORY_SEPARATOR . '.media';
+    @mkdir($mediaDir, 0777, true);
+    $secreto = str_repeat('a', 64);
+    file_put_contents($mediaDir . DIRECTORY_SEPARATOR . 'config.json', json_encode([
+        'version' => 1,
+        'base' => realpath($BASE),
+        'secret' => $secreto,
+        'creado' => time(),
+    ]));
+    $srv = pmu_http_servidor($BASE, $raizPlugin, ['PMU_MEDIA_CONFIG' => $mediaDir . DIRECTORY_SEPARATOR . 'config.json']);
+    if (empty($srv['ok'])) {
+        check('servidor de prueba de media.php arranca', false, (string)($srv['error'] ?? ''));
+    } else {
+        $falloArranque = pmu_http_esperar($srv);
+        check('servidor de prueba de media.php arranca', $falloArranque === '', $falloArranque);
+        if ($falloArranque === '') {
+            $url = $srv['url'];
+            $ro = pmu_http_get($url . '?op=ping');
+            check('HTTP ping = 200', $ro['status'] === 200, 'status=' . $ro['status']);
+            check('HTTP ping responde ok', is_array($ro['json']) && !empty($ro['json']['data']['ok']));
+
+            $ro = pmu_http_get($url . '?op=listar');
+            check('HTTP listar sin identidad = 200', $ro['status'] === 200, 'status=' . $ro['status']);
+            check('HTTP listar sin identidad emite pmu_sid', strpos((string)($ro['headers']['set-cookie'] ?? ''), 'pmu_sid=') !== false, (string)($ro['headers']['set-cookie'] ?? 'sin cookie'));
+            check('HTTP listar sin identidad = lista vacia', is_array($ro['json']) && isset($ro['json']['data']['fotos']) && count((array)$ro['json']['data']['fotos']) === 0);
+
+            $ro = pmu_http_get($url . '?op=listar', ['pmu_sid' => 'abc12345']);
+            check('HTTP listar del invitado = 200', $ro['status'] === 200, 'status=' . $ro['status']);
+            $fotos = is_array($ro['json']) ? (array)($ro['json']['data']['fotos'] ?? []) : [];
+            check('HTTP listar del invitado trae sus 2 fotos', count($fotos) === 2, 'n=' . count($fotos));
+            $revision = (string)($ro['json']['data']['revision'] ?? '');
+            check('HTTP listar publica revision de 12 hex', strlen($revision) === 12 && ctype_xdigit($revision), $revision !== '' ? $revision : 'vacia');
+            check('HTTP listar es JSON y no cachea', strpos((string)($ro['headers']['content-type'] ?? ''), 'application/json') !== false && strtolower((string)($ro['headers']['cache-control'] ?? '')) === 'no-store', (string)($ro['headers']['cache-control'] ?? ''));
+            $conThumb = 0;
+            foreach ($fotos as $foto) {
+                if (strpos((string)($foto['thumb_data'] ?? ''), 'data:image/webp;base64,') === 0) {
+                    $conThumb++;
+                }
+            }
+            check('HTTP listar embebe miniaturas', $conThumb >= 1, 'conThumb=' . $conThumb);
+            check('HTTP listar trae las recetas por contexto', count($fotos) === 2 && array_key_exists('recetas', $fotos[0]) && array_key_exists('recetas', $fotos[1]));
+
+            $ro = pmu_http_get($url . '?op=listar&desde=' . rawurlencode($revision), ['pmu_sid' => 'abc12345']);
+            check('HTTP listar con desde = sin_cambios', is_array($ro['json']) && !empty($ro['json']['data']['sin_cambios']) && count((array)($ro['json']['data']['fotos'] ?? [])) === 0, 'status=' . $ro['status']);
+            $bytes1 = (string)file_get_contents($hruta1);
+            $ro = pmu_http_get($url . '?op=imagen&id=' . $hid1, ['pmu_sid' => 'abc12345']);
+            check('HTTP imagen = 200', $ro['status'] === 200, 'status=' . $ro['status']);
+            check('HTTP imagen sirve los bytes del original', $ro['body'] === $bytes1, 'bytes=' . strlen($ro['body']));
+            check('HTTP imagen es image/webp', strpos((string)($ro['headers']['content-type'] ?? ''), 'image/webp') !== false, (string)($ro['headers']['content-type'] ?? ''));
+            check('HTTP imagen cachea 7 dias', strpos((string)($ro['headers']['cache-control'] ?? ''), 'max-age=604800') !== false, (string)($ro['headers']['cache-control'] ?? ''));
+            check('HTTP imagen varia por cookie', strpos((string)($ro['headers']['vary'] ?? ''), 'Cookie') !== false, (string)($ro['headers']['vary'] ?? ''));
+            check('HTTP imagen manda nosniff', (string)($ro['headers']['x-content-type-options'] ?? '') === 'nosniff');
+            $etag1 = '"' . sha1((string)@filemtime($hruta1) . '-' . (string)@filesize($hruta1)) . '"';
+            $ro = pmu_http_get($url . '?op=imagen&id=' . $hid1, ['pmu_sid' => 'abc12345'], ['If-None-Match' => $etag1]);
+            check('HTTP imagen con If-None-Match = 304', $ro['status'] === 304, 'status=' . $ro['status'] . ' etag=' . $etag1);
+
+            $ro = pmu_http_get($url . '?op=miniatura&id=' . $hid1, ['pmu_sid' => 'abc12345']);
+            check('HTTP miniatura = 200', $ro['status'] === 200, 'status=' . $ro['status']);
+            check('HTTP miniatura es image/webp', strpos((string)($ro['headers']['content-type'] ?? ''), 'image/webp') !== false, (string)($ro['headers']['content-type'] ?? ''));
+            $dimMini = @getimagesizefromstring($ro['body']);
+            check('HTTP miniatura mide 80x80', is_array($dimMini) && (int)$dimMini[0] === 80 && (int)$dimMini[1] === 80);
+            $etagMini = '"' . sha1($ro['body']) . '"';
+            $ro = pmu_http_get($url . '?op=miniatura&id=' . $hid1, ['pmu_sid' => 'abc12345'], ['If-None-Match' => $etagMini]);
+            check('HTTP miniatura con If-None-Match = 304', $ro['status'] === 304, 'status=' . $ro['status']);
+
+            $ro = pmu_http_get($url . '?op=imagen&id=' . $hid2, ['pmu_sid' => 'abc12345']);
+            check('HTTP imagen png = 200 image/png', $ro['status'] === 200 && strpos((string)($ro['headers']['content-type'] ?? ''), 'image/png') !== false, 'status=' . $ro['status'] . ' ct=' . (string)($ro['headers']['content-type'] ?? ''));
+
+            $ro = pmu_http_get($url . '?op=listar', ['pmu_uid' => PMU_Lectura::firmar_uid(7, time() + 3600, $secreto)]);
+            $fotosCli = is_array($ro['json']) ? (array)($ro['json']['data']['fotos'] ?? []) : [];
+            check('HTTP listar del cliente = 200 y su foto', $ro['status'] === 200 && count($fotosCli) === 1 && (string)($fotosCli[0]['id'] ?? '') === $cid, 'status=' . $ro['status'] . ' n=' . count($fotosCli));
+
+            $ro = pmu_http_get($url . '?op=imagen&id=ZZZ', ['pmu_sid' => 'abc12345']);
+            check('HTTP imagen con id invalido = 400', $ro['status'] === 400, 'status=' . $ro['status']);
+            $ro = pmu_http_get($url . '?op=imagen&id=ffffffffffff', ['pmu_sid' => 'abc12345']);
+            check('HTTP imagen inexistente = 404', $ro['status'] === 404, 'status=' . $ro['status']);
+            $ro = pmu_http_get($url . '?op=otra', ['pmu_sid' => 'abc12345']);
+            check('HTTP op desconocida = 400 media:op', $ro['status'] === 400 && (string)($ro['json']['data'] ?? '') === 'media:op', 'status=' . $ro['status']);
+
+            $mala = ['pmu_uid' => 'v1.7.' . (time() + 3600) . '.deadbeef'];
+            $ro = pmu_http_get($url . '?op=listar', $mala);
+            check('HTTP credencial alterada = 403 media:identidad', $ro['status'] === 403 && (string)($ro['json']['data'] ?? '') === 'media:identidad' && !empty($ro['json']['fallback']), 'status=' . $ro['status']);
+            $ro = pmu_http_get($url . '?op=listar', ['pmu_sid' => '../x']);
+            check('HTTP sid invalido = 403', $ro['status'] === 403, 'status=' . $ro['status']);
+            $ro = pmu_http_get($url . '?op=imagen&id=' . $hid1, $mala);
+            check('HTTP imagen con credencial alterada = 403', $ro['status'] === 403, 'status=' . $ro['status']);
+        }
+        pmu_http_parar($srv);
+    }
+    $candidato = dirname(dirname($raizPlugin)) . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'pmu' . DIRECTORY_SEPARATOR . '.media' . DIRECTORY_SEPARATOR . 'config.json';
+    if (is_file($candidato)) {
+        check('HTTP sin config = 503 (omitido: existe ' . $candidato . ')', true);
+    } else {
+        $srv503 = pmu_http_servidor($BASE, $raizPlugin, [], 'router-media-503.php', $BASE . DIRECTORY_SEPARATOR . 'no-existe' . DIRECTORY_SEPARATOR . 'media.php');
+        if (empty($srv503['ok'])) {
+            check('servidor de prueba sin config arranca', false, (string)($srv503['error'] ?? ''));
+        } else {
+            $fallo503 = pmu_http_esperar($srv503);
+            check('servidor de prueba sin config arranca', $fallo503 === '', $fallo503);
+            if ($fallo503 === '') {
+                $ro = pmu_http_get($srv503['url'] . '?op=ping');
+                check('HTTP ping sin config = 200', $ro['status'] === 200, 'status=' . $ro['status']);
+                $ro = pmu_http_get($srv503['url'] . '?op=listar');
+                check('HTTP listar sin config = 503 media:config', $ro['status'] === 503 && (string)($ro['json']['data'] ?? '') === 'media:config', 'status=' . $ro['status'] . ' data=' . (string)($ro['json']['data'] ?? ''));
+                check('HTTP listar sin config pide respaldo', !empty($ro['json']['fallback']));
+            }
+            pmu_http_parar($srv503);
+        }
+    }
 } catch (\Throwable $e) {
     $mal++;
     echo '  FAIL excepcion: ' . $e->getMessage() . "\n";

@@ -8,7 +8,11 @@
 
 ## Phase 1 — Setup
 
-- [ ] T001 Confirmar el baseline de puertas en verde (`php -l`, `node --check` de los 5 assets, `tests/selector-contrato.test.js`, `tests/biblioteca-contrato.test.js`, `tests/campos-contrato.test.js`, `php tests/media_lectura.php`) y anotar el conteo en el commit.
+- [X] T001 Confirmar el baseline de puertas en verde (`php -l`, `node --check` de los 5 assets, `tests/selector-contrato.test.js`, `tests/biblioteca-contrato.test.js`, `tests/campos-contrato.test.js`, `php tests/media_lectura.php`) y anotar el conteo en el commit.
+  - **Hecho 2026-11-22** (Act): baseline en verde — `php -l` de `personalizador-pdf.php`,
+    `media.php`, `admin/`, `engine/` e `inc/`; `node --check` de los 5 assets;
+    `selector-contrato` (F0-F5), `biblioteca-contrato` **81**, `campos-contrato` y
+    `media_lectura` **75** (total v4.36.0).
 - [ ] T002 Agregar a `tests/selector-contrato.test.js` los helpers de prueba para una receta por contexto (`{gid}-{w}x{h}-{phsize}`) y un doble de `declararReceta`.
 - [ ] T003 Agregar a `tests/biblioteca-contrato.test.js` el fixture de una biblioteca con 1, 3 y 12 fotos para probar el chip "Ver todas (N)".
 - [X] T004 Documentar en `specs/043-editor-imagen-biblioteca/contracts/editor-imagen.md` cualquier ajuste de firma que surja al implementar (mantener el contrato como fuente de verdad).

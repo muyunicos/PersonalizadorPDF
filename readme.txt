@@ -78,7 +78,7 @@ Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}
 * El editor suma **Eliminar** y **Ver en grande** (el visor del campo sigue accesible).
 * Sin IndexedDB: la imagen se sirve con la cache HTTP de `media.php` (7 dias + validacion).
 * Puertas: `selector-contrato`, `biblioteca-contrato` 81, `texto_puente` (fotos/biblioteca),
-  `campos-contrato`, `media_lectura` 39, `ficha-pedido` 53/53.
+  `campos-contrato`, `media_lectura` 75, `ficha-pedido` 53/53.
 
 = 4.35.0 =
 * Spec 042 (lectura rapida): la galeria del comprador deja de pagar el arranque completo de WordPress.
