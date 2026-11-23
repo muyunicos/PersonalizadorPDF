@@ -1554,7 +1554,16 @@
         global.PMU_FICHA = global.PMU_FICHA || {};
         if (url) {
             global.PMU_FICHA.recortes = global.PMU_FICHA.recortes || {};
+            var recorteAnterior = String(global.PMU_FICHA.recortes[clave] || '');
             global.PMU_FICHA.recortes[clave] = String(url);
+            // Spec 043 (fix 2026-11-22): si el recorte cambio (el comprador
+            // reencuadro una foto existente), el memo `id -> url` tiene que caer:
+            // si no, la miniatura y la vista previa siguen dibujando la foto SIN
+            // recortar hasta que se recarga la pagina.
+            if (recorteAnterior !== String(url)
+                && global.PMU_API && typeof global.PMU_API.invalidarUrl === 'function') {
+                global.PMU_API.invalidarUrl(clave);
+            }
         }
         if (receta) {
             global.PMU_FICHA.recetas = global.PMU_FICHA.recetas || {};
@@ -2087,6 +2096,11 @@
             urlsResueltas[String(k)] = String(ficha.urls[k]);
         });
         api.anotarUrl = anotarUrl;
+        // Spec 043 (fix 2026-11-22): el memo `id -> url` se puede invalidar cuando
+        // llega un recorte nuevo (la foto cambio de encuadre en esta pestana).
+        api.invalidarUrl = function (id) {
+            if (id) { delete urlsResueltas[String(id)]; }
+        };
         api.urlDeRespaldo = function (id) {
             var m = (window.PMU_FICHA && window.PMU_FICHA.urls_respaldo) || {};
             var u = String(m[String(id || '')] || '');

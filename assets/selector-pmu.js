@@ -1885,27 +1885,43 @@
             var puedeReusar = (typeof this.config.usarExistente === 'function');
             var puedeDeclarar = (typeof this.config.declararReceta === 'function');
             if (iguales || puedeDeclarar || puedeReusar) {
-                var usar = (typeof this.config.usarExistente === 'function')
-                    ? this.config.usarExistente(this._bib.id, paramsBib, this._bib.url)
-                    : Promise.resolve(this._bib.id);
-                if (puedeDeclarar) {
-                    try { this.config.declararReceta(this._bib.id, paramsBib); } catch (e) { /* best-effort */ }
-                }
                 var okBib = this.raiz ? this.raiz.querySelector('.spmu-ok') : null;
                 if (okBib) { okBib.disabled = true; okBib.textContent = 'Usando...'; }
-                Promise.resolve(usar).then(function () {
-                    if (okBib) { okBib.disabled = false; }
-                    if (typeof self.onSelectCallback === 'function') {
-                        self.onSelectCallback(self._bib.url || '', {
-                            width: self.config.finalW,
-                            height: self.config.finalH
-                        });
+                // Spec 043 (fix 2026-11-22): con la receta SIN CAMBIOS se reutiliza
+                // la URL original (0 trabajo). Si el comprador REENCUADRO, se compone
+                // el recorte en el navegador (0 bytes) y se publica su objectURL: la
+                // miniatura del campo y la vista previa tienen que mostrar el encuadre
+                // NUEVO, no la foto original.
+                var publicar = function (urlFinal) {
+                    var usar = (typeof self.config.usarExistente === 'function')
+                        ? self.config.usarExistente(self._bib.id, paramsBib, urlFinal || self._bib.url)
+                        : Promise.resolve(self._bib.id);
+                    if (puedeDeclarar) {
+                        try { self.config.declararReceta(self._bib.id, paramsBib); } catch (e) { /* best-effort */ }
                     }
-                    self.close();
-                }, function (err) {
-                    if (okBib) { okBib.disabled = false; self._actualizarPrimario(); }
-                    self._fallo('UPLOAD_FAILED', (err && err.message) || 'No se pudo usar la imagen');
-                });
+                    Promise.resolve(usar).then(function () {
+                        if (okBib) { okBib.disabled = false; }
+                        if (typeof self.onSelectCallback === 'function') {
+                            self.onSelectCallback(urlFinal || self._bib.url || '', {
+                                width: self.config.finalW,
+                                height: self.config.finalH
+                            });
+                        }
+                        self.close();
+                    }, function (err) {
+                        if (okBib) { okBib.disabled = false; self._actualizarPrimario(); }
+                        self._fallo('UPLOAD_FAILED', (err && err.message) || 'No se pudo usar la imagen');
+                    });
+                };
+                if (iguales) { publicar(self._bib.url); return; }
+                var lienzoEd = self._generarLienzoSalida();
+                if (lienzoEd && lienzoEd.toBlob && typeof lienzoAWebP === 'function') {
+                    lienzoAWebP(lienzoEd, 0.85, function (blobEd) {
+                        publicar(blobEd ? URL.createObjectURL(blobEd) : self._bib.url);
+                    });
+                } else {
+                    publicar(self._bib.url);
+                }
                 return;
             }
         }

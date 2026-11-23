@@ -650,9 +650,14 @@ async function precondiciones(page) {
             await esperar(1200);
         };
         const postUploads = () => log.posts.filter((p) => p === 'pmu_uploads').length;
+        const srcMini = () => page.evaluate(() => {
+            const m = document.querySelector('[data-pmu-panel] .cpmu-mini img');
+            return m ? String(m.src) : null;
+        });
 
         // E1: editar el encuadre de una foto existente y guardar = 0 bytes.
         const origAntes = contarOriginales();
+        const miniAntes = await srcMini();
         await abrirEditor();
         const zoom0 = await zoomActual();
         await moverZoom(20);
@@ -662,6 +667,17 @@ async function precondiciones(page) {
         await esperar(2500);
         await subirOtra(page);
         await cerrarOverlays(page);
+        const miniDespues = await srcMini();
+        const recorteUrl = await page.evaluate(() => {
+            const r = (window.PMU_FICHA && PMU_FICHA.recortes) || {};
+            const k = Object.keys(r)[0];
+            return k ? String(r[k]) : null;
+        }).catch(() => null);
+        check('E1 (043/US1): la miniatura del campo muestra el recorte NUEVO (no el original)',
+            !!miniDespues && miniDespues !== miniAntes && /^blob:/.test(miniDespues),
+            miniAntes + ' -> ' + miniDespues);
+        check('E1 (043/US1): la vista previa recibe el recorte recien compuesto (blob:)',
+            !!recorteUrl && /^blob:/.test(recorteUrl), recorteUrl);
         check('E1 (043/US1): guardar una existente NO sube bytes (0 POST pmu_uploads)',
             postUploads() === uploadsAntes, uploadsAntes + ' -> ' + postUploads());
         check('E1 (043/SC-001): no aparecio ningun archivo nuevo en originales',

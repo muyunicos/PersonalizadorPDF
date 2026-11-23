@@ -25,6 +25,7 @@ const VENDOR = path.join(RAIZ, 'assets', 'vendor', 'cropper');
 const plugin = fs.readFileSync(path.join(RAIZ, 'personalizador-pdf.php'), 'utf8');
 const selector = fs.readFileSync(path.join(RAIZ, 'assets', 'selector-pmu.js'), 'utf8');
 const cargador = fs.readFileSync(path.join(RAIZ, 'assets', 'cargador-pmu.js'), 'utf8');
+const tienda = fs.readFileSync(path.join(RAIZ, 'assets', 'tienda.js'), 'utf8');
 
 console.log('== F0: Cropper.js RETIRADO (spec 021) ==');
 check('el vendor assets/vendor/cropper/ ya no existe', !fs.existsSync(VENDOR));
@@ -194,10 +195,11 @@ console.log('\n== F2e: imagenes en WebP con fallback por firma (spec 026) ==');
 const tiendaSrc = fs.readFileSync(path.join(RAIZ, 'assets', 'tienda.js'), 'utf8');
 check('Spec 026: el selector emite WebP con fallback a PNG (solo si el servidor lo soporta)',
   typeof puro.esWebP === 'function'
-  // Spec 035 (T014/D2): la codificacion se parte en DOS llamadas a q0.85 — el
-  // recorte (vista previa local) y el ORIGINAL acotado (lo que viaja al servidor).
+  // Spec 035 (T014/D2): la codificacion se parte en TRES llamadas a q0.85 — el
+  // recorte (vista previa local), el ORIGINAL acotado (lo que viaja al servidor) y
+  // el recorte de una foto EXISTENTE reencuadrada (spec 043, fix 2026-11-22: 0 bytes).
   && /lienzoAWebP\(lienzo, 0\.85, terminar\)/.test(selSrc) === false
-  && (selSrc.match(/lienzoAWebP\([^,]+, 0\.85,/g) || []).length === 2
+  && (selSrc.match(/lienzoAWebP\([^,]+, 0\.85,/g) || []).length === 3
   && /prototype\._lienzoOriginal = function/.test(selSrc)
   && /servidorSoportaWebP\(\) \? 'image\/webp' : 'image\/png', q\);/.test(selSrc)
   && /webp_soportado === false/.test(selSrc)
@@ -600,6 +602,13 @@ check('spec 047 (T017): la validacion por extension tampoco acepta bmp/svg',
   /var EXTS = \['png', 'jpg', 'jpeg', 'gif', 'webp'\]/.test(selector));
 check('spec 047 (T016): el lote deduplica repetidos y avisa',
   /repetidos/.test(cargador) && /omitio .*repetido/.test(cargador));
+
+check('spec 043 (fix): el selector compone el recorte al reencuadrar una existente (0 bytes)',
+  /lienzoAWebP\(lienzoEd, 0\.85,/.test(selector) && /urlFinal \|\| self\._bib\.url/.test(selector));
+check('spec 043 (fix): tienda invalida el memo de URLs cuando llega un recorte nuevo',
+  /invalidarUrl/.test(tienda) && /PMU_API\.invalidarUrl\(clave\)/.test(tienda));
+check('spec 043 (fix): la miniatura se repinta cuando la URL cambio (no se congela)',
+  /_pmuMiniUrl/.test(cargador) && /pintada === String\(url\)/.test(cargador));
 
 console.log('');
 if (fallos) {

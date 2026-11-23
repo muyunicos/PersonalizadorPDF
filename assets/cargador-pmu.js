@@ -872,11 +872,13 @@
     CargadorPMU.prototype._pintarMini = function (mini, id) {
         var self = this;
         if (!this.config.urlDe && !this._urls[String(id)]) { return; }
-        if (mini._pmuMiniImg) { return; }
+        var pintada = String(mini._pmuMiniUrl || '');
         var conocida = this._urls[String(id)] || '';
         var pedir = conocida || (this.config.urlDe ? this.config.urlDe(id) : '');
         Promise.resolve(pedir).then(function (url) {
-            if (!url || mini._pmuMiniImg) { return; }
+            if (!url) { return; }
+            // Spec 043 (fix 2026-11-22): si la URL no cambio, no se repinta.
+            if (pintada === String(url)) { return; }
             var doc = mini.ownerDocument || global.document;
             var img = doc.createElement('img');
             img.alt = '';
@@ -890,6 +892,7 @@
                 };
             }
             img.src = url;
+            mini._pmuMiniUrl = String(url);
             mini._pmuMiniImg = true;
             mini.innerHTML = '';
             mini.appendChild(img);
