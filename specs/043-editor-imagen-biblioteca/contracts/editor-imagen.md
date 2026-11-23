@@ -30,8 +30,8 @@ aplicado; no puede pedir archivo.
 params = { w, h, modo, escala, ox, oy, rot, fondo, gid, phsize }
 ```
 
-- La clave del contexto es `"{gid}-{w}x{h}-{phsize}"`.
-- Orden de resolucion: catalogo (`uploads.json recetas[clave]`) → memoria del cargador →
+- La clave del contexto es `"{aspecto}-{familia}-{area}"` (spec 047; la vieja se ignora).
+- Orden de resolucion: memoria del cargador → catalogo (`uploads.json recetas[clave]`) →
   valores por defecto del campo.
 - Si la receta no aplica a la geometria actual, se descarta y se abre con defaults (aviso no
   bloqueante).
@@ -51,6 +51,8 @@ selector.config = {
 | Existente, receta identica | firma de `params` igual a la previa | `usarExistente` (0 bytes) |
 | Existente, receta distinta | firma distinta | `usarExistente` + `declararReceta` (0 bytes) |
 | Nuevo archivo | sin `_bib.id` | `subirAsync` (bytes) |
+
+Nota: "0 bytes" se refiere a la red y al catalogo. `usarExistente` se llama siempre que el integrador lo provee; con receta identica es un no-op local.
 
 **Obligatorio**: `CargadorPMU` **debe** cablear `declararReceta`. Sin el, el selector cae a subir
 bytes (el bug que cierra esta spec).

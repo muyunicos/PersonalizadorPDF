@@ -13,7 +13,7 @@
     `media.php`, `admin/`, `engine/` e `inc/`; `node --check` de los 5 assets;
     `selector-contrato` (F0-F5), `biblioteca-contrato` **81**, `campos-contrato` y
     `media_lectura` **75** (total v4.36.0).
-- [ ] T002 Agregar a `tests/selector-contrato.test.js` los helpers de prueba para una receta por contexto (`{gid}-{w}x{h}-{phsize}`) y un doble de `declararReceta`.
+- [ ] T002 Agregar a `tests/selector-contrato.test.js` los helpers de prueba para una receta por contexto (`{aspecto}-{familia}-{area}`, spec 047) y un doble de `declararReceta`.
 - [ ] T003 Agregar a `tests/biblioteca-contrato.test.js` el fixture de una biblioteca con 1, 3 y 12 fotos para probar el chip "Ver todas (N)".
 - [X] T004 Documentar en `specs/043-editor-imagen-biblioteca/contracts/editor-imagen.md` cualquier ajuste de firma que surja al implementar (mantener el contrato como fuente de verdad).
 
@@ -34,11 +34,13 @@
 **Goal**: guardar una receta nueva sobre una foto existente = **0 bytes**.
 **Independent test**: `php tests/texto_puente.php receta_sin_bytes` + `node tests/selector-contrato.test.js`.
 
-- [X] T014 [P] [US1] Test en `tests/selector-contrato.test.js`: (a) existente con receta distinta -> `declararReceta` llamado y `subirAsync` **no** llamado; (b) existente **sin cambios** -> ninguna de las tres funciones (`subirAsync`, `usarExistente`, `declararReceta`) y sin POST `fotos` (FR-005).
+- [X] T014 [P] [US1] Test en `tests/selector-contrato.test.js`: (a) existente con receta distinta -> `declararReceta` llamado y `subirAsync` **no** llamado; (b) existente **sin cambios** -> 0 POST `fotos` y 0 bytes; puede llamar `usarExistente` como no-op local, nunca `subirAsync` ni escritura de catalogo (FR-005).
 - [X] T015 [US1] En `assets/selector-pmu.js` (`_aceptar`), unificar la condicion: con `_bib.id` y `puedeDeclarar`, usar `usarExistente` + `declararReceta` (nunca caer al upload si falta solo una).
 - [X] T016 [US1] En `assets/cargador-pmu.js`, `declararReceta` guarda `recetas[id] = params` y dispara `onRecorte(id, url, params)`.
 - [X] T017 [US1] En `assets/cargador-pmu.js`, crear `_recetaDeContexto(id, ranura)` (memoria -> lista -> defaults) y usarla al abrir desde la biblioteca; pasar el resultado como `params`.
 - [X] T018 [US1] Gate: `node tests/selector-contrato.test.js` y `php tests/texto_puente.php receta` + `fotos` (las aserciones de FR-004/FR-005 viven en la fase `fotos`) en verde.
+
+- [ ] T045 [P] Test en `tests/selector-contrato.test.js`: inyectar una accion extra en `config.acciones` y comprobar que el modal la pinta sin reescribir el layout (FR-017).
 
 ## Phase 4 — US2: La miniatura del campo abre el editor (P1)
 
@@ -131,6 +133,6 @@ diseno se desvio del plan.
 ## Format validation
 
 - Todas las tareas siguen `- [ ] TNNN [P?] [US?] descripcion con ruta`.
-- IDs unicos y secuenciales (T001-T044).
+- IDs unicos y secuenciales (T001-T045).
 - Tareas de US con etiqueta `[USn]`; setup, fundacional y polish sin etiqueta.
 - Sin marcadores pendientes ni placeholders.

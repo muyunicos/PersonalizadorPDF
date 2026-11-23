@@ -25,11 +25,12 @@ en el catalogo (`uploads.json recetas[clave]`). Solo falta la pieza del cliente.
 
 ## R2 — Donde vive la receta vigente de un contexto
 
-**Decision**: catalogo del comprador -> memoria del cargador -> valores por defecto.
+**Decision**: memoria del cargador -> catalogo del comprador -> valores por defecto.
 
 **Evidencia**: `PMU_Lectura::listar()` devuelve `recetas` por foto
-(`inc/class-pmu-lectura.php:239`) con la clave `{gid}-{w}x{h}-{phsize}`
-(`inc/class-pmu-sesion.php:607`); el respaldo devuelve el mismo mapa. `CargadorPMU.recetas[id]`
+(`inc/class-pmu-lectura.php:239`) con la clave `{aspecto}-{familia}-{area}` (spec 047; la vieja
+`{gid}-{w}x{h}-{phsize}` se ignora) y en `inc/class-pmu-sesion.php:607`; el respaldo devuelve el
+mismo mapa. `CargadorPMU.recetas[id]`
 (`cargador-pmu.js:517`, `:633`) solo vive en memoria y se pierde al recargar. `SelectorPMU._recetaDeFoto()`
 (`selector-pmu.js:1158`) ya sabe leer el mapa del listado.
 

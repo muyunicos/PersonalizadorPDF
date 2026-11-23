@@ -25,7 +25,7 @@ en el navegador (mismo estilo que `assets/*.js`).
 `inc/class-pmu-sesion.php` (manifiesto y recetas). Sin librerias nuevas.
 
 **Storage**: `uploads/pmu/{tmp/sesion-{sid}|orders/{uid}}/uploads/uploads.json` con una entrada por
-foto y sus **recetas por contexto** (`{gid}-{w}x{h}-{phsize}`); manifiesto del item con una fila por
+foto y sus **recetas por contexto** (`{aspecto}-{familia}-{area}`, spec 047); manifiesto del item con una fila por
 receta (`origen: compuesta`, `orig.id`). Sin IndexedDB ni copia local de fotos.
 
 **Testing**: puertas PHP (`php -l`, `tests/catalogo_uploads.php`, `tests/media_lectura.php`,
@@ -122,7 +122,7 @@ Resolver, con evidencia del codigo:
    subida cuando la receta cambia porque `declararReceta` no esta cableado en `cargador-pmu.js`.
 2. **R2 — Donde vive la receta vigente**: memoria del cargador (`recetas[id]`, se pierde al
    recargar) vs catalogo (`uploads.json recetas[clave]`, servido por la lista rapida y por el
-   respaldo). Se elige catalogo -> memoria -> defaults.
+   respaldo). Se elige memoria -> catalogo -> defaults (igual que FR-002 y el contrato).
 3. **R3 — Como se guarda una receta nueva**: `PMU_Sesion::registrar_fotos()` ya escribe una fila por
    receta con `orig.id` y `file` determinista; no hace falta servidor nuevo.
 4. **R4 — Que gesto abre el editor**: `_miniTocar` hoy abre el visor; el contrato nuevo agrega

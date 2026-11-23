@@ -21,7 +21,7 @@ Imagen que el comprador subio una vez. Vive en
 | `w`, `h` | int | medidas del original (cap 2000 px) |
 | `creado` | int | epoch |
 | `ultimo_uso` | int | epoch; se actualiza al registrar una receta |
-| `recetas` | mapa | `{ "{gid}-{w}x{h}-{phsize}": params }` (spec 040) |
+| `recetas` | mapa | `{ "{aspecto}-{familia}-{area}": delta }` (spec 047; la clave vieja se ignora) |
 
 **Invariante**: editar el encuadre **no** crea otra foto ni cambia `id`, `bytes`, `w`, `h`.
 
@@ -41,7 +41,7 @@ Como se coloca una foto en un contexto de campo. Es la identidad de la composici
 | `phsize` | int | 0-2 |
 | `hash` | string(12) | lo recomputa **siempre** el servidor (`PMU_Sesion::receta_de`); el cliente nunca lo propone |
 
-**Clave de contexto**: `"{gid}-{w}x{h}-{phsize}"`. Dos campos distintos pueden tener recetas
+**Clave de contexto**: `"{aspecto}-{familia}-{area}"` (spec 047). Dos campos distintos pueden tener recetas
 distintas de la misma foto.
 
 **Validacion**: si la receta no aplica a la geometria actual (otro `phsize`, `w`/`h`), se descarta y
@@ -92,14 +92,14 @@ Lista extensible que define que se puede hacer sobre la imagen abierta.
 ### Abrir el editor
 
 1. El comprador toca una miniatura del campo (o "Cargar imagen" para una nueva).
-2. Se resuelve `id` + receta: catalogo -> memoria -> defaults (R2).
+2. Se resuelve `id` + receta: memoria -> catalogo -> defaults (R2).
 3. El selector abre en modo `editar` con `paramsIniciales`; en modo `nueva` abre sin receta.
 
 ### Guardar
 
 | Caso | Que viaja | Que se escribe |
 |---|---|---|
-| Nueva con archivo | bytes de la composicion | foto + fila (comportamiento actual) |
+| Nueva con archivo | el ORIGINAL (cap 2000 px) + `orig.params` (receta v2) | foto + fila; el bitmap lo compone el servidor (constitution §III) |
 | Existente sin cambios | nada | nada (el editor se cierra) |
 | Existente con cambios | **0 bytes** | receta nueva en catalogo + fila por receta |
 | Fallo de red | nada | nada; los ajustes quedan en pantalla y se puede reintentar |

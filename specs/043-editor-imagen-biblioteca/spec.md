@@ -141,9 +141,9 @@ campo queda vacio y que la foto sale de la biblioteca.
 
 - **FR-001**: El sistema MUST abrir el editor al tocar una miniatura del campo, con la imagen de esa miniatura y su receta vigente aplicada. Si la miniatura esta marcada por un fallo de subida, el toque MUST reintentar la subida (039 D2) y MUST NOT abrir el editor.
 - **FR-002**: El sistema MUST resolver la receta del contexto en este orden: memoria del cargador, catalogo del comprador (`uploads.json`, recetas por contexto) y valores por defecto del campo.
-- **FR-003**: La clave de la receta MUST ser la del contexto (`{gid}-{w}x{h}-{phsize}`), de modo que dos campos distintos puedan usar encuadres distintos de la misma foto.
+- **FR-003**: La clave de la receta MUST ser la del contexto, de modo que dos campos distintos puedan usar encuadres distintos de la misma foto. **(Superada por la spec 047)**: la clave vigente es el objetivo `{aspecto 4dec}-{familia 0|1}-{area}` (`assets/receta-objetivo.js`); la anterior `{gid}-{w}x{h}-{phsize}` se ignora (sin migracion).
 - **FR-004**: Al guardar una imagen existente con cambios, el sistema MUST declarar la receta nueva y MUST NOT subir bytes de imagen.
-- **FR-005**: Al guardar una imagen existente sin cambios, el sistema MUST cerrar el editor sin escrituras.
+- **FR-005**: Al guardar una imagen existente sin cambios, el sistema MUST cerrar el editor sin escrituras (0 POST y 0 bytes; `usarExistente` puede llamarse como no-op local).
 - **FR-006**: Al guardar una imagen nueva, el sistema MUST subir el original una sola vez (comportamiento actual).
 - **FR-007**: Al cancelar, el sistema MUST descartar los ajustes sin subir ni escribir nada.
 - **FR-008**: El sistema MUST permitir eliminar la imagen desde el editor y quitar su opcion del campo.
@@ -155,7 +155,7 @@ campo queda vacio y que la foto sale de la biblioteca.
 - **FR-014**: El sistema MUST reutilizar el endpoint de borrado existente y su confirmacion en dos pasos; NO se agregan endpoints nuevos.
 - **FR-015**: El sistema MUST mantener intacto el camino rapido de lectura (1 listado, 0 lecturas por el camino administrativo) y el respaldo actual.
 - **FR-016**: El sistema MUST NOT guardar copias de las fotos en el navegador (sin IndexedDB): la imagen abierta se sirve con la cache HTTP existente.
-- **FR-017**: Las acciones del editor MUST definirse como una lista extensible, para sumar ajustes de imagen o texto mas adelante sin reescribir el modal.
+- **FR-017**: Las acciones del editor MUST definirse como una lista extensible: agregar una accion a `config.acciones` debe pintarse sin editar el modal (se verifica con una accion extra inyectada en la suite de contrato).
 - **FR-018**: El Motor y los PNG del PDF MUST NOT cambiar: la receta editada es la misma que ya consume el compositor.
 
 ### Key Entities

@@ -827,7 +827,7 @@
     /**
      * Spec 043 (US1/T017): receta vigente de un contexto para una foto existente.
      * Orden: memoria del cargador -> catalogo del comprador (recetas por contexto)
-     * -> null (defaults del campo). La clave es `{gid}-{w}x{h}-{phsize}`.
+     * -> null (defaults del campo). La clave es el objetivo `{aspecto}-{familia}-{area}` (spec 047).
      */
     CargadorPMU.prototype._recetaDeContexto = function (id, r) {
         var clave = String(id || '');
