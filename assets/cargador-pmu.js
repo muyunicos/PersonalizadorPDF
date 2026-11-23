@@ -528,6 +528,15 @@
         }
         var r = this.config.ranuras[indice];
         var btn = this.selectores[indice].boton;
+        // Spec 043 (fix 2026-11-22): la URL del recorte recien compuesto se captura
+        // AHORA, antes del POST. `ultimaUrl` vive en la INSTANCIA del selector
+        // (`selectores[i].sel`), no en el slot: leer `slot.ultimaUrl` daba
+        // undefined y la vista previa nunca recibia el recorte local.
+        var selAlSubir = (this.selectores[indice] || {}).sel;
+        var urlRecorte = (selAlSubir && selAlSubir.ultimaUrl)
+            || (this.selectores[indice] && this.selectores[indice].ultimaUrl) || '';
+        var paramsRecorte = (selAlSubir && typeof selAlSubir._params === 'function')
+            ? selAlSubir._params() : (params || null);
         btn.disabled = true;
         // Spec 046 (U7): placeholder con spinner en la tira mientras sube.
         var token = {};
@@ -560,10 +569,10 @@
             // sin red y sin subir copias. La receta es la misma que viajo con la
             // subida: `tienda.js` la manda por instancia al registrar el grupo.
             if (id && typeof self.config.onRecorte === 'function') {
-                var selPub = self.selectores[indice];
-                self.config.onRecorte(String(id),
-                    (selPub && selPub.ultimaUrl) || '',
-                    (selPub && typeof selPub._params === 'function') ? selPub._params() : null);
+                // Spec 043 (fix): se publica la URL capturada al empezar la subida
+                // (el selector ya cerro cuando el POST responde).
+                self.config.onRecorte(String(id), String(urlRecorte || ''),
+                    paramsRecorte || paramsSubida || null);
             }
             if (!id) {
                 self._error('El servidor no devolvio la imagen.');

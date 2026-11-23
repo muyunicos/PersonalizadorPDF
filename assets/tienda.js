@@ -1551,7 +1551,12 @@
     function anotarRecorte(id, url, receta) {
         var clave = String(id || '');
         if (clave === '') { return; }
-        global.PMU_FICHA = global.PMU_FICHA || {};
+        // Spec 043 (fix 2026-11-22): el mapa se escribe en el objeto que la pagina
+        // expone (`window.PMU_FICHA`), no en un `global` que puede no ser window.
+        var ficha = global.PMU_FICHA
+            || (typeof window !== 'undefined' ? window.PMU_FICHA : null);
+        if (!ficha) { return; }
+        global.PMU_FICHA = ficha;
         if (url) {
             global.PMU_FICHA.recortes = global.PMU_FICHA.recortes || {};
             var recorteAnterior = String(global.PMU_FICHA.recortes[clave] || '');

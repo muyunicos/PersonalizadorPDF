@@ -609,6 +609,10 @@ check('spec 043 (fix): tienda invalida el memo de URLs cuando llega un recorte n
   /invalidarUrl/.test(tienda) && /PMU_API\.invalidarUrl\(clave\)/.test(tienda));
 check('spec 043 (fix): la miniatura se repinta cuando la URL cambio (no se congela)',
   /_pmuMiniUrl/.test(cargador) && /pintada === String\(url\)/.test(cargador));
+check('spec 043 (fix): la URL del recorte se captura del selector ANTES del POST',
+  /selAlSubir && selAlSubir\.ultimaUrl/.test(cargador));
+check('spec 043 (fix): anotarRecorte escribe en window.PMU_FICHA (global puede no ser window)',
+  /window\.PMU_FICHA : null/.test(tienda));
 
 console.log('');
 if (fallos) {
