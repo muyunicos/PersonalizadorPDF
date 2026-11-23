@@ -196,7 +196,10 @@
             + '.cpmu-zona-llena{opacity:.75}'
             + '.cpmu-falta{margin:6px 0 0;font-size:12.5px;color:#8a6116}'
             + '.cpmu-error{margin:6px 0 0;font-size:12.5px;color:#b32d2d;background:#fdf2f2;border:1px solid #f4c7c7;border-radius:4px;padding:4px 6px}'
-            + '.cpmu-falta[hidden]{display:none}';
+            + '.cpmu-falta[hidden]{display:none}'
+            // Spec 046 (U7): spinner de "subiendo" en la miniatura.
+            + '.cpmu-mini-cargando{background:linear-gradient(90deg,#f0f6fc 0%,#c3c4c7 50%,#f0f6fc 100%);background-size:200% 100%;animation:cpmu-cargando 1.1s linear infinite}'
+            + '@keyframes cpmu-cargando{to{background-position:-200% 0}}';
         (doc.head || doc.documentElement).appendChild(st);
     }
 
@@ -232,6 +235,8 @@
         this.selectores = [];
         this.raiz = null;
         this._reemplazo = null;
+        // Spec 046 (U1): los avisos de faltantes arrancan ocultos (se abren al comprar).
+        this._avisos = false;
         // Spec 039 (D2): blobs de las subidas que FALLARON, por ranura y posicion.
         // Viven en memoria (moran con la pestana): al tocar la miniatura marcada se
         // reintenta con el MISMO recorte, sin volver a elegir el archivo.
@@ -241,6 +246,8 @@
         // (id conocido): no viajan bytes y la miniatura se pinta sin pedirla.
         this._urls = {};
         this.recetas = {};
+        // Spec 046 (U7): placeholders de las subidas en curso (spinner en la tira).
+        this._pendientes = {};
     }
 
     CargadorPMU.prototype.montar = function () {
@@ -441,12 +448,7 @@
                     if (!reemp) { return Promise.resolve(false); }
                     return self._quitar(reemp.indice, reemp.posicion, true);
                 },
-                // Spec 043 (T023): el visor del campo sigue accesible desde el editor.
-                verVisor: function () {
-                    var reemp = self._reemplazo;
-                    if (!reemp) { return Promise.resolve(false); }
-                    return self._abrirVisorCompartido(reemp.indice, reemp.posicion);
-                },
+                // Spec 046 (U5): "Ver en grande" se retiro del editor.
                 usarExistente: function (id, params, url) {
                     return self._usarExistente(indice, id, params, url);
                 }
@@ -475,12 +477,16 @@
             }
             self._error(mensaje);
         });
-        var tituloContexto = this._reemplazo
-            ? ('Reemplazando imagen #' + (this._reemplazo.posicion + 1))
-            : '';
+        // Spec 046 (U2/U6): titulo "Imagen #X" siempre; el reemplazo solo decide
+        // el "¿Subir otra?" (esReemplazo), no el titulo.
+        var posFoto = this._reemplazo
+            ? (parseInt(this._reemplazo.posicion, 10) + 1)
+            : (((this.estado[indice] && this.estado[indice].ids.length) || 0) + 1);
         slot.sel.open({
             archivo: archivo || null,
-            tituloContexto: tituloContexto,
+            titulo: 'Imagen #' + posFoto,
+            esReemplazo: !!this._reemplazo,
+            tituloContexto: this._reemplazo ? ('Reemplazando imagen #' + posFoto) : '',
             // Spec 043 (US2/T022): la receta vigente viaja al editor (paramsIniciales).
             params: (opciones && opciones.params) || null,
             // Spec 043 (US2): en modo edicion NO se abre el selector de archivos.
@@ -521,6 +527,11 @@
         var r = this.config.ranuras[indice];
         var btn = this.selectores[indice].boton;
         btn.disabled = true;
+        // Spec 046 (U7): placeholder con spinner en la tira mientras sube.
+        var token = {};
+        if (!this._pendientes[indice]) { this._pendientes[indice] = []; }
+        this._pendientes[indice].push(token);
+        this._pintar();
         var paramsSubida = this._paramsDe(indice);
         return Promise.resolve(this.config.subir(blob, {
             ranura: indice, w: r.w, h: r.h, forma: r.forma,
@@ -533,6 +544,7 @@
             // Spec 039 (D6): `madre_origen` se retiro con las "familias".
         })).then(function (res) {
             btn.disabled = false;
+            self._quitarPendiente(indice, token);
             var id = res && res.id;
             // Spec 040 (A6): la receta con la que se subio queda legible por id
             // (`recetasDe`), igual que la de una imagen usada de la biblioteca.
@@ -564,6 +576,7 @@
             return id;
         }, function (err) {
             btn.disabled = false;
+            self._quitarPendiente(indice, token);
             var msg = (err && err.message) || 'No se pudo subir la imagen.';
             // Spec 039 (D2): se GUARDA el blob del recorte (y con que receta se
             // compuso) para que tocar la miniatura marcada reintente sin volver a
@@ -578,6 +591,13 @@
             throw err || new Error(msg);
         });
     };
+    /** Spec 046 (U7): saca el placeholder de una subida (exito o fallo). */
+    CargadorPMU.prototype._quitarPendiente = function (indice, token) {
+        var lista = this._pendientes[indice] || [];
+        var i = lista.indexOf(token);
+        if (i >= 0) { lista.splice(i, 1); }
+    };
+
     /** Repinta miniaturas, contadores y el boton de "Listo" (D16). */
     CargadorPMU.prototype._pintar = function () {
         var self = this;
@@ -613,17 +633,26 @@
                 });
                 slot.tira.appendChild(miniF);
             });
-            slot.boton.disabled = n >= r.max;
+            // Spec 046 (U7): las subidas en curso quedan como miniaturas con spinner.
+            (self._pendientes[i] || []).forEach(function () {
+                var miniP = doc.createElement('span');
+                miniP.className = 'cpmu-mini cpmu-mini-cargando';
+                miniP.setAttribute('aria-label', 'Subiendo imagen');
+                slot.tira.appendChild(miniP);
+            });
+            slot.boton.disabled = (n + (self._pendientes[i] || []).length) >= r.max;
             slot.zona.classList.toggle('cpmu-zona-llena', n > 0);
         });
         // Aviso SOLO si falta algo: con todo completo no se dice nada (antes
         // decia "Listo: N imagen(es)." y hacia ruido).
         var est = completo(this.config.ranuras, this.estado);
         if (this.txtFalta) {
-            this.txtFalta.hidden = est.listo;
-            this.txtFalta.textContent = est.listo
-                ? ''
-                : 'Faltan ' + est.faltan + ' imagen(es) por cargar.';
+            // Spec 046 (U1): el aviso arranca OCULTO; se muestra al intentar comprar.
+            var mostrar = this._avisos && !est.listo;
+            this.txtFalta.hidden = !mostrar;
+            this.txtFalta.textContent = mostrar
+                ? 'Faltan ' + est.faltan + ' imagen(es) por cargar.'
+                : '';
         }
         if (this.config.onChange) {
             this.config.onChange(this.estadoActual());
@@ -1007,6 +1036,12 @@ CargadorPMU.prototype._abrirVisorCompartido = function (indice, posicion) {
     };
 
     /** Lo que publica el campo (FR-033/FR-034). */
+    /** Spec 046 (U1): muestra los avisos de faltantes (los llama la ficha al comprar). */
+    CargadorPMU.prototype.mostrarAvisos = function () {
+        this._avisos = true;
+        this._pintar();
+    };
+
     CargadorPMU.prototype.ids = function () {
         return idsPlanos(this.estado);
     };

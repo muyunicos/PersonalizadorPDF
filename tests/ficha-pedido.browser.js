@@ -277,7 +277,9 @@ const marcasLocales = (page) => page.evaluate(() => {
 });
 const botonCarrito = (page) => page.evaluate(() => {
     const b = document.querySelector('.single_add_to_cart_button');
-    return b ? b.disabled : null;
+    if (!b) { return null; }
+    // Spec 046 (U1): el boton no se deshabilita; el bloqueo vive en aria-disabled.
+    return (b.disabled || b.getAttribute('aria-disabled') === 'true') ? true : false;
 });
 /** Espera a que la galeria tenga `n` vistas armadas (o se agota el tiempo). */
 const esperarGaleria = async (page, n) => {
@@ -420,14 +422,20 @@ async function precondiciones(page) {
             btnPreview: !!([...document.querySelectorAll('[data-pmu-panel] button')].find((b) => b.textContent.trim() === 'Vista previa')),
             btnCargar: !!([...document.querySelectorAll('[data-pmu-panel] button')].find((b) => b.textContent.trim() === 'Cargar imagen')),
             opciones: [...document.querySelectorAll('.pmu-opciones-btn')].map((b) => b.textContent.trim()),
-            add: (() => { const b = document.querySelector('.single_add_to_cart_button'); return b ? { txt: b.textContent.trim(), disabled: b.disabled } : null; })(),
+            add: (() => { const b = document.querySelector('.single_add_to_cart_button'); return b ? { txt: b.textContent.trim(), disabled: b.disabled, aria: b.getAttribute('aria-disabled') } : null; })(),
             aviso: (() => { const t = [...document.querySelectorAll('[data-pmu-panel] *')].map((e) => e.textContent || '').find((x) => /Faltan \d+ foto/i.test(x)); return t ? t.trim().slice(0, 90) : null; })()
         }));
         check('ficha: panel + formulario de compra', ficha.panel && ficha.form);
         check('ficha: PMU_FICHA con PDFs y campos', !!ficha.pmu && ficha.pmu.pdfs >= 1 && ficha.pmu.campos >= 1, JSON.stringify(ficha.pmu));
         check('ficha: cargador expuesto y SIN boton "Vista previa" (spec 036/D3)', ficha.btnCargar && ficha.btnPreview === false, JSON.stringify({ cargar: ficha.btnCargar, previa: ficha.btnPreview }));
-        check('ficha (spec 022): el carrito arranca bloqueado por el min de fotos', !!ficha.add && ficha.add.disabled === true, JSON.stringify(ficha.add));
-        check('ficha (spec 022): aviso de faltantes visible', !!ficha.aviso, ficha.aviso || '(sin aviso)');
+        check('ficha (spec 022/046): el carrito arranca bloqueado por el min de fotos', !!ficha.add && (ficha.add.disabled === true || ficha.add.aria === 'true'), JSON.stringify(ficha.add));
+        check('ficha (spec 046/U1): sin avisos hasta el intento de compra', ficha.aviso === null, ficha.aviso || '(sin aviso)');
+        // Spec 046 (U1): el aviso aparece al COMPRAR, no durante la carga.
+        await page.evaluate(() => { const b = document.querySelector('.single_add_to_cart_button'); if (b && b.click) { b.click(); } });
+        await esperar(500);
+        const avisoCompra = await page.evaluate(() => [...document.querySelectorAll('[data-pmu-panel] *')]
+            .some((e) => /Faltan \d+ foto/i.test(e.textContent || '') && e.offsetParent !== null));
+        check('ficha (spec 046/U1): el aviso aparece al tocar Comprar', avisoCompra);
         // ---- E1 (spec 036, D7): 0 red al cargar la ficha, ANTES de tocar nada.
         // Las imagenes del comprador se piden al abrir el modal y el motor de texto
         // (TextMuy) solo se instancia si hay texto NUEVO que renderizar.
@@ -453,7 +461,7 @@ async function precondiciones(page) {
         await esperar(800);
         await page.locator('.spmu-file').setInputFiles(FOTO);
         await esperar(2500);
-        await page.getByRole('button', { name: 'Guardar', exact: true }).first().click();
+        await page.locator('.spmu-modal .spmu-ok').first().click();
         await esperar(2500);
         const otra = page.getByRole('button', { name: 'Si, subir otra' });
         if (await otra.count() && await otra.first().isVisible()) {
@@ -566,9 +574,11 @@ async function precondiciones(page) {
                 return !!(m.querySelector('.spmu-escena img') || m.querySelector('.spmu-escena canvas'));
             });
             check('biblioteca (spec 043/US2): la miniatura abre el editor con la imagen', editorConImagen);
-            const btnEliminarEd = page.locator('.spmu-modal .spmu-eliminar').first();
-            check('editor (spec 043/US5): Eliminar esta disponible en el editor',
-                (await btnEliminarEd.count()) > 0 && await btnEliminarEd.isVisible().catch(() => false));
+            const btnQuitarEd = page.locator('.spmu-modal .spmu-eliminar').first();
+            const txtQuitar = (await btnQuitarEd.count()) ? (await btnQuitarEd.textContent().catch(() => '')) : '';
+            check('editor (spec 046/U5): Quitar esta disponible en el editor',
+                (await btnQuitarEd.count()) > 0 && await btnQuitarEd.isVisible().catch(() => false)
+                && /Quitar/.test(txtQuitar), txtQuitar);
             check('biblioteca (030/E3): `Elegir` del visor se revalida con US4/US5 (omitido)', true, '(nuevo flujo)');
             await cerrarOverlays(page);
         } else {
@@ -586,7 +596,7 @@ async function precondiciones(page) {
         await esperar(800);
         await page.locator('.spmu-file').setInputFiles(FOTO);
         await esperar(2500);
-        await page.getByRole('button', { name: 'Guardar', exact: true }).first().click();
+        await page.locator('.spmu-modal .spmu-ok').first().click();
         await esperar(3000);
         await subirOtra(page);
         await cerrarOverlays(page);
@@ -605,7 +615,7 @@ async function precondiciones(page) {
         await abrirModal(page);
         await page.locator('.spmu-file').setInputFiles(FOTO);
         await esperar(2500);
-        await page.getByRole('button', { name: 'Guardar', exact: true }).first().click();
+        await page.locator('.spmu-modal .spmu-ok').first().click();
         await esperar(2500);
         await subirOtra(page);
         await cerrarOverlays(page);

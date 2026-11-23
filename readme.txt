@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.36.1
+Stable tag: 4.36.2
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,24 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.36.2 =
+* Spec 046 (UX del modal y avisos): titulo **"Imagen #X"** (nueva o editar), boton
+  **"Cambiar imagen"** cuando ya hay una, y **primario por contexto**: `Subir`
+  (nueva), `Aceptar` (editar sin cambios), `Guardar` (con cambios), `Cambiar`
+  (elegir otra de la biblioteca).
+* **Avisos solo al comprar**: al cargar la ficha no se ve ningun aviso; aparecen
+  (pueden convivir) cuando el comprador toca **Agregar al carrito** con algo
+  faltante, y el boton queda clicable (`aria-disabled`) para poder avisar.
+* **"Ver en grande" se retiro** del editor; **"Eliminar" pasa a "Quitar"** y solo
+  aparece si la ranura estaba poblada.
+* **Carga en segundo plano**: al Guardar/Subir el modal cierra al instante y el
+  **spinner queda en la miniatura** (`cpmu-mini`); si falla, queda marcada con "!"
+  y se puede reintentar.
+* **"Todas (N)"** (tema `muyunicos`): el chip se pinta **siempre** como ultimo item
+  de la tira, con el total y abriendo el visor completo.
+* Puertas: `selector-contrato`, `biblioteca-contrato` 81, `campos-contrato`,
+  `cargador-estado` 25 + `ficha-pedido.browser.js` 53/53.
 
 = 4.36.1 =
 * Spec 045 (bugs del cargador): editar una foto y luego cargar otra **ya no pisa** la

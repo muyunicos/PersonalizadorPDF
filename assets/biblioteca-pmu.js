@@ -315,6 +315,8 @@
             navegable: false,
             tope: TOPE_TIRA,
             chipAccion: 'abrir',
+            // Spec 046 (U8): "Todas (N)" siempre como ultimo item.
+            chipSiempre: true,
             onChip: function (cuantos, desde) { verTodas(desde || 0); },
             onAbrir: function (i) { elegir(i); }
         });

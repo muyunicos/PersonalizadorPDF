@@ -88,6 +88,21 @@
     }
 
     /**
+     * Spec 046 (U3): firma COMPARABLE de una receta (misma tolerancia que el
+     * `_aceptar` de la 043: 4 decimales). Sirve para saber si el comprador
+     * cambio algo respecto de la receta con la que abrio el editor.
+     */
+    function firmaParams(p) {
+        if (!p) { return ''; }
+        var r = function (v) {
+            var n = parseFloat(v);
+            return isFinite(n) ? (Math.round(n * 10000) / 10000) : '';
+        };
+        return [r(p.w), r(p.h), String(p.modo || ''), r(p.escala), r(p.ox), r(p.oy),
+            r(p.rot), String(p.fondo || ''), String(p.gid || ''), r(p.phsize)].join('|');
+    }
+
+    /**
      * Spec 021 (D2/D3/D4): geometria de `spmu-canvas` (10% de margen en cada
      * borde), del recorte secundario (placeholder WxH) y del recorte principal
      * (forma/envoltura posicionada con `size`, `ox`, `oy`).
@@ -660,7 +675,11 @@
         this._resetEstado();   // spec 045 (A2): cada apertura empieza limpia
         inyectarEstilos();
         this._focoPrevio = document.activeElement || null;
-        this._contextoReemplazo = opciones.tituloContexto ? String(opciones.tituloContexto) : '';
+        // Spec 046 (U2/U6): el titulo es "Imagen #X"; el contexto de reemplazo
+        // (`esReemplazo`) decide el "¿Subir otra?", no el titulo.
+        this._contextoReemplazo = opciones.esReemplazo
+            ? String(opciones.tituloContexto || 'Reemplazando imagen')
+            : '';
         // Spec 039 (D6): se retiro la rama de reuso `Elegir`. El primario dice
         // SIEMPRE `Guardar`. Con una foto de la biblioteca (040 A6 / 043 US1) el
         // guardado es de 0 bytes (declara la receta); si no, viajan bytes y el
@@ -675,9 +694,9 @@
         this._falloSubida = false;
         this.raiz = document.createElement('div');
         this.raiz.className = 'spmu-modal';
-        var tituloTxt = this._contextoReemplazo
-            ? this._contextoReemplazo
-            : 'Ajuste la imagen';
+        var tituloTxt = opciones.titulo
+            ? String(opciones.titulo)
+            : (this._contextoReemplazo || 'Imagen');
         this.raiz.innerHTML =
             '<div class="spmu-caja" role="dialog" aria-modal="true" aria-label="Ajuste de imagen">' +
             '<div class="spmu-cabecera">' +
@@ -737,8 +756,7 @@
             '' + // 5a: "Cargar imagen" vive ARRIBA, en la fila de la tira
             // Spec 043 (US5/T023): acciones de la imagen existente (se encienden en
             // `_actualizarPrimario`).
-            '<button type="button" class="button-link spmu-eliminar" hidden>Eliminar</button>' +
-            '<button type="button" class="button-link spmu-vervisor" hidden>Ver en grande</button>' +
+            '<button type="button" class="button-link spmu-eliminar" hidden>Quitar</button>' +
             '<input type="file" class="spmu-file" accept="' + ACEPTA + '" hidden>' +
             '' + // 4a clarificacion: se fue "Elegir ya subida" (la tira vive arriba, siempre visible)
             '' + // 4a clarificacion: el contenedor de la tira vive ARRIBA (uno solo)
@@ -785,13 +803,6 @@
                     btnEliminar.disabled = false;
                     self._fallo('UPLOAD_FAILED', (err && err.message) || 'No se pudo eliminar la imagen');
                 });
-            });
-        }
-        // Spec 043 (T023): el visor del campo sigue accesible desde el editor.
-        var btnVerVisor = $('.spmu-vervisor');
-        if (btnVerVisor) {
-            btnVerVisor.addEventListener('click', function () {
-                if (!self._subiendo && self.config.verVisor) { self.config.verVisor(); }
             });
         }
         $('.spmu-file').addEventListener('change', function () {
@@ -970,9 +981,9 @@
 
                 window.PMUBiblioteca.tira(cajaBib, {
                     onElegir: function (foto) {
-                        // Spec 040 (A4/A6): la miniatura entra DIRECTO al recorte con su
-                        // receta recordada y el primario pasa a `Usar` (0 bytes).
-                        self.cargarDesdeBiblioteca(foto);
+                        // Spec 040 (A4/A6) + 046 (U3): entra DIRECTO al recorte con
+                        // su receta; la miniatura manda y el primario dice `Cambiar`.
+                        self.cargarDesdeBiblioteca(foto, 'tira');
                     }
                 });
             })();
@@ -1031,6 +1042,7 @@
         this._mascaraRecorte = false;
         this._bib = null;
         this._desdeBiblioteca = false;
+        this._cambios = false;
         this.supera5 = false;
     };
 
@@ -1164,7 +1176,7 @@
      * y deja que `_cargar` los re-aplique si son de esta geometria. El primario
      * pasa a `Usar` y, al aceptar, NO se suben bytes.
      */
-    SelectorPMU.prototype.cargarDesdeBiblioteca = function (foto) {
+    SelectorPMU.prototype.cargarDesdeBiblioteca = function (foto, origen) {
         var self = this;
         if (!foto || !this.raiz) { return Promise.resolve(false); }
         // B2 (spec 045): el canvas necesita el ORIGINAL. `thumb` es 80x80, asi que
@@ -1178,7 +1190,9 @@
         this._bib = {
             id: String(foto.id || ''),
             params: this._recetaDeFoto(foto),
-            url: url
+            url: url,
+            // Spec 046 (U3): de donde vino (editar la miniatura vs elegir en la tira).
+            origen: String(origen || 'editar')
         };
         var respaldo = (window.PMUBiblioteca && window.PMUBiblioteca.urlRespaldo)
             ? String(window.PMUBiblioteca.urlRespaldo(foto)) : '';
@@ -1478,20 +1492,34 @@
     };
 
     /**
-     * Spec 039 (D6) + 043 (D3): el primario del modal dice **siempre** `Guardar`.
-     * Spec 043 (US5): ademas enciende las acciones que solo aplican a una imagen
-     * existente (Eliminar / Ver en grande).
+     * Spec 046 (U2/U3/U4/U6): el primario cambia de etiqueta segun el contexto:
+     * `Subir` (foto nueva), `Aceptar`/`Guardar` (editar sin/con cambios) y
+     * `Cambiar` (elegir otra de la biblioteca). El secundario dice `Cambiar imagen`
+     * cuando ya hay una cargada, y `Quitar` solo con la ranura poblada.
      */
     SelectorPMU.prototype._actualizarPrimario = function () {
         if (!this.raiz || this._subiendo) { return; }
         var ok = this.raiz.querySelector('.spmu-ok');
         if (!ok) { return; }
-        ok.textContent = 'Guardar';
         var existente = !!(this._bib && this._bib.id);
+        // ¿cambio algo respecto de la receta con la que se abrio?
+        var base = this._paramsIniciales || (this._bib && this._bib.params) || null;
+        try {
+            this._cambios = !!(base && firmaParams(this._params()) !== firmaParams(base));
+        } catch (e) { /* sin imagen: no hay receta que comparar */ }
+        if (existente) {
+            ok.textContent = (this._bib && this._bib.origen === 'tira')
+                ? 'Cambiar'
+                : (this._cambios ? 'Guardar' : 'Aceptar');
+        } else {
+            ok.textContent = 'Subir';
+        }
+        var bElegir = this.raiz.querySelector('.spmu-elegir');
+        if (bElegir) {
+            bElegir.textContent = (this.imagen || existente) ? 'Cambiar imagen' : 'Cargar imagen';
+        }
         var btnElim = this.raiz.querySelector('.spmu-eliminar');
         if (btnElim) { btnElim.hidden = !(existente && this.config.eliminar); }
-        var btnVer = this.raiz.querySelector('.spmu-vervisor');
-        if (btnVer) { btnVer.hidden = !(existente && this.config.verVisor); }
     };
 
     SelectorPMU.prototype._dibujar = function () {
@@ -1837,16 +1865,7 @@
             // Comparacion CON TOLERANCIA: el prefill reconstruye `ox/oy` por inversa y
             // el recomputo puede diferir en el ultimo decimal. Un JSON exacto diria
             // "cambio" siempre y volveria a subir sin motivo.
-            var firmaDe = function (p) {
-                if (!p) { return ''; }
-                var r = function (v) {
-                    var n = parseFloat(v);
-                    return isFinite(n) ? (Math.round(n * 10000) / 10000) : '';
-                };
-                return [r(p.w), r(p.h), String(p.modo || ''), r(p.escala), r(p.ox), r(p.oy),
-                    r(p.rot), String(p.fondo || ''), String(p.gid || ''), r(p.phsize)].join('|');
-            };
-            try { iguales = firmaDe(previos) !== '' && firmaDe(previos) === firmaDe(paramsBib); }
+            try { iguales = firmaParams(previos) !== '' && firmaParams(previos) === firmaParams(paramsBib); }
             catch (e) { iguales = false; }
             var puedeReusar = (typeof this.config.usarExistente === 'function');
             var puedeDeclarar = (typeof this.config.declararReceta === 'function');
@@ -1912,45 +1931,19 @@
             self.ultimoBlob = blob;
             self.ultimaUrl = url;
 
-            var finalizarExito = function () {
-                self._subiendo = false;
-                if (elegir) { elegir.disabled = false; }
-                self._estado(null);
-                self._emitir('success', { url: url, width: meta.width, height: meta.height, fileSize: meta.fileSize });
-                var quedan = (!self._contextoReemplazo && self.config.quedanEspacios)
-                    ? !!self.config.quedanEspacios()
-                    : false;
-                if (quedan && self.raiz) {
-                    var mOtra = self.raiz.querySelector('.spmu-otra-modal');
-                    if (mOtra) {
-                        mOtra.hidden = false;
-                        return;
-                    }
-                }
-                self.close();
-            };
-
+            // Spec 046 (U7): la subida pasa a SEGUNDO PLANO. El modal cierra ya y
+            // el progreso vive en la miniatura (`cpmu-mini`); si falla, el cargador
+            // la marca con "!" y permite reintentar.
+            self._subiendo = false;
             if (typeof self.config.subirAsync === 'function') {
-                Promise.resolve(self.config.subirAsync(blobOrig || blob, meta)).then(function () {
-                    // Spec 039 (D2): subio bien -> ya no hay blob que reintentar.
-                    self._falloSubida = false;
-                    if (typeof self.onSelectCallback === 'function') { self.onSelectCallback(url, meta); }
-                    finalizarExito();
-                }, function (err) {
-                    // Spec 039 (D2): la subida fallo pero el blob queda en memoria:
-                    // `obtenerBlobFallido()` lo devuelve para reintentar sin recomponer.
-                    self._falloSubida = true;
-                    self._subiendo = false;
-                    if (ok) { ok.disabled = false; self._actualizarPrimario(); }
-                    if (elegir) { elegir.disabled = false; }
-                    self._estado(null);
-                    self._fallo('UPLOAD_FAILED', (err && err.message) || 'No se pudo subir la imagen');
-                });
-                return;
+                try {
+                    var prom = self.config.subirAsync(blobOrig || blob, meta);
+                    if (prom && typeof prom.catch === 'function') { prom.catch(function () { }); }
+                } catch (e) { /* el cargador ya marco el fallo */ }
+            } else if (typeof self.onSelectCallback === 'function') {
+                self.onSelectCallback(url, meta);
             }
-
-            if (typeof self.onSelectCallback === 'function') { self.onSelectCallback(url, meta); }
-            finalizarExito();
+            self.close();
         };
 
         var lienzo = this._generarLienzoSalida();

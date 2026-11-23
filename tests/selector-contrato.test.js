@@ -77,7 +77,7 @@ check('Spec 024 D3: control "Escala" al 100% y SIN boton de reset',
   && selector.indexOf('spmu-zoom-reset') === -1
   && !/Reducir \/ Ampliar/.test(selector));
 check('Spec 024 D1/D2: titulo sin medidas y badge solo con `tecnico`',
-  /: 'Ajuste la imagen';/.test(selector)
+  /: \(this\._contextoReemplazo \|\| 'Imagen'\);/.test(selector)
   && /\(this\.config\.tecnico/.test(selector)
   && /spmu-badge/.test(selector));
 check('Spec 024 D4/D5/D6/D7: modos resetean Escala, fondo auto, Girar y acciones separadas',
@@ -553,17 +553,39 @@ check('tras guardar una existente se repinta la tira (sin re-subir)',
   /_usarExistente = function[\s\S]{0,1400}this\._pintar\(\)/.test(cargador));
 
 console.log('\n== Spec 043 (US5): Eliminar desde el editor ==');
-check('el editor enciende Eliminar/Ver en grande solo con imagen existente',
-  /spmu-eliminar/.test(selector) && /spmu-vervisor/.test(selector)
-  && /existente && this\.config\.eliminar/.test(selector));
+check('el editor enciende Quitar solo con imagen existente (spec 046: sin Ver en grande)',
+  /spmu-eliminar/.test(selector) && !/spmu-vervisor/.test(selector)
+  && /existente && this\.config\.eliminar/.test(selector)
+  && />Quitar</.test(selector));
 check('Eliminar delega en el cargador con confirmacion por uso',
   /eliminar: function \(\)/.test(cargador)
   && /_quitar\(reemp\.indice, reemp\.posicion, true\)/.test(cargador)
   && /preguntar/.test(cargador));
 check('si el borrado falla la foto NO se saca (se avisa)',
   /_quitar = function[\s\S]{0,4000}var msg = \(err && err\.message\)[\s\S]{0,160}self\._error\(msg\)/.test(cargador));
-check('el visor sigue accesible desde el editor (T023)',
-  /verVisor: function \(\)/.test(cargador) && /self\.config\.verVisor\(\)/.test(selector));
+check('spec 046 (U5): "Ver en grande" se retiro del editor',
+  !/spmu-vervisor/.test(selector) && !/verVisor/.test(cargador));
+
+console.log('\n== Spec 046: modal y avisos ==');
+check('U2/U6: el titulo es "Imagen #X" (lo pasa el cargador)',
+  /titulo: 'Imagen #' \+ posFoto/.test(cargador));
+check('U2: `open()` usa `opciones.titulo` y `opciones.esReemplazo`',
+  /opciones\.titulo/.test(selector) && /opciones\.esReemplazo/.test(selector));
+check('U3: etiquetas por contexto (Subir/Aceptar/Guardar/Cambiar)',
+  /'Subir'/.test(selector) && /'Aceptar'/.test(selector)
+  && /'Guardar'/.test(selector) && /'Cambiar'/.test(selector));
+check('U3: la receta se compara con `firmaParams`',
+  /firmaParams\(this\._params\(\)\)/.test(selector));
+check('U4: "Cambiar imagen" cuando ya hay una',
+  /'Cambiar imagen' : 'Cargar imagen'/.test(selector));
+check('U1: el aviso del cargador arranca oculto (`mostrarAvisos`)',
+  /mostrarAvisos = function/.test(cargador) && /this\._avisos && !est\.listo/.test(cargador));
+check('U1: el aviso de la ficha arranca oculto (`avisosActivos`)',
+  /avisosActivos && \(faltan > 0 \|\| bloqueos\.subidas\)/.test(tienda16));
+check('U1: el boton queda clicable con `aria-disabled` (aviso al comprar)',
+  /aria-disabled/.test(tienda16) && /activarAvisos/.test(tienda16));
+check('U7: el modal cierra al enviar (subida en segundo plano)',
+  /subida pasa a SEGUNDO PLANO/.test(selector) && /_pendientes/.test(cargador));
 
 console.log('');
 if (fallos) {

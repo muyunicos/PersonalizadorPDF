@@ -70,6 +70,15 @@
 > `campos-contrato`, `biblioteca-contrato` 81, `receta-contrato` 21 + `ficha-pedido` **53/53**.
 > Auditoria completa (A3-A8 pendientes, spec 044): `docs/auditoria-cargador.md`.
 
+> **2026-11-22**: spec **046-ux-modal-cargador** implementada (v4.36.2) — avisos de
+> faltantes **solo al comprar** (boton clicable con `aria-disabled` + guard del submit),
+> titulo **"Imagen #X"**, primario por contexto (`Subir`/`Aceptar`/`Guardar`/`Cambiar`),
+> **"Cambiar imagen"**, **"Ver en grande" retirado** y **"Eliminar" -> "Quitar"** (solo con
+> ranura poblada); **subida en segundo plano** con spinner en la miniatura (`cpmu-mini`) y
+> reintento si falla. Tema `muyunicos`: chip **"Todas (N)"** siempre al final de la tira.
+> Puertas: `selector-contrato`, `biblioteca-contrato` 81, `campos-contrato`,
+> `cargador-estado` 25 + `ficha-pedido.browser.js` **54/54**.
+
 ## Activos (codigo completo, falta solo manual WP real)
 | Spec | Codigo | Pendiente manual | Docs normativos |
 |------|--------|------------------|-----------------|

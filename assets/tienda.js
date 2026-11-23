@@ -651,6 +651,10 @@
     var galeriaActual = null;
     var filtroActual = null;
     var bloqueos = { vistas: false, validez: false, minimos: false, subidas: false };
+    // Spec 046 (U1): los avisos de faltantes arrancan ocultos; se abren al comprar.
+    var avisosActivos = false;
+    // Spec 046 (U1): cargadores montados (para abrirles el aviso al comprar).
+    var cargadores = [];
     // Spec 022: el `min` de las ranuras bloquea la compra. `minimos` es lo que
     // el navegador DECLARA al servidor ({campo: total exigido}) y `faltanFoto`
     // lo que falta ahora mismo por campo ({campo: N}).
@@ -1202,7 +1206,15 @@
         // Spec 036 (T022/D8): `subidas` = la cola (fotos + textos) NO esta vacia.
         // El boton se habilita recien cuando se vacia.
         bloqueos.subidas = subidasPendientes() > 0;
-        b.disabled = !!(bloqueos.vistas || bloqueos.validez || bloqueos.minimos || bloqueos.subidas);
+        var bloqueado = !!(bloqueos.vistas || bloqueos.validez || bloqueos.minimos || bloqueos.subidas);
+        // Spec 046 (U1): el boton NO se deshabilita: queda clicable para poder
+        // avisar al comprador. `aria-disabled` + las ayudas visuales lo muestran
+        // apagado, y el guard del submit evita el add-to-cart.
+        b.disabled = false;
+        b.setAttribute('aria-disabled', bloqueado ? 'true' : 'false');
+        b.classList.toggle('pmu-bloqueado', bloqueado);
+        b.style.opacity = bloqueado ? '0.6' : '';
+        b.style.cursor = bloqueado ? 'not-allowed' : '';
     }
 
     /**
@@ -1227,10 +1239,11 @@
                 aviso.setAttribute('role', 'alert');
                 panel.appendChild(aviso);
             }
-            if (faltan > 0) {
+            var mostrar = avisosActivos && (faltan > 0 || bloqueos.subidas);
+            if (mostrar && faltan > 0) {
                 aviso.textContent = 'Faltan ' + faltan + ' foto(s) por cargar.';
                 aviso.style.display = '';
-            } else if (bloqueos.subidas) {
+            } else if (mostrar) {
                 // Spec 039 (H5): si lo unico que falta es que termine la cola, se dice
                 // CUANTO queda (no solo que "algo" pasa): el comprador no se queda
                 // mirando un boton apagado sin explicacion.
@@ -1333,7 +1346,26 @@
         var form = document.querySelector('form.cart');
         if (!form || form.getAttribute('data-pmu-carrito') === '1') { return; }
         form.setAttribute('data-pmu-carrito', '1');
-        form.addEventListener('submit', function () {
+        // Spec 046 (U1): el boton queda clicable (`aria-disabled`) para poder
+        // avisar; este guard es el que impide el add-to-cart cuando hay bloqueos.
+        form.addEventListener('click', function (e) {
+            var btn = (e.target && e.target.closest) ? e.target.closest('.single_add_to_cart_button') : null;
+            if (!btn || btn.getAttribute('aria-disabled') !== 'true') { return; }
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            if (global.PMU_API && typeof global.PMU_API.activarAvisos === 'function') {
+                global.PMU_API.activarAvisos();
+            }
+        }, true);
+        form.addEventListener('submit', function (e) {
+            var b = botonWoo();
+            if (b && b.getAttribute('aria-disabled') === 'true') {
+                e.preventDefault();
+                if (global.PMU_API && typeof global.PMU_API.activarAvisos === 'function') {
+                    global.PMU_API.activarAvisos();
+                }
+                return;
+            }
             if (!global.PMU_API) { return; }
             // US3 (T018/T019): sin sesion (omisible sin vistas) se envian los
             // valores del panel y el SERVIDOR crea el item omisible.
@@ -2012,6 +2044,14 @@
         // Spec 036 (T026/D4): repinta la galeria si algo cambio (lo llama cualquier
         // editor de campo; no hace nada si la firma de los valores es la misma).
         api.repintar = function () { agendarMontaje(); };
+        // Spec 046 (U1): abre los avisos de faltantes (intento de compra).
+        api.activarAvisos = function () {
+            avisosActivos = true;
+            refrescarMinimos();
+            cargadores.forEach(function (c) {
+                if (c && typeof c.mostrarAvisos === 'function') { c.mostrarAvisos(); }
+            });
+        };
         global.PMU_FICHA = global.PMU_FICHA || {};
         global.PMU_FICHA.subidas = api.subidas;
         // Spec 030 (D23): mapa id -> url por pagina. La miniatura, el visor y el
@@ -2182,6 +2222,7 @@
             if (!montado && typeof console !== 'undefined' && console.warn) {
                 console.warn('[PMU] CargadorPMU no dibujo la ranura (revisa w/h en RANURAS).');
             }
+            if (montado) { cargadores.push(cargador); }   // spec 046 (U1): avisos al comprar
             return montado ? cargador : null;
         };
         // Spec 018 (T001/FIX): PUBLICAR la API COMPLETA **antes** de montar. El

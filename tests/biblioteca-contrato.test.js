@@ -52,7 +52,7 @@ check('el modal monta la tira SIEMPRE visible (sin boton de biblioteca)',
     !/spmu-biblioteca/.test(sel) && /pmu-bib-contenedor/.test(sel));
 check('engancha la tira pasando onElegir', /PMUBiblioteca\.tira\(cajaBib, \{/.test(sel));
 check('la foto elegida entra por cargarDesdeBiblioteca (sin drop sintetico)',
-    /self\.cargarDesdeBiblioteca\(foto\)/.test(sel)
+    /self\.cargarDesdeBiblioteca\(foto, 'tira'\)/.test(sel)
     && /prototype\.cargarDesdeBiblioteca = function/.test(sel)
     && !/new DragEvent\('drop'/.test(sel));
 // Spec 040 (T012/T015): la tira pinta miniaturas y el selector resuelve la receta por clave.
@@ -206,7 +206,8 @@ console.log('== Spec 039 D6: se retiro `Elegir` del selector ==');
 check('el selector ya no tiene `_bibMadre`/`_yaElegido`/`_paramsBase`',
     !/_bibMadre/.test(sel) && !/_yaElegido/.test(sel) && !/_paramsBase/.test(sel));
 check('spec 043 (US3): el primario dice SIEMPRE `Guardar` (sin rama de reuso)',
-    /prototype\._actualizarPrimario = function/.test(sel) && /ok\.textContent = 'Guardar';/.test(sel));
+    /prototype\._actualizarPrimario = function/.test(sel)
+    && /'Aceptar'/.test(sel) && /'Subir'/.test(sel));
 check('el selector expone obtenerBlobFallido() para reintentar (spec 039 D2)',
     /prototype\.obtenerBlobFallido = function/.test(sel) && /_falloSubida/.test(sel));
 
@@ -240,15 +241,15 @@ check('el selector sabe sus params con los 15 campos de la receta v2',
     && /iw: dim\.w/.test(sel));
 
 console.log('== Spec 039 D2: reintento de subida ==');
-check('el selector marca _falloSubida y guarda ultimoBlob al fallar',
-    /_falloSubida = true;/.test(sel) && /self\.ultimoBlob = blob;/.test(sel));
+check('spec 046 (U7): la subida en segundo plano deja el fallo en el cargador',
+    /self\._anotarFallo\(indice, \{/.test(carg) && /cpmu-mini-fallo/.test(carg));
 check('el cargador reintenta con el MISMO blob (no vuelve a elegir archivo)',
     /this\._subir\(indice, fallo\.blob, null\)/.test(carg));
 
 console.log('== Spec 039 D4: la tira carga directo ==');
 check('la tira de "Mis imagenes" NO usa madre ni drop: usa cargarDesdeBiblioteca',
     /self\._bibMadre = String/.test(sel) === false
-    && /self\.cargarDesdeBiblioteca\(foto\)/.test(sel)
+    && /self\.cargarDesdeBiblioteca\(foto, 'tira'\)/.test(sel)
     && /new DragEvent\('drop'/.test(sel) === false);
 check('A4: la receta recordada solo se aplica si la geometria coincide',
     /_aplicarParamsIniciales = function/.test(sel)
