@@ -4,7 +4,8 @@
 
 **Created**: 2026-11-22
 
-**Status**: Draft (decisiones del usuario tomadas; falta clarify)
+**Status**: Implementada (v4.36.2, 2026-11-22) — falta el recorrido manual del usuario y
+las pasadas de spec clarify.
 
 **Input**: relevamiento `docs/sintomas-comprador.md` (U1-U8) + respuestas del usuario.
 

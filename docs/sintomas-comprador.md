@@ -1,5 +1,10 @@
 # Sintomas del comprador (relevamiento)
 
+> **Estado 2026-11-22**: **U1-U8 implementadas** (plugin v4.36.2 + tema
+> `muyunicos` 3.7.3.1795455340, ambos deploy verificados). B1/B2/B3 quedaron en
+> v4.36.1 (spec 045). Sigue abierto: el resto de sintomas que reporte el usuario y
+> las pasadas de **spec clarify**.
+
 > Fecha: 2026-11-22. Fuente: relevamiento del usuario sobre
 > `https://muyunicos.com/ojo-turco-protector-sticker/`.
 > Objetivo: clasificar cada sintoma (bug / UX / tema) y llevarlo a un spec.
