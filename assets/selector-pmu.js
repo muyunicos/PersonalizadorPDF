@@ -657,12 +657,14 @@
         this._paramsIniciales = (opciones.params && typeof opciones.params === 'object')
             ? opciones.params : null;
         if (this.raiz) { return; }
+        this._resetEstado();   // spec 045 (A2): cada apertura empieza limpia
         inyectarEstilos();
         this._focoPrevio = document.activeElement || null;
         this._contextoReemplazo = opciones.tituloContexto ? String(opciones.tituloContexto) : '';
-        // Spec 039 (D6): se retira la rama de reuso `Elegir` (0 bytes). El primario
-        // dice SIEMPRE `Guardar` y SIEMPRE viajan bytes; el servidor deduplica por
-        // `sha` (D24 de la 035) si la foto ya existia.
+        // Spec 039 (D6): se retiro la rama de reuso `Elegir`. El primario dice
+        // SIEMPRE `Guardar`. Con una foto de la biblioteca (040 A6 / 043 US1) el
+        // guardado es de 0 bytes (declara la receta); si no, viajan bytes y el
+        // servidor deduplica por `sha` (D24 de la 035) si la foto ya existia.
         //   - `this.config.usar`  -> eliminado
         //   - la fuente de biblioteca (`bibMadre`) y su guard (`yaElegido`)
         //   - la composicion de REFERENCIA que hacia decir `Elegir`
@@ -1008,17 +1010,35 @@
         document.addEventListener('keydown', this._onKey);
     };
 
-    SelectorPMU.prototype._prepararNuevaCarga = function () {
-        // Spec 040 (A6): una carga NUEVA deja de ser "usar la existente".
-        this._bib = null;
-        if (this.imagen && this.imagen.src) { URL.revokeObjectURL(this.imagen.src); }
+    /**
+     * Spec 045 (A2): estado visual limpio de una apertura.
+     *
+     * La instancia del selector se REUTILIZA por ranura (`cargador-pmu.js`), asi
+     * que sin reset el modal siguiente mostraba la foto anterior (y habilitaba
+     * Eliminar / Ver en grande sobre ella).
+     */
+    SelectorPMU.prototype._resetEstado = function () {
         this.imagen = null;
         this.archivoOrigen = null;
+        this.ultimoBlob = null;
+        this.ultimaUrl = null;
         this.desplazamiento = { x: 0, y: 0 };
         this.zoom = 1;
         this.rotacion = 0;
-        // Spec 024 (D9): una carga nueva arranca sin la mascara de inspeccion.
+        this.colorFondo = '#ffffff';
+        this.fondoAuto = '#ffffff';
+        this.fondoEsAuto = true;
         this._mascaraRecorte = false;
+        this._bib = null;
+        this._desdeBiblioteca = false;
+        this.supera5 = false;
+    };
+
+    SelectorPMU.prototype._prepararNuevaCarga = function () {
+        // Spec 040 (A6): una carga NUEVA deja de ser "usar la existente".
+        // Spec 045 (A2): el reset vive en un unico lugar (`_resetEstado`).
+        if (this.imagen && this.imagen.src) { URL.revokeObjectURL(this.imagen.src); }
+        this._resetEstado();
         if (!this.raiz) { return; }
         var elegir = this.raiz.querySelector('.spmu-elegir');
         if (elegir) { elegir.textContent = 'Cargar imagen'; }

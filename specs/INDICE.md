@@ -62,6 +62,14 @@
 > (D2, D3/US3.4 y SC-003), la **030** (clarificacion 4a y D8) y la **016** (D7). 5 historias, 18 FR,
 > 8 SC; sin IndexedDB (cache HTTP de `media.php`). Puertas: `selector-contrato`, `biblioteca-contrato` 81, `campos-contrato`, `media_lectura` 75 y `ficha-pedido.browser.js` **53/53** (2026-11-22).
 
+> **2026-11-22**: spec **045-bugs-cargador** implementada (v4.36.1) — **A1**: editar una
+> foto y guardar ya no deja el reemplazo armado (la siguiente foto no pisa la editada;
+> `_usarExistente` honra `_reemplazo` y lo limpia). **A2**: el selector **reabre limpio**
+> (`_resetEstado` en `open()`): sin la foto anterior ni `Eliminar`/`Ver en grande` sobre
+> una imagen que no es la actual. Puertas: `cargador-estado` **22** (nueva), `selector-contrato`,
+> `campos-contrato`, `biblioteca-contrato` 81, `receta-contrato` 21 + `ficha-pedido` **53/53**.
+> Auditoria completa (A3-A8 pendientes, spec 044): `docs/auditoria-cargador.md`.
+
 ## Activos (codigo completo, falta solo manual WP real)
 | Spec | Codigo | Pendiente manual | Docs normativos |
 |------|--------|------------------|-----------------|

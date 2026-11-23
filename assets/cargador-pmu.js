@@ -646,6 +646,25 @@
         }
         if (url) { this._urls[clave] = String(url); }
         var ids = this.estado[indice].ids;
+        // Spec 045 (A1): si hay un reemplazo PENDIENTE de esta ranura, el id va a
+        // ESA posicion y el contexto se limpia. Antes se agregaba al final (o se
+        // rechazaba con la ranura llena): la foto editada quedaba y la siguiente
+        // subida la pisaba.
+        var reemplazo = this._reemplazo;
+        if (reemplazo && parseInt(reemplazo.indice, 10) === parseInt(indice, 10)) {
+            var pos = Math.max(0, Math.min(ids.length - 1, parseInt(reemplazo.posicion, 10) || 0));
+            if (ids.length === 0) { ids.push(clave); } else { ids[pos] = clave; }
+            this._reemplazo = null;
+            this.recetas[clave] = params || null;
+            this._pintar();
+            if (typeof this.config.onRecorte === 'function') {
+                this.config.onRecorte(clave, String(url || ''), params || null);
+            }
+            if (reemplazo.desdeVisor) {
+                this._abrirVisorCompartido(indice, Math.min(pos, ids.length - 1));
+            }
+            return Promise.resolve(clave);
+        }
         if (ids.indexOf(clave) === -1) {
             if (ids.length >= r.max) {
                 return Promise.reject(new Error('La ranura ya esta llena.'));
