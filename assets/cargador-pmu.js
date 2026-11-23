@@ -373,12 +373,14 @@
             e.preventDefault();
             zona.classList.remove('cpmu-zona-sobre');
             var dt = e.dataTransfer;
-            var archivo = dt && dt.files && dt.files[0];
-            if (!archivo) {
+            var archivos = (dt && dt.files) ? Array.prototype.slice.call(dt.files) : [];
+            if (!archivos.length) {
                 self._error('Suelta un archivo de imagen.');
                 return;
             }
-            self._abrir(i, archivo);
+            // Spec 047: con N>1 se omite el editor y se sube el lote.
+            if (archivos.length > 1) { self._subirLote(i, archivos); return; }
+            self._abrir(i, archivos[0]);
         });
 
         this.selectores[i] = { boton: boton, tira: tira, zona: zona, sel: null };
@@ -420,6 +422,9 @@
                 // Spec 024 (D2): el badge tecnico solo se ve en la consola.
                 tecnico: this.config.tecnico,
                 envoltura: this.config.envoltura || null,
+                // Spec 047: habilita `multiple` y el tope del lote.
+                max: r.max,
+                subirLote: function (archivos) { return self._subirLote(indice, archivos); },
                 subirAsync: function (blob) {
                     var reemplazo = self._reemplazo;
                     self._reemplazo = null;
@@ -515,7 +520,7 @@
      * Spec 039 (D6): se retiro `_madreDe` (y con el, `madre_origen`). No hay familia
      * que reusar: el servidor deduplica por `sha` (D24 de la 035).
      */
-    CargadorPMU.prototype._subir = function (indice, blob, posicion) {
+    CargadorPMU.prototype._subir = function (indice, blob, posicion, params) {
         var self = this;
         if (!this.config.subir) {
             this._error('No hay donde subir la imagen.');
@@ -529,7 +534,7 @@
         if (!this._pendientes[indice]) { this._pendientes[indice] = []; }
         this._pendientes[indice].push(token);
         this._pintar();
-        var paramsSubida = this._paramsDe(indice);
+        var paramsSubida = params || this._paramsDe(indice);
         return Promise.resolve(this.config.subir(blob, {
             ranura: indice, w: r.w, h: r.h, forma: r.forma,
             // Spec 035 (D9): la RECETA de la composicion viaja con la subida (el
@@ -593,6 +598,98 @@
         var lista = this._pendientes[indice] || [];
         var i = lista.indexOf(token);
         if (i >= 0) { lista.splice(i, 1); }
+    };
+
+    /**
+     * Spec 047: original acotado al cap del comprador (2000 px de lado mayor),
+     * en memoria. Devuelve `{blob, w, h}` o null si no se puede leer.
+     */
+    CargadorPMU.prototype._originalAcotado = function (archivo) {
+        return new Promise(function (resolve) {
+            var doc = global.document;
+            if (!doc || !global.URL || !global.Image) { resolve(null); return; }
+            var url = URL.createObjectURL(archivo);
+            var img = new Image();
+            img.onload = function () {
+                var w = Math.max(1, img.naturalWidth || 1);
+                var h = Math.max(1, img.naturalHeight || 1);
+                if (global.PMUFotos && typeof global.PMUFotos.medidasAcotadas === 'function') {
+                    var m = global.PMUFotos.medidasAcotadas(w, h);
+                    if (m && m.w > 0 && m.h > 0) { w = m.w; h = m.h; }
+                }
+                var cv = doc.createElement('canvas');
+                cv.width = w;
+                cv.height = h;
+                var cx = cv.getContext ? cv.getContext('2d') : null;
+                if (!cx) { URL.revokeObjectURL(url); resolve(null); return; }
+                cx.drawImage(img, 0, 0, w, h);
+                URL.revokeObjectURL(url);
+                if (!cv.toBlob) { resolve(null); return; }
+                cv.toBlob(function (blob) {
+                    resolve(blob ? { blob: blob, w: w, h: h } : null);
+                }, 'image/webp', 0.85);
+            };
+            img.onerror = function () { URL.revokeObjectURL(url); resolve(null); };
+            img.src = url;
+        });
+    };
+
+    /**
+     * Spec 047 (U2): receta v2 por defecto del lote (`cubrir`, escala 1, centro).
+     * Mismas claves que `SelectorPMU._params()`.
+     */
+    CargadorPMU.prototype._recetaLote = function (r, w, h) {
+        return {
+            v: 2,
+            w: r.w,
+            h: r.h,
+            forma: String(r.forma || 'auto'),
+            modo: 'cubrir',
+            escala: 1,
+            ox: 0.5,
+            oy: 0.5,
+            fondo: (r.transp === 'no') ? '#ffffff' : 'transparent',
+            transp: String(r.transp || ''),
+            rot: 0,
+            iw: Math.max(1, parseInt(w, 10) || 1),
+            ih: Math.max(1, parseInt(h, 10) || 1),
+            phsize: Math.max(0, Math.min(2, parseInt(r.phsize, 10) || 0)),
+            gid: String(r.gid || '').toUpperCase()
+        };
+    };
+
+    /** Spec 047: sube UN archivo del lote con la receta por defecto. */
+    CargadorPMU.prototype._subirArchivo = function (indice, archivo) {
+        var self = this;
+        var r = this.config.ranuras[indice];
+        return Promise.resolve(this._originalAcotado(archivo)).then(function (res) {
+            if (!res || !res.blob) {
+                self._error('No se pudo leer la imagen.');
+                return null;
+            }
+            return self._subir(indice, res.blob, null, self._recetaLote(r, res.w, res.h));
+        });
+    };
+
+    /**
+     * Spec 047: lote de N archivos. Respeta el `max` de la ranura, avisa si sobran
+     * y sigue aunque uno falle (cada fallo queda marcado en su miniatura).
+     */
+    CargadorPMU.prototype._subirLote = function (indice, archivos) {
+        var self = this;
+        var r = this.config.ranuras[indice];
+        this._reemplazo = null;
+        var libres = Math.max(0, r.max - this.estado[indice].ids.length);
+        var lista = Array.prototype.slice.call(archivos || []);
+        if (lista.length > libres) {
+            this._error('Solo entran ' + libres + ' imagen(es) en esta ranura.');
+            lista = lista.slice(0, libres);
+        }
+        return lista.reduce(function (p, archivo) {
+            return p.then(function () {
+                return self._subirArchivo(indice, archivo).catch(function () { });
+            });
+        }, Promise.resolve()).then(function () { return true; });
     };
 
     /** Repinta miniaturas, contadores y el boton de "Listo" (D16). */

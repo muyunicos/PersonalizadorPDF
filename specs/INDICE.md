@@ -79,6 +79,13 @@
 > Puertas: `selector-contrato`, `biblioteca-contrato` 81, `campos-contrato`,
 > `cargador-estado` 25 + `ficha-pedido.browser.js` **54/54**.
 
+> **2026-11-22**: spec **047-carga-multiple** implementada (v4.37.0) — en un campo con
+> `max > 1` se pueden arrastrar/elegir **varias fotos** de una (`multiple` + drop de N);
+> con N>1 se omite el editor y se suben con receta por defecto (`cubrir`, escala 1,
+> centro), despues editables desde la tira. Puertas: `cargador-lote` **20** (nueva),
+> `selector-contrato`, `biblioteca-contrato` 81, `cargador-estado` 25 +
+> `ficha-pedido.browser.js` **54/54**.
+
 ## Activos (codigo completo, falta solo manual WP real)
 | Spec | Codigo | Pendiente manual | Docs normativos |
 |------|--------|------------------|-----------------|

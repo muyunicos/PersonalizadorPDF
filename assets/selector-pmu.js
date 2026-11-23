@@ -592,7 +592,10 @@
             // Spec 040 (A4): receta v2 a re-aplicar sobre la imagen (si es de esta geometria).
             paramsIniciales: (config.paramsIniciales && typeof config.paramsIniciales === 'object')
                 ? config.paramsIniciales : null,
-            subirAsync: typeof config.subirAsync === 'function' ? config.subirAsync : null
+            subirAsync: typeof config.subirAsync === 'function' ? config.subirAsync : null,
+            // Spec 047: lote (multiple) y tope de la ranura.
+            max: Math.max(1, parseInt(config.max, 10) || 1),
+            subirLote: typeof config.subirLote === 'function' ? config.subirLote : null
         };
         if (this.config.finalW < 1 || this.config.finalH < 1) {
             throw new Error('selector-pmu: finalW/finalH son obligatorios (los define el campo/PDF).');
@@ -770,6 +773,9 @@
             '</div>';
         document.body.appendChild(this.raiz);
         document.body.classList.add('spmu-bloqueado');
+        // Spec 047: `multiple` solo si la ranura admite mas de una foto.
+        var inpFich = this.raiz.querySelector('.spmu-file');
+        if (inpFich) { inpFich.multiple = (parseInt(this.config.max, 10) || 1) > 1; }
 
         var $ = function (sel) { return self.raiz ? self.raiz.querySelector(sel) : null; };
         this.escenaWrap = $('.spmu-escena-wrap');
@@ -799,9 +805,16 @@
             });
         }
         $('.spmu-file').addEventListener('change', function () {
-            var f = this.files && this.files[0];
+            var archivos = Array.prototype.slice.call(this.files || []);
             this.value = '';
-            if (f) { self._cargar(f); }
+            if (!archivos.length) { return; }
+            // Spec 047: con N>1 se omite el editor y se sube el lote.
+            if (archivos.length > 1 && typeof self.config.subirLote === 'function') {
+                self.close();
+                self.config.subirLote(archivos);
+                return;
+            }
+            self._cargar(archivos[0]);
         });
         $('.spmu-zoom').addEventListener('input', function () {
             self._setZoom(sliderAZoom(this.value));
@@ -989,8 +1002,16 @@
         caja.addEventListener('drop', function (e) {
             e.preventDefault();
             caja.classList.remove('spmu-sobre');
-            var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-            if (f && !self._subiendo) { self._cargar(f); }
+            var archivos = (e.dataTransfer && e.dataTransfer.files)
+                ? Array.prototype.slice.call(e.dataTransfer.files) : [];
+            if (!archivos.length || self._subiendo) { return; }
+            // Spec 047: con N>1 se omite el editor y se sube el lote.
+            if (archivos.length > 1 && typeof self.config.subirLote === 'function') {
+                self.close();
+                self.config.subirLote(archivos);
+                return;
+            }
+            self._cargar(archivos[0]);
         });
         this.raiz.addEventListener('click', function (e) {
             if (e.target === self.raiz && !self._subiendo) { self._cancelar(); }

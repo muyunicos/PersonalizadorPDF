@@ -586,6 +586,11 @@ check('U1: el boton queda clicable con `aria-disabled` (aviso al comprar)',
   /aria-disabled/.test(tienda16) && /activarAvisos/.test(tienda16));
 check('U7: el modal cierra al enviar (subida en segundo plano)',
   /subida pasa a SEGUNDO PLANO/.test(selector) && /_pendientes/.test(cargador));
+check('spec 047: el input admite multiple y delega el lote',
+  /inpFich\.multiple = \(parseInt\(this\.config\.max/.test(selector)
+  && /config\.subirLote\(archivos\)/.test(selector));
+check('spec 047: el cargador pasa max y subirLote al selector',
+  /max: r\.max/.test(cargador) && /subirLote: function \(archivos\)/.test(cargador));
 
 console.log('');
 if (fallos) {

@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.36.3
+Stable tag: 4.37.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,14 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.37.0 =
+* Spec 047 (carga multiple): en un campo con `max > 1` se pueden **arrastrar o elegir
+  varias fotos** de una. Con N>1 se omite el editor y se suben con receta por defecto
+  (`cubrir`, escala 1, centro); despues se editan individualmente desde la tira.
+* `multiple` en "Cargar imagen" y drop de N archivos; si sobran, se avisa el tope.
+* Puertas: `cargador-lote` 20 (nueva), `selector-contrato`, `biblioteca-contrato` 81,
+  `cargador-estado` 25 + `ficha-pedido.browser.js` 54/54.
 
 = 4.36.3 =
 * Spec 046 (ajuste): el boton del modal vuelve a decir **siempre "Cargar imagen"**

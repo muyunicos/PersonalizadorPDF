@@ -214,7 +214,7 @@ check('el selector expone obtenerBlobFallido() para reintentar (spec 039 D2)',
 console.log('== Cargador: receta y reintento (spec 039) ==');
 check('el cargador pasa params al subir (sin usar ni madre_origen)',
     /params: paramsSubida/.test(carg)
-    && /var paramsSubida = this\._paramsDe\(indice\)/.test(carg)
+    && /var paramsSubida = (params \|\| )?this\._paramsDe\(indice\)/.test(carg)
     && /CargadorPMU\.prototype\._paramsDe = function/.test(carg)
     && !/usar: self\.config\.usar \? function \(madre, params\)/.test(carg)
     && !/madre_origen: this\._madreDe\(indice\)/.test(carg));
