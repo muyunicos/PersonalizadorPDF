@@ -696,6 +696,7 @@
      * Spec 045 (T018): objetivo de una ranura `{aspecto}-{familia}-{area}`.
      * Familia: 1 = circulo/ovalo, 0 = resto (el PH manda; `auto` no se guarda).
      */
+    if (false) {   // spec 044: helpers locales retirados (unica: assets/receta-objetivo.js)
     function objetivoDeLocal(r) {
         var w = Math.max(1, parseInt(r && r.w, 10) || 1);
         var h = Math.max(1, parseInt(r && r.h, 10) || 1);
@@ -734,21 +735,19 @@
         });
         return mejor;
     }
+    }
 
-    // Spec 044: implementacion canonica compartida (`assets/receta-objetivo.js`);
-    // el fallback local solo cubre el caso de que el modulo no este cargado.
-    function objetivoDe(r) {
-        return (global.PMURecetaObjetivo && global.PMURecetaObjetivo.objetivoDe)
-            ? global.PMURecetaObjetivo.objetivoDe(r) : objetivoDeLocal(r);
+    // Spec 044: implementacion canonica compartida (`assets/receta-objetivo.js`).
+    // Sin fallback local: si el modulo no esta cargado, se avisa y se corta.
+    function ro() {
+        if (!global.PMURecetaObjetivo) {
+            throw new Error('receta-objetivo.js no esta cargado (spec 044)');
+        }
+        return global.PMURecetaObjetivo;
     }
-    function parseObjetivo(clave) {
-        return (global.PMURecetaObjetivo && global.PMURecetaObjetivo.parseObjetivo)
-            ? global.PMURecetaObjetivo.parseObjetivo(clave) : parseObjetivoLocal(clave);
-    }
-    function mejorReceta(recetas, obj) {
-        return (global.PMURecetaObjetivo && global.PMURecetaObjetivo.mejorReceta)
-            ? global.PMURecetaObjetivo.mejorReceta(recetas, obj) : mejorRecetaLocal(recetas, obj);
-    }
+    function objetivoDe(r) { return ro().objetivoDe(r); }
+    function parseObjetivo(clave) { return ro().parseObjetivo(clave); }
+    function mejorReceta(recetas, obj) { return ro().mejorReceta(recetas, obj); }
 
     /** Repinta miniaturas, contadores y el boton de "Listo" (D16). */
     CargadorPMU.prototype._pintar = function () {

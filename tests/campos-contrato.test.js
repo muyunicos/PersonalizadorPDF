@@ -370,7 +370,8 @@ console.log('\n== baja de campos: confirmacion antes del POST ==');
 
 console.log('\n== cargador de imagenes (spec 012, T023/T024) ==');
 {
-  const Carg = require(path.join(__dirname, '..', 'assets', 'cargador-pmu.js'));
+  require(path.join(__dirname, '..', 'assets', 'receta-objetivo.js'));
+const Carg = require(path.join(__dirname, '..', 'assets', 'cargador-pmu.js'));
 
   // normalizarRanuras: descarta lo invalido y no inventa medidas (T023).
   check('cargador: descarta la ranura sin w/h',

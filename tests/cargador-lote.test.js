@@ -12,6 +12,7 @@
 
 const path = require('path');
 const RAIZ = path.resolve(__dirname, '..');
+require(path.join(RAIZ, 'assets', 'receta-objetivo.js'));
 const API = require(path.join(RAIZ, 'assets', 'cargador-pmu.js'));
 const CargadorPMU = API.CargadorPMU;
 

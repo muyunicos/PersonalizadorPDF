@@ -100,6 +100,7 @@ check('focus trap con Tab/Shift+Tab y restauracion del foco',
   && /_focoPrevio/.test(selector));
 
 console.log('\n== F2: Geometria de escena 10%, 3 modos, regla del 5% y fondo por bordes (spec 021) ==');
+require(path.join(RAIZ, 'assets', 'receta-objetivo.js'));
 const SelectorMod = require(path.join(RAIZ, 'assets', 'selector-pmu.js'));
 const puro = SelectorMod.puro || {};
 check('expone SelectorPMU.puro con las funciones puras',

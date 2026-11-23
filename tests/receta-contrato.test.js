@@ -21,6 +21,7 @@ const fs = require('fs');
 const path = require('path');
 
 const RAIZ = path.resolve(__dirname, '..');
+require(path.join(RAIZ, 'assets', 'receta-objetivo.js'));
 const SelectorPMU = require(path.join(RAIZ, 'assets', 'selector-pmu.js'));
 
 let checks = 0;

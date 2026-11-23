@@ -91,6 +91,7 @@
      * Spec 046 (T018): objetivo de una ranura `{aspecto}-{familia}-{area}`.
      * (Duplica los helpers de `cargador-pmu.js`: la unificacion queda para la 044.)
      */
+    if (false) {   // spec 044: helpers locales retirados (unica: assets/receta-objetivo.js)
     function objetivoDeLocal(r) {
         var w = Math.max(1, parseInt(r && r.w, 10) || 1);
         var h = Math.max(1, parseInt(r && r.h, 10) || 1);
@@ -127,20 +128,18 @@
         return mejor;
     }
 
-    // Spec 044: implementacion canonica compartida (`assets/receta-objetivo.js`);
-    // el fallback local solo cubre el caso de que el modulo no este cargado.
-    function objetivoDe(r) {
-        return (global.PMURecetaObjetivo && global.PMURecetaObjetivo.objetivoDe)
-            ? global.PMURecetaObjetivo.objetivoDe(r) : objetivoDeLocal(r);
+    }   // fin de los helpers locales retirados (spec 044)
+
+    // Spec 044: implementacion canonica compartida (`assets/receta-objetivo.js`).
+    function ro() {
+        if (!global.PMURecetaObjetivo) {
+            throw new Error('receta-objetivo.js no esta cargado (spec 044)');
+        }
+        return global.PMURecetaObjetivo;
     }
-    function parseObjetivo(clave) {
-        return (global.PMURecetaObjetivo && global.PMURecetaObjetivo.parseObjetivo)
-            ? global.PMURecetaObjetivo.parseObjetivo(clave) : parseObjetivoLocal(clave);
-    }
-    function mejorReceta(recetas, obj) {
-        return (global.PMURecetaObjetivo && global.PMURecetaObjetivo.mejorReceta)
-            ? global.PMURecetaObjetivo.mejorReceta(recetas, obj) : mejorRecetaLocal(recetas, obj);
-    }
+    function objetivoDe(r) { return ro().objetivoDe(r); }
+    function parseObjetivo(clave) { return ro().parseObjetivo(clave); }
+    function mejorReceta(recetas, obj) { return ro().mejorReceta(recetas, obj); }
 
     /**
      * Spec 046 (U3): firma COMPARABLE de una receta (misma tolerancia que el
