@@ -207,7 +207,7 @@
         config = config || {};
         this.elemento = elemento;
         this.config = {
-            ranuras: normalizarRanuras(config.ranuras),
+            ranuras: config.yaNormalizadas ? (config.ranuras || []) : normalizarRanuras(config.ranuras),
             subir: typeof config.subir === 'function' ? config.subir : null,
             onChange: typeof config.onChange === 'function' ? config.onChange : null,
             onError: typeof config.onError === 'function' ? config.onError : null,

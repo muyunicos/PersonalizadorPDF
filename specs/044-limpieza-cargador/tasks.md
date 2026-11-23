@@ -15,9 +15,9 @@
 
 ## Phase 2 — Normalizador único (US2)
 
-- [ ] T007 Unificar `PURO.normalizarRanura` y `CargadorPMU.normalizarRanuras` (una sola
+- [X] T007 Unificar `PURO.normalizarRanura` y `CargadorPMU.normalizarRanuras` (una sola
   implementación; el cargador usa la de la ficha o viceversa).
-- [ ] T008 Puerta anti-divergencia (`campos-contrato`) + `ficha-pedido`.
+- [X] T008 Puerta anti-divergencia (`campos-contrato`) + `ficha-pedido`.
 
 ## Phase 3 — Estado y código muerto (US3)
 

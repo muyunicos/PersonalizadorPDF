@@ -2187,6 +2187,9 @@
             var mio = false;
             var cargador = new window.CargadorPMU(el, {
                 ranuras: ranuras,
+                // Spec 044 (US2): la ficha ya normalizo con `defCampo`; el cargador
+                // no vuelve a normalizar (antes se hacia dos veces).
+                yaNormalizadas: true,
                 envoltura: envoltura,
                 // Spec 012 (fix): el valor guardado llega PLANO (`ids()` -> `idsPlanos`) y el
                 // cargador restaura una entrada por RANURA. Aca `ranuras` ya esta armada;
