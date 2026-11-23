@@ -30,8 +30,8 @@ console.log('== F0: Cropper.js RETIRADO (spec 021) ==');
 check('el vendor assets/vendor/cropper/ ya no existe', !fs.existsSync(VENDOR));
 check('el plugin no encola cropper (ni JS ni CSS)',
   !/personalizador-pdf-cropper/.test(plugin) && !/vendor\/cropper/.test(plugin));
-check('selector-pmu se encola SIN dependencias',
-  /'personalizador-pdf-selector'[\s\S]{0,200}\[\],/.test(plugin));
+check('selector-pmu se encola con el modulo de recetas (spec 044)',
+  /'personalizador-pdf-selector'[\s\S]{0,200}\['personalizador-pdf-receta-objetivo'\]/.test(plugin));
 check('ningun JS del plugin referencia Cropper',
   !/Cropper/.test(selector) && !/Cropper/.test(cargador));
 check('el plugin no sirve el vendor por CDN',

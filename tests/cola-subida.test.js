@@ -163,8 +163,9 @@ check('039 H5: el aviso de cola distingue 1 pendiente (singular)',
 check('039 H5: `api.subidas` expone detalle() con {total, campos}',
     /detalle: function \(\) \{/.test(tiendaSrc)
     && /return \{ total: total, campos: porCampo \}/.test(tiendaSrc));
-check('039 H5: refrescarMinimos avisa de la cola cuando no faltan fotos',
-    /\} else if \(bloqueos\.subidas\) \{/.test(tiendaSrc));
+check('039 H5: refrescarMinimos avisa de la cola cuando no faltan fotos (spec 046: solo con avisos activos)',
+    /var mostrar = avisosActivos && \(faltan > 0 \|\| bloqueos\.subidas\)/.test(tiendaSrc)
+    && /\} else if \(mostrar\) \{/.test(tiendaSrc));
 check('039 H5: la cola no cuenta dos veces (usa pendientes(), no lista a ciegas)',
     /parseInt\(c\.pendientes\(\), 10\) \|\| 0/.test(tiendaSrc));
 

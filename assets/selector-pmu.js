@@ -91,7 +91,7 @@
      * Spec 046 (T018): objetivo de una ranura `{aspecto}-{familia}-{area}`.
      * (Duplica los helpers de `cargador-pmu.js`: la unificacion queda para la 044.)
      */
-    function objetivoDe(r) {
+    function objetivoDeLocal(r) {
         var w = Math.max(1, parseInt(r && r.w, 10) || 1);
         var h = Math.max(1, parseInt(r && r.h, 10) || 1);
         var forma = String((r && r.forma) || '').toLowerCase();
@@ -104,20 +104,20 @@
     }
 
     /** Interpreta una clave de objetivo; null si no vale. */
-    function parseObjetivo(clave) {
+    function parseObjetivoLocal(clave) {
         var m = /^(\d+(?:\.\d+)?)-([01])-(\d+)$/.exec(String(clave || ''));
         if (!m) { return null; }
         return { aspecto: parseFloat(m[1]), familia: parseInt(m[2], 10), area: parseInt(m[3], 10) };
     }
 
     /** Mejor receta de un mapa `objetivo -> delta` (exacta o la mas cercana). */
-    function mejorReceta(recetas, obj) {
+    function mejorRecetaLocal(recetas, obj) {
         if (!recetas || !obj) { return null; }
         if (recetas[obj.clave]) { return recetas[obj.clave]; }
         var mejor = null;
         var mejorScore = Infinity;
         Object.keys(recetas).forEach(function (k) {
-            var p = parseObjetivo(k);
+            var p = parseObjetivoLocal(k);
             if (!p) { return; }
             var score = Math.abs(p.aspecto - obj.aspecto) * 1000
                 + (p.familia === obj.familia ? 0 : 10)
@@ -125,6 +125,21 @@
             if (score < mejorScore) { mejorScore = score; mejor = recetas[k]; }
         });
         return mejor;
+    }
+
+    // Spec 044: implementacion canonica compartida (`assets/receta-objetivo.js`);
+    // el fallback local solo cubre el caso de que el modulo no este cargado.
+    function objetivoDe(r) {
+        return (global.PMURecetaObjetivo && global.PMURecetaObjetivo.objetivoDe)
+            ? global.PMURecetaObjetivo.objetivoDe(r) : objetivoDeLocal(r);
+    }
+    function parseObjetivo(clave) {
+        return (global.PMURecetaObjetivo && global.PMURecetaObjetivo.parseObjetivo)
+            ? global.PMURecetaObjetivo.parseObjetivo(clave) : parseObjetivoLocal(clave);
+    }
+    function mejorReceta(recetas, obj) {
+        return (global.PMURecetaObjetivo && global.PMURecetaObjetivo.mejorReceta)
+            ? global.PMURecetaObjetivo.mejorReceta(recetas, obj) : mejorRecetaLocal(recetas, obj);
     }
 
     /**

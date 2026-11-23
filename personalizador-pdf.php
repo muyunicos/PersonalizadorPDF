@@ -1043,13 +1043,22 @@ class Personalizador_PDF_Plugin
             PERSONALIZADOR_PDF_VERSION,
             true
         );
+        // Spec 044: helpers Puros de receta (objetivo/delta) compartidos por el
+        // cargador y el selector (antes estaban duplicados).
+        wp_enqueue_script(
+            'personalizador-pdf-receta-objetivo',
+            PERSONALIZADOR_PDF_URL . 'assets/receta-objetivo.js',
+            [],
+            PERSONALIZADOR_PDF_VERSION,
+            true
+        );
         // Spec 021: el recorte lo hace el propio selector con Canvas 2D (3 modos,
         // margen del 10% y doble guia). Cropper.js se retiro: era el motor de la
         // spec 016 y quedo sin uso (42 KB menos por ficha).
         wp_enqueue_script(
             'personalizador-pdf-selector',
             PERSONALIZADOR_PDF_URL . 'assets/selector-pmu.js',
-            [],
+            ['personalizador-pdf-receta-objetivo'],
             PERSONALIZADOR_PDF_VERSION,
             true
         );
@@ -1083,7 +1092,7 @@ class Personalizador_PDF_Plugin
         wp_enqueue_script(
             'personalizador-pdf-cargador',
             PERSONALIZADOR_PDF_URL . 'assets/cargador-pmu.js',
-            ['personalizador-pdf-visor'],
+            ['personalizador-pdf-visor', 'personalizador-pdf-receta-objetivo'],
             PERSONALIZADOR_PDF_VERSION,
             true
         );
@@ -6267,6 +6276,15 @@ JS;
             [],
             PERSONALIZADOR_PDF_VERSION
         );
+        // Spec 044: helpers Puros de receta (objetivo/delta) compartidos por el
+        // cargador y el selector (antes estaban duplicados).
+        wp_enqueue_script(
+            'personalizador-pdf-receta-objetivo',
+            PERSONALIZADOR_PDF_URL . 'assets/receta-objetivo.js',
+            [],
+            PERSONALIZADOR_PDF_VERSION,
+            true
+        );
         // El JS de la consola (modal, galeria wp.media) solo se usa en "PDFs";
         // El preview del campo usa el MISMO modulo que la ficha (spec 012, T011).
         wp_enqueue_script(
@@ -6281,7 +6299,7 @@ JS;
         wp_enqueue_script(
             'personalizador-pdf-cargador',
             PERSONALIZADOR_PDF_URL . 'assets/cargador-pmu.js',
-            ['personalizador-pdf-visor'],
+            ['personalizador-pdf-visor', 'personalizador-pdf-receta-objetivo'],
             PERSONALIZADOR_PDF_VERSION,
             true
         );
@@ -6291,7 +6309,7 @@ JS;
         wp_enqueue_script(
             'personalizador-pdf-selector',
             PERSONALIZADOR_PDF_URL . 'assets/selector-pmu.js',
-            [],
+            ['personalizador-pdf-receta-objetivo'],
             PERSONALIZADOR_PDF_VERSION,
             true
         );
