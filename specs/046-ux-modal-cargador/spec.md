@@ -15,6 +15,7 @@ y la pasada de clarify en curso).
 
 - Q: Cuando el comprador toca "Agregar al carrito" y el bloqueo **no** son fotos faltantes (vistas obligatorias sin ver, validez o archivos subiendo), ¿qué aviso mostramos? → A: **el aviso del bloqueo que aplique** (faltantes / cola / vistas / validez), **el primero por prioridad**.
 - Q: Cuando el bloqueo es por fotos faltantes, ¿la página debe desplazarse al **campo/ranura** que falta o al **aviso** global? → A: al **campo/ranura** (el aviso queda visible); para vistas -> galeria, para validez -> mensaje.
+- Q: "Quitar" en el editor, ¿borra la foto de la **biblioteca** o solo la saca de la **ranura**? → A: **solo de la ranura** y **cierra el modal**; el borrado de la biblioteca sigue en el visor de "Mis imagenes".
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -104,8 +105,9 @@ necesita abrir el visor completo siempre.
   con cambios `Guardar`, biblioteca `Cambiar`.
 - **FR-005** (U4): el boton secundario dice **siempre** `Cargar imagen` (sin
   "Cambiar imagen").
-- **FR-006** (U5): se retira `Ver en grande`; `Eliminar` pasa a `Quitar` y solo se
-  muestra con la ranura poblada.
+- **FR-006** (U5): se retira `Ver en grande`; `Eliminar` pasa a `Quitar`, solo con la
+  ranura poblada. **Quitar** retira la foto de la **ranura** y **cierra el editor**
+  (no toca la biblioteca); el borrado del archivo vive en el visor de "Mis imagenes".
 - **FR-007** (U7): al aceptar, el modal cierra **antes** de que termine la subida;
   el progreso/error vive en la miniatura (`cpmu-mini`).
 - **FR-008** (U8, tema): `mu-gal-linea` pinta `Todas (N)` **siempre** como ultimo
@@ -127,6 +129,8 @@ necesita abrir el visor completo siempre.
   `campos-contrato`, `biblioteca-contrato`, `ficha-pedido`).
 - **SC-007**: con un bloqueo de vistas/validez (sin fotos faltantes), el aviso aparece
   al tocar comprar (browser).
+- **SC-008**: "Quitar" retira la foto de la ranura (0 borrados en la biblioteca) y
+  cierra el editor (unit + browser).
 
 ## Key Entities
 

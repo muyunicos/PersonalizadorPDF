@@ -1127,6 +1127,10 @@ CargadorPMU.prototype._abrirVisorCompartido = function (indice, posicion) {
             self._pintar();
             return true;
         };
+        // Spec 047 (Q3): "Quitar" en el editor retira la foto de la RANURA (no de la
+        // biblioteca) y cierra el modal; el borrado del archivo vive en el visor
+        // de "Mis imagenes" (con confirmacion si esta en uso).
+        if (preguntar) { return Promise.resolve(quitarLocal()); }
         // Sin consumidor de red (preview del admin, o sin `borrarFoto`): solo local.
         var tieneBaja = (global.PMU_API && typeof global.PMU_API.borrarFoto === 'function');
         if (!tieneBaja || !id) {
