@@ -12,7 +12,8 @@
 
 const path = require('path');
 const RAIZ = path.resolve(__dirname, '..');
-const CargadorPMU = require(path.join(RAIZ, 'assets', 'cargador-pmu.js')).CargadorPMU;
+const API = require(path.join(RAIZ, 'assets', 'cargador-pmu.js'));
+const CargadorPMU = API.CargadorPMU;
 
 let checks = 0;
 let fallos = 0;
@@ -113,6 +114,26 @@ function cargador(max) {
     await c2._subir(0, { size: 1 }, null, paramsFijos);
     check('los params del lote llegan al servidor', !!c2.ctx && c2.ctx.params === paramsFijos, JSON.stringify(c2.ctx && c2.ctx.params));
     check('la receta queda memoizada por id', c2.recetas.abcdef123456 === paramsFijos);
+
+    /* ---- Objetivo y mejor receta (T018) ---- */
+    grupo('Objetivo y mejor receta');
+    const o1 = API.objetivoDe({ w: 300, h: 200, forma: 'rectangulo' });
+    check('objetivo 300x200 rect = 1.5000-0-60000', o1.clave === '1.5000-0-60000', o1.clave);
+    const o2 = API.objetivoDe({ w: 200, h: 200, forma: 'circulo' });
+    check('objetivo 200x200 circulo = 1.0000-1-40000', o2.clave === '1.0000-1-40000', o2.clave);
+    const o3 = API.objetivoDe({ w: 300, h: 200, forma: 'ovalo' });
+    check('objetivo 300x200 ovalo = 1.5000-1-60000', o3.clave === '1.5000-1-60000', o3.clave);
+    const o4 = API.objetivoDe({ w: 300, h: 200, forma: 'cuadrado' });
+    check('cuadrado con aspecto != 1 -> familia 0', o4.clave === '1.5000-0-60000', o4.clave);
+    const o5 = API.objetivoDe({ w: 0, h: 0, forma: 'auto' });
+    check('sin medidas -> 1.0000-0-1', o5.clave === '1.0000-0-1', o5.clave);
+    const p1 = API.parseObjetivo('1.5000-0-60000');
+    check('parseObjetivo', !!p1 && p1.aspecto === 1.5 && p1.familia === 0 && p1.area === 60000, JSON.stringify(p1));
+    check('parseObjetivo invalido', API.parseObjetivo('x') === null);
+    check('mejorReceta exacta', API.mejorReceta({ '1.5000-0-60000': { modo: 'cubrir' } }, o1).modo === 'cubrir');
+    check('mejorReceta mas cercana por aspecto',
+        API.mejorReceta({ '1.0000-1-40000': { modo: 'encajar' }, '1.6000-0-50000': { modo: 'estirar' } }, o1).modo === 'estirar');
+    check('mejorReceta sin datos', API.mejorReceta({}, o1) === null);
 
     console.log('');
     if (fallos === 0) {
