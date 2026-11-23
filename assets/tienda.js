@@ -2051,6 +2051,18 @@
             cargadores.forEach(function (c) {
                 if (c && typeof c.mostrarAvisos === 'function') { c.mostrarAvisos(); }
             });
+            // Spec 046 (FR-009): el aviso del primer bloqueo aplicable y, si no
+            // alcanzaba con el texto, se lleva la vista ahi (sin abrir nada).
+            var panel = raiz();
+            if (!panel) { return; }
+            var candidatos = ['.pmu-minimos-aviso', '.pmu-gal-revisar', '.pmu-validez-aviso'];
+            for (var i = 0; i < candidatos.length; i++) {
+                var el = panel.querySelector(candidatos[i]);
+                if (el && el.offsetParent !== null) {
+                    try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { }
+                    break;
+                }
+            }
         };
         global.PMU_FICHA = global.PMU_FICHA || {};
         global.PMU_FICHA.subidas = api.subidas;

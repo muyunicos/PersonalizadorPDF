@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.38.2
+Stable tag: 4.38.3
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,12 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.38.3 =
+* Spec 046 (FR-009): al intentar comprar se muestra el aviso del **primer bloqueo
+  aplicable** (faltantes -> cola -> vistas -> validez) y la vista se lleva a el.
+* Puertas: `selector-contrato`, `biblioteca-contrato` 81, `cola-subida` 26,
+  `campos-contrato`, `texto_puente ficha` OK.
 
 = 4.38.2 =
 * Spec 044 (limpieza final): los helpers de receta quedan **solo** en

@@ -9,6 +9,12 @@ las pasadas de spec clarify.
 
 **Input**: relevamiento `docs/sintomas-comprador.md` (U1-U8) + respuestas del usuario.
 
+## Clarifications
+
+### Session 2026-11-22
+
+- Q: Cuando el comprador toca "Agregar al carrito" y el bloqueo **no** son fotos faltantes (vistas obligatorias sin ver, validez o archivos subiendo), ¿qué aviso mostramos? → A: **el aviso del bloqueo que aplique** (faltantes / cola / vistas / validez), **el primero por prioridad**.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Avisos solo cuando el comprador va a comprar (Priority: P1)
@@ -103,6 +109,9 @@ necesita abrir el visor completo siempre.
   el progreso/error vive en la miniatura (`cpmu-mini`).
 - **FR-008** (U8, tema): `mu-gal-linea` pinta `Todas (N)` **siempre** como ultimo
   item, con la accion `abrir` del plugin.
+- **FR-009** (U1): al intentar comprar se muestra el aviso del **primer bloqueo
+  aplicable** por prioridad: faltantes de fotos -> cola de subida -> vistas
+  obligatorias -> validez. Sin bloqueo, no se muestra nada.
 
 ## Success Criteria
 
@@ -114,6 +123,8 @@ necesita abrir el visor completo siempre.
 - **SC-005**: el chip `Todas (N)` aparece con 1 foto y con muchas (tema).
 - **SC-006**: las puertas existentes siguen verdes (`selector-contrato`,
   `campos-contrato`, `biblioteca-contrato`, `ficha-pedido`).
+- **SC-007**: con un bloqueo de vistas/validez (sin fotos faltantes), el aviso aparece
+  al tocar comprar (browser).
 
 ## Key Entities
 
