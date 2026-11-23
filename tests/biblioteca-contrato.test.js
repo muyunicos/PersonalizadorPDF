@@ -40,8 +40,9 @@ check('revalida por revision: manda desde y respeta sin_cambios',
     /fd\.append\(.desde., previa\.revision\)/.test(bib) && /d\.sin_cambios && previa/.test(bib));
 check('la tira pinta hasta 10 fotos y no dibuja si esta vacia',
     /var TOPE_TIRA = 10;/.test(bib) && /if \(!fotos \|\| !fotos\.length\)/.test(bib));
-check('guarda solo metadatos: usa thumb_data/thumb y no la resolucion por POST',
+check('guarda solo metadatos: usa thumb_data/thumb y no la resolucion por POST (spec 044)', /img\.src = String\(f\.thumb_data \|+ f\.url \|+ f\.thumb/.test(bib) && !/urlDeSubida/.test(bib)); /*
     /img\.src = String\(f\.thumb_data \|\| urlResuelta \|\| f\.thumb \|\| f\.url/.test(bib) && !/urlDeSubida/.test(bib));
+*/
 check('spec 043 (US4): la miniatura ELIGE y el visor de la biblioteca existe',
     /function elegir\(indice\)/.test(bib)
     && /function verTodas\(indice\)/.test(bib)
@@ -104,9 +105,10 @@ check('spec 042: la copia solo se usa con la identidad de la ficha',
     && /String\(v\.identidad \|\| ''\) !== esperada/.test(bib));
 check('spec 042: tira salta con revision/identidad iguales',
     /previa\.revision === c\.revision/.test(bib));
-check('spec 042: miniaturas embebidas en los dos caminos',
+check('spec 042: miniaturas embebidas en los dos caminos (spec 044)', /f\.thumb_data \|+ f\.url/.test(bib) && /var thumb = String\(f\.thumb_data/.test(bib)); /*
     /f\.thumb_data \|\| urlResuelta/.test(bib)
     && /var thumb = String\(f\.thumb_data/.test(bib));
+*/
 check('spec 042: urlRespaldo para imagenes',
     /function urlRespaldo/.test(bib) && /urlRespaldo: urlRespaldo/.test(bib));
 check('spec 042: la ficha publica rapido/revision/identidad',
@@ -265,10 +267,11 @@ check('T035: los hooks del vinculo estan registrados (wp_login + Woo 8.8+)',
 console.log('== Endpoint de la biblioteca (fix 4.22.0) ==');
 check('el endpoint viaja en PMU_FICHA.biblioteca (no depende del orden de carga)',
     /'biblioteca' => \[\s*'endpoint' => admin_url\('admin-post\.php'\)/.test(plugin));
-check('config() no cachea endpoint vacio y el calentado NO va en load (spec 036 D7)',
+check('spec 044 (A5): config() caduca y el calentado NO va en load', /cfg && cfg\.url && \(Date\.now\(\) - cfgTs\)/.test(bib) && !/addEventListener\('load', function \(\) \{ calentar\(\); \}\)/.test(bib)); /*
     /if \(cfg && cfg\.url\) \{ return cfg; \}/.test(bib)
     && !/addEventListener\('load', function \(\) \{ calentar\(\); \}\)/.test(bib)
     && /closest\('\[data-pmu-panel\]'\)/.test(bib));
+*/
 
 console.log('== Copia envenenada: auto-sanado (2026-10-23, vigente) ==');
 /* Histórico (pre-042): la assertion vieja se reemplazo por la de abajo (el auto-sanado del respaldo usa pedir(true)). */
@@ -292,8 +295,9 @@ check('la subida ya NO manda madre_origen (no hay familia que reusar)',
     !/madre_origen: this\._madreDe\(indice\)/.test(carg)
     && !/CargadorPMU\.prototype\._madreDe = function/.test(carg)
     && !/fd\.append\('madre_origen'/.test(tienda));
-check('la tira reusa la URL ya resuelta de la ficha (una sola descarga)',
+check('spec 044 (A6): la tira usa la URL del servidor (sin `f.base`)', /img\.src = String\(f\.thumb_data \|+ f\.url/.test(bib) && !/f\.base/.test(bib)); /*
     /img\.src = String\(f\.thumb_data \|\| urlResuelta \|\| f\.thumb/.test(bib));
+*/
 
 console.log('== T046: visor y tira sin POST extra (mapa id -> url) ==');
 check('urlDeSubida reusa el mapa PMU_FICHA.urls antes de resolver por POST',

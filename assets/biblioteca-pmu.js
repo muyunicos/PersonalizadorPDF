@@ -30,6 +30,7 @@
     var ESTILO_ID = 'pmu-bib-estilo';
     var cache = null;
     var cfg = null;
+    var cfgTs = 0; // spec 044 (A5): la config no se cachea para siempre
     var ultimoEl = null; // contenedor vigente de la tira (para repintar tras borrar)
     var ultimas = [];    // ultima lista pintada: el visor muestra TODAS (no solo las visibles)
     var onElegir = null;
@@ -39,7 +40,9 @@
     var modo = 'auto'; // 'auto' = camino liviano; 'wp' = respaldo actual
 
     function config() {
-        if (cfg && cfg.url) { return cfg; } // OJO: nunca cachear un endpoint vacio
+        // Spec 044 (A5): la config caduca (5 min) para no arrastrar endpoint/nonce
+        // de otra ficha o identidad.
+        if (cfg && cfg.url && (Date.now() - cfgTs) < 5 * 60 * 1000) { return cfg; } // OJO: nunca cachear un endpoint vacio
         var t = global.PMU_TIENDA || {};
         var b = (global.PMU_FICHA && global.PMU_FICHA.biblioteca) || {};
         var s = (global.PMU_FICHA && global.PMU_FICHA.sesion) || {};
@@ -52,6 +55,7 @@
             revision: String(b.revision || ''),
             identidad: String(b.identidad || '')
         };
+        cfgTs = Date.now();
         return cfg;
     }
 
@@ -104,6 +108,9 @@
         if (!c.url && !c.rapido) { return Promise.reject(new Error('api:biblioteca:sin:endpoint')); }
         // Spec 040 (F1): una sola peticion en vuelo (ver `enVuelo`).
         if (enVuelo && !sinDesde) { return enVuelo; }
+        // Spec 044 (A4): tras un fallo se vuelve a intentar el camino liviano
+        // (antes `modo` quedaba en 'wp' para toda la sesion).
+        if (modo === 'wp' && c.rapido) { modo = 'auto'; }
         var p = (c.rapido && modo !== 'wp') ? pedirRapido(sinDesde) : pedirWp(sinDesde);
         if (!sinDesde) {
             enVuelo = p;
@@ -298,10 +305,10 @@
         if (!tema || typeof tema.coleccion !== 'function') { return false; }
         tema.coleccion(el, {
             items: (fotos || []).map(function (f) {
-                var urlResuelta = (global.PMU_FICHA && global.PMU_FICHA.urls && f.base)
-                    ? global.PMU_FICHA.urls[String(f.base)] : '';
+                // Spec 044 (A6): el campo `base` no existe en el payload (se retiro
+                // el codigo muerto); se usa la URL del servidor.
                 var thumb = String(f.thumb_data || f.thumb || f.url || '');
-                var url = String(urlResuelta || f.url || f.thumb || '');
+                var url = String(f.url || f.thumb || '');
                 return {
                     url: url,
                     thumb: thumb,
@@ -352,9 +359,7 @@
             var img = doc.createElement('img');
             img.alt = '';
             img.decoding = 'async';
-            var urlResuelta = (global.PMU_FICHA && global.PMU_FICHA.urls && f.base)
-                ? global.PMU_FICHA.urls[String(f.base)] : '';
-            img.src = String(f.thumb_data || urlResuelta || f.thumb || f.url || '');
+            img.src = String(f.thumb_data || f.url || f.thumb || '');
             b.appendChild(img);
             b.addEventListener('click', function () { elegir(i); });
             t.appendChild(b);
