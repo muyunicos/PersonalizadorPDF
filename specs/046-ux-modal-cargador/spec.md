@@ -4,8 +4,8 @@
 
 **Created**: 2026-11-22
 
-**Status**: Implementada (v4.36.2, 2026-11-22) — falta el recorrido manual del usuario y
-las pasadas de spec clarify.
+**Status**: Implementada (v4.36.2 + ajustes 4.38.2–4.38.4; falta el recorrido manual del usuario
+y la pasada de clarify en curso).
 
 **Input**: relevamiento `docs/sintomas-comprador.md` (U1-U8) + respuestas del usuario.
 
@@ -14,6 +14,7 @@ las pasadas de spec clarify.
 ### Session 2026-11-22
 
 - Q: Cuando el comprador toca "Agregar al carrito" y el bloqueo **no** son fotos faltantes (vistas obligatorias sin ver, validez o archivos subiendo), ¿qué aviso mostramos? → A: **el aviso del bloqueo que aplique** (faltantes / cola / vistas / validez), **el primero por prioridad**.
+- Q: Cuando el bloqueo es por fotos faltantes, ¿la página debe desplazarse al **campo/ranura** que falta o al **aviso** global? → A: al **campo/ranura** (el aviso queda visible); para vistas -> galeria, para validez -> mensaje.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -110,8 +111,9 @@ necesita abrir el visor completo siempre.
 - **FR-008** (U8, tema): `mu-gal-linea` pinta `Todas (N)` **siempre** como ultimo
   item, con la accion `abrir` del plugin.
 - **FR-009** (U1): al intentar comprar se muestra el aviso del **primer bloqueo
-  aplicable** por prioridad: faltantes de fotos -> cola de subida -> vistas
-  obligatorias -> validez. Sin bloqueo, no se muestra nada.
+  aplicable** por prioridad (faltantes -> cola -> vistas -> validez) y la vista se
+  desplaza al conflicto: la **ranura** que falta, el aviso de cola, la galeria o el
+  mensaje de validez. Sin bloqueo, no se muestra nada.
 
 ## Success Criteria
 

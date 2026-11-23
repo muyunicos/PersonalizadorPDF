@@ -2051,18 +2051,26 @@
             cargadores.forEach(function (c) {
                 if (c && typeof c.mostrarAvisos === 'function') { c.mostrarAvisos(); }
             });
-            // Spec 046 (FR-009): el aviso del primer bloqueo aplicable y, si no
-            // alcanzaba con el texto, se lleva la vista ahi (sin abrir nada).
+            // Spec 046 (FR-009): llevar al comprador al conflicto (sin abrir nada).
             var panel = raiz();
             if (!panel) { return; }
-            var candidatos = ['.pmu-minimos-aviso', '.pmu-gal-revisar', '.pmu-validez-aviso'];
-            for (var i = 0; i < candidatos.length; i++) {
-                var el = panel.querySelector(candidatos[i]);
+            var ir = function (el) {
                 if (el && el.offsetParent !== null) {
                     try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { }
-                    break;
+                    return true;
                 }
+                return false;
+            };
+            // 1) Faltantes: la RANURA que falta (no el aviso global).
+            var ranuras = panel.querySelectorAll('.cpmu-ranura');
+            for (var i = 0; i < ranuras.length; i++) {
+                var falta = ranuras[i].querySelector('.cpmu-falta');
+                if (falta && !falta.hidden && ir(ranuras[i])) { return; }
             }
+            // 2) Cola de subida -> aviso; 3) vistas -> galeria; 4) validez -> mensaje.
+            if (ir(panel.querySelector('.pmu-minimos-aviso'))) { return; }
+            if (ir(panel.querySelector('.pmu-gal-revisar'))) { return; }
+            ir(panel.querySelector('.pmu-validez-aviso'));
         };
         global.PMU_FICHA = global.PMU_FICHA || {};
         global.PMU_FICHA.subidas = api.subidas;
