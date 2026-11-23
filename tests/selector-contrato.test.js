@@ -613,6 +613,11 @@ check('spec 043 (fix): la URL del recorte se captura del selector ANTES del POST
   /selAlSubir && selAlSubir\.ultimaUrl/.test(cargador));
 check('spec 043 (fix): anotarRecorte escribe en window.PMU_FICHA (global puede no ser window)',
   /window\.PMU_FICHA : null/.test(tienda));
+check('spec 043 (fix): el mockup dibuja el recorte local (0 POST si cubre todos los grupos)',
+  /recortesLocales/.test(tienda) && /pngsPorGrupo\[gidK\] = listaL/.test(tienda)
+  && /fotosCubiertas/.test(tienda));
+check('spec 043 (fix): el selector publica el recorte por PMU_API.anotarRecorte',
+  /PMU_API\.anotarRecorte/.test(selector));
 
 console.log('');
 if (fallos) {

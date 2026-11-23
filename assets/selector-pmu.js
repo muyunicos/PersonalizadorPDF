@@ -1896,6 +1896,11 @@
                     var usar = (typeof self.config.usarExistente === 'function')
                         ? self.config.usarExistente(self._bib.id, paramsBib, urlFinal || self._bib.url)
                         : Promise.resolve(self._bib.id);
+                    // Spec 043 (fix 2026-11-22): el selector publica el recorte local
+                    // por si mismo (no depende de que el cargador reenvie `onRecorte`).
+                    if (urlFinal && global.PMU_API && typeof global.PMU_API.anotarRecorte === 'function') {
+                        try { global.PMU_API.anotarRecorte(self._bib.id, urlFinal, paramsBib); } catch (e) { /* best-effort */ }
+                    }
                     if (puedeDeclarar) {
                         try { self.config.declararReceta(self._bib.id, paramsBib); } catch (e) { /* best-effort */ }
                     }

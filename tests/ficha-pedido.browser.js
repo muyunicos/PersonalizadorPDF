@@ -671,9 +671,15 @@ async function precondiciones(page) {
         check('E1 (043/US1): la miniatura del campo muestra el recorte NUEVO (no el original)',
             !!miniDespues && miniDespues !== miniAntes && /^blob:/.test(miniDespues),
             miniAntes + ' -> ' + miniDespues);
-        // OJO (pendiente 2026-11-22): la VISTA PREVIA no pasa por `PMU_FICHA.recortes`
-        // (probe: llega null) y sigue resolviendo el pool/servidor. Cuando se cablee,
-        // aca va el check "la galeria recibe el recorte recien compuesto (blob:)".
+        // Spec 043 (fix 2026-11-22): la vista previa DIBUJA el recorte local (el mockup
+        // resuelve `recorteLocal(id)`), asi que el mapa tiene que tener el blob.
+        const recorteUrl = await page.evaluate(() => {
+            const r = (window.PMU_FICHA && PMU_FICHA.recortes) || {};
+            const k = Object.keys(r)[0];
+            return k ? String(r[k]) : null;
+        }).catch(() => null);
+        check('E1 (043/US1): la vista previa recibe el recorte recien compuesto (blob:)',
+            !!recorteUrl && /^blob:/.test(recorteUrl), recorteUrl);
         check('E1 (043/US1): guardar una existente NO sube bytes (0 POST pmu_uploads)',
             postUploads() === uploadsAntes, uploadsAntes + ' -> ' + postUploads());
         check('E1 (043/SC-001): no aparecio ningun archivo nuevo en originales',

@@ -1534,14 +1534,36 @@
      * foto que viene de otro item.
      */
     function recorteLocal(id) {
+        var k = String(id || '');
+        // Spec 043 (fix): el modulo manda; `PMU_FICHA` es el respaldo.
+        if (recortesMem[k]) { return recortesMem[k]; }
         var mapa = (global.PMU_FICHA && global.PMU_FICHA.recortes) || null;
-        return (mapa && mapa[String(id)]) ? String(mapa[String(id)]) : null;
+        return (mapa && mapa[k]) ? String(mapa[k]) : null;
     }
+
+    // Spec 043 (fix 2026-11-22): recorte local por id, en el MODULO (no depende de
+    // que `window.PMU_FICHA` exista o no sea reemplazado).
+    var recortesMem = {};
 
     /** Receta publicada de una foto subida (la que viajo con su subida). */
     function recetaLocal(id) {
         var mapa = (global.PMU_FICHA && global.PMU_FICHA.recetas) || null;
         return (mapa && mapa[String(id)]) ? mapa[String(id)] : null;
+    }
+
+    /**
+     * Spec 043 (fix 2026-11-22): recorte LOCAL por grupo/instancia (`gid-i` -> URL).
+     * Es el blob que compuso el selector al guardar: si esta, el mockup lo dibuja
+     * DIRECTO (0 POST, 0 encode) en vez del PNG del pool.
+     */
+    function recortesLocales(fotos) {
+        var mapa = {};
+        (fotos || []).forEach(function (f) {
+            if (!f || !f.id) { return; }
+            var url = recorteLocal(f.id);
+            if (url) { mapa[f.gid + '-' + f.i] = url; }
+        });
+        return mapa;
     }
 
     /**
@@ -1551,16 +1573,16 @@
     function anotarRecorte(id, url, receta) {
         var clave = String(id || '');
         if (clave === '') { return; }
-        // Spec 043 (fix 2026-11-22): el mapa se escribe en el objeto que la pagina
-        // expone (`window.PMU_FICHA`), no en un `global` que puede no ser window.
+        // Spec 043 (fix 2026-11-22): el recorte se guarda en el MODULO
+        // (`recortesMem`) y, si hay ficha, tambien en `window.PMU_FICHA`.
+        if (url) { recortesMem[clave] = String(url); }
         var ficha = global.PMU_FICHA
             || (typeof window !== 'undefined' ? window.PMU_FICHA : null);
-        if (!ficha) { return; }
-        global.PMU_FICHA = ficha;
-        if (url) {
-            global.PMU_FICHA.recortes = global.PMU_FICHA.recortes || {};
-            var recorteAnterior = String(global.PMU_FICHA.recortes[clave] || '');
-            global.PMU_FICHA.recortes[clave] = String(url);
+        if (url && ficha) {
+            global.PMU_FICHA = ficha;
+            ficha.recortes = ficha.recortes || {};
+            var recorteAnterior = String(ficha.recortes[clave] || '');
+            ficha.recortes[clave] = String(url);
             // Spec 043 (fix 2026-11-22): si el recorte cambio (el comprador
             // reencuadro una foto existente), el memo `id -> url` tiene que caer:
             // si no, la miniatura y la vista previa siguen dibujando la foto SIN
@@ -1716,7 +1738,16 @@
         pendientes = dedupPendientes(pendientes);
         // Las fotos se REGISTRAN por su cuenta (sin copiarse) y se esperan junto
         // al texto.
-        var trabajoFotos = registrarFotos(fotos, sid, itemKey, pdfDatos, gruposImagen);
+        // Spec 043 (fix 2026-11-22): si TODOS los grupos de imagen tienen recorte
+        // local, no se rasteriza ni se sube nada al pool: el mockup dibuja el
+        // blob local (0 POST, 0 encode). Si falta alguno, se cae al camino de
+        // siempre (pool) para no romper la vista.
+        var localesFotos = recortesLocales(fotos);
+        var fotosCubiertas = gruposImagen.length > 0 && fotos.length > 0
+            && fotos.every(function (f) { return !!localesFotos[f.gid + '-' + f.i]; });
+        var trabajoFotos = fotosCubiertas
+            ? Promise.resolve([])
+            : registrarFotos(fotos, sid, itemKey, pdfDatos, gruposImagen);
         if (avisos.length) { mostrarAviso(pdfDatos, avisos.join(' ')); }
         if (!pendientes.length && !fotos.length && !gruposImagen.length) {
             var esperaBloq = vista.marco.querySelector('.pmu-gal-espera');
@@ -1850,6 +1881,16 @@
                     var listaF = pngsPorGrupo[t.gid] || [];
                     listaF[t.i] = t.url;
                     pngsPorGrupo[t.gid] = listaF;
+                });
+                // Spec 043 (fix): el recorte local MANDA sobre el pool (misma
+                // resolucion que el PNG del grupo, sin red).
+                Object.keys(localesFotos).forEach(function (k) {
+                    var partesK = String(k).split('-');
+                    var gidK = partesK[0];
+                    var iK = parseInt(partesK[1], 10) || 0;
+                    var listaL = pngsPorGrupo[gidK] || [];
+                    listaL[iK] = localesFotos[k];
+                    pngsPorGrupo[gidK] = listaL;
                 });
                 return componerMockup(pdfDatos, vista.mockup, pngsPorGrupo).then(function (canvas) {
                     var espera = vista.marco.querySelector('.pmu-gal-espera');
@@ -2106,6 +2147,11 @@
         api.invalidarUrl = function (id) {
             if (id) { delete urlsResueltas[String(id)]; }
         };
+        // Spec 043 (fix): el recorte local del modulo, visible para el mockup y
+        // para diagnostico (`PMU_API.recorteLocal(id)`).
+        api.recorteLocal = recorteLocal;
+        // Spec 043 (fix): el selector publica el recorte local por esta via.
+        api.anotarRecorte = anotarRecorte;
         api.urlDeRespaldo = function (id) {
             var m = (window.PMU_FICHA && window.PMU_FICHA.urls_respaldo) || {};
             var u = String(m[String(id || '')] || '');
