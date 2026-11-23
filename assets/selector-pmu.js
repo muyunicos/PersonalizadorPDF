@@ -588,12 +588,11 @@
             declararReceta: typeof config.declararReceta === 'function' ? config.declararReceta : null,
             // Spec 043 (US5/T023): acciones sobre una imagen existente (editor).
             eliminar: typeof config.eliminar === 'function' ? config.eliminar : null,
-            verVisor: typeof config.verVisor === 'function' ? config.verVisor : null,
+            // Spec 046 (U5): "Ver en grande" se retiro del editor.
             // Spec 040 (A4): receta v2 a re-aplicar sobre la imagen (si es de esta geometria).
             paramsIniciales: (config.paramsIniciales && typeof config.paramsIniciales === 'object')
                 ? config.paramsIniciales : null,
-            subirAsync: typeof config.subirAsync === 'function' ? config.subirAsync : null,
-            quedanEspacios: typeof config.quedanEspacios === 'function' ? config.quedanEspacios : null
+            subirAsync: typeof config.subirAsync === 'function' ? config.subirAsync : null
         };
         if (this.config.finalW < 1 || this.config.finalH < 1) {
             throw new Error('selector-pmu: finalW/finalH son obligatorios (los define el campo/PDF).');
@@ -767,13 +766,7 @@
             '</div>' +
             '</div>' +
             '<p class="spmu-status" role="status" aria-live="polite"></p>' +
-            '<div class="spmu-otra-modal" hidden>' +
-            '<p class="spmu-otra-txt">Imagen subida correctamente. ¿Queres subir otra imagen?</p>' +
-            '<div class="spmu-otra-botones">' +
-            '<button type="button" class="button button-primary spmu-otra-si">Si, subir otra</button>' +
-            '<button type="button" class="button spmu-otra-no">No, terminar</button>' +
-            '</div>' +
-            '</div>' +
+            // Spec 046 (U7): el modal cierra al enviar; se retiro el "¿Subir otra?".
             '</div>';
         document.body.appendChild(this.raiz);
         document.body.classList.add('spmu-bloqueado');
@@ -892,10 +885,6 @@
             '.spmu-acciones{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:10px 0 0;flex-wrap:wrap}' +
             '.spmu-acciones-izq,.spmu-acciones-der{display:flex;align-items:center;gap:8px;flex-wrap:wrap}' +
             '.spmu-status{margin:6px 0 0;color:#1d2327;font-size:13px;font-weight:500;min-height:18px}' +
-            '.spmu-otra-modal{position:absolute;inset:0;background:rgba(255,255,255,.96);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;z-index:5;border-radius:10px}' +
-            '.spmu-otra-modal[hidden]{display:none}' +
-            '.spmu-otra-txt{font-size:16px;font-weight:600;margin:0 0 16px;color:#1d2327}' +
-            '.spmu-otra-botones{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}' +
             '.spmu-cargando .spmu-escena{opacity:.45}' +
             '.spmu-cargando .spmu-escena::after{content:"";position:absolute;inset:0;margin:auto;width:36px;height:36px;border:4px solid #c3c4c7;border-top-color:#2271b1;border-radius:50%;animation:spmu-giro 1s linear infinite}' +
             '@keyframes spmu-giro{to{transform:rotate(360deg)}}' +
@@ -991,14 +980,6 @@
         $('.spmu-cancelar').addEventListener('click', function () {
             if (!self._subiendo) { self._cancelar(); }
         });
-        $('.spmu-otra-si').addEventListener('click', function () {
-            var mOtra = $('.spmu-otra-modal');
-            if (mOtra) { mOtra.hidden = true; }
-            self._prepararNuevaCarga();
-            $('.spmu-file').click();
-        });
-        $('.spmu-otra-no').addEventListener('click', function () { self.close(); });
-
         var caja = $('.spmu-caja');
         caja.addEventListener('dragover', function (e) {
             e.preventDefault();
@@ -1140,8 +1121,6 @@
             if (self.raiz) {
                 var rango = self.raiz.querySelector('.spmu-zoom');
                 if (rango) { rango.value = '0'; }
-                var elegir = self.raiz.querySelector('.spmu-elegir');
-                if (elegir) { elegir.textContent = 'Cambiar imagen'; }
                 var ok = self.raiz.querySelector('.spmu-ok');
                 if (ok) { ok.disabled = false; }
             }
@@ -1494,7 +1473,7 @@
     /**
      * Spec 046 (U2/U3/U4/U6): el primario cambia de etiqueta segun el contexto:
      * `Subir` (foto nueva), `Aceptar`/`Guardar` (editar sin/con cambios) y
-     * `Cambiar` (elegir otra de la biblioteca). El secundario dice `Cambiar imagen`
+     * `Cambiar` (elegir otra de la biblioteca). El secundario dice siempre `Cargar imagen`
      * cuando ya hay una cargada, y `Quitar` solo con la ranura poblada.
      */
     SelectorPMU.prototype._actualizarPrimario = function () {
@@ -1514,10 +1493,7 @@
         } else {
             ok.textContent = 'Subir';
         }
-        var bElegir = this.raiz.querySelector('.spmu-elegir');
-        if (bElegir) {
-            bElegir.textContent = (this.imagen || existente) ? 'Cambiar imagen' : 'Cargar imagen';
-        }
+        // Spec 046 (U4): el secundario dice SIEMPRE "Cargar imagen".
         var btnElim = this.raiz.querySelector('.spmu-eliminar');
         if (btnElim) { btnElim.hidden = !(existente && this.config.eliminar); }
     };

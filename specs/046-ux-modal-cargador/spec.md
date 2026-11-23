@@ -95,8 +95,8 @@ necesita abrir el visor completo siempre.
 - **FR-003** (U2/U6): titulo del modal = `Imagen #X` (nueva = #N+1, editar = #pos).
 - **FR-004** (U3): primario por contexto: nueva `Subir`, sin cambios `Aceptar`,
   con cambios `Guardar`, biblioteca `Cambiar`.
-- **FR-005** (U4): boton secundario `Cambiar imagen` si hay imagen, `Cargar imagen`
-  si no.
+- **FR-005** (U4): el boton secundario dice **siempre** `Cargar imagen` (sin
+  "Cambiar imagen").
 - **FR-006** (U5): se retira `Ver en grande`; `Eliminar` pasa a `Quitar` y solo se
   muestra con la ranura poblada.
 - **FR-007** (U7): al aceptar, el modal cierra **antes** de que termine la subida;

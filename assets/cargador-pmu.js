@@ -431,9 +431,6 @@
                         return id;
                     });
                 },
-                quedanEspacios: function () {
-                    return self.estado[indice].ids.length < r.max;
-                },
                 // Spec 040 (A6): una imagen YA subida (id conocido) no manda bytes:
                 // Spec 043 (US1): la receta NUEVA de una foto existente se DECLARA (0 bytes).
                 declararReceta: function (id, params) {
@@ -833,7 +830,7 @@
     /**
      * Spec 043 (US2/T020-T022): tocar una miniatura abre el EDITOR con esa imagen y
      * su receta vigente del contexto (no el visor). Carga la foto existente por
-     * `cargarDesdeBiblioteca`, asi Guardar es 0 bytes y Cambiar imagen reemplaza
+     * `cargarDesdeBiblioteca`, asi Guardar es 0 bytes y la edicion reemplaza
      * la posicion de la tira.
      */
     CargadorPMU.prototype._editar = function (indice, posicion) {

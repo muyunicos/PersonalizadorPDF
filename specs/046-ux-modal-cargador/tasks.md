@@ -51,3 +51,12 @@
 - [X] T017 Puerta de navegador `ficha-pedido.browser.js` **54/54** en el lab.
 - [X] T018 Bump 4.36.2 + changelog.
 - [X] T019 Commit + push (plugin y tema).
+
+## Phase 8 — Ajustes del usuario
+
+- [X] T020 U4: el boton del modal dice **siempre "Cargar imagen"** (se retiro el
+    "Cambiar imagen").
+- [X] T021 Limpieza: retirar el modal **"¿Subir otra?"** (el modal cierra al enviar)
+    y el codigo muerto de **"Ver en grande"**/`quedanEspacios`.
+- [X] T022 Puertas: `selector-contrato`, `biblioteca-contrato` 81,
+    `cargador-estado` 25 + `ficha-pedido.browser.js` 54/54.

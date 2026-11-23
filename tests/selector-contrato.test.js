@@ -66,11 +66,11 @@ check('estado de carga y de subida con spinner (sin boton Reintentar ni Camara)'
   /spmu-cargando/.test(selector) && /Cargando imagen/.test(selector)
   && /Subiendo imagen/.test(selector)
   && !/spmu-reintentar/.test(selector) && !/spmu-camara/.test(selector));
-check('boton Cargar imagen que cambia a Cambiar imagen cuando hay imagen',
-  /Cargar imagen/.test(selector) && /Cambiar imagen/.test(selector));
-check('boton Guardar (spec 043 D3) + modal para subir otra imagen si quedan espacios',
+check('boton Cargar imagen (siempre, spec 046 U4)',
+  /Cargar imagen/.test(selector) && !/Cambiar imagen/.test(selector));
+check('boton Guardar dinamico (spec 046 U3) y sin modal de "subir otra"',
   />Guardar<\/button>/.test(selector) && /Guardando\.\.\./.test(selector)
-  && /spmu-otra-modal/.test(selector) && /spmu-otra-si/.test(selector));
+  && !/spmu-otra-modal/.test(selector) && !/spmu-otra-si/.test(selector));
 check('Spec 024 D3: control "Escala" al 100% y SIN boton de reset',
   /<span class="spmu-lb-zoom">Escala<\/span>/.test(selector)
   && /class="spmu-zoom"[^>]*min="-100" max="/.test(selector)
@@ -576,8 +576,8 @@ check('U3: etiquetas por contexto (Subir/Aceptar/Guardar/Cambiar)',
   && /'Guardar'/.test(selector) && /'Cambiar'/.test(selector));
 check('U3: la receta se compara con `firmaParams`',
   /firmaParams\(this\._params\(\)\)/.test(selector));
-check('U4: "Cambiar imagen" cuando ya hay una',
-  /'Cambiar imagen' : 'Cargar imagen'/.test(selector));
+check('U4: "Cargar imagen" siempre (spec 046, sin "Cambiar imagen")',
+  /Cargar imagen/.test(selector) && !/Cambiar imagen/.test(selector));
 check('U1: el aviso del cargador arranca oculto (`mostrarAvisos`)',
   /mostrarAvisos = function/.test(cargador) && /this\._avisos && !est\.listo/.test(cargador));
 check('U1: el aviso de la ficha arranca oculto (`avisosActivos`)',

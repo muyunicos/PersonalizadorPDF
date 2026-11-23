@@ -14,10 +14,11 @@
 
 ### Bugs (cambian comportamiento, hay que arreglar con puerta)
 
-- **B1 (ALTA) "Ver en grande" no hace nada** en el editor. `_abrirVisorCompartido`
-  resuelve las URLs SOLO con `config.urlDe(id)` (pool del item); una foto de la
-  biblioteca que no esta en el item da 404 y el visor no abre. Debe usar
-  `_urls[id]` (URL ya resuelta) antes de `urlDe`.
+- **B1 (CERRADO por U5) "Ver en grande" no hacia nada** en el editor:
+  `_abrirVisorCompartido` resolvía las URLs SOLO con `config.urlDe(id)` (pool del
+  item); una foto de la biblioteca que no esta en el item daba 404 y el visor no
+  abria. Se arreglo usando `_urls[id]` y **la 046 retiro el boton**: el arreglo
+  queda para el "Reemplazar" del visor compartido.
 - **B2 (MEDIA) miniatura de baja resolucion al canvas**. Al tocar una miniatura de
   la tira del modal, a veces entra al canvas la miniatura (80x80) en vez del
   original: `cargarDesdeBiblioteca` acepta `foto.thumb` como URL primaria. Debe
@@ -43,11 +44,10 @@
   | editar con cambios | Guardar |
   | elegir otra de la biblioteca | Cambiar |
   | reemplazar desde el visor | Cambiar |
-- **U4 boton "Cargar imagen" dentro del modal**: pasa a "Cambiar imagen" cuando ya
-  hay una imagen cargada (o icono de subir).
-- **U5 acciones sobre la imagen existente**: `Eliminar` (que el usuario no pidio)
-  y `Ver en grande` (hoy no hace nada -> B1). Mantener `Eliminar` con confirmacion
-  y arreglar `Ver en grande`.
+- **U4 boton "Cargar imagen" dentro del modal**: **siempre "Cargar imagen"** (se
+  retiro el "Cambiar imagen").
+- **U5 acciones sobre la imagen existente**: `Eliminar` -> **"Quitar"** (solo con la
+  ranura poblada) y **"Ver en grande" retirado**.
 - **U6 titulo "Reemplazando imagen #1"**: cuando solo se ajusta la edicion, no
   reemplaza; usar "Imagen #X".
 - **U7 carga en segundo plano**: hoy el modal se queda abierto con el indicador
