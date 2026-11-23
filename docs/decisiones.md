@@ -564,3 +564,16 @@ aqui como registro; la constitucion ya no los arrastra.
 - **Impacto en el motor**: **ninguno**. `Pdf`/`Detector`/`Overlay`/`Motor` no cambian; el lienzo del
   cotizador es explicito en la receta (`w/h`) y el arte se compone con `engine/Compositor.php`.
   Sin migracion (§V).
+
+- **2026-11-22 — Vista previa del comprador: el recorte viaja LOCAL (spec 043, fix)**: la miniatura
+  y la galeria dibujan el **blob** que compuso el selector al guardar (`PMU_API.anotarRecorte` ->
+  `PMU_FICHA.recortes[id]`), no el PNG del pool. Si todos los grupos de imagen tienen recorte local,
+  la vista previa no rasteriza ni sube nada (**0 POST**, 0 encode); si falta alguno, cae al pool.
+- **Decision de diseno**: la clave del pool de **fotos** es la **receta**
+  (`img/foto-{pdf}-{gid}-{receta}.webp`, `PMU_Sesion::receta_de`, server-side). `hash_pool()` y
+  `PURO.hashRender()` quedan **solo para texto** (`valor|preset|settings|WxH|overrides`): el texto
+  no se recorta, asi que meter la receta ahi seria ruido y romperia la paridad cliente/servidor.
+- **Puertas**: `texto_puente.php composicion` suma 3 checks (otra receta -> otra clave; la misma ->
+  la misma; el nombre se arma con la receta) + `ficha-pedido.browser.js` E1 comprueba
+  mini=blob y vista previa=blob.
+- **Fuente**: `specs/043-editor-imagen-biblioteca/` (enmienda 2026-11-22), `AGENTS.md` §5.

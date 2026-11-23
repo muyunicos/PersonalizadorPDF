@@ -55,6 +55,8 @@
 > limitado a la carpeta de fotos del comprador. 5 historias, 22 FR, 10 SC; **implementada (v4.36.0, 2026-11-21)** — puertas verdes: `media_lectura` **75** (contrato HTTP de `media.php`: 200/304/400/403/404/503, cookies, `ETag`, `Cache-Control`, `Vary`, `nosniff`), `catalogo_uploads` 16, `biblioteca-contrato` 81, `texto_puente` (biblioteca/fotos/receta/red_carga/ficha) y `ficha-pedido.browser.js` **53/53** (2026-11-22, lab en IPv4). Deploy **verificado** el 2026-11-22 (webhook 200, `readme.txt` servido con el SHA del local, `ping` 200, `.media/config.json` 403). Pendiente: T024/T025/T029-T049 (medir SC-001 p95 y cerrar el resto del tracking) y la purga + Ctrl+F5.
 
 > **2026-11-20**: spec **043-editor-imagen-biblioteca** **implementada (v4.36.0)** (42/45 `[X]`; falta Polish y deploy) — el comprador edita el
+> **2026-11-22**: fix de la 043 (la miniatura y la vista previa dibujan el **recorte local**, 0 POST si
+> cubre todos los grupos; la clave del pool de fotos es la **receta**) — v4.38.8.
 > recorte de una imagen ya puesta **sin volver a subirla** (una foto = un `id`, N recetas por
 > contexto): tocar la miniatura del campo abre el editor **con la receta vigente**; Guardar sube
 > solo si es nueva y Cancelar descarta; **"Ver todas (N)"** al final de la tira abre el visor de la

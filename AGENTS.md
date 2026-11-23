@@ -551,6 +551,13 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   (`{id, params}`), y el servidor la **materializa** con `Compositor` al generar el PDF:
   **el nombre ES el cache**. Los `params` v2 son obligatorios en la fila — `receta` es un hash
   **irreversible**, sin ellos no hay con que recomponer.
+  **Spec 043 (fix 2026-11-22) — la vista previa dibuja el recorte LOCAL**: el selector publica el
+  blob compuesto al guardar (`PMU_API.anotarRecorte` -> `PMU_FICHA.recortes[id]`), y el mockup lo
+  usa como capa PH en vez del PNG del pool; si **todos** los grupos de imagen tienen recorte local
+  no se rasteriza ni se sube nada (**0 POST**, 0 encode). Si falta alguno, cae al pool. Ojo: la
+  clave del pool de **fotos** es la **receta** (`img/foto-{pdf}-{gid}-{receta}.webp`); `hash_pool()`
+  y `PURO.hashRender()` son SOLO para los grupos de **texto** (`valor|preset|settings|WxH|overrides`),
+  que no se recortan.
   **Spec 035 (D13)**: `podar_uploads_sesion()` borra los originales que ningun item de la sesion
   referencia; `limpiar_ttl` **no** cuenta `uploads/` como item.
 - Catálogo global de campos (formato v1, ya migrado a v3): ver la entrada de arriba.

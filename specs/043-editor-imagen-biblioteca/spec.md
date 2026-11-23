@@ -221,3 +221,14 @@ campo queda vacio y que la foto sale de la biblioteca.
 - **D5**: borrar sin uso = directo; en uso = dialogo y reintento con confirmacion.
 - **D6**: sin IndexedDB; se usa la cache HTTP (7 dias + validacion).
 - **D7**: acciones extensibles (recorte hoy; ajustes/texto despues).
+
+## Enmienda 2026-11-22 (fix de la vista previa)
+
+- **D8 (nueva)**: la miniatura del campo y la galeria dibujan el **recorte local** (el blob que
+  compuso el selector al guardar, `PMU_API.anotarRecorte`), **no** el PNG del pool. Si todos los
+  grupos de imagen tienen recorte local, la vista previa no rasteriza ni sube nada (**0 POST**).
+- **D9 (nueva)**: la clave del pool de **fotos** es la **receta**
+  (`img/foto-{pdf}-{gid}-{receta}.webp`, `PMU_Sesion::receta_de`, siempre del servidor).
+  `hash_pool()` y `PURO.hashRender()` quedan **solo para texto**: el texto no se recorta.
+- **Puertas**: `php tests/texto_puente.php composicion` (+3 checks) y `ficha-pedido.browser.js`
+  E1 (mini=`blob:` y vista previa=`blob:`).
