@@ -51,7 +51,7 @@
   cercano (sin umbral) -> familia -> area**; "ajustes del cliente" = ultima receta.
 - [ ] T019 [P] `assets/selector-pmu.js`: `_params()` devuelve el **delta**
   (default `{modo:'cubrir'}`) y `_recetaDeFoto` lee el objetivo nuevo.
-- [ ] T020 `inc/class-pmu-lectura.php`: `listar` expone `recetas` (objetivo) y
+- [X] T020 `inc/class-pmu-lectura.php`: `listar` expone `recetas` (objetivo) y
   `ajustes` por foto.
 - [ ] T021 `personalizador-pdf.php`: el puente/`PMU_FICHA` publica los objetivos.
 - [ ] T022 Puertas: `cargador-lote`, `receta-contrato`, `biblioteca-contrato`,

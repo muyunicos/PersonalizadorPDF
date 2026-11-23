@@ -187,7 +187,7 @@ try {
     $id1 = 'aabbccddeeff';
     $id2 = '112233445566';
     $cat = ['version' => 1, 'items' => [
-        $id1 => ['id' => $id1, 'ext' => 'webp', 'bytes' => 100, 'w' => 10, 'h' => 20, 'creado' => 100, 'ultimo_uso' => 100, 'recetas' => ['X' => ['a' => 1]]],
+        $id1 => ['id' => $id1, 'ext' => 'webp', 'bytes' => 100, 'w' => 10, 'h' => 20, 'creado' => 100, 'ultimo_uso' => 100, 'recetas' => ['X' => ['a' => 1]], 'ajustes' => ['objetivo' => '1.5000-0-60000', 'configuracion' => ['modo' => 'cubrir']]],
         $id2 => ['id' => $id2, 'ext' => 'png', 'bytes' => 200, 'w' => 30, 'h' => 40, 'creado' => 200, 'ultimo_uso' => 200, 'recetas' => []],
     ]];
     $rutaCat = $dir . DIRECTORY_SEPARATOR . 'uploads.json';
@@ -252,6 +252,10 @@ try {
     check('listar publica las recetas por contexto',
         isset($res['fotos'][1]['recetas']['X']),
         json_encode($res['fotos'][1]['recetas'] ?? null));
+    check('listar publica los ajustes del cliente',
+        isset($res['fotos'][1]['ajustes']['objetivo'])
+        && ($res['fotos'][1]['ajustes']['objetivo'] ?? '') === '1.5000-0-60000',
+        json_encode($res['fotos'][1]['ajustes'] ?? null));
     $conThumb = 0;
     foreach ($res['fotos'] as $f) {
         if (isset($f['thumb_data'])) {
@@ -293,7 +297,7 @@ try {
     file_put_contents($carpetaHttp . DIRECTORY_SEPARATOR . 'uploads.json', json_encode([
         'version' => 1,
         'items' => [
-            $hid1 => ['id' => $hid1, 'ext' => 'webp', 'bytes' => filesize($hruta1), 'w' => 300, 'h' => 200, 'creado' => 100, 'ultimo_uso' => 100, 'recetas' => []],
+            $hid1 => ['id' => $hid1, 'ext' => 'webp', 'bytes' => filesize($hruta1), 'w' => 300, 'h' => 200, 'creado' => 100, 'ultimo_uso' => 100, 'recetas' => [], 'ajustes' => ['objetivo' => '1.5000-0-60000', 'configuracion' => ['modo' => 'cubrir']]],
             $hid2 => ['id' => $hid2, 'ext' => 'png', 'bytes' => filesize($hruta2), 'w' => 200, 'h' => 300, 'creado' => 200, 'ultimo_uso' => 200, 'recetas' => []],
         ],
     ]));
@@ -349,6 +353,9 @@ try {
             }
             check('HTTP listar embebe miniaturas', $conThumb >= 1, 'conThumb=' . $conThumb);
             check('HTTP listar trae las recetas por contexto', count($fotos) === 2 && array_key_exists('recetas', $fotos[0]) && array_key_exists('recetas', $fotos[1]));
+    check('HTTP listar trae los ajustes del cliente',
+        isset($fotos[1]['ajustes']['objetivo']) && ($fotos[1]['ajustes']['objetivo'] ?? '') === '1.5000-0-60000',
+        json_encode($fotos[1]['ajustes'] ?? null));
 
             $ro = pmu_http_get($url . '?op=listar&desde=' . rawurlencode($revision), ['pmu_sid' => 'abc12345']);
             check('HTTP listar con desde = sin_cambios', is_array($ro['json']) && !empty($ro['json']['data']['sin_cambios']) && count((array)($ro['json']['data']['fotos'] ?? [])) === 0, 'status=' . $ro['status']);

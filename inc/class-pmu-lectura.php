@@ -237,6 +237,8 @@ class PMU_Lectura
                 'w' => (int)($it['w'] ?? 0),
                 'h' => (int)($it['h'] ?? 0),
                 'recetas' => (isset($it['recetas']) && is_array($it['recetas'])) ? $it['recetas'] : [],
+                // Spec 045: ultima receta aceptada (objetivo + delta).
+                'ajustes' => (isset($it['ajustes']) && is_array($it['ajustes'])) ? $it['ajustes'] : null,
                 'creado' => (int)($it['creado'] ?? 0),
             ];
             $bytes += $peso;
