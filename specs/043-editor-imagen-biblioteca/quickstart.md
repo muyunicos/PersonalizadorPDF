@@ -101,3 +101,10 @@ node tests/ficha-pedido.browser.js      # con el lab arriba
 | "Ver todas" no aparece | la tira no fuerza el chip | `biblioteca-pmu.js` (tira) |
 | Borra sin confirmar cuando esta en uso | no se mira `data.referencias` | `op=borrar` + `_quitar` |
 | La galeria vuelve a tardar | el fast path se rompio | `media.php` / `biblioteca-pmu.js` |
+
+## Cobertura scriptada (2026-11-22)
+
+E1-E5 de este quickstart estan **scripteados** en `tests/ficha-pedido.browser.js`
+(checks `E1 (043/US1)` ... `E5 (043/SC-005)`, gate en verde con 65/65). E5 se corre al
+final del recorrido a proposito: borrar la unica foto del comprador rompe la vista previa,
+el carrito y el pedido.

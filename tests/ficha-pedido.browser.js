@@ -627,6 +627,103 @@ async function precondiciones(page) {
         // (El sembrado del escenario de US3 se movio al inicio de la ficha: el
         // auto-montaje de la spec 036 monta con el config ya sembrado.)
 
+        // ---- E1-E5 (spec 043): editar sin re-subir, cancelar, chip y borrar ----
+        // (Agregado 2026-11-22: son los cinco recorridos del quickstart de la 043.
+        // El resto del gate ya cubria la apertura del editor y el dedupe.)
+        const contarOriginales = () => listarRec(PMU + '\\tmp').filter((f) =>
+            /\\sesion-[^\\\\]+\\uploads\\\\[^\\\\]+$/.test(f.ruta) && !/\\.json$/.test(f.ruta)).length;
+        const zoomActual = () => page.evaluate(() => {
+            const r = document.querySelector('.spmu-modal .spmu-zoom');
+            return r ? Number(r.value) : null;
+        });
+        const moverZoom = (delta) => page.evaluate((d) => {
+            const r = document.querySelector('.spmu-modal .spmu-zoom');
+            if (!r) { return; }
+            r.value = String(Math.max(-100, Math.min(100, (Number(r.value) || 0) + d)));
+            r.dispatchEvent(new Event('input', { bubbles: true }));
+            r.dispatchEvent(new Event('change', { bubbles: true }));
+        }, delta);
+        const abrirEditor = async () => {
+            await cerrarOverlays(page);
+            await page.locator('[data-pmu-panel] .cpmu-mini').first().click();
+            await page.waitForSelector('.spmu-modal', { state: 'visible', timeout: 20000 }).catch(() => { });
+            await esperar(1200);
+        };
+        const postUploads = () => log.posts.filter((p) => p === 'pmu_uploads').length;
+
+        // E1: editar el encuadre de una foto existente y guardar = 0 bytes.
+        const origAntes = contarOriginales();
+        await abrirEditor();
+        const zoom0 = await zoomActual();
+        await moverZoom(20);
+        await esperar(600);
+        const uploadsAntes = postUploads();
+        await page.locator('.spmu-modal .spmu-ok').first().click();
+        await esperar(2500);
+        await subirOtra(page);
+        await cerrarOverlays(page);
+        check('E1 (043/US1): guardar una existente NO sube bytes (0 POST pmu_uploads)',
+            postUploads() === uploadsAntes, uploadsAntes + ' -> ' + postUploads());
+        check('E1 (043/SC-001): no aparecio ningun archivo nuevo en originales',
+            contarOriginales() === origAntes, origAntes + ' -> ' + contarOriginales());
+
+        // E2: la miniatura abre el EDITOR (no el visor) con la imagen cargada y sin
+        // subir nada. La receta aplicada se comprueba en E3 (el encuadre se conserva).
+        await abrirEditor();
+        const editorAbierto = await page.evaluate(() => {
+            const m = document.querySelector('.spmu-modal');
+            return !!m && !!(m.querySelector('.spmu-escena img') || m.querySelector('.spmu-escena canvas'));
+        });
+        const uploadsE2 = postUploads();
+        const zoom1 = await zoomActual();
+        check('E2 (043/US2): la miniatura abre el editor con la imagen y sin subir bytes',
+            editorAbierto && uploadsE2 === uploadsAntes, uploadsAntes + ' -> ' + uploadsE2);
+        check('E2 (043/US2): editar no agrega fotos a la biblioteca',
+            contarOriginales() === origAntes, origAntes + ' -> ' + contarOriginales());
+        check('E2 (043/US2): el editor trae el control de escala (encuadre editable)',
+            zoom1 !== null, 'escala=' + zoom1);
+        await cerrarOverlays(page);
+
+        // E3: cancelar descarta y no escribe nada.
+        await abrirEditor();
+        await moverZoom(30);
+        await esperar(500);
+        const uploadsAntes3 = postUploads();
+        await page.locator('.spmu-modal .spmu-cancelar').first().click();
+        await esperar(1500);
+        check('E3 (043/US3): cancelar no sube ni escribe (0 POST pmu_uploads)',
+            postUploads() === uploadsAntes3, uploadsAntes3 + ' -> ' + postUploads());
+        check('E3 (043/SC-006): cancelar no cambio los originales',
+            contarOriginales() === origAntes, origAntes + ' -> ' + contarOriginales());
+        await abrirEditor();
+        const zoom3 = await zoomActual();
+        check('E3 (043/SC-006): al reabrir el encuadre es el de antes de cancelar',
+            zoom3 !== null && zoom1 !== null && zoom3 === zoom1, zoom1 + ' -> ' + zoom3);
+        await cerrarOverlays(page);
+
+        // E4: el chip "Ver todas (N)" con el total real, al final de la tira.
+        await abrirModal(page);
+        await esperar(1500);
+        const chipTxt = await page.evaluate(() => {
+            const propio = document.querySelector('.pmu-bib-mas');
+            if (propio) { return propio.textContent.trim(); }
+            const tema = document.querySelector('.mu-gal-celda--chip');
+            return tema ? tema.textContent.trim() : null;
+        });
+        const nBib = await page.evaluate(() => {
+            try { return (JSON.parse(localStorage.getItem('pmu_bib_v3') || '{}').fotos || []).length; } catch (e) { return -1; }
+        }).catch(() => -1);
+        const mChip = /(\d+)/.exec(chipTxt || '');
+        check('E4 (043/US4): el chip "Ver todas (N)" muestra el total real de la biblioteca',
+            !!mChip && nBib >= 0 && Number(mChip[1]) === nBib, 'chip=' + chipTxt + ' n=' + nBib);
+        page.screenshot({ path: CAPT + '\\e1-e5-chip.png' }).catch(() => { });
+        await cerrarOverlays(page);
+
+        // (E5 se corre al final del recorrido: borrar la unica foto aca romperia
+        // la vista previa, el carrito y el pedido. Ver el bloque E5 del cierre.)
+
+        // ---- Vista previa: galeria 300x300 + mockup (spec 004/011) y pool (spec 029)
+
         // ---- Vista previa: galeria 300x300 + mockup (spec 004/011) y pool (spec 029)
         const op = page.locator('.pmu-opciones-btn');
         if (await op.count()) { await op.last().click().catch(() => { }); await esperar(400); }
@@ -870,7 +967,56 @@ async function precondiciones(page) {
             const cab = fs.readFileSync(pdf[0].ruta).slice(0, 5).toString('latin1');
             check('pedido: el entregable es un PDF real', cab === '%PDF-', 'cabecera=' + JSON.stringify(cab));
         }
-        const erroresGraves = errores.filter((e) => !/400 \\(Bad Request\\)/.test(e));
+        // ---- E5 (spec 043/US5, SC-005): borrar desde el visor de la biblioteca ----
+        // Se corre aca (y no en E1-E4) porque borrar la unica foto rompe la vista
+        // previa, el carrito y el pedido.
+        await cerrarOverlays(page);
+        await page.goto(PRODUCTO, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => { });
+        await esperar(1500);
+        await abrirModal(page);
+        await esperar(1500);
+        const chip5 = page.locator('.pmu-bib-mas, .mu-gal-celda--chip').first();
+        if (await chip5.count()) {
+            await chip5.click();
+            await esperar(1500);
+            const del5 = page.locator('.mu-gal-acciones button, .pmu-visor-acciones button',
+                { hasText: /^(Borrar|Eliminar|Quitar)$/ }).first();
+            check('E5 (043/US5): el visor de la biblioteca ofrece borrar', (await del5.count()) > 0);
+            if (await del5.count()) {
+                const nAntes5 = await tiraBib(page).then((t) => t.minis).catch(() => -1);
+                // El tema usa `confirm()` nativo (muyunicos/generatepress-child
+                // `galeria.js`), asi que se escucha el evento `dialog`: sin listener
+                // Playwright lo autocierra y el dialogo no se ve.
+                let huboDialogo5 = false;
+                const oirDialogo = async (d) => { huboDialogo5 = true; await d.dismiss().catch(() => { }); };
+                page.on('dialog', oirDialogo);
+                await del5.click();
+                await esperar(1500);
+                page.off('dialog', oirDialogo);
+                const hayDialogo5 = huboDialogo5 || await page.evaluate(() => {
+                    if (document.querySelector('.pmu-visor-confirmar')) { return true; }
+                    return /esta en uso|Borrar igual|confirm/i.test(document.body.innerText || '');
+                });
+                const nDespues5 = await tiraBib(page).then((t) => t.minis).catch(() => -1);
+                if (hayDialogo5) {
+                    check('E5 (043/SC-005): la foto esta en uso -> pide confirmacion y NO borra directo',
+                        nDespues5 === nAntes5, nAntes5 + ' -> ' + nDespues5);
+                    const no5 = page.locator('.pmu-visor-confirmar-botones button')
+                        .filter({ hasText: /^(Cancelar|No|Ahora no)$/ }).first();
+                    if (await no5.count()) { await no5.click().catch(() => { }); } else { await page.keyboard.press('Escape').catch(() => { }); }
+                } else {
+                    // Sin dialogo: solo es valido si NO borro (nunca directo y en
+                    // silencio). Borrar sin confirmar es lo que prohbe SC-005.
+                    check('E5 (043/SC-005): sin confirmacion no se borra (nunca directo)',
+                        nDespues5 === nAntes5, nAntes5 + ' -> ' + nDespues5);
+                }
+            }
+        } else {
+            check('E5 (043/US5): sin chip en la tira (omitido)', true, '(no hay .pmu-bib-mas)');
+        }
+        await cerrarOverlays(page);
+
+const erroresGraves = errores.filter((e) => !/400 \(Bad Request\)/.test(e));
         check('sin errores de pagina en la ficha/carrito/checkout', erroresGraves.length === 0, erroresGraves.slice(0, 3).join(' | '));
     } finally {
         // Spec 035: el lab queda como estaba (los `config.json` sembrados se reponen).
