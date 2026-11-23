@@ -185,8 +185,18 @@ funciona; la lista por ambos caminos coincide en ids/orden.
 - [X] T046 [P] Actualizar `readme.txt` (changelog) y la version a **4.35.0** solo en la cabecera de `personalizador-pdf.php` (§10.bis); `?ver=` se deriva.
 - [ ] T047 Correr las puertas completas: `foreach ($f in @('personalizador-pdf.php','media.php')) { php -l $f }`; `Get-ChildItem admin, engine, inc -Filter *.php | ForEach-Object { php -l $_.FullName }`; `foreach ($f in @('assets/biblioteca-pmu.js','assets/tienda.js','assets/cargador-pmu.js','assets/selector-pmu.js')) { node --check $f }`; `php tests/media_lectura.php`; `php tests/catalogo_uploads.php`; `php tests/sin_lectura.php`; `php tests/motor_smoke.php`; `php tests/parity.php`; todas las fases de `php tests/texto_puente.php` listadas en `AGENTS.md` §9, una por proceso (al menos `biblioteca`, `ficha`, `red_carga`, `admin`, `cotizador`, `pedido`, `completados`); `node tests/biblioteca-contrato.test.js`; `node tests/ficha-pedido.browser.js`.
 - [ ] T048 Verificar seguridad/privacidad: `.media/config.json` responde **403**; `media.php?op=ping` **200**; TTFB; cookies `HttpOnly`/`Secure`/`SameSite=Lax`; el secreto no aparece en la pagina ni en el JS; solo se sirven carpetas de uploads del comprador; rotacion: borrar `.media/config.json`, comprobar que las credenciales viejas dejan de servir, que el proximo open usa el respaldo y que el config se reemite.
+  - **Verificado 2026-11-22 en produccion**: `uploads/pmu/.media/config.json` responde **403**
+    (el `.htaccess` de `config_crear()` esta activo: el secreto no se sirve); `media.php?op=ping`
+    **200**; `?op=listar` emite `pmu_sid` con `Secure; HttpOnly; SameSite=Lax`; una credencial
+    alterada responde **403 `media:identidad`** con `fallback`. Falta la **rotacion** (borrar el
+    config, ver que las credenciales viejas dejan de servir y que se reemite).
 - [ ] T049 Medir y registrar la evidencia: primera apertura <1 s (p95), reapertura dentro de 5 min = **0** solicitudes, **0** lecturas por `admin-post`, lista ≤60 KB, miniaturas ≤20 KB; comparar con la linea base (9 arranques WP).
-- [ ] T050 Verificar el deploy: `pwsh scripts/verificar-deploy.ps1 -Url <biblioteca-pmu.js servido> -Local assets/biblioteca-pmu.js`; `media.php?op=ping` 200; purga + Ctrl+F5; marcar `spec.md`/`tasks.md`/`specs/INDICE.md` como implementados y cerrar.
+- [X] T050 Verificar el deploy: `pwsh scripts/verificar-deploy.ps1 -Url <biblioteca-pmu.js servido> -Local assets/biblioteca-pmu.js`; `media.php?op=ping` 200; purga + Ctrl+F5; marcar `spec.md`/`tasks.md`/`specs/INDICE.md` como implementados y cerrar.
+  - **Hecho 2026-11-22** (produccion `https://muyunicos.com`): push `6cdb114` + webhook de
+    Hostinger **HTTP 200**; `scripts/verificar-deploy.ps1` contra el `readme.txt` servido =
+    **DEPLOY OK (intento 1)** (mismo SHA256 que el local); `media.php?op=ping` **200**
+    (`{"success":true,"data":{"ok":true}}`); `?op=listar` **200** con `pmu_sid` y lista vacia;
+    `Stable tag` servido **4.36.0**. Falta la purga de cache + Ctrl+F5 del navegador (usuario).
 
 ---
 

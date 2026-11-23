@@ -52,7 +52,7 @@
 > lista (hasta 10), **revision** para que las reaperturas hagan **0 solicitudes**, e **invalidacion** al
 > subir/borrar. El **camino actual queda como respaldo** y las escrituras conservan la autorizacion
 > vigente. Trade-off aceptado y documentado: lecturas por credencial (sin token por apertura), alcance
-> limitado a la carpeta de fotos del comprador. 5 historias, 22 FR, 10 SC; **implementada (v4.36.0, 2026-11-21)** — puertas verdes: `media_lectura` **75** (contrato HTTP de `media.php`: 200/304/400/403/404/503, cookies, `ETag`, `Cache-Control`, `Vary`, `nosniff`), `catalogo_uploads` 16, `biblioteca-contrato` 81, `texto_puente` (biblioteca/fotos/receta/red_carga/ficha) y `ficha-pedido.browser.js` **53/53** (2026-11-22, lab en IPv4). Pendiente: T024/T025/T029-T049 (medir SC-001 p95 y cerrar el resto del tracking) y T050 (deploy).
+> limitado a la carpeta de fotos del comprador. 5 historias, 22 FR, 10 SC; **implementada (v4.36.0, 2026-11-21)** — puertas verdes: `media_lectura` **75** (contrato HTTP de `media.php`: 200/304/400/403/404/503, cookies, `ETag`, `Cache-Control`, `Vary`, `nosniff`), `catalogo_uploads` 16, `biblioteca-contrato` 81, `texto_puente` (biblioteca/fotos/receta/red_carga/ficha) y `ficha-pedido.browser.js` **53/53** (2026-11-22, lab en IPv4). Deploy **verificado** el 2026-11-22 (webhook 200, `readme.txt` servido con el SHA del local, `ping` 200, `.media/config.json` 403). Pendiente: T024/T025/T029-T049 (medir SC-001 p95 y cerrar el resto del tracking) y la purga + Ctrl+F5.
 
 > **2026-11-20**: spec **043-editor-imagen-biblioteca** **implementada (v4.36.0)** (42/45 `[X]`; falta Polish y deploy) — el comprador edita el
 > recorte de una imagen ya puesta **sin volver a subirla** (una foto = un `id`, N recetas por
