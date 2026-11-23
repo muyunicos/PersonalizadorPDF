@@ -83,6 +83,26 @@ specify integration status                      # después: 0 modificados / 0 fa
 
 - Actualizaciones del CLI: `specify self check`.
 
+### Qué feature resuelven los scripts (y cómo apuntar a otra)
+
+`.specify/feature.json` guarda la feature "vigente"; los scripts (`check-prerequisites.ps1`,
+`setup-plan.ps1`, `setup-tasks.ps1`, los workflows `speckit-*`) la leen de ahí. Si apunta a una
+feature vieja, el flujo corre sobre **esos** artefactos (paso real: apuntaba a la 043 con la 047
+ya implementada).
+
+- Ver dónde apunta: `Get-Content .specify/feature.json`.
+- Apuntar a otra **sin editar el archivo a mano** (lo persiste el propio script):
+
+```powershell
+$env:SPECIFY_FEATURE_DIRECTORY = 'specs/047-carga-multiple'
+.specify/scripts/powershell/check-prerequisites.ps1 -Json -RequireSpec -RequireTasks -IncludeTasks
+Remove-Item Env:\SPECIFY_FEATURE_DIRECTORY   # opcional: ya quedo escrito en feature.json
+```
+
+- Ojo: `SPECIFY_FEATURE` (solo el nombre de rama) **no** resuelve la feature; la variable que
+  lee `Get-FeaturePathsEnv` es `SPECIFY_FEATURE_DIRECTORY` (ruta relativa a la raíz o absoluta).
+- `SPECIFY_FEATURE_NO_PERSIST=1` resuelve **sin** escribir `feature.json` (para consultas de solo
+  lectura que no deben mutar el estado).
 ## 4. Terminal de VS Code y Cline
 
 - `.vscode/settings.json` (versionado) fija
