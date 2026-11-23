@@ -88,6 +88,46 @@
     }
 
     /**
+     * Spec 046 (T018): objetivo de una ranura `{aspecto}-{familia}-{area}`.
+     * (Duplica los helpers de `cargador-pmu.js`: la unificacion queda para la 044.)
+     */
+    function objetivoDe(r) {
+        var w = Math.max(1, parseInt(r && r.w, 10) || 1);
+        var h = Math.max(1, parseInt(r && r.h, 10) || 1);
+        var forma = String((r && r.forma) || '').toLowerCase();
+        var familia = (forma === 'circulo' || forma === 'ovalo') ? 1 : 0;
+        var aspecto = Math.round((w / h) * 10000) / 10000;
+        return {
+            clave: aspecto.toFixed(4) + '-' + familia + '-' + (w * h),
+            aspecto: aspecto, familia: familia, area: w * h
+        };
+    }
+
+    /** Interpreta una clave de objetivo; null si no vale. */
+    function parseObjetivo(clave) {
+        var m = /^(\d+(?:\.\d+)?)-([01])-(\d+)$/.exec(String(clave || ''));
+        if (!m) { return null; }
+        return { aspecto: parseFloat(m[1]), familia: parseInt(m[2], 10), area: parseInt(m[3], 10) };
+    }
+
+    /** Mejor receta de un mapa `objetivo -> delta` (exacta o la mas cercana). */
+    function mejorReceta(recetas, obj) {
+        if (!recetas || !obj) { return null; }
+        if (recetas[obj.clave]) { return recetas[obj.clave]; }
+        var mejor = null;
+        var mejorScore = Infinity;
+        Object.keys(recetas).forEach(function (k) {
+            var p = parseObjetivo(k);
+            if (!p) { return; }
+            var score = Math.abs(p.aspecto - obj.aspecto) * 1000
+                + (p.familia === obj.familia ? 0 : 10)
+                + Math.abs(p.area - obj.area) / Math.max(1, obj.area);
+            if (score < mejorScore) { mejorScore = score; mejor = recetas[k]; }
+        });
+        return mejor;
+    }
+
+    /**
      * Spec 046 (U3): firma COMPARABLE de una receta (misma tolerancia que el
      * `_aceptar` de la 043: 4 decimales). Sirve para saber si el comprador
      * cambio algo respecto de la receta con la que abrio el editor.
@@ -1234,21 +1274,18 @@
         if (foto.params && typeof foto.params === 'object') {
             return foto.params;
         }
+        // Spec 046: ajustes del cliente (ultima receta aceptada).
+        if (foto.ajustes && foto.ajustes.configuracion && typeof foto.ajustes.configuracion === 'object') {
+            return foto.ajustes.configuracion;
+        }
         var recetas = (foto.recetas && typeof foto.recetas === 'object') ? foto.recetas : null;
         if (!recetas) {
             return null;
         }
-        var w = Math.max(1, parseInt(this.config.finalW, 10) || 1);
-        var h = Math.max(1, parseInt(this.config.finalH, 10) || 1);
-        var gid = String(this.config.gid || '').toUpperCase();
-        var ph = Math.max(0, Math.min(2, parseInt(this.config.phsize, 10) || 0));
-            var pedido = gid + '-' + w + 'x' + h + '-' + ph;
-        if (recetas[pedido]) {
-            return recetas[pedido];
-        }
-        // Compatibilidad: una sola receta conocida (datos viejos) se ofrece igual.
-        var claves = Object.keys(recetas);
-        return (claves.length === 1) ? recetas[claves[0]] : null;
+        var obj = SelectorPMU.puro.objetivoDe({
+            w: this.config.finalW, h: this.config.finalH, forma: this.config.forma
+        });
+        return SelectorPMU.puro.mejorReceta(recetas, obj);
     };
 
     /**
@@ -1261,13 +1298,18 @@
         if (!params || !this.imagen) { return false; }
         var w = Math.max(1, parseInt(this.config.finalW, 10) || 1);
         var h = Math.max(1, parseInt(this.config.finalH, 10) || 1);
-        if (parseInt(params.w, 10) !== w || parseInt(params.h, 10) !== h) { return false; }
-        var gidConf = String(this.config.gid || '').toUpperCase();
-        var gidPar = String(params.gid || '').toUpperCase();
-        if (gidConf !== '' && gidPar !== '' && gidConf !== gidPar) { return false; }
-        var psz = Math.max(0, Math.min(2, parseInt(this.config.phsize, 10) || 0));
-        if (parseInt(params.phsize, 10) !== psz) { return false; }
-        var esc = parseFloat(params.escala);
+        // Spec 046 (FR-014): acepta la v2 completa (legacy) y el **delta** nuevo
+        // (sin w/h/phsize/gid: se aplica sobre los defaults del campo).
+        var esV2 = (params.w !== undefined || params.h !== undefined);
+        if (esV2) {
+            if (parseInt(params.w, 10) !== w || parseInt(params.h, 10) !== h) { return false; }
+            var gidConf = String(this.config.gid || '').toUpperCase();
+            var gidPar = String(params.gid || '').toUpperCase();
+            if (gidConf !== '' && gidPar !== '' && gidConf !== gidPar) { return false; }
+            var psz = Math.max(0, Math.min(2, parseInt(this.config.phsize, 10) || 0));
+            if (parseInt(params.phsize, 10) !== psz) { return false; }
+        }
+        var esc = parseFloat(params.escala !== undefined ? params.escala : params.zoom);
         if (isFinite(esc) && esc > 0) { this.zoom = Math.max(0.25, Math.min(4, esc)); }
         var rot = parseInt(params.rot, 10);
         if (isFinite(rot)) { this.rotacion = ((rot % 360) + 360) % 360; }
@@ -2062,6 +2104,9 @@
     SelectorPMU.puro = {
         formaCanonica: formaCanonica,
         modoCanonico: modoCanonico,
+        objetivoDe: objetivoDe,
+        parseObjetivo: parseObjetivo,
+        mejorReceta: mejorReceta,
         ICO_MODO: ICO_MODO,
         TITULO_MODO: TITULO_MODO,
         geometriaEscena: geometriaEscena,

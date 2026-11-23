@@ -692,6 +692,49 @@
         }, Promise.resolve()).then(function () { return true; });
     };
 
+    /**
+     * Spec 045 (T018): objetivo de una ranura `{aspecto}-{familia}-{area}`.
+     * Familia: 1 = circulo/ovalo, 0 = resto (el PH manda; `auto` no se guarda).
+     */
+    function objetivoDe(r) {
+        var w = Math.max(1, parseInt(r && r.w, 10) || 1);
+        var h = Math.max(1, parseInt(r && r.h, 10) || 1);
+        var forma = String((r && r.forma) || '').toLowerCase();
+        var familia = (forma === 'circulo' || forma === 'ovalo') ? 1 : 0;
+        var aspecto = Math.round((w / h) * 10000) / 10000;
+        return {
+            clave: aspecto.toFixed(4) + '-' + familia + '-' + (w * h),
+            aspecto: aspecto, familia: familia, area: w * h
+        };
+    }
+
+    /** Interpreta una clave de objetivo; null si no vale. */
+    function parseObjetivo(clave) {
+        var m = /^(\d+(?:\.\d+)?)-([01])-(\d+)$/.exec(String(clave || ''));
+        if (!m) { return null; }
+        return { aspecto: parseFloat(m[1]), familia: parseInt(m[2], 10), area: parseInt(m[3], 10) };
+    }
+
+    /**
+     * Spec 045 (T018): mejor receta de un mapa `objetivo -> delta`.
+     * Exacta si existe; si no, la mas cercana por aspecto -> familia -> area.
+     */
+    function mejorReceta(recetas, obj) {
+        if (!recetas || !obj) { return null; }
+        if (recetas[obj.clave]) { return recetas[obj.clave]; }
+        var mejor = null;
+        var mejorScore = Infinity;
+        Object.keys(recetas).forEach(function (k) {
+            var p = parseObjetivo(k);
+            if (!p) { return; }
+            var score = Math.abs(p.aspecto - obj.aspecto) * 1000
+                + (p.familia === obj.familia ? 0 : 10)
+                + Math.abs(p.area - obj.area) / Math.max(1, obj.area);
+            if (score < mejorScore) { mejorScore = score; mejor = recetas[k]; }
+        });
+        return mejor;
+    }
+
     /** Repinta miniaturas, contadores y el boton de "Listo" (D16). */
     CargadorPMU.prototype._pintar = function () {
         var self = this;
@@ -816,16 +859,20 @@
         var clave = String(id || '');
         if (clave === '') { return null; }
         if (this.recetas[clave]) { return this.recetas[clave]; }
+        var obj = objetivoDe(r);
         try {
             var bib = (global.PMUBiblioteca && typeof global.PMUBiblioteca.cache === 'function')
                 ? global.PMUBiblioteca.cache() : null;
             var fotos = (bib && bib.fotos) || [];
-            var ctx = String((r && r.gid) || '') + '-' + (r && r.w ? r.w : 0) + 'x'
-                + (r && r.h ? r.h : 0) + '-' + ((r && parseInt(r.phsize, 10)) || 0);
             for (var i = 0; i < fotos.length; i++) {
                 if (String(fotos[i] && fotos[i].id) !== clave) { continue; }
-                var rec = (fotos[i] && fotos[i].recetas) || {};
-                if (rec[ctx]) { return rec[ctx]; }
+                // Spec 045: recetas por objetivo (exacta o la mas cercana).
+                var mejor = mejorReceta((fotos[i] && fotos[i].recetas) || {}, obj);
+                if (mejor) { return mejor; }
+                // Ajustes del cliente = ultima receta aceptada.
+                var ajustes = (fotos[i] && fotos[i].ajustes) || null;
+                if (ajustes && ajustes.configuracion) { return ajustes.configuracion; }
+                break;
             }
         } catch (e) { /* sin catalogo: defaults del campo */ }
         return null;
@@ -1178,6 +1225,9 @@ CargadorPMU.prototype._abrirVisorCompartido = function (indice, posicion) {
         minTotal: minTotal,
         idsPlanos: idsPlanos,
         esArray: esArray,
+        objetivoDe: objetivoDe,
+        parseObjetivo: parseObjetivo,
+        mejorReceta: mejorReceta,
         FORMAS: FORMAS
     };
 

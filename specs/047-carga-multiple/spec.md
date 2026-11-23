@@ -115,9 +115,9 @@ y reemplaza al modal "¿Subir otra?" que la 046 retiro.
   escala 1, centro 0.5/0.5, rot 0, fondo auto, sin desplazamiento): solo se persisten
   los cambios (`modo`, `zoom`, `rot`, `ox`, `oy`, `fondo`, `transp`). Default =
   `{modo:'cubrir'}`.
-- **FR-014**: la **receta v2** que viaja al servidor se **deriva** del delta + objetivo
-  (`w/h` del área+aspecto) + `iw/ih` del original + `gid`/`phsize` del contexto; el hash
-  lo sigue calculando el servidor.
+- **FR-014**: la **receta v2** viaja al servidor (la tiene el cliente de la vista
+  previa) y el **catalogo** guarda el **delta** derivado (`receta_delta`); el hash lo
+  sigue calculando el servidor. `_aplicarParamsIniciales` acepta v2 o delta.
 
 ## Success Criteria
 

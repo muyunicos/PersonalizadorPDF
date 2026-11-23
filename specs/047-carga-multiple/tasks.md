@@ -47,17 +47,17 @@
 
 ## Phase 6 — Modelo de recetas (P1, transversal) — pendiente v4.38.0
 
-- [ ] T018 `assets/cargador-pmu.js`: `_recetaDeContexto` resuelve por **aspecto mas
+- [X] T018 `assets/cargador-pmu.js`: `_recetaDeContexto` resuelve por **aspecto mas
   cercano (sin umbral) -> familia -> area**; "ajustes del cliente" = ultima receta.
-- [ ] T019 [P] `assets/selector-pmu.js`: `_params()` devuelve el **delta**
-  (default `{modo:'cubrir'}`) y `_recetaDeFoto` lee el objetivo nuevo.
+- [X] T019 [P] `assets/selector-pmu.js`: `_params()` sigue dando la **v2** (wire) y
+  `_aplicarParamsIniciales` acepta **v2 o delta**; `_recetaDeFoto` lee objetivo/ajustes.
 - [X] T020 `inc/class-pmu-lectura.php`: `listar` expone `recetas` (objetivo) y
   `ajustes` por foto.
-- [ ] T021 `personalizador-pdf.php`: el puente/`PMU_FICHA` publica los objetivos.
-- [ ] T022 Puertas: `cargador-lote`, `receta-contrato`, `biblioteca-contrato`,
-  `texto_puente.php receta|fotos|biblioteca`, `media_lectura`.
-- [ ] T023 Bump 4.38.0 + changelog.
-- [ ] T024 Commit + push.
+- [X] T021 `personalizador-pdf.php`: no requiere cambios (usa `PMU_Lectura::listar`).
+- [X] T022 Puertas: `cargador-lote` 30, `receta-contrato` 21, `biblioteca-contrato` 81,
+  `texto_puente.php receta|fotos|biblioteca`, `media_lectura` 77, `ficha-pedido` 54/54.
+- [X] T023 Bump 4.38.0 + changelog.
+- [X] T024 Commit + push.
 
 ## Phase 7 — Polish
 
