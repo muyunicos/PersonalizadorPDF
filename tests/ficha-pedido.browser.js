@@ -769,9 +769,9 @@ async function precondiciones(page) {
         check('vista previa: la respuesta trae mockups de los PDFs elegibles', conMock >= 1,
             pdfsResp ? JSON.stringify(pdfsResp.map((p) => ({ pdf: p.pdf, mockups: (p.mockups || []).length }))) : '(sin respuesta)');
         const generados = listarRec(PMU + '\\tmp').filter((f) => f.ruta.indexOf('sesion-') >= 0 && f.ruta.indexOf('\\img\\') >= 0);
-        const fotosItem = listarRec(PMU + '\\tmp').filter((f) => f.ruta.indexOf('sesion-') >= 0 && f.ruta.indexOf('\\subidas\\') >= 0);
-        check('vista previa (spec 029): el pool guarda lo GENERADO y referencia la foto',
-            generados.length >= 1 && fotosItem.length >= 1, 'pool(img/)=' + generados.length + ' | subidas/=' + fotosItem.length);
+        const fotosItem = listarRec(PMU + '\\tmp').filter((f) => f.ruta.indexOf('sesion-') >= 0 && f.ruta.indexOf('\\uploads\\') >= 0);
+        check('vista previa (spec 029/040): el pool guarda lo GENERADO y el original vive en uploads/',
+            generados.length >= 1 && fotosItem.length >= 1, 'pool(img/)=' + generados.length + ' | uploads/=' + fotosItem.length);
         const addTras = await botonCarrito(page);
 
         /* ---- US3 (spec 035 §3.5): la vista previa se marca al MOSTRARSE ---- */
