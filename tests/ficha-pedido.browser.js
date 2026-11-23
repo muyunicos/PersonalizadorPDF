@@ -700,6 +700,10 @@ async function precondiciones(page) {
             contarOriginales() === origAntes, origAntes + ' -> ' + contarOriginales());
         check('E2 (043/US2): el editor trae el control de escala (encuadre editable)',
             zoom1 !== null, 'escala=' + zoom1);
+        // Spec 043 (fix 2026-11-22): el editor abre con el ORIGINAL, no con el recorte
+        // ya aplicado. No se comprueba por `src` porque la escena puede renderizar
+        // en <canvas>; el guard real vive en `selector-contrato` (cargador: `_urls`
+        // para el editor, `_recortes` para la miniatura).
         await cerrarOverlays(page);
 
         // E3: cancelar descarta y no escribe nada.

@@ -618,6 +618,10 @@ check('spec 043 (fix): el mockup dibuja el recorte local (0 POST si cubre todos 
   && /fotosCubiertas/.test(tienda));
 check('spec 043 (fix): el selector publica el recorte por PMU_API.anotarRecorte',
   /PMU_API\.anotarRecorte/.test(selector));
+check('spec 043 (fix): el editor abre con el ORIGINAL (`_urls`) y la miniatura con el recorte (`_recortes`)',
+  /var url = this\._urls\[String\(id\)\] \|\| \(this\.config\.urlDe/.test(cargador)
+  && /var conocida = \(this\._recortes \|\| \{\}\)\[String\(id\)\] \|\| this\._urls\[String\(id\)\]/.test(cargador)
+  && /this\._recortes\[clave\] = String\(url\)/.test(cargador));
 
 console.log('');
 if (fallos) {

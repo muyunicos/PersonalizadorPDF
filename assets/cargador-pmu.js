@@ -245,6 +245,10 @@
         // Spec 040 (A6): URLs y RECETAS de las imagenes usadas desde la biblioteca
         // (id conocido): no viajan bytes y la miniatura se pinta sin pedirla.
         this._urls = {};
+        // Spec 043 (fix 2026-11-22): `_urls` = ORIGINAL (lo que abre el editor);
+        // `_recortes` = blob RECORTADO (lo que ven la miniatura y la vista previa).
+        // Mezclarlos hacia que el editor abriera sobre una imagen ya recortada.
+        this._recortes = {};
         this.recetas = {};
         // Spec 046 (U7): placeholders de las subidas en curso (spinner en la tira).
         this._pendientes = {};
@@ -560,6 +564,12 @@
             // Spec 040 (A6): la receta con la que se subio queda legible por id
             // (`recetasDe`), igual que la de una imagen usada de la biblioteca.
             if (id) { self.recetas[String(id)] = paramsSubida || null; }
+            // Spec 043 (fix): el recorte recien compuesto alimenta la MINiatura
+            // (el editor sigue abriendo con el ORIGINAL via `_urls`).
+            if (id && urlRecorte) {
+                self._recortes = self._recortes || {};
+                self._recortes[String(id)] = String(urlRecorte);
+            }
             // Spec 042: la biblioteca cambio (nuevo original): se revalida en la proxima apertura.
             if (id && global.PMUBiblioteca && typeof global.PMUBiblioteca.invalidar === 'function') {
                 global.PMUBiblioteca.invalidar();
@@ -810,7 +820,10 @@
         if (!r || clave === '') {
             return Promise.reject(new Error('Imagen invalida.'));
         }
-        if (url) { this._urls[clave] = String(url); }
+        if (url) {
+            this._recortes = this._recortes || {};
+            this._recortes[clave] = String(url);
+        }
         var ids = this.estado[indice].ids;
         // Spec 045 (A1): si hay un reemplazo PENDIENTE de esta ranura, el id va a
         // ESA posicion y el contexto se limpia. Antes se agregaba al final (o se
@@ -880,9 +893,10 @@
 
     CargadorPMU.prototype._pintarMini = function (mini, id) {
         var self = this;
-        if (!this.config.urlDe && !this._urls[String(id)]) { return; }
+        if (!this.config.urlDe && !this._urls[String(id)]
+            && !((this._recortes || {})[String(id)])) { return; }
         var pintada = String(mini._pmuMiniUrl || '');
-        var conocida = this._urls[String(id)] || '';
+        var conocida = (this._recortes || {})[String(id)] || this._urls[String(id)] || '';
         var pedir = conocida || (this.config.urlDe ? this.config.urlDe(id) : '');
         Promise.resolve(pedir).then(function (url) {
             if (!url) { return; }
