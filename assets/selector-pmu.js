@@ -91,44 +91,6 @@
      * Spec 046 (T018): objetivo de una ranura `{aspecto}-{familia}-{area}`.
      * (Duplica los helpers de `cargador-pmu.js`: la unificacion queda para la 044.)
      */
-    if (false) {   // spec 044: helpers locales retirados (unica: assets/receta-objetivo.js)
-    function objetivoDeLocal(r) {
-        var w = Math.max(1, parseInt(r && r.w, 10) || 1);
-        var h = Math.max(1, parseInt(r && r.h, 10) || 1);
-        var forma = String((r && r.forma) || '').toLowerCase();
-        var familia = (forma === 'circulo' || forma === 'ovalo') ? 1 : 0;
-        var aspecto = Math.round((w / h) * 10000) / 10000;
-        return {
-            clave: aspecto.toFixed(4) + '-' + familia + '-' + (w * h),
-            aspecto: aspecto, familia: familia, area: w * h
-        };
-    }
-
-    /** Interpreta una clave de objetivo; null si no vale. */
-    function parseObjetivoLocal(clave) {
-        var m = /^(\d+(?:\.\d+)?)-([01])-(\d+)$/.exec(String(clave || ''));
-        if (!m) { return null; }
-        return { aspecto: parseFloat(m[1]), familia: parseInt(m[2], 10), area: parseInt(m[3], 10) };
-    }
-
-    /** Mejor receta de un mapa `objetivo -> delta` (exacta o la mas cercana). */
-    function mejorRecetaLocal(recetas, obj) {
-        if (!recetas || !obj) { return null; }
-        if (recetas[obj.clave]) { return recetas[obj.clave]; }
-        var mejor = null;
-        var mejorScore = Infinity;
-        Object.keys(recetas).forEach(function (k) {
-            var p = parseObjetivoLocal(k);
-            if (!p) { return; }
-            var score = Math.abs(p.aspecto - obj.aspecto) * 1000
-                + (p.familia === obj.familia ? 0 : 10)
-                + Math.abs(p.area - obj.area) / Math.max(1, obj.area);
-            if (score < mejorScore) { mejorScore = score; mejor = recetas[k]; }
-        });
-        return mejor;
-    }
-
-    }   // fin de los helpers locales retirados (spec 044)
 
     // Spec 044: implementacion canonica compartida (`assets/receta-objetivo.js`).
     function ro() {

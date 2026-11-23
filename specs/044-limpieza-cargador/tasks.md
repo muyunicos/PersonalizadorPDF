@@ -31,3 +31,4 @@
 - [X] T013 Correr todas las puertas (CLI + browser) y comparar con la linea base.
 - [X] T014 Bump + changelog.
 - [X] T015 Commit por bloque + push.
+- [X] T016 Borrar los bloques `if (false)` con los helpers locales (40 + 38 lineas).
