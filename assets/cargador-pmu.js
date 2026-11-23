@@ -821,7 +821,18 @@
         var slot = this.selectores[indice];
         if (!slot || !slot.sel) { return Promise.resolve(false); }
         return Promise.resolve(url).then(function (u) {
+            if (!u) {
+                // B3 (spec 045): foto de la biblioteca que no vive en el item:
+                // usar la URL del catalogo del comprador antes de rendirse.
+                var bib = (global.PMUBiblioteca && typeof global.PMUBiblioteca.cache === 'function')
+                    ? global.PMUBiblioteca.cache() : null;
+                var foto = ((bib && bib.fotos) || []).filter(function (x) {
+                    return String(x && x.id) === String(id);
+                })[0];
+                u = foto ? String(foto.url || '') : '';
+            }
             if (!u) { return false; }
+            self._urls[String(id)] = String(u);   // queda memoizada para el visor
             return slot.sel.cargarDesdeBiblioteca({ id: String(id), url: String(u), params: params });
         }).catch(function () { return false; });
     };
@@ -840,7 +851,20 @@ CargadorPMU.prototype._abrirVisorCompartido = function (indice, posicion) {
             return Promise.resolve(false);
         }
         var pos = Math.max(0, Math.min(ids.length - 1, parseInt(posicion, 10) || 0));
-        return Promise.all(ids.map(function (id) { return self.config.urlDe(id); }))
+        // B1/B3 (spec 045): primero la URL YA resuelta (`_urls`, la que funciono al
+        // cargar la foto); despues el pool del item. Antes se pedia siempre al pool,
+        // asi que una foto de la biblioteca (que no vive en el item) daba 404 y el
+        // visor no abria.
+        var resolver = function (id) {
+            var memo = self._urls[String(id)] || '';
+            if (memo) { return Promise.resolve(memo); }
+            var pedir = self.config.urlDe ? self.config.urlDe(id) : '';
+            return Promise.resolve(pedir).then(function (u) {
+                if (u) { self._urls[String(id)] = String(u); }
+                return u;
+            });
+        };
+        return Promise.all(ids.map(function (id) { return resolver(id); }))
             .then(function (urls) {
                 var items = [];
                 ids.forEach(function (id, i) {

@@ -76,6 +76,12 @@ codigo (040 A6 / 043 US1) y desvia al proximo cambio.
   funcionando.
 - **FR-004**: el camino de subida con bytes (`subirAsync` -> `_subir`) no cambia.
 - **FR-005**: comentarios y docs alineados con 040 A6 / 043 US1.
+- **FR-006** (B1): `_abrirVisorCompartido` usa `_urls[id]` (URL ya resuelta) antes
+  que el pool del item; memoiza lo que resuelve.
+- **FR-007** (B3): `_editar` cae al catalogo de la biblioteca si el pool no tiene la
+  foto, y memoiza la URL.
+- **FR-008** (B2): `cargarDesdeBiblioteca` usa `foto.url` (original); `thumb` solo
+  como ultimo recurso.
 
 ## Success Criteria
 
@@ -86,6 +92,8 @@ codigo (040 A6 / 043 US1) y desvia al proximo cambio.
 - **SC-003**: las puertas existentes siguen verdes (`selector-contrato`,
   `campos-contrato`, `biblioteca-contrato`, `receta-contrato`, `ficha-pedido`).
 - **SC-004**: el test nuevo falla antes del fix y pasa despues.
+- **SC-005** (B1): el visor abre con la URL de la biblioteca (B1.1/B1.2 de
+  `cargador-estado`).
 
 ## Key Entities
 

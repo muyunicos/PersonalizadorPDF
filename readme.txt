@@ -73,7 +73,11 @@ Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}
   limpia el contexto); antes se agregaba al final o rechazaba con la ranura llena.
 * El selector **reabre limpio**: se acabo la foto anterior en el modal y las acciones
   `Eliminar` / `Ver en grande` sobre una imagen que no es la actual (`_resetEstado`).
-* Puertas: `cargador-estado` 22 (nueva), `selector-contrato`, `campos-contrato`,
+* **B1/B3**: "Ver en grande" y editar una foto de la biblioteca que no esta en el
+  item vuelven a funcionar: el visor usa la URL ya resuelta (no el pool del item).
+* **B2**: tocar una miniatura ya no mete la miniatura (80x80) en el canvas; el
+  editor pide el original y la miniatura queda como ultimo recurso.
+* Puertas: `cargador-estado` 25 (nueva), `selector-contrato`, `campos-contrato`,
   `biblioteca-contrato` 81, `receta-contrato` 21 + `ficha-pedido` 53/53.
 
 = 4.36.0 =

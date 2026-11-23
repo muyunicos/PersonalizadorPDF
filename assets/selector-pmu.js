@@ -1167,7 +1167,13 @@
     SelectorPMU.prototype.cargarDesdeBiblioteca = function (foto) {
         var self = this;
         if (!foto || !this.raiz) { return Promise.resolve(false); }
-        var url = String(foto.url || foto.thumb || '');
+        // B2 (spec 045): el canvas necesita el ORIGINAL. `thumb` es 80x80, asi que
+        // solo se usa como ultimo recurso (antes entraba una imagen borrosa).
+        var url = String(foto.url || '');
+        if (!url && global.PMUBiblioteca && typeof global.PMUBiblioteca.urlRespaldo === 'function') {
+            url = String(global.PMUBiblioteca.urlRespaldo(foto) || '');
+        }
+        if (!url) { url = String(foto.thumb || ''); }
         if (url === '') { return Promise.resolve(false); }
         this._bib = {
             id: String(foto.id || ''),

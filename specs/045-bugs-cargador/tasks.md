@@ -35,3 +35,10 @@
 - [X] T010 Browser: `node tests/ficha-pedido.browser.js` en el lab (IPv4).
 - [X] T011 Bump de version (4.36.1) + changelog en `readme.txt`.
 - [X] T012 Commit `fix(043): ...` con las puertas en verde.
+
+## Phase 5 - B1/B2/B3 (sintomas del comprador)
+
+- [X] T013 [B1] `_abrirVisorCompartido` usa `_urls[id]` antes del pool y memoiza.
+- [X] T014 [B3] `_editar` cae al catalogo de la biblioteca y memoiza la URL.
+- [X] T015 [B2] `cargarDesdeBiblioteca` prioriza `foto.url`; `thumb` ultimo recurso.
+- [X] T016 Puertas: `cargador-estado` 25 + selector/campos/biblioteca/receta + browser.

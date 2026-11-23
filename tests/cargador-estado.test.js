@@ -122,6 +122,40 @@ async function usar(c, indice, id, params, url) {
         c.visorAbierto.length === 1 && c.visorAbierto[0][0] === 0,
         JSON.stringify(c.visorAbierto));
     check('A1.5 desde el visor: limpia `_reemplazo`', c._reemplazo === null);
+    /* ---- B1: el visor usa la URL ya resuelta ---- */
+    grupo('B1: _abrirVisorCompartido con foto de la biblioteca');
+
+    let visto = null;
+    global.PMUVisor = {
+        abrir: function (opts) { visto = opts; return true; },
+        cerrar: function () { },
+        confirmar: function () { return Promise.resolve(false); }
+    };
+
+    // 1) URL memoizada (foto usada/al editar): el pool del item no la tiene.
+    c = cargador(['aaaaaaaaaaaa']);
+    c._abrirVisorCompartido = CargadorPMU.prototype._abrirVisorCompartido; // metodo real
+    c._urls = { aaaaaaaaaaaa: 'url-original' };
+    c.config.urlDe = function () { return Promise.resolve(''); };
+    await c._abrirVisorCompartido(0, 0);
+    check('B1.1 abre con la URL ya resuelta (no el pool)',
+        !!visto && visto.items.length === 1 && visto.items[0].url === 'url-original',
+        JSON.stringify(visto && visto.items));
+    check('B1.1 deja la URL memoizada', c._urls.aaaaaaaaaaaa === 'url-original');
+
+    // 2) Sin memo: cae al pool y lo memoiza.
+    visto = null;
+    c = cargador(['bbbbbbbbbbbb']);
+    c._abrirVisorCompartido = CargadorPMU.prototype._abrirVisorCompartido; // metodo real
+    c.config.urlDe = function (id) { return Promise.resolve('url-pool-' + id); };
+    await c._abrirVisorCompartido(0, 0);
+    check('B1.2 sin memo usa el pool y lo memoiza',
+        !!visto && visto.items[0].url === 'url-pool-bbbbbbbbbbbb'
+        && c._urls.bbbbbbbbbbbb === 'url-pool-bbbbbbbbbbbb',
+        JSON.stringify(visto && visto.items));
+
+    delete global.PMUVisor;
+
     /* ---- A2: reset de estado ---- */
     grupo('A2: `_resetEstado` del selector');
 
