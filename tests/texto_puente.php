@@ -1370,6 +1370,22 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
             check('composicion: sin original ni composicion da causa propia',
                 strpos((string)($GLOBALS['test_comp_causa'] ?? ''), 'motor:original:ausente') !== false,
                 (string)($GLOBALS['test_comp_causa'] ?? ''));
+            // Spec 043 (A, 2026-11-22): la RECETA es parte de la clave del pool
+            // (`img/foto-{pdf}-{grupo}-{receta}.webp`): dos encuadres de la misma
+            // foto NO pueden compartir cache, y la misma receta SI (idempotente).
+            $pA = ['v' => 2, 'w' => 500, 'h' => 400, 'forma' => 'rectangulo', 'modo' => 'cubrir',
+                'escala' => 1, 'ox' => 0.5, 'oy' => 0.5, 'fondo' => 'transparent', 'transp' => '',
+                'rot' => 0, 'iw' => 1200, 'ih' => 900, 'phsize' => 1, 'gid' => '0000FF'];
+            $pB = $pA;
+            $pB['escala'] = 1.5;
+            check('spec 043 (A): otra receta de la MISMA foto da otra clave (no reusa cache)',
+                \PMU_Sesion::receta_de($pA) !== \PMU_Sesion::receta_de($pB),
+                \PMU_Sesion::receta_de($pA) . ' vs ' . \PMU_Sesion::receta_de($pB));
+            check('spec 043 (A): la misma receta da la misma clave (idempotente por receta)',
+                \PMU_Sesion::receta_de($pA) === \PMU_Sesion::receta_de($pA));
+            check('spec 043 (A): el nombre del pool se arma CON la receta (cache determinista)',
+                strpos((string)@file_get_contents(__DIR__ . '/../inc/class-pmu-sesion.php'),
+                    "'file' => 'img/foto-' . \$pdf . '-' . \$grupo . '-' . \$receta . '.webp'") !== false);
             break;
 
         case 'rutas':
