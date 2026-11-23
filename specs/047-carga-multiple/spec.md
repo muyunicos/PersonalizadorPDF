@@ -158,3 +158,18 @@ y reemplaza al modal "¿Subir otra?" que la 046 retiro.
 - Cambiar el `Compositor` o el Motor.
 - Edicion masiva (mover/rotar N fotos de una).
 - Ignorar las recetas viejas: no se migran ni se reutilizan (FR-011).
+
+## Clarifications (2026-11-22)
+
+Quedaban **dos** decisiones abiertas y ambas se cerraron con esta spec (no quedan
+marcadores `[NEEDS CLARIFICATION]`):
+
+- **T016 (duplicados en el lote)**: se resolvio por **dedupe de identidad**
+  (`nombre|bytes|fecha`) con aviso "se omitio N repetido(s)". Se descarto el hash de
+  contenido (crypto en el navegador, HTTP no seguro) y el aviso sin dedupe (el
+  comprador ve dos miniaturas iguales). Sin identidad usable no se deduplica.
+- **T017 (BMP/SVG)**: se **sacaron** del selector (`ACEPTA`, `TIPOS`, `EXTS`) en vez de
+  avisar por archivo: el servidor ya los rechazaba por firma (`firma_imagen`), asi que
+  ofrecerlos era prometer algo que falla despues.
+
+Ambas quedaron implementadas y con puerta (`tests/cargador-lote.test.js`, 36 checks).

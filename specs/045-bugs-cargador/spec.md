@@ -112,3 +112,9 @@ codigo (040 A6 / 043 US1) y desvia al proximo cambio.
 
 - Resto de la auditoria (A3-A8): spec 044 (limpieza/orden).
 - Sintomas del usuario aun sin confirmar.
+
+## Clarifications (2026-11-22)
+
+Sin preguntas abiertas: los **tres** puntos que motivaron el clarify de esta spec
+(aviso por prioridad, scroll a la ranura y "Quitar" local) ya estaban resueltos y
+quedaron implementados en la 046. No hay marcadores `[NEEDS CLARIFICATION]`.
