@@ -347,6 +347,96 @@ check('el visor navega con las URLs ya resueltas (config.urlDe memoizado, items[
 }
 
     console.log('');
+
+// ---------------------------------------------------------------------------
+// Spec 043 (T003): el chip "Ver todas (N)" en RUNTIME, con un DOM minimo.
+// T028 lo verificaba por codigo fuente; aca se pinta la tira de verdad (1, 3 y
+// 12 fotos) y se comprueba el numero, la posicion del chip y cuantas miniaturas
+// entran (tope 10: con 12 se reservan 9 + el chip).
+// ---------------------------------------------------------------------------
+console.log('== Spec 043 (T003): chip "Ver todas (N)" en runtime ==');
+
+const apiBib = require(path.join(RAIZ, 'assets', 'biblioteca-pmu.js'));
+
+function domMinimo() {
+    function nodo(tag) {
+        const n = {
+            tagName: tag, childNodes: [], style: {}, dataset: {}, _attrs: {}, _listeners: {},
+            className: '', id: '', type: '', title: '', textContent: '', src: '', alt: '',
+            decoding: '', clientWidth: 0,
+            setAttribute(k, v) { this._attrs[k] = v; },
+            getAttribute(k) { return this._attrs[k]; },
+            appendChild(h) { this.childNodes.push(h); h.parentNode = this; return h; },
+            addEventListener(ev, fn) { (this._listeners[ev] = this._listeners[ev] || []).push(fn); },
+            getBoundingClientRect() { return { width: 0 }; }
+        };
+        let html = '';
+        Object.defineProperty(n, 'innerHTML', {
+            get() { return html; },
+            set(v) { html = v; if (v === '') { n.childNodes = []; } }
+        });
+        n.ownerDocument = doc;
+        return n;
+    }
+    const doc = {
+        _byId: {},
+        createElement(tag) { return nodo(tag); },
+        getElementById(id) { return doc._byId[id] || null; }
+    };
+    doc.head = nodo('head');
+    doc.documentElement = nodo('html');
+    return doc;
+}
+
+function pintar(nFotos) {
+    const doc = domMinimo();
+    const cont = doc.createElement('div');
+    cont.clientWidth = 640; // caben 10 (ANCHO_MINI = 64)
+    global.document = doc;
+    global.localStorage = {
+        _d: {},
+        getItem(k) { return Object.prototype.hasOwnProperty.call(this._d, k) ? this._d[k] : null; },
+        setItem(k, v) { this._d[k] = String(v); },
+        removeItem(k) { delete this._d[k]; }
+    };
+    global.PMU_FICHA = { biblioteca: { revision: 'r1', identidad: 'idX' } };
+    global.PMU_TIENDA = { postUrl: 'x' };
+    apiBib.invalidar();
+    if (nFotos) {
+        const fotos = [];
+        for (let i = 0; i < nFotos; i++) { fotos.push({ id: 'f' + i, url: 'u' + i, thumb: 't' + i, recetas: {} }); }
+        global.localStorage.setItem(apiBib.clave, JSON.stringify({
+            revision: 'r1', identidad: 'idX', ts: Date.now(), fotos: fotos
+        }));
+    }
+    apiBib.tira(cont, {});
+    return cont;
+}
+
+const tiraDe = (cont) => cont.childNodes[0] || null;
+const chipDe = (t) => (t ? t.childNodes.filter(n => String(n.className).indexOf('pmu-bib-mas') !== -1)[0] || null : null);
+const minisDe = (t) => (t ? t.childNodes.filter(n => String(n.className).indexOf('pmu-bib-mini') !== -1
+    && String(n.className).indexOf('pmu-bib-mas') === -1) : []);
+
+[[1, 1], [3, 3], [12, 9]].forEach(function (par) {
+    const n = par[0]; const visibles = par[1];
+    const t = tiraDe(pintar(n));
+    const chip = chipDe(t);
+    check('T003: ' + n + ' fotos -> el chip dice "Ver todas (' + n + ')"',
+        !!chip && chip.textContent === 'Ver todas (' + n + ')');
+    check('T003: ' + n + ' fotos -> el chip es el ULTIMO item de la tira',
+        !!chip && !!t && t.childNodes[t.childNodes.length - 1] === chip);
+    check('T003: ' + n + ' fotos -> se pintan ' + visibles + ' miniaturas (+1 chip)',
+        minisDe(t).length === visibles);
+});
+
+check('T003: biblioteca vacia -> la tira no dibuja nada (sin chip roto)',
+    pintar(0).childNodes.length === 0);
+delete global.document;
+delete global.localStorage;
+delete global.PMU_FICHA;
+delete global.PMU_TIENDA;
+
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }
 console.log('BIBLIOTECA CONTRATO FALLA (' + fallos + ' de ' + (ok + fallos) + ')');
 process.exit(1);
