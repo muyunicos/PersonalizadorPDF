@@ -40,10 +40,11 @@
 
 - [X] T014 [US3] Archivo ilegible: aviso por archivo, el lote sigue.
 - [X] T015 [US3] Tope `max`: aviso "Solo entran N imagen(es)".
-- [ ] T016 [US3] **Duplicados en el lote** (mismo archivo dos veces): dedupe por
-  contenido o aviso (pendiente de decidir).
-- [ ] T017 [US3] **BMP/SVG**: el `accept` los ofrece y el servidor no los valida;
-  sacarlos o avisar por archivo.
+- [X] T016 [US3] **Duplicados en el lote** (mismo archivo dos veces): dedupe por
+  identidad (nombre + bytes + fecha) y aviso "se omitio N repetido(s)". Sin identidad
+  usable no se deduplica (mejor subir de mas que perder una imagen).
+- [X] T017 [US3] **BMP/SVG**: sacados del `accept` y de la validacion del selector
+  (`TIPOS`/`EXTS`); el servidor ya los rechazaba por firma (`firma_imagen`).
 
 ## Phase 6 — Modelo de recetas (P1, transversal) — pendiente v4.38.0
 
@@ -72,7 +73,7 @@
 - **Setup (Phase 1)**: hecho.
 - **Foundational (Phase 2)**: bloquea el modelo de recetas (Phase 6) y la lectura.
 - **US1/US2 (Phases 3-4)**: hechos y desplegados (v4.37.0).
-- **US3 (Phase 5)**: T014/T015 hechos; T016/T017 deferred.
+- **US3 (Phase 5)**: T014-T017 hechos.
 - **Modelo de recetas (Phase 6)**: depende de Phase 2; **es el trabajo pendiente**.
 - **Polish (Phase 7)**: despues de Phase 6.
 

@@ -593,6 +593,14 @@ check('spec 047: el input admite multiple y delega el lote',
 check('spec 047: el cargador pasa max y subirLote al selector',
   /max: r\.max/.test(cargador) && /subirLote: function \(archivos\)/.test(cargador));
 
+check('spec 047 (T017): el selector no ofrece BMP/SVG (el servidor los rechaza por firma)',
+  /var ACEPTA = '\.png,\.jpg,\.jpeg,\.gif,\.webp'/.test(selector)
+  && !/image\/bmp/.test(selector) && !/image\/svg\+xml/.test(selector));
+check('spec 047 (T017): la validacion por extension tampoco acepta bmp/svg',
+  /var EXTS = \['png', 'jpg', 'jpeg', 'gif', 'webp'\]/.test(selector));
+check('spec 047 (T016): el lote deduplica repetidos y avisa',
+  /repetidos/.test(cargador) && /omitio .*repetido/.test(cargador));
+
 console.log('');
 if (fallos) {
   console.log('SELECTOR CONTRATO FALLA (' + fallos + ' checks en rojo)');

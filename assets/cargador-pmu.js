@@ -681,6 +681,23 @@
         this._reemplazo = null;
         var libres = Math.max(0, r.max - this.estado[indice].ids.length);
         var lista = Array.prototype.slice.call(archivos || []);
+        // Spec 047 (T016): el mismo archivo elegido dos veces entra UNA vez.
+        // Identidad = nombre + bytes + fecha (sin leer el archivo ni usar crypto:
+        // el caso real es arrastrar o elegir el mismo archivo dos veces).
+        var vistos = {};
+        var repetidos = 0;
+        lista = lista.filter(function (a) {
+            // Sin identidad usable (ni nombre ni bytes) NO se deduplica: es mejor
+            // subir una de mas que perder una imagen.
+            if (!a || (!a.name && !a.size)) { return true; }
+            var k = String((a && a.name) || '') + '|' + ((a && a.size) || 0) + '|' + ((a && a.lastModified) || 0);
+            if (vistos[k]) { repetidos++; return false; }
+            vistos[k] = true;
+            return true;
+        });
+        if (repetidos > 0) {
+            this._error('Se omitio ' + repetidos + ' archivo(s) repetido(s) del lote.');
+        }
         if (lista.length > libres) {
             this._error('Solo entran ' + libres + ' imagen(es) en esta ranura.');
             lista = lista.slice(0, libres);

@@ -94,6 +94,28 @@ function cargador(max) {
     await c._subirLote(0, [{ n: 1 }, { n: 2 }]);
     check('max=1 con 2 archivos -> 1 subida', c.subidas.length === 1, 'n=' + c.subidas.length);
 
+    /* ---- Lote: duplicados (T016) ---- */
+    grupo('Lote: archivos repetidos');
+    const f1 = { name: 'foto.png', size: 1000, lastModified: 111 };
+    const f2 = { name: 'otra.png', size: 2000, lastModified: 222 };
+    let cd = cargador(3);
+    await cd._subirLote(0, [f1, f1, f2]);
+    check('el mismo archivo dos veces -> 2 subidas (no 3)', cd.subidas.length === 2, 'n=' + cd.subidas.length);
+    check('avisa que se omitio 1 repetido',
+        cd.errores.some((e) => /omitio 1 archivo\(s\) repetido/.test(e)), JSON.stringify(cd.errores));
+    cd = cargador(3);
+    await cd._subirLote(0, [{ name: 'x.png', size: 1, lastModified: 1 }, { name: 'x.png', size: 2, lastModified: 1 }]);
+    check('mismo nombre y fecha pero OTROS bytes -> 2 subidas', cd.subidas.length === 2, 'n=' + cd.subidas.length);
+    cd = cargador(3);
+    await cd._subirLote(0, [f1, f2]);
+    check('sin repetidos no hay aviso', cd.errores.length === 0, JSON.stringify(cd.errores));
+    cd = cargador(2);
+    await cd._subirLote(0, [f1, f1, f1, f2]);
+    check('3 copias del mismo + 1 -> 2 subidas (el dedupe corre antes del tope)',
+        cd.subidas.length === 2, 'n=' + cd.subidas.length);
+    check('avisa los 2 repetidos omitidos',
+        cd.errores.some((e) => /omitio 2 archivo/.test(e)), JSON.stringify(cd.errores));
+
     /* ---- _subir con params explicito ---- */
     grupo('_subir con params explicito');
     const c2 = Object.create(CargadorPMU.prototype);

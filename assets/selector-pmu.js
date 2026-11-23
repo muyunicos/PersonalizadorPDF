@@ -9,9 +9,9 @@
 (function (global) {
     'use strict';
 
-    var TIPOS = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml'];
-    var EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'];
-    var ACEPTA = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg';
+    var TIPOS = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']; // Spec 047 (T017): BMP/SVG fuera (el servidor los rechaza por firma)
+    var EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp']; // Spec 047 (T017): sin bmp/svg
+    var ACEPTA = '.png,.jpg,.jpeg,.gif,.webp'; // Spec 047 (T017): solo lo que el servidor valida por firma
 
     // Spec 028: los 3 modos (tabla normativa en `escalaBase`). `ICO_MODO` y
     // `TITULO_MODO` son la cara visible de esa tabla: los tests de vocabulario
