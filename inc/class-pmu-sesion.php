@@ -889,10 +889,14 @@ class PMU_Sesion
             'creado' => $ahora,
             'ultimo_uso' => $ahora,
         ];
-        if ($receta !== '' && is_array($paramsV2) && $paramsV2) {
-            $claveReceta = self::clave_receta($paramsV2);
-            if ($claveReceta !== '') {
-                $entrada['recetas'] = [$claveReceta => $paramsV2];
+        // Spec 045: el catalogo guarda objetivo -> delta (no la v2 completa) y la
+        // ultima receta aceptada (`ajustes` = {objetivo, configuracion}).
+        if (is_array($paramsV2) && $paramsV2) {
+            $objetivo = self::clave_receta($paramsV2);
+            if ($objetivo !== '') {
+                $delta = self::receta_delta($paramsV2);
+                $entrada['recetas'] = array($objetivo => $delta);
+                $entrada['ajustes'] = array('objetivo' => $objetivo, 'configuracion' => $delta);
             }
         }
         $this->motor->catalogo_upsert($dir, $id, $entrada);
@@ -906,14 +910,42 @@ class PMU_Sesion
      */
     private static function clave_receta(array $params)
     {
-        $gid = strtoupper((string)($params['gid'] ?? ''));
         $w = (int)($params['w'] ?? 0);
         $h = (int)($params['h'] ?? 0);
-        $ph = max(0, min(2, (int)($params['phsize'] ?? 0)));
-        if (preg_match('/^[0-9A-F]{6}$/', $gid) !== 1 || $w < 1 || $h < 1) {
+        if ($w < 1 || $h < 1) {
             return '';
         }
-        return $gid . '-' . $w . 'x' . $h . '-' . $ph;
+        // Spec 045: `{aspecto 4 dec}-{familia 0|1}-{area}`. El `gid` ya no entra:
+        // la receta se reutiliza entre campos (el grupo es contexto de PDF).
+        $aspecto = number_format($w / $h, 4, '.', '');
+        $forma = strtolower((string)($params['forma'] ?? ''));
+        $familia = in_array($forma, array('circulo', 'ovalo'), true) ? 1 : 0;
+        return $aspecto . '-' . $familia . '-' . ($w * $h);
+    }
+
+    /**
+     * Spec 045 (T004): delta de la configuracion respecto del default
+     * (`modo: cubrir`, escala 1, centro 0.5/0.5, rot 0, fondo auto, sin transp).
+     * Solo incluye lo que cambia: es lo que se guarda en el catalogo.
+     */
+    public static function receta_delta(array $params)
+    {
+        $delta = array('modo' => (string)($params['modo'] ?? 'cubrir'));
+        $escala = (float)($params['escala'] ?? 1);
+        if (abs($escala - 1.0) > 0.0001) { $delta['zoom'] = $escala; }
+        $rot = ((int)($params['rot'] ?? 0)) % 360;
+        if ($rot !== 0) { $delta['rot'] = $rot; }
+        $ox = (float)($params['ox'] ?? 0.5);
+        if (abs($ox - 0.5) > 0.0001) { $delta['ox'] = $ox; }
+        $oy = (float)($params['oy'] ?? 0.5);
+        if (abs($oy - 0.5) > 0.0001) { $delta['oy'] = $oy; }
+        $fondo = strtolower((string)($params['fondo'] ?? ''));
+        if ($fondo !== '' && $fondo !== 'auto' && $fondo !== 'transparent') {
+            $delta['fondo'] = (string)($params['fondo'] ?? '');
+        }
+        $transp = strtolower((string)($params['transp'] ?? ''));
+        if ($transp === 'si' || $transp === 'no') { $delta['transp'] = $transp; }
+        return $delta;
     }
 
     public function guardar_subida($sid, $item_key, $bytes, $params = [])
