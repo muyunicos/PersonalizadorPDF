@@ -100,18 +100,20 @@
 }
 .ec-ayuda-icon:hover,
 .ec-ayuda-icon:focus { background: #f0f6fc; border-color: #2271b1; color: #2271b1; outline: none; }
-/* Flechas ‹ › de la vista previa por instancia (patron visor, spec 049). */
+/* Flechas ‹ › a los lados de la vista previa (patron visor, spec 049). */
 .ec-preview-nav {
-    display: inline-flex;
-    gap: 6px;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: space-between;
     align-items: center;
-    justify-content: center;
-    margin-top: 4px;
+    pointer-events: none;
 }
 .ec-preview-nav[hidden] { display: none !important; }
 .ec-preview-nav button {
+    pointer-events: auto;
     border: 1px solid #c3c4c7;
-    background: #fff;
+    background: rgba(255, 255, 255, .9);
     border-radius: 50%;
     width: 26px;
     height: 26px;
@@ -120,6 +122,8 @@
     cursor: pointer;
 }
 .ec-preview-nav button:hover { border-color: #2271b1; color: #2271b1; }
+.ec-preview-img { display: block; max-width: 100%; height: auto; margin: 0 auto; border: 1px solid #dcdcde; }
+.ec-preview-cargador { margin-top: 6px; }
 
 /* ============ Switch (Activo) ============ */
 .ec-switch { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
@@ -263,6 +267,7 @@
     min-width: 0;
     text-align: center;
     font-size: 11px;
+    position: relative;
 }
 .ec-preview img {
     max-width: 100%;

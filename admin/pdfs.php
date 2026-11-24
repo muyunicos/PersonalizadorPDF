@@ -511,14 +511,14 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                                 <div class="ec-preview ec-checker ec-marco-btn" data-id="<?php echo esc_attr($gid); ?>"
                                      data-ver="<?php echo esc_url($link_ver('imagen', ['archivo' => $seleccionado, 'id' => $gid])); ?>"
                                      data-vw="<?php echo (int)$vw; ?>" data-vh="<?php echo (int)$vh; ?>"
-                                     title="Clic: elegir imagen de la galeria (o arrastrala aca)">
-                                    <?php if ($tiene) : ?>
-                                        <img src="<?php echo esc_url($link_ver('imagen', ['archivo' => $seleccionado, 'id' => $gid])); ?>"
-                                             alt="Imagen del grupo <?php echo esc_attr($gid); ?>">
-                                    <?php else : ?>
-                                        <div class="ec-marco" style="width:<?php echo (int)$vw; ?>px;height:<?php echo (int)$vh; ?>px"
-                                             title="<?php echo (int)$mnW; ?>x<?php echo (int)$mnH; ?> px"></div>
-                                    <?php endif; ?>
+                                     title="Clic: cargar imagen de prueba (motor de recorte)">
+                                    <div class="ec-marco" style="width:<?php echo (int)$vw; ?>px;height:<?php echo (int)$vh; ?>px"
+                                         title="<?php echo (int)$mnW; ?>x<?php echo (int)$mnH; ?> px"></div>
+                                    <div class="ec-preview-img"></div>
+                                    <span class="ec-preview-nav" hidden>
+                                        <button type="button" class="ec-prev" aria-label="Imagen anterior">&lsaquo;</button>
+                                        <button type="button" class="ec-next" aria-label="Imagen siguiente">&rsaquo;</button>
+                                    </span>
                                 </div>
                                 <a class="button button-small ec-btn-placeholder"
                                    href="<?php echo esc_url($link_desc('placeholder', ['archivo' => $seleccionado, 'id' => $gid])); ?>">
@@ -589,10 +589,6 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                                     <button type="button" class="button button-small ec-probar" data-id="<?php echo esc_attr($gid); ?>">Probar</button>
                                     <span class="ec-texto-status" aria-live="polite"></span>
                                 </p>
-                                <div class="ec-texto-preview-caja" hidden>
-                                    <img alt="Vista previa del grupo <?php echo esc_attr($gid); ?>">
-                                    <span class="ec-texto-preview-dims"></span>
-                                </div>
                                 <?php if ($valor !== '' && $preset_g !== '' && $tiene) : ?>
                                     <p class="ec-aviso">Al procesar, el texto renderizado reemplazara la imagen cargada de este grupo.</p>
                                 <?php endif; ?>

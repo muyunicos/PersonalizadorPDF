@@ -880,25 +880,15 @@ jQuery(function ($) {
 
     function panelDeId(id) { return $('.ec-panel-grupo[data-id="' + id + '"]'); }
 
-    /** Refresca el preview del grupo con la imagen del motor (ver) con cache-bust. */
+    /** Refresca el estado del grupo (el preview es superficie de prueba, no muestra la persistida). */
     function marcarImagen($panel) {
-        var $marco = $panel.find('.ec-marco-btn');
-        var url = String($marco.attr('data-ver') || '');
-        if (!url) { return; }
-        $marco.find('img, .ec-marco').remove();
-        $marco.append($('<img alt="">').attr('src', url + '&t=' + Date.now()));
         $panel.attr('data-tiene', '1');
         $panel.find('.ec-quitar').removeAttr('hidden');
         refrescarProcesar();
     }
 
-    /** Vuelve al marco vacio del grupo (tras quitar la imagen). */
+    /** Vuelve al estado sin imagen persistida del grupo. */
     function marcarSinImagen($panel) {
-        var $marco = $panel.find('.ec-marco-btn');
-        var vw = parseInt($marco.attr('data-vw'), 10) || 100;
-        var vh = parseInt($marco.attr('data-vh'), 10) || 100;
-        $marco.find('img, .ec-marco').remove();
-        $marco.append($('<div class="ec-marco"></div>').css({ width: vw + 'px', height: vh + 'px' }));
         $panel.attr('data-tiene', '0');
         $panel.find('.ec-quitar').attr('hidden', true);
         refrescarProcesar();
@@ -932,61 +922,17 @@ jQuery(function ($) {
             });
     }
 
-    if (typeof wp !== 'undefined' && wp.media) {
-        // El marco del placeholder y el boton del pool oculto abren la misma galeria;
-        // se manda el id del adjunto (el servidor copia el archivo original).
-        $(document).on('click', '.ec-marco-btn', function (e) {
+    // Spec 049: el recuadro de vista previa abre el MOTOR de carga (CargadorPMU) del
+    // grupo: imagen de prueba temporal, recortada segun el campo/placeholder.
+    $(document).on('click', '.ec-preview .ec-marco, .ec-preview .ec-preview-img', function (e) {
+        var $panel = $(this).closest('.ec-panel-grupo');
+        var id = String($panel.attr('data-id') || '');
+        var carg = PREVIEW_CARG[id];
+        if (carg && typeof carg.abrir === 'function') {
             e.preventDefault();
-            var idGrupo = (String($(this).data('id') || '')).toUpperCase();
-            var $form = $('form.ec-form-imagen[data-id="' + idGrupo + '"]').first();
-            if (!$form.length) { return; }
-            var $status = panelDeId(idGrupo).find('.ec-subida-status');
-            var frame = wp.media({
-                title: 'Elegir imagen para el grupo ' + idGrupo,
-                multiple: false,
-                library: { type: 'image' }
-            });
-            frame.on('select', function () {
-                var att = frame.state().get('selection').first().toJSON();
-                var idAdj = parseInt(att.id, 10) || 0;
-                if (!idAdj) {
-                    $status.addClass('ec-error').text('La imagen elegida no tiene id de adjunto.');
-                    return;
-                }
-                subirImagen($form, null, $status, idAdj)
-                    .catch(function () { /* el status ya muestra el error */ });
-            });
-            frame.open();
-        });
-    } else {
-        $('.ec-marco-btn').attr('title', 'Galeria no disponible');
-    }
-
-    // Arrastrar y soltar una imagen sobre el marco (sin recargar).
-    $(document).on('dragover dragleave drop', '.ec-marco-btn', function (e) {
-        var $marco = $(this);
-        var id = String($marco.data('id') || '');
-        var $panel = panelDeId(id);
-        var $status = $panel.find('.ec-subida-status');
-        if (e.type === 'dragover') {
-            e.preventDefault();
-            e.originalEvent.dataTransfer.dropEffect = 'copy';
-            $marco.addClass('ec-arrastre');
-            return;
+            e.stopPropagation();
+            carg.abrir(0);
         }
-        $marco.removeClass('ec-arrastre');
-        if (e.type === 'dragleave') { return; }
-        e.preventDefault();
-        var dt = e.originalEvent.dataTransfer;
-        var file = dt && dt.files && dt.files[0];
-        if (!file) { return; }
-        var $form = $('form.ec-form-imagen[data-id="' + id + '"]').first();
-        if (!$form.length) { return; }
-        if (file.type && file.type.indexOf('image/') !== 0) {
-            $status.addClass('ec-error').text('El archivo soltado no es una imagen.');
-            return;
-        }
-        subirImagen($form, file, $status).catch(function () { /* el status ya muestra el error */ });
     });
 
     // "Subir desde PC" (boton visible del panel) dispara el input del pool oculto.
@@ -2380,29 +2326,12 @@ jQuery(function ($) {
         delete PREVIEWS[String(id)];
     }
 
-    /* ===== Spec 049: vista previa por grupo/instancia (motor de carga real) ===== */
-    var PREVIEW_INST = {};    // grupoId -> instancia activa
-    var PREVIEW_RECORTE = {}; // grupoId -> {url,w,h} recorte local (objectURL)
+    /* ===== Spec 049: vista previa = motor de carga (CargadorPMU) por grupo ===== */
+    var PREVIEW_RECORTE = {}; // grupoId -> {ids, urls, activa, url, w, h} imagenes de prueba
     var PREVIEW_CARG = {};    // grupoId -> cargador montado
 
-    function contInstancias($panel) {
-        return Math.max(1, parseInt($panel.attr('data-cont'), 10) || 1);
-    }
-    function instanciaActiva($panel) {
-        var id = String($panel.attr('data-id') || '');
-        var n = contInstancias($panel);
-        var i = parseInt(PREVIEW_INST[id], 10) || 0;
-        if (i < 0 || i >= n) { i = 0; }
-        return i;
-    }
-    function fijarInstancia($panel, i) {
-        var id = String($panel.attr('data-id') || '');
-        var n = contInstancias($panel);
-        PREVIEW_INST[id] = ((i % n) + n) % n;
-    }
-
-    /** Contenido real del grupo para una instancia (recorte local o texto render). */
-    function resolverPreview(grupoId, instancia) {
+    /** Contenido real del grupo (recorte de prueba o texto render). */
+    function resolverPreview(grupoId) {
         var rec = PREVIEW_RECORTE[String(grupoId)];
         if (rec && rec.url) { return { url: rec.url, w: rec.w, h: rec.h, origen: 'recorte' }; }
         var prev = PREVIEWS[String(grupoId)];
@@ -2410,78 +2339,96 @@ jQuery(function ($) {
         return null;
     }
 
-    /** Repinta el recuadro .ec-preview del panel con el contenido de la instancia activa. */
+    /** Repinta .ec-preview: imagen activa (recorte/texto) o placeholder transparente. */
     function pintarPreview($panel) {
-        var $marco = $panel.find('.ec-marco-btn');
-        if (!$marco.length) { return; }
+        var $prev = $panel.find('.ec-preview');
+        if (!$prev.length) { return; }
         var id = String($panel.attr('data-id') || '');
-        var inst = instanciaActiva($panel);
-        var det = resolverPreview(id, inst);
+        var det = resolverPreview(id);
+        var $img = $prev.find('.ec-preview-img');
         if (det && det.url) {
-            $marco.find('img, .ec-marco').remove();
-            $marco.append($('<img alt="">').attr('src', det.url));
+            if ($img.attr('src') !== det.url) { $img.attr('src', det.url); }
+            $img.show();
+        } else {
+            $img.removeAttr('src').hide();
         }
-        var $nav = $panel.find('.ec-preview-nav');
-        if ($nav.length) {
-            $nav.find('.ec-preview-nav-pos').text((inst + 1) + ' / ' + contInstancias($panel));
-        }
+        pintarNav($panel);
     }
 
-    function notificarInstancia($panel) {
+    /** Publica el contenido actual del grupo al mockup (pmu:preview-listo). */
+    function notificarPreview($panel) {
         var id = String($panel.attr('data-id') || '');
-        var inst = instanciaActiva($panel);
-        var det = resolverPreview(id, inst);
+        var det = resolverPreview(id);
         window.dispatchEvent(new CustomEvent('pmu:preview-listo', {
-            detail: det ? { id: id, url: det.url, w: det.w, h: det.h, instancia: inst } : { id: id, instancia: inst }
+            detail: det ? { id: id, url: det.url, w: det.w, h: det.h } : { id: id }
         }));
     }
 
-    /** Flechas ‹ › para alternar instancias (patron visor). */
-    function pintarNav($panel) {
-        var $col = $panel.find('.ec-col-media');
-        if (!$col.length) { return; }
-        var n = contInstancias($panel);
-        var $nav = $col.find('.ec-preview-nav');
-        if (n <= 1) { $nav.remove(); return; }
-        if (!$nav.length) {
-            $nav = $('<span class="ec-preview-nav"></span>');
-            var $prev = $('<button type="button" aria-label="Instancia anterior">\u2039</button>');
-            var $pos = $('<span class="ec-preview-nav-pos"></span>');
-            var $next = $('<button type="button" aria-label="Instancia siguiente">\u203a</button>');
-            $prev.on('click', function () { fijarInstancia($panel, instanciaActiva($panel) - 1); pintarPreview($panel); notificarInstancia($panel); });
-            $next.on('click', function () { fijarInstancia($panel, instanciaActiva($panel) + 1); pintarPreview($panel); notificarInstancia($panel); });
-            $nav.append($prev).append($pos).append($next);
-            $col.append($nav);
-        }
-        $nav.find('.ec-preview-nav-pos').text((instanciaActiva($panel) + 1) + ' / ' + n);
+    /** Activa una imagen de prueba por id y la pinta. */
+    function activarImagen($panel, idFoto) {
+        var id = String($panel.attr('data-id') || '');
+        var rec = PREVIEW_RECORTE[id];
+        if (!rec || !rec.ids || !rec.ids.length) { return; }
+        rec.activa = idFoto;
+        rec.url = (rec.urls && rec.urls[idFoto]) ? rec.urls[idFoto] : rec.url;
+        pintarPreview($panel);
+        notificarPreview($panel);
     }
 
-    /** Monta el motor de carga real (CargadorPMU) para un grupo imagen con campo. */
+    /** Navega las imagenes de prueba cargadas (delta -1/+1). */
+    function irImagen($panel, delta) {
+        var id = String($panel.attr('data-id') || '');
+        var rec = PREVIEW_RECORTE[id];
+        if (!rec || !rec.ids || rec.ids.length <= 1) { return; }
+        var i = rec.ids.indexOf(rec.activa);
+        if (i < 0) { i = 0; }
+        i = (i + delta + rec.ids.length) % rec.ids.length;
+        activarImagen($panel, rec.ids[i]);
+    }
+
+    /** Flechas ‹ › a los lados: visibles solo con >1 imagen de prueba cargada. */
+    function pintarNav($panel) {
+        var $nav = $panel.find('.ec-preview-nav');
+        if (!$nav.length) { return; }
+        var id = String($panel.attr('data-id') || '');
+        var rec = PREVIEW_RECORTE[id];
+        var n = (rec && rec.ids) ? rec.ids.length : 0;
+        $nav.prop('hidden', n <= 1);
+    }
+
+    /** Monta el motor de carga real (CargadorPMU) para un grupo de imagen. */
     function montarCargadorGrupo($panel) {
         var id = String($panel.attr('data-id') || '');
         if (PREVIEW_CARG[id]) { return; }
         var tipo = String($panel.find('.ec-h-tipo').val() || '');
-        var campo = parseInt($panel.attr('data-campo'), 10) || 0;
-        if (tipo !== 'imagen' || campo <= 0 || !window.CargadorPMU) { return; }
+        if (tipo !== 'imagen' || !window.CargadorPMU) { return; }
         var $col = $panel.find('.ec-col-media');
         if (!$col.length) { return; }
-        var cont = $('<div class="ec-preview-cargador"></div>').appendTo($col);
         var w = parseInt($panel.attr('data-w'), 10) || 100;
         var h = parseInt($panel.attr('data-h'), 10) || 100;
+        var cont = $('<div class="ec-preview-cargador"></div>').appendTo($col);
         var blobs = {};
         var carg = new window.CargadorPMU(cont[0], {
-            ranuras: [{ w: w, h: h, forma: 'rectangulo', min: 0, max: 1, gid: id, phsize: 0 }],
+            ranuras: [{ w: w, h: h, forma: 'rectangulo', min: 0, max: 9, gid: id, phsize: 0 }],
             tecnico: true,
             subir: function (blob) {
-                var nid = 'pv-' + id + '-' + Date.now();
+                var nid = 'pv-' + id + '-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
                 blobs[nid] = URL.createObjectURL(blob);
                 return Promise.resolve({ id: nid, file: nid + '.webp', mime: 'image/webp', bytes: 0 });
             },
             urlDe: function (rid) { return Promise.resolve(blobs[rid] || null); },
             onRecorte: function (rid, url) {
-                PREVIEW_RECORTE[id] = { url: url, w: w, h: h };
+                var rec = PREVIEW_RECORTE[id] || { ids: [], urls: {} };
+                if (rec.ids.indexOf(rid) < 0) { rec.ids.push(rid); }
+                rec.urls = rec.urls || {};
+                rec.urls[rid] = url;
+                rec.activa = rid;
+                rec.url = url;
+                rec.w = w;
+                rec.h = h;
+                PREVIEW_RECORTE[id] = rec;
                 pintarPreview($panel);
-                notificarInstancia($panel);
+                notificarPreview($panel);
             }
         });
         if (carg.montar()) { PREVIEW_CARG[id] = carg; }
@@ -2490,16 +2437,21 @@ jQuery(function ($) {
     function initPreviewGrupos() {
         $('.ec-panel-grupo').each(function () {
             var $p = $(this);
-            pintarNav($p);
-            pintarPreview($p);
             montarCargadorGrupo($p);
+            pintarPreview($p);
         });
     }
     $(function () { initPreviewGrupos(); });
 
-    function cajaPreview($panel) {
-        return $panel.find('.ec-texto-preview-caja');
-    }
+    // Flechas laterales (delegadas): navegan las imagenes de prueba del grupo.
+    $(document).on('click', '.ec-preview-nav .ec-prev', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        irImagen($(this).closest('.ec-panel-grupo'), -1);
+    });
+    $(document).on('click', '.ec-preview-nav .ec-next', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        irImagen($(this).closest('.ec-panel-grupo'), 1);
+    });
 
     /** Vista previa del grupo al tamano exacto del hueco (texto de muestra). */
     $(document).on('click', '.ec-probar', function () {
@@ -2515,13 +2467,10 @@ jQuery(function ($) {
         var texto = textoMuestra(st);
         var hash = hashPreview(texto, st.preset, st.w, st.h);
         var previo = PREVIEWS[st.id];
-        // FR-021: si el render vigente es el mismo, no se vuelve a renderizar:
-        // abrir el editor o pulsar dos veces no genera renders duplicados.
+        // FR-021: si el render vigente es el mismo, no se vuelve a renderizar.
         if (previo && previo.hash === hash && previo.url) {
-            cajaPreview($panel).find('img').attr('src', previo.url).data('url', previo.url);
-            cajaPreview($panel).removeAttr('hidden');
             $status.removeClass('ec-error').text('');
-            window.dispatchEvent(new CustomEvent('pmu:preview-listo', { detail: previo }));
+            publicarPreview(st.id, previo);
             return;
         }
         $btn.prop('disabled', true).text('Renderizando...');
@@ -2529,12 +2478,8 @@ jQuery(function ($) {
             return core.TextMuyAPI.renderBatch([{ id: st.id, text: texto, preset: st.preset, width: st.w, height: st.h }]);
         }).then(function (out) {
             var url = URL.createObjectURL(out[0].blob);
-            var $caja = cajaPreview($panel);
-            var $img = $caja.find('img');
-            if ($img.data('url')) { URL.revokeObjectURL($img.data('url')); }
-            $img.attr('src', url).data('url', url);
-            $caja.find('.ec-texto-preview-dims').text(st.w + 'x' + st.h + ' px');
-            $caja.removeAttr('hidden');
+            var prev = PREVIEWS[st.id];
+            if (prev && prev.url && String(prev.url).indexOf('blob:') === 0) { URL.revokeObjectURL(prev.url); }
             $status.removeClass('ec-error').text('');
             publicarPreview(st.id, {
                 id: st.id, url: url, w: st.w, h: st.h,
