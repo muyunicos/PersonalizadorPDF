@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.39.5
+Stable tag: 4.39.6
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,14 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.39.6 =
+* Spec 043 (fix): la allowlist del selector tambien tiraba `gid` y `phsize` (la
+  receta salia con `gid: ""`); y `_aplicarParamsIniciales` descartaba recetas v2
+  viejas sin `phsize`. Ambos corregidos.
+* Mantenibilidad: nueva puerta conductual `tests/conducta-selector.test.js` (25
+  checks: `_params`, `open`, aplicar receta y `_recetaDeFoto`, sin DOM).
+* Puertas: `selector-contrato` +1 (gid/phsize), `config-cableado` 20.
 
 = 4.39.5 =
 * Mantenibilidad: `cargador-recetas` pasa de 12 a **18 checks** con casos

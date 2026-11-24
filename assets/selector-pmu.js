@@ -606,6 +606,11 @@
             // el cargador; sin ella la tira caia al catalogo (y con el catalogo
             // vacio, a cubrir para cualquier miniatura).
             paramsDe: typeof config.paramsDe === 'function' ? config.paramsDe : null,
+            // Spec 043 (fix 2026-11-22): `gid` y `phsize` tambien se caian de la
+            // allowlist; sin el gid la receta salia con `gid: ""` (el servidor la
+            // rechaza en `receta_validar`).
+            gid: String(config.gid || '').toUpperCase(),
+            phsize: Math.max(0, Math.min(2, parseInt(config.phsize, 10) || 0)),
             // Spec 043 (US5/T023): acciones sobre una imagen existente (editor).
             eliminar: typeof config.eliminar === 'function' ? config.eliminar : null,
             // Spec 046 (U5): "Ver en grande" se retiro del editor.
@@ -1305,7 +1310,9 @@
             var gidPar = String(params.gid || '').toUpperCase();
             if (gidConf !== '' && gidPar !== '' && gidConf !== gidPar) { return false; }
             var psz = Math.max(0, Math.min(2, parseInt(this.config.phsize, 10) || 0));
-            if (parseInt(params.phsize, 10) !== psz) { return false; }
+            // Spec 043 (fix 2026-11-22): una v2 vieja sin `phsize` sigue siendo
+            // valida: se asume el del campo (antes NaN !== 0 la descartaba).
+            if (params.phsize !== undefined && parseInt(params.phsize, 10) !== psz) { return false; }
         }
         var esc = parseFloat(params.escala !== undefined ? params.escala : params.zoom);
         if (isFinite(esc) && esc > 0) { this.zoom = Math.max(0.25, Math.min(4, esc)); }

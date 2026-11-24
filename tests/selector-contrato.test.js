@@ -637,6 +637,9 @@ check('spec 043 (fix): sin receta previa el cargador manda cubrir (no `{}`)',
 check('spec 043 (fix): los constructores NO tiran los hooks (allowlist de config)',
   /onRecorte: typeof config\.onRecorte === 'function' \? config\.onRecorte : null/.test(cargador)
   && /paramsDe: typeof config\.paramsDe === 'function' \? config\.paramsDe : null/.test(selector));
+check('spec 043 (fix): gid y phsize llegan (receta v2 completa)',
+  /gid: String\(config\.gid \|\| ''\)\.toUpperCase\(\)/.test(selector)
+  && /phsize: Math\.max\(0, Math\.min\(2, parseInt\(config\.phsize/.test(selector));
 
 console.log('');
 if (fallos) {
