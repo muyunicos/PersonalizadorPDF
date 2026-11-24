@@ -221,7 +221,7 @@ renderiza; solo consume lo que produce `.ec-probar` (D2, FR-017/021).
 | Lista de capas | miniaturas, reordenable, con acciones (renombrar, duplicar, ocultar, bloquear, eliminar) y marca de invalida |
 | Recursos | galeria de fotos del PDF (arrastrar archivo = sube y anade), catalogo `img/` con busqueda y categorias, lista de grupos con id/tamano/instancias |
 | Galeria de mockups | miniaturas en vivo; crear, duplicar, renombrar, eliminar, reordenar |
-| Teclado | flechas mueven (1 px; 10 px con modificador), Supr elimina, Ctrl+Z / Ctrl+Shift+Z deshace/rehace, Ctrl+D duplica, Ctrl+S guarda, `[`/`]` orden, Esc deselecciona |
+| Teclado | flechas mueven (1 px; Shift = 10 px o rota 15° en una capa; Alt = ancho/alto desde el centro; Alt+Shift y selecciones de más de una capa escalan/rotan el bloque), Supr elimina, Ctrl+Z / Ctrl+Shift+Z deshace/rehace, Ctrl+D duplica, Ctrl+S guarda, `[`/`]` orden, Esc deselecciona |
 | Estado | "Sin guardar" / "Guardando" / "Guardado" siempre visible |
 
 Regla: **ningun flujo principal** usa `window.prompt`/`alert` (FR-042). `confirm` solo para bajas

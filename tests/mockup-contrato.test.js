@@ -917,6 +917,14 @@ check('el menu se cierra por fuera, Escape y scroll del panel',
         && ed.indexOf("$(document).on('keydown.pmuCtx'") !== -1
         && ed.indexOf("$ed.on('scroll.pmuCtx'") !== -1
         && ed.indexOf('function cerrarMenuCtx()') !== -1);
+check('las flechas del teclado cubren mover, mayus (rotar/escala), alt (ancho/alto desde el centro) y bloque',
+    ed.indexOf('if (ev.altKey) {') !== -1
+        && ed.indexOf('redimensionarDesdeTirador(cAlt, tiradorAlt') !== -1
+        && ed.indexOf('desdeCentro: true') !== -1
+        && ed.indexOf('G.escalarGrupo(capas(), indices, origenAlt') !== -1
+        && ed.indexOf('G.transformarGrupo(capas(), indices, origen, grados, dx, dy)') !== -1
+        && ed.indexOf('c.rot = Math.max(-360, Math.min(360') !== -1);
+
 check('el menu ofrece fallback visible y deshabilita lo que no aplica',
     ed.indexOf('ec-mk-capa-ias') !== -1
         && ed.indexOf('aria-disabled') !== -1
