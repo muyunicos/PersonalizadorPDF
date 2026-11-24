@@ -12,8 +12,9 @@
 
 ### Session 2026-11-24
 
-- Q: Con flechas ‹ › en un grupo multi-instancia, ¿contenido distinto por instancia o el mismo? → A: Contenido distinto por instancia (cada instancia tiene su propio recorte/imagen, como un campo array del comprador).
+- Q: Con flechas ‹ › en un grupo multi-instancia, ¿contenido distinto por instancia o el mismo? → A: Las flechas navegan **las imágenes de prueba cargadas** (la cantidad la define el campo; una sola para texto), NO las instancias del PDF. Cada imagen cargada tiene su propio recorte.
 - Q: El recorte/encuadre del admin, ¿alimenta el Procesar real o es solo preview? → A: Alimenta el "Procesar PDF" de PRUEBA del admin (salida de muestra) para verificar; NO llega al cliente (las imágenes/textos de prueba no se entregan al comprador).
+- Q: ¿Qué muestra `.ec-preview` por defecto y qué pasa con `.ec-texto-preview-caja`? → A: Muestra el **placeholder transparente** por defecto (no la imagen persistida del grupo); `.ec-texto-preview-caja` se elimina: el texto se previsualiza en el mismo `.ec-preview`.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -35,7 +36,7 @@ El administrador abre la consola de un PDF y ve el editor de mockups como un aco
 
 ### User Story 2 - Vista previa del placeholder que simula al comprador (Priority: P2)
 
-El administrador ve en el acordeón Placeholders un recuadro de vista previa que ya no es solo "imagen subida o marco vacío": monta el mismo motor de carga de imágenes que usa el comprador (recorte y encuadre reales), adaptado al campo y al tamaño del grupo. Cuando el grupo tiene más de una instancia, flechas ‹ › permiten alternar entre ellas. El recuadro previsualiza el resultado real del grupo sea imagen, texto (render) o un tipo futuro, con un punto de extensión para nuevos tipos.
+El administrador ve en el acordeón Placeholders un recuadro de vista previa que **por defecto muestra el placeholder transparente** (no la imagen persistida del grupo). Al cargar imágenes de prueba con el **motor de carga del comprador** (CargadorPMU + SelectorPMU, recorte y encuadre reales, adaptado al campo y tamaño del grupo), el recuadro muestra el resultado real. Las **flechas ‹ › a los lados** alternan entre las **imágenes de prueba cargadas** (la cantidad la define el campo; una sola para texto). El recuadro previsualiza imagen, texto (render) o un tipo futuro, con punto de extensión. `.ec-texto-preview-caja` se elimina: el texto se ve en el mismo recuadro.
 
 **Why this priority**: Es el corazón de la petición: acerca al máximo la consola a lo que verá el comprador, reduce errores de configuración y unifica la previsualización. Depende de que exista el editor (US1) para tener sentido completo, pero aporta valor por sí mismo en el acordeón Placeholders.
 
@@ -44,7 +45,7 @@ El administrador ve en el acordeón Placeholders un recuadro de vista previa que
 **Acceptance Scenarios**:
 
 1. **Given** un grupo con campo de imagen, **When** el admin carga una imagen en la vista previa, **Then** ve el recorte/encuadre real (no solo la imagen cruda) adaptado al tamaño del grupo.
-2. **Given** un grupo con más de una instancia, **When** el admin pulsa las flechas ‹ ›, **Then** la vista previa alterna entre instancias (cada una con su propio contenido) y la instancia activa alimenta el mockup.
+2. **Given** un grupo con más de una imagen de prueba cargada, **When** el admin pulsa las flechas ‹ › de los lados, **Then** la vista previa alterna entre esas imágenes (cada una con su recorte) y la activa alimenta el mockup; con una sola imagen (p. ej. texto) no hay flechas.
 3. **Given** un grupo de texto con render generado, **When** el admin mira la vista previa, **Then** ve el texto renderizado (mismo resultado que el mockup), no un marco vacío.
 4. **Given** un tipo de placeholder no contemplado hoy, **When** el admin lo selecciona, **Then** la vista previa cae a un comportamiento genérico sin romper la consola.
 
@@ -68,10 +69,11 @@ En el editor de mockups, el interruptor antes llamado "Ver texto real" se llama 
 
 ### Edge Cases
 
-- ¿Qué pasa con un grupo sin campo asociado? La vista previa cae al comportamiento clásico (marco vacío o imagen subida) sin montar motor de carga.
+- ¿Qué muestra el recuadro sin una imagen de prueba cargada? El **placeholder transparente** (nunca la imagen persistida del grupo).
+- ¿Qué pasa con un grupo sin campo asociado? Si es de imagen, el motor monta con una ranura por defecto del tamaño del grupo; si es de texto, no monta motor y cae al render/clásico.
 - ¿Qué pasa si el grupo declara tipo imagen pero el campo asociado es de otro tipo? Se muestra un aviso de desajuste y la vista previa no bloquea la edición.
-- ¿Qué pasa con un grupo de una sola instancia? Las flechas ‹ › no se muestran.
-- ¿Qué pasa con contenido por instancia en un grupo array? Cada instancia conserva su propio recorte/imagen; cambiar la instancia activa no pisa las demás.
+- ¿Qué pasa con un grupo de una sola imagen de prueba (p. ej. texto)? No se muestran flechas ‹ ›.
+- ¿Dónde se ve el texto? En el mismo `.ec-preview` (`.ec-texto-preview-caja` fue eliminado).
 - ¿Qué pasa si falla el render de texto o el recorte? La vista previa muestra la causa exacta y la consola sigue operativa (nunca pantalla en blanco).
 - ¿Qué pasa con grupos de tipos mezclados? Cada recuadro resuelve su propio tipo; un fallo en uno no afecta a los demás.
 - ¿Qué pasa con la "biblioteca del comprador" (Mis imágenes) en el admin? No está disponible en el contexto de administración; el motor de carga del admin cubre recorte, encuadre y receta sin biblioteca (sub-fase fuera de alcance).
@@ -83,11 +85,11 @@ En el editor de mockups, el interruptor antes llamado "Ver texto real" se llama 
 - **FR-001**: El editor de mockups DEBE presentarse como un acordeón propio titulado "Editor de mockups".
 - **FR-002**: La descripción de uso del mockup DEBE mostrarse desde un icono de ayuda "?" ubicado a la derecha de la cabecera del acordeón, accesible por teclado y cursor, sin alterar el estado del acordeón.
 - **FR-003**: El editor NO DEBE mostrar un título interno duplicado del acordeón que lo contiene.
-- **FR-004**: El recuadro de vista previa de cada grupo del acordeón Placeholders DEBE previsualizar el resultado real del grupo (imagen, texto u otro tipo), no solo la imagen subida o un marco vacío.
+- **FR-004**: El recuadro de vista previa de cada grupo del acordeón Placeholders DEBE mostrar por defecto el **placeholder transparente** y previsualizar el resultado real (imagen de prueba, texto u otro tipo) cuando haya contenido, no solo la imagen subida o un marco vacío.
 - **FR-005**: Para grupos de tipo imagen con campo asociado, la vista previa DEBE usar el mismo motor de carga/recorte que el comprador, adaptado al tamaño del grupo y a la guía de recorte deducida del cableado del hueco.
-- **FR-006**: Cuando un grupo tiene más de una instancia, la vista previa DEBE ofrecer flechas para alternar entre instancias y CADA instancia DEBE admitir su propio contenido (recorte/imagen distinto por instancia, como un campo array del comprador); la instancia activa DEBE ser la que alimenta el mockup.
+- **FR-006**: Cuando un grupo tiene MÁS de una imagen de prueba cargada, la vista previa DEBE ofrecer flechas ‹ › **a los lados** del recuadro (patrón del motor de visor) para alternar entre **las imágenes cargadas** (la cantidad la define el campo; con texto hay una sola y no se muestran flechas). La imagen activa DEBE ser la que alimenta el mockup. NO navega las instancias del PDF.
 - **FR-007**: La vista previa DEBE resolver su contenido por tipo, con un punto de extensión que ante un tipo no contemplado caiga a un comportamiento genérico sin romper la consola.
-- **FR-008**: Ante un grupo sin campo de imagen asociado, la vista previa DEBE caer al comportamiento clásico (marco vacío o imagen) sin montar el motor de carga.
+- **FR-008**: Ante un grupo de tipo imagen (con o sin campo asociado), la vista previa DEBE montar el motor con una ranura por defecto del tamaño del grupo; ante un grupo de texto NO DEBE montar motor (cae al render de texto o al comportamiento clásico).
 - **FR-009**: El interruptor del editor DEBE llamarse "Alternar PH" y controlar si las capas placeholder se dibujan con el contenido real de la vista previa del grupo o como caja neutra.
 - **FR-010**: El contenido que muestra la capa placeholder en el mockup DEBE coincidir con el de la vista previa del grupo correspondiente y repintarse cuando ese contenido cambie.
 - **FR-011**: Ante un fallo de render o recorte, la vista previa DEBE mostrar la causa exacta y la consola DEBE seguir operativa.

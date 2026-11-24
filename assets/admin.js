@@ -923,14 +923,15 @@ jQuery(function ($) {
     }
 
     // Spec 049: el recuadro de vista previa abre el MOTOR de carga (CargadorPMU) del
-    // grupo: imagen de prueba temporal, recortada segun el campo/placeholder.
-    $(document).on('click', '.ec-preview .ec-marco, .ec-preview .ec-preview-img', function (e) {
+    // grupo (imagen de prueba temporal, recortada segun el campo/placeholder).
+    $(document).on('click', '.ec-preview', function (e) {
+        if ($(e.target).closest('.ec-preview-nav').length) { return; } // no abrir al navegar
         var $panel = $(this).closest('.ec-panel-grupo');
         var id = String($panel.attr('data-id') || '');
+        if (!PREVIEW_CARG[id]) { montarCargadorGrupo($panel); } // montaje perezoso
         var carg = PREVIEW_CARG[id];
         if (carg && typeof carg.abrir === 'function') {
             e.preventDefault();
-            e.stopPropagation();
             carg.abrir(0);
         }
     });
