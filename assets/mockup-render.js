@@ -718,6 +718,68 @@
 
         return { perforadas: perforadas, saltadas: saltadas };
     }
+    /* ============ Reparto en bandas (enmienda D13, spec 036) ============ */
+
+    /** Modo de fusion no neutro (multiply u otro). */
+    function esModo(capa) {
+        return !!(capa && capa.modo && capa.modo !== 'normal');
+    }
+
+    /**
+     * Parte las capas de un mockup en TRES bandas por el orden z, para poder
+     * aplanarlas en 2 bitmaps (fondo + frente) y dibujar los placeholders EN
+     * MEDIO: asi un PH con `multiply` multiplica contra el FONDO (estatico) y
+     * no contra un hueco transparente (bug de la Ficha con el aplanado D12).
+     *
+     * - fondo  = capas `img` VISIBLES que estan ANTES del primer PH visible.
+     * - frente = capas `img` VISIBLES que estan DESPUES del ultimo PH visible.
+     * - phs    = capas `placeholder` VISIBLES, en su orden relativo.
+     *
+     * No aplanable (ok=false) cuando el sandwich no puede reproducir el z-order
+     * o el blend (el consumidor cae a composicion por capas):
+     * - 'img-intercalada': una `img` visible con un PH antes Y otro despues.
+     * - 'blend-delante': una `img` con modo != 'normal' DESPUES de algun PH
+     *   (tendria que multiplicar contra la foto del comprador, que es dinamica
+     *   y no se puede hornear en un bitmap estatico).
+     *
+     * Las capas `oculta` no dibujan: se ignoran para la clasificacion.
+     */
+    function partirCapas(capas) {
+        var lista = capas || [];
+        var n = lista.length;
+        var i, c, primerPH = -1, ultPH = -1;
+        for (i = 0; i < n; i++) {
+            c = lista[i];
+            if (c && !c.oculta && c.tipo === 'placeholder') {
+                if (primerPH < 0) { primerPH = i; }
+                ultPH = i;
+            }
+        }
+        var fondo = [], frente = [], phs = [];
+        // Sin placeholders: todo `img` visible es fondo (no hay frente ni PH).
+        if (primerPH < 0) {
+            for (i = 0; i < n; i++) {
+                if (lista[i] && !lista[i].oculta && lista[i].tipo === 'img') { fondo.push(lista[i]); }
+            }
+            return { ok: true, motivo: '', fondo: fondo, phs: phs, frente: frente };
+        }
+        for (i = 0; i < n; i++) {
+            c = lista[i];
+            if (!c || c.oculta) { continue; }
+            if (c.tipo === 'placeholder') { phs.push(c); continue; }
+            if (c.tipo !== 'img') { continue; }
+            var antesPH = primerPH < i;   // hay algun PH antes que esta img
+            var despuesPH = ultPH > i;    // hay algun PH despues de esta img
+            if (antesPH && despuesPH) {
+                return { ok: false, motivo: 'img-intercalada', fondo: [], phs: [], frente: [] };
+            }
+            if (antesPH && esModo(c)) {
+                return { ok: false, motivo: 'blend-delante', fondo: [], phs: [], frente: [] };
+            }
+            if (despuesPH) { fondo.push(c); } else { frente.push(c); }
+        }
+        return { ok: true, motivo: '', fondo: fondo, phs: phs, frente: frente };
+    }
     return {
         LIENZO: LIENZO,
         // Nombre canonico (contracts/mockup-capas.md 2): `componer`. `composicion`
@@ -737,6 +799,8 @@
         comandosEnvoltura: comandosEnvoltura,
         trazarEnvoltura: trazarEnvoltura,
         // Enmienda D12: hueco del aplanado (destination-out sobre los PH).
-        siluetas: siluetas
+        siluetas: siluetas,
+        // Enmienda D13 (spec 036): reparto fondo/frente/PH para el aplanado de 2 planos.
+        partirCapas: partirCapas
     };
 }));

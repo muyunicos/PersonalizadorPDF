@@ -350,6 +350,15 @@ y se conserva, porque es la evidencia de por que no se repite.
   aplanado **encima**: la foto se ve **por el hueco**. **1 archivo, 1 descarga**; sin bandas ni mascara.
   Limitaciones aceptadas: nada pisa dentro del hueco, un PH `multiply` pierde el multiplicado, halo de
   1 px con envolturas organicas y un PH con **perspectiva** no se perfora (aviso en el editor).
+- ✅ **Enmienda D13 (2026-11-24, v4.41.0): aplanado de 2 planos / sandwich**: supera la limitacion (b) de
+  D12 (el `multiply` **se pierde** porque el PH quedaba **detras** del bitmap y la ficha veia el recuadro
+  blanco). `PMUMockup.partirCapas` parte las capas por z-order en **fondo / PHs / frente**; el editor exporta
+  **hasta 2 WebP** (`{id}.webp` fondo BLANCO opaco + `{id}-frente.webp` frente transparente con alfa, solo si
+  hay decoracion delante) y la ficha dibuja **fondo -> PHs (con su `modo`) -> frente**, asi el `multiply`
+  multiplica contra el fondo. **1 descarga** (sin frente) o **2** (con frente). **No aplaneable** (cae a
+  composicion por capas; el editor avisa): `img` intercalada entre PHs, o capa con **modo de fusion delante**
+  de un PH (multiplicaria contra la foto dinamica del comprador). El servidor guarda **autoritativo** (borra el
+  plano ausente). Desaparecen el halo de 1 px y el "PH tapado por perspectiva" de D12. El Motor no se toca.
 - ✅ **Jerarquia documental**: `constitution` > este AGENTS.md > resto (`readme.txt`,
   `admin/ayuda.php`, `modules/LEEME.md` solo resumen y apuntan aqui). El `== Changelog ==`
   de `readme.txt` es historial, no normativa.

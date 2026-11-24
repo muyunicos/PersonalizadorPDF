@@ -458,20 +458,22 @@ Todo archivo dinámico o de usuario **VIVE EN UPLOADS**, no en el directorio del
   Sin `textos.json` y sin `metadata.json` (norma ex-008).
 - Fotos de mockups del admin: `pdfs/{nombre}/mockups/` (datos de usuario, sin catálogo);
   las reutilizables viven en el catálogo `img/`.
-- **Mockup APLANADO del cliente (spec 036, D10 + enmienda D12)**: `pdfs/{nombre}/mockups/{mockup_id}.webp`
-  es un artefacto **DERIVADO** (NO vive en `config.json`): el editor del admin exporta el **WebP** de
-  **TODO** el mockup visible en **cada** guardado (`aplanarMockup`): fondo **BLANCO opaco** + todas las
-  capas `img` VISIBLES (marco incluido) y la **silueta de cada PH borrada (alfa 0)** = el **hueco**
-  (`PMUMockup.siluetas`, `destination-out`). La ficha compone **PH primero (abajo) y el aplanado
-  encima** (1 descarga por mockup): la foto del comprador se ve **por el hueco** y el fondo no la tapa.
-  **Sin bandas ni mascara aparte**. Limitaciones aceptadas: nada puede pisar dentro del hueco, un PH
-  `multiply` pierde el multiplicado, posible halo de 1 px con envolturas organicas y un PH con
-  **perspectiva** no se perfora (el editor **avisa**). El servidor lo publica al leer
-  (`mockups_con_aplanado`/`aplanados_mockups`) y lo **excluye** de la lista de fotos del admin; el
-  `id` se **rechaza** si no es ya su forma segura. Ausente = la ficha cae a la composicion por capas
-  (ningun mockup previo se rompe) y la consola lo regenera al guardar.
+- **Mockup APLANADO del cliente (spec 036, D10 + enmienda D13, 2 planos)**: `pdfs/{nombre}/mockups/{mockup_id}.webp`
+  es un artefacto **DERIVADO** (NO vive en `config.json`): el editor del admin exporta **hasta 2 WebP**
+  en **cada** guardado (`aplanarMockup` + `PMUMockup.partirCapas`): **fondo** (`{id}.webp`, BLANCO opaco +
+  capas `img` por **debajo** del primer PH) y **frente** (`{id}-frente.webp`, transparente con alfa + capas
+  `img` por **encima** del ultimo PH; solo existe si hay decoracion delante). La ficha dibuja **fondo ->
+  placeholders (foto del comprador, con su `modo`) -> frente**: asi un PH `multiply` multiplica contra el
+  fondo (D12 lo dibujaba **detras** del bitmap y **perdia el multiplicado** = recuadro blanco). **1 descarga**
+  (fondo) o **2** (con frente). **No aplaneable** (cae a composicion por capas y el editor **avisa**): una
+  `img` **intercalada** entre PHs, o una capa con **modo de fusion delante** de un PH (multiplicaria contra
+  la foto dinamica del comprador). El servidor guarda **autoritativo** (borra el plano que no llegue, evita
+  stale) y publica `aplanado`+`frente` (`mockups_con_aplanado`/`aplanados_mockups`), **excluyendolos** de las
+  fotos del admin; el `id` se **rechaza** si no es ya su forma segura. Ausente = la ficha cae a la composicion
+  por capas (ningun mockup previo se rompe) y la consola lo regenera al guardar.
 - **Red al cargar la ficha (spec 036, D7/D8/D3)**: **0** imagenes del cliente (se piden al abrir el
-  modal), **0** motor de texto si no hay campo `texto` (es lazy) y **1** bitmap aplanado por mockup.
+  modal), **0** motor de texto si no hay campo `texto` (es lazy) y **1** bitmap aplanado por mockup (**2** si
+  tiene frente).
   El boton de comprar se habilita solo con `bloqueos` en falso: `vistas`, `validez`, `minimos` y
   `subidas` (cola de fotos + contador del pool). La galeria se **monta sola** al quedar "completo"
   (predicado unico `PURO.estaCompleto`, ojo con la polaridad de `validez`) y se **repinta** al

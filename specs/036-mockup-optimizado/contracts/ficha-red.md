@@ -16,24 +16,25 @@
 - Las imagenes del cliente (`assets/biblioteca-pmu.js` / `assets/visor-pmu.js`) **no** se cargan hasta
   abrir el modal.
 
-## C2 — Mockup aplanado (D10 + enmienda D12)
+## C2 — Mockup aplanado (D10 + enmienda D13, 2 planos)
 
-- **Artefacto**: `pdfs/{nombre}/mockups/{mockup_id}.webp`.
-- **Productor**: el **editor del admin** (`assets/mockups.js`) al guardar (Canvas -> WebP).
-- **Contenido**: **TODO** el mockup visible en **un solo WebP**: fondo **BLANCO opaco** + todas las
-  capas `tipo: img` visibles (marco incluido, con filtros/efectos/deformaciones) y la **silueta de
-  cada `placeholder` borrada (alfa 0)** = el **HUECO**. `PMUMockup.siluetas` hace el borrado con
-  `destination-out` y el mismo stack de transformacion/envoltura que `componer`.
-- **Los placeholders NO se dibujan encima**: van **DEBAJO** del aplanado. La ficha compone
-  `[PH..., aplanado]`; la foto del comprador se ve **por el hueco** y el fondo no la tapa.
-- **Un solo archivo**, sin bandas ni mascara aparte: **1 descarga por mockup**.
-- **Limitaciones aceptadas (Diseno A)**: nada puede pisar dentro del hueco; un PH con
-  `modo: multiply` pierde el multiplicado; posible halo de 1 px en el borde con envolturas organicas;
-  un PH con **perspectiva** no se perfora (el editor **avisa** y el aplanado lo tapa).
-- **Invalidacion**: cambio de capas -> regeneracion en el mismo guardado (sin flag persistido).
-- **Ausente**: la ficha degrada con **causa visible**; la consola lo regenera al abrir el editor.
-- Al cliente se le pasa a `PMUMockup.componer` los `placeholder` **primero** y **1** capa `img`
-  (el aplanado) **al final**.
+- **Artefactos**: `pdfs/{nombre}/mockups/{mockup_id}.webp` (fondo) y `{mockup_id}-frente.webp` (frente, opcional).
+- **Productor**: el **editor del admin** (`assets/mockups.js` `aplanarMockup`) al guardar (Canvas -> WebP).
+- **Reparto**: `PMUMockup.partirCapas(capas)` separa por z-order **fondo** (`img` antes del primer PH),
+  **PHs** y **frente** (`img` despues del ultimo PH).
+- **Contenido**: **fondo** = WebP **BLANCO opaco** + capas `img` de fondo (con filtros/efectos/deformaciones);
+  **frente** = WebP **transparente con alfa** + capas `img` de delante (marco incluido). Solo se genera el
+  frente si hay capas `img` por encima del ultimo PH.
+- **La ficha dibuja `fondo -> placeholders -> frente`**: el PH (foto del comprador, con su `modo`) queda
+  **en medio**, asi un `multiply` multiplica contra el fondo (D12 lo dibujaba **detras** y **perdia el
+  multiplicado**). **1 descarga** (sin frente) o **2** (con frente).
+- **No aplaneable** -> la ficha cae a composicion por capas (`mockup.capas`) y el editor **avisa**:
+  una `img` **intercalada** entre PHs, o una capa con **modo de fusion delante** de un PH (multiplicaria
+  contra la foto dinamica del comprador).
+- **Invalidacion**: cambio de capas -> regeneracion en el mismo guardado. El editor es **autoritativo**:
+  manda `aplanado_id` y el servidor **borra el plano que no llegue** (evita aplanados stale).
+- **Ausente**: la ficha degrada a composicion por capas; la consola lo regenera al abrir el editor.
+- Al cliente se le pasa a `PMUMockup.componer` `[capa img fondo, ...placeholders, capa img frente]`.
 
 ## C3 — Gate del boton (D8)
 

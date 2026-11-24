@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.40.2
+ * Version: 4.41.0
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -535,6 +535,11 @@ class Personalizador_PDF_Plugin
             if (is_file($dir . DIRECTORY_SEPARATOR . $file)) {
                 $out[$file] = $base . rawurlencode($file);
             }
+            // Enmienda D13 (spec 036): el frente (marco con alfa) es un 2do bitmap.
+            $frente = $id . '-frente.webp';
+            if (is_file($dir . DIRECTORY_SEPARATOR . $frente)) {
+                $out[$frente] = $base . rawurlencode($frente);
+            }
         }
         return $out;
     }
@@ -558,6 +563,9 @@ class Personalizador_PDF_Plugin
             }
             $file = (isset($m['id']) ? (string)$m['id'] : '') . '.webp';
             $mockups[$i]['aplanado'] = isset($aplanados[$file]) ? $aplanados[$file] : null;
+            // Enmienda D13: bitmap del frente (marco con alfa), opcional.
+            $fileFrente = (isset($m['id']) ? (string)$m['id'] : '') . '-frente.webp';
+            $mockups[$i]['frente'] = isset($aplanados[$fileFrente]) ? $aplanados[$fileFrente] : null;
         }
         return $mockups;
     }
@@ -5807,48 +5815,71 @@ JS;
         if (!$ok) {
             $this->responder(false, [], 'No se pudieron guardar los mockups.');
         }
-        // Spec 036 (T014/D10): el editor manda ademas el mockup APLANADO (WebP de
-        // sus capas `img` visibles). Es DERIVADO y OPCIONAL: si falta, la ficha
-        // degrada con causa visible y la consola lo regenera al abrir el editor.
-        // Nunca hace fallar el guardado de las capas.
-        $this->guardar_aplanado_mockup($nombre, isset($_POST['aplanado_id']) ? $_POST['aplanado_id'] : '', $_FILES['aplanado'] ?? null);
+        // Spec 036 (T014/D10) + D13 (2 planos): el editor manda el mockup APLANADO
+        // como hasta 2 WebP por mockup (fondo + frente). Es DERIVADO y OPCIONAL:
+        // si el editor no manda `aplanado_id`, no se tocan los bitmaps. Si lo
+        // manda, es AUTORITATIVO (borra el plano que no llegue). Nunca hace
+        // fallar el guardado de las capas.
+        if (isset($_POST['aplanado_id'])) {
+            $this->guardar_aplanados_mockup(
+                $nombre,
+                (string)$_POST['aplanado_id'],
+                $_FILES['aplanado'] ?? null,
+                $_FILES['frente'] ?? null
+            );
+        }
         $this->responder(true, ['mockups' => count($mockups)]);
     }
 
     /**
-     * Guarda el bitmap aplanado de un mockup (spec 036, T014/D10):
-     * `pdfs/{nombre}/mockups/{mockup_id}.webp`.
+     * Guarda (o borra) los DOS planos aplanados de un mockup (spec 036, D13):
+     * `pdfs/{nombre}/mockups/{id}.webp` (fondo) y `{id}-frente.webp` (frente).
      *
-     * El `id` sale del JSON que el editor acaba de guardar y se sanea con
-     * `nombre_seguro` antes de tocar el disco (lanza si no valida: se atrapa).
-     * Devuelve false —sin ruido— si falta el archivo, el id o el destino: el
-     * aplanado es un artefacto derivado, no un requisito del guardado.
+     * El editor es AUTORITATIVO: si llega el `id` pero NO un plano, su bitmap
+     * viejo se BORRA (evita aplanados stale cuando el mockup deja de ser
+     * aplaneable o pierde el marco de delante). Devuelve false —sin ruido— si
+     * falta el id o el id no es ya su forma segura: el aplanado es un artefacto
+     * derivado, no un requisito del guardado.
      */
-    private function guardar_aplanado_mockup($nombre, $id, $file)
+    private function guardar_aplanados_mockup($nombre, $id, $fondo, $frente)
     {
-        if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            return false;
-        }
         try {
             $id_seguro = $this->pmu_uploads()->nombre_seguro((string)$id, 'aplanado_mockup');
         } catch (\Throwable $e) {
             return false;
         }
-        // El id viene del config YA saneado (`config_mockups`): si no es
-        // exactamente su forma segura, se RECHAZA (nada de sanear a ciegas un
-        // `../` hacia un nombre valido: el artefacto seria un huerfano).
-        if ($id_seguro !== strtolower(trim((string)$id)) || !preg_match('/^[a-z0-9_-]+$/', $id_seguro)) {
-            return false;
-        }
-        $bytes = @file_get_contents((string)($file['tmp_name'] ?? ''));
-        if ($bytes === false || $bytes === '') {
+        // El id viene del config YA saneado: si no es exactamente su forma segura,
+        // se RECHAZA (nada de sanear a ciegas un `../` hacia un nombre valido).
+        if ($id_seguro === '' || $id_seguro !== strtolower(trim((string)$id)) || !preg_match('/^[a-z0-9_-]+$/', $id_seguro)) {
             return false;
         }
         $dir = $this->pmu_uploads()->dir_mockups($nombre, true);
         if (!is_dir($dir)) {
             return false;
         }
-        return @file_put_contents($dir . DIRECTORY_SEPARATOR . $id_seguro . '.webp', $bytes) !== false;
+        $this->guardar_plano_aplanado($dir, $id_seguro . '.webp', $fondo);
+        $this->guardar_plano_aplanado($dir, $id_seguro . '-frente.webp', $frente);
+        return true;
+    }
+
+    /**
+     * Escribe un plano del aplanado si trae archivo valido; si no, BORRA el
+     * bitmap viejo de ese plano (el editor es la autoridad de que ese plano ya
+     * no existe). Nunca lanza.
+     */
+    private function guardar_plano_aplanado($dir, $nombreArchivo, $file)
+    {
+        $destino = $dir . DIRECTORY_SEPARATOR . $nombreArchivo;
+        if (is_array($file) && ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+            $bytes = @file_get_contents((string)($file['tmp_name'] ?? ''));
+            if ($bytes !== false && $bytes !== '') {
+                @file_put_contents($destino, $bytes);
+                return;
+            }
+        }
+        if (is_file($destino)) {
+            @unlink($destino);
+        }
     }
 
     /* ==================== Bonus por PDF 0..N (spec 018) ==================== */

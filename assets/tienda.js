@@ -1038,6 +1038,10 @@
                 if (capa.ref === 'aplanado') {
                     return (mockup && mockup.aplanado) ? { url: mockup.aplanado } : null;
                 }
+                // Enmienda D13: bitmap del frente (marco/decoracion con alfa).
+                if (capa.ref === 'frente') {
+                    return (mockup && mockup.frente) ? { url: mockup.frente } : null;
+                }
                 var url = window.PMUMockup.urlDeImagen(capa.ref, {
                     fotos: fotos, imagenes: imagenes
                 });
@@ -1054,17 +1058,22 @@
             return null;
         }
 
-        // Spec 036 (T015/D10 + enmienda 2026-11-03, D12): el aplanado trae el
-        // fondo BLANCO con la silueta de cada PH perforada (alfa 0). El cliente
-        // dibuja PRIMERO los PH (la foto del comprador) y DESPUES el aplanado
-        // ENCIMA: la foto se ve por el hueco y el fondo no la tapa. Sin aplanado
-        // (mockup todavia sin regenerar) se conserva la composicion por capas.
+        // Spec 036 (T015/D10 + enmienda 2026-11-03, D12) + D13 (2 planos): con
+        // aplanado, la ficha dibuja FONDO (img) -> placeholders (foto del
+        // comprador, con su `modo`) -> FRENTE (img con alfa). Asi un PH con
+        // `multiply` multiplica contra el fondo y las decoraciones de delante
+        // (marco) quedan encima. Sin aplanado se conserva la composicion por
+        // capas (mockup aun sin regenerar o no aplaneable: img intercalada /
+        // blend delante de un PH).
         var capasMockup = [];
         if (mockup && mockup.aplanado) {
-            ((mockup.capas) || []).forEach(function (c) {
-                if (c && c.tipo === 'placeholder') { capasMockup.push(c); }
-            });
             capasMockup.push({ tipo: 'img', ref: 'aplanado', x: 0, y: 0, w: 300, h: 300, rot: 0 });
+            ((mockup.capas) || []).forEach(function (c) {
+                if (c && !c.oculta && c.tipo === 'placeholder') { capasMockup.push(c); }
+            });
+            if (mockup.frente) {
+                capasMockup.push({ tipo: 'img', ref: 'frente', x: 0, y: 0, w: 300, h: 300, rot: 0 });
+            }
         } else {
             capasMockup = (mockup && mockup.capas) || [];
         }

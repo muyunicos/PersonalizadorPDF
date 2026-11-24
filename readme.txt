@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.40.2
+Stable tag: 4.41.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,19 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.41.0 =
+* Enmienda D13 (spec 036): el mockup del cliente se sirve como **2 planos aplanados**
+  (`fondo` + `frente`) en vez de uno perforado. La ficha dibuja **fondo -> placeholders
+  -> frente**, asi un placeholder con **modo de fusion "multiplicar"** multiplica contra
+  el fondo (antes se dibujaba **detras** del bitmap y **perdia el multiplicado**,
+  mostrando un recuadro blanco). El `frente` (marco/decoracion con alfa) solo se
+  genera si hay capas `img` por encima de algun placeholder; si no, 1 sola descarga.
+* Mockups no aplaneables (imagen **intercalada** entre placeholders, o una capa con
+  **modo de fusion delante** de un placeholder) caen a **composicion por capas** en la
+  ficha; el editor lo **avisa**. Lo mismo un mockup **sin** aplanado (se regenera al
+  guardar). Fixes: el multiplicado ya no se pierde y desaparecen el halo de 1 px y el
+  "placeholder tapado por perspectiva" del aplanado D12.
 
 = 4.40.2 =
 * Cargador (3 fixes de la auditoria):

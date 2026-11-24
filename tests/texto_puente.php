@@ -2235,7 +2235,7 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 ($GLOBALS['test_ap_invalido'] ?? null) === false);
             check('sin id no se escribe', ($GLOBALS['test_ap_sin_id'] ?? null) === false);
             check('sin archivo NO rompe el guardado (derivado)',
-                ($GLOBALS['test_ap_sin_archivo'] ?? null) === false);
+                ($GLOBALS['test_ap_sin_archivo'] ?? null) === true);
             check('nada se escribio fuera de la carpeta del ambito',
                 ($GLOBALS['test_ap_fuera'] ?? null) === true);
             check('regeneracion (T016): el MISMO id se reescribe y gana la ULTIMA version',
@@ -2261,6 +2261,15 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 (string)($m_ap2['aplanado'] ?? '(null)'));
             check('el aplanado NO aparece como foto del admin',
                 !isset($datos_ap['fotos']['vistas.webp']));
+            // Enmienda D13: el 2do plano (frente con alfa) tambien viaja.
+            $ruta_fr = $dir_ap . DIRECTORY_SEPARATOR . 'vistas-frente.webp';
+            check('el FRENTE se guarda en {id}-frente.webp byte a byte',
+                is_file($ruta_fr) && (string)@file_get_contents($ruta_fr) === (string)($GLOBALS['test_fr_bytes'] ?? null), $ruta_fr);
+            check('datos_pdf_render publica la URL del frente',
+                isset($m_ap2['frente']) && strpos((string)$m_ap2['frente'], '/mockups/vistas-frente.webp') !== false,
+                (string)($m_ap2['frente'] ?? '(null)'));
+            check('el frente NO aparece como foto del admin',
+                !isset($datos_ap['fotos']['vistas-frente.webp']));
             break;
         case 'cotizador':
             // Spec 037 (T028/T036): contexto, receta, ideas, favoritos, borrado,
@@ -5888,12 +5897,22 @@ switch ($fase) {
             'name' => 'aplanado.webp', 'type' => 'image/webp', 'tmp_name' => $tmp_ap,
             'error' => UPLOAD_ERR_OK, 'size' => strlen($bytes_ap),
         ];
+        // Enmienda D13: 2do plano (frente con alfa), bytes propios para medir la copia.
+        $bytes_fr = "RIFF\x00\x00\x00\x00WEBPVP8 " . str_repeat('f', 48);
+        $tmp_fr = sys_get_temp_dir() . '/pd_puente_frente_' . getmypid() . '.webp';
+        @file_put_contents($tmp_fr, $bytes_fr);
+        $file_fr = [
+            'name' => 'frente.webp', 'type' => 'image/webp', 'tmp_name' => $tmp_fr,
+            'error' => UPLOAD_ERR_OK, 'size' => strlen($bytes_fr),
+        ];
+        $GLOBALS['test_fr_bytes'] = $bytes_fr;
         // 1) Id invalido, sin id y sin archivo: NINGUNO rompe ni escribe.
-        $rm_ap = new ReflectionMethod(get_class($p), 'guardar_aplanado_mockup');
+        $rm_ap = new ReflectionMethod(get_class($p), 'guardar_aplanados_mockup');
         $rm_ap->setAccessible(true);
-        $GLOBALS['test_ap_invalido'] = $rm_ap->invoke($p, 'muestra', '../fuera', $file_ap);
-        $GLOBALS['test_ap_sin_id'] = $rm_ap->invoke($p, 'muestra', '', $file_ap);
-        $GLOBALS['test_ap_sin_archivo'] = $rm_ap->invoke($p, 'muestra', 'vistas', null);
+        $GLOBALS['test_ap_invalido'] = $rm_ap->invoke($p, 'muestra', '../fuera', $file_ap, $file_fr);
+        $GLOBALS['test_ap_sin_id'] = $rm_ap->invoke($p, 'muestra', '', $file_ap, $file_fr);
+        // Sin planos (ambos null) con id valido: no rompe (sanea y no escribe nada).
+        $GLOBALS['test_ap_sin_archivo'] = $rm_ap->invoke($p, 'muestra', 'vistas', null, null);
         $GLOBALS['test_ap_fuera'] = !is_file($dir_ap . DIRECTORY_SEPARATOR . 'fuera.webp')
             && !is_file(dirname($dir_ap) . DIRECTORY_SEPARATOR . 'fuera.webp')
             && !is_file(dirname(dirname($dir_ap)) . DIRECTORY_SEPARATOR . 'fuera.webp');
@@ -5906,13 +5925,13 @@ switch ($fase) {
             'name' => 'aplanado.webp', 'type' => 'image/webp', 'tmp_name' => $tmp_ap2,
             'error' => UPLOAD_ERR_OK, 'size' => strlen($bytes_ap2),
         ];
-        $rm_ap->invoke($p, 'muestra', 'vistas', $file_ap2);
+        $rm_ap->invoke($p, 'muestra', 'vistas', $file_ap2, null);
         $GLOBALS['test_ap_bytes2'] = $bytes_ap2;
         $GLOBALS['test_ap_previo'] = (string)@file_get_contents($dir_ap . DIRECTORY_SEPARATOR . 'vistas.webp');
         // 2) Camino REAL: el guardado del editor (handler) con el aplanado.
         $GLOBALS['test_ap_dir'] = $dir_ap;
         $GLOBALS['test_ap_bytes'] = $bytes_ap;
-        $_FILES = ['aplanado' => $file_ap];
+        $_FILES = ['aplanado' => $file_ap, 'frente' => $file_fr];
         $_POST = [
             'action' => 'personalizador_pdf_mockups',
             'archivo' => 'muestra.pdf',

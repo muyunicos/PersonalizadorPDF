@@ -56,9 +56,9 @@ jQuery(function ($) {
         guias: [],
         // Caché de envolturas pedidas bajo demanda: clave `{gid}#{n}`.
         envs: {},
-        // Enmienda D12: PH que el aplanado no pudo perforar (perspectiva).
-        // { id: mockupId, saltadas: [{indice, ref, motivo}] }
-        huecosSaltadas: null
+        // Enmienda D13 (spec 036): mockup no aplaneable; aviso y la ficha compone por capas.
+        // { id: mockupId, motivo: 'img-intercalada'|'blend-delante'|'error' }
+        avisoAplanado: null
     };
 
     function normalizarMockup(m) {
@@ -1132,11 +1132,15 @@ jQuery(function ($) {
                 }).join(', ') + '. Se conservan: volve a subir la foto o re-analiza el PDF.'));
         }
         var m = mockup();
-        var hs = estado.huecosSaltadas;
-        if (m && hs && hs.id === m.id && hs.saltadas && hs.saltadas.length) {
+        var aa = estado.avisoAplanado;
+        if (m && aa && aa.id === m.id && aa.motivo) {
+            var textosAA = {
+                'img-intercalada': 'Este mockup tiene una imagen entre dos placeholders: no se puede aplanar. La ficha lo compone por capas (baja mas imagenes).',
+                'blend-delante': 'Este mockup tiene una capa con modo de fusion delante de un placeholder: no se puede aplanar (multiplicaria contra la foto del comprador). La ficha lo compone por capas.',
+                'error': 'No se pudo aplanar este mockup. La ficha lo compone por capas.'
+            };
             $a.append($('<p class="ec-mk-alerta-foto ec-mk-alerta-hueco">').text(
-                hs.saltadas.length + ' hueco(s) con perspectiva: el aplanado no puede perforarlos. ' +
-                'Quita la perspectiva de ese grupo/capa para que la foto se vea por el hueco.'));
+                textosAA[aa.motivo] || textosAA.error));
         }
         if (m && m.avisos && m.avisos.length) {
             $a.append($('<p class="ec-mk-alerta-foto">').text(m.avisos[0]));
@@ -2050,44 +2054,69 @@ jQuery(function ($) {
      * regenera en cada guardado, T016).
      */
     function aplanarMockup(m) {
-        if (!R || typeof R.componer !== 'function' || typeof R.siluetas !== 'function' || !m) {
-            return Promise.resolve(null);
+        if (!R || typeof R.componer !== 'function' || typeof R.partirCapas !== 'function' || !m) {
+            return Promise.resolve({ aplanado: null, frente: null, motivo: 'error' });
         }
-        var capas = (m.capas || []).filter(function (c) {
-            return c && c.tipo === 'img' && !c.oculta;
-        });
-        var c = document.createElement('canvas');
-        c.width = LIENZO;
-        c.height = LIENZO;
-        var ctx = c.getContext('2d');
-        if (!ctx) { return Promise.resolve(null); }
-        // Enmienda D12: el aplanado es el FONDO del mockup, no una capa
-        // transparente. Fondo BLANCO opaco; los huecos se perforan despues.
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, LIENZO, LIENZO);
         var datosCtx = contexto();
-        return R.componer(ctx, capas, {
+        var reparto = R.partirCapas(m.capas || []);
+        // Enmienda D13: si el sándwich no puede reproducir el z-order/blend, la
+        // ficha cae a composición por capas. No se genera ningún bitmap.
+        if (!reparto.ok) {
+            return Promise.resolve({ aplanado: null, frente: null, motivo: reparto.motivo });
+        }
+        // FONDO: blanco opaco + capas `img` por debajo del primer PH.
+        var fondo = document.createElement('canvas');
+        fondo.width = LIENZO;
+        fondo.height = LIENZO;
+        var fctx = fondo.getContext('2d');
+        if (!fctx) { return Promise.resolve({ aplanado: null, frente: null, motivo: 'error' }); }
+        fctx.fillStyle = '#ffffff';
+        fctx.fillRect(0, 0, LIENZO, LIENZO);
+        return R.componer(fctx, reparto.fondo, {
             resolver: resolverCapa,
             contexto: datosCtx,
             lienzo: LIENZO,
             // El blanco no se borra: el fondo se pinta arriba.
             limpiar: false,
-            // P0: un recurso `img` roto deja BLANCO, nunca el gris de encuadre.
             huecosTransparentes: true
         }).then(function () {
-            // El hueco va DESPUES de las capas: borra la silueta de cada PH
-            // sobre lo ya compuesto (deja alfa 0 donde va la foto).
-            var huecos = R.siluetas(ctx, m.capas || [], { contexto: datosCtx });
-            return new Promise(function (resolver) {
-                if (typeof c.toBlob !== 'function') {
-                    resolver({ blob: null, huecos: huecos });
-                    return;
+            // FRENTE (opcional): transparente + capas `img` por encima del último
+            // PH (marco/decoración con alfa). Solo si hay capas delante.
+            var frenteP = Promise.resolve(null);
+            if (reparto.frente.length) {
+                var fr = document.createElement('canvas');
+                fr.width = LIENZO;
+                fr.height = LIENZO;
+                var frctx = fr.getContext('2d');
+                if (frctx) {
+                    frenteP = R.componer(frctx, reparto.frente, {
+                        resolver: resolverCapa,
+                        contexto: datosCtx,
+                        lienzo: LIENZO,
+                        limpiar: true,
+                        huecosTransparentes: true
+                    }).then(function () {
+                        return new Promise(function (resolver) {
+                            if (typeof fr.toBlob !== 'function') { resolver(null); return; }
+                            fr.toBlob(function (blob) { resolver(blob || null); }, 'image/webp', 0.85);
+                        });
+                    });
                 }
-                c.toBlob(function (blob) {
-                    resolver({ blob: blob || null, huecos: huecos });
-                }, 'image/webp', 0.85);
+            }
+            return frenteP.then(function (frenteBlob) {
+                return new Promise(function (resolver) {
+                    if (typeof fondo.toBlob !== 'function') {
+                        resolver({ aplanado: null, frente: frenteBlob, motivo: '' });
+                        return;
+                    }
+                    fondo.toBlob(function (blob) {
+                        resolver({ aplanado: blob || null, frente: frenteBlob, motivo: '' });
+                    }, 'image/webp', 0.85);
+                });
             });
-        }).catch(function () { return null; });
+        }).catch(function () {
+            return { aplanado: null, frente: null, motivo: 'error' };
+        });
     }
 
     function guardar() {
@@ -2106,32 +2135,33 @@ jQuery(function ($) {
         var omisible = $ed.find('.ec-mk-omisible').prop('checked') ? '1' : '0';
         var jsonMockups = JSON.stringify(estado.mockups);
         var m = mockup();
-        // Spec 036 (T013/T016/D10): el mockup APLANADO viaja en el MISMO guardado
-        // (WebP de las capas `img` visibles). El id es el del mockup que se acaba
-        // de guardar: el servidor escribe pdfs/{nombre}/mockups/{id}.webp. Sin
-        // bitmap (no hay capas img, o el navegador no lo soporta) el guardado de
-        // las capas sigue igual y la ficha degrada con causa visible.
-        aplanarMockup(m).then(function (aplanado) {
-            var blob = aplanado ? aplanado.blob : null;
-            var huecos = aplanado ? aplanado.huecos : null;
+        // Enmienda D13 (spec 036, 2 planos): el mockup APLANADO viaja en el
+        // MISMO guardado como hasta 2 WebP por mockup: `aplanado` (fondo, capas
+        // img por debajo del PH) y `frente` (marco/decoracion por encima, con
+        // alfa; opcional). El id es el del mockup que se acaba de guardar. El
+        // editor es AUTORITATIVO: siempre manda `aplanado_id`; si falta un plano
+        // el servidor borra su bitmap viejo (evita aplanados stale). Sin R o con
+        // motivo (img intercalada / blend delante de un PH) no hay bitmap y la
+        // ficha cae a composicion por capas.
+        aplanarMockup(m).then(function (res) {
+            var blob = res ? res.aplanado : null;
+            var frente = res ? res.frente : null;
+            var motivo = res ? res.motivo : 'error';
             var fd = new FormData();
             fd.append('archivo', datos.pdf + '.pdf');
             fd.append('mockups', jsonMockups);
             fd.append('preview_omisible', omisible);
-            if (blob) {
-                fd.append('aplanado_id', String((m && m.id) || ''));
-                fd.append('aplanado', blob, 'aplanado.webp');
-            }
+            // Siempre autoritativo respecto a los planos de ESTE mockup.
+            fd.append('aplanado_id', String((m && m.id) || ''));
+            if (blob) { fd.append('aplanado', blob, 'aplanado.webp'); }
+            if (frente) { fd.append('frente', frente, 'frente.webp'); }
             return api('personalizador_pdf_mockups', fd,
                 cfg.nonceAccion ? cfg.nonceAccion.mockups : (cfg.nonceMockups || '')).then(function (respuesta) {
-                // Enmienda D12: si el aplanado no pudo perforar un PH con
-                // perspectiva, el editor lo avisa (el bitmap lo taparia).
-                if (aplanado && huecos) {
-                    estado.huecosSaltadas = {
-                        id: String((m && m.id) || ''),
-                        saltadas: huecos.saltadas || []
-                    };
-                }
+                // Enmienda D13: si el mockup no se pudo aplanar (img intercalada,
+                // blend delante de un PH o error), la ficha compone por capas.
+                estado.avisoAplanado = motivo
+                    ? { id: String((m && m.id) || ''), motivo: motivo }
+                    : null;
                 return respuesta;
             });
         })

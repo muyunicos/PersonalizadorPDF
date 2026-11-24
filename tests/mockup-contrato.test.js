@@ -1142,21 +1142,55 @@ var edAplanado = leer('assets/mockups.js');
 var tiendaAplanado = leer('assets/tienda.js');
 var coreAplanado = leer('assets/mockup-render.js');
 
-check('D12: el nucleo exporta siluetas() para perforar el hueco',
-    typeof R.siluetas === 'function');
-check('D12: el aplanado pinta fondo BLANCO opaco antes de componer',
-    edAplanado.indexOf("ctx.fillStyle = '#ffffff'") !== -1
-        && edAplanado.indexOf('ctx.fillRect(0, 0, LIENZO, LIENZO)') !== -1);
-check('D12: el aplanado compone TODAS las capas img con limpiar:false y huecosTransparentes',
-    /R\.componer\(ctx, capas,[\s\S]{0,500}limpiar: false[\s\S]{0,200}huecosTransparentes: true/.test(edAplanado));
-check('D12: el aplanado perfora los PH DESPUES de componer (siluetas con todo el mockup)',
-    /R\.componer\(ctx, capas,[\s\S]{0,900}R\.siluetas\(ctx, m\.capas \|\| \[\], \{ contexto: datosCtx \}\)/.test(edAplanado));
-check('D12: la ficha dibuja los PH DEBAJO y el aplanado ENCIMA',
-    /if \(mockup && mockup\.aplanado\) \{[\s\S]{0,500}c\.tipo === 'placeholder'[\s\S]{0,500}ref: 'aplanado'/.test(tiendaAplanado),
-    'si el aplanado se dibuja antes que los PH, el fondo tapa la foto');
-check('D12: el editor avisa los PH con perspectiva que no se pueden perforar',
-    edAplanado.indexOf('ec-mk-alerta-hueco') !== -1
-        && edAplanado.indexOf('huecosSaltadas') !== -1);
+check('D13: el nucleo exporta partirCapas() para el reparto fondo/frente/PH',
+    typeof R.partirCapas === 'function');
+
+pruebas.push(function () {
+    var r = R.partirCapas([
+        capa('img', 'mock:1'), capa('img', 'mock:2'),
+        capa('placeholder', '0000FF'), capa('placeholder', '00FF00'),
+        capa('img', 'mock:3'), capa('img', 'mock:4')
+    ]);
+    check('D13/partirCapas: fondo = img antes del primer PH', r.ok && r.fondo.length === 2, JSON.stringify(r));
+    check('D13/partirCapas: PH en medio', r.phs.length === 2);
+    check('D13/partirCapas: frente = img despues del ultimo PH', r.frente.length === 2);
+});
+
+pruebas.push(function () {
+    var r = R.partirCapas([
+        capa('img', 'mock:1'), capa('placeholder', '0000FF'),
+        capa('img', 'mock:2'), capa('placeholder', '00FF00')
+    ]);
+    check('D13/partirCapas: img intercalada -> no aplaneable',
+        r.ok === false && r.motivo === 'img-intercalada', JSON.stringify(r));
+});
+
+pruebas.push(function () {
+    var r = R.partirCapas([
+        capa('placeholder', '0000FF'), capa('img', 'mock:2', { modo: 'multiply' })
+    ]);
+    check('D13/partirCapas: blend (multiply) delante de un PH -> no aplaneable',
+        r.ok === false && r.motivo === 'blend-delante', JSON.stringify(r));
+});
+
+pruebas.push(function () {
+    var r = R.partirCapas([capa('img', 'mock:1'), capa('img', 'mock:2')]);
+    check('D13/partirCapas: sin PH todo es fondo (no frente)',
+        r.ok && r.fondo.length === 2 && r.frente.length === 0 && r.phs.length === 0, JSON.stringify(r));
+});
+
+check('D13: el aplanado compone el FONDO (limpiar:false) y el FRENTE (limpiar:true)',
+    /R\.componer\(fctx, reparto\.fondo,[\s\S]{0,300}limpiar: false/.test(edAplanado)
+        && /R\.componer\(frctx, reparto\.frente,[\s\S]{0,300}limpiar: true/.test(edAplanado));
+check('D13: el aplanado pinta fondo BLANCO opaco antes de componer',
+    edAplanado.indexOf("fctx.fillStyle = '#ffffff'") !== -1
+        && edAplanado.indexOf('fctx.fillRect(0, 0, LIENZO, LIENZO)') !== -1);
+check('D13: la ficha dibuja FONDO -> PH -> FRENTE',
+    /ref: 'aplanado'[\s\S]{0,600}ref: 'frente'/.test(tiendaAplanado)
+        && /ref: 'aplanado'[\s\S]{0,600}c\.tipo === 'placeholder'/.test(tiendaAplanado),
+    'orden: fondo, placeholders, frente');
+check('D13: el editor avisa cuando el mockup no se puede aplanar',
+    edAplanado.indexOf('avisoAplanado') !== -1 && edAplanado.indexOf('img-intercalada') !== -1);
 check('D12: el core documenta el stack de siluetas (destination-out + envoltura)',
     coreAplanado.indexOf("ctx.globalCompositeOperation = 'destination-out'") !== -1
         && coreAplanado.indexOf('trazarEnvoltura(ctx, comandosEnvoltura(env, {') !== -1);
