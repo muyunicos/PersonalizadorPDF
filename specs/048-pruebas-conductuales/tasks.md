@@ -35,10 +35,10 @@
 
 ## Phase 5 — US3: Mockup (P2)
 
-- [ ] T014 [P] [US3] Canvas stub en `mockup-contrato` (ctx 2D: drawImage, save/restore, clip, globalCompositeOperation).
-- [ ] T015 [US3] `componer` con 2 capas -> orden de dibujo y estado del ctx.
-- [ ] T016 [US3] Capa fuera del lienzo -> recorte sin romper.
-- [ ] T017 [US3] Gate: `node tests/mockup-contrato.test.js && node tests/mockup-geometria.test.js`.
+- [X] T014 [P] [US3] Canvas stub en `mockup-contrato` (ctx 2D: drawImage, save/restore, clip, globalCompositeOperation).
+- [X] T015 [US3] `componer` con 2 capas -> orden de dibujo y estado del ctx.
+- [X] T016 [US3] Capa fuera del lienzo -> recorte sin romper.
+- [X] T017 [US3] Gate: `node tests/mockup-contrato.test.js && node tests/mockup-geometria.test.js`.
 
 ## Phase 6 — US4: Guia
 

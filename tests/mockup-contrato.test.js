@@ -1243,4 +1243,5 @@ pruebas.push(function () {
                 && dibujos[1].indexOf('aplanado') !== -1, dibujos.join(' | '));
     });
 });
+
 correr();
