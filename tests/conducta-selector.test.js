@@ -137,7 +137,27 @@ check('_cargar rechaza formatos no permitidos (conserva la anterior)',
             sCarga.archivoOrigen === archivoNuevo && !!sCarga.imagen,
             'origen=' + (sCarga.archivoOrigen && sCarga.archivoOrigen.name));
 
-/* ---- US1 (T005): _cancelar ---- */
+/* ---- #N2 (fix 2026-11-24): la ultima carga manda (sin carrera) ---- */
+    grupo('#N2: la ultima carga manda');
+    const urlOrigN2 = global.URL; const imgOrigN2 = global.Image; const revN2 = [];
+    const imgsN2 = [];
+    global.URL = { createObjectURL: (function () { let n = 0; return function () { return 'blob:carga-' + (++n); }; })(), revokeObjectURL: function (u) { revN2.push(String(u)); } };
+    global.Image = class { constructor() { this._src = ''; this.onload = null; this.onerror = null; } set src(v) { this._src = v; imgsN2.push(this); } get src() { return this._src; } };
+    const sN2 = selector();
+    sN2.config.declararReceta = function () { };
+    sN2.config.subirAsync = function () { return Promise.resolve('x'); };
+    const aN1 = { type: 'image/png', name: 'primera.png', size: 1 };
+    const aN2 = { type: 'image/png', name: 'segunda.png', size: 1 };
+    sN2._cargar(aN1);    // img1 (1ra pedida)
+    sN2._cargar(aN2);    // img2 (2da pedida)
+    imgsN2[1].onload();  // resuelve la 2da (la pedida en ultimo lugar)
+    check('#N2: la 2da pedida se carga', sN2.archivoOrigen === aN2);
+    imgsN2[0].onload();  // resuelve la 1ra (carrera: llega ULTIMO)
+    check('#N2: la carga vieja NO pisa la 2da (la ultima manda)', sN2.archivoOrigen === aN2, sN2.archivoOrigen && sN2.archivoOrigen.name);
+    check('#N2: el objectURL de la carga vieja se libera', revN2.indexOf('blob:carga-1') !== -1, JSON.stringify(revN2));
+    global.URL = urlOrigN2; global.Image = imgOrigN2;
+
+    /* ---- US1 (T005): _cancelar ---- */
 grupo('_cancelar: CROP_ABORTED sin escrituras');
 const sCanc = selector();
 let errores = [];

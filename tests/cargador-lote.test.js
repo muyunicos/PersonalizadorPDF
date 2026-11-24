@@ -237,6 +237,25 @@ function cargador(max) {
     check('#F5: no creo el selector (no avanzo)', c5.selectores[0].sel === undefined);
     global.SelectorPMU = selPrev;
 
+    /* ---- #N1 (fix 2026-11-24): editar avisa si no se puede traer la imagen ---- */
+    grupo('#N1: editar avisa si no se puede abrir la imagen');
+    let cerroN1 = false;
+    const cN1 = Object.create(CargadorPMU.prototype);
+    cN1.config = { ranuras: [{ w: 500, h: 400, forma: 'rectangulo', min: 1, max: 1, gid: '', phsize: 0 }], urlDe: function () { return 'http://x/foto.webp'; } };
+    cN1.estado = [{ ids: ['foto-1'] }];
+    cN1._urls = {};
+    cN1.recetas = {};
+    cN1.errores = [];
+    cN1._error = function (m) { cN1.errores.push(String(m)); };
+    cN1._recetaDeContexto = function () { return null; };
+    cN1._abrir = function () { /* el selectores[0].sel ya existe */ };
+    cN1.selectores = [{ sel: { close: function () { cerroN1 = true; }, cargarDesdeBiblioteca: function () { return Promise.resolve(false); } } }];
+    const okN1 = await cN1._editar(0, 0);
+    check('#N1: cargarDesdeBiblioteca resuelve false -> _editar devuelve false', okN1 === false);
+    check('#N1: avisa que no se pudo abrir la imagen',
+        cN1.errores.some(function (e) { return /no se pudo abrir la imagen/i.test(e); }), JSON.stringify(cN1.errores));
+    check('#N1: cierra el editor (no queda vacio)', cerroN1 === true);
+
     /* ---- Objetivo y mejor receta (T018) ---- */
     grupo('Objetivo y mejor receta');
     const o1 = API.objetivoDe({ w: 300, h: 200, forma: 'rectangulo' });

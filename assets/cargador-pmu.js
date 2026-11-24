@@ -1103,8 +1103,25 @@
                 return false;
             }
             self._urls[String(id)] = String(u);   // queda memoizada para el visor
-            return slot.sel.cargarDesdeBiblioteca({ id: String(id), url: String(u), params: params });
-        }).catch(function () { return false; });
+            return slot.sel.cargarDesdeBiblioteca({ id: String(id), url: String(u), params: params })
+                .then(function (ok) {
+                    // N1 (fix 2026-11-24): si la imagen no se pudo traer (fetch 403/404/red),
+                    // cargarDesdeBiblioteca resuelve false: se cierra el editor y se avisa
+                    // (antes quedaba el modal ABIERTO y vacio, sin feedback).
+                    if (ok === false) {
+                        self._reemplazo = null;
+                        if (slot.sel && typeof slot.sel.close === 'function') { slot.sel.close(); }
+                        self._error('No se pudo abrir la imagen. Revisa tu conexion e intenta de nuevo.');
+                    }
+                    return ok;
+                });
+        }).catch(function () {
+            // N1: ante una excepcion inesperada, cerrar y avisar (no dejar el modal vacio).
+            self._reemplazo = null;
+            if (slot.sel && typeof slot.sel.close === 'function') { slot.sel.close(); }
+            self._error('No se pudo abrir la imagen. Revisa tu conexion e intenta de nuevo.');
+            return false;
+        });
     };
 
 CargadorPMU.prototype._abrirVisorCompartido = function (indice, posicion) {

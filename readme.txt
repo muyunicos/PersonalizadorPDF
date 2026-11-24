@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.40.1
+Stable tag: 4.40.2
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,16 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.40.2 =
+* Cargador (3 fixes de la auditoria):
+  * #N1: editar una foto que **no se puede traer** (fetch 403/404/red) ya no deja el
+    modal **abierto y vacio**: cierra y avisa "No se pudo abrir la imagen...".
+  * #N2: **la ultima carga manda** en el selector (`_cargar` con token): una doble
+    seleccion rapida ya no deja la **imagen equivocada** ni revoca la correcta.
+  * #N3: el visor "Ver todas" (Mi biblioteca) usa la **imagen completa** (`f.url`), no
+    la miniatura 80x80 (antes se veia borroso en pantalla completa).
+* Puertas: CARGADOR LOTE **54** (+N1), CONDUCTA SELECTOR **48** (+N2), BIBLIOTECA CONTRATO **106** (+N3).
 
 = 4.40.1 =
 * Fix: al agregar una foto y tocar **Añadir al carrito** (producto omisible o antes de

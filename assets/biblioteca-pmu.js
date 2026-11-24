@@ -219,7 +219,7 @@
             return false;
         }
         var items = fotos.map(function (f) {
-            return { url: String(f.thumb_data || f.thumb || f.url || ''), etiqueta: String(f.id || '') };
+            return { url: String(f.url || f.thumb_data || f.thumb || ''), etiqueta: String(f.id || '') }; // N3: el visor fullscreen usa la imagen COMPLETA (thumb_data es 80x80, se ve borrosa)
         });
         var pos = Math.max(0, Math.min(items.length - 1, parseInt(indice, 10) || 0));
         global.PMUVisor.abrir({

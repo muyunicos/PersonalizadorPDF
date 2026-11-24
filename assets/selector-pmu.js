@@ -1136,7 +1136,9 @@
         this._emitir('progress', { percentage: 10 });
         var url = URL.createObjectURL(archivo);
         var img = new Image();
+        var tokenCarga = {}; self._tokenCarga = tokenCarga;   // N2: la ultima carga manda
         img.onload = function () {
+            if (self._tokenCarga !== tokenCarga) { try { URL.revokeObjectURL(url); } catch (e) { /* nada */ } return; }   // N2: carga vieja, se ignora
             if (self.imagen && self.imagen.src && self.imagen.src !== url) { URL.revokeObjectURL(self.imagen.src); }
             self.imagen = img;
             self.archivoOrigen = archivo;
@@ -1207,6 +1209,7 @@
             self._emitir('progress', { percentage: 100 });
         };
         img.onerror = function () {
+            if (self._tokenCarga !== tokenCarga) { try { URL.revokeObjectURL(url); } catch (e) { /* nada */ } return; }   // N2: carga vieja, no pisa
             URL.revokeObjectURL(url);
             self._estado('error');
             self._fallo('UPLOAD_FAILED', 'No se pudo leer la imagen');

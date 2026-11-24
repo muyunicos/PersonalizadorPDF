@@ -519,6 +519,8 @@ check('T012: el borrado va PRIMERO sin confirmar', llamadasBorrar.length >= 1 &&
     JSON.stringify(llamadasBorrar));
 check('T012: el codigo reintenta con confirmar=1 (dialogo)', /PMUVisor\.confirmar/.test(bib),
     'sin confirmar en el fuente');
+check('#N3 (fix 2026-11-24): el visor (Ver todas) usa la imagen COMPLETA, no la miniatura 80x80',
+    /url: String\(f\.url \|\| f\.thumb_data/.test(bib));
 
 delete global.document;
 delete global.localStorage;
