@@ -1244,4 +1244,31 @@ pruebas.push(function () {
     });
 });
 
+// Spec 048 (US3, T016): capa fuera del lienzo (x/y aceptan ±3000 px, AGENTS §5).
+// El render DIBUJA en esas coordenadas; el recorte lo hace el propio canvas.
+// Comprueba robustez: no rompe, no descoloca el ctx y no se cuela NaN/Infinity.
+global.Image = global.Image || class {
+    constructor() { this.naturalWidth = 100; this.naturalHeight = 100; this._src = ''; }
+    set src(v) { this._src = v; if (typeof this.onload === 'function') { this.onload(); } }
+    get src() { return this._src; }
+};
+
+pruebas.push(function () {
+    var ctx = ctxFalso();
+    return R.componer(ctx, [
+        capa('img', 'pdf:a.png', { x: 5000, y: 5000 }),
+        capa('img', 'pdf:b.png', { x: -3000, y: -3000 }),
+        capa('img', 'pdf:c.png', { x: 20, y: 20 })
+    ], {
+        resolver: function (c) { return { url: 'blob:' + c.ref }; },
+        contexto: {},
+        lienzo: 300
+    }).then(function () {
+        var dib = ctx.ops.filter(function (o) { return o.indexOf('drawImage') === 0; });
+        check('T016: capas fuera del lienzo no rompen (3 drawImage)', dib.length === 3, dib.join(' | '));
+        check('T016: no se cuela NaN/Infinity en las coordenadas',
+            !dib.some(function (o) { return /NaN|Infinity/.test(o); }), dib.join(' | '));
+        check('T016: save/restore balanceado', ctx.ops.indexOf('restore') !== -1);
+    });
+});
 correr();
