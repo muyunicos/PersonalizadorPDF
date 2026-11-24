@@ -15,6 +15,7 @@ const RAIZ = path.resolve(__dirname, '..');
 require(path.join(RAIZ, 'assets', 'receta-objetivo.js'));
 const API = require(path.join(RAIZ, 'assets', 'cargador-pmu.js'));
 const CargadorPMU = API.CargadorPMU;
+const cargadorSrc = require('fs').readFileSync(require('path').join(RAIZ, 'assets', 'cargador-pmu.js'), 'utf8');
 
 let checks = 0;
 let fallos = 0;
@@ -137,6 +138,104 @@ function cargador(max) {
     await c2._subir(0, { size: 1 }, null, paramsFijos);
     check('los params del lote llegan al servidor', !!c2.ctx && c2.ctx.params === paramsFijos, JSON.stringify(c2.ctx && c2.ctx.params));
     check('la receta queda memoizada por id', c2.recetas.abcdef123456 === paramsFijos);
+
+    /* ---- #4 (fix 2026-11-24): no duplica una foto ya cargada ---- */
+    grupo('#4: foto ya cargada no se duplica (avisa)');
+    function cargadorSubir(max, idFijo) {
+        const c = Object.create(CargadorPMU.prototype);
+        c.config = {
+            ranuras: [{ w: 500, h: 400, min: 1, max: max, forma: 'rectangulo', gid: '0000ff', phsize: 1 }],
+            subir: function () { return Promise.resolve({ id: idFijo }); },
+            onRecorte: null
+        };
+        c.estado = [{ ids: [] }];
+        c.selectores = [{ boton: { disabled: false } }];
+        c._urls = {};
+        c.recetas = {};
+        c._pendientes = {};
+        c._avisos = false;
+        c.txtFalta = null;
+        c.errores = [];
+        c._error = function (m) { c.errores.push(String(m)); };
+        c._pintar = function () { };
+        c._paramsDe = function () { return {}; };
+        return c;
+    }
+    const params4 = { v: 2, w: 500, h: 400, modo: 'cubrir', escala: 1, ox: 0.5, oy: 0.5, rot: 0, iw: 1200, ih: 900, fondo: '#ffffff', transp: 'no', phsize: 1, gid: '0000FF' };
+    let cdup = cargadorSubir(3, 'misma-foto');
+    await cdup._subir(0, { size: 1 }, null, params4);
+    await cdup._subir(0, { size: 1 }, null, params4);
+    check('#4: subir dos veces la misma foto -> 1 sola entrada', cdup.estado[0].ids.length === 1, 'ids=' + JSON.stringify(cdup.estado[0].ids));
+    check('#4: avisa que la foto ya estaba cargada',
+        cdup.errores.some(function (e) { return /ya esta cargada/.test(e); }), JSON.stringify(cdup.errores));
+
+    let cdist = cargadorSubir(3, null);
+    let nDist = 0;
+    cdist.config.subir = function () { nDist++; return Promise.resolve({ id: 'id-' + nDist }); };
+    await cdist._subir(0, { size: 1 }, null, params4);
+    await cdist._subir(0, { size: 1 }, null, params4);
+    check('#4: fotos distintas -> 2 entradas (sin falso positivo)', cdist.estado[0].ids.length === 2, 'ids=' + JSON.stringify(cdist.estado[0].ids));
+    check('#4: sin aviso cuando son distintas', cdist.errores.length === 0, JSON.stringify(cdist.errores));
+
+    /* ---- #F1 (fix 2026-11-24): el lote no pasa del max ---- */
+    grupo('#F1: el lote respeta el maximo');
+    let cf1 = cargador(2);
+    cf1._pendientes = { 0: [{}] }; // 1 subida en vuelo
+    await cf1._subirLote(0, [{ n: 1 }, { n: 2 }, { n: 3 }]);
+    check('#F1: libres descuenta las subidas en vuelo -> 1 sola entra', cf1.subidas.length === 1, 'n=' + cf1.subidas.length);
+
+    let cconc = cargadorSubir(1, null);
+    let cn = 0;
+    cconc.config.subir = (function () { let n = 0; return function () { n++; var idn = 'c-' + n; return new Promise(function (r) { setTimeout(function () { r({ id: idn }); }, 5); }); }; })();
+    await Promise.all([cconc._subir(0, { size: 1 }, null, params4), cconc._subir(0, { size: 1 }, null, params4)]);
+    check('#F1: dos subidas concurrentes con max=1 -> 1 sola entrada', cconc.estado[0].ids.length === 1, 'ids=' + JSON.stringify(cconc.estado[0].ids));
+    check('#F1: avisa que la ranura ya esta llena', cconc.errores.some(function (e) { return /llena/.test(e); }), JSON.stringify(cconc.errores));
+
+    /* ---- #F3 (fix 2026-11-24): un intento exitoso limpia el error viejo ---- */
+    grupo('#F3: el error viejo no queda pegado');
+    let ce = Object.create(CargadorPMU.prototype);
+    ce.txtError = { hidden: false, textContent: 'fallo anterior' };
+    ce._limpiarError();
+    check('#F3: _limpiarError oculta y vacia el error', ce.txtError.hidden === true && ce.txtError.textContent === '', JSON.stringify(ce.txtError));
+    let ce2 = Object.create(CargadorPMU.prototype); // sin txtError: no rompe
+    ce2._limpiarError();
+    check('#F3: _limpiarError sin txtError no rompe', true);
+    check('#F3: _subir limpia el error al empezar (wiring)',
+        /prototype\._subir = function[\s\S]{0,700}?this\._limpiarError\(\)/.test(cargadorSrc));
+
+    /* ---- #F4 (fix 2026-11-24): editar sin URL responde (avisa) ---- */
+    grupo('#F4: editar una miniatura sin URL responde');
+    let c4 = Object.create(CargadorPMU.prototype);
+    c4.config = { ranuras: [{ w: 500, h: 400, forma: 'rectangulo', min: 1, max: 1, gid: '', phsize: 0 }], urlDe: function () { return ''; } };
+    c4.estado = [{ ids: ['sin-url'] }];
+    c4._urls = {};
+    c4.recetas = {};
+    c4.errores = [];
+    c4._error = function (m) { c4.errores.push(String(m)); };
+    c4._recetaDeContexto = function () { return null; };
+    let cerro = false;
+    c4._abrir = function () {
+        c4.selectores = [{ sel: { close: function () { cerro = true; }, cargarDesdeBiblioteca: function () { return Promise.resolve(true); } } }];
+    };
+    let res4 = await c4._editar(0, 0);
+    check('#F4: sin URL no resuelve (false)', res4 === false);
+    check('#F4: avisa que no se pudo abrir', c4.errores.some(function (e) { return /no se pudo abrir/i.test(e); }), JSON.stringify(c4.errores));
+    check('#F4: cierra el editor vacio', cerro === true);
+
+    /* ---- #F5 (fix 2026-11-24): valida el archivo antes de abrir el modal ---- */
+    grupo('#F5: archivo invalido no abre el modal');
+    const selPrev = global.SelectorPMU;
+    global.SelectorPMU = { esImagen: function (a) { return !!(a && a.ok); } };
+    let c5 = Object.create(CargadorPMU.prototype);
+    c5.config = { ranuras: [{ w: 500, h: 400, forma: 'rectangulo', min: 1, max: 2 }] };
+    c5.selectores = [{}]; // slot existe; no se debe tocar tira
+    c5._reemplazo = null;
+    c5.errores = [];
+    c5._error = function (m) { c5.errores.push(String(m)); };
+    c5._abrir(0, { ok: false }); // archivo invalido
+    check('#F5: archivo invalido avisa', c5.errores.some(function (e) { return /formato no permitido/i.test(e); }), JSON.stringify(c5.errores));
+    check('#F5: no creo el selector (no avanzo)', c5.selectores[0].sel === undefined);
+    global.SelectorPMU = selPrev;
 
     /* ---- Objetivo y mejor receta (T018) ---- */
     grupo('Objetivo y mejor receta');

@@ -417,6 +417,13 @@
         var r = this.config.ranuras[indice];
         var slot = this.selectores[indice];
         if (!r || !slot) { return; }
+        // #F5 (fix 2026-11-24): valida el archivo ANTES de abrir el modal (un no-imagen
+        // no abre un editor vacio para fallar despues).
+        if (archivo && global.SelectorPMU && typeof global.SelectorPMU.esImagen === 'function'
+            && !global.SelectorPMU.esImagen(archivo)) {
+            this._error('Formato no permitido (usa PNG, JPG, GIF o WebP).');
+            return;
+        }
         if (!this._reemplazo && slot.tira.querySelectorAll('.cpmu-mini').length >= r.max) { return; }
 
         if (!slot.sel && typeof global.SelectorPMU !== 'function') {
@@ -546,6 +553,9 @@
      */
     CargadorPMU.prototype._subir = function (indice, blob, posicion, params) {
         var self = this;
+        // #F3 (fix 2026-11-24): un intento nuevo limpia el error anterior (si este
+        // sale bien, el rojo viejo no queda pegado).
+        this._limpiarError();
         if (!this.config.subir) {
             this._error('No hay donde subir la imagen.');
             return Promise.reject(new Error('No hay donde subir la imagen.'));
@@ -629,7 +639,21 @@
                 throw new Error('El servidor no devolvio la imagen.');
             }
             if (posSubida === null || posSubida === undefined || posSubida >= self.estado[indice].ids.length) {
-                self.estado[indice].ids.push(String(id));
+                if (self.estado[indice].ids.indexOf(String(id)) === -1) {
+                    // #F1 (fix 2026-11-24): al COMPLETAR, si la ranura se lleno con subidas
+                    // concurrentes, no se supera el `max` (el guard de arranque no
+                    // alcanzaba: otra subida pudo completar mientras esta viajava).
+                    if (self.estado[indice].ids.length >= r.max) {
+                        self._error('La ranura ya esta llena (max ' + r.max + ').');
+                    } else {
+                        self.estado[indice].ids.push(String(id));
+                    }
+                } else {
+                    // #4 (fix 2026-11-24): la foto (mismo id = mismo contenido) ya
+                    // esta en la ranura: no se duplica y se avisa (antes quedaba
+                    // [A, A] en silencio). Iguala a `_usarExistente`, que ya deduplica.
+                    self._error('Esa foto ya esta cargada en esta ranura.');
+                }
             } else {
                 self.estado[indice].ids[posSubida] = String(id);
             }
@@ -739,7 +763,10 @@
         var self = this;
         var r = this.config.ranuras[indice];
         this._reemplazo = null;
-        var libres = Math.max(0, r.max - this.estado[indice].ids.length);
+        // #F1 (fix 2026-11-24): el lote descuenta las subidas EN VUELO, no solo las ya
+        // guardadas. Antes (solo ids) dos lotes superpuestos pasaban del `max`.
+        var enVuelo = (this._pendientes[indice] || []).length;
+        var libres = Math.max(0, r.max - this.estado[indice].ids.length - enVuelo);
         var lista = Array.prototype.slice.call(archivos || []);
         // Spec 047 (T016): el mismo archivo elegido dos veces entra UNA vez.
         // Identidad = nombre + bytes + fecha (sin leer el archivo ni usar crypto:
@@ -1057,7 +1084,14 @@
                 })[0];
                 u = foto ? String(foto.url || '') : '';
             }
-            if (!u) { return false; }
+            // #F4 (fix 2026-11-24): sin URL no se abre el editor vacio: se cierra y se
+            // avisa con causa (antes el toque sobre la miniatura no hacia NI decia nada).
+            if (!u) {
+                self._reemplazo = null;
+                if (slot.sel && typeof slot.sel.close === 'function') { slot.sel.close(); }
+                self._error('No se pudo abrir la foto para editar.');
+                return false;
+            }
             self._urls[String(id)] = String(u);   // queda memoizada para el visor
             return slot.sel.cargarDesdeBiblioteca({ id: String(id), url: String(u), params: params });
         }).catch(function () { return false; });
@@ -1238,6 +1272,15 @@ CargadorPMU.prototype._abrirVisorCompartido = function (indice, posicion) {
 
     /** Lo que publica el campo (FR-033/FR-034). */
     /** Spec 046 (U1): muestra los avisos de faltantes (los llama la ficha al comprar). */
+    CargadorPMU.prototype._limpiarError = function () {
+        // #F3 (fix 2026-11-24): el error rojo quedaba pegado tras un fallo ya
+        // resuelto. Se oculta/vacia al empezar un intento nuevo o al completarlo.
+        if (this.txtError) {
+            this.txtError.hidden = true;
+            this.txtError.textContent = '';
+        }
+    };
+
     CargadorPMU.prototype.mostrarAvisos = function () {
         this._avisos = true;
         this._pintar();

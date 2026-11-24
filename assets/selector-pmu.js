@@ -1077,7 +1077,21 @@
      * que sin reset el modal siguiente mostraba la foto anterior (y habilitaba
      * Eliminar / Ver en grande sobre ella).
      */
+    SelectorPMU.prototype._revoquearBlob = function (url) {
+        // #F2 (fix 2026-11-24): revoca un objectURL (solo `blob:`), sin romper si no aplica.
+        try {
+            var u = String(url || '');
+            if (u.slice(0, 5) === 'blob:' && global.URL
+                && typeof global.URL.revokeObjectURL === 'function') {
+                global.URL.revokeObjectURL(u);
+            }
+        } catch (e) { /* nada */ }
+    };
+
     SelectorPMU.prototype._resetEstado = function () {
+        // #F2 (fix 2026-11-24): libera el objectURL del ORIGINAL de la sesion anterior
+        // (acota el leak a 1; el del recorte lo libera el cargador al reemplazar/destruir).
+        this._revoquearBlob(this.imagen && this.imagen.src);
         this.imagen = null;
         this.archivoOrigen = null;
         this.ultimoBlob = null;
@@ -2119,7 +2133,8 @@
 
     SelectorPMU.prototype.destroy = function () {
         this.close();
-        if (this.imagen && this.imagen.src) { URL.revokeObjectURL(this.imagen.src); }
+        this._revoquearBlob(this.imagen && this.imagen.src);
+        this._revoquearBlob(this.ultimaUrl);
         this.onSelectCallback = null;
         this.onErrorCallback = null;
         this.oyentes = {};
@@ -2149,6 +2164,13 @@
         esWebP: esWebP,
         sliderAZoom: sliderAZoom,
         zoomASlider: zoomASlider
+    };
+
+    SelectorPMU.esImagen = function (archivo) {
+        // #F5 (fix 2026-11-24): ¿el archivo es una imagen aceptable? (PNG/JPG/GIF/WebP).
+        var tipo = String((archivo && archivo.type) || '').toLowerCase();
+        var ext = String((archivo && archivo.name) || '').split('.').pop().toLowerCase();
+        return TIPOS.indexOf(tipo) !== -1 || EXTS.indexOf(ext) !== -1;
     };
 
     global.SelectorPMU = SelectorPMU;

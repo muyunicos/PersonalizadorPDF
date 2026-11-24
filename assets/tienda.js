@@ -564,7 +564,37 @@
          * cargador GUARDA plano (`idsPlanos`) y al restaurar espera `[[id]]`: sin
          * esta conversion la foto guardada no volvia al re-editar desde el carrito.
          */
-        repartirPorRanura: repartirPorRanura
+        repartirPorRanura: repartirPorRanura,
+
+        /**
+         * #3 (fix 2026-11-24): envuelve una promesa con un LIMITE de tiempo. Si no
+         * resuelve ni rechaza en `ms`, aborta (`abortar`, opcional) y rechaza con
+         * `mensaje`. Sin esto, una red colgada dejaba el fetch de la subida sin
+         * resolver -> la cola no vaciaba -> `bloqueos.subidas = true` (boton de
+         * comprar trabado) sin ningun aviso. Puro y testeable en Node (sin DOM).
+         */
+        peticionConLimite: function (promesa, ms, abortar, mensaje) {
+            return new Promise(function (resolve, reject) {
+                var hecho = false;
+                var temporizador = setTimeout(function () {
+                    if (hecho) { return; }
+                    hecho = true;
+                    try { if (typeof abortar === 'function') { abortar(); } } catch (e) { /* nada */ }
+                    reject(new Error(mensaje || 'La operacion tardo demasiado (timeout).'));
+                }, ms);
+                Promise.resolve(promesa).then(function (v) {
+                    if (hecho) { return; }
+                    hecho = true;
+                    clearTimeout(temporizador);
+                    resolve(v);
+                }, function (e) {
+                    if (hecho) { return; }
+                    hecho = true;
+                    clearTimeout(temporizador);
+                    reject(e);
+                });
+            });
+        }
     };
 
     // Node (tests/conciliacion.js): exporta SOLO la logica pura, sin DOM.
@@ -927,8 +957,16 @@
 
     /** POST al admin-ajax (FormData) con respuesta JSON. */
     function postAjax(datos) {
-        return fetch(cfg.ajaxUrl, { method: 'POST', body: datos, credentials: 'same-origin' })
-            .then(function (r) { return r.json(); });
+        // #3 (fix 2026-11-24): la peticion tiene LIMITE de tiempo (AbortController).
+        // Sin timeout, una red colgada dejaba el fetch sin resolver y la cola de
+        // subida no vaciaba nunca (bloqueos.subidas = true, comprar trabado, sin aviso).
+        var ctrl = (typeof global.AbortController === 'function') ? new global.AbortController() : null;
+        var opciones = { method: 'POST', body: datos, credentials: 'same-origin' };
+        if (ctrl) { opciones.signal = ctrl.signal; }
+        var peticion = fetch(cfg.ajaxUrl, opciones).then(function (r) { return r.json(); });
+        return PURO.peticionConLimite(peticion, 45000,
+            ctrl ? function () { try { ctrl.abort(); } catch (e) { /* nada */ } } : null,
+            'La subida tardo demasiado o se cancelo (timeout).');
     }
     /** Sube un PNG del pool (limpiar solo en el primer envio de cada grupo). */
     function subirPool(sid, itemKey, pdf, gid, blob, params, limpiar, tipo) {

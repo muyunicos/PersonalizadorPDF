@@ -169,6 +169,49 @@ check('039 H5: refrescarMinimos avisa de la cola cuando no faltan fotos (spec 04
 check('039 H5: la cola no cuenta dos veces (usa pendientes(), no lista a ciegas)',
     /parseInt\(c\.pendientes\(\), 10\) \|\| 0/.test(tiendaSrc));
 
-console.log('\nCOLA SUBIDA OK (' + checks + ' checks)');
+// ===========================================================================
+// == #3 (fix 2026-11-24): la subida no se cuelga (timeout del POST) ==
+//    Sin timeout, una red colgada dejaba el fetch sin resolver -> la cola no
+//    vaciaba -> bloqueos.subidas = true (boton comprar trabado) sin aviso.
+// ===========================================================================
+    const pcl = PURO.peticionConLimite;
+    check('#3: existe el helper PURO.peticionConLimite', typeof pcl === 'function');
+
+    // a) resuelve el valor si la promesa llega a tiempo
+    let r3a = await pcl(Promise.resolve('ok'), 5000, null, 'x').then(function (v) { return v; }, function (e) { return 'ERR:' + e.message; });
+    check('#3: resuelve el valor si llega antes del timeout', r3a === 'ok', r3a);
+
+    // b) no espera al timeout cuando la promesa ya resolvio
+    let t3 = Date.now();
+    await pcl(Promise.resolve(1), 100000, null, 'x');
+    check('#3: no espera el timeout si la promesa resolvio', (Date.now() - t3) < 500);
+
+    // c) una promesa colgada rechaza por timeout y aborta la peticion
+    let abort3 = false;
+    let r3c = await pcl(new Promise(function () { /* nunca resuelve */ }), 20, function () { abort3 = true; }, 'timeout de prueba')
+        .then(function () { return 'NO-RECHAZO'; }, function (e) { return e.message; });
+    check('#3: una promesa colgada rechaza por timeout', r3c === 'timeout de prueba', r3c);
+    check('#3: al vencer el timeout se aborta la peticion', abort3 === true);
+
+    // d) deja pasar el rechazo real y NO aborta
+    let abort3b = false;
+    const orig3 = new Error('fallo real');
+    let r3d = await pcl(Promise.reject(orig3), 5000, function () { abort3b = true; }, 'x')
+        .then(function () { return 'NO-RECHAZO'; }, function (e) { return e; });
+    check('#3: deja pasar el rechazo real (mismo error)', r3d === orig3);
+    check('#3: no aborta si la promesa rechazo antes del timeout', abort3b === false);
+
+    // e) la respuesta tardia no pisa el timeout (no resuelve dos veces)
+    let r3e = await pcl(new Promise(function (resolve) { setTimeout(function () { resolve('tarde'); }, 80); }), 20)
+        .then(function () { return 'NO-RECHAZO'; }, function (e) { return 'timeout:' + e.message; });
+    check('#3: la respuesta tardia no pisa el timeout', /^timeout:/.test(r3e), r3e);
+
+    // f) wiring: postAjax usa AbortController + signal + peticionConLimite
+    check('#3: postAjax arma un AbortController y lo pasa a fetch (signal)',
+        /AbortController/.test(tiendaSrc) && /opciones\.signal = ctrl\.signal/.test(tiendaSrc));
+    check('#3: postAjax envuelve el fetch con PURO.peticionConLimite',
+        /PURO\.peticionConLimite\(peticion/.test(tiendaSrc));
+
+    console.log('\nCOLA SUBIDA OK (' + checks + ' checks)');
     if (fallos) { process.exit(1); }
 })();

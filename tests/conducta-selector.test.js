@@ -166,6 +166,37 @@ try { sAcep._aceptar(); } catch (e) { /* sin DOM */ }
 check('_aceptar de existente llama usarExistente', usados.length === 1, JSON.stringify(usados));
 check('_aceptar de existente declara la receta', declaradas.length === 1, JSON.stringify(declaradas));
 check('_aceptar de existente NO sube bytes', subidas === 0, 'subidas=' + subidas);
+
+    /* ---- #F2 (fix 2026-11-24): libera objectURLs (sin leak) ---- */
+    grupo('#F2: libera objectURLs');
+    const urlRev = [];
+    const revOrig = (global.URL && global.URL.revokeObjectURL) ? global.URL.revokeObjectURL : null;
+    if (global.URL) { global.URL.revokeObjectURL = function (u) { urlRev.push(String(u)); }; }
+    const sF2 = selector();
+    sF2.imagen = { src: 'blob:original-1', naturalWidth: 100, naturalHeight: 100 };
+    sF2.ultimaUrl = 'blob:recorte-1';
+    sF2._resetEstado();
+    check('#F2: _resetEstado revoca el ORIGINAL anterior', urlRev.indexOf('blob:original-1') !== -1, JSON.stringify(urlRev));
+    check('#F2: _resetEstado deja imagen en null', sF2.imagen === null);
+    const nRev = urlRev.length;
+    sF2._revoquearBlob('http://x/a.webp');
+    check('#F2: _revoquearBlob no toca URLs que no son blob:', urlRev.length === nRev);
+    const sF2d = selector();
+    sF2d.imagen = { src: 'blob:original-2', naturalWidth: 1, naturalHeight: 1 };
+    sF2d.ultimaUrl = 'blob:recorte-2';
+    sF2d.destroy();
+    check('#F2: destroy revoca original y recorte',
+        urlRev.indexOf('blob:original-2') !== -1 && urlRev.indexOf('blob:recorte-2') !== -1, JSON.stringify(urlRev));
+    if (global.URL) { global.URL.revokeObjectURL = revOrig; }
+
+    /* ---- #F5: esImagen (validacion de archivo, pura) ---- */
+    grupo('#F5: esImagen acepta/rechaza por tipo y extension');
+    check('#F5: png por tipo', SelectorPMU.esImagen({ type: 'image/png', name: 'x' }) === true);
+    check('#F5: jpg por extension', SelectorPMU.esImagen({ type: '', name: 'foto.JPG' }) === true);
+    check('#F5: webp', SelectorPMU.esImagen({ type: 'image/webp', name: 'a.webp' }) === true);
+    check('#F5: svg queda fuera', SelectorPMU.esImagen({ type: 'image/svg+xml', name: 'a.svg' }) === false);
+    check('#F5: texto queda fuera', SelectorPMU.esImagen({ type: 'text/plain', name: 'a.txt' }) === false);
+    check('#F5: nulo no rompe', SelectorPMU.esImagen(null) === false);
     console.log('');
     if (fallos === 0) {
         console.log('CONDUCTA SELECTOR OK (' + checks + ' checks)');

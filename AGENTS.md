@@ -744,14 +744,14 @@ node tests/biblioteca-contrato.test.js  # Biblioteca del comprador (spec 030): "
 node tests/conciliacion.js    # `PURO.conciliarGrupo` (spec 012, D17-D19) + reparto por ranura: "CONCILIACION OK"
 node tests/cola-subida.test.js # Cola de subida del comprador (spec 036, D9): concurrencia acotada,
                               # FIFO, dedupe por contenido/slot y "la ultima version manda":
-                              # "COLA SUBIDA OK (22 checks)"
+                              # "COLA SUBIDA OK (36 checks)" (incluye #3: timeout del POST via PURO.peticionConLimite)
 node tests/receta-contrato.test.js  # Receta v2 del recorte (spec 035): "RECETA CONTRATO OK (21 checks)"
 node tests/cargador-estado.test.js  # Estado entre aperturas (spec 045): reemplazo de 0 bytes + reset del selector: "CARGADOR ESTADO OK (25 checks)"
 node tests/cargador-recetas.test.js  # spec 043 (fix 2026-11-22): cada foto abre con SU receta + `max`/`_reemplazo` + imagen nueva en cubrir: "CARGADOR RECETAS OK (12 checks)"
 node tests/config-cableado.test.js  # spec 043 (fix 2026-11-22): los hooks de config llegan a las allowlists del cargador/selector: "CONFIG CABLEADO OK (20 checks)"
-node tests/conducta-selector.test.js  # spec 043 (P1-5): comportamiento del selector sin DOM (_params, open, aplicar receta, _recetaDeFoto): "CONDUCTA SELECTOR OK (25 checks)"
+node tests/conducta-selector.test.js  # spec 043 (P1-5): comportamiento del selector sin DOM (_params, open, aplicar receta, _recetaDeFoto) + #F2 (libera objectURLs) y #F5 (esImagen): "CONDUCTA SELECTOR OK (45 checks)"
 node tests/dom-stub.test.js  # spec 048 (T003): auto-prueba del helper de DOM (tests/_util/dom-stub.js): "DOM STUB OK (19 checks)"
-node tests/cargador-lote.test.js  # Carga multiple (spec 047): receta por defecto y tope de la ranura: "CARGADOR LOTE OK (20 checks)"
+node tests/cargador-lote.test.js  # Carga multiple (spec 047): receta por defecto, tope de la ranura, #4 (no duplica una foto ya cargada), #F1/#F3/#F4 (max bajo carga, limpia error viejo, editar sin URL avisa) y #F5 (no abre el modal con archivo invalido): "CARGADOR LOTE OK (51 checks)"
 node tests/vistas-contrato.test.js  # Orden/marca de las vistas obligatorias (035): "VISTAS CONTRATO OK (24 checks)"
 node tests/fotos-contrato.test.js   # Original acotado a 2000 px + dedupe por sha (035): "FOTOS CONTRATO OK (38 checks)"
 node tests/compositor-paridad.test.js  # Compositor PHP vs cliente (035): "COMPOSITOR PARIDAD OK (6 checks)"
