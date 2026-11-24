@@ -152,6 +152,25 @@ function cargador(opts) {
     check('selector: paramsDe resuelve la receta del contexto',
         sel5.config.paramsDe('A') === pCatalogo, JSON.stringify(sel5.config.paramsDe('A')));
     check('selector: paramsDe sin id -> null', sel5.config.paramsDe('') === null);
+    /* ---- #receta-item (spec 049): las recetas del item sobreviven F5 ---- */
+    grupo('#receta-item: recetas iniciales del item (siembra desde manifest)');
+    const pSeed = { v: 2, w: 500, h: 400, modo: 'encajar', escala: 1.3, ox: 0.4, oy: 0.6, rot: 0, phsize: 1, gid: '0000FF' };
+    const cSeed = new CargadorPMU(null, {
+        ranuras: [{ w: 500, h: 400, forma: 'rectangulo', min: 1, max: 1, gid: '0000ff', phsize: 1 }],
+        recetasIniciales: { abc123abc123: pSeed }
+    });
+    check('#receta-item: el constructor siembra this.recetas desde recetasIniciales',
+        cSeed.recetas.abc123abc123 === pSeed, JSON.stringify(cSeed.recetas));
+    check('#receta-item: _recetaDeContexto la devuelve sin cache de biblioteca',
+        cSeed._recetaDeContexto('abc123abc123', cSeed.config.ranuras[0]) === pSeed);
+    const cNoSeed = new CargadorPMU(null, { ranuras: [{ w: 500, h: 400, forma: 'rectangulo', min: 1, max: 1, gid: '0000ff', phsize: 1 }] });
+    check('#receta-item: sin recetasIniciales arranca vacio (compat)', Object.keys(cNoSeed.recetas).length === 0);
+    // wiring (una capa): PHP expone recetas y tienda las pasa al cargador.
+    const pluginSrc = require('fs').readFileSync(require('path').join(RAIZ, 'personalizador-pdf.php'), 'utf8');
+    const tiendaSrc = require('fs').readFileSync(require('path').join(RAIZ, 'assets', 'tienda.js'), 'utf8');
+    check('#receta-item wiring: PHP expone PMU_FICHA.recetas', /'recetas' => \$recetas,/.test(pluginSrc));
+    check('#receta-item wiring: tienda pasa recetasIniciales desde ficha.recetas', /recetasIniciales: \(ficha\.recetas/.test(tiendaSrc));
+
     delete global.PMUBiblioteca;
 
     console.log('');

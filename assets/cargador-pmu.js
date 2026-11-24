@@ -266,6 +266,16 @@
         // Mezclarlos hacia que el editor abriera sobre una imagen ya recortada.
         this._recortes = {};
         this.recetas = {};
+        // spec 049: recetas del item (id -> params v2) sembradas desde el manifest,
+        // asi `_recetaDeContexto` las encuentra tras F5 sin depender de la cache de
+        // la biblioteca (que arranca fria y se invalidó al subir).
+        if (config.recetasIniciales && typeof config.recetasIniciales === 'object') {
+            Object.keys(config.recetasIniciales).forEach(function (k) {
+                if (config.recetasIniciales[k] && typeof config.recetasIniciales[k] === 'object') {
+                    this.recetas[String(k)] = config.recetasIniciales[k];
+                }
+            }, this);
+        }
         // Spec 046 (U7): placeholders de las subidas en curso (spinner en la tira).
         this._pendientes = {};
     }

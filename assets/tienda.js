@@ -2318,6 +2318,10 @@
                 // cargador restaura una entrada por RANURA. Aca `ranuras` ya esta armada;
                 // sin esta conversion la foto guardada nunca se restauraba.
                 idsIniciales: repartirPorRanura(idsIniciales, ranuras),
+                // spec 049: recetas del item (id -> params v2) sembradas desde el manifest,
+                // asi la miniatura abre con SU receta tras F5 (sin depender de la cache
+                // de la biblioteca, que arranca fria y se invalidó al subir).
+                recetasIniciales: (ficha.recetas && typeof ficha.recetas === 'object') ? ficha.recetas : null,
                 // Spec 035 (T014/D2): el cargador publica el recorte local de cada
                 // foto subida (objectURL) para que la vista previa dibuje sin red.
                 onRecorte: function (id, url, receta) { anotarRecorte(id, url, receta); },

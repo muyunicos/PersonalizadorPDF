@@ -747,7 +747,7 @@ node tests/cola-subida.test.js # Cola de subida del comprador (spec 036, D9): co
                               # "COLA SUBIDA OK (36 checks)" (incluye #3: timeout del POST via PURO.peticionConLimite)
 node tests/receta-contrato.test.js  # Receta v2 del recorte (spec 035): "RECETA CONTRATO OK (21 checks)"
 node tests/cargador-estado.test.js  # Estado entre aperturas (spec 045): reemplazo de 0 bytes + reset del selector: "CARGADOR ESTADO OK (25 checks)"
-node tests/cargador-recetas.test.js  # spec 043 (fix 2026-11-22): cada foto abre con SU receta + `max`/`_reemplazo` + imagen nueva en cubrir: "CARGADOR RECETAS OK (12 checks)"
+node tests/cargador-recetas.test.js  # spec 043 (fix 2026-11-22): cada foto abre con SU receta + `max`/`_reemplazo` + imagen nueva en cubrir + #receta-item (spec 049: recetas del item sobreviven F5): "CARGADOR RECETAS OK (23 checks)"
 node tests/config-cableado.test.js  # spec 043 (fix 2026-11-22): los hooks de config llegan a las allowlists del cargador/selector: "CONFIG CABLEADO OK (20 checks)"
 node tests/conducta-selector.test.js  # spec 043 (P1-5): comportamiento del selector sin DOM (_params, open, aplicar receta, _recetaDeFoto) + #F2 (libera objectURLs) y #F5 (esImagen): "CONDUCTA SELECTOR OK (45 checks)"
 node tests/dom-stub.test.js  # spec 048 (T003): auto-prueba del helper de DOM (tests/_util/dom-stub.js): "DOM STUB OK (19 checks)"
