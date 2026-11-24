@@ -1547,6 +1547,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 !empty($mi['id_sin_archivo']));
             check('minimos: saneo (0 y basura se ignoran; el cap acota a 50)',
                 !empty($mi['declarados']));
+            check('minimos (spec 049): item existente con valores viejo pero pmu_valores con el id -> NO bloquea',
+                !empty($mi['item_existente']));
             break;
         case 'pool':
         case 'pool_reem':
@@ -3153,6 +3155,25 @@ switch ($fase) {
         // (D) Saneo (D3): 0 no exige, la basura se ignora y el cap acota.
         $_POST = ['pmu_minimos' => json_encode([$cid_m => 999, '0' => 5, 'x' => 3, 7 => 0])];
         $GLOBALS['test_minimos']['declarados'] = $refD->invoke($p) === [$cid_m => 50];
+        // (E) spec 049 (fix): item EXISTENTE (subida ya guardada por handle_subida,
+        // que NO escribe valores) con manifest.valores VIEJO. El navegador declara
+        // pmu_valores con el id -> NO debe bloquear (el archivo real esta). Antes
+        // el minimo leia el manifest.valores viejo y rechazaba con "faltan 1".
+        $sesion_m = new PMU_Sesion($motor_m);
+        $sidE = 'test-min-49';
+        $itemE = $sesion_m->crear_draft($sidE, ['muestra']);
+        $manE = $sesion_m->leer_manifest($sidE, $itemE);
+        $manE['subidas'] = [['id' => $fotoM, 'file' => 'a.webp', 'mime' => 'image/webp', 'bytes' => 10, 'origen' => 'original']];
+        $manE['valores'] = new \stdClass(); // VIEJO a proposito
+        $sesion_m->guardar_manifest($sidE, $itemE, $manE);
+        $_POST = [
+            'pmu_sid' => $sidE,
+            'pmu_item_key' => $itemE,
+            'pmu_valores' => json_encode([$cid_m => ['valor' => [$fotoM], 'cliente' => '']]),
+            'pmu_minimos' => json_encode([$cid_m => 1]),
+        ];
+        $_REQUEST = $_POST;
+        $GLOBALS['test_minimos']['item_existente'] = $p->carrito_validar(true, 4242, 1, 0) === true;
         break;
 
     case 'pool':

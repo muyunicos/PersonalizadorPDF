@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.40.0
+ * Version: 4.40.1
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -2668,6 +2668,15 @@ class Personalizador_PDF_Plugin
                 $manifest['pdfs_descartados'] = $snapshot['descartados'];
                 $sesion->guardar_manifest($sid, $item, $manifest);
                 $sesion->pool_filtrar_pdfs($sid, $item, $snapshot['pdfs']);
+            }
+            // spec 049 (fix): el minimo se valida contra los ids que el navegador DECLARA AHORA
+            // (pmu_valores), no contra manifest.valores (que la vista previa no
+            // actualiza en productos omisibles ni antes de terminar). El gate sigue
+            // siendo el archivo real: minimos_faltantes cuenta los ids con subida real.
+            $crudosVal = isset($_POST['pmu_valores']) ? json_decode(wp_unslash((string)$_POST['pmu_valores']), true) : null;
+            if (is_array($crudosVal)) {
+                $manifest['valores'] = $this->valores_sanitizados($crudosVal, $panelProducto['campos']) ?: new \stdClass();
+                $sesion->guardar_manifest($sid, $item, $manifest);
             }
             // Spec 022 (D2/D4): el `min` de las ranuras FRENA la compra. El
             // navegador declara el total exigido por campo (`pmu_minimos`) y aca
