@@ -613,6 +613,13 @@
             max: Math.max(1, parseInt(config.max, 10) || 1),
             subirLote: typeof config.subirLote === 'function' ? config.subirLote : null
         };
+        // Spec 043 (fix 2026-11-22): defaults del campo. Una imagen NUEVA tiene que
+        // arrancar en cubrir/ajustar al marco; antes heredaba el `mode` que
+// `_aplicarParamsIniciales` dejaba mutado en la instancia.
+        this._defaults = {
+            mode: this.config.mode || 'cubrir',
+            fondo: this.config.fondo || 'auto'
+        };
         if (this.config.finalW < 1 || this.config.finalH < 1) {
             throw new Error('selector-pmu: finalW/finalH son obligatorios (los define el campo/PDF).');
         }
@@ -1091,6 +1098,16 @@
         // de la biblioteca: al cargarlo se pierde el id recordado.
         if (!this._desdeBiblioteca) { this._bib = null; }
         this._desdeBiblioteca = false;
+        // Spec 043 (fix 2026-11-22): una imagen NUEVA arranca con los defaults del
+        // campo (cubrir / ajustar al marco), no con la receta de la apertura
+        // anterior. Sin esto, `config.mode` (mutado por `_aplicarParamsIniciales`)
+        // se arrastraba a la siguiente foto y el zoom viejo quedaba como base.
+        this._paramsIniciales = null;
+        if (this._defaults) {
+            this.config.mode = this._defaults.mode;
+            this.colorFondo = this._defaults.fondo;
+            this.fondoEsAuto = true;
+        }
         var tipo = String(archivo.type || '');
         var ext = String(archivo.name || '').split('.').pop().toLowerCase();
         if (TIPOS.indexOf(tipo) === -1 && EXTS.indexOf(ext) === -1) {

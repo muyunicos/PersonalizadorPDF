@@ -629,6 +629,11 @@ check('spec 043 (fix): el cargador expone `paramsDe` y la tira la usa (no el cat
 check('spec 043 (fix): `cargarDesdeBiblioteca` acepta la receta del integrador',
   /cargarDesdeBiblioteca = function \(foto, origen, params\)/.test(selector)
   && /params: \(params && typeof params === 'object'\) \? params : this\._recetaDeFoto\(foto\)/.test(selector));
+check('spec 043 (fix): una imagen nueva arranca con los defaults (no hereda el modo anterior)',
+  /this\._defaults = \{\s*mode: this\.config\.mode \|\| 'cubrir'/.test(selector)
+  && /this\._paramsIniciales = null;\s*if \(this\._defaults\) \{\s*this\.config\.mode = this\._defaults\.mode/.test(selector));
+check('spec 043 (fix): sin receta previa el cargador manda cubrir (no `{}`)',
+  /if \(!paramsSubida \|\| !Object\.keys\(paramsSubida\)\.length\) \{\s*paramsSubida = this\._recetaLote/.test(cargador));
 
 console.log('');
 if (fallos) {

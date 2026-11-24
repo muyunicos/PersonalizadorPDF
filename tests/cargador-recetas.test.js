@@ -108,6 +108,20 @@ function cargador(opts) {
     check('no se pierde la otra foto', c3.estado[0].ids.length === 2, JSON.stringify(c3.estado[0].ids));
     check('el reemplazo quedo limpio', c3._reemplazo === null);
 
+    /* ---- 4. Imagen nueva: defaults del campo ---- */
+    grupo('Imagen nueva sin receta');
+    const c4 = cargador({ max: 2, ids: [] });
+    c4.config.subir = function (blob, ctx) { c4.ctxSubida = ctx; return Promise.resolve({ id: 'N' }); };
+    await c4._subir(0, { size: 1 }, null).catch(function () { });
+    check('sin receta previa la imagen nueva usa cubrir (defaults del campo)',
+        !!(c4.ctxSubida && c4.ctxSubida.params && c4.ctxSubida.params.modo === 'cubrir'),
+        JSON.stringify(c4.ctxSubida && c4.ctxSubida.params));
+    check('escala 1 y centro (0.5/0.5)', !!(c4.ctxSubida && c4.ctxSubida.params
+        && c4.ctxSubida.params.escala === 1 && c4.ctxSubida.params.ox === 0.5 && c4.ctxSubida.params.oy === 0.5),
+        JSON.stringify(c4.ctxSubida && c4.ctxSubida.params));
+    check('no manda una receta vacia', !!(c4.ctxSubida && c4.ctxSubida.params
+        && Object.keys(c4.ctxSubida.params).length > 3));
+
     console.log('');
     if (fallos === 0) {
         console.log('CARGADOR RECETAS OK (' + checks + ' checks)');

@@ -567,6 +567,11 @@
         this._pendientes[indice].push(token);
         this._pintar();
         var paramsSubida = params || this._paramsDe(indice);
+        // Spec 043 (fix 2026-11-22): imagen nueva sin receta -> defaults del campo
+// (cubrir, escala 1, centro). Antes caia a `{}` y el servidor guardaba sin receta.
+        if (!paramsSubida || !Object.keys(paramsSubida).length) {
+            paramsSubida = this._recetaLote(r, r.w, r.h);
+        }
         return Promise.resolve(this.config.subir(blob, {
             ranura: indice, w: r.w, h: r.h, forma: r.forma,
             // Spec 035 (D9): la RECETA de la composicion viaja con la subida (el
