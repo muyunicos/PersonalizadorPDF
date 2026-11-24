@@ -2306,6 +2306,9 @@
                 }
             });
             // `montar()` se llama UNA sola vez: devuelve el cargador montado o null.
+// Spec 043 (fix 2026-11-22): la instancia queda accesible para diagnostico
+// (`el.__pmuCargador`), sin cambiar el contrato publico.
+            el.__pmuCargador = cargador;
             var montado = cargador.montar();
             if (!montado && typeof console !== 'undefined' && console.warn) {
                 console.warn('[PMU] CargadorPMU no dibujo la ranura (revisa w/h en RANURAS).');
