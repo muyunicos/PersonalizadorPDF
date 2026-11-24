@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.39.4
+Stable tag: 4.39.5
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,13 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.39.5 =
+* Mantenibilidad: `cargador-recetas` pasa de 12 a **18 checks** con casos
+  conductuales del resolvedor (memoria -> catalogo -> ajustes -> defaults y
+  `paramsDe` del selector). Menos asserts por regex sobre el fuente.
+* Docs: `specs/INDICE.md` aclara que los conteos de cada spec caducan y actualiza
+  los vigentes de la 043 (67/67, biblioteca-contrato 91, media_lectura 77).
 
 = 4.39.4 =
 * Limpieza: se retiro codigo muerto (`_prepararNuevaCarga` en el selector y

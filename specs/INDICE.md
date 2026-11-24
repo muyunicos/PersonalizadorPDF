@@ -1,6 +1,11 @@
 # Indice de specs — Personalizador PDF
 
 > Jerarquia: `constitution` (.specify/memory/constitution.md) > `AGENTS.md` > resto.
+>
+> **Conteos de checks**: los numeros de cada entrada son del cierre de esa spec y
+> **caducan** (hoy `ficha-pedido.browser.js` esta en **67/67**, `biblioteca-contrato`
+> en **91** y `media_lectura` en **77**). La fuente es la salida de cada gate
+> (`AGENTS.md` §9); no se actualizan retroactivamente.
 > Ultima actualizacion: 2026-10-31 (spec **035-fotos-originales-cliente**: **implementada y verificada en el laboratorio** (US1+US2+US3, **50/50 tareas**; recorrido `quickstart` E1-E9 con evidencia, las 18 puertas CLI en verde y las 2 puertas de navegador **revalidadas el 2026-10-31** (`galerias-sprite.browser.js` **32/32** y `ficha-pedido.browser.js` **47/47**)) — original acotado a 2000 px en el navegador hasta el add-to-cart, nace en `tmp/sesion-{sid}/uploads/` y al pagar se **mueve** a `orders/{cliente}/{order_id}/{item_key}/` + `orders/{cliente}/uploads/`; **sin staging**; receta v2 con `rot`; **con** `engine/Compositor.php` (el servidor compone el original bajo demanda al generar el PDF); la vista se marca al mostrarse en la galeria; incluye el refactor de rutas de `orders/` (20 puntos) y el pool sin `subidas/`; mockup -> spec 036). Antes, 2026-10-24 (spec **009-galerias-sprite-unificado**: **implementada (RC46–RC79) y reconciliada** — `tasks.md` T001–T041 con estado real; el recorrido **E1–E7 salio del script del lab y es puerta del repo** (`tests/galerias-sprite.browser.js`, **32/32 en verde**, con modo `PMU_SOLO_UI=1` para el hosting); T040 (causa visible en la galeria de fuentes, RC75) y T041 (causa exacta del motor al cliente, RC79) **cerradas**; pendiente solo confirmar en el hosting real). Antes, 2026-10-23 (spec **030-biblioteca-imagenes**: **implementada y verificada en codigo, v4.22.3** — biblioteca del comprador (tira + visor), Elegir sin recomponer (0 bytes), versiones `{madre}-{n}`, referencias entre pedidos y TTL con cron; pendiente el recorrido manual **T042** en WP real; release **4.22.3**: specs 026 `imagenes-webp`, 027 `transparencia-campo`, 028 `modos-lienzo`, 029 `pool-sin-copias` y 030 implementadas).
 
 > **2026-11-03**: spec **037-cotizador-diseno-mockups** en **borrador** (cotizador: diseno del
@@ -60,7 +65,7 @@
 > solo si es nueva y Cancelar descarta; **"Ver todas (N)"** al final de la tira abre el visor de la
 > biblioteca (seleccionar / borrar, con dialogo solo si la imagen esta en uso). Enmienda la **039**
 > (D2, D3/US3.4 y SC-003), la **030** (clarificacion 4a y D8) y la **016** (D7). 5 historias, 18 FR,
-> 8 SC; sin IndexedDB (cache HTTP de `media.php`). Puertas: `selector-contrato`, `biblioteca-contrato` 81, `campos-contrato`, `media_lectura` 75 y `ficha-pedido.browser.js` **53/53** (2026-11-22).
+> 8 SC; sin IndexedDB (cache HTTP de `media.php`). Puertas: `selector-contrato`, `biblioteca-contrato` 91, `campos-contrato`, `media_lectura` 77 y `ficha-pedido.browser.js` **67/67** (2026-11-22).
 >
 > **2026-11-22** (fix 043, v4.38.8): la miniatura y la vista previa dibujan el **recorte local** (el blob
 > del selector), no el PNG del pool — **0 POST** si todos los grupos tienen recorte local; la clave del

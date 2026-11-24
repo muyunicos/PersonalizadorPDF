@@ -15,6 +15,7 @@ const path = require('path');
 const RAIZ = path.resolve(__dirname, '..');
 require(path.join(RAIZ, 'assets', 'receta-objetivo.js'));
 const CargadorPMU = require(path.join(RAIZ, 'assets', 'cargador-pmu.js')).CargadorPMU;
+const SelectorPMU = require(path.join(RAIZ, 'assets', 'selector-pmu.js'));
 
 let checks = 0;
 let fallos = 0;
@@ -121,6 +122,37 @@ function cargador(opts) {
         JSON.stringify(c4.ctxSubida && c4.ctxSubida.params));
     check('no manda una receta vacia', !!(c4.ctxSubida && c4.ctxSubida.params
         && Object.keys(c4.ctxSubida.params).length > 3));
+
+    /* ---- 5. Resolvedor: catalogo, ajustes y defaults (P1-5) ---- */
+    grupo('Resolvedor: catalogo -> ajustes -> defaults');
+    const ranura5 = { w: 500, h: 400, forma: 'rectangulo', min: 1, max: 2, gid: '0000ff', phsize: 0 };
+    const pCatalogo = { v: 2, w: 500, h: 400, modo: 'encajar', escala: 1.2 };
+    const pAjustes = { v: 2, w: 500, h: 400, modo: 'estirar', escala: 1.1 };
+    const c5 = cargador({ max: 2, ids: ['A'], recetas: {} });
+
+    global.PMUBiblioteca = { cache: () => ({ fotos: [{ id: 'A', recetas: { '1.2500-0-200000': pCatalogo } }] }) };
+    check('sin memoria cae al catalogo (receta por objetivo)',
+        c5._recetaDeContexto('A', ranura5) === pCatalogo);
+
+    global.PMUBiblioteca = { cache: () => ({ fotos: [{ id: 'A', recetas: {}, ajustes: { configuracion: pAjustes } }] }) };
+    check('sin receta por objetivo cae a los ajustes del cliente',
+        c5._recetaDeContexto('A', ranura5) === pAjustes);
+
+    global.PMUBiblioteca = { cache: () => ({ fotos: [] }) };
+    check('sin memoria ni catalogo -> defaults (null)',
+        c5._recetaDeContexto('A', ranura5) === null);
+    check('sin id -> null (no inventa receta)', c5._recetaDeContexto('', ranura5) === null);
+
+    // paramsDe del selector usa el MISMO resolvedor que el cargador.
+    const sel5 = new SelectorPMU(null, {
+        finalW: 500, finalH: 400, mode: 'cubrir', forma: 'rectangulo',
+        paramsDe: function (id) { return c5._recetaDeContexto(String(id || ''), ranura5); }
+    });
+    global.PMUBiblioteca = { cache: () => ({ fotos: [{ id: 'A', recetas: { '1.2500-0-200000': pCatalogo } }] }) };
+    check('selector: paramsDe resuelve la receta del contexto',
+        sel5.config.paramsDe('A') === pCatalogo, JSON.stringify(sel5.config.paramsDe('A')));
+    check('selector: paramsDe sin id -> null', sel5.config.paramsDe('') === null);
+    delete global.PMUBiblioteca;
 
     console.log('');
     if (fallos === 0) {
