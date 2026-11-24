@@ -55,6 +55,13 @@ if (!defined('ABSPATH')) {
         <strong>]</strong> cambian su orden, las <strong>flechas</strong> la mueven (con Shift, 10 px),
         <strong>Ctrl/Cmd+Z</strong> deshace y <strong>Escape</strong> cierra el menu contextual.
         El importador de pagina esta en el acordeon <strong>Placeholders</strong>.</p>
+    <p><strong>Ayuda y vista previa (spec 049)</strong>: el acordeon se llama <strong>Editor de mockups</strong>
+        y su descripcion vive en el icono <strong>?</strong> de la cabecera (no pliega el acordeon). En
+        <strong>Placeholders</strong>, el recuadro de vista previa monta el mismo motor de carga/recorte que el
+        comprador (adaptado al grupo): con mas de una instancia aparecen <strong>flechas &lsaquo; &rsaquo;</strong>
+        para alternar y cada instancia tiene su propio contenido; el recorte alimenta el <strong>Procesar PDF</strong>
+        de prueba (no se entrega al cliente). El interruptor <strong>Alternar PH</strong> del editor hace que la
+        capa placeholder muestre ese mismo contenido (o la caja neutra si se desactiva).</p>
     <p><strong>Reemplazar una capa o grupo</strong>: si antes de pulsar "Importar pagina + PH" hay una
         capa (o un grupo) seleccionado, el importador <strong>reemplaza</strong> esa seleccion en vez de
         agregar una capa nueva: la pagina importada ocupa <em>el mismo lugar, tamano y rotacion</em> que

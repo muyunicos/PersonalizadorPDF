@@ -339,7 +339,6 @@ jQuery(function ($) {
         return '' +
             '<div class="ec-mk">' +
             '  <div class="ec-mk-cab">' +
-            '    <span class="ec-mk-cab-titulo">Editor de mockups</span>' +
             '    <span class="ec-mk-acciones ec-mk-cab-acciones">' +
             '      <button type="button" class="button button-small" data-mk="guardar">Guardar ahora</button>' +
             '      <span class="ec-mk-estado" aria-live="polite"></span>' +
@@ -351,7 +350,7 @@ jQuery(function ($) {
             '        <label for="ec-mk-zoom">Zoom' +
             '          <select id="ec-mk-zoom" class="ec-mk-zoom"></select>' +
             '        </label>' +
-            '        <label><input type="checkbox" class="ec-mk-ver-texto" checked> Ver texto real</label>' +
+            '        <label><input type="checkbox" class="ec-mk-ver-texto" checked> Alternar PH</label>' +
             '        <span class="ec-mk-marcas"></span>' +
             '      </div>' +
             '      <div class="ec-mk-lienzo"><canvas width="300" height="300"></canvas></div>' +

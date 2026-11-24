@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Personalizador PDF
  * Description: Reemplaza placeholders (rectangulos 100% transparentes) en PDFs exportados desde CorelDRAW con imagenes reales por grupo de color. Motor 100% PHP, sin Python. Integra el sistema TextMuy (editor de estilos de texto) en la pestana "Estilos de Texto".
- * Version: 4.41.0
+ * Version: 4.42.0
  * Author: Personalizador PDF
  * License: GPL-2.0+
  * Text Domain: personalizador-pdf
@@ -451,12 +451,25 @@ class Personalizador_PDF_Plugin
     private function imagenes_de($nombre)
     {
         $dir = $this->dir_imagenes($nombre);
-        $out = [];
+        $base = [];
+        $listas = [];
         foreach ((array)glob($dir . DIRECTORY_SEPARATOR . '*.*') as $ruta) {
-            $id = strtoupper(pathinfo($ruta, PATHINFO_FILENAME));
-            if (preg_match('/^[0-9A-F]{6}$/', $id)) {
-                $out[$id] = $ruta;
+            $arch = pathinfo($ruta, PATHINFO_FILENAME);
+            // Variante por instancia: {gid}-{n} (spec 049, aditivo).
+            if (preg_match('/^([0-9A-Fa-f]{6})-(\d+)$/', $arch, $m)) {
+                $listas[strtoupper($m[1])][(int)$m[2]] = $ruta;
+                continue;
             }
+            $id = strtoupper($arch);
+            if (preg_match('/^[0-9A-F]{6}$/', $id)) {
+                $base[$id] = $ruta;
+            }
+        }
+        $out = $base;
+        foreach ($listas as $id => $mapa) {
+            ksort($mapa);
+            $rutas = array_values($mapa);
+            $out[$id] = isset($base[$id]) ? array_merge([$base[$id]], $rutas) : $rutas;
         }
         ksort($out);
         return $out;
@@ -6824,11 +6837,25 @@ JS;
         }
     }
 
+    /** Guarda una variante por instancia del grupo ({gid}-{n}.ext); aditivo (spec 049). */
+    private function guardar_imagen_indice($archivo, $gid, $indice, $origen, $ext)
+    {
+        $nombre = $this->nombre_de($archivo);
+        $dir = $this->dir_muestras($nombre);
+        $dest = $dir . DIRECTORY_SEPARATOR . $gid . '-' . (int)$indice . '.' . $ext;
+        if (!@copy($origen, $dest)) {
+            throw new \RuntimeException('No se pudo guardar la imagen por instancia (permisos de ' . $dir . ').');
+        }
+    }
+
     /** Elimina la imagen del grupo si existe. */
     private function quitar_imagen($archivo, $gid)
     {
         $dir = $this->dir_muestras($this->nombre_de($archivo));
         foreach ((array)glob($dir . DIRECTORY_SEPARATOR . $gid . '.*') as $vieja) {
+            @unlink($vieja);
+        }
+        foreach ((array)glob($dir . DIRECTORY_SEPARATOR . $gid . '-*.png') as $vieja) {
             @unlink($vieja);
         }
         @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . $gid . '.webp'); // miniatura legada
@@ -7453,6 +7480,32 @@ JS;
             }
             try {
                 $this->guardar_imagen($archivo, $gid, $file['tmp_name'], 'png');
+            } catch (\Throwable $e) {
+                $this->responder(false, [], $e->getMessage());
+            }
+        }
+
+        // 2b) PNGs por instancia (imagen_{id}__{n}) -> variantes indexadas del grupo (spec 049).
+        foreach ($_FILES as $campo => $file) {
+            if (!is_string($campo) || !preg_match('/^imagen_([0-9A-Fa-f]{6})__(\d+)$/', $campo, $m)) {
+                continue;
+            }
+            $gid = strtoupper($m[1]);
+            $indice = (int)$m[2];
+            if (!isset($ids_dataset[$gid]) || $indice < 1) {
+                continue;
+            }
+            if (!is_array($file) || ($file['error'] ?? 1) !== UPLOAD_ERR_OK || empty($file['tmp_name'])) {
+                $this->responder(false, [],
+                    'No se pudo recibir la imagen por instancia del grupo ' . $gid
+                        . ' (revisa el tamano maximo de subida del servidor).');
+            }
+            $firma = (string)@file_get_contents($file['tmp_name'], false, null, 0, 8);
+            if ($firma !== "\x89PNG\r\n\x1a\n") {
+                $this->responder(false, [], 'El archivo por instancia del grupo ' . $gid . ' no es un PNG valido.');
+            }
+            try {
+                $this->guardar_imagen_indice($archivo, $gid, $indice, $file['tmp_name'], 'png');
             } catch (\Throwable $e) {
                 $this->responder(false, [], $e->getMessage());
             }

@@ -457,6 +457,7 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
                     <div class="ec-panel-grupo<?php echo $gi === 0 ? ' ec-panel-activa' : ''; ?>"
                          data-id="<?php echo esc_attr($gid); ?>"
                          data-w="<?php echo (int)$mnW; ?>" data-h="<?php echo (int)$mnH; ?>"
+                         data-cont="<?php echo (int)$g['cont']; ?>" data-campo="<?php echo (int)$campo_id; ?>"
                          data-tiene="<?php echo $tiene ? '1' : '0'; ?>">
                         <div class="ec-grupo-cab">
                             <span class="swatch" style="background: #<?php echo esc_attr($gid); ?>"></span>
@@ -610,21 +611,13 @@ $link_ver = function ($tipo, array $extra = []) use ($post_url) {
             </details>
 
             <details class="ec-acordeon ec-acordeon-mockups">
-                <summary class="ec-acordeon-cab">Mockups</summary>
+                <summary class="ec-acordeon-cab">Editor de mockups
+                    <span class="ec-ayuda-icon" role="button" tabindex="0" aria-label="Ayuda sobre el editor de mockups" title="El mockup es una &quot;fotografia&quot; simulada 300x300px del producto en uso (NO el PDF): el cliente la aprueba al agregar al carrito. El editor compone la escena por capas; el boton &quot;Probar&quot; de cada grupo deja ver el texto real dentro de la foto antes de guardar. Las imagenes que uses como capa van en el catalogo de mockups (Imagenes de mockup, en el panel derecho del editor): ese catalogo es exclusivo de los mockups y es el unico que puede borrar. Arrastrar una imagen sobre el lienzo la sube al catalogo y crea la capa.">&?</span>
+                </summary>
                 <div class="ec-acordeon-cuerpo">
-                    <p class="description">El mockup es una "fotografia" simulada 300x300px del
-                        producto en uso (NO el PDF): el cliente la aprueba al agregar al carrito.
-                        El editor de abajo compone la escena por capas; el boton "Probar" de cada
-                        grupo te deja ver el texto real dentro de la foto antes de guardar.</p>
-
                     <?php // Fuente unica de la marca "vista previa omisible" (spec 011, FR-037):
                           // el editor la refleja y la guarda; el servidor normaliza con la
                           // regla vigente (sin mockups queda false). ?>
-                    <p class="description">
-                        Las imagenes que uses como capa van en el catalogo de mockups
-                        (<strong>Imagenes de mockup</strong>, en el panel derecho del editor): ese catalogo es
-                        exclusivo de los mockups y es el unico que puede borrar. Arrastrar una imagen
-                        sobre el lienzo la sube al catalogo y crea la capa.</p>
                     <?php // Spec 011 T032: las "fotos de referencia" (pdfs/{nombre}/mockups/) se retiraron.
                           // El catalogo `mockups` las reemplaza como unica fuente de imagenes de capa. ?>
                     <?php // El editor (assets/mockups.js) se inyecta al inicio de este

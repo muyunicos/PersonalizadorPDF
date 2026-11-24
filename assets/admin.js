@@ -2239,6 +2239,13 @@ jQuery(function ($) {
         return st.tiene || st.value !== '';
     }
 
+    // Spec 049: el icono de ayuda "?" muestra su tooltip sin plegar el acordeon.
+    $(document).on('click keydown', '.ec-ayuda-icon', function (e) {
+        if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') { return; }
+        e.preventDefault();
+        e.stopPropagation();
+    });
+
     // Pestanas: un grupo visible a la vez.
     $(document).on('click', '.ec-tab', function () {
         var id = String($(this).data('id') || '');
@@ -2363,6 +2370,8 @@ jQuery(function ($) {
 
     function publicarPreview(id, detalle) {
         PREVIEWS[String(id)] = detalle;
+        var $panel = panelDeId(String(id));
+        if ($panel.length) { pintarPreview($panel); }
         window.dispatchEvent(new CustomEvent('pmu:preview-listo', { detail: detalle }));
     }
 
@@ -2370,6 +2379,123 @@ jQuery(function ($) {
     function invalidarPreview(id) {
         delete PREVIEWS[String(id)];
     }
+
+    /* ===== Spec 049: vista previa por grupo/instancia (motor de carga real) ===== */
+    var PREVIEW_INST = {};    // grupoId -> instancia activa
+    var PREVIEW_RECORTE = {}; // grupoId -> {url,w,h} recorte local (objectURL)
+    var PREVIEW_CARG = {};    // grupoId -> cargador montado
+
+    function contInstancias($panel) {
+        return Math.max(1, parseInt($panel.attr('data-cont'), 10) || 1);
+    }
+    function instanciaActiva($panel) {
+        var id = String($panel.attr('data-id') || '');
+        var n = contInstancias($panel);
+        var i = parseInt(PREVIEW_INST[id], 10) || 0;
+        if (i < 0 || i >= n) { i = 0; }
+        return i;
+    }
+    function fijarInstancia($panel, i) {
+        var id = String($panel.attr('data-id') || '');
+        var n = contInstancias($panel);
+        PREVIEW_INST[id] = ((i % n) + n) % n;
+    }
+
+    /** Contenido real del grupo para una instancia (recorte local o texto render). */
+    function resolverPreview(grupoId, instancia) {
+        var rec = PREVIEW_RECORTE[String(grupoId)];
+        if (rec && rec.url) { return { url: rec.url, w: rec.w, h: rec.h, origen: 'recorte' }; }
+        var prev = PREVIEWS[String(grupoId)];
+        if (prev && prev.url) { return { url: prev.url, w: prev.w, h: prev.h, origen: 'texto' }; }
+        return null;
+    }
+
+    /** Repinta el recuadro .ec-preview del panel con el contenido de la instancia activa. */
+    function pintarPreview($panel) {
+        var $marco = $panel.find('.ec-marco-btn');
+        if (!$marco.length) { return; }
+        var id = String($panel.attr('data-id') || '');
+        var inst = instanciaActiva($panel);
+        var det = resolverPreview(id, inst);
+        if (det && det.url) {
+            $marco.find('img, .ec-marco').remove();
+            $marco.append($('<img alt="">').attr('src', det.url));
+        }
+        var $nav = $panel.find('.ec-preview-nav');
+        if ($nav.length) {
+            $nav.find('.ec-preview-nav-pos').text((inst + 1) + ' / ' + contInstancias($panel));
+        }
+    }
+
+    function notificarInstancia($panel) {
+        var id = String($panel.attr('data-id') || '');
+        var inst = instanciaActiva($panel);
+        var det = resolverPreview(id, inst);
+        window.dispatchEvent(new CustomEvent('pmu:preview-listo', {
+            detail: det ? { id: id, url: det.url, w: det.w, h: det.h, instancia: inst } : { id: id, instancia: inst }
+        }));
+    }
+
+    /** Flechas ‹ › para alternar instancias (patron visor). */
+    function pintarNav($panel) {
+        var $col = $panel.find('.ec-col-media');
+        if (!$col.length) { return; }
+        var n = contInstancias($panel);
+        var $nav = $col.find('.ec-preview-nav');
+        if (n <= 1) { $nav.remove(); return; }
+        if (!$nav.length) {
+            $nav = $('<span class="ec-preview-nav"></span>');
+            var $prev = $('<button type="button" aria-label="Instancia anterior">\u2039</button>');
+            var $pos = $('<span class="ec-preview-nav-pos"></span>');
+            var $next = $('<button type="button" aria-label="Instancia siguiente">\u203a</button>');
+            $prev.on('click', function () { fijarInstancia($panel, instanciaActiva($panel) - 1); pintarPreview($panel); notificarInstancia($panel); });
+            $next.on('click', function () { fijarInstancia($panel, instanciaActiva($panel) + 1); pintarPreview($panel); notificarInstancia($panel); });
+            $nav.append($prev).append($pos).append($next);
+            $col.append($nav);
+        }
+        $nav.find('.ec-preview-nav-pos').text((instanciaActiva($panel) + 1) + ' / ' + n);
+    }
+
+    /** Monta el motor de carga real (CargadorPMU) para un grupo imagen con campo. */
+    function montarCargadorGrupo($panel) {
+        var id = String($panel.attr('data-id') || '');
+        if (PREVIEW_CARG[id]) { return; }
+        var tipo = String($panel.find('.ec-h-tipo').val() || '');
+        var campo = parseInt($panel.attr('data-campo'), 10) || 0;
+        if (tipo !== 'imagen' || campo <= 0 || !window.CargadorPMU) { return; }
+        var $col = $panel.find('.ec-col-media');
+        if (!$col.length) { return; }
+        var cont = $('<div class="ec-preview-cargador"></div>').appendTo($col);
+        var w = parseInt($panel.attr('data-w'), 10) || 100;
+        var h = parseInt($panel.attr('data-h'), 10) || 100;
+        var blobs = {};
+        var carg = new window.CargadorPMU(cont[0], {
+            ranuras: [{ w: w, h: h, forma: 'rectangulo', min: 0, max: 1, gid: id, phsize: 0 }],
+            tecnico: true,
+            subir: function (blob) {
+                var nid = 'pv-' + id + '-' + Date.now();
+                blobs[nid] = URL.createObjectURL(blob);
+                return Promise.resolve({ id: nid, file: nid + '.webp', mime: 'image/webp', bytes: 0 });
+            },
+            urlDe: function (rid) { return Promise.resolve(blobs[rid] || null); },
+            onRecorte: function (rid, url) {
+                PREVIEW_RECORTE[id] = { url: url, w: w, h: h };
+                pintarPreview($panel);
+                notificarInstancia($panel);
+            }
+        });
+        if (carg.montar()) { PREVIEW_CARG[id] = carg; }
+    }
+
+    function initPreviewGrupos() {
+        $('.ec-panel-grupo').each(function () {
+            var $p = $(this);
+            pintarNav($p);
+            pintarPreview($p);
+            montarCargadorGrupo($p);
+        });
+    }
+    $(function () { initPreviewGrupos(); });
 
     function cajaPreview($panel) {
         return $panel.find('.ec-texto-preview-caja');
@@ -2492,7 +2618,7 @@ jQuery(function ($) {
                     out.forEach(function (r) {
                         fd.append('imagen_' + r.id, r.blob, r.id + '.png');
                     });
-                    return enviarProcesar(fd);
+                    return agregarRecortes(fd).then(function () { return enviarProcesar(fd); });
                 });
             });
         }).then(function (res) {
@@ -2510,11 +2636,25 @@ jQuery(function ($) {
         }).then(function () { $btn.prop('disabled', false); });
     });
 
+    /** Agrega el recorte local de cada grupo como imagen_{gid} (spec 049, muestra). */
+    function agregarRecortes(fd) {
+        var pend = [];
+        Object.keys(PREVIEW_RECORTE).forEach(function (gid) {
+            var rec = PREVIEW_RECORTE[gid];
+            if (!rec || !rec.url) { return; }
+            if (fd.has && fd.has('imagen_' + gid)) { return; } // no pisar un PNG de texto
+            pend.push(fetch(rec.url).then(function (r) { return r.blob(); }).then(function (blob) {
+                if (!fd.has || !fd.has('imagen_' + gid)) { fd.append('imagen_' + gid, blob, gid + '.png'); }
+            })['catch'](function () { /* si el recorte no se puede leer, se ignora */ }));
+        });
+        return Promise.all(pend);
+    }
+
     /** Procesar sin textos: POST unico con las imagenes ya guardadas. */
     function procesarSinTexto($form, ov) {
         ov.aplicar();
         var fd = new FormData($form[0]);
-        return enviarProcesar(fd);
+        return agregarRecortes(fd).then(function () { return enviarProcesar(fd); });
     }
 
     /** Envia el POST de procesar via pmu-core (timeout 90 s, sin recarga). */

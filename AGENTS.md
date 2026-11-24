@@ -277,6 +277,15 @@ El plugin NO conoce los internos de TextMuy. Consume un contrato público:
      quedan en `pdfs/{nombre}/mockups/`; el editor (`mockups.js`) las lee de
      `PersonalizadorPDF.mockups.fotos` al momento de listar/renderizar, por lo que
      **la capa "Foto" recien es utilizable**.
+     - **Spec 049 (editor + vista previa)**: el acordeon se titula "Editor de mockups" con la
+       descripcion en el icono de ayuda "?" de la cabecera (`.ec-ayuda-icon`, no pliega el
+       `<details>`). El recuadro `.ec-preview` del acordeon Placeholders monta `CargadorPMU`
+       real por grupo imagen con campo (patron de `apiPreview`), con flechas `‹ ›` por
+       instancia (`data-cont`) y unificacion por tipo (`resolverPreview`); `onRecorte` publica
+       `pmu:preview-listo` con `instancia` y el mockup lo refleja (interruptor "Alternar PH").
+       El recorte local alimenta el "Procesar PDF" de muestra (canal `imagen_{gid}`; variantes
+       indexadas `imagen_{gid}__{n}` -> `{gid}-{n}.png`, `imagenes_de` arma lista; el Motor ya
+       acepta lista por instancia). La muestra NO se entrega al comprador.
    - **Procesar PDF** → si hay textos activos, `admin.js` renderiza PNGs vía RenderCore en
      el navegador (tamaño exacto del hueco) y envía UN POST único a `handle_procesar` con
      imágenes y textos (los mapeos persisten en `config.json` por grupo, `placeholders[id]`;
