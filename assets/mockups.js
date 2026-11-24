@@ -2976,52 +2976,76 @@ jQuery(function ($) {
         var anterior = JSON.stringify(estado.mockups);
         var indices = indicesSeleccionados();
         var bloqueadas = seleccionConBloqueadas(indices);
-        var paso = ev.shiftKey ? 10 : (ev.ctrlKey || ev.metaKey ? 0.1 : 1);
+        var ctrl = ev.ctrlKey || ev.metaKey;
+        var paso = ctrl ? 0.1 : 1;
         var flecha = ev.key;
         if (flecha !== 'ArrowLeft' && flecha !== 'ArrowRight'
             && flecha !== 'ArrowUp' && flecha !== 'ArrowDown') { return; }
         var horizontal = flecha === 'ArrowLeft' || flecha === 'ArrowRight';
         var signo = (flecha === 'ArrowLeft' || flecha === 'ArrowUp') ? -1 : 1;
-        if (ev.altKey) {
-            // Alt: redimensiona ancho (flechas izq/der) o alto (flechas arriba/abajo).
+        if (ev.altKey && ev.shiftKey) {
+            // Alt+Mayus: redimensiona ancho (izq/der) o alto (arriba/abajo) desde el centro.
             ev.preventDefault();
             if (bloqueadas) { return; }
             if (indices.length > 1) {
-                var origenAlt = G.centro(marcoOrientadoSeleccion(indices) || {});
-                var escalaAlt = 1 + signo * paso / 100;
-                mockup().capas = G.escalarGrupo(capas(), indices, origenAlt,
-                    horizontal ? escalaAlt : 1, horizontal ? 1 : escalaAlt);
+                var origenRS = G.centro(marcoOrientadoSeleccion(indices) || {});
+                var escalaRS = 1 + signo * 0.01;
+                mockup().capas = G.escalarGrupo(capas(), indices, origenRS,
+                    horizontal ? escalaRS : 1, horizontal ? 1 : escalaRS);
             } else {
-                var cAlt = capa();
-                if (!cAlt) { return; }
-                var tiradorAlt = horizontal ? 'e' : 's';
-                var deltaAlt = { x: horizontal ? signo * paso : 0, y: horizontal ? 0 : signo * paso };
-                var alt = G.redimensionarDesdeTirador(cAlt, tiradorAlt, deltaAlt.x, deltaAlt.y,
+                var cRS = capa();
+                if (!cRS) { return; }
+                var tiradorRS = horizontal ? 'e' : 's';
+                var deltaRS = { x: horizontal ? signo : 0, y: horizontal ? 0 : signo };
+                var rs = G.redimensionarDesdeTirador(cRS, tiradorRS, deltaRS.x, deltaRS.y,
                     { desdeCentro: true, lienzo: LIENZO });
-                cAlt.x = alt.x; cAlt.y = alt.y; cAlt.w = alt.w; cAlt.h = alt.h;
+                cRS.x = rs.x; cRS.y = rs.y; cRS.w = rs.w; cRS.h = rs.h;
+            }
+        } else if (ev.altKey) {
+            // Alt: escala 1 px (Ctrl = 0,1 px) en el eje de la flecha.
+            ev.preventDefault();
+            if (bloqueadas) { return; }
+            if (indices.length > 1) {
+                var origenEs = G.centro(marcoOrientadoSeleccion(indices) || {});
+                var escalaEs = 1 + signo * paso / 100;
+                mockup().capas = G.escalarGrupo(capas(), indices, origenEs,
+                    horizontal ? escalaEs : 1, horizontal ? 1 : escalaEs);
+            } else {
+                var cEs = capa();
+                if (!cEs) { return; }
+                var tiradorEs = horizontal ? 'e' : 's';
+                var deltaEs = { x: horizontal ? signo * paso : 0, y: horizontal ? 0 : signo * paso };
+                var es = G.redimensionarDesdeTirador(cEs, tiradorEs, deltaEs.x, deltaEs.y, { lienzo: LIENZO });
+                cEs.x = es.x; cEs.y = es.y; cEs.w = es.w; cEs.h = es.h;
+            }
+        } else if (ev.shiftKey) {
+            // Mayus: rota ±15° (Ctrl = ±1°).
+            ev.preventDefault();
+            if (bloqueadas) { return; }
+            var gradosRot = signo * (ctrl ? 1 : 15);
+            if (indices.length > 1) {
+                var origenRot = G.centro(marcoOrientadoSeleccion(indices) || {});
+                mockup().capas = G.transformarGrupo(capas(), indices, origenRot, gradosRot, 0, 0);
+            } else {
+                var cRot = capa();
+                if (!cRot || cRot.bloqueada) { return; }
+                cRot.rot = Math.max(-360, Math.min(360, (parseFloat(cRot.rot) || 0) + gradosRot));
             }
         } else if (indices.length > 1) {
-            // Seleccion multiple o grupo: mover/rotar el bloque completo.
+            // Seleccion multiple o grupo: mueve el bloque completo.
             ev.preventDefault();
             if (bloqueadas) { return; }
             var origen = G.centro(marcoOrientadoSeleccion(indices) || {});
-            var dx = horizontal ? signo * paso : 0;
-            var dy = horizontal ? 0 : signo * paso;
-            var grados = ev.shiftKey ? signo * 15 : 0;
-            mockup().capas = G.transformarGrupo(capas(), indices, origen, grados, dx, dy);
+            mockup().capas = G.transformarGrupo(capas(), indices, origen, 0,
+                horizontal ? signo * paso : 0, horizontal ? 0 : signo * paso);
         } else {
             var c = capa();
             if (!c || c.bloqueada) { return; }
             ev.preventDefault();
-            if (ev.shiftKey) {
-                // Mayus: rota la capa (-15/+15 grados; izq/abajo = +, der/arriba = -).
-                c.rot = Math.max(-360, Math.min(360, (parseFloat(c.rot) || 0) + signo * 15));
-            } else {
-                c.x += horizontal ? signo * paso : 0;
-                c.y += horizontal ? 0 : signo * paso;
-                var n = G.acotar(c);
-                c.x = n.x; c.y = n.y;
-            }
+            c.x += horizontal ? signo * paso : 0;
+            c.y += horizontal ? 0 : signo * paso;
+            var n = G.acotar(c);
+            c.x = n.x; c.y = n.y;
         }
         marcarPaso(anterior);
         sinGuardar();

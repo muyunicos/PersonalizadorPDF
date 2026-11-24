@@ -923,13 +923,14 @@ check('el lienzo toma foco al interactuar y el teclado manda si hay capa selecci
         && ed.indexOf('var haySeleccion = (estado.seleccion >= 0') !== -1
         && ed.indexOf('if (!enEditor && !haySeleccion) { return; }') !== -1);
 
-check('las flechas del teclado cubren mover, mayus (rotar/escala), alt (ancho/alto desde el centro) y bloque',
-    ed.indexOf('if (ev.altKey) {') !== -1
-        && ed.indexOf('redimensionarDesdeTirador(cAlt, tiradorAlt') !== -1
-        && ed.indexOf('desdeCentro: true') !== -1
-        && ed.indexOf('G.escalarGrupo(capas(), indices, origenAlt') !== -1
-        && ed.indexOf('G.transformarGrupo(capas(), indices, origen, grados, dx, dy)') !== -1
-        && ed.indexOf('c.rot = Math.max(-360, Math.min(360') !== -1);
+check('las flechas del teclado cubren mover, ctrl (fino), shift (rotar), alt (escala) y alt+shift (ancho/alto)',
+    ed.indexOf('var paso = ctrl ? 0.1 : 1;') !== -1
+        && ed.indexOf('if (ev.altKey && ev.shiftKey) {') !== -1
+        && ed.indexOf('redimensionarDesdeTirador(cRS, tiradorRS') !== -1
+        && ed.indexOf('} else if (ev.altKey) {') !== -1
+        && ed.indexOf('redimensionarDesdeTirador(cEs, tiradorEs') !== -1
+        && ed.indexOf('var gradosRot = signo * (ctrl ? 1 : 15);') !== -1
+        && ed.indexOf('G.transformarGrupo(capas(), indices, origen, 0,') !== -1);
 
 check('el menu ofrece fallback visible y deshabilita lo que no aplica',
     ed.indexOf('ec-mk-capa-ias') !== -1
