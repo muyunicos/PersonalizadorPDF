@@ -229,6 +229,17 @@
             // vista previa no recibia el recorte local).
             onRecorte: typeof config.onRecorte === 'function' ? config.onRecorte : null
         };
+        // Spec 043 (2026-11-22): si el integrador pasa una FUNCION que la allowlist
+        // no reconoce, se avisa. Es el fallo silencioso que dejo la tira en `cubrir`.
+        if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+            var propioC = this.config;
+            Object.keys(config).forEach(function (k) {
+                if (typeof config[k] === 'function'
+                    && !Object.prototype.hasOwnProperty.call(propioC, k)) {
+                    console.warn('[PMU] cargador: funcion de config ignorada: ' + k);
+                }
+            });
+        }
         this.estado = estadoInicial(this.config.ranuras);
         if (Array.isArray(config.idsIniciales)) {
             config.idsIniciales.forEach(function (ids, i) {

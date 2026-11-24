@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.39.2
+Stable tag: 4.39.3
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,13 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.39.3 =
+* Mantenibilidad: los constructores de `CargadorPMU` y `SelectorPMU` avisan por
+  consola cuando se pasa una **funcion** de config que la allowlist ignora (antes
+  se descartaba en silencio: fue la causa de "cubrir para cualquier miniatura").
+* Puerta nueva: `tests/config-cableado.test.js` (20 checks) — construye los dos
+  componentes y verifica que cada hook llega al `config` de la instancia.
 
 = 4.39.2 =
 * Spec 043 (fix): los **constructores** del cargador y del selector armaban `this.config`

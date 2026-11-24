@@ -748,6 +748,7 @@ node tests/cola-subida.test.js # Cola de subida del comprador (spec 036, D9): co
 node tests/receta-contrato.test.js  # Receta v2 del recorte (spec 035): "RECETA CONTRATO OK (21 checks)"
 node tests/cargador-estado.test.js  # Estado entre aperturas (spec 045): reemplazo de 0 bytes + reset del selector: "CARGADOR ESTADO OK (25 checks)"
 node tests/cargador-recetas.test.js  # spec 043 (fix 2026-11-22): cada foto abre con SU receta + `max`/`_reemplazo` + imagen nueva en cubrir: "CARGADOR RECETAS OK (12 checks)"
+node tests/config-cableado.test.js  # spec 043 (fix 2026-11-22): los hooks de config llegan a las allowlists del cargador/selector: "CONFIG CABLEADO OK (20 checks)"
 node tests/cargador-lote.test.js  # Carga multiple (spec 047): receta por defecto y tope de la ranura: "CARGADOR LOTE OK (20 checks)"
 node tests/vistas-contrato.test.js  # Orden/marca de las vistas obligatorias (035): "VISTAS CONTRATO OK (24 checks)"
 node tests/fotos-contrato.test.js   # Original acotado a 2000 px + dedupe por sha (035): "FOTOS CONTRATO OK (38 checks)"

@@ -617,6 +617,17 @@
             max: Math.max(1, parseInt(config.max, 10) || 1),
             subirLote: typeof config.subirLote === 'function' ? config.subirLote : null
         };
+        // Spec 043 (2026-11-22): si el integrador pasa una FUNCION que la allowlist
+        // no reconoce, se avisa (misma idea que en `CargadorPMU`).
+        if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+            var propioS = this.config;
+            Object.keys(config).forEach(function (k) {
+                if (typeof config[k] === 'function'
+                    && !Object.prototype.hasOwnProperty.call(propioS, k)) {
+                    console.warn('[PMU] selector: funcion de config ignorada: ' + k);
+                }
+            });
+        }
         // Spec 043 (fix 2026-11-22): defaults del campo. Una imagen NUEVA tiene que
         // arrancar en cubrir/ajustar al marco; antes heredaba el `mode` que
 // `_aplicarParamsIniciales` dejaba mutado en la instancia.
