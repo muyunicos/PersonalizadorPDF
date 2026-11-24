@@ -42,13 +42,13 @@
 
 ## Phase 6 — US4: Guia
 
-- [ ] T018 [P] [US4] `docs/testing.md`: como escribir una suite conductual + plantilla.
-- [ ] T019 [US4] `AGENTS.md §9`: politica "regex = wiring; el comportamiento se ejecuta".
+- [X] T018 [P] [US4] `docs/testing.md`: como escribir una suite conductual + plantilla.
+- [X] T019 [US4] `AGENTS.md §9`: politica "regex = wiring; el comportamiento se ejecuta".
 
 ## Phase 7 — Polish
 
-- [ ] T020 Correr todas las puertas CLI + `ficha-pedido.browser.js`.
-- [ ] T021 Commit por suite (una por commit) + push.
+- [X] T020 Correr todas las puertas CLI + `ficha-pedido.browser.js`.
+- [X] T021 Commit por suite (una por commit) + push.
 
 ## Dependencies
 

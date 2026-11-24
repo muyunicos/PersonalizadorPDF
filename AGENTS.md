@@ -796,6 +796,7 @@ la carpeta `tests/` viaja con el plugin al hosting y no debe ser ejecutable por 
   `tests/dom-stub.test.js`, `tests/cargador-recetas.test.js` (sin DOM/ sin navegador).
 - Un assert conductual **no** se reemplaza por uno de texto; si una suite tiene muchos
   regex, es deuda (ver `specs/048-pruebas-conductuales/`).
+- Guia practica (como escribir una suite, plantilla y errores comunes): `docs/testing.md`.
 
 ### Auditoría de código (solo desarrollo; NO corre en hosting)
 ```powershell
