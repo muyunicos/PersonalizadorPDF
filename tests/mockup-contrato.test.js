@@ -917,10 +917,11 @@ check('el menu se cierra por fuera, Escape y scroll del panel',
         && ed.indexOf("$(document).on('keydown.pmuCtx'") !== -1
         && ed.indexOf("$ed.on('scroll.pmuCtx'") !== -1
         && ed.indexOf('function cerrarMenuCtx()') !== -1);
-check('el lienzo toma foco al interactuar y el teclado no roba flechas de botones del acordeon',
+check('el lienzo toma foco al interactuar y el teclado manda si hay capa seleccionada',
     ed.indexOf('class="ec-mk-lienzo" tabindex="0"') !== -1
         && ed.indexOf('lienzo.focus({ preventScroll: true })') !== -1
-        && ed.indexOf("activo === 'BUTTON' || activo === 'SUMMARY'") !== -1);
+        && ed.indexOf('var haySeleccion = (estado.seleccion >= 0') !== -1
+        && ed.indexOf('if (!enEditor && !haySeleccion) { return; }') !== -1);
 
 check('las flechas del teclado cubren mover, mayus (rotar/escala), alt (ancho/alto desde el centro) y bloque',
     ed.indexOf('if (ev.altKey) {') !== -1

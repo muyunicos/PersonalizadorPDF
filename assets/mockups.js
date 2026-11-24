@@ -2944,15 +2944,17 @@ jQuery(function ($) {
         if (!estado.mockups.length) { return; }
         var activo = ev.target && ev.target.tagName;
         var escribiendo = activo === 'INPUT' || activo === 'TEXTAREA' || activo === 'SELECT';
-        // Si el foco quedo en un boton/summary del acordeon, no robamos sus flechas.
-        if (activo === 'BUTTON' || activo === 'SUMMARY' || activo === 'A') { return; }
         var enEditor = $.contains($ed[0], ev.target) || $.contains(lienzo, ev.target);
+        var haySeleccion = (estado.seleccion >= 0 || indicesSeleccionados().length > 0);
         if ((ev.ctrlKey || ev.metaKey) && String(ev.key).toLowerCase() === 's') {
             ev.preventDefault();
             guardar();
             return;
         }
-        if (!enEditor || escribiendo) { return; }
+        if (escribiendo) { return; }
+        // Con una capa seleccionada, las flechas son del editor aunque el foco
+        // haya quedado en un boton/summary del acordeon (evita el scroll nativo).
+        if (!enEditor && !haySeleccion) { return; }
         var ctrl = ev.ctrlKey || ev.metaKey;
         if (ctrl && String(ev.key).toLowerCase() === 'z') {
             ev.preventDefault();
