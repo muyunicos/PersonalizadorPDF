@@ -104,7 +104,7 @@ Un helper `tests/_util/dom-stub.js` reutilizable por las suites, y una guia en
 
 ## Success Criteria *(mandatory)*
 
-- **SC-001**: `selector-contrato` baja de **201** asserts por regex a **<50**, sin perder checks totales.
+- **SC-001**: `selector-contrato` conserva sus asserts de **wiring** (contrato publico, no regresiones) y el **comportamiento critico** vive en `conducta-selector` (>=35 checks). No se borran asserts de wiring para maquillar el numero: el objetivo es que cada comportamiento importante se **ejecute**, no que el regex desaparezca.
 - **SC-002**: `biblioteca-contrato` suma **>=20** checks conductuales (tira, elegir, visor).
 - **SC-003**: **0** puertas pasan de verde a rojo (las 47 suites + las de navegador).
 - **SC-004**: `mockup-contrato` ejecuta `componer` con canvas stub en al menos 3 casos.
