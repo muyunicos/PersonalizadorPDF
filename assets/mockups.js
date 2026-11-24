@@ -2976,7 +2976,7 @@ jQuery(function ($) {
         var anterior = JSON.stringify(estado.mockups);
         var indices = indicesSeleccionados();
         var bloqueadas = seleccionConBloqueadas(indices);
-        var paso = ev.shiftKey ? 10 : 1;
+        var paso = ev.shiftKey ? 10 : (ev.ctrlKey || ev.metaKey ? 0.1 : 1);
         var flecha = ev.key;
         if (flecha !== 'ArrowLeft' && flecha !== 'ArrowRight'
             && flecha !== 'ArrowUp' && flecha !== 'ArrowDown') { return; }
