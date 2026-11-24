@@ -1090,22 +1090,6 @@
         this.supera5 = false;
     };
 
-    SelectorPMU.prototype._prepararNuevaCarga = function () {
-        // Spec 040 (A6): una carga NUEVA deja de ser "usar la existente".
-        // Spec 045 (A2): el reset vive en un unico lugar (`_resetEstado`).
-        if (this.imagen && this.imagen.src) { URL.revokeObjectURL(this.imagen.src); }
-        this._resetEstado();
-        if (!this.raiz) { return; }
-        var elegir = this.raiz.querySelector('.spmu-elegir');
-        if (elegir) { elegir.textContent = 'Cargar imagen'; }
-        var ok = this.raiz.querySelector('.spmu-ok');
-        if (ok) { ok.disabled = true; ok.textContent = 'Guardar'; }
-        var zIn = this.raiz.querySelector('.spmu-zoom');
-        if (zIn) { zIn.value = '0'; }
-        this._estado(null);
-        this._dibujar();
-    };
-
     SelectorPMU.prototype._cargar = function (archivo) {
         var self = this;
         if (!archivo) { return; }

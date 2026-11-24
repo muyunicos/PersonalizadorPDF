@@ -602,7 +602,7 @@
             self._quitarPendiente(indice, token);
             var id = res && res.id;
             // Spec 040 (A6): la receta con la que se subio queda legible por id
-            // (`recetasDe`), igual que la de una imagen usada de la biblioteca.
+            // (la resuelve `_recetaDeContexto`), igual que la de una imagen usada de la biblioteca.
             if (id) { self.recetas[String(id)] = paramsSubida || null; }
             // Spec 043 (fix): el recorte recien compuesto alimenta la MINiatura
             // (el editor sigue abriendo con el ORIGINAL via `_urls`).
@@ -899,15 +899,13 @@
         return Promise.resolve(clave);
     };
 
-    /** Receta v2 con la que se uso una imagen (spec 040 A6), o null. */
-    CargadorPMU.prototype.recetasDe = function (id) {
-        return this.recetas[String(id)] || null;
-    };
-
     /**
-     * Spec 043 (US1/T017): receta vigente de un contexto para una foto existente.
+     * Spec 043 (US1/T017) + fix 2026-11-22: RESOLVE UNICO de la receta.
      * Orden: memoria del cargador -> catalogo del comprador (recetas por contexto)
      * -> null (defaults del campo). La clave es el objetivo `{aspecto}-{familia}-{area}` (spec 047).
+     * Lo usan los tres caminos: miniatura (`_editar`), tira (`paramsDe`) y visor
+     * (Elegir -> `elegir()` -> `onElegir` -> `paramsDe`). Un camino nuevo tiene que
+     * pasar por aca; `_recetaDeFoto` es solo el respaldo de catalogo.
      */
     CargadorPMU.prototype._recetaDeContexto = function (id, r) {
         var clave = String(id || '');
