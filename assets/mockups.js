@@ -353,7 +353,7 @@ jQuery(function ($) {
             '        <label><input type="checkbox" class="ec-mk-ver-texto" checked> Alternar PH</label>' +
             '        <span class="ec-mk-marcas"></span>' +
             '      </div>' +
-            '      <div class="ec-mk-lienzo"><canvas width="300" height="300"></canvas></div>' +
+            '      <div class="ec-mk-lienzo" tabindex="0" role="application" aria-label="Lienzo del mockup"><canvas width="300" height="300"></canvas></div>' +
             '      <div class="ec-mk-transformar">' +
             '        <div class="ec-mk-panel-props" hidden>' +
             '          <div class="ec-mk-props"></div>' +
@@ -972,6 +972,7 @@ jQuery(function ($) {
         if (estado.arrastre && lienzo.setPointerCapture) {
             lienzo.setPointerCapture(ev.pointerId);
         }
+        try { lienzo.focus({ preventScroll: true }); } catch (e) { try { lienzo.focus(); } catch (e2) {} }
         ev.preventDefault();
     });
 
@@ -2943,6 +2944,8 @@ jQuery(function ($) {
         if (!estado.mockups.length) { return; }
         var activo = ev.target && ev.target.tagName;
         var escribiendo = activo === 'INPUT' || activo === 'TEXTAREA' || activo === 'SELECT';
+        // Si el foco quedo en un boton/summary del acordeon, no robamos sus flechas.
+        if (activo === 'BUTTON' || activo === 'SUMMARY' || activo === 'A') { return; }
         var enEditor = $.contains($ed[0], ev.target) || $.contains(lienzo, ev.target);
         if ((ev.ctrlKey || ev.metaKey) && String(ev.key).toLowerCase() === 's') {
             ev.preventDefault();
