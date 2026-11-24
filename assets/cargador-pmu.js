@@ -222,7 +222,12 @@
             // `tecnico`: muestra medidas/forma/min y avisos de configuracion.
             // Lo pasa el preview de la consola; la ficha del comprador NO.
             tecnico: !!config.tecnico,
-            envoltura: envolturaValida(config.envoltura)
+            envoltura: envolturaValida(config.envoltura),
+            // Spec 043 (fix 2026-11-22): el constructor arma `this.config` con lista
+            // explicita; sin estas lineas se caian los hooks que `tienda.js` pasa
+            // (`onRecorte` no llegaba -> `PMU_FICHA.recetas` nunca se poblaba y la
+            // vista previa no recibia el recorte local).
+            onRecorte: typeof config.onRecorte === 'function' ? config.onRecorte : null
         };
         this.estado = estadoInicial(this.config.ranuras);
         if (Array.isArray(config.idsIniciales)) {

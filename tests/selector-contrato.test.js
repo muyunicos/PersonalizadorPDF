@@ -634,6 +634,9 @@ check('spec 043 (fix): una imagen nueva arranca con los defaults (no hereda el m
   && /this\._paramsIniciales = null;\s*if \(this\._defaults\) \{\s*this\.config\.mode = this\._defaults\.mode/.test(selector));
 check('spec 043 (fix): sin receta previa el cargador manda cubrir (no `{}`)',
   /if \(!paramsSubida \|\| !Object\.keys\(paramsSubida\)\.length\) \{\s*paramsSubida = this\._recetaLote/.test(cargador));
+check('spec 043 (fix): los constructores NO tiran los hooks (allowlist de config)',
+  /onRecorte: typeof config\.onRecorte === 'function' \? config\.onRecorte : null/.test(cargador)
+  && /paramsDe: typeof config\.paramsDe === 'function' \? config\.paramsDe : null/.test(selector));
 
 console.log('');
 if (fallos) {

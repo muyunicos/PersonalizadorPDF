@@ -602,6 +602,10 @@
             usarExistente: typeof config.usarExistente === 'function' ? config.usarExistente : null,
             // Spec 040 (A6): declarar la receta SIN bytes (si el integrador lo soporta).
             declararReceta: typeof config.declararReceta === 'function' ? config.declararReceta : null,
+            // Spec 043 (fix 2026-11-22): receta de una foto para ESTA ranura. La pasa
+            // el cargador; sin ella la tira caia al catalogo (y con el catalogo
+            // vacio, a cubrir para cualquier miniatura).
+            paramsDe: typeof config.paramsDe === 'function' ? config.paramsDe : null,
             // Spec 043 (US5/T023): acciones sobre una imagen existente (editor).
             eliminar: typeof config.eliminar === 'function' ? config.eliminar : null,
             // Spec 046 (U5): "Ver en grande" se retiro del editor.
