@@ -111,10 +111,65 @@ check('sin params ni ajustes usa recetas[objetivo]',
 check('sin nada -> null (defaults del campo)', sFoto._recetaDeFoto({}) === null);
 check('foto vacia -> null', sFoto._recetaDeFoto(null) === null);
 
-console.log('');
-if (fallos === 0) {
-    console.log('CONDUCTA SELECTOR OK (' + checks + ' checks)');
-    process.exit(0);
-}
-console.log('CONDUCTA SELECTOR FALLA (' + fallos + ' de ' + checks + ')');
+/* ---- US1 (T004): _cargar una imagen nueva ---- */
+grupo('_cargar: imagen nueva');
+global.URL = global.URL || {};
+global.URL.createObjectURL = function () { return 'blob:foto-nueva'; };
+global.URL.revokeObjectURL = function () { };
+global.Image = class {
+    constructor() { this._src = ''; }
+    set src(v) { this._src = v; if (typeof this.onload === 'function') { this.onload(); } }
+    get src() { return this._src; }
+};
+const sCarga = selector();
+sCarga.config.declararReceta = function () { };
+let subioCuenta = 0;
+sCarga.config.subirAsync = function () { subioCuenta++; return Promise.resolve('id-nuevo'); };
+const archivoNuevo = { type: 'image/png', name: 'foto.png', size: 10 };
+let excepcionCarga = null;
+try { sCarga._cargar(archivoNuevo); } catch (e) { excepcionCarga = e; }
+check('_cargar sin excepcion', excepcionCarga === null, excepcionCarga && excepcionCarga.message);
+check('_cargar deja la imagen cargada', !!sCarga.imagen && sCarga.archivoOrigen === archivoNuevo);
+check('_cargar resetea el zoom a 1', sCarga.zoom === 1, String(sCarga.zoom));
+check('_cargar no sube todavia (sube al guardar)', subioCuenta === 0, 'subidas=' + subioCuenta);
+sCarga._cargar({ type: 'text/plain', name: 'x.txt' });
+check('_cargar rechaza formatos no permitidos (conserva la anterior)',
+            sCarga.archivoOrigen === archivoNuevo && !!sCarga.imagen,
+            'origen=' + (sCarga.archivoOrigen && sCarga.archivoOrigen.name));
+
+/* ---- US1 (T005): _cancelar ---- */
+grupo('_cancelar: CROP_ABORTED sin escrituras');
+const sCanc = selector();
+let errores = [];
+sCanc.onError(function (e) { errores.push(e); });
+sCanc.config.subirAsync = function () { errores.push({ code: 'SUBIO' }); return Promise.resolve('x'); };
+sCanc.config.usarExistente = function () { errores.push({ code: 'USAR' }); return Promise.resolve('x'); };
+sCanc.config.declararReceta = function () { errores.push({ code: 'DECLARAR' }); };
+try { sCanc._cancelar(); } catch (e) { /* sin DOM */ }
+check('_cancelar emite CROP_ABORTED (avisa cancelacion)',
+            errores.some((e) => /CROP_ABORTED|Cancelado/i.test(typeof e === 'string' ? e : JSON.stringify(e))),
+            JSON.stringify(errores));
+check('_cancelar no sube ni declara', !errores.some((e) => e && /SUBIO|USAR|DECLARAR/.test(e.code)), JSON.stringify(errores));
+
+/* ---- US1 (T006): _aceptar de una EXISTENTE (0 bytes) ---- */
+grupo('_aceptar: existente = 0 bytes');
+const sAcep = selector();
+var usados = [];
+var declaradas = [];
+var subidas = 0;
+sAcep.config.usarExistente = function (id, params) { usados.push({ id: id, params: params }); return Promise.resolve(id); };
+sAcep.config.declararReceta = function (id, params) { declaradas.push({ id: id, params: params }); };
+sAcep.config.subirAsync = function () { subidas++; return Promise.resolve('x'); };
+sAcep.imagen = { naturalWidth: 800, naturalHeight: 600 };
+sAcep._bib = { id: 'bced3cb925d7', url: 'http://x/original.webp', params: null };
+try { sAcep._aceptar(); } catch (e) { /* sin DOM */ }
+check('_aceptar de existente llama usarExistente', usados.length === 1, JSON.stringify(usados));
+check('_aceptar de existente declara la receta', declaradas.length === 1, JSON.stringify(declaradas));
+check('_aceptar de existente NO sube bytes', subidas === 0, 'subidas=' + subidas);
+    console.log('');
+    if (fallos === 0) {
+        console.log('CONDUCTA SELECTOR OK (' + checks + ' checks)');
+        process.exit(0);
+    }
+    console.log('CONDUCTA SELECTOR FALLA (' + fallos + ' de ' + checks + ')');
 process.exit(1);

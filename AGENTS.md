@@ -750,6 +750,7 @@ node tests/cargador-estado.test.js  # Estado entre aperturas (spec 045): reempla
 node tests/cargador-recetas.test.js  # spec 043 (fix 2026-11-22): cada foto abre con SU receta + `max`/`_reemplazo` + imagen nueva en cubrir: "CARGADOR RECETAS OK (12 checks)"
 node tests/config-cableado.test.js  # spec 043 (fix 2026-11-22): los hooks de config llegan a las allowlists del cargador/selector: "CONFIG CABLEADO OK (20 checks)"
 node tests/conducta-selector.test.js  # spec 043 (P1-5): comportamiento del selector sin DOM (_params, open, aplicar receta, _recetaDeFoto): "CONDUCTA SELECTOR OK (25 checks)"
+node tests/dom-stub.test.js  # spec 048 (T003): auto-prueba del helper de DOM (tests/_util/dom-stub.js): "DOM STUB OK (19 checks)"
 node tests/cargador-lote.test.js  # Carga multiple (spec 047): receta por defecto y tope de la ranura: "CARGADOR LOTE OK (20 checks)"
 node tests/vistas-contrato.test.js  # Orden/marca de las vistas obligatorias (035): "VISTAS CONTRATO OK (24 checks)"
 node tests/fotos-contrato.test.js   # Original acotado a 2000 px + dedupe por sha (035): "FOTOS CONTRATO OK (38 checks)"
@@ -786,6 +787,15 @@ php tests/texto_puente.php    # Arnes con stubs WP, una fase por proceso:
 ```
 Los 3 arneses CLI salen de inmediato si no corren por CLI (`PHP_SAPI !== 'cli'`):
 la carpeta `tests/` viaja con el plugin al hosting y no debe ser ejecutable por HTTP.
+
+### Politica de asserts (spec 048)
+
+- **Regex sobre el fuente = wiring** (contrato, encolados, rutas): sirve para detectar
+  que una pieza se conecto, no que se comporte bien.
+- **Comportamiento = ejecutar el codigo**: `tests/conducta-selector.test.js`,
+  `tests/dom-stub.test.js`, `tests/cargador-recetas.test.js` (sin DOM/ sin navegador).
+- Un assert conductual **no** se reemplaza por uno de texto; si una suite tiene muchos
+  regex, es deuda (ver `specs/048-pruebas-conductuales/`).
 
 ### Auditoría de código (solo desarrollo; NO corre en hosting)
 ```powershell

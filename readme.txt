@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.39.6
+Stable tag: 4.39.7
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,13 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.39.7 =
+* Spec 048 (T002/T003): helper de DOM propio `tests/_util/dom-stub.js` (sin
+  dependencias) + su auto-prueba `tests/dom-stub.test.js` (19 checks).
+* Spec 048 (US1): `conducta-selector` pasa de 25 a **35 checks** (`_cargar` con
+  `URL`/`Image` stub, `_cancelar` sin escrituras, `_aceptar` de una existente = 0 bytes).
+* Docs: politica de asserts en `AGENTS.md §9` (regex = wiring; el comportamiento se ejecuta).
 
 = 4.39.6 =
 * Spec 043 (fix): la allowlist del selector tambien tiraba `gid` y `phsize` (la

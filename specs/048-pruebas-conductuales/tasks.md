@@ -11,19 +11,19 @@
 - [X] T001 Medir la linea base por suite (checks totales vs asserts por regex).
   - **Hecho 2026-11-22**: 850 checks / 435 regex. Concentracion: `selector-contrato` 201,
     `biblioteca-contrato` 138, `mockup-contrato` 71 (94% del total).
-- [ ] T002 Crear `tests/_util/dom-stub.js`: `document`, nodos, `classList`, `dataset`, `innerHTML`.
+- [X] T002 Crear `tests/_util/dom-stub.js`: `document`, nodos, `classList`, `dataset`, `innerHTML`.
 
 ## Phase 2 — Fundacional (bloquea las historias)
 
-- [ ] T003 Auto-prueba del helper (`tests/dom-stub.test.js`): crear/pintar/consultar nodos.
+- [X] T003 Auto-prueba del helper (`tests/dom-stub.test.js`): crear/pintar/consultar nodos.
 
 ## Phase 3 — US1: Selector (P1)
 
-- [ ] T004 [P] [US1] `conducta-selector`: `_cargar` con `URL.createObjectURL`/`Image` stub -> `imagen`, `archivoOrigen` y `_params()` con `iw/ih`.
-- [ ] T005 [US1] `conducta-selector`: `_cancelar` emite `CROP_ABORTED` y no llama `subirAsync`/`usarExistente`/`declararReceta`.
-- [ ] T006 [US1] `conducta-selector`: `_aceptar` de una existente sin POST y con `usarExistente`+`declararReceta`.
-- [ ] T007 [US1] `selector-contrato`: marcar cada regex restante como **wiring** (comentario) y quitar los que ya tengan equivalente conductual.
-- [ ] T008 [US1] Gate: `node tests/selector-contrato.test.js && node tests/conducta-selector.test.js`.
+- [X] T004 [P] [US1] `conducta-selector`: `_cargar` con `URL.createObjectURL`/`Image` stub -> `imagen`, `archivoOrigen` y `_params()` con `iw/ih`.
+- [X] T005 [US1] `conducta-selector`: `_cancelar` emite `CROP_ABORTED` y no llama `subirAsync`/`usarExistente`/`declararReceta`.
+- [X] T006 [US1] `conducta-selector`: `_aceptar` de una existente sin POST y con `usarExistente`+`declararReceta`.
+- [X] T007 [US1] `selector-contrato`: marcar cada regex restante como **wiring** (comentario) y quitar los que ya tengan equivalente conductual.
+- [X] T008 [US1] Gate: `node tests/selector-contrato.test.js && node tests/conducta-selector.test.js`.
 
 ## Phase 4 — US2: Biblioteca (P1)
 

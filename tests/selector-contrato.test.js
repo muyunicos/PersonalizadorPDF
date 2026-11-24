@@ -9,6 +9,12 @@
  * congela el CONTRATO publico de `selector-pmu.js` (el que consumen
  * cargador-pmu y tienda.js): si una fase futura lo rompe, esta puerta lo
  * atrapa antes del navegador.
+ *
+ * Spec 048 (2026-11-22): los asserts de esta suite son de **wiring** (que las piezas
+ * esten conectadas y el contrato no cambie). El **comportamiento** se prueba en
+ * `tests/conducta-selector.test.js` (`_params`, `open`, aplicar receta, `_cargar`,
+ * `_cancelar`, `_aceptar`). Si un assert de aca se puede convertir en conductual,
+* la conversion va alla, no aca.
  */
 'use strict';
 const fs = require('fs');
