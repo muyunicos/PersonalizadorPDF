@@ -4,7 +4,7 @@ Tags: pdf, corel, placeholder, credenciales, certificados, textmuy, texto, estil
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 4.38.9
+Stable tag: 4.39.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,13 @@ El plugin pregunta si renombrarlo automaticamente o sobrescribirlo. Sobrescribir
 Todo queda en `wp-content/uploads/pmu/`: cada PDF en `pdfs/{nombre}/` (`{nombre}.pdf` + `analisis.json` + `config.json`) y las pruebas del panel en `tmp/muestras/{nombre}/`. Puedes borrar cada PDF (con sus datos y muestras) desde la propia pantalla del plugin; los pedidos confirmados en `orders/` nunca se tocan desde la consola. Detalle en `AGENTS.md` §5.
 
 == Changelog ==
+
+= 4.39.0 =
+* Spec 043 (fix): al elegir una foto de la tira (mu-gal-item) manda la receta del
+  **cargador** (memoria del campo), no el catalogo; cada foto abre con su encuadre.
+* Spec 043 (fix): `max` se respeta al subir (con `max=1` ya no quedan dos miniaturas)
+  y un `_reemplazo` pendiente manda sobre la posicion.
+* Puerta nueva: `tests/cargador-recetas.test.js` (9 checks).
 
 = 4.38.9 =
 * Spec 043 (fix): al tocar la miniatura, el editor abre con la IMAGEN ORIGINAL y los

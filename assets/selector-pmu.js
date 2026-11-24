@@ -1001,7 +1001,11 @@
                     onElegir: function (foto) {
                         // Spec 040 (A4/A6) + 046 (U3): entra DIRECTO al recorte con
                         // su receta; la miniatura manda y el primario dice `Cambiar`.
-                        self.cargarDesdeBiblioteca(foto, 'tira');
+                        // Spec 043 (fix 2026-11-22): la receta la manda el CARGADOR
+                        // (memoria del campo); el catalogo queda como respaldo.
+                        var paramsEleg = (typeof self.config.paramsDe === 'function')
+                            ? self.config.paramsDe(foto && foto.id) : null;
+                        self.cargarDesdeBiblioteca(foto, 'tira', paramsEleg);
                     }
                 });
             })();
@@ -1192,7 +1196,7 @@
      * y deja que `_cargar` los re-aplique si son de esta geometria. El primario
      * pasa a `Usar` y, al aceptar, NO se suben bytes.
      */
-    SelectorPMU.prototype.cargarDesdeBiblioteca = function (foto, origen) {
+    SelectorPMU.prototype.cargarDesdeBiblioteca = function (foto, origen, params) {
         var self = this;
         if (!foto || !this.raiz) { return Promise.resolve(false); }
         // B2 (spec 045): el canvas necesita el ORIGINAL. `thumb` es 80x80, asi que
@@ -1205,7 +1209,9 @@
         if (url === '') { return Promise.resolve(false); }
         this._bib = {
             id: String(foto.id || ''),
-            params: this._recetaDeFoto(foto),
+            // Spec 043 (fix 2026-11-22): si el integrador paso la receta (el cargador
+            // la resuelve por id), manda esa; el catalogo es el respaldo.
+            params: (params && typeof params === 'object') ? params : this._recetaDeFoto(foto),
             url: url,
             // Spec 046 (U3): de donde vino (editar la miniatura vs elegir en la tira).
             origen: String(origen || 'editar')

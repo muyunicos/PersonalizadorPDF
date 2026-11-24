@@ -465,7 +465,7 @@ check('Spec 021 D9 + 020 T014: la miniatura abre el visor COMPARTIDO (sin visor 
 check('el visor compartido ofrece Reemplazar (avisando que imagen) y Eliminar',
   /etiqueta: 'Reemplazar'/.test(cargador16) && /etiqueta: 'Eliminar'/.test(cargador16)
   && /Reemplazando imagen #/.test(cargador16)
-  && /ids\[posicion\] = String\(id\)/.test(cargador16));
+  && /ids\[posSubida\] = String\(id\)/.test(cargador16));
 check('cancelar el reemplazo vuelve a la galeria con la foto actual',
   /err\.code === 'CROP_ABORTED'/.test(cargador16)
   && /reemp && reemp\.desdeVisor/.test(cargador16)
@@ -622,6 +622,13 @@ check('spec 043 (fix): el editor abre con el ORIGINAL (`_urls`) y la miniatura c
   /var url = this\._urls\[String\(id\)\] \|\| \(this\.config\.urlDe/.test(cargador)
   && /var conocida = \(this\._recortes \|\| \{\}\)\[String\(id\)\] \|\| this\._urls\[String\(id\)\]/.test(cargador)
   && /this\._recortes\[clave\] = String\(url\)/.test(cargador));
+check('spec 043 (fix): el cargador expone `paramsDe` y la tira la usa (no el catalogo)',
+  /paramsDe: function \(id\) \{ return self\._recetaDeContexto/.test(cargador)
+  && /paramsEleg = \(typeof self\.config\.paramsDe === 'function'/.test(selector)
+  && /cargarDesdeBiblioteca\(foto, 'tira', paramsEleg\)/.test(selector));
+check('spec 043 (fix): `cargarDesdeBiblioteca` acepta la receta del integrador',
+  /cargarDesdeBiblioteca = function \(foto, origen, params\)/.test(selector)
+  && /params: \(params && typeof params === 'object'\) \? params : this\._recetaDeFoto\(foto\)/.test(selector));
 
 console.log('');
 if (fallos) {

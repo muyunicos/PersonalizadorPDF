@@ -447,6 +447,10 @@
                     if (claveD === '') { return; }
                     self.recetas[claveD] = params || null;
                 },
+                // Spec 043 (fix 2026-11-22): receta de una foto para ESTA ranura
+                // (memoria -> catalogo -> defaults). La usa la tira al elegir, para
+                // que no mande el catalogo (que puede estar desactualizado).
+                paramsDe: function (id) { return self._recetaDeContexto(String(id || ''), r); },
                 // se anota en la ranura y se publica su receta (0 red, cierre inmediato).
                 // Spec 043 (US5): Eliminar la imagen desde el editor (dos pasos si esta en uso).
                 eliminar: function () {
@@ -531,7 +535,21 @@
             return Promise.reject(new Error('No hay donde subir la imagen.'));
         }
         var r = this.config.ranuras[indice];
-        var btn = this.selectores[indice].boton;
+        // Spec 043 (fix 2026-11-22): el tope de la ranura se respeta y un reemplazo
+        // pendiente manda sobre la posicion. Antes se hacia `push` sin mirar `max`
+        // (con max=1 y [A] quedaba [A,B]: dos miniaturas donde cabe una) y el
+        // `_reemplazo` se ignoraba si llegaba con `posicion` null.
+        var posSubida = posicion;
+        if ((posSubida === null || posSubida === undefined)
+            && this._reemplazo && parseInt(this._reemplazo.indice, 10) === parseInt(indice, 10)) {
+            posSubida = parseInt(this._reemplazo.posicion, 10) || 0;
+        }
+        if (posSubida === null || posSubida === undefined) {
+            if (this.estado[indice].ids.length >= r.max) {
+                this._error('Solo entran ' + r.max + ' imagen(es) en esta ranura.');
+                return Promise.reject(new Error('motor:ranura:llena'));
+            }
+        }
         // Spec 043 (fix 2026-11-22): la URL del recorte recien compuesto se captura
         // AHORA, antes del POST. `ultimaUrl` vive en la INSTANCIA del selector
         // (`selectores[i].sel`), no en el slot: leer `slot.ultimaUrl` daba
@@ -541,6 +559,7 @@
             || (this.selectores[indice] && this.selectores[indice].ultimaUrl) || '';
         var paramsRecorte = (selAlSubir && typeof selAlSubir._params === 'function')
             ? selAlSubir._params() : (params || null);
+        var btn = this.selectores[indice].boton;
         btn.disabled = true;
         // Spec 046 (U7): placeholder con spinner en la tira mientras sube.
         var token = {};
@@ -588,11 +607,12 @@
                 self._error('El servidor no devolvio la imagen.');
                 throw new Error('El servidor no devolvio la imagen.');
             }
-            if (posicion === null || posicion === undefined || posicion >= self.estado[indice].ids.length) {
+            if (posSubida === null || posSubida === undefined || posSubida >= self.estado[indice].ids.length) {
                 self.estado[indice].ids.push(String(id));
             } else {
-                self.estado[indice].ids[posicion] = String(id);
+                self.estado[indice].ids[posSubida] = String(id);
             }
+            self._reemplazo = null;
             self._pintar();
             return id;
         }, function (err) {

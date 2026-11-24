@@ -96,7 +96,7 @@
 - [X] T042 Ejecutar todas las puertas: `php -l`, `tests/catalogo_uploads.php`, `tests/media_lectura.php`, `tests/sin_lectura.php`, fases de `tests/texto_puente.php`, `tests/motor_smoke.php`, `tests/parity.php`, `node --check` + suites de contrato. Verificar ademas FR-016: `Select-String -Path assets/*.js -Pattern 'global\.indexedDB'` debe dar **0**.
 - [X] T043 Correr `node tests/ficha-pedido.browser.js` en el laboratorio y verificar E1-E6 del quickstart.
   - **Nota 2026-11-22**: E1-E5 quedaron **scripteados** en el gate (`E1 (043/US1)` ... `E5 (043/SC-005)`): 65/65 en verde. E5 corre al final del recorrido (borrar la unica foto rompe el flujo) y comprueba la propiedad de seguridad "sin confirmacion no se borra".
-- [X] T044 Commit con el lint gateado en el mismo comando (sin push).
+- [X] T046 (fix 2026-11-22) `max` se respeta al subir y `_reemplazo` manda: con `max=1` y [A] ya no queda [A,B]; la receta la manda el cargador (`paramsDe`) y no el catalogo. Puerta: `tests/cargador-recetas.test.js` (9 checks).
 
 ## Dependencies
 
