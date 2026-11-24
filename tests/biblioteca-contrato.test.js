@@ -437,6 +437,96 @@ delete global.localStorage;
 delete global.PMU_FICHA;
 delete global.PMU_TIENDA;
 
+/* ---- Spec 048 (US2, T009-T012): comportamiento de la tira y el visor ---- */
+const { crearDocumento } = require('./_util/dom-stub.js');
+
+function montarTira(nFotos, elegidos) {
+    const doc = crearDocumento();
+    const cont = doc.createElement('div');
+    cont.clientWidth = 640; // caben 10
+    global.document = doc;
+    global.localStorage = {
+        _d: {},
+        getItem(k) { return Object.prototype.hasOwnProperty.call(this._d, k) ? this._d[k] : null; },
+        setItem(k, v) { this._d[k] = String(v); },
+        removeItem(k) { delete this._d[k]; }
+    };
+    global.PMU_FICHA = { biblioteca: { revision: 'r1', identidad: 'idX' } };
+    global.PMU_TIENDA = {};
+    apiBib.invalidar();
+    const fotos = [];
+    for (let i = 0; i < nFotos; i++) { fotos.push({ id: 'f' + i, url: 'u' + i, thumb: 't' + i, recetas: {} }); }
+    if (nFotos) {
+        global.localStorage.setItem(apiBib.clave, JSON.stringify({ revision: 'r1', identidad: 'idX', ts: Date.now(), fotos: fotos }));
+    }
+    apiBib.tira(cont, { onElegir: function (f) { if (elegidos) { elegidos.push(f); } } });
+    const tira = cont.childNodes[0] || null;
+    const chip = tira ? tira.childNodes.filter((n) => String(n.className).indexOf('pmu-bib-mas') !== -1)[0] : null;
+    return { cont: cont, fotos: fotos, tira: tira, chip: chip };
+}
+
+console.log('== Spec 048 (US2): tira y visor en runtime ==');
+[1, 3, 12].forEach(function (n) {
+    const m = montarTira(n, null);
+    const minis = m.tira ? m.tira.childNodes.filter((x) => String(x.className).indexOf('pmu-bib-mini') !== -1
+        && String(x.className).indexOf('pmu-bib-mas') === -1) : [];
+    const visibles = n > 10 ? 9 : n;
+    check('T009: ' + n + ' fotos -> ' + visibles + ' miniaturas', minis.length === visibles, 'minis=' + minis.length);
+    check('T009: ' + n + ' fotos -> chip "Ver todas (' + n + ')"', !!m.chip && m.chip.textContent === 'Ver todas (' + n + ')',
+        m.chip && m.chip.textContent);
+    check('T009: ' + n + ' fotos -> el chip es el ultimo', !!m.chip && m.tira.childNodes[m.tira.childNodes.length - 1] === m.chip);
+});
+
+const elegido = [];
+const m3 = montarTira(3, elegido);
+const primeraMini = m3.tira.childNodes.filter((x) => String(x.className).indexOf('pmu-bib-mini') !== -1)[0];
+if (primeraMini) { primeraMini.click(); }
+check('T010: tocar una miniatura entrega ESA foto (id f0)', elegido.length === 1 && elegido[0].id === 'f0',
+    JSON.stringify(elegido.map((e) => e.id)));
+
+// Visor: PMUVisor stub.
+let visorArgs = null;
+let confirmArgs = null;
+global.PMUVisor = {
+    abrir: function (o) { visorArgs = o; return true; },
+    cerrar: function () { },
+    confirmar: function (o) { confirmArgs = o; return Promise.resolve(true); }
+};
+const m3b = montarTira(3, elegido);
+apiBib.visor(0);
+check('T011: verTodas abre el visor con todas las fotos', !!visorArgs && visorArgs.items.length === 3,
+    visorArgs ? 'items=' + visorArgs.items.length : 'sin visor');
+const accElegir = visorArgs ? visorArgs.acciones.filter((a) => a.etiqueta === 'Elegir')[0] : null;
+const antesElegir = elegido.length;
+if (accElegir) { accElegir.onAccion(1); }
+check('T011: Elegir carga la foto elegida', elegido.length === antesElegir + 1 && elegido[elegido.length - 1].id === 'f1',
+    JSON.stringify(elegido.map((e) => e.id)));
+
+// Borrado en dos pasos: la LLAMADA al endpoint es sincronica (el dialogo es async).
+var llamadasBorrar = [];
+global.PMU_API = {
+    borrarFoto: function (id, confirmar) {
+        llamadasBorrar.push(!!confirmar);
+        if (confirmar) { return Promise.resolve({ success: true }); }
+        return Promise.reject({ referencias: [{ tipo: 'item', id: 'x' }] });
+    }
+};
+const m3c = montarTira(2, null);
+apiBib.visor(0);
+const accBorrar = visorArgs.acciones.filter((a) => /Borrar|Eliminar/.test(a.etiqueta))[0];
+if (accBorrar) { accBorrar.onAccion(0); }
+check('T012: el borrado va PRIMERO sin confirmar', llamadasBorrar.length >= 1 && llamadasBorrar[0] === false,
+    JSON.stringify(llamadasBorrar));
+check('T012: el codigo reintenta con confirmar=1 (dialogo)', /PMUVisor\.confirmar/.test(bib),
+    'sin confirmar en el fuente');
+
+delete global.document;
+delete global.localStorage;
+delete global.PMU_FICHA;
+delete global.PMU_TIENDA;
+delete global.PMUVisor;
+delete global.PMU_API;
+
 if (fallos === 0) { console.log('BIBLIOTECA CONTRATO OK (' + ok + ' checks)'); process.exit(0); }
 console.log('BIBLIOTECA CONTRATO FALLA (' + fallos + ' de ' + (ok + fallos) + ')');
 process.exit(1);

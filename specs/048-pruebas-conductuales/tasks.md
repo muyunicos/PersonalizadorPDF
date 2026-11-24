@@ -27,11 +27,11 @@
 
 ## Phase 4 — US2: Biblioteca (P1)
 
-- [ ] T009 [P] [US2] `biblioteca-contrato` (runtime): `tira(el, {onElegir})` con 1/3/12 fotos -> N minis + chip `Ver todas (N)`.
-- [ ] T010 [P] [US2] Click en una miniatura -> `onElegir` recibe ESA foto (con `id` y `recetas`).
-- [ ] T011 [US2] Visor con `PMUVisor` stub: `verTodas(0)` abre con todas; `Elegir` llama `onElegir`.
-- [ ] T012 [US2] Borrado en dos pasos: `op=borrar` con `referencias` -> dialogo y `confirmar=1`.
-- [ ] T013 [US2] Gate: `node tests/biblioteca-contrato.test.js`.
+- [X] T009 [P] [US2] `biblioteca-contrato` (runtime): `tira(el, {onElegir})` con 1/3/12 fotos -> N minis + chip `Ver todas (N)`.
+- [X] T010 [P] [US2] Click en una miniatura -> `onElegir` recibe ESA foto (con `id` y `recetas`).
+- [X] T011 [US2] Visor con `PMUVisor` stub: `verTodas(0)` abre con todas; `Elegir` llama `onElegir`.
+- [X] T012 [US2] Borrado en dos pasos: `op=borrar` con `referencias` -> dialogo y `confirmar=1`.
+- [X] T013 [US2] Gate: `node tests/biblioteca-contrato.test.js`.
 
 ## Phase 5 — US3: Mockup (P2)
 
