@@ -1900,7 +1900,7 @@ class PMU_Sesion
                 // sale del helper unico (el mismo que usa el traslado al pagar).
                 $referencias = array_merge($referencias, self::ids_originales($man));
             }
-            $this->podar_uploads_sesion($dirSesion, $referencias);
+            $this->podar_uploads_sesion($dirSesion, $referencias, $horizonteCarrito);
             if ($vivos === 0) {
                 $this->borrar_arbol($dirSesion);
             }
@@ -1998,7 +1998,7 @@ class PMU_Sesion
         return $quedan;
     }
 
-    private function podar_uploads_sesion($dirSesion, array $referencias)
+    private function podar_uploads_sesion($dirSesion, array $referencias, $horizonte = 0)
     {
         $dir = $dirSesion . DIRECTORY_SEPARATOR . 'uploads';
         if (!is_dir($dir) || !$referencias) {
@@ -2013,6 +2013,13 @@ class PMU_Sesion
             if (isset($referencias[$id])) {
                 continue;
             }
+            // Spec 050 (retencion atada a la cookie, 30 d): un original que ningun
+            // item vivo referencia NO se poda de inmediato; se conserva hasta vencer
+            // la retencion (misma ventana que `pmu_sid` / carrito abandonado). Solo
+            // se elimina si supero el horizonte. `$horizonte <= 0` = sin retencion.
+            if ($horizonte > 0 && (@filemtime($ruta) ?: 0) >= $horizonte) {
+                continue;
+            }
             $nombre = basename($ruta);
             // Spec 040 (T006): el catalogo y su lock NO son fotos: la poda por
             // referencias los borraria como huerfanos.
@@ -2025,7 +2032,23 @@ class PMU_Sesion
                 continue;
             }
             @unlink($ruta);
+            // La miniatura derivada se va con su original (sino queda huerfana).
+            $mini = PMU_Lectura::miniatura_ruta($ruta, PMU_Lectura::MINIATURA_LADO);
+            if ($mini !== '' && is_file($mini)) { @unlink($mini); }
             $borrados[] = $id;
+        }
+        // Spec 050 (1): el catalogo no queda con entradas muertas. Se reescribe bajo
+        // lock (atomico); si falla, `PMU_Lectura::listar` ya omite lo que no existe.
+        if ($borrados) {
+            try {
+                $this->motor->catalogo_mutar($dir, static function (&$c) use ($borrados) {
+                    foreach ($borrados as $id) {
+                        unset($c['items'][$id]);
+                    }
+                });
+            } catch (\Throwable $e) {
+                // Best-effort: la poda del catalogo nunca tumba el barrido.
+            }
         }
         return $borrados;
     }

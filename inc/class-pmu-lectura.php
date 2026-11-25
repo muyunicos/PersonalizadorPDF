@@ -228,6 +228,12 @@ class PMU_Lectura
                 continue;
             }
             $id = (string)$id;
+            // Spec 050 (2): no se anuncia una foto cuyo original ya no existe
+            // (catalogo desactualizado tras una poda). Auto-sana en lectura, sin
+            // escribir el catalogo (respeta `sin_lectura.php`).
+            if (self::archivo($dir, $id, (string)($it['ext'] ?? '')) === '') {
+                continue;
+            }
             $peso = (int)($it['bytes'] ?? 0);
             $fotos[] = [
                 'id' => $id,
