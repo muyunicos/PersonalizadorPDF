@@ -1,5 +1,10 @@
 schema: spec-driven
 
+context: |
+  Todos los artefactos OpenSpec se escriben en espanol (convencion del repo).
+  Los identificadores (capacidades, changes, requirements) van en kebab-case sin tildes.
+  Alcance: solo documentacion bajo openspec/. No tocar codigo de produccion ni specs/ legacy.
+
 # Project context (optional)
 # Add only constraints that should guide OpenSpec artifacts and workflows.
 # Include constraints an agent cannot infer by reading the code.
