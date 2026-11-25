@@ -2537,6 +2537,15 @@ jQuery(function ($) {
         if (st.tipo === 'imagen') {
             var rec = PREVIEW_RECORTE[st.id];
             if (!rec || !rec.url) {
+                if (!PREVIEW_CARG[st.id]) { montarCargadorGrupo($panel); } // montaje perezoso
+                var carg = PREVIEW_CARG[st.id];
+                if (carg && typeof carg.abrir === 'function') {
+                    // Sin imagen de prueba "Probar" abre el cargador del campo en vez
+                    // de dejar un error sin salida (misma conducta que el recuadro).
+                    $status.removeClass('ec-error').text('');
+                    carg.abrir(0);
+                    return;
+                }
                 $status.addClass('ec-error').text('Carga una imagen de prueba primero.');
                 return;
             }
