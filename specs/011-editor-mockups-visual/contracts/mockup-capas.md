@@ -1,6 +1,6 @@
 # Contract: Capas de mockup y render compartido
 
-**Feature**: 011-editor-mockups-visual | **Version**: 10 (enmienda `004-woocommerce-pdf-personalization/contracts/mockups.md`; v3 envolturas PowerClip, v4 dedup de formas + forma representativa + guia del cargador, v5 grupos e importacion de paginas PDF, v6 transformaciones fuera del lienzo, v7 perspectiva y propiedades de grupo, v8 marco orientado y giro sin salto, v9 giro grupal continuo y escala proporcional de imagenes, v10 tirador de giro recortado al lienzo sin alterar su direccion)
+**Feature**: 011-editor-mockups-visual | **Version**: 11 (enmienda `004-woocommerce-pdf-personalization/contracts/mockups.md`; v3 envolturas PowerClip, v4 dedup de formas + forma representativa + guia del cargador, v5 grupos e importacion de paginas PDF, v6 transformaciones fuera del lienzo, v7 perspectiva y propiedades de grupo, v8 marco orientado y giro sin salto, v9 giro grupal continuo y escala proporcional de imagenes, v10 tirador de giro recortado al lienzo sin alterar su direccion, v11 perspectiva en capa suelta + interruptor y estirado de capas img)
 
 Contrato de la composicion de un mockup (`config.json:mockups[]`) y del **nucleo de render
 compartido** que la usan el editor del admin y la ficha del cliente. Especificacion: [../spec.md](../spec.md).
@@ -62,9 +62,9 @@ compartido** que la usan el editor del admin y la ficha del cliente. Especificac
   transformacion. La rasterizacion temporal de perspectiva usa el mismo marco orientado.
 - El tirador de rotacion de una capa individual aplica el delta angular desde el inicio del gesto
   a la rotacion existente; tomar el control no cambia el angulo por si solo. `Shift` ajusta a 15°.
-- Los ocho tiradores de una capa `img` conservan su proporcion actual sin requerir modificador;
-  los tiradores laterales escalan desde el punto medio del lado opuesto. Para placeholders, `Shift`
-  conserva la proporcion como antes.
+- Los ocho tiradores de una capa estiran la caja (img incluida) sin requerir modificador;
+  los tiradores laterales escalan desde el punto medio del lado opuesto. `Shift` o el candado de aspecto
+  conservan la proporcion. Al estirar una capa `img`, su imagen se deforma con la caja (solo en el mockup).
 - Al insertar una imagen del catalogo, la caja inicial usa sus dimensiones naturales y conserva
   la proporcion, centrada y ajustada al lienzo; no se selecciona una caja cuadrada distinta de
   los limites visibles de la imagen.
@@ -74,6 +74,9 @@ compartido** que la usan el editor del admin y la ficha del cliente. Especificac
 - La perspectiva rasteriza temporalmente el grupo y lo proyecta mediante una malla de triangulos
   Canvas 2D; conserva transparencia, z-order y PowerClip del mockup. Cuadrilateros cruzados o
   degenerados no se aceptan. Restablecer perspectiva vuelve los cuatro puntos al rectangulo original.
+- La perspectiva se ofrece tambien a una **capa suelta** (sin agrupar): el marco de la capa es la
+  referencia de los cuatro puntos. Un interruptor **Perspectiva** por item (capa o grupo) en la fila de transformacion (bajo el lienzo) muestra u
+  oculta los controles (por defecto apagado); al apagarlo se restablece la perspectiva del item seleccionado.
 - La seleccion automatica de grupo se puede anular temporalmente con **Alt+clic** sobre una capa,
   tanto en el lienzo como en la lista. Asi se mueve, redimensiona o rota un miembro sin cambiar su
   pertenencia al grupo; seleccionar normalmente vuelve a expandir el grupo.
@@ -210,8 +213,8 @@ Reglas:
 > NO dibuja con `contener()` directo sino con `rectPlaceholder(caja, medidas, grupo)`. En reposo
 > (la caja tiene el aspecto del grupo, asi se inserta) reproduce EXACTO el `contain` del PDF; si la
 > caja fue estirada/deformada para simular perspectiva, el contenido se escala con la caja -> el
-> hueco y su imagen se deforman juntos, como la herramienta de perspectiva. Las capas `img` siguen
-> en `contener()` (nunca se deforman). El `w/h` del recorte que llega al mockup es el del **lienzo**
+> hueco y su imagen se deforman juntos, como la herramienta de perspectiva. Desde v11 las capas
+> `img` tambien deforman con la caja (su referencia es el tamaño natural de la imagen). El `w/h` del recorte que llega al mockup es el del **lienzo**
 > (`params` de la receta); si falta, el nucleo cae al tamaño natural de la imagen. Bug corregido:
 > antes llegaba el tamaño del GRUPO (p. ej. 391x391) en vez del recorte (1000x100) y el mockup
 > estiraba en reposo en lugar de contener.

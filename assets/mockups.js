@@ -61,7 +61,11 @@ jQuery(function ($) {
         avisoAplanado: null,
         // Candado de relacion de aspecto (icono entre Ancho y Alto). No se
         // persiste: es una ayuda de edicion, no un dato del mockup.
-        bloquearAspecto: false
+        bloquearAspecto: false,
+        // Interruptor de perspectiva POR ITEM (ayuda de edicion, no se persiste):
+        // mapa { clave: bool } donde clave = 'g:{grupo}' o 'i:{indice}'.
+        // Ausente = apagado (por defecto NO se muestran los controles).
+        perspectivaActiva: {}
     };
 
     /* ============ Proporcion de referencia (candado y restablecer) ============ */
@@ -254,11 +258,26 @@ jQuery(function ($) {
         return esGrupoPersistido(indices, lista);
     }
 
+    function clavePerspectiva(indices) {
+        if (indices && indices.length > 1 && esGrupoPersistido(indices)) {
+            var c0 = capas()[indices[0]];
+            return 'g:' + (c0 ? String(c0.grupo || '') : '');
+        }
+        return 'i:' + (indices && indices.length ? indices[0] : -1);
+    }
+
+    function perspectivaActivaItem(indices) {
+        return estado.perspectivaActiva[clavePerspectiva(indices)] === true;
+    }
+
     function giroSeleccion(indices, lista) {
         var capasLista = lista || capas();
         var primera = (indices || []).map(function (i) { return capasLista[i]; })
             .filter(function (c) { return !!c; })[0];
-        return primera ? (parseFloat(primera.grupo_rot) || 0) : 0;
+        var gr = primera ? (parseFloat(primera.grupo_rot) || 0) : 0;
+    if (gr) { return gr; }
+    // Capa suelta sin grupo: su propia rotacion orienta el marco de perspectiva.
+    return (indices && indices.length === 1 && primera) ? (parseFloat(primera.rot) || 0) : 0;
     }
 
     function marcoOrientadoSeleccion(indices, lista) {
@@ -399,6 +418,7 @@ jQuery(function ($) {
             '              <button type="button" class="button button-small ec-mk-icono ec-mk-dist" data-eje="x" title="Distribuir horizontalmente (Ctrl+clic marca varias)" aria-label="Distribuir horizontalmente">&#8633;</button>' +
             '              <button type="button" class="button button-small ec-mk-icono ec-mk-dist" data-eje="y" title="Distribuir verticalmente (Ctrl+clic marca varias)" aria-label="Distribuir verticalmente">&#8693;</button>' +
             '            </span>' +
+'            <label class="ec-mk-perspectiva-toggle"><input type="checkbox" class="ec-mk-perspectiva"> Perspectiva</label>' +
             '          </div>' +
             '        </div>' +
             '      </div>' +
@@ -709,7 +729,7 @@ jQuery(function ($) {
                 ctx.strokeRect(p.x - 4 / f, p.y - 4 / f, 8 / f, 8 / f);
                 ctx.restore();
             });
-            if (puedePerspectiva(seleccion) && !seleccionConBloqueadas(seleccion)) {
+            if (perspectivaActivaItem(seleccion) && puedePerspectiva(seleccion) && !seleccionConBloqueadas(seleccion)) {
                 puntosTiradoresPerspectiva(marcoGrupo, puntosPerspectiva(seleccion)).forEach(function (p) {
                     ctx.save();
                     ctx.beginPath();
@@ -753,6 +773,27 @@ jQuery(function ($) {
             });
         }
         ctx.restore();
+        if (perspectivaActivaItem([estado.seleccion]) && !c.bloqueada && puedePerspectiva([estado.seleccion])) {
+            var marcoCapa = G.marcoOrientado(capas(), [estado.seleccion], giroSeleccion([estado.seleccion]));
+            if (marcoCapa) {
+                puntosTiradoresPerspectiva(marcoCapa, puntosPerspectiva([estado.seleccion])).forEach(function (p) {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.fillStyle = '#fff';
+                    ctx.strokeStyle = '#d63638';
+                    ctx.lineWidth = 2 / f;
+                    ctx.arc(p.x, p.y, 6 / f, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.fillStyle = '#1d2327';
+                    ctx.font = 'bold 9px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(String(p.indice + 1), p.x, p.y);
+                    ctx.restore();
+                });
+            }
+        }
         // Tirador de rotacion: punto recortado al lienzo (T029), el MISMO que usa el
         // hit-test, asi el circulo se dibuja donde se puede agarrar.
         var rot = G.puntosDeRotacion(c, { x: cx, y: cy - 1 });
@@ -801,7 +842,7 @@ jQuery(function ($) {
             if (seleccionConBloqueadas(seleccion)) { return ''; }
             var marcoGrupo = marcoOrientadoSeleccion(seleccion);
             if (!marcoGrupo) { return ''; }
-            if (puedePerspectiva(seleccion)) {
+            if (perspectivaActivaItem(seleccion) && puedePerspectiva(seleccion)) {
                 var puntosPersp = puntosTiradoresPerspectiva(marcoGrupo, puntosPerspectiva(seleccion));
                 for (var tp = 0; tp < puntosPersp.length; tp++) {
                     if (Math.abs(p.x - puntosPersp[tp].x) <= tol * 1.4
@@ -827,6 +868,18 @@ jQuery(function ($) {
         var rotCapa = puntoRotacionCapa(c);
         if (Math.abs(p.x - rotCapa.x) <= tol * 1.6
             && Math.abs(p.y - rotCapa.y) <= tol * 1.6) { return 'rotar'; }
+        if (perspectivaActivaItem([estado.seleccion]) && puedePerspectiva([estado.seleccion])) {
+            var marcoCapaHit = G.marcoOrientado(capas(), [estado.seleccion], giroSeleccion([estado.seleccion]));
+            if (marcoCapaHit) {
+                var puntosPerspCapa = puntosTiradoresPerspectiva(marcoCapaHit, puntosPerspectiva([estado.seleccion]));
+                for (var tpc = 0; tpc < puntosPerspCapa.length; tpc++) {
+                    if (Math.abs(p.x - puntosPerspCapa[tpc].x) <= tol * 1.4
+                        && Math.abs(p.y - puntosPerspCapa[tpc].y) <= tol * 1.4) {
+                        return 'perspectiva:' + puntosPerspCapa[tpc].indice;
+                    }
+                }
+            }
+        }
         for (var i = 0; i < G.TIRADORES.length; i++) {
             var pos = G.posicionTirador(c, G.TIRADORES[i]);
             if (Math.abs(p.x - pos.x) <= tol && Math.abs(p.y - pos.y) <= tol) { return G.TIRADORES[i]; }
@@ -1094,7 +1147,7 @@ jQuery(function ($) {
         } else {
             // El candado de aspecto fuerza proporcion aunque la capa no sea
             // `img` y sin Shift (hoy img/Shift ya la conservaban).
-            var preservarProporcion = estado.bloquearAspecto || c.tipo === 'img' || ev.shiftKey;
+            var preservarProporcion = estado.bloquearAspecto || ev.shiftKey;
             var modoProporcion = estado.bloquearAspecto
                 ? true
                 : (c.tipo === 'img'
@@ -1489,6 +1542,15 @@ jQuery(function ($) {
         var indices = indicesSeleccionados();
         var esGrupo = indices.length > 1;
         var marcoProps = esGrupo ? G.marco(capas(), indices) : null;
+        // Interruptor de perspectiva: va en la fila de transformacion (bajo el
+        // lienzo), a la derecha de alinear/distribuir. Solo habilitado si aplica.
+        var $perspToggle = $ed.find('.ec-mk-perspectiva');
+        if ($perspToggle.length) {
+            var puedePersp = puedePerspectiva(indices);
+            $perspToggle.prop('checked', perspectivaActivaItem(indices));
+            $perspToggle.prop('disabled', !puedePersp);
+            $perspToggle.closest('.ec-mk-perspectiva-toggle').toggle(!!puedePersp);
+        }
         if (esGrupo) {
             html += '<h4 class="ec-mk-props-titulo">Grupo seleccionado (' + indices.length + ' capas)</h4>';
         } else {
@@ -1585,13 +1647,6 @@ jQuery(function ($) {
         html += '<div class="ec-mk-acciones">'
             + '<button type="button" class="button button-small" data-mk="reset">Restablecer ajustes</button>'
             + '</div>';
-        if (puedePerspectiva(indices)) {
-            html += '<p class="description ec-mk-perspectiva-ayuda">Arrastra los cuatro puntos rojos del lienzo para deformar '
-                + (indices.length > 1 ? 'el grupo como una sola pieza' : 'esta capa') + '.</p>'
-                + '<div class="ec-mk-acciones"><button type="button" class="button button-small" data-mk="reset-perspectiva">Restablecer perspectiva</button></div>';
-        } else if (esGrupo) {
-            html += '<p class="description ec-mk-perspectiva-ayuda">Selecciona una capa o un grupo para habilitar la perspectiva de cuatro puntos.</p>';
-        }
         $propsAj.html(html);
         $propsAj.find('.ec-mk-modo').val(c.modo || 'normal');
     }
@@ -2591,6 +2646,28 @@ jQuery(function ($) {
         c.nombre = String(this.value).slice(0, 60);
         marcarPaso();
         sinGuardar();
+        refrescar();
+    });
+
+    
+       
+       
+    /* Perspectiva: interruptor del mockup. Activo = muestra los cuatro puntos del
+       item seleccionado; inactivo = los oculta y restablece la perspectiva
+       (borra `perspectiva`). Es una ayuda de edicion: no se persiste. */
+    $ed.on('change', '.ec-mk-perspectiva', function () {
+        var activoPersp = this.checked === true;
+        estado.perspectivaActiva[clavePerspectiva(indicesSeleccionados())] = activoPersp;
+        if (!activoPersp) {
+            var indicesPersp = indicesSeleccionados();
+            if (indicesPersp.length > 0 && mockup()) {
+                var antesPersp = JSON.stringify(estado.mockups);
+                mockup().capas = asignarPerspectiva(capas().slice(), indicesPersp,
+                    [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }]);
+                marcarPaso(antesPersp);
+                sinGuardar();
+            }
+        }
         refrescar();
     });
 

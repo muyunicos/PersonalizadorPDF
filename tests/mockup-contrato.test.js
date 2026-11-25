@@ -119,7 +119,8 @@ check('el editor ofrece cuatro controles de perspectiva con reinicio',
     editor.indexOf('puntosTiradoresPerspectiva') !== -1
         && editor.indexOf("return 'perspectiva:' + puntosPersp[tp].indice") !== -1
         && editor.indexOf('puedePerspectiva(seleccion)') !== -1
-        && editor.indexOf('data-mk="reset-perspectiva"') !== -1
+        && editor.indexOf('ec-mk-perspectiva') !== -1
+        && editor.indexOf('perspectivaActivaItem') !== -1
         && editor.indexOf('perspectivaConvexa(puntosActuales)') !== -1);
 check('el renderer aplica perspectiva al grupo a traves de una malla de triangulos',
     /function dibujarPerspectiva\(/.test(leer('assets/mockup-render.js'))
@@ -134,7 +135,7 @@ check('T010: la perspectiva tambien se aplica a una capa sin grupo', (function (
         && /gruposPerspectiva\[gid \? 'g:' \+ gid : 'i:' \+ item\.indice\]/.test(r)
         && /grupoPerspectiva\.items\.length >= 1/.test(r)
         && /function puedePerspectiva\(indices, lista\)/.test(e)
-        && /if \(puedePerspectiva\(indices\)\) \{/.test(e)
+        && /estado\.perspectivaActiva/.test(e)
         && /indicesPerspectiva\.length < 1/.test(e);
 })(),
     'una capa suelta debe deformarse igual que un grupo (US3)');
@@ -734,9 +735,12 @@ check('dibujo del tirador grupal: guia y circulo en GLOBAL (contexto normal), no
         && ed.indexOf('ctx.arc(rotGrupo.x, rotGrupo.y, 5 / f') !== -1
         && ed.indexOf('rotLocal.x - marcoGrupo.x') === -1,
     'el contexto rotado con coordenadaMarco (local a la esquina) deformaba el punto: doble resta de la esquina del marco');
-check('el redimensionado conserva proporcion (imagen por defecto, candado opcional)',
-    /var preservarProporcion = estado\.bloquearAspecto \|\| c\.tipo === 'img' \|\| ev\.shiftKey/.test(ed)
+check('el redimensionado estira todas las capas (Shift/candado conservan proporcion)',
+    /var preservarProporcion = estado\.bloquearAspecto \|\| ev\.shiftKey/.test(ed)
         && /centrarEje: c\.tipo === 'img' && a\.tipo\.length === 1/.test(ed));
+    check('la capa img deforma con la caja (grupo imgNatural en rectPlaceholder)',
+        /if \(capa\.tipo === 'img'\) \{ return \{ imgNatural: true \}; \}/.test(leer('assets/mockup-render.js'))
+        && /if \(grupo && grupo\.imgNatural\)/.test(leer('assets/mockup-render.js')));
 check('los tiradores de grupo usan un marco orientado compartido',
     typeof geometria.marcoOrientado === 'function'
         && editor.indexOf('marcoOrientadoSeleccion') !== -1
@@ -1345,6 +1349,13 @@ pruebas.push(function () {
     var cont = R.contener({ x: -50, y: -50, w: 100, h: 100 }, medidas);
     check('placeholder sin grupo: cae a contener (capas img intactas)',
         Math.abs(sinGrupo.w - cont.w) < 0.001 && Math.abs(sinGrupo.h - cont.h) < 0.001);
+    var imgNatural = { imgNatural: true };
+    var imgReposo = R.rectPlaceholder({ x: -50, y: -5, w: 100, h: 10 }, medidas, imgNatural);
+    check('img reposo: respeta el aspecto natural (100x10 -> 100x10)',
+        Math.abs(imgReposo.w - 100) < 0.5 && Math.abs(imgReposo.h - 10) < 0.5, imgReposo.w + 'x' + imgReposo.h);
+    var imgEstirada = R.rectPlaceholder({ x: -50, y: -100, w: 100, h: 200 }, medidas, imgNatural);
+    check('img estirada: deforma con la caja (alto 10 -> 200)',
+        imgEstirada.h > imgReposo.h * 1.4, imgReposo.h + ' -> ' + imgEstirada.h);
 });
 
 pruebas.push(function () {

@@ -123,7 +123,12 @@
      * hueco (el del grupo) para dibujar el placeholder.
      */
     function grupoDeRef(capa, contexto) {
-        if (!capa || capa.tipo !== 'placeholder' || !contexto) { return null; }
+        if (!capa || !contexto) { return null; }
+        // Spec 011 v11: las capas `img` tambien deforman con la caja (solo en el
+        // mockup). Su "grupo" de referencia es el tamaño natural de la imagen;
+        // `rectPlaceholder` lo interpreta con la marca `imgNatural`.
+        if (capa.tipo === 'img') { return { imgNatural: true }; }
+        if (capa.tipo !== 'placeholder') { return null; }
         var id = String(capa.ref || '').split('#')[0];
         var g = null;
         (contexto.grupos || []).forEach(function (x) {
@@ -142,6 +147,23 @@
      * a `contener` (comportamiento clasico, p. ej. capas `img`).
      */
     function rectPlaceholder(caja, medidas, grupo) {
+        if (grupo && grupo.imgNatural) {
+            // Capa `img`: la caja manda. En reposo (aspecto natural) reproducimos
+            // el `contain`; al estirar la caja, la imagen se escala con ella.
+            var nw = medidas && numero(medidas.w) > 0 ? numero(medidas.w) : 0;
+            var nh = medidas && numero(medidas.h) > 0 ? numero(medidas.h) : 0;
+            if (!nw || !nh) { return contener(caja, medidas); }
+            var baseImg = contener({ x: 0, y: 0, w: nw, h: nh }, medidas);
+            var sxImg = caja.w / nw;
+            var syImg = caja.h / nh;
+            return {
+                x: caja.x + baseImg.x * sxImg,
+                y: caja.y + baseImg.y * syImg,
+                w: baseImg.w * sxImg,
+                h: baseImg.h * syImg,
+                discrepancia: false
+            };
+        }
         var gw = grupo && numero(grupo.w) > 0 ? numero(grupo.w) : 0;
         var gh = grupo && numero(grupo.h) > 0 ? numero(grupo.h) : 0;
         if (!gw || !gh) { return contener(caja, medidas); }

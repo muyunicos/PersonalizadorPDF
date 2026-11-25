@@ -73,15 +73,17 @@ if (!defined('ABSPATH')) {
         agregarse centrada.</p>
     <p><strong>Perspectiva</strong>: con una capa o un grupo seleccionado aparecen cuatro puntos rojos en
         las esquinas del lienzo; arrastralos para deformar la pieza (homografia). "Restablecer perspectiva"
-        vuelve al rectangulo. Una capa suelta tambien admite perspectiva (no hace falta agruparla).</p>
+        vuelve al rectangulo. Una capa suelta tambien admite perspectiva (no hace falta agruparla).
+        El interruptor <strong>Perspectiva</strong>, en la fila de transformacion bajo el lienzo (a la derecha de alinear/distribuir), muestra u oculta
+        los controles; por defecto esta apagado. Al apagarlo se restablece la perspectiva del item seleccionado.</p>
     <p>En la consola de <strong>PDFs</strong>, cada mockup puede incluir capas de imagen y placeholders.
         Selecciona varias con <strong>Ctrl/Cmd + clic</strong> para agruparlas o desagruparlas; cualquier
         miembro de un grupo permite mover, redimensionar y rotar el conjunto. El panel indica
         <strong>Grupo seleccionado</strong> y sus campos X/Y/ancho/alto/rotacion modifican el grupo
         completo; la escala por tiradores conserva la proporcion y admite dimensiones de hasta 1200 px.
         El tirador de rotacion se mantiene visible en el borde del lienzo y sigue el puntero alrededor
-        del centro del grupo. Las imagenes conservan su proporcion al redimensionarlas desde cualquier
-        tirador; para los placeholders, manten <strong>Shift</strong> para conservarla. Al estirar un placeholder (sin Shift) su contenido se deforma junto con la caja para simular una perspectiva; el PDF final no cambia (siempre encaja sin deformar).
+        del centro del grupo. Todas las capas se estiran al redimensionarlas desde cualquier tirador;
+        tirador; manten <strong>Shift</strong> (o el candado de aspecto) para conservar la proporcion. Al estirar una capa su contenido se deforma junto con la caja para simular una perspectiva; el PDF final no cambia (siempre encaja sin deformar).
         Los cuatro puntos rojos del lienzo deforman el grupo como una sola pieza, solo para el mockup;
         usa "Restablecer perspectiva" para volver al rectangulo. Si necesitas editar un PH sin mover los demas,
         haz <strong>Alt + clic</strong> sobre el PH en el lienzo o en la lista. La capa sigue en su
