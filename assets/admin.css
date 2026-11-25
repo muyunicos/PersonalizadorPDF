@@ -20,7 +20,7 @@
     border-radius: 4px;
     padding: 18px 22px;
     margin-top: 18px;
-    max-width: 960px;
+    max-width: 100%;
     box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
 }
 .personalizador-pdf .ec-tabla .ec-fila-activa td {

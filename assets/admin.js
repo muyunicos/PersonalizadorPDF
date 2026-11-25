@@ -2407,8 +2407,6 @@ jQuery(function ($) {
     /** Ejecuta el `campo.js` de un campo con un espia que captura sus RANURAS. */
     function ranurasDelCampo(campoId) {
         var cid = parseInt(campoId, 10) || 0;
-        var defs = (cfgGlobal.camposDef) || {};
-        var def = defs[String(cid)] || null;
         var lista = (cfgGlobal.campos && cfgGlobal.campos[String(cid)]) || null;
         var codigo = lista && (lista.js || lista.script);
         if (codigo) {
@@ -2427,8 +2425,8 @@ jQuery(function ($) {
                 if (capturado && capturado.length) { return capturado; }
             } catch (e) { /* cae al fallback */ }
         }
-        // Fallback: ranura legacy del grupo (sin campo.js).
-        return [{ w: 100, h: 100, forma: 'rectangulo', min: 1, max: 1, phsize: 0 }];
+        // Sin campo.js: el tamano/forma lo decide el GRUPO (no 100x100 fijo).
+        return null;
     }
 
     /** Monta el motor de carga real (CargadorPMU) para un grupo de imagen. */
@@ -2444,23 +2442,34 @@ jQuery(function ($) {
         var campoId = parseInt($panel.attr('data-campo'), 10) || 0;
         var defs = (cfgGlobal.camposDef) || {};
         var defCampo = defs[String(campoId)] || null;
-        // Envoltura (guia PowerClip): la del campo asociado o, si no hay, la forma
-        // por defecto del grupo (A). Solo se pasa si hay geometria util.
+        // Grupo del panel (tamano base + forma por defecto).
         var grupos = (cfgGlobal.mockups && cfgGlobal.mockups.grupos) || [];
         var grupo = null;
         grupos.forEach(function (g) { if (String(g.id) === id) { grupo = g; } });
+        var gw = (grupo && grupo.w) ? parseInt(grupo.w, 10) : w;
+        var gh = (grupo && grupo.h) ? parseInt(grupo.h, 10) : h;
+        if (!(gw > 0)) { gw = w; }
+        if (!(gh > 0)) { gh = h; }
+        // Envoltura (guia PowerClip): la del campo asociado o, si no hay, la forma
+        // por defecto del grupo (A).
         var envoltura = (defCampo && defCampo.envoltura) || (grupo && grupo.env_defecto) || null;
-        // RANURAS reales del campo (o fallback del grupo) normalizadas con el mismo
-        // normalizador del comprador (CargadorPMU), resolviendo phsize con defCampo.
+        // RANURAS: del campo (si tiene) o del grupo. Mismo normalizador del comprador.
         var crudas = ranurasDelCampo(campoId);
+        if (!crudas || !crudas.length) {
+            // Sin campo: tamano del grupo + phsize 1 (el ph de referencia).
+            crudas = [{ w: gw, h: gh, forma: 'auto', min: 1, max: 1, phsize: 1 }];
+        }
         var ranuras = (window.PMURanuras && PMURanuras.normalizar)
             ? PMURanuras.normalizar(crudas) : crudas;
         ranuras.forEach(function (r) {
-            if (r.phsize > 0 && defCampo && defCampo.grupo_w > 0 && defCampo.grupo_h > 0) {
+            // phsize 1/2 resuelve desde el grupo base del PDF (ph de referencia).
+            var gW = (defCampo && defCampo.grupo_w > 0) ? defCampo.grupo_w : gw;
+            var gH = (defCampo && defCampo.grupo_h > 0) ? defCampo.grupo_h : gh;
+            if (r.phsize > 0 && gW > 0 && gH > 0) {
                 var k = r.phsize === 2 ? 2 : 1;
-                r.w = defCampo.grupo_w * k; r.h = defCampo.grupo_h * k;
+                r.w = gW * k; r.h = gH * k;
             }
-            if (!r.gid && defCampo && defCampo.grupo_gid) { r.gid = String(defCampo.grupo_gid).toUpperCase(); }
+            if (!r.gid) { r.gid = String((defCampo && defCampo.grupo_gid) || id).toUpperCase(); }
         });
         var cont = $('<div class="ec-preview-cargador"></div>').appendTo($col);
         var blobs = {};
