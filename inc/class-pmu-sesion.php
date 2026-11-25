@@ -1244,17 +1244,17 @@ class PMU_Sesion
             return $salida;   // compartido: se borro la fila, el archivo queda
         }
 
-        // 3) Borra el archivo de `tmp/sesion-{sid}/uploads/{id}.{ext}` (si existe).
+        // 3) Borra el archivo de `tmp/sesion-{sid}/uploads/{id}.{ext}` y su miniatura;
+        //    baja la entrada del catalogo (espejo de los archivos, spec 040).
         try {
             $dir = $this->motor->dir_sesion_uploads($sid, false);
             $ruta = $this->archivo_con_extension($dir . DIRECTORY_SEPARATOR . $id);
-            if ($ruta !== '' && is_file($ruta)) {
-                if (@unlink($ruta)) {
-                    $salida['archivo'] = true;
-                }
+            if ($ruta !== '') {
+                $salida['archivo'] = $this->borrar_archivo_original($ruta);
             }
-        } catch (Exception $e) {
-            // Sin carpeta: no hay archivo que borrar (ya se borro o nunca existio).
+            $this->motor->catalogo_borrar($dir, $id);
+        } catch (\Throwable $e) {
+            // Sin carpeta o catalogo reconstruible: no bloquea el borrado.
         }
         return $salida;
     }
@@ -1336,13 +1336,7 @@ class PMU_Sesion
             return $salida;
         }
         $dir = dirname($ruta);
-        $ext = strtolower((string)pathinfo($ruta, PATHINFO_EXTENSION));
-        $base = ($ext !== '') ? substr($ruta, 0, -(strlen($ext) + 1)) : $ruta;
-        $mini = $base . '-80x80.webp';
-        $salida['archivo'] = @unlink($ruta);
-        if (is_file($mini)) {
-            @unlink($mini);
-        }
+        $salida['archivo'] = $this->borrar_archivo_original($ruta);
         try {
             $this->motor->catalogo_borrar($dir, $id);
             $salida['catalogo'] = true;
@@ -1998,6 +1992,23 @@ class PMU_Sesion
         return $quedan;
     }
 
+    /**
+     * Borra el archivo fisico de un original y su miniatura derivada (`{id}-80x80.webp`).
+     * Devuelve true si borro el original. NO toca el catalogo: eso lo hace el llamador
+     * (que decide si tambien baja la entrada). Unico punto que borra original+miniatura.
+     */
+    private function borrar_archivo_original($ruta)
+    {
+        if ($ruta === '' || !is_file($ruta)) {
+            return false;
+        }
+        $mini = PMU_Lectura::miniatura_ruta($ruta, PMU_Lectura::MINIATURA_LADO);
+        if ($mini !== '' && is_file($mini)) {
+            @unlink($mini);
+        }
+        return @unlink($ruta);
+    }
+
     private function podar_uploads_sesion($dirSesion, array $referencias, $horizonte = 0)
     {
         $dir = $dirSesion . DIRECTORY_SEPARATOR . 'uploads';
@@ -2031,10 +2042,7 @@ class PMU_Sesion
             if (preg_match('/-\\d{2,3}x\\d{2,3}\\.webp$/i', $nombre) === 1) {
                 continue;
             }
-            @unlink($ruta);
-            // La miniatura derivada se va con su original (sino queda huerfana).
-            $mini = PMU_Lectura::miniatura_ruta($ruta, PMU_Lectura::MINIATURA_LADO);
-            if ($mini !== '' && is_file($mini)) { @unlink($mini); }
+            $this->borrar_archivo_original($ruta);
             $borrados[] = $id;
         }
         // Spec 050 (1): el catalogo no queda con entradas muertas. Se reescribe bajo
