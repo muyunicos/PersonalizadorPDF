@@ -1529,28 +1529,25 @@ jQuery(function ($) {
                 if (!refProp) { $geo.find('.ec-mk-restablecer-prop').attr('disabled', 'disabled'); }
             }
         });
-        html += '<div class="ec-mk-geofila-wrap">' + $('<div>').append($geo).html() + '</div>';
-        if (c.tipo === 'placeholder') {
-            // Envoltura (PowerClip del PDF): recorta la capa al contenedor
-            // vectorial del hueco. La pagina solo trae CLAVES: el toggle se
-            // habilita segun el analisis y la geometria se pide al marcar.
-            // `checked` solo si ademas HAY envoltura: una capa guardada con
-            // envoltura cuya clave desaparecio no se muestra marcada con un
-            // aviso que la contradice (el flag persiste en el config).
-            var infoEnv = infoEnvoltura(c.ref);
-            html += '<label class="ec-mk-ancho"><input type="checkbox" class="ec-mk-envoltura"'
+        // Envoltura (PowerClip del PDF): comparte la MISMA fila (flex-wrap) si
+        // entra; si no, baja sola. Solo para capas placeholder. `checked` solo
+        // si ademas HAY envoltura: una capa guardada con envoltura cuya clave
+        // desaparecio no se muestra marcada con un aviso que la contradice.
+        var infoEnv = c.tipo === 'placeholder' ? infoEnvoltura(c.ref) : null;
+        if (infoEnv) {
+            $geo.append($('<label class="ec-mk-env-campo"><input type="checkbox" class="ec-mk-envoltura"'
                 + (c.envoltura && infoEnv.hay ? ' checked' : '') + (infoEnv.hay ? '' : ' disabled')
-                + '> Envoltura del PDF (PowerClip)</label>';
-            if (!infoEnv.hay) {
-                html += infoEnv.sin
-                    ? '<p class="description">Esta instancia no tiene envoltura en el PDF.</p>'
+                + '> Envoltura del PDF (PowerClip)</label>'));
+        }
+        html += '<div class="ec-mk-geofila-wrap">' + $('<div>').append($geo).html() + '</div>';
+        if (infoEnv && !infoEnv.hay) {
+            html += '<div class="ec-mk-geofila-desc"><p class="description">'
+                + (infoEnv.sin
+                    ? 'Esta instancia no tiene envoltura en el PDF.'
                     : (infoEnv.disponible
-                        ? '<p class="description">Este placeholder no esta recortado en ninguna'
-                            + ' forma del PDF (sin envoltura).</p>'
-                        : '<p class="description">Sin envolturas analizadas: si el PDF recorta'
-                            + ' placeholders dentro de formas (PowerClip), pulsa "Re-analizar"'
-                            + ' para extraerlas.</p>');
-            }
+                        ? 'Este placeholder no esta recortado en ninguna forma del PDF (sin envoltura).'
+                        : 'Sin envolturas analizadas: si el PDF recorta placeholders dentro de formas (PowerClip), pulsa "Re-analizar" para extraerlas.'))
+                + '</p></div>';
         }
         $props.html(html);
     }
