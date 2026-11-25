@@ -1143,9 +1143,23 @@ body.ec-c-drawer-abierto { overflow: hidden; }
     align-items: end;
     gap: 6px;
 }
-.ec-mk-geo-campo { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: #50575e; min-width: 0; }
-.ec-mk-geo-campo span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ec-mk-geo-campo input[type="number"] { width: 100%; font-size: 12px; }
+.ec-mk-geo-campo { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: #50575e; min-width: 0; align-items: center; }
+.ec-mk-geo-campo span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.ec-mk-geo-campo input[type="number"] {
+    width: 100%;
+    max-width: 6em;
+    font-size: 12px;
+    padding: 0;
+    text-align: center;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+.ec-mk-geo-campo input[type="number"]:hover,
+.ec-mk-geo-campo input[type="number"]:focus {
+    background: #f0f6fb;
+    border-radius: 3px;
+}
 .ec-mk-icono {
     min-width: 26px;
     height: 26px;
