@@ -2421,7 +2421,13 @@ jQuery(function ($) {
                 var ctxEspia = { id: cid, set: function () {}, get: function () { return null; } };
                 var rootEspia = { querySelector: function () { return { appendChild: function () {} }; } };
                 var fn = new Function('ctx', 'root', 'return (' + codigo + ')(ctx, root);');
-                fn(ctxEspia, rootEspia);
+                var prevApi = window.PMU_API;
+                window.PMU_API = apiEspia;
+                try {
+                    fn(ctxEspia, rootEspia);
+                } finally {
+                    window.PMU_API = prevApi;
+                }
                 if (capturado && capturado.length) { return capturado; }
             } catch (e) { /* cae al fallback */ }
         }
@@ -2526,6 +2532,19 @@ jQuery(function ($) {
         syncPanel($panel);
         var st = estadoPanel($panel);
         var $status = $panel.find('.ec-texto-status');
+        // Imagen: el preview ya es automatico (CargadorPMU -> onRecorte). "Probar"
+        // re-publica el recorte vigente al mockup; sin recorte cargado, avisa.
+        if (st.tipo === 'imagen') {
+            var rec = PREVIEW_RECORTE[st.id];
+            if (!rec || !rec.url) {
+                $status.addClass('ec-error').text('Carga una imagen de prueba primero.');
+                return;
+            }
+            $status.removeClass('ec-error').text('');
+            pintarPreview($panel);
+            notificarPreview($panel);
+            return;
+        }
         if (st.tipo !== 'texto' || !st.preset || !st.value) {
             $status.addClass('ec-error').text('Elegi tipo texto, un campo o codigo y un estilo.');
             return;

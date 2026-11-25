@@ -532,11 +532,18 @@ const Carg = require(path.join(__dirname, '..', 'assets', 'cargador-pmu.js'));
     adm.indexOf('function ranurasDelCampo(') !== -1
     && adm.indexOf('montarCargador: function (el, opts)') !== -1
     && adm.indexOf('capturado = (opts && opts.ranuras)') !== -1);
+  check('el espia de ranuras se instala como window.PMU_API (si no, el campo.js no captura RANURAS)',
+    adm.indexOf('window.PMU_API = apiEspia;') !== -1
+    && adm.indexOf('window.PMU_API = prevApi;') !== -1);
   check('el preview del grupo pasa la envoltura (campo o defecto del grupo)',
     adm.indexOf('var envoltura = (defCampo && defCampo.envoltura) || (grupo && grupo.env_defecto)') !== -1
     && adm.indexOf('envoltura: envoltura,') !== -1);
   check('al cambiar de campo se destruye y remonta el cargador del preview',
     /function invalidarPreview\(id\)[\s\S]{0,400}PREVIEW_CARG\[String\(id\)\][\s\S]{0,200}destruir/.test(adm));
+  check('"Probar" es tipo-aware: imagen re-publica el recorte (no el cartel de texto)',
+    adm.indexOf("if (st.tipo === 'imagen')") !== -1
+    && adm.indexOf('notificarPreview($panel);') !== -1
+    && adm.indexOf('Carga una imagen de prueba primero.') !== -1);
 }
 
 console.log('\n' + (fallos === 0 ? 'CAMPOS CONTRATO OK' : 'CAMPOS CONTRATO FALLA: ' + fallos));
