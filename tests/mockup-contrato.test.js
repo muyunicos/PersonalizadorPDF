@@ -629,19 +629,24 @@ var literalesSinCierre = [];
 var literalesVistos = 0;
 modulosCliente.forEach(function (rel) {
     var codigo = leer(rel);
-    var i = codigo.indexOf(APERTURA);
+    // Recorre las DOS aperturas: `$('<` y `$("<` (el bug del candado usaba
+    // comillas dobles y el detector solo miraba comilla simple).
+    ['\'', '"'].forEach(function (comilla) {
+    var apertura = '$(' + comilla + '<';
+    var i = codigo.indexOf(apertura);
     while (i !== -1) {
-        var finLiteral = codigo.indexOf(COMILLA, i + APERTURA.length);
+        var finLiteral = codigo.indexOf(comilla, i + apertura.length);
         if (finLiteral === -1) { break; }
-        var html = codigo.slice(i + APERTURA.length, finLiteral);
+        var html = codigo.slice(i + apertura.length, finLiteral);
         var resto = codigo.slice(finLiteral + 1);
         var concat = String(resto).trim().charAt(0) === MAS;
         literalesVistos++;
         if (!concat && html.charAt(html.length - 1) !== CIERRE) {
             literalesSinCierre.push(rel + DOS_PUNTOS + ' ' + html.slice(0, 60));
         }
-        i = codigo.indexOf(APERTURA, finLiteral + 1);
+        i = codigo.indexOf(apertura, finLiteral + 1);
     }
+    });
 });
 check('ningun literal jQuery sin > de cierre (tag sin cerrar = selector)',
     literalesSinCierre.length === 0,

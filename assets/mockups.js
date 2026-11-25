@@ -1512,7 +1512,7 @@ jQuery(function ($) {
             $campo.append($('<input type="number" class="ec-mk-geo" data-geo="' + f[0] + '" step="' + (f[0] === 'rot' ? 1 : (f[0] === 'w' || f[0] === 'h' ? 1 : 0.1)) + '" value="' + (Math.round((f[2] || 0) * 100) / 100) + '">'));
             $geo.append($campo);
             if (f[0] === 'w') {
-                $geo.append($("<button type=\"button\" class=\"button button-small ec-mk-icono ec-mk-candado\"")
+                $geo.append($('<button type="button" class="button button-small ec-mk-icono ec-mk-candado">')
                     .attr('aria-pressed', estado.bloquearAspecto ? 'true' : 'false')
                     .attr('title', estado.bloquearAspecto
                         ? 'Relacion de aspecto bloqueada: al cambiar Ancho o Alto se conserva la proporcion'
@@ -1522,7 +1522,7 @@ jQuery(function ($) {
                     .html(estado.bloquearAspecto ? '&#128274;' : '&#128275;'));
             }
             if (f[0] === 'h') {
-                $geo.append($("<button type=\"button\" class=\"button button-small ec-mk-icono ec-mk-restablecer-prop\"")
+                $geo.append($('<button type="button" class="button button-small ec-mk-icono ec-mk-restablecer-prop">')
                     .attr('title', 'Restablecer la proporcion original del recurso (sin deformar)')
                     .attr('aria-label', 'Restablecer proporcion')
                     .html('&#8634;'));
