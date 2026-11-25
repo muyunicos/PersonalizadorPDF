@@ -2819,38 +2819,33 @@ jQuery(function ($) {
         var obj = estado.menuCtx;
         cerrarMenuCtx();
         if (!obj || !mockup()) { return; }
-        if (obj.tipo === 'grupo') {
-            if (!fijarSeleccionDeGrupo(obj.grupo)) { return; }
-        } else {
-            seleccionarCapa(obj.indice, false, false);
+
+        // Acciones multi-seleccion: no reemplazar la seleccion.
+        var multi = (accion === 'agrupar' || accion === 'desagrupar' || accion === 'desagrupar-grupo'
+            || /ocultar|mostrar/.test(accion) || accion === 'bloquear' || accion === 'desbloquear');
+
+        if (!multi) {
+            if (obj.tipo === 'grupo') { if (!fijarSeleccionDeGrupo(obj.grupo)) { return; } }
+            else { seleccionarCapa(obj.indice, false, false); }
         }
         var indices = indicesSeleccionados();
         var c = capas()[estado.seleccion];
-        if (!c) { return; }
+        if (!c && !multi) { return; }
         if (accion === 'duplicar') { duplicarCapa(); return; }
         if (accion === 'quitar' || accion === 'quitar-grupo') { borrarCapa(); return; }
         if (accion === 'agrupar') { agruparSeleccion(); return; }
         if (accion === 'desagrupar' || accion === 'desagrupar-grupo') { desagruparSeleccion(); return; }
-        if (accion.indexOf('ocultar') !== -1 || accion.indexOf('mostrar') !== -1) {
-            var ocultar = accion.indexOf('ocultar') !== -1;
+        if (/ocultar|mostrar/.test(accion)) {
+            var ocultar = /ocultar/.test(accion);
             var antes = JSON.stringify(estado.mockups);
-            indices.forEach(function (k) {
-                if (capas()[k]) { capas()[k].oculta = ocultar; }
-            });
-            marcarPaso(antes);
-            sinGuardar();
-            refrescar();
-            return;
+            indices.forEach(function (k) { if (capas()[k]) { capas()[k].oculta = ocultar; } });
+            marcarPaso(antes); sinGuardar(); refrescar(); return;
         }
         if (accion === 'bloquear' || accion === 'desbloquear') {
             var bloquear = accion === 'bloquear';
             var antesB = JSON.stringify(estado.mockups);
-            indices.forEach(function (k) {
-                if (capas()[k]) { capas()[k].bloqueada = bloquear; }
-            });
-            marcarPaso(antesB);
-            sinGuardar();
-            refrescar();
+            indices.forEach(function (k) { if (capas()[k]) { capas()[k].bloqueada = bloquear; } });
+            marcarPaso(antesB); sinGuardar(); refrescar();
         }
     }
 
