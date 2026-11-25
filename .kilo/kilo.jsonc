@@ -8,17 +8,7 @@
       }
     }
   },
-  "model": "openrouter/baidu/ernie-5.5-flash-preview:free",
-  "small_model": "openrouter/liquid/lfm-3-1.7b:free",
-  "username": "Jonatan",
-  "default_agent": "code",
-  "snapshot": true,
-  "share": "disabled",
-  "autoupdate": "notify",
-  "compaction": {
-    "auto": true,
-    "prune": true
-  },
+  
   "permission": {
     "read": "allow",
     "glob": "allow",
