@@ -6911,7 +6911,7 @@ JS;
         foreach ((array)glob($dir . DIRECTORY_SEPARATOR . $gid . '.*') as $vieja) {
             @unlink($vieja);
         }
-        foreach ((array)glob($dir . DIRECTORY_SEPARATOR . $gid . '-*.png') as $vieja) {
+        foreach ((array)glob($dir . DIRECTORY_SEPARATOR . $gid . '-*.*') as $vieja) {
             @unlink($vieja);
         }
         @unlink($dir . DIRECTORY_SEPARATOR . 'thumbs' . DIRECTORY_SEPARATOR . $gid . '.webp'); // miniatura legada
@@ -7515,6 +7515,12 @@ JS;
             }
         }
 
+        // Firma de imagen por bytes (PNG/WebP/JPG/GIF): el recorte del preview es WebP
+        // (spec 026) y el render de texto es PNG. `PMU_Sesion` se carga perezoso.
+        if (!class_exists('PMU_Sesion')) {
+            require_once PERSONALIZADOR_PDF_PATH . 'inc' . DIRECTORY_SEPARATOR . 'class-pmu-sesion.php';
+        }
+
         // 2) PNGs renderizados por el navegador (imagen_{id}) -> imagen del grupo.
         foreach ($_FILES as $campo => $file) {
             if (!is_string($campo) || !preg_match('/^imagen_([0-9A-Fa-f]{6})$/', $campo, $m)) {
@@ -7529,13 +7535,14 @@ JS;
                     'No se pudo recibir el texto renderizado del grupo ' . strtoupper($gid)
                         . ' (revisa el tamano maximo de subida del servidor).');
             }
-            // Firma PNG: evitar guardar como imagen algo que no sea un PNG del render.
-            $firma = (string)@file_get_contents($file['tmp_name'], false, null, 0, 8);
-            if ($firma !== "\x89PNG\r\n\x1a\n") {
-                $this->responder(false, [], 'El archivo del grupo ' . strtoupper($gid) . ' no es un PNG valido.');
+            // Firma de imagen real (PNG/WebP/JPG/GIF): el recorte del preview es WebP
+            // (spec 026) y el render de texto es PNG. Se acepta cualquiera por su firma.
+            $firma = PMU_Sesion::firma_imagen((string)@file_get_contents($file['tmp_name'], false, null, 0, 16));
+            if ($firma === null) {
+                $this->responder(false, [], 'El archivo del grupo ' . strtoupper($gid) . ' no es una imagen valida (PNG/WebP/JPG/GIF).');
             }
             try {
-                $this->guardar_imagen($archivo, $gid, $file['tmp_name'], 'png');
+                $this->guardar_imagen($archivo, $gid, $file['tmp_name'], $firma['ext']);
             } catch (\Throwable $e) {
                 $this->responder(false, [], $e->getMessage());
             }
@@ -7556,12 +7563,12 @@ JS;
                     'No se pudo recibir la imagen por instancia del grupo ' . $gid
                         . ' (revisa el tamano maximo de subida del servidor).');
             }
-            $firma = (string)@file_get_contents($file['tmp_name'], false, null, 0, 8);
-            if ($firma !== "\x89PNG\r\n\x1a\n") {
-                $this->responder(false, [], 'El archivo por instancia del grupo ' . $gid . ' no es un PNG valido.');
+            $firma = PMU_Sesion::firma_imagen((string)@file_get_contents($file['tmp_name'], false, null, 0, 16));
+            if ($firma === null) {
+                $this->responder(false, [], 'El archivo por instancia del grupo ' . $gid . ' no es una imagen valida (PNG/WebP/JPG/GIF).');
             }
             try {
-                $this->guardar_imagen_indice($archivo, $gid, $indice, $file['tmp_name'], 'png');
+                $this->guardar_imagen_indice($archivo, $gid, $indice, $file['tmp_name'], $firma['ext']);
             } catch (\Throwable $e) {
                 $this->responder(false, [], $e->getMessage());
             }

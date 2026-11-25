@@ -1224,8 +1224,8 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
         case 'rechazo':
             check('id inexistente (FFFFFF) no se guarda', !is_file($uploads . '/tmp/muestras/muestra/FFFFFF.png'));
             check('archivo no-PNG no se guarda', !is_file($uploads . '/tmp/muestras/muestra/FF0000.png'));
-            check('error JSON de PNG invalido', is_array($json) && $json['success'] === false
-                && strpos((string)$json['data'], 'PNG valido') !== false);
+            check('error JSON de imagen invalida', is_array($json) && $json['success'] === false
+                && strpos((string)$json['data'], 'imagen valida') !== false);
             break;
         case 'imagen_adjunto':
             // Etapa 4: el adjunto de la galeria se copia del disco (sin subida del navegador).
@@ -1241,6 +1241,15 @@ register_shutdown_function(function () use ($fase, $testBase, $plugin, $base_adm
                 check('copia con firma PNG', substr((string)@file_get_contents($ruta_adj, false, null, 0, 4), 0, 4) === "\x89PNG");
                 check('sin $_FILES en la operacion', empty($_FILES));
             }
+            break;
+        case 'imagen_webp':
+            // spec 026/049: el recorte del preview es WebP; el Procesar debe aceptarlo.
+            check('WebP: respuesta JSON success', is_array($json) && $json['success'] === true);
+            $rutaW = $uploads . '/tmp/muestras/muestra/FF0000.webp';
+            check('WebP: imagen del grupo guardada como .webp', is_file($rutaW));
+            $firmaW = (string)@file_get_contents($rutaW, false, null, 0, 12);
+            check('WebP: firma RIFF/WEBP', substr($firmaW, 0, 4) === 'RIFF' && substr($firmaW, 8, 4) === 'WEBP');
+            check('WebP: salida del motor generada', is_file($uploads . '/tmp/muestras/muestra/muestra_procesado.pdf'));
             break;
         case 'ficha':
             // T012: panel del comprador (oculto si el PDF no es ofrecible).
@@ -4556,6 +4565,29 @@ switch ($fase) {
         ];
         $_REQUEST = $_POST;
         $p->handle_subir_imagen(); // exit en responder(JSON)
+        break;
+
+    case 'imagen_webp':
+        // spec 026/049: el recorte del preview es WebP; el Procesar debe aceptarlo.
+        preparar_entorno($testBase, $base);
+        $imW = imagecreatetruecolor(120, 80);
+        imagefill($imW, 0, 0, imagecolorallocate($imW, 200, 100, 50));
+        $webpTemp = sys_get_temp_dir() . '/pd_puente_webp_' . getmypid() . '.webp';
+        imagewebp($imW, $webpTemp, 85);
+        imagedestroy($imW);
+        $_FILES = [
+            'imagen_FF0000' => [
+                'name' => 'b.webp', 'type' => 'image/webp',
+                'tmp_name' => $webpTemp, 'error' => UPLOAD_ERR_OK, 'size' => filesize($webpTemp),
+            ],
+        ];
+        $_POST = [
+            'action' => 'personalizador_pdf_procesar',
+            'archivo' => 'muestra.pdf',
+            '_wpnonce' => 'nonce',
+        ];
+        $_REQUEST = $_POST;
+        $p->handle_procesar(); // exit en responder(JSON)
         break;
 
     case 'placeholder':
