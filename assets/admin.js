@@ -2489,15 +2489,15 @@ jQuery(function ($) {
                 return Promise.resolve({ id: nid, file: nid + '.webp', mime: 'image/webp', bytes: 0 });
             },
             urlDe: function (rid) { return Promise.resolve(blobs[rid] || null); },
-            onRecorte: function (rid, url) {
+            onRecorte: function (rid, url, params) {
                 var rec = PREVIEW_RECORTE[id] || { ids: [], urls: {} };
                 if (rec.ids.indexOf(rid) < 0) { rec.ids.push(rid); }
                 rec.urls = rec.urls || {};
                 rec.urls[rid] = url;
                 rec.activa = rid;
                 rec.url = url;
-                rec.w = w;
-                rec.h = h;
+                rec.w = (params && params.w) ? params.w : w;
+                rec.h = (params && params.h) ? params.h : h;
                 PREVIEW_RECORTE[id] = rec;
                 pintarPreview($panel);
                 notificarPreview($panel);

@@ -509,7 +509,7 @@ jQuery(function ($) {
         var previews = (cfg.previews || {});
         var prev = previews[String(g.id)];
         if (!prev || !prev.url) { return null; }
-        return { url: prev.url, w: prev.w || g.w, h: prev.h || g.h };
+        return { url: prev.url };
     }
 
 

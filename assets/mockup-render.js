@@ -115,6 +115,48 @@
         };
     }
 
+    /* ============ Placeholder: contener en reposo, deformar al estirar ============ */
+
+    /**
+     * Grupo de referencia de una capa placeholder (por el id de su `ref`), o
+     * null si no es placeholder o no hay contexto. Da el aspecto original del
+     * hueco (el del grupo) para dibujar el placeholder.
+     */
+    function grupoDeRef(capa, contexto) {
+        if (!capa || capa.tipo !== 'placeholder' || !contexto) { return null; }
+        var id = String(capa.ref || '').split('#')[0];
+        var g = null;
+        (contexto.grupos || []).forEach(function (x) {
+            if (x && String(x.id) === id) { g = x; }
+        });
+        return g;
+    }
+
+    /**
+     * Rectangulo de dibujo de un placeholder en coordenadas locales (centro
+     * 0,0). En reposo la caja tiene el aspecto del grupo (asi se inserta) y el
+     * PDF contiene la imagen dentro de esa forma: se reproduce ese `contain`.
+     * Si la caja fue deformada (estirada para simular perspectiva), el
+     * resultado se escala con la caja -> el hueco y su contenido se deforman
+     * juntos, como la herramienta de perspectiva. Sin grupo de referencia cae
+     * a `contener` (comportamiento clasico, p. ej. capas `img`).
+     */
+    function rectPlaceholder(caja, medidas, grupo) {
+        var gw = grupo && numero(grupo.w) > 0 ? numero(grupo.w) : 0;
+        var gh = grupo && numero(grupo.h) > 0 ? numero(grupo.h) : 0;
+        if (!gw || !gh) { return contener(caja, medidas); }
+        var base = contener({ x: 0, y: 0, w: gw, h: gh }, medidas);
+        var sx = caja.w / gw;
+        var sy = caja.h / gh;
+        return {
+            x: caja.x + base.x * sx,
+            y: caja.y + base.y * sy,
+            w: base.w * sx,
+            h: base.h * sy,
+            discrepancia: false
+        };
+    }
+
     /* ============ Carga de imagenes (cache por URL) ============ */
 
     /** Carga (o recupera de cache) la imagen de una URL. Nunca lanza. */
@@ -423,7 +465,7 @@
             var medidas = item.recurso && item.recurso.w && item.recurso.h
                 ? { w: item.recurso.w, h: item.recurso.h }
                 : { w: item.img.w, h: item.img.h };
-            var encaje = contener({ x: -caja.w / 2, y: -caja.h / 2, w: caja.w, h: caja.h }, medidas);
+            var encaje = rectPlaceholder({ x: -caja.w / 2, y: -caja.h / 2, w: caja.w, h: caja.h }, medidas, grupoDeRef(c, op.contexto));
             if (encaje.discrepancia) { discrepancias.push({ indice: item.indice, ref: c.ref }); }
             ctx.drawImage(item.img.img, encaje.x, encaje.y, encaje.w, encaje.h);
         } else if (!op.huecosTransparentes) {
@@ -619,7 +661,7 @@
                     var medidas = item.recurso && item.recurso.w && item.recurso.h
                         ? { w: item.recurso.w, h: item.recurso.h }
                         : { w: item.img.w, h: item.img.h };
-                    var encaje = contener({ x: -caja.w / 2, y: -caja.h / 2, w: caja.w, h: caja.h }, medidas);
+                    var encaje = rectPlaceholder({ x: -caja.w / 2, y: -caja.h / 2, w: caja.w, h: caja.h }, medidas, grupoDeRef(c, op.contexto));
                     if (encaje.discrepancia) { discrepancias.push({ indice: item.indice, ref: c.ref }); }
                     ctx.drawImage(item.img.img, encaje.x, encaje.y, encaje.w, encaje.h);
                 } else if (!op.huecosTransparentes) {
@@ -786,7 +828,7 @@
         // queda como alias para no romper a ningun consumidor anterior.
         componer: componer,
         composicion: componer,
-        contener: contener,
+        contener: contener, rectPlaceholder: rectPlaceholder, grupoDeRef: grupoDeRef,
         homografia: homografia,
         perspectivaConvexa: perspectivaConvexa,
         filtroCss: filtroCss,

@@ -81,7 +81,7 @@ if (!defined('ABSPATH')) {
         completo; la escala por tiradores conserva la proporcion y admite dimensiones de hasta 1200 px.
         El tirador de rotacion se mantiene visible en el borde del lienzo y sigue el puntero alrededor
         del centro del grupo. Las imagenes conservan su proporcion al redimensionarlas desde cualquier
-        tirador; para los placeholders, manten <strong>Shift</strong> para conservarla.
+        tirador; para los placeholders, manten <strong>Shift</strong> para conservarla. Al estirar un placeholder (sin Shift) su contenido se deforma junto con la caja para simular una perspectiva; el PDF final no cambia (siempre encaja sin deformar).
         Los cuatro puntos rojos del lienzo deforman el grupo como una sola pieza, solo para el mockup;
         usa "Restablecer perspectiva" para volver al rectangulo. Si necesitas editar un PH sin mover los demas,
         haz <strong>Alt + clic</strong> sobre el PH en el lienzo o en la lista. La capa sigue en su

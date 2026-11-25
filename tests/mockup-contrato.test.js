@@ -1320,4 +1320,34 @@ pruebas.push(function () {
         check('T016: save/restore balanceado', ctx.ops.indexOf('restore') !== -1);
     });
 });
+pruebas.push(function () {
+    // Fix del bug de fidelidad (contain en reposo) + deformacion al estirar.
+    var grupo = { id: '0000FF', w: 391, h: 391, cont: 1 };
+    var medidas = { w: 1000, h: 100 }; // recorte real (campo 1000x100)
+    var reposo = R.rectPlaceholder({ x: -195.5, y: -195.5, w: 391, h: 391 }, medidas, grupo);
+    check('placeholder reposo: contain (no fill) -> ~391x39, no 391x391',
+        Math.abs(reposo.w - 391) < 0.5 && Math.abs(reposo.h - 39.1) < 0.5, reposo.w + 'x' + reposo.h);
+    var estirada = R.rectPlaceholder({ x: -195.5, y: -300, w: 391, h: 600 }, medidas, grupo);
+    check('placeholder estirado: el contenido escala con la caja (deforma junto)',
+        estirada.h > reposo.h * 1.4, reposo.h + ' -> ' + estirada.h);
+    var sinGrupo = R.rectPlaceholder({ x: -50, y: -50, w: 100, h: 100 }, medidas, null);
+    var cont = R.contener({ x: -50, y: -50, w: 100, h: 100 }, medidas);
+    check('placeholder sin grupo: cae a contener (capas img intactas)',
+        Math.abs(sinGrupo.w - cont.w) < 0.001 && Math.abs(sinGrupo.h - cont.h) < 0.001);
+});
+
+pruebas.push(function () {
+    var ctx = ctxFalso();
+    // Placeholder 391x391 con recorte 1000x100: el mockup debe CONTENER (no fill).
+    return R.componer(ctx, [capa('placeholder', '0000FF', { x: 0, y: 0, w: 391, h: 391 })], {
+        resolver: function () { return { url: 'rec', w: 1000, h: 100 }; },
+        contexto: { grupos: [{ id: '0000FF', w: 391, h: 391, cont: 1 }] },
+        lienzo: 300
+    }).then(function () {
+        var trazo = ctx.ops.filter(function (o) { return o.indexOf('drawImage:rec@') === 0; })[0] || '';
+        var partes = (trazo.split('@')[1] || '').split(',').map(Number);
+        check('componer placeholder: contain en reposo (alto ~39, no 391)',
+            partes.length === 4 && Math.abs(partes[3] - 39) < 1, trazo);
+    });
+});
 correr();

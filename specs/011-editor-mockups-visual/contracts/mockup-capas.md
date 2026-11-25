@@ -206,6 +206,16 @@ Reglas:
 6. **Salida**: siempre 300x300 px. El zoom del editor es una lupa; el backing store escala, la
    geometria no.
 
+> **Placeholder — contain en reposo, deforma al estirar (fix 2026-11-24)**: el placeholder ya
+> NO dibuja con `contener()` directo sino con `rectPlaceholder(caja, medidas, grupo)`. En reposo
+> (la caja tiene el aspecto del grupo, asi se inserta) reproduce EXACTO el `contain` del PDF; si la
+> caja fue estirada/deformada para simular perspectiva, el contenido se escala con la caja -> el
+> hueco y su imagen se deforman juntos, como la herramienta de perspectiva. Las capas `img` siguen
+> en `contener()` (nunca se deforman). El `w/h` del recorte que llega al mockup es el del **lienzo**
+> (`params` de la receta); si falta, el nucleo cae al tamaño natural de la imagen. Bug corregido:
+> antes llegaba el tamaño del GRUPO (p. ej. 391x391) en vez del recorte (1000x100) y el mockup
+> estiraba en reposo en lugar de contener.
+
 ## 3. Preview de grupo (store cliente)
 
 `PersonalizadorPDF.previews[grupoId] = {url, w, h, hash, ts}`; evento `pmu:preview-listo` con
