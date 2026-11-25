@@ -85,7 +85,9 @@ var editor = leer('assets/mockups.js');
 check('PMUGeometria.distribuir sigue exportado', typeof geometria.distribuir === 'function');
 check('el editor llama a PMUGeometria.distribuir', /\bG\.distribuir\s*\(/.test(editor));
 check('el editor expone los botones de distribuir', editor.indexOf('ec-mk-dist') !== -1
-    && editor.indexOf('Distribuir H') !== -1 && editor.indexOf('Distribuir V') !== -1);
+    && editor.indexOf('data-eje="x"') !== -1 && editor.indexOf('data-eje="y"') !== -1
+    && editor.indexOf('aria-label="Distribuir horizontalmente"') !== -1
+    && editor.indexOf('aria-label="Distribuir verticalmente"') !== -1);
 check('el editor lleva el estado de seleccion multiple', editor.indexOf('seleccionados: []') !== -1
     && editor.indexOf('ec-mk-sel') !== -1);
 check('las propiedades numericas muestran y transforman el grupo seleccionado',
@@ -98,7 +100,11 @@ check('las propiedades numericas muestran y transforman el grupo seleccionado',
 check('la transformacion de la seleccion vive bajo el lienzo (.ec-mk-transformar)',
     editor.indexOf('ec-mk-transformar') !== -1
         && /ec-mk-lienzo[\s\S]{0,600}ec-mk-transformar/.test(editor)
-        && (editor.match(/ec-mk-transformar-acciones/g) || []).length >= 2);
+        && (editor.match(/ec-mk-transformar-acciones/g) || []).length >= 1);
+check('el bloque bajo el lienzo es una sola tarjeta compacta (geo + iconos)',
+    /ec-mk-panel-props[\s\S]{0,900}ec-mk-transformar-acciones[\s\S]{0,900}ec-mk-grupo-iconos/.test(editor)
+        && editor.indexOf('ec-mk-candado') !== -1
+        && editor.indexOf('ec-mk-restablecer-prop') !== -1);
 check('los ajustes de capa viven en el acordeon Ajustes (nodo propio)',
     editor.indexOf('data-ac="ajustes"') !== -1
         && editor.indexOf('ec-mk-props-aj') !== -1
@@ -723,8 +729,8 @@ check('dibujo del tirador grupal: guia y circulo en GLOBAL (contexto normal), no
         && ed.indexOf('ctx.arc(rotGrupo.x, rotGrupo.y, 5 / f') !== -1
         && ed.indexOf('rotLocal.x - marcoGrupo.x') === -1,
     'el contexto rotado con coordenadaMarco (local a la esquina) deformaba el punto: doble resta de la esquina del marco');
-check('el redimensionado de imagen conserva proporcion por defecto',
-    /var preservarProporcion = c\.tipo === 'img' \|\| ev\.shiftKey/.test(ed)
+check('el redimensionado conserva proporcion (imagen por defecto, candado opcional)',
+    /var preservarProporcion = estado\.bloquearAspecto \|\| c\.tipo === 'img' \|\| ev\.shiftKey/.test(ed)
         && /centrarEje: c\.tipo === 'img' && a\.tipo\.length === 1/.test(ed));
 check('los tiradores de grupo usan un marco orientado compartido',
     typeof geometria.marcoOrientado === 'function'

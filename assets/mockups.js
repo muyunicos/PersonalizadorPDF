@@ -58,8 +58,36 @@ jQuery(function ($) {
         envs: {},
         // Enmienda D13 (spec 036): mockup no aplaneable; aviso y la ficha compone por capas.
         // { id: mockupId, motivo: 'img-intercalada'|'blend-delante'|'error' }
-        avisoAplanado: null
+        avisoAplanado: null,
+        // Candado de relacion de aspecto (icono entre Ancho y Alto). No se
+        // persiste: es una ayuda de edicion, no un dato del mockup.
+        bloquearAspecto: false
     };
+
+    /* ============ Proporcion de referencia (candado y restablecer) ============ */
+
+    /**
+     * Proporcion ORIGINAL de una capa: la de su recurso (foto del catalogo)
+     * o, para un placeholder, la del grupo del PDF (el aspecto con el que se
+     * inserto). Devuelve 0 si no se puede derivar (el llamador decide).
+     */
+    function proporcionReferencia(c) {
+        if (!c) { return 0; }
+        if (c.tipo === 'img') {
+            var it = (datos.imagenes || []).filter(function (x) {
+                return String(x.id) === String(String(c.ref || '').split(':')[1]);
+            })[0];
+            var iw = it && Number(it.w) > 0 ? Number(it.w) : 0;
+            var ih = it && Number(it.h) > 0 ? Number(it.h) : 0;
+            return (iw > 0 && ih > 0) ? (iw / ih) : 0;
+        }
+        var gid = String(c.ref || '').split('#')[0];
+        var g = null;
+        grupos.forEach(function (x) { if (String(x.id) === gid) { g = x; } });
+        var gw = g && Number(g.w) > 0 ? Number(g.w) : 0;
+        var gh = g && Number(g.h) > 0 ? Number(g.h) : 0;
+        return (gw > 0 && gh > 0) ? (gw / gh) : 0;
+    }
 
     function normalizarMockup(m) {
         var avisos = [];
@@ -357,20 +385,21 @@ jQuery(function ($) {
             '      <div class="ec-mk-transformar">' +
             '        <div class="ec-mk-panel-props" hidden>' +
             '          <div class="ec-mk-props"></div>' +
-            '        </div>' +
-            '        <div class="ec-mk-acciones ec-mk-transformar-acciones" hidden>' +
-            '          <span class="description">Alinear:</span>' +
-            '          <button type="button" class="button button-small ec-mk-alin" data-pos="izquierda">Izq.</button>' +
-            '          <button type="button" class="button button-small ec-mk-alin" data-pos="centro_h">Centro H</button>' +
-            '          <button type="button" class="button button-small ec-mk-alin" data-pos="derecha">Der.</button>' +
-            '          <button type="button" class="button button-small ec-mk-alin" data-pos="arriba">Arriba</button>' +
-            '          <button type="button" class="button button-small ec-mk-alin" data-pos="centro_v">Centro V</button>' +
-            '          <button type="button" class="button button-small ec-mk-alin" data-pos="abajo">Abajo</button>' +
-            '        </div>' +
-            '        <div class="ec-mk-acciones ec-mk-transformar-acciones" hidden>' +
-            '          <span class="description">Distribuir (Ctrl+clic marca varias):</span>' +
-            '          <button type="button" class="button button-small ec-mk-dist" data-eje="x">Distribuir H</button>' +
-            '          <button type="button" class="button button-small ec-mk-dist" data-eje="y">Distribuir V</button>' +
+            '          <div class="ec-mk-acciones ec-mk-transformar-acciones" hidden>' +
+            '            <span class="ec-mk-grupo-iconos" role="group" aria-label="Alinear">' +
+            '              <button type="button" class="button button-small ec-mk-icono ec-mk-alin" data-pos="izquierda" title="Alinear a la izquierda" aria-label="Alinear a la izquierda">&#8676;</button>' +
+            '              <button type="button" class="button button-small ec-mk-icono ec-mk-alin" data-pos="centro_h" title="Centrar horizontalmente" aria-label="Centrar horizontalmente">&#8596;</button>' +
+            '              <button type="button" class="button button-small ec-mk-icono ec-mk-alin" data-pos="derecha" title="Alinear a la derecha" aria-label="Alinear a la derecha">&#8677;</button>' +
+            '              <button type="button" class="button button-small ec-mk-icono ec-mk-alin" data-pos="arriba" title="Alinear arriba" aria-label="Alinear arriba">&#8645;</button>' +
+            '              <button type="button" class="button button-small ec-mk-icono ec-mk-alin" data-pos="centro_v" title="Centrar verticalmente" aria-label="Centrar verticalmente">&#8597;</button>' +
+            '              <button type="button" class="button button-small ec-mk-icono ec-mk-alin" data-pos="abajo" title="Alinear abajo" aria-label="Alinear abajo">&#8647;</button>' +
+            '            </span>' +
+            '            <span class="ec-mk-sep" aria-hidden="true"></span>' +
+            '            <span class="ec-mk-grupo-iconos" role="group" aria-label="Distribuir (Ctrl+clic marca varias)">' +
+            '              <button type="button" class="button button-small ec-mk-icono ec-mk-dist" data-eje="x" title="Distribuir horizontalmente (Ctrl+clic marca varias)" aria-label="Distribuir horizontalmente">&#8633;</button>' +
+            '              <button type="button" class="button button-small ec-mk-icono ec-mk-dist" data-eje="y" title="Distribuir verticalmente (Ctrl+clic marca varias)" aria-label="Distribuir verticalmente">&#8693;</button>' +
+            '            </span>' +
+            '          </div>' +
             '        </div>' +
             '      </div>' +
             '      <p class="ec-mk-ayuda">Arrastra para mover; usa los tiradores para redimensionar, rotar ' +
@@ -1063,10 +1092,14 @@ jQuery(function ($) {
             if (ev.shiftKey) { c.rot = Math.round(c.rot / 15) * 15; }
             estado.guias = [];
         } else {
-            var preservarProporcion = c.tipo === 'img' || ev.shiftKey;
-            var modoProporcion = c.tipo === 'img'
-                ? (/^[ew]$/.test(a.tipo) ? 'w' : (/^[ns]$/.test(a.tipo) ? 'h' : true))
-                : ev.shiftKey;
+            // El candado de aspecto fuerza proporcion aunque la capa no sea
+            // `img` y sin Shift (hoy img/Shift ya la conservaban).
+            var preservarProporcion = estado.bloquearAspecto || c.tipo === 'img' || ev.shiftKey;
+            var modoProporcion = estado.bloquearAspecto
+                ? true
+                : (c.tipo === 'img'
+                    ? (/^[ew]$/.test(a.tipo) ? 'w' : (/^[ns]$/.test(a.tipo) ? 'h' : true))
+                    : ev.shiftKey);
             c = G.redimensionarDesdeTirador(a.original, a.tipo, p.x - a.inicio.x, p.y - a.inicio.y, {
                 proporcion: preservarProporcion ? modoProporcion : false,
                 centrarEje: c.tipo === 'img' && a.tipo.length === 1,
@@ -1466,11 +1499,37 @@ jQuery(function ($) {
                 ['w', 'Ancho', marcoProps.w], ['h', 'Alto', marcoProps.h], ['rot', 'Rotacion', c.rot || 0]]
             : [['x', 'X', c.x], ['y', 'Y', c.y], ['w', 'Ancho', c.w],
                 ['h', 'Alto', c.h], ['rot', 'Rotacion', c.rot || 0]];
+        // Fila unica: X, Y, Ancho, candado, Alto, restablecer, Rotacion. El
+        // candado y el restablecer quedan ENTRE Ancho y Alto (el candado
+        // conserva la relacion al editar; el restablecer la recupera del
+        // recurso). `proporcionReferencia` decide si hay una proporcion
+        // original que valga la pena restablecer.
+        var refProp = proporcionReferencia(esGrupo ? null : c);
+        var $geo = $('<div class="ec-mk-geofila">');
         camposGeo.forEach(function (f) {
-            html += '<label>' + f[1] + ' <input type="number" class="ec-mk-geo" data-geo="' + f[0]
-                + '" step="' + (f[0] === 'rot' ? 1 : (f[0] === 'w' || f[0] === 'h' ? 1 : 0.1))
-                + '" value="' + (Math.round((f[2] || 0) * 100) / 100) + '"></label>';
+            var $campo = $('<label class="ec-mk-geo-campo">').attr('data-geo-campo', f[0]);
+            $campo.append($('<span>').text(f[1]));
+            $campo.append($('<input type="number" class="ec-mk-geo" data-geo="' + f[0] + '" step="' + (f[0] === 'rot' ? 1 : (f[0] === 'w' || f[0] === 'h' ? 1 : 0.1)) + '" value="' + (Math.round((f[2] || 0) * 100) / 100) + '">'));
+            $geo.append($campo);
+            if (f[0] === 'w') {
+                $geo.append($("<button type=\"button\" class=\"button button-small ec-mk-icono ec-mk-candado\"")
+                    .attr('aria-pressed', estado.bloquearAspecto ? 'true' : 'false')
+                    .attr('title', estado.bloquearAspecto
+                        ? 'Relacion de aspecto bloqueada: al cambiar Ancho o Alto se conserva la proporcion'
+                        : 'Bloquear la relacion de aspecto entre Ancho y Alto')
+                    .attr('aria-label', 'Bloquear relacion de aspecto')
+                    .toggleClass('ec-activo', !!estado.bloquearAspecto)
+                    .html(estado.bloquearAspecto ? '&#128274;' : '&#128275;'));
+            }
+            if (f[0] === 'h') {
+                $geo.append($("<button type=\"button\" class=\"button button-small ec-mk-icono ec-mk-restablecer-prop\"")
+                    .attr('title', 'Restablecer la proporcion original del recurso (sin deformar)')
+                    .attr('aria-label', 'Restablecer proporcion')
+                    .html('&#8634;'));
+                if (!refProp) { $geo.find('.ec-mk-restablecer-prop').attr('disabled', 'disabled'); }
+            }
         });
+        html += '<div class="ec-mk-geofila-wrap">' + $('<div>').append($geo).html() + '</div>';
         if (c.tipo === 'placeholder') {
             // Envoltura (PowerClip del PDF): recorta la capa al contenedor
             // vectorial del hueco. La pagina solo trae CLAVES: el toggle se
@@ -2425,12 +2484,21 @@ jQuery(function ($) {
     /* Propiedades numericas: aplicar durante la edicion y guardar un solo paso al terminar. */
     $ed.on('focusin', '.ec-mk-geo', function () {
         var indices = indicesSeleccionados();
+        // Proporcion original para el candado: la de la capa (recurso/grupo)
+        // o, con seleccion multiple, la del marco al enfocar.
+        var propRef = indices.length > 1
+            ? (function () {
+                var mk = G.marco(capas(), indices);
+                return mk && mk.w > 0 && mk.h > 0 ? (mk.w / mk.h) : 0;
+            }())
+            : proporcionReferencia(capas()[estado.seleccion]);
         geoEdicion = {
             campo: String($(this).attr('data-geo')),
             indices: indices,
             original: JSON.parse(JSON.stringify(capas())),
             estadoAnterior: JSON.stringify(estado.mockups),
             seleccion: estado.seleccion,
+            proporcionOriginal: propRef,
             modificado: false
         };
     });
@@ -2443,6 +2511,16 @@ jQuery(function ($) {
         var originales = geoEdicion.original;
         var indices = geoEdicion.indices;
         var base = originales[geoEdicion.seleccion];
+        // Candado de aspecto: al editar Ancho/Alto se conserva la relacion
+        // original de la capa (o, en grupo, la del marco al enfocar).
+        var candado = estado.bloquearAspecto && (campo === 'w' || campo === 'h');
+        if (candado && geoEdicion.proporcionOriginal) {
+            // proporcionOriginal = w/h. Ancho -> alto: alto = ancho / (w/h).
+            // Alto -> ancho: ancho = alto * (w/h).
+            if (campo === 'w') { v = Math.max(1, Math.min(G.MAX_DIMENSION, v / geoEdicion.proporcionOriginal)); }
+            else { v = Math.max(1, Math.min(G.MAX_DIMENSION, v * geoEdicion.proporcionOriginal)); }
+            campo = (geoEdicion.campo === 'w') ? 'h' : 'w';
+        }
         if (indices.length > 1) {
             var marco = G.marco(originales, indices);
             if (!marco) { return; }
@@ -2455,6 +2533,7 @@ jQuery(function ($) {
                 var dimension = Math.max(1, Math.min(G.MAX_DIMENSION, v));
                 var sx = campo === 'w' ? dimension / Math.max(1, marco.w) : 1;
                 var sy = campo === 'h' ? dimension / Math.max(1, marco.h) : 1;
+                if (candado) { sx = sy; }
                 mockup().capas = G.escalarGrupo(originales, indices,
                     { x: marco.x + marco.w / 2, y: marco.y + marco.h / 2 }, sx, sy);
             } else if (campo === 'rot' && base) {
@@ -3074,6 +3153,37 @@ jQuery(function ($) {
     /* Distribuir (T034, FR-027): data-eje="x"|"y". */
     $ed.on('click', '.ec-mk-dist', function () {
         distribuirSeleccion(String($(this).attr('data-eje')) === 'y' ? 'y' : 'x');
+    });
+
+    /* Candado de relacion de aspecto: alterna el estado y repinta. */
+    $ed.on('click', '.ec-mk-candado', function () {
+        estado.bloquearAspecto = !estado.bloquearAspecto;
+        pintarProps();
+    });
+
+    /* Restablecer la proporcion original del recurso (sin deformar): mantiene
+       el centro y el area aproximada, y solo ajusta w/h. */
+    $ed.on('click', '.ec-mk-restablecer-prop', function () {
+        var c = capa();
+        if (!c || c.bloqueada) { return; }
+        var ref = proporcionReferencia(c);
+        if (!ref) {
+            $ed.find('.ec-mk-alertas').text('No hay una proporcion original para esta capa.');
+            return;
+        }
+        // Conserva el area: w*h constante; resuelve w desde la proporcion.
+        var area = Math.max(1, Number(c.w) * Number(c.h));
+        var nuevoW = Math.sqrt(area * ref);
+        var nuevoH = nuevoW / ref;
+        if (!isFinite(nuevoW) || !isFinite(nuevoH) || nuevoW <= 0 || nuevoH <= 0) { return; }
+        c.w = Math.min(G.MAX_DIMENSION, Math.max(1, nuevoW));
+        c.h = Math.min(G.MAX_DIMENSION, Math.max(1, nuevoH));
+        var normalizada = G.acotar(c);
+        c.x = normalizada.x; c.y = normalizada.y;
+        c.w = normalizada.w; c.h = normalizada.h;
+        marcarPaso();
+        sinGuardar();
+        refrescar();
     });
 
     /* Arranque. */
