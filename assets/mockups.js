@@ -3002,21 +3002,19 @@ jQuery(function ($) {
                 cRS.x = rs.x; cRS.y = rs.y; cRS.w = rs.w; cRS.h = rs.h;
             }
         } else if (ev.altKey) {
-            // Alt: escala 1 px (Ctrl = 0,1 px) en el eje de la flecha.
+            // Alt: escala PROPORCIONAL desde el centro (Ctrl = 0,1 px).
             ev.preventDefault();
             if (bloqueadas) { return; }
+            var factorEs = 1 + signo * paso / 100;
             if (indices.length > 1) {
                 var origenEs = G.centro(marcoOrientadoSeleccion(indices) || {});
-                var escalaEs = 1 + signo * paso / 100;
-                mockup().capas = G.escalarGrupo(capas(), indices, origenEs,
-                    horizontal ? escalaEs : 1, horizontal ? 1 : escalaEs);
+                mockup().capas = G.escalarGrupo(capas(), indices, origenEs, factorEs, factorEs);
             } else {
                 var cEs = capa();
                 if (!cEs) { return; }
-                var tiradorEs = horizontal ? 'e' : 's';
-                var deltaEs = { x: horizontal ? signo * paso : 0, y: horizontal ? 0 : signo * paso };
-                var es = G.redimensionarDesdeTirador(cEs, tiradorEs, deltaEs.x, deltaEs.y, { lienzo: LIENZO });
-                cEs.x = es.x; cEs.y = es.y; cEs.w = es.w; cEs.h = es.h;
+                var cx = cEs.x + (cEs.w || 0) / 2;
+                var cy = cEs.y + (cEs.h || 0) / 2;
+                mockup().capas = G.escalarGrupo(capas(), indices, { x: cx, y: cy }, factorEs, factorEs);
             }
         } else if (ev.shiftKey) {
             // Mayus: rota ±15° (Ctrl = ±1°).
