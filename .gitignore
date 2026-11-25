@@ -22,3 +22,8 @@ composer.phar
 # Configuraciones de AI Assistant (Speckit recomendaciones).
 .clinerules/
 .specify/
+
+# Variables de entorno locales (claves de proveedores). Solo .env.example se versiona.
+.env
+.env.*
+!.env.example

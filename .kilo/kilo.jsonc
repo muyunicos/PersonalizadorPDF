@@ -1,0 +1,57 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "instructions": [".kilo/rules/*.md"],
+  "provider": {
+    "ollama": {
+      "options": {
+        "baseURL": "http://127.0.0.1:11434/v1"
+      }
+    }
+  },
+  "model": "openrouter/baidu/ernie-5.5-flash-preview:free",
+  "small_model": "openrouter/liquid/lfm-3-1.7b:free",
+  "username": "Jonatan",
+  "default_agent": "code",
+  "snapshot": true,
+  "share": "disabled",
+  "autoupdate": "notify",
+  "compaction": {
+    "auto": true,
+    "prune": true
+  },
+  "permission": {
+    "read": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "list": "allow",
+    "semantic_search": "allow",
+    "webfetch": "allow",
+    "websearch": "allow",
+    "todowrite": "allow",
+    "todoread": "allow",
+    "task": "allow",
+    "edit": "ask",
+    "external_directory": {
+      "**/personalizador-pdf/**": "allow",
+      "**/textmuy/**": "allow",
+      "**/calculadora/**": "allow",
+      "**/muyunicos/**": "allow",
+      "C:/Users/Jonatan/Documents/GitHub/personalizador-pdf/**": "allow",
+      "C:/Users/Jonatan/Documents/GitHub/calculadora/**": "allow",
+      "C:/Users/Jonatan/Documents/GitHub/muyunicos/**": "allow",
+      "*": "ask"
+    },
+    "bash": {
+      "php -l*": "allow",
+      "php tests/*": "allow",
+      "php composer.phar*": "allow",
+      "node --check*": "allow",
+      "node tests/*": "allow",
+      "npx jscpd*": "allow",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "*": "ask"
+    }
+  }
+}
