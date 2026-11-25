@@ -6508,6 +6508,12 @@ JS;
             ],
             // Editor de mockups (spec 004, T008): datos del PDF seleccionado.
             'mockups' => $this->mockups_para_editor(),
+            // Spec 049: definicion de los campos del PDF (envoltura + grupo base)
+            // para que el preview del grupo simule el cargador real del cliente.
+            'camposDef' => $this->campos_definiciones_admin(),
+            // Spec 049: catalogo de campos (id => fila v2 con `js`/`datos`) para
+            // que el preview capture las RANURAS reales del campo asociado.
+            'campos' => $this->pmu_uploads()->campo_listar(),
         ]);
     }
 
@@ -6517,6 +6523,47 @@ JS;
      * `datos_pdf_render()` (evita duplicar el armado de grupos/fotos/mockups).
      * Solo lectura; nunca tumba el enqueue.
      */
+    /**
+     * Definiciones de los campos del PDF para el preview del admin (spec 049):
+     * id => {envoltura, grupo_gid, grupo_w, grupo_h} reutilizando `campos_panel`
+     * (fuente unica). Solo lectura; nunca tumba el enqueue.
+     */
+    public function campos_definiciones_admin()
+    {
+        $out = [];
+        try {
+            $get = isset($_GET['ec_pdf']) ? sanitize_file_name(wp_unslash((string)$_GET['ec_pdf'])) : '';
+            $pdfs = $this->pdfs_subidos();
+            if ($get !== '' && in_array($get, $pdfs, true)) {
+                $archivo = $get;
+            } elseif ($pdfs) {
+                $archivo = (string)reset($pdfs);
+            } else {
+                return $out;
+            }
+            $nombre = $this->nombre_de($archivo);
+            $config = $this->config_de($nombre);
+            $campos = [];
+            foreach ((array)($config['campos_ids'] ?? []) as $cid) {
+                $cid = (int)$cid;
+                if ($cid > 0 && isset($this->pmu_uploads()->campo_listar()[$cid])) {
+                    $campos[$cid] = $this->pmu_uploads()->campo_listar()[$cid];
+                }
+            }
+            foreach ($this->campos_panel($campos) as $c) {
+                $out[(int)$c['id']] = [
+                    'envoltura' => $c['envoltura'],
+                    'grupo_gid' => $c['grupo_gid'],
+                    'grupo_w' => $c['grupo_w'],
+                    'grupo_h' => $c['grupo_h'],
+                ];
+            }
+        } catch (\Throwable $e) {
+            // Sin datos: el preview cae a la ranura del grupo.
+        }
+        return $out;
+    }
+
     public function mockups_para_editor()
     {
         $vacio = ['pdf' => '', 'grupos' => [], 'fotos' => [], 'mockups' => [], 'preview_omisible' => false,

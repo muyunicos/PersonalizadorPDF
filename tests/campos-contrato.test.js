@@ -526,6 +526,17 @@ const Carg = require(path.join(__dirname, '..', 'assets', 'cargador-pmu.js'));
   check('los datos tecnicos van SOLO con `tecnico` (preview de la consola)',
     /if \(this\.config\.tecnico\) \{/.test(cargadorJs)
     && adm.indexOf('tecnico: true') !== -1);
+  // Spec 049: el preview del grupo simula el cargador real (ranuras del campo +
+  // envoltura por defecto del grupo) y se remonta al cambiar de campo.
+  check('el preview del grupo lee las ranuras reales del campo (espia)', 
+    adm.indexOf('function ranurasDelCampo(') !== -1
+    && adm.indexOf('montarCargador: function (el, opts)') !== -1
+    && adm.indexOf('capturado = (opts && opts.ranuras)') !== -1);
+  check('el preview del grupo pasa la envoltura (campo o defecto del grupo)',
+    adm.indexOf('var envoltura = (defCampo && defCampo.envoltura) || (grupo && grupo.env_defecto)') !== -1
+    && adm.indexOf('envoltura: envoltura,') !== -1);
+  check('al cambiar de campo se destruye y remonta el cargador del preview',
+    /function invalidarPreview\(id\)[\s\S]{0,400}PREVIEW_CARG\[String\(id\)\][\s\S]{0,200}destruir/.test(adm));
 }
 
 console.log('\n' + (fallos === 0 ? 'CAMPOS CONTRATO OK' : 'CAMPOS CONTRATO FALLA: ' + fallos));

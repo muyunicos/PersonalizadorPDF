@@ -1362,5 +1362,7 @@ CargadorPMU.prototype._abrirVisorCompartido = function (indice, posicion) {
     };
 
     global.CargadorPMU = CargadorPMU;
+    // Spec 049: normalizacion compartida para el preview del admin (sin DOM).
+    global.PMURanuras = { normalizar: normalizarRanuras };
     if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
 })(typeof window !== 'undefined' ? window : globalThis);

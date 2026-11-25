@@ -2325,6 +2325,13 @@ jQuery(function ($) {
     /** Invalida el preview de un grupo (cambio de tipo/estilo/codigo/campo). */
     function invalidarPreview(id) {
         delete PREVIEWS[String(id)];
+        // Spec 049: el preview monta el cargador real; al cambiar de campo hay que
+        // destruirlo y borrarlo para que se remonte con las ranuras nuevas.
+        var carg = PREVIEW_CARG[String(id)];
+        if (carg) {
+            try { if (typeof carg.destruir === 'function') { carg.destruir(); } } catch (e) {}
+            delete PREVIEW_CARG[String(id)];
+        }
     }
 
     /* ===== Spec 049: vista previa = motor de carga (CargadorPMU) por grupo ===== */
@@ -2397,6 +2404,33 @@ jQuery(function ($) {
         $nav.prop('hidden', n <= 1);
     }
 
+    /** Ejecuta el `campo.js` de un campo con un espia que captura sus RANURAS. */
+    function ranurasDelCampo(campoId) {
+        var cid = parseInt(campoId, 10) || 0;
+        var defs = (cfgGlobal.camposDef) || {};
+        var def = defs[String(cid)] || null;
+        var lista = (cfgGlobal.campos && cfgGlobal.campos[String(cid)]) || null;
+        var codigo = lista && (lista.js || lista.script);
+        if (codigo) {
+            try {
+                var capturado = null;
+                var apiEspia = {
+                    montarCargador: function (el, opts) {
+                        capturado = (opts && opts.ranuras) ? opts.ranuras : [];
+                        return { montar: function () { return true; } };
+                    }
+                };
+                var ctxEspia = { id: cid, set: function () {}, get: function () { return null; } };
+                var rootEspia = { querySelector: function () { return { appendChild: function () {} }; } };
+                var fn = new Function('ctx', 'root', 'return (' + codigo + ')(ctx, root);');
+                fn(ctxEspia, rootEspia);
+                if (capturado && capturado.length) { return capturado; }
+            } catch (e) { /* cae al fallback */ }
+        }
+        // Fallback: ranura legacy del grupo (sin campo.js).
+        return [{ w: 100, h: 100, forma: 'rectangulo', min: 1, max: 1, phsize: 0 }];
+    }
+
     /** Monta el motor de carga real (CargadorPMU) para un grupo de imagen. */
     function montarCargadorGrupo($panel) {
         var id = String($panel.attr('data-id') || '');
@@ -2407,10 +2441,32 @@ jQuery(function ($) {
         if (!$col.length) { return; }
         var w = parseInt($panel.attr('data-w'), 10) || 100;
         var h = parseInt($panel.attr('data-h'), 10) || 100;
+        var campoId = parseInt($panel.attr('data-campo'), 10) || 0;
+        var defs = (cfgGlobal.camposDef) || {};
+        var defCampo = defs[String(campoId)] || null;
+        // Envoltura (guia PowerClip): la del campo asociado o, si no hay, la forma
+        // por defecto del grupo (A). Solo se pasa si hay geometria util.
+        var grupos = (cfgGlobal.mockups && cfgGlobal.mockups.grupos) || [];
+        var grupo = null;
+        grupos.forEach(function (g) { if (String(g.id) === id) { grupo = g; } });
+        var envoltura = (defCampo && defCampo.envoltura) || (grupo && grupo.env_defecto) || null;
+        // RANURAS reales del campo (o fallback del grupo) normalizadas con el mismo
+        // normalizador del comprador (CargadorPMU), resolviendo phsize con defCampo.
+        var crudas = ranurasDelCampo(campoId);
+        var ranuras = (window.PMURanuras && PMURanuras.normalizar)
+            ? PMURanuras.normalizar(crudas) : crudas;
+        ranuras.forEach(function (r) {
+            if (r.phsize > 0 && defCampo && defCampo.grupo_w > 0 && defCampo.grupo_h > 0) {
+                var k = r.phsize === 2 ? 2 : 1;
+                r.w = defCampo.grupo_w * k; r.h = defCampo.grupo_h * k;
+            }
+            if (!r.gid && defCampo && defCampo.grupo_gid) { r.gid = String(defCampo.grupo_gid).toUpperCase(); }
+        });
         var cont = $('<div class="ec-preview-cargador"></div>').appendTo($col);
         var blobs = {};
         var carg = new window.CargadorPMU(cont[0], {
-            ranuras: [{ w: w, h: h, forma: 'rectangulo', min: 0, max: 9, gid: id, phsize: 0 }],
+            ranuras: ranuras,
+            envoltura: envoltura,
             tecnico: true,
             subir: function (blob) {
                 var nid = 'pv-' + id + '-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
