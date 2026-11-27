@@ -1,67 +1,75 @@
-# Script custom de feeds Google (WCPBC) — módulo del tema
+# Briefing para el próximo agente (modo Plan)
+## Idioma por defecto en la raíz (BR/US) + `/es/` como alternativa
 
-## Contexto / problema
-- Merchant (654115807) ya tiene el feed AR de "Google for WooCommerce" (381 productos, **ARS**) mostrándose en ~100 países → **precio no localizado**.
-- WCPBC no es soportado por Product Feed PRO (free) ni por su multi-moneda (Elite, solo Aelia/Curcy/FOX/WCML). La vía WCPBC-compatible y sin costo es **un generador propio** que lea la zona WCPBC por país (API `WCPBC_Pricing_Zones`) y emita un XML por país.
-- Decisión del usuario: **módulo integrado al tema** (no script suelto) y **cubrir los 10 países incluido AR** (unificar; reemplazar el feed de Google for WooCommerce).
+> Este archivo es **contexto de handoff**, no un plan final. El próximo agente en modo Plan debe
+> **investigar la viabilidad con wpLingua** y producir un plan de implementación mejorado.
 
-## Decisiones
-- **D1 — Módulo `inc/feed-google.php`** cargado con `mu_load_module('feed-google')` (patrón del tema). Expone `https://{subdominio}/feed-google.xml`.
-- **D2 — País desde el subdominio** (`muyu_get_current_country_from_subdomain()`), con override por `?wcpbc-manual-country=XX` (whitelist ISO) para robustez de Googlebot.
-- **D3 — Precio por zona WCPBC**: `WCPBC_Frontend_Pricing::unset()` para no heredar la zona del visitante; recorrer `WCPBC_Pricing_Zones::get_zones()` y usar `$zone->get_post_price($id,'_price')` + `$zone->get_currency()`. `identifier_exists=false` (sin GTIN/MPN).
-- **D4 — `g:id` único por país** (`{product_id}-{CC}`) para evitar conflictos entre feeds; `g:link` = permalink del subdominio + `?wcpbc-manual-country=XX`.
-- **D5 — Un feed por país** (10): AR/es/ARS, US/en/USD, BR/pt/BRL, MX/es/MXN, ES/es/EUR, CO/es/COP, CL/es/CLP, PE/es/PEN, EC/es/USD, CR/es/CRC. Se **desactiva** el feed AR de Google for WooCommerce (evita duplicar el mismo `id`/producto en AR).
-- **D6 — Caché**: transient `pmu_feed_{CC}` (1 h), invalidado en `save_post_product`/`woocommerce_update_product`. Headers `Cache-Control: public, max-age=3600` + `X-Robots-Tag: noindex`.
-- **D7 — Formato**: RSS 2.0 + namespace `g:` (Google Shopping), XML bien formado.
+## Objetivo ampliado (lo que quiere el usuario)
+- **BR** (`br.muyunicos.com`): **raíz = portugués** (idioma por defecto del país), y **`/es/`** = español.
+- **US** (`us.muyunicos.com`): **raíz = inglés** (idioma por defecto del país), y **`/es/`** = español.
+- **Países hispanos** (`mexico.` `co.` `es.` `cl.` `pe.` `ec.` `cr.`): **raíz = español** (sin `/es/`).
+- Se mantiene: **subdominio = país/moneda** (WCPBC) e **idioma = wpLingua**.
+- **Importante**: el usuario **rechaza** la solución actual de redirección `br/`→`/pt/` y `us/`→`/en/`.
+  Quiere que la **raíz sirva el idioma local sin redirección** (URL queda `br.`/`us.`).
 
-## Tareas (ordenadas)
-1. **`inc/feed-google.php`** (nuevo):
-   - `mu_load_module('feed-google')` en `functions.php`.
-   - `init`: `add_rewrite_rule('^feed-google\.xml$','index.php?pmu_feed=1','top')` + `template_redirect` (o match de `REQUEST_URI`) que emite el XML y `exit`. Flush de reglas al activar/tema (una vez).
-   - Resolver país (D2) y zona (D3); `WP_Query` de `product` publicados; armar XML (D4/D7); cachear (D6).
-   - Fallback si WCPBC no está activo: precio/moneda base.
-2. **Merchant Center**:
-   - Crear **10 feeds** (uno por país) con URL `https://{subdominio}/feed-google.xml`, país/idioma/moneda según D5.
-   - **Desactivar** el feed AR de Google for WooCommerce.
-   - Reclamar subdominios como sitios adicionales (o verificar que el claim del dominio los cubra).
-   - Configurar **envío/impuestos por país** (obligatorio por destino).
-3. **Validación** (ver abajo) y **enlazar** Merchant con Search Console por subdominio.
+## Situación actual (con evidencia)
+- **`.htaccess`** (`muyunicos/htaccess`):
+  - p14: regla LiteSpeed `E="Cache-Control:no-autoflush,vary=host%{HTTP_HOST}"`.
+  - p93: bloque "IDIOMA POR PAIS": `br/`→301 `/pt/`, `us/`→301 `/en/`, y hispanos `/pt/`,`/en/`→raíz.
+    → **Esto es lo que hay que reemplazar** por el enfoque A (rewrite interno, sin redirección).
+  - p145: bots liberados; p167: `Options All` eliminado.
+- **`inc/geo.php`**: país por subdominio (`muyu_get_countries_data()`, `muyu_get_current_country_from_subdomain()`),
+  filtros `woocommerce_customer_default_location[_array]` (p636/654), moneda por país.
+- **`inc/seo-hreflang.php`**: hreflang custom con códigos `es-{CC}`, `pt-BR`, `en-US`, `x-default` AR
+  (el hreflang de wpLingua ya se removió).
+- **`inc/compat-wplingua.php`**: conserva el prefijo de idioma en el 301 canónico.
+- **`inc/feed-google.php`**: feed por país (WCPBC) en `/feed-google.xml`; usa `muyu_get_countries_data()`.
+- **wpLingua**: idioma por defecto **global** = `es` en la raíz de **todos** los subdominios; `/pt/` y `/en/`
+  como subdirectorios en todos los hosts. **No soporta** "raíz = pt/en por subdominio".
 
-## Archivos afectados
-- `muyunicos/inc/feed-google.php` (nuevo).
-- `muyunicos/functions.php` (una línea: `mu_load_module('feed-google')`).
+## Restricción técnica clave (a validar)
+- wpLingua resuelve el idioma **por la URL** (prefijo `/pt/`, `/en/`). La raíz (`/`) siempre sirve el
+  idioma por defecto global (`es`). Por eso "raíz = pt/en" **no es nativo**.
+- El enfoque **A (rewrite interno)** intenta: que la raíz de BR/US sirva el contenido de `/pt/` y `/en/`
+  **sin cambiar la URL**, que `/pt/` y `/en/` redirijan a la raíz (canónica), y que `/es/` quede como
+  español. **Riesgo**: chocar con el switcher de wpLingua, el canonical, el hreflang y la caché.
 
-## Formato del feed (campos por item)
-`g:id` (`{id}-{CC}`), `g:title`, `g:description` (short description), `g:link` (subdominio + `?wcpbc-manual-country=XX`), `g:price` (`{local} {MONEDA}`), `g:availability` (en stock/agotado), `g:condition` (new), `g:brand` ("Muy Únicos" por defecto), `g:image_link`, `g:google_product_category` (mapeo), `g:product_type` (categoría Woo), `identifier_exists=false`.
+## Qué debe investigar el próximo agente (modo Plan)
+1. **Cómo wpLingua resuelve el idioma**: ¿engancha `parse_request`/`request`/`wp` para leer el prefijo?
+   ¿Qué pasa si el path es `/` pero se necesita servir pt/en? (Leer el plugin `wp-content/plugins/wplingua`.)
+2. **Viabilidad del rewrite interno**: ¿se puede servir `/pt/` en la raíz de `br.` sin redirección y sin
+   romper el switcher/canonical? ¿O conviene un `wp` action que fije el idioma y cargue la home traducida?
+3. **Alineación de canonical/hreflang**: la raíz `br/` debe ser canónica de pt-BR; `/es/` canónica de es;
+   `/pt/`→`/` (301). Ver `inc/compat-wplingua.php` y `inc/seo-hreflang.php`.
+4. **Caché LiteSpeed**: el vary por host ya existe; validar que la raíz cachee la variante correcta por host.
+5. **Switcher de idioma**: que en BR muestre pt (activo) y es (alternativa), y viceversa en US.
+6. **Feed Google**: los `link` del feed deben apuntar a la URL canónica resultante (raíz o `/es/`).
+7. **Rutas solo-AR / `country-scope.php`**: no romper el hreflang reducido.
 
-## Edge cases
-- **Producto variable**: precio mínimo de la zona (`_min_price`).
-- **Sin precio en la zona**: se omite el item (no se inventa ARS).
-- **WCPBC inactivo**: fallback a precio/moneda base.
-- **Inyección en `wcpbc-manual-country`**: whitelist ISO.
-- **Catálogo grande (381×10)**: caché por transient; una sola generación por país/hora.
-- **Out of stock**: se incluye con `availability=out of stock`.
-- **Duplicados**: `g:id` por país + desactivar el feed AR viejo.
+## Archivos clave
+- `muyunicos/htaccess` (bloque IDIOMA POR PAIS p93).
+- `muyunicos/inc/compat-wplingua.php`, `inc/seo-hreflang.php`, `inc/geo.php`, `inc/feed-google.php`.
+- `muyunicos/functions.php` (carga de módulos).
+- Plugin **wpLingua** (`wp-content/plugins/wplingua`) — investigar su resolución de idioma.
 
-## Validación
-- `php -l inc/feed-google.php` (gateado).
-- `curl.exe -s https://us.muyunicos.com/feed-google.xml` → XML válido, precios **USD**, `link` a `us.`.
-- Ídem `br.` (BRL), `mexico.` (MXN), `es.` (EUR), raíz (ARS).
-- Bien formado: `php -r "simplexml_load_file('...')"` o `xmllint --noout`.
-- Merchant → **Feeds** → fetch OK; **Diagnostics** sin "price mismatch"/"currency".
-- La página del producto (subdominio) muestra el **mismo precio** que el feed.
+## Preguntas abiertas a resolver (para el plan mejorado)
+- ¿El rewrite interno es viable o hay que ir a **B** (Polylang/WPML "dominios por idioma")?
+- ¿`/es/` en BR/US se sirve como subdirectorio de wpLingua o hay que excluirlo/redirigirlo?
+- ¿Cómo queda el hreflang final (raíz=pt/en, `/es/`=es, hispanos raíz=es)?
+- ¿Impacto en `feed-google.php` (links) y en el switcher?
 
-## Rollout
-1. Crear `inc/feed-google.php` + `mu_load_module` (con `php -l` por paso).
-2. Commit en repo `muyunicos` (push = deploy).
-3. Crear los 10 feeds en Merchant, desactivar el AR viejo, reclamar subdominios, configurar envío/impuestos.
-4. Validar con curl + Diagnostics.
+## Validación (a definir en el plan)
+- `curl.exe -sI https://br.muyunicos.com/` → 200 (sin 301), contenido en portugués, canónica `br/`.
+- `curl.exe -sI https://us.muyunicos.com/` → 200, inglés, canónica `us/`.
+- `/es/` en BR/US → español, canónica `/es/`.
+- hreflang: pt-BR→`br/`, en-US→`us/`, es→`.../es/`, hispanos→raíz.
+- Switcher y caché por host OK.
 
 ## Fuera de alcance
-- `robots.txt` (IA), schema Organization/LocalBusiness/AggregateRating, title home.
-- Fix de precio local en HTML/caché por subdominio (plan aparte).
-- hreflang (ejecutado).
+- Feeds Merchant (otro plan), `robots.txt`, schema Organization, title home.
+- El fix de precio local/caché (plan previo, ya aplicado).
 
-## Versiones verificadas (nov-2026)
-- **WCPBC 4.4.0** (24-nov-2026): API `WCPBC_Pricing_Zones::get_zones()`, `$zone->get_post_price()`, `wcpbc_the_zone()`, `WCPBC_Frontend_Pricing::unset()/init()`, filtro `wc_price_based_country_stop_pricing`; soporta `?wcpbc-manual-country=XX`.
-- **Google for WooCommerce / Merchant**: feed RSS 2.0 + `g:` namespace; `identifier_exists=false` para productos sin GTIN.
+## Estado de los planes previos (referencia)
+- Precio local por subdominio: aplicado (geo.php + compat-litespeed + htaccess vary).
+- hreflang fuente única: aplicado (seo-hreflang.php `es-{CC}`).
+- Feeds WCPBC: aplicado (`inc/feed-google.php`), Merchant en curso por el usuario.
